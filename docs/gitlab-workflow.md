@@ -1,6 +1,6 @@
 # Hướng dẫn Quy trình Làm việc GitLab & Quản lý Nhánh (GitLab Workflow & Branching Guidelines)
 
-Tài liệu này đóng vai trò là nguồn thông tin chính thức (single source of truth) về các quy tắc làm việc trên Git và GitLab dành cho nhóm thực tập sinh (OJT) gồm 5 thành viên. Việc tuân thủ các tiêu chuẩn này giúp đảm bảo chất lượng mã nguồn, khả năng truy vết và tích hợp mượt mà trên kiến trúc microservices (`client`, `server`, `api-gateway`).
+Tài liệu này đóng vai trò là nguồn thông tin chính thức (single source of truth) về các quy tắc làm việc trên Git và GitLab dành cho nhóm. Việc tuân thủ các tiêu chuẩn này giúp đảm bảo chất lượng mã nguồn, khả năng truy vết và tích hợp mượt mà trên kiến trúc microservices (`client`, `server`, `api-gateway`).
 
 ---
 
