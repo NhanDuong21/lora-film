@@ -1,0 +1,23 @@
+# Build outputs
+api-gateway/target/
+server/auth-service/target/
+server/movie-service/target/
+server/booking-service/target/
+server/payment-service/target/
+server/notification-service/target/
+
+# Local application config per service (do not push)
+api-gateway/src/main/resources/application.properties
+server/auth-service/src/main/resources/application.properties
+server/movie-service/src/main/resources/application.properties
+server/booking-service/src/main/resources/application.properties
+server/payment-service/src/main/resources/application.properties
+server/notification-service/src/main/resources/application.properties
+
+# Keep sample config files in repository
+!api-gateway/src/main/resources/application.example.properties
+!server/auth-service/src/main/resources/application.example.properties
+!server/movie-service/src/main/resources/application.example.properties
+!server/booking-service/src/main/resources/application.example.properties
+!server/payment-service/src/main/resources/application.example.properties
+!server/notification-service/src/main/resources/application.example.properties
