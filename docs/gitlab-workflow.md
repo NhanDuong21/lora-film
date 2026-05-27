@@ -1,24 +1,24 @@
-# OJT GitLab Workflow & Branching Guidelines
+# Hướng dẫn Quy trình Làm việc GitLab & Quản lý Nhánh (GitLab Workflow & Branching Guidelines)
 
-This document serves as the single source of truth for the Git and GitLab workflow rules for our 5-member On-the-Job Training (OJT) team. Adhering to these standards ensures code quality, traceability, and seamless integration across our microservices architecture (`client`, `server`, `api-gateway`).
-
----
-
-## 1. Introduction
-
-In a collaborative microservices environment, workflow discipline is paramount. With multiple developers concurrently changing the frontend, backend, and API gateway components, ad-hoc branching or direct commits will inevitably lead to broken builds, lost code, and integration blockages. 
-
-By enforcing structured branching, conventional commits, systematic issue board transitions, and rigorous merge request reviews, we:
-*   Ensure that every change is associated with an approved **GitLab Issue**.
-*   Maintain a clean, readable, and searchable project history.
-*   Prevent regression bugs from entering our integration (`develop`) and production (`main`) branches.
-*   Foster a culture of continuous peer review and mentorship under our Team Leader.
+Tài liệu này đóng vai trò là nguồn thông tin chính thức (single source of truth) về các quy tắc làm việc trên Git và GitLab dành cho nhóm thực tập sinh (OJT) gồm 5 thành viên. Việc tuân thủ các tiêu chuẩn này giúp đảm bảo chất lượng mã nguồn, khả năng truy vết và tích hợp mượt mà trên kiến trúc microservices (`client`, `server`, `api-gateway`).
 
 ---
 
-## 2. Branching Strategy
+## 1. Giới thiệu (Introduction)
 
-Our repository uses a Git Flow-inspired branching strategy designed to keep the stable production code separated from ongoing development.
+Trong môi trường phát triển microservices cộng tác, tính kỷ luật trong quy trình làm việc là vô cùng quan trọng. Với việc nhiều lập trình viên cùng thay đổi mã nguồn của các thành phần frontend, backend và API gateway, việc tự ý tạo nhánh hoặc push trực tiếp sẽ dẫn đến xung đột mã nguồn (merge conflicts), mất code và làm gián đoạn quá trình tích hợp.
+
+Bằng cách áp dụng quy trình quản lý nhánh chặt chẽ, commit có cấu trúc, cập nhật trạng thái bảng issue một cách hệ thống và kiểm duyệt mã nguồn thông qua Merge Request, chúng ta sẽ:
+*   Đảm bảo mọi thay đổi đều được gắn liền với một **GitLab Issue** đã được phê duyệt.
+*   Duy trì lịch sử commit sạch sẽ, dễ đọc và dễ tìm kiếm.
+*   Ngăn chặn các lỗi nghiêm trọng (regression bugs) lọt vào nhánh tích hợp (`develop`) và nhánh sản phẩm (`main`).
+*   Thúc đẩy văn hóa đánh giá chéo mã nguồn (peer review) và học hỏi dưới sự hướng dẫn của Team Leader.
+
+---
+
+## 2. Chiến lược Quản lý Nhánh (Branching Strategy)
+
+Kho lưu trữ mã nguồn của chúng ta áp dụng chiến lược quản lý nhánh lấy cảm hứng từ Git Flow nhằm tách biệt mã nguồn chạy ổn định ở môi trường sản xuất khỏi mã nguồn đang trong quá trình phát triển.
 
 ```mermaid
 gitGraph
@@ -26,171 +26,171 @@ gitGraph
     branch develop
     checkout develop
     commit id: "Setup develop"
-    branch docs/issue-#2-gitlab-workflow-guidelines
-    checkout docs/issue-#2-gitlab-workflow-guidelines
+    branch docs/issue-2-gitlab-workflow-guidelines
+    checkout docs/issue-2-gitlab-workflow-guidelines
     commit id: "docs(workflow): add team gitlab workflow"
     checkout develop
-    merge docs/issue-#2-gitlab-workflow-guidelines id: "Merge MR #2"
+    merge docs/issue-2-gitlab-workflow-guidelines id: "Merge MR #2"
     checkout main
     merge develop tag: "v1.0.0"
 ```
 
-### Core Branches
+### Các Nhánh Chính (Core Branches)
 
-| Branch | Protection Status | Purpose | Rules |
+| Nhánh (Branch) | Trạng thái Bảo vệ | Mục đích | Quy tắc |
 | :--- | :--- | :--- | :--- |
-| `main` | **Strictly Protected** | Production-ready state. Represents the latest stable deployment. | Direct pushes are forbidden. Code only arrives via Merge Requests (MRs) merged from `develop` by the Team Leader. |
-| `develop` | **Strictly Protected** | Main integration branch. All features, bug fixes, and documentation are merged here first. | Direct pushes are forbidden. All modifications must be made via local task branches and merged through MRs. |
+| `main` | **Bảo vệ Nghiêm ngặt** | Trạng thái sẵn sàng chạy trên môi trường sản xuất (production). Đại diện cho phiên bản triển khai ổn định mới nhất. | Nghiêm cấm push trực tiếp. Mã nguồn chỉ được cập nhật thông qua Merge Request (MR) được merge từ nhánh `develop` bởi Team Leader. |
+| `develop` | **Bảo vệ Nghiêm ngặt** | Nhánh tích hợp chính. Mọi tính năng, sửa lỗi và tài liệu đều phải được merge vào đây trước tiên. | Nghiêm cấm push trực tiếp. Mọi thay đổi phải được thực hiện trên các nhánh công việc (task branches) cục bộ và merge thông qua MR. |
 
-### Feature-Specific Prefixes
+### Tiền tố Đặc trưng cho Nhánh (Feature-Specific Prefixes)
 
-All development tasks must be executed on a dedicated branch cut from the latest `develop` branch. Branches must use one of the following prefixes based on the nature of the task:
+Tất cả các task phát triển phải được thực hiện trên một nhánh riêng biệt được cắt ra từ nhánh `develop` mới nhất. Các nhánh phải sử dụng một trong các tiền tố sau đây tùy thuộc vào bản chất của công việc:
 
-| Prefix | Category | Usage Description |
+| Tiền tố (Prefix) | Phân loại | Mô tả Cách dùng |
 | :--- | :--- | :--- |
-| `feature/` | Features | Developing a new user feature or functional component. |
-| `fix/` | Bug Fixes | Fixing a bug, resolving a runtime error, or correcting broken logic. |
-| `docs/` | Documentation | Creating, editing, or updating Markdown files, API specs, or guides. |
-| `setup/` | Setup & Environment | Configuring project setup, CI/CD pipelines, Docker configurations, or directory structures. |
-| `test/` | Testing | Adding or updating unit tests, integration tests, or end-to-end testing configurations. |
+| `feature/` | Tính năng (Features) | Phát triển một tính năng mới hoặc một thành phần chức năng của hệ thống. |
+| `fix/` | Sửa lỗi (Bug Fixes) | Sửa lỗi, khắc phục lỗi runtime hoặc chỉnh sửa lại logic bị lỗi. |
+| `docs/` | Tài liệu (Documentation) | Tạo mới, sửa đổi hoặc cập nhật các file Markdown, tài liệu đặc tả API hoặc các tài liệu hướng dẫn. |
+| `setup/` | Cài đặt & Môi trường | Cấu hình cài đặt dự án, CI/CD pipelines, cấu hình Docker hoặc cấu trúc thư mục. |
+| `test/` | Kiểm thử (Testing) | Thêm mới hoặc cập nhật unit tests, integration tests hoặc cấu hình kiểm thử đầu cuối (E2E). |
 
 > [!IMPORTANT]
-> **Strict Workflow Rule:** Every development task must map to a GitLab Issue. Direct pushes to `main` or `develop` are strictly prohibited. Always cut your branch from the latest `develop` branch.
+> **Quy tắc Quy trình Nghiêm ngặt:** Mọi task phát triển đều phải ánh xạ tới một GitLab Issue. Việc push trực tiếp lên nhánh `main` hoặc `develop` bị nghiêm cấm hoàn toàn. Luôn cắt nhánh của bạn từ nhánh `develop` mới nhất.
 
-### Branch Naming Conventions
+### Quy ước Đặt tên Nhánh (Branch Naming Conventions)
 
-To maintain uniformity and trace code back to project tasks, all branch names must follow this exact format:
+Để duy trì tính đồng nhất và khả năng truy vết mã nguồn theo từng task của dự án, tất cả các tên nhánh phải tuân theo đúng định dạng sau:
 
-$$\text{<prefix>/issue-\#<id>-<short-description>}$$
+$$\text{<prefix>/issue-<id>-<short-description>}$$
 
-*   `<prefix>`: One of the prefixes listed in the table above (e.g., `feature`, `fix`, `docs`).
-*   `<id>`: The GitLab Issue ID number.
-*   `<short-description>`: A concise, lowercase, hyphen-separated (kebab-case) description of the task.
+*   `<prefix>`: Một trong các tiền tố được liệt kê trong bảng trên (ví dụ: `feature`, `fix`, `docs`).
+*   `<id>`: Số ID của GitLab Issue.
+*   `<short-description>`: Mô tả ngắn gọn, viết thường, các từ cách nhau bằng dấu gạch ngang (kebab-case) về công việc cần thực hiện.
 
-#### Examples:
-*   `docs/issue-#2-gitlab-workflow-guidelines`
-*   `feature/issue-#14-client-login-ui`
-*   `fix/issue-#29-server-jwt-expiration`
-*   `setup/issue-#5-docker-compose-environment`
-*   `test/issue-#42-api-gateway-routing-tests`
+#### Ví dụ:
+*   `docs/issue-2-gitlab-workflow-guidelines`
+*   `feature/issue-14-client-login-ui`
+*   `fix/issue-29-server-jwt-expiration`
+*   `setup/issue-5-docker-compose-environment`
+*   `test/issue-42-api-gateway-routing-tests`
 
 ---
 
-## 3. Commit Message Guidelines
+## 3. Quy ước Lịch sử Commit (Commit Message Guidelines)
 
-We enforce the **Conventional Commits** specification to keep our commit history clear, organized, and machine-readable.
+Chúng ta áp dụng quy chuẩn **Conventional Commits** để giữ cho lịch sử commit luôn rõ ràng, có tổ chức và có thể đọc hiểu tự động.
 
-### Commit Format
+### Định dạng Commit
 
 $$\text{<type>(<scope>): <description>}$$
 
-*   **`<type>`**: Describes the intent of the commit (e.g., `feat`, `fix`, `docs`).
-*   **`<scope>`** (Optional but highly recommended): The specific module or package affected, enclosed in parentheses. Common scopes for our project include: `client`, `server`, `api-gateway`, `docker`, `workflow`, `deps`, `config`.
-*   **`<description>`**: A brief summary of the changes in the imperative, present tense (e.g., "add login form", NOT "added login form" or "adds login form"). The description should start with a lowercase letter and must not end with a period.
+*   **`<type>`**: Mô tả mục đích của commit (ví dụ: `feat`, `fix`, `docs`).
+*   **`<scope>`** (Không bắt buộc nhưng khuyến khích sử dụng): Module hoặc gói phần mềm cụ thể bị ảnh hưởng bởi commit, được đặt trong dấu ngoặc đơn. Các scope phổ biến trong dự án của chúng ta bao gồm: `client`, `server`, `api-gateway`, `docker`, `workflow`, `deps`, `config`.
+*   **`<description>`**: Tóm tắt ngắn gọn các thay đổi ở thì hiện tại, thể hiện dưới dạng câu mệnh lệnh (ví dụ: "add login form", KHÔNG dùng "added login form" hay "adds login form"). Mô tả nên bắt đầu bằng chữ cái viết thường và không kết thúc bằng dấu chấm.
 
-### Commit Types
+### Các loại Commit (Commit Types)
 
-| Type | Description |
+| Loại (Type) | Mô tả |
 | :--- | :--- |
-| `feat` | A new feature or major addition to the codebase. |
-| `fix` | A bug fix or correction to existing code. |
-| `docs` | Documentation-only changes. |
-| `style` | Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc.). |
-| `refactor` | A code change that neither fixes a bug nor adds a feature (e.g., rewriting for performance or cleanliness). |
-| `test` | Adding missing tests or correcting existing tests. |
-| `chore` | Changes to the build process, auxiliary tools, libraries, or dependencies (e.g., updating package versions). |
+| `feat` | Một tính năng mới hoặc một bổ sung lớn cho codebase. |
+| `fix` | Sửa lỗi hoặc khắc phục sự cố trong code hiện tại. |
+| `docs` | Những thay đổi chỉ liên quan đến tài liệu. |
+| `style` | Những thay đổi không làm ảnh hưởng đến ngữ nghĩa của code (khoảng trắng, định dạng code, thiếu dấu chấm phẩy, v.v.). |
+| `refactor` | Thay đổi cấu trúc code nhưng không sửa lỗi cũng như không thêm tính năng mới (ví dụ: tối ưu hiệu năng hoặc làm sạch code). |
+| `test` | Thêm các test case bị thiếu hoặc sửa lại các test case hiện có. |
+| `chore` | Các thay đổi đối với quy trình build, công cụ hỗ trợ, thư viện hoặc dependencies (ví dụ: cập nhật phiên bản của thư viện). |
 
-### Concrete Examples
+### Ví dụ Thực tế
 
-Here are exact commit messages formatted according to our rules:
+Dưới đây là các commit message mẫu được định dạng chính xác theo quy tắc của chúng ta:
 
 ```bash
-# Feature addition in the client
+# Thêm tính năng ở client
 feat(client): implement interactive navigation sidebar
 
-# Bug fix in the server
+# Sửa lỗi ở server
 fix(server): resolve null pointer exception in auth interceptor
 
-# Documentation update
+# Cập nhật tài liệu
 docs(workflow): add team gitlab workflow and branching guidelines
 
-# Build tool/Dependency chore
+# Cập nhật dependency/thư viện ở client
 chore(deps): upgrade axios to version 1.6.0 in client
 
-# Test addition
+# Thêm kiểm thử cho API Gateway
 test(api-gateway): add request rate limiting tests
 ```
 
 ---
 
-## 4. GitLab Issue Board Workflow
+## 4. Quy trình Quản lý Bảng Issue trên GitLab (GitLab Issue Board Workflow)
 
-Our GitLab Issue Board is the control center for our sprint progress. We track the status of all work items using scoped labels that form a clear pipeline from planning to completion.
+Bảng Issue trên GitLab là trung tâm quản lý tiến độ sprint của chúng ta. Trạng thái của từng công việc được theo dõi thông qua các scoped labels tùy chỉnh tạo nên một pipeline rõ ràng từ khi lập kế hoạch đến khi hoàn thành.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> status::ready : Issue Created
-    status::ready --> status::in-progress : Assignee starts work / Cuts branch
-    status::in-progress --> status::review : Push to GitLab & Open Merge Request
-    status::in-progress --> status::blocked : Blocked by external task/issue
-    status::blocked --> status::in-progress : Blocker resolved
-    status::review --> status::done : MR Approved & Merged by Leader
+    [*] --> status::ready : Tạo Issue
+    status::ready --> status::in-progress : Người được giao bắt đầu làm / Cắt nhánh
+    status::in-progress --> status::review : Push lên GitLab & Tạo Merge Request
+    status::in-progress --> status::blocked : Bị nghẽn bởi task/issue khác
+    status::blocked --> status::in-progress : Hết nghẽn (Blocker được giải quyết)
+    status::review --> status::done : MR được duyệt & Merge bởi Leader
     status::done --> [*]
 ```
 
-### Scoped Labels & States
+### Scoped Labels & Trạng thái
 
 1.  **`status::ready`**
-    *   **Meaning:** The issue has been groomed, estimated, and is ready for development. It is placed in the backlog or active sprint backlog.
-    *   **Action:** When a developer is ready to start a new task, they select an issue from this column, assign it to themselves, and move it to the next column.
+    *   **Ý nghĩa:** Issue đã được thảo luận, đánh giá độ khó và sẵn sàng để phát triển. Nó được đưa vào cột backlog của sprint hiện tại.
+    *   **Hành động:** Khi lập trình viên sẵn sàng bắt đầu một task mới, họ chọn issue từ cột này, tự gán (assign) cho bản thân và chuyển sang cột tiếp theo.
 2.  **`status::in-progress`**
-    *   **Meaning:** The developer is actively working on the task. A corresponding local branch has been created.
-    *   **Action:** The developer writes code, commits changes locally using Conventional Commits, and pushes the branch to GitLab.
+    *   **Ý nghĩa:** Lập trình viên đang tích cực thực hiện task. Nhánh code cục bộ tương ứng đã được tạo.
+    *   **Hành động:** Lập trình viên viết code, commit cục bộ tuân theo Conventional Commits và push nhánh lên GitLab.
 3.  **`status::review`**
-    *   **Meaning:** The code is complete, tests are passing, and a Merge Request (MR) has been opened targeting the `develop` branch.
-    *   **Action:** The developer sets the MR reviewers, links the issue, and moves the issue to this status on the board.
+    *   **Ý nghĩa:** Việc viết code đã hoàn thành, các bài test đã chạy thành công và một Merge Request (MR) đã được mở để merge vào nhánh `develop`.
+    *   **Hành động:** Lập trình viên thiết lập các reviewer cho MR, liên kết với issue và chuyển trạng thái của issue sang cột này trên bảng.
 4.  **`status::blocked`**
-    *   **Meaning:** Development cannot proceed due to external dependencies, unresolved architectural decisions, or bugs in other modules.
-    *   **Action:** The developer moves the issue to this state, adds a comment explaining the blocker, and tags the Team Leader or relevant team members. Once resolved, it moves back to `status::in-progress`.
+    *   **Ý nghĩa:** Việc phát triển bị tạm dừng do phụ thuộc vào các task khác chưa xong, chưa có quyết định về mặt kiến trúc hoặc phát hiện lỗi ở module liên quan.
+    *   **Hành động:** Lập trình viên chuyển issue sang trạng thái này, để lại comment giải thích rõ lý do bị chặn và tag Team Leader hoặc các thành viên liên quan. Khi vấn đề được giải quyết, chuyển issue quay lại `status::in-progress`.
 5.  **`status::done`**
-    *   **Meaning:** The MR has been approved, conflicts resolved, pipeline passed, and the branch is successfully merged into `develop`.
-    *   **Action:** The issue is automatically or manually closed and marked as Done.
+    *   **Ý nghĩa:** MR đã được phê duyệt, giải quyết xong các xung đột dòng code, pipeline chạy thành công và nhánh đã được merge vào `develop`.
+    *   **Hành động:** Issue sẽ tự động hoặc thủ công được đóng lại và đánh dấu là Done.
 
 > [!WARNING]
-> **Issue Movement Policy:** Do not skip stages. Never move an issue to `status::done` yourself. The transition to `status::done` is strictly coupled with the merging of the MR or confirmation by the Team Leader.
+> **Quy tắc di chuyển trạng thái Issue:** Không tự ý nhảy giai đoạn. Tuyệt đối không tự chuyển issue sang trạng thái `status::done`. Trạng thái `status::done` chỉ được cập nhật đồng thời với việc merge MR hoặc có sự xác nhận của Team Leader.
 
 ---
 
-## 5. Merge Request (MR) Process
+## 5. Quy trình Tạo Merge Request (MR Process)
 
-Once you finish development and verify your changes locally, you must submit your code for review. The MR process acts as our gatekeeper for quality.
+Sau khi hoàn thành phát triển và kiểm tra kỹ lưỡng các thay đổi ở máy cục bộ, bạn phải gửi mã nguồn để đánh giá. Quy trình MR đóng vai trò kiểm soát chất lượng mã nguồn của toàn đội.
 
-### Merge Request Pipeline Steps
+### Các Bước Thực hiện Quy trình MR
 
-1.  **Prepare your Branch:**
-    Ensure your local branch is updated with the latest changes from remote `develop`.
+1.  **Chuẩn bị Nhánh của bạn:**
+    Đảm bảo nhánh cục bộ đã cập nhật mã nguồn mới nhất từ nhánh `develop` trên GitLab.
     ```bash
     git checkout develop
     git pull origin develop
-    git checkout docs/issue-#2-gitlab-workflow-guidelines
+    git checkout docs/issue-2-gitlab-workflow-guidelines
     git merge develop
     ```
-2.  **Push and Create MR:**
-    Push your branch to the GitLab repository and click the link in your terminal or navigate to GitLab to open a new Merge Request.
-3.  **Configure the MR Details:**
-    *   **Title:** Follow the commit convention (e.g., `docs(workflow): add team gitlab workflow and branching guidelines`).
-    *   **Source Branch:** `<your-prefix>/issue-#<id>-<short-description>`
-    *   **Target Branch:** `develop` (Never target `main` directly for regular tasks).
-    *   **Description:** Use the Standard MR Template below to outline your changes.
-    *   **Reviewer Assignment:** Mandatorily assign **Thành (Team Leader)** as the primary Reviewer. You may also tag other team members for peer review.
-4.  **Review and Resolve Discussions:**
-    *   Reviewer Thành will inspect the code, leave comments/feedback, and approve or request changes.
-    *   Address all feedback by pushing additional commits to the same branch.
-    *   Once all discussions are marked resolved and the Team Leader approves, the MR is ready to be merged.
+2.  **Push và Tạo MR:**
+    Push nhánh của bạn lên kho lưu trữ GitLab, sau đó nhấn vào đường link hiển thị ở terminal hoặc truy cập vào trang GitLab để mở một Merge Request mới.
+3.  **Điền Thông tin Chi tiết cho MR:**
+    *   **Tiêu đề (Title):** Tuân theo quy chuẩn commit (ví dụ: `docs(workflow): add team gitlab workflow and branching guidelines`).
+    *   **Nhánh nguồn (Source Branch):** `<your-prefix>/issue-<id>-<short-description>`
+    *   **Nhánh đích (Target Branch):** `develop` (Tuyệt đối không chọn `main` cho các task phát triển thông thường).
+    *   **Mô tả (Description):** Sử dụng Template mô tả MR chuẩn dưới đây để trình bày về thay đổi của bạn.
+    *   **Chỉ định Người duyệt (Reviewer Assignment):** Bắt buộc gán **Thành (Team Leader)** làm Reviewer chính. Bạn cũng có thể tag các thành viên khác để cùng đánh giá (peer review).
+4.  **Xem xét và Giải quyết Thảo luận:**
+    *   Reviewer Thành sẽ kiểm tra mã nguồn, để lại nhận xét/phản hồi và duyệt (approve) hoặc yêu cầu sửa đổi (request changes).
+    *   Lập trình viên phản hồi ý kiến bằng cách sửa đổi và push các commit bổ sung lên cùng nhánh đó.
+    *   Khi tất cả thảo luận được đánh dấu là đã giải quyết (resolved) và Team Leader phê duyệt, MR đã sẵn sàng để merge.
 
-### Standard MR Template
+### Template mô tả MR Chuẩn
 
-Copy and paste the template below into the GitLab MR description box:
+Copy và paste phần nội dung bên dưới vào khung mô tả MR trên GitLab:
 
 ```markdown
 ## Summary
@@ -206,7 +206,7 @@ Closes #2
 * Outlined the `status::` label pipeline for the issue board.
 
 ## How to Test
-1. Checkout to this branch: `git checkout docs/issue-#2-gitlab-workflow-guidelines`
+1. Checkout to this branch: `git checkout docs/issue-2-gitlab-workflow-guidelines`
 2. Open and review `docs/gitlab-workflow.md` using a Markdown viewer or IDE preview.
 3. Verify that all rules match Sprint 0 requirements exactly.
 
@@ -219,16 +219,16 @@ Closes #2
 
 ---
 
-## 6. Definition of Done (DoD)
+## 6. Tiêu chí Hoàn thành (Definition of Done - DoD)
 
-A task is never complete just because the code is written. To ensure that our codebase remains stable and deployable, every issue must meet the following **Definition of Done (DoD)**:
+Một task không bao giờ được coi là xong chỉ vì dòng code đã được viết. Để đảm bảo codebase luôn ổn định và sẵn sàng deploy, mọi issue phải đáp ứng đủ các **Tiêu chí Hoàn thành (DoD)** sau:
 
-*   [ ] **Code Quality:** Code complies with clean code principles, has no unused imports, commented-out blocks, or temporary debugger statements.
-*   [ ] **Build & Tests:** The application builds locally without errors. All unit and integration tests run successfully.
-*   [ ] **Git Conformity:** Branch naming and commit messages follow the guidelines in this document.
-*   [ ] **Review & Approvals:** The MR has been reviewed and approved by the Team Leader (**Thành**).
-*   [ ] **Integration:** The MR is successfully merged into the `develop` branch.
-*   [ ] **Closing Issues:** The associated GitLab Issue is closed.
+*   [ ] **Chất lượng mã nguồn (Code Quality):** Code tuân thủ các nguyên lý clean code, không có thư viện import thừa, không có đoạn code comment bị bỏ hoang hoặc các câu lệnh debugger tạm thời.
+*   [ ] **Build & Kiểm thử:** Ứng dụng chạy build thành công ở máy cục bộ và không xảy ra lỗi. Tất cả các bài unit và integration tests đều vượt qua (passed).
+*   [ ] **Tính tuân thủ Git:** Tên nhánh và commit message tuân thủ đúng hướng dẫn trong tài liệu này.
+*   [ ] **Đánh giá & Duyệt:** MR đã được kiểm duyệt và phê duyệt bởi Team Leader (**Thành**).
+*   [ ] **Tích hợp:** MR được merge thành công vào nhánh `develop`.
+*   [ ] **Đóng Issue:** GitLab Issue liên quan đã được đóng lại.
 
 > [!CAUTION]
-> **Important Rule on Done Status:** An issue is only considered DONE when the Merge Request has been officially merged into `develop` or confirmed/closed by the Team Leader. **Members must not close issues prematurely.**
+> **Quy tắc Quan trọng về Trạng thái Hoàn thành:** Một issue chỉ được coi là HOÀN THÀNH khi Merge Request tương ứng đã chính thức được merge vào nhánh `develop` hoặc được xác nhận/đóng bởi Team Leader. **Các thành viên không được phép đóng issue trước khi MR được merge.**
