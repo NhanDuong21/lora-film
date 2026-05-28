@@ -1,139 +1,111 @@
-# Movie Booking Microservices Backend
+# Movie Booking System
 
-This repository contains a Spring Boot microservices backend for a movie booking system. Each service is a standalone Maven project with its own `application.properties`, health endpoint, and unique port.
+Welcome to the online movie booking system project by Group 3. This repository contains the complete source code of the project including the Frontend (Client), Backend (Microservices Server), and API Gateway.
 
-## Repository Structure
+## Technology Stack
+
+**Frontend (Client):**
+- React 19 (with Vite)
+- React Router DOM
+- Axios
+
+**Backend (Server & API Gateway):**
+- Java 21
+- Spring Boot (Microservices)
+- Spring Cloud Gateway
+- Maven 3.9+
+- Database: MySQL 8+
+
+## Project Structure
 
 ```text
-server/
-├── api-gateway/
-├── auth-service/
-├── movie-service/
-├── booking-service/
-├── payment-service/
-├── notification-service/
-└── README.md
+hcm26_cpl_java_05_group3/
+├── client/                 # Frontend application (React/Vite)
+├── server/                 # Backend services (Java/Spring Boot)
+│   ├── auth-service/       # User authentication service (JWT/OAuth2)
+│   ├── movie-service/      # Service managing movies, cinemas, schedules
+│   ├── booking-service/    # Booking processing service
+│   ├── payment-service/    # Payment integration service
+│   └── notification-service/# Email/SMS notification service
+├── api-gateway/            # Intermediate API Gateway routing requests
+└── docs/                   # Project documentation (workflow, structure...)
 ```
+*(For more details, see [Project Structure Documentation](docs/project-structure.md))*
 
-## Requirements
+## 🛠 Clone Instructions
 
-- Java 21
-- Maven 3.9+
-- MySQL 8+
+1. Clone the repository to your local machine:
+   ```bash
+   git clone <repository_url>
+   cd hcm26_cpl_java_05_group3
+   ```
+2. Checkout the `develop` branch (main integration branch):
+   ```bash
+   git checkout develop
+   ```
 
-## Service Ports
+## Frontend Run Instructions
 
-- `api-gateway` -> `8080`
-- `auth-service` -> `8081`
-- `movie-service` -> `8082`
-- `booking-service` -> `8083`
-- `payment-service` -> `8084`
-- `notification-service` -> `8085`
-
-## Configuration
-
-Each service includes an `application.properties` file with:
-
-- `server.port`
-- `spring.application.name`
-- MySQL datasource settings
-- JPA settings for backend services
-
-The gateway includes Spring Cloud Gateway route definitions for the backend services.
-
-## Health Checks
-
-Each service exposes:
-
-- `GET /health`
-
-Example response:
-
-```json
-{
-  "service": "auth-service",
-  "status": "UP"
-}
-```
-
-## How To Run
-
-Open a terminal in each service directory and run the service independently.
-
-### API Gateway
+Open a new terminal and run the following commands:
 
 ```bash
-cd server/api-gateway
-mvn spring-boot:run
+cd client
+npm install
+npm run dev
 ```
 
-### Auth Service
+## Backend Run Instructions
 
-```bash
-cd server/auth-service
-mvn spring-boot:run
-```
+The backend uses a Microservices architecture. Ensure that you have MySQL installed and the corresponding databases created (`auth_db`, `movie_db`, `booking_db`, `payment_db`, `notification_db`).
 
-### Movie Service
-
-```bash
-cd server/movie-service
-mvn spring-boot:run
-```
-
-### Booking Service
-
-```bash
-cd server/booking-service
-mvn spring-boot:run
-```
-
-### Payment Service
-
-```bash
-cd server/payment-service
-mvn spring-boot:run
-```
-
-### Notification Service
-
-```bash
-cd server/notification-service
-mvn spring-boot:run
-```
-
-## Notes
-
-- Make sure MySQL is running locally before starting the backend services.
-- Create the referenced databases if you want JPA to connect successfully:
-  - `auth_db`
-  - `movie_db`
-  - `booking_db`
-  - `payment_db`
-  - `notification_db`
-- The gateway routes requests to the backend services using the configured local ports.
-
-## Example Gateway Routes
-
-- `/auth/**` -> `http://localhost:8081`
-- `/movies/**` -> `http://localhost:8082`
-- `/bookings/**` -> `http://localhost:8083`
-- `/payments/**` -> `http://localhost:8084`
-- `/notifications/**` -> `http://localhost:8085`
-
-## Build Verification
-
-From each module directory you can verify compilation with:
+Open a terminal in each service directory and run them independently. You can use the commands:
 
 ```bash
 mvn clean compile
+mvn spring-boot:run
 ```
 
-If you want to run the full backend, start the services in this order:
+**Recommended Startup Order:**
+1. `cd server/auth-service && mvn spring-boot:run` (Port: `8081`)
+2. `cd server/movie-service && mvn spring-boot:run` (Port: `8082`)
+3. `cd server/booking-service && mvn spring-boot:run` (Port: `8083`)
+4. `cd server/payment-service && mvn spring-boot:run` (Port: `8084`)
+5. `cd server/notification-service && mvn spring-boot:run` (Port: `8085`)
+6. `cd api-gateway && mvn spring-boot:run` (Port: `8080`)
 
-1. `auth-service`
-2. `movie-service`
-3. `booking-service`
-4. `payment-service`
-5. `notification-service`
-6. `api-gateway`
+Check the health status via the `GET /health` endpoint for each service (e.g., `http://localhost:8081/health`). 
+The Gateway routes requests, for example: `/auth/**` -> `http://localhost:8081`.
+
+## Basic Branching Rules
+
+The project adopts a branch management process inspired by Git Flow:
+- **`main`**: Production branch, contains the most stable source code. No direct pushing allowed.
+- **`develop`**: Main integration branch. All feature branches must branch off from here.
+- **Development Branch Prefixes**:
+  - `feature/<issue-id>-<description>`: Develop a new feature.
+  - `fix/<issue-id>-<description>`: Fix a bug.
+  - `docs/<issue-id>-<description>`: Update documentation.
+  - `setup/<issue-id>-<description>`: Configuration setup, CI/CD.
+  - `test/<issue-id>-<description>`: Add/edit test cases.
+
+## Merge Request (MR) Process
+
+All code intended for `develop` must go through a Merge Request (MR).
+1. Complete the code on your local branch, ensuring it runs well and passes tests.
+2. Push the branch to GitLab.
+3. Create an MR with a clear title (following Conventional Commits standards), with `develop` as the target branch.
+4. Write a detailed description for the MR and link the corresponding Issue (e.g., `Closes #1`).
+5. Assign the Team Leader/Reviewer (Thành) to review the code.
+6. Once the MR is approved and passes the pipeline, it will be merged into `develop`.
+
+*(For more details, see [GitLab Workflow Guidelines](docs/gitlab-workflow.md))*
+
+## Team Members
+
+- **Phan Tuấn Thành** - Team Leader / Developer
+- **Dương Thiện Nhân** - Member / Developer
+- **Trần Hiển Vinh** - Member / Developer
+- **Trương Hoàng Khang** - Member / Developer
+- **Trần Lương Thiện Hoàn** - Member / Developer
+---
+**Note:** See detailed rules regarding Git, commits, and workflows in [docs/gitlab-workflow.md](docs/gitlab-workflow.md).
