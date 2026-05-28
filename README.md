@@ -73,6 +73,85 @@ mvn spring-boot:run
 5. `cd server/notification-service && mvn spring-boot:run` (Port: `8085`)
 6. `cd api-gateway && mvn spring-boot:run` (Port: `8080`)
 
+1. `auth-service`
+2. `movie-service`
+3. `booking-service`
+4. `payment-service`
+5. `notification-service`
+6. `api-gateway`
+
+## Docker Compose Local Development
+
+A base local environment is available at the repository root with:
+
+- MySQL 8
+- Redis
+- Zookeeper
+- Kafka
+
+### Prerequisites
+
+- Docker Desktop or Docker Engine installed
+- Docker Compose support enabled
+- `docker` and `docker compose` available in your terminal
+
+### Setup
+
+1. Copy the sample environment file:
+
+```bash
+cp .env.example .env
+```
+
+2. Edit `.env` and add your values for:
+
+- `MYSQL_ROOT_PASSWORD`
+- `MYSQL_DATABASE`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+
+### Start services
+
+```bash
+docker compose up -d
+```
+
+### Stop services
+
+```bash
+docker compose down
+```
+
+### Check logs
+
+```bash
+docker compose logs -f
+```
+
+Or check logs for a single service:
+
+```bash
+docker compose logs -f mysql
+```
+
+### Remove containers and volumes
+
+```bash
+docker compose down -v
+```
+
+### Verify services are running
+
+- MySQL: `localhost:3306`
+- Redis: `localhost:6379`
+- Zookeeper: `localhost:2181`
+- Kafka: `localhost:9092`
+
+You can also check Docker status directly:
+
+```bash
+docker compose ps
+```
 Check the health status via the `GET /health` endpoint for each service (e.g., `http://localhost:8081/health`). 
 The Gateway routes requests, for example: `/auth/**` -> `http://localhost:8081`.
 

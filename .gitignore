@@ -21,3 +21,10 @@ server/notification-service/src/main/resources/application.properties
 !server/booking-service/src/main/resources/application.example.properties
 !server/payment-service/src/main/resources/application.example.properties
 !server/notification-service/src/main/resources/application.example.properties
+
+# Local Docker Compose environment files and data
+.env
+mysql_data
+redis_data
+kafka_data
+logs
