@@ -1,0 +1,44 @@
+@startuml
+title Login Flow
+
+actor User as "User"
+participant Frontend as "React Frontend"
+participant APIGW as "API Gateway"
+participant Auth as "Auth Service"
+database MySQL as "MySQL"
+
+User -> Frontend: Enter email/password
+activate Frontend
+
+Frontend -> APIGW: POST /api/auth/login
+activate APIGW
+
+APIGW -> Auth: Forward Login Request
+activate Auth
+
+Auth -> MySQL: Query User by Email
+activate MySQL
+MySQL --> Auth: Return User Details (or Not Found)
+deactivate MySQL
+
+alt User Exists & Valid Password
+    Auth -> Auth: Validate password
+    Auth -> Auth: Generate JWT token
+    Auth --> APIGW: 200 OK (With JWT Token)
+    
+    APIGW --> Frontend: 200 OK (Return JWT Token)
+    
+    Frontend -> Frontend: Save JWT token to localStorage
+    Frontend --> User: Login Success & Redirect
+else Invalid User or Password
+    Auth --> APIGW: 401 Unauthorized
+    deactivate Auth
+    
+    APIGW --> Frontend: 401 Unauthorized
+    deactivate APIGW
+    
+    Frontend --> User: Show Error Message
+    deactivate Frontend
+end
+
+@enduml

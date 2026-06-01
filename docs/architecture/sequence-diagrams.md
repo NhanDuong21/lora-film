@@ -155,3 +155,99 @@ User
 → React Frontend
 → User
 ```
+
+---
+
+# Login Flow
+
+## Description
+
+This sequence diagram describes the login process using email/password and retrieving a JWT token in the Movie Theater Management System.
+
+## Participants
+
+* User
+* React Frontend
+* API Gateway
+* Auth Service
+* MySQL
+
+## Main Flow
+
+### 1. User enters login information
+
+The user opens the login page and enters:
+
+* Email
+* Password
+
+### 2. Frontend sends request to API Gateway
+
+The React Frontend sends the login request to the API Gateway.
+
+**Request**
+
+```http
+POST /api/auth/login
+```
+
+### 3. API Gateway forwards request to Auth Service
+
+The API Gateway routes the request to the Auth Service.
+
+### 4. Auth Service checks user in MySQL
+
+Auth Service queries MySQL by email to check if the user exists.
+
+### 5. Auth Service validates password
+
+If the user is found, Auth Service validates the provided password against the stored hash.
+
+### 6. Auth Service generates JWT token
+
+Upon successful validation, Auth Service generates a JWT token for the user session.
+
+### 7. Auth Service returns response
+
+Auth Service returns a 200 OK response with the JWT token, forwarded through API Gateway to the Frontend.
+
+### 8. Frontend saves JWT token
+
+The React Frontend receives the JWT token, saves it to `localStorage`, and redirects the user upon successful login.
+
+---
+
+## Alternative Flow
+
+### Invalid User or Password
+
+1. Auth Service checks the email address or validates the password.
+2. If the user is not found or the password does not match, Auth Service returns:
+
+```http
+HTTP/1.1 401 Unauthorized
+```
+
+3. Frontend displays an error message to the user.
+
+---
+
+## Sequence Diagram
+
+![Login Sequence](./diagrams/login-sequence.png)
+
+---
+
+## Diagram Flow Summary
+
+```text
+User
+→ React Frontend
+→ API Gateway
+→ Auth Service
+→ MySQL
+→ Auth Service
+→ API Gateway
+→ React Frontend
+→ User
+```
