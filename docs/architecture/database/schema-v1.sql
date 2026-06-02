@@ -41,7 +41,7 @@ CREATE TABLE accounts (
 
     deleted_at DATETIME NULL COMMENT 'Soft delete tài khoản',
 
-    CONSTRAINT uk_accounts_username UNIQUE (username),
+
 
     CONSTRAINT uk_accounts_email UNIQUE (email),
 
