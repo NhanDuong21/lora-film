@@ -111,6 +111,7 @@
     text-transform: uppercase;
     background: linear-gradient(135deg, #ffffff 50%, #ff9e9e 100%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -210,6 +211,23 @@
 
 .password-toggle-btn:hover {
     color: #ffffff;
+}
+
+/* Form Success Banner */
+.success-banner {
+    background-color: rgba(40, 167, 69, 0.15);
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    color: #28a745;
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 15px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    animation: pop-in 0.3s ease-out;
 }
 
 /* Form Errors */
