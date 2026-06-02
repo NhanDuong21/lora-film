@@ -60,7 +60,6 @@ COLLATE utf8mb4_unicode_ci;
 
 USE user_db;
 
-DROP TABLE IF EXISTS user_addresses;
 DROP TABLE IF EXISTS user_profiles;
 
 CREATE TABLE user (
@@ -96,36 +95,3 @@ CREATE TABLE user (
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci
 COMMENT='Bảng hồ sơ người dùng thuộc User Service';
-
-
-CREATE TABLE user_addresses (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Khóa chính địa chỉ',
-
-    account_id BIGINT NOT NULL COMMENT 'ID account từ Authentication Service',
-
-    receiver_name VARCHAR(150) NOT NULL COMMENT 'Tên người nhận',
-
-    phone_number VARCHAR(20) NOT NULL COMMENT 'Số điện thoại nhận liên hệ',
-
-    address_line VARCHAR(255) NOT NULL COMMENT 'Địa chỉ chi tiết',
-
-    ward VARCHAR(100) NULL COMMENT 'Phường/Xã',
-
-    district VARCHAR(100) NULL COMMENT 'Quận/Huyện',
-
-    city VARCHAR(100) NULL COMMENT 'Tỉnh/Thành phố',
-
-    is_default BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Địa chỉ mặc định',
-
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Thời điểm tạo địa chỉ',
-
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP COMMENT 'Thời điểm cập nhật địa chỉ',
-
-    deleted_at DATETIME NULL COMMENT 'Soft delete địa chỉ',
-
-    INDEX idx_user_addresses_account_id (account_id)
-) ENGINE=InnoDB
-DEFAULT CHARSET=utf8mb4
-COLLATE=utf8mb4_unicode_ci
-COMMENT='Bảng địa chỉ người dùng';
