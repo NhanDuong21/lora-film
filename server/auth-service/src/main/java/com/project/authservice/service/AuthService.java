@@ -1,0 +1,14 @@
+package com.project.authservice.service;
+
+import com.project.authservice.dto.RegisterRequest;
+import com.project.authservice.dto.RegisterResponse;
+
+public interface AuthService {
+	/**
+	 * Registers a new user account.
+	 *
+	 * @param request registration request
+	 * @return register response
+	 */
+	RegisterResponse register(RegisterRequest request);
+}
