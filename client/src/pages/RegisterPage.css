@@ -214,6 +214,15 @@ select.form-input {
     color: #E50914;
 }
 
+.clickable-icon {
+    pointer-events: auto !important;
+    cursor: pointer;
+}
+
+.clickable-icon:hover {
+    color: #E50914;
+}
+
 /* Password Visibility Toggle */
 .password-toggle-btn {
     position: absolute;

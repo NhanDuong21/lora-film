@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./RegisterPage.css";
 
@@ -19,24 +19,77 @@ function RegisterPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const dateInputRef = useRef(null);
     useEffect(() => {
         document.title = "Create Account - CinePass Ticket Booking";
     }, []);
 
     const handleChange = (e) => {
-        const { name, value } = e.target;
+        let { name, value } = e.target;
+
+        if (name === "dob") {
+            const digits = value.replace(/\D/g, "");
+            const limitedDigits = digits.substring(0, 8);
+
+            let formattedValue = "";
+            if (limitedDigits.length > 0) {
+                formattedValue += limitedDigits.substring(0, 2);
+                if (limitedDigits.length > 2) {
+                    formattedValue += "/" + limitedDigits.substring(2, 4);
+                    if (limitedDigits.length > 4) {
+                        formattedValue += "/" + limitedDigits.substring(4, 8);
+                    }
+                }
+            }
+            value = formattedValue;
+        }
+
         setFormData(prev => ({
             ...prev,
             [name]: value
         }));
 
-        if (touched[name]) {
+        if (touched[name] || name === "dob") {
             const fieldError = validateField(name, value);
             setErrors(prev => ({
                 ...prev,
                 [name]: fieldError
             }));
         }
+    };
+
+    const handleCalendarClick = () => {
+        if (dateInputRef.current) {
+            try {
+                if (typeof dateInputRef.current.showPicker === 'function') {
+                    dateInputRef.current.showPicker();
+                } else {
+                    dateInputRef.current.click();
+                }
+            } catch (err) {
+                dateInputRef.current.click();
+            }
+        }
+    };
+
+    const handleDateChange = (e) => {
+        const dateValue = e.target.value; 
+        if (!dateValue) return;
+
+        const [y, m, d] = dateValue.split("-");
+        const formattedDate = `${d}/${m}/${y}`;
+
+        setFormData(prev => ({
+            ...prev,
+            dob: formattedDate
+        }));
+
+        setTouched(prev => ({ ...prev, dob: true }));
+        const fieldError = validateField("dob", formattedDate);
+        setErrors(prev => ({
+            ...prev,
+            dob: fieldError
+        }));
     };
 
     const handleBlur = (e) => {
@@ -74,9 +127,28 @@ function RegisterPage() {
                 return "";
 
             case "dob":
-                if (!value) return "Date of birth is required";
-                const birthDate = new Date(value);
+                if (!value.trim()) return "Date of birth is required";
+                if (value.length < 10) return "Please enter complete date (DD/MM/YYYY)";
+
+                const dobRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+                if (!dobRegex.test(value)) return "Invalid date format";
+
+                const [dayStr, monthStr, yearStr] = value.split("/");
+                const day = parseInt(dayStr, 10);
+                const month = parseInt(monthStr, 10);
+                const year = parseInt(yearStr, 10);
+
+                if (month < 1 || month > 12) return "Month must be between 01 and 12";
+
+                const birthDate = new Date(year, month - 1, day);
+
+                if (birthDate.getFullYear() !== year || birthDate.getMonth() !== month - 1 || birthDate.getDate() !== day) {
+                    return "Please enter a valid calendar date";
+                }
+
                 const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
                 if (birthDate > today) return "Date of birth cannot be in the future";
 
                 let age = today.getFullYear() - birthDate.getFullYear();
@@ -84,6 +156,7 @@ function RegisterPage() {
                 if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
                     age--;
                 }
+
                 if (age < 13) return "You must be at least 13 years old";
                 return "";
 
@@ -266,15 +339,28 @@ function RegisterPage() {
                             <input
                                 id="dob"
                                 name="dob"
-                                type="date"
+                                type="text"
+                                placeholder="DD/MM/YYYY"
                                 value={formData.dob}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
+                                maxLength={10}
                                 className={`form-input ${errors.dob && touched.dob ? "error-border" : ""}`}
                             />
-                            <div className="input-left-icon">
+                            <div 
+                                className="input-left-icon clickable-icon" 
+                                onClick={handleCalendarClick}
+                                title="Open calendar"
+                            >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>
                             </div>
+                            <input
+                                type="date"
+                                ref={dateInputRef}
+                                onChange={handleDateChange}
+                                style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
+                                max={new Date().toISOString().split("T")[0]}
+                            />
                         </div>
                         {errors.dob && touched.dob && <span className="error-container">{errors.dob}</span>}
                     </div>
