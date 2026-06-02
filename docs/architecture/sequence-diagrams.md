@@ -1,103 +1,104 @@
-# Hướng Dẫn Chuẩn Hóa Sequence Diagram
+# Hướng Dẫn Chuẩn Hóa Sequence Diagram (Sequence Diagrams Guideline)
 
-Tài liệu này quy định các tiêu chuẩn thiết kế, cấu trúc thư mục, quy ước đặt tên và danh sách phân công vẽ Sequence Diagram cho dự án Website Đặt Vé Xem Phim Trực Tuyến. Việc chuẩn hóa giúp toàn bộ 5 thành viên trong nhóm phát triển đồng bộ hóa thiết kế luồng nghiệp vụ trước khi tiến hành viết code.
+Tài liệu này quy định các tiêu chuẩn thiết kế, cấu trúc thư mục, quy ước đặt tên và phân công nhiệm vụ vẽ Sequence Diagram cho dự án Website Đặt Vé Xem Phim Trực Tuyến. Việc chuẩn hóa này giúp các thành viên trong nhóm phát triển đồng bộ hóa thiết kế luồng nghiệp vụ của hệ thống phân tán một cách đồng nhất.
 
 ---
 
 ## 1. Mục Đích (Purpose)
 
-Sequence Diagram (Biểu đồ tuần tự) được sử dụng để mô tả chi tiết cách thức các thành phần trong hệ thống phân tán tương tác với nhau theo trình tự thời gian. Đối với hệ thống microservices của chúng ta, việc vẽ Sequence Diagram giúp:
-*   Làm rõ luồng đi của dữ liệu giữa **Client**, **API Gateway**, các **Backend Services**, **Redis Cache**, **MySQL Database** và **Kafka Message Broker**.
-*   Phân biệt rõ ràng giữa các giao tiếp đồng bộ (synchronous HTTP/gRPC/WebSocket calls) và không đồng bộ (asynchronous Kafka events).
-*   Phát hiện sớm các lỗ hổng logic, các điểm nghẽn hiệu năng, và xác định vị trí thực hiện validate dữ liệu.
-*   Làm tài liệu tham chiếu chuẩn cho việc viết code, viết test cases và hỗ trợ quá trình kiểm thử (UAT).
+Tài liệu này được thiết lập nhằm chuẩn hóa quy trình thiết kế, cách vẽ và cấu trúc file cho toàn bộ các thành viên thuộc dự án. Điều này giúp các thành viên dễ dàng cộng tác, duy trì tài liệu thiết kế hệ thống và giúp Mentor của dự án dễ dàng kiểm duyệt, đánh giá các luồng tương tác giữa các microservice, cache, và database.
 
 ---
 
 ## 2. Cấu Trúc Thư Mục Chuẩn (Standard Folder Structure)
 
-Để dễ dàng quản lý phiên bản trên Git, tất cả các tài liệu mô tả luồng nghiệp vụ và hình ảnh sơ đồ đi kèm phải được lưu trữ đúng theo cấu trúc thư mục phân rã dưới đây:
+Để đảm bảo việc lưu trữ và theo dõi lịch sử Git một cách khoa học, cấu trúc thư mục liên quan tới Sequence Diagram được chuẩn hóa như sau:
 
 ```text
-hcm26_cpl_java_05_group3/
-├── docs/
-│   └── architecture/
-│       ├── sequence-diagrams.md       # File tài liệu hướng dẫn này
-│       ├── diagrams/                  # Thư mục chứa mã nguồn sơ đồ và ảnh xuất ra
-│       │   ├── <flow-name>-sequence.drawio
-│       │   └── <flow-name>-sequence.png
-│       └── sequences/                 # Thư mục chứa các tài liệu giải thích chi tiết
-│           ├── sequence-template.md   # File mẫu tái sử dụng
-│           └── <flow-name>-sequence.md
+docs/
+└── architecture/
+    ├── sequence-diagrams.md             # File tài liệu hướng dẫn này
+    ├── sequences/                       # Thư mục chứa các tài liệu giải thích chi tiết luồng nghiệp vụ
+    │   ├── sequence-template.md         # File mẫu tái sử dụng cho các luồng nghiệp vụ mới
+    │   ├── register-sequence.md
+    │   ├── login-sequence.md
+    │   ├── booking-sequence.md
+    │   ├── payment-sequence.md
+    │   ├── promotion-score-sequence.md
+    │   └── notification-analytics-sequence.md
+    └── diagrams/                        # Thư mục chứa các file thiết kế Draw.io và hình ảnh PNG tương ứng
+        ├── register-sequence.drawio
+        ├── register-sequence.png
+        ├── login-sequence.drawio
+        ├── login-sequence.png
+        ├── booking-sequence.drawio
+        ├── booking-sequence.png
+        ├── payment-sequence.drawio
+        ├── promotion-score-sequence.drawio
+        ├── notification-analytics-sequence.drawio
+        ├── system-diagram.drawio
+        └── system-diagram.png
 ```
 
 ---
 
-## 3. Quy Tắc Đặt Tên (Naming Conventions)
+## 3. Quy Tắc Đặt Tên (Naming Convention)
 
-Tất cả các tệp tin liên quan đến Sequence Diagram phải được đặt tên đồng nhất theo định dạng viết thường, phân tách bằng dấu gạch ngang (kebab-case) và hậu tố `-sequence`:
+Tất cả các tệp tin liên quan đến Sequence Diagram phải được đặt tên đồng nhất theo định dạng kebab-case viết thường và kết thúc bằng hậu tố `-sequence`:
 
-*   **Tệp tài liệu giải thích (.md):** `docs/architecture/sequences/<flow-name>-sequence.md`
-*   **Tệp nguồn thiết kế Draw.io (.drawio):** `docs/architecture/diagrams/<flow-name>-sequence.drawio`
-*   **Tệp hình ảnh xuất ra (.png):** `docs/architecture/diagrams/<flow-name>-sequence.png`
+*   **Tệp tài liệu Markdown giải thích:** `docs/architecture/sequences/<flow-name>-sequence.md`
+*   **Tệp thiết kế nguồn Draw.io:** `docs/architecture/diagrams/<flow-name>-sequence.drawio`
+*   **Tệp hình ảnh xuất ra:** `docs/architecture/diagrams/<flow-name>-sequence.png`
 
 #### Ví dụ chuẩn:
-*   `docs/architecture/sequences/booking-sequence.md`
-*   `docs/architecture/diagrams/booking-sequence.drawio`
-*   `docs/architecture/diagrams/booking-sequence.png`
+*   `booking-sequence.md`
+*   `booking-sequence.drawio`
+*   `booking-sequence.png`
 
 ---
 
-## 4. Danh Sách Phân Công (Sequence Assignment List)
+## 4. Bảng Phân Công Công Việc (Sequence Assignment Matrix)
 
-Dưới đây là bảng theo dõi tiến độ và phân công thiết kế Sequence Diagram cho từng nghiệp vụ cốt lõi trong hệ thống:
+Dưới đây là bảng phân công thiết kế chi tiết cho từng luồng nghiệp vụ của dự án:
 
-| Tên Nghiệp Vụ (Flow Name) | Tệp Tài Liệu (.md) | Thành Viên Phụ Trách | Trạng Thái Hiện Tại |
-| :--- | :--- | :--- | :--- |
-| **Đăng ký tài khoản (Register)** | `register-sequence.md` | Nhóm (Cả nhóm) | Bản thảo nháp (already drafted) |
-| **Đăng nhập (Login)** | `login-sequence.md` | Nhóm (Cả nhóm) | Bản thảo nháp (already drafted) |
-| **Đặt vé xem phim (Booking)** | `booking-sequence.md` | **Hoàng** | Đang thực hiện |
-| **Thanh toán hóa đơn (Payment)** | `payment-sequence.md` | **Vinh** | Đang thực hiện |
-| **Khuyến mãi & Điểm tích lũy (Promotion & Score)** | `promotion-score-sequence.md` | **Khang** | Đang thực hiện |
-| **Thông báo & Thống kê (Notification & Analytics)** | `notification-analytics-sequence.md` | **Thành** | Đang thực hiện |
+| Luồng Nghiệp Vụ (Flow Name) | Thành Viên Phân Công (Assignee) | Markdown File Path | Draw.io File Path | PNG File Path | Trạng Thái (Status) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Đăng ký tài khoản (Register)** | Nhóm (Cả nhóm) | `docs/architecture/sequences/register-sequence.md` | `docs/architecture/diagrams/register-sequence.drawio` | `docs/architecture/diagrams/register-sequence.png` | Bản thảo nháp (already drafted) |
+| **Đăng nhập (Login)** | Nhóm (Cả nhóm) | `docs/architecture/sequences/login-sequence.md` | `docs/architecture/diagrams/login-sequence.drawio` | `docs/architecture/diagrams/login-sequence.png` | Bản thảo nháp (already drafted) |
+| **Đặt vé xem phim (Booking)** | Hoàng | `docs/architecture/sequences/booking-sequence.md` | `docs/architecture/diagrams/booking-sequence.drawio` | `docs/architecture/diagrams/booking-sequence.png` | Đang thực hiện (In-progress) |
+| **Thanh toán hóa đơn (Payment)** | Vinh | `docs/architecture/sequences/payment-sequence.md` | `docs/architecture/diagrams/payment-sequence.drawio` | `docs/architecture/diagrams/payment-sequence.png` | Đang thực hiện (In-progress) |
+| **Khuyến mãi & Điểm tích lũy (Promotion & Score)** | Khang | `docs/architecture/sequences/promotion-score-sequence.md` | `docs/architecture/diagrams/promotion-score-sequence.drawio` | `docs/architecture/diagrams/promotion-score-sequence.png` | Đang thực hiện (In-progress) |
+| **Thông báo & Thống kê (Notification & Analytics)** | Thành | `docs/architecture/sequences/notification-analytics-sequence.md` | `docs/architecture/diagrams/notification-analytics-sequence.drawio` | `docs/architecture/diagrams/notification-analytics-sequence.png` | Đang thực hiện (In-progress) |
+
+> [!WARNING]
+> **Lưu ý về các tệp tin hình ảnh PNG:** Các tệp hình ảnh `.png` của sơ đồ tuần tự chưa được khởi tạo sẵn (hiện đang trống) do hạn chế trong việc tạo trực tiếp tệp ảnh nhị phân. Khi các thành viên hoàn thiện thiết kế trên file `.drawio` tương ứng, bắt buộc phải thực hiện export sơ đồ ra định dạng `.png` và lưu vào thư mục `docs/architecture/diagrams/` trước khi tạo Merge Request.
 
 ---
 
 ## 5. Quy Tắc Thiết Kế Chung (General Rules)
 
-Khi thiết kế Sequence Diagram trên Draw.io hoặc các công cụ thiết kế khác, các thành viên bắt buộc phải tuân thủ các quy tắc sau:
+Khi vẽ Sequence Diagram, các thành viên bắt buộc phải mô tả đầy đủ vòng đời các đối tượng và định dạng đường mũi tên tương tác như sau:
 
-### Các thành phần bắt buộc hiển thị (Participants)
-Mỗi biểu đồ tuần tự của một luồng nghiệp vụ lớn phải thể hiện đầy đủ (nếu có tham gia) các tác nhân theo thứ tự từ trái qua phải:
-1.  **Actor (Tác nhân):** Người dùng (Khách hàng, Quản trị viên, Nhân viên rạp).
-2.  **Client (Giao diện):** Ứng dụng React chạy trên trình duyệt.
-3.  **API Gateway:** Spring Cloud Gateway (cổng chặn, định tuyến và kiểm tra bảo mật).
-4.  **Backend Services:** Các microservice nghiệp vụ tương ứng (ví dụ: `booking-service`, `payment-service`).
-5.  **Caches:** Redis (sử dụng cho việc cache dữ liệu và lock ghế tạm thời).
-6.  **Databases:** Cơ sở dữ liệu quan hệ MySQL của từng dịch vụ.
-7.  **Message Brokers:** Apache Kafka (truyền thông điệp bất đồng bộ).
-8.  **Third-parties:** Cổng thanh toán (VNPay/Momo) hoặc dịch vụ SMTP gửi mail.
-
-### Quy chuẩn đường kết nối (Arrows & Lifelines)
-*   **Lời gọi đồng bộ (Synchronous Call):** Sử dụng mũi tên nét liền đầu tam giác đặc (`->`) hướng từ đối tượng gọi sang đối tượng nhận.
-*   **Phản hồi đồng bộ (Return Message):** Sử dụng mũi tên nét đứt đầu hở (`-->`) hướng ngược lại để mô tả dữ liệu trả về kèm mã HTTP status code (ví dụ: `200 OK`, `400 Bad Request`, `401 Unauthorized`).
-*   **Lời gọi bất đồng bộ (Asynchronous Call):** Sử dụng mũi tên nét liền đầu hở (`->>`) khi gửi tin nhắn tới Kafka broker hoặc chạy các tác vụ chạy ngầm.
-
-### Quy trình xác thực dữ liệu (Data Validation)
-Tại mỗi điểm chạm dữ liệu, luồng xử lý phải mô tả rõ các hoạt động validate:
-*   **Client-side Validation:** Validate định dạng đầu vào (ví dụ: định dạng email, mật khẩu không được rỗng) trước khi gửi API.
-*   **Gateway-side Validation:** API Gateway kiểm tra chữ ký và thời hạn của token JWT.
-*   **Service-side Validation:** Microservice nhận request kiểm tra logic nghiệp vụ phức tạp (ví dụ: kiểm tra số lượng vé khả dụng, kiểm tra số dư điểm tích lũy) và trả về mã lỗi thích hợp nếu không hợp lệ.
+*   **Các thành phần bắt buộc (Participants):** Sơ đồ phải phản ánh đúng luồng đi từ **Actors** (Người dùng) $\rightarrow$ **API Gateway** (Spring Cloud Gateway) $\rightarrow$ **Services** (Microservices nghiệp vụ) $\rightarrow$ **Database** (MySQL) / **Cache** (Redis) / **Message Queue** (Apache Kafka).
+*   **Đường truyền đồng bộ (Synchronous):** Sử dụng mũi tên nét liền đầu tam giác đặc (`->`) cho lời gọi đồng bộ (như HTTP REST API) và mũi tên nét đứt đầu hở (`-->`) cho phản hồi tương ứng kèm HTTP Status Code (ví dụ: `200 OK`, `400 Bad Request`, `401 Unauthorized`).
+*   **Đường truyền bất đồng bộ (Asynchronous):** Sử dụng mũi tên nét liền đầu hở (`->>`) khi gửi thông điệp bất đồng bộ (như gửi event lên Kafka Broker) hoặc các tiến trình ngầm không cần chờ phản hồi lập tức.
+*   **Xác thực và Validate lỗi:** Luôn mô tả rõ ràng các điểm kiểm tra tính hợp lệ của dữ liệu (validation), các trường hợp xảy ra lỗi xác thực quyền truy cập hay lỗi nghiệp vụ tại API Gateway và từng Service cụ thể.
 
 ---
 
 ## 6. Checklist Trước Khi Tạo Merge Request
 
-Trước khi gửi yêu cầu xem xét mã nguồn (Merge Request) lên nhánh `develop` cho Leader **Thành**, các thành viên phải tự kiểm tra các mục sau:
+Trước khi tạo Merge Request để gửi bản vẽ thiết kế tới Team Leader **Thành** phê duyệt, hãy tự kiểm tra:
 
-- [ ] Tên file `.md`, `.drawio`, và `.png` đã tuân thủ đúng định dạng kebab-case với hậu tố `-sequence`.
-- [ ] File hình ảnh `.png` đã được xuất từ Draw.io và đặt đúng trong thư mục `docs/architecture/diagrams/`.
-- [ ] Sơ đồ mô tả rõ ràng các phản hồi lỗi (Alternative Flows) như lỗi xác thực (401), lỗi dữ liệu đầu vào (400) hoặc lỗi thanh toán thất bại.
-- [ ] Các microservice không gọi trực tiếp database của nhau mà đi qua cổng API hoặc giao tiếp bất đồng bộ qua Kafka.
-- [ ] Đường dẫn tham chiếu ảnh trong file `.md` sử dụng đường dẫn tương đối chính xác.
-- [ ] File mô tả giải thích luồng hoạt động khớp hoàn toàn 1-1 với sơ đồ hình ảnh trực quan.
+- [ ] Đường dẫn tương đối trỏ tới file ảnh sơ đồ hoạt động chính xác (ví dụ: `../diagrams/<flow-name>-sequence.png`).
+- [ ] File PNG sơ đồ đã được xuất đầy đủ và lưu trong `docs/architecture/diagrams/`.
+- [ ] Không có microservice nào kết nối và truy cập chéo sang database của microservice khác.
+- [ ] Đã mô tả đầy đủ các luồng xử lý lỗi/ngoại lệ (Alternative/Error Flows).
+- [ ] Toàn bộ nội dung văn bản giải thích bằng tiếng Việt và khớp chính xác 1-1 với thứ tự các bước trong sơ đồ.
+
+---
+
+## 7. Ghi Chú Vòng Đời (Lifecycle Note)
+
+> [!NOTE]
+> Các Sequence Diagram trong hệ thống ban đầu chỉ đại diện cho các bản thảo thiết kế sớm của các Sprint đầu tiên. Trong quá trình phát triển dự án thực tế, các thành viên có thể chủ động cập nhật linh hoạt sơ đồ và tài liệu giải thích tương ứng để phản ánh đúng cấu trúc thay đổi của mã nguồn trong các sprint tiếp theo.
