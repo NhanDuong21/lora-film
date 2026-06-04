@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,13 +17,16 @@ import lombok.NoArgsConstructor;
 public class RegisterRequest {
 	@NotBlank(message = "email is required")
 	@Email(message = "email format is invalid")
-	@Size(max = 150, message = "email max length is 150")
+	@Size(max = 100, message = "email max length is 100")
 	private String email;
 
 	@NotBlank(message = "password is required")
 	@Size(min = 8, max = 50, message = "password length must be between 8 and 50")
+	@Pattern(
+			regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$",
+			message = "password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character (@$!%*?&)"
+	)
 	private String password;
-
 	@NotBlank(message = "confirmPassword is required")
 	@Size(min = 8, max = 50, message = "confirmPassword length must be between 8 and 50")
 	private String confirmPassword;
@@ -43,14 +47,10 @@ public class RegisterRequest {
 	// Expecting ISO date string (yyyy-MM-dd)
 	private String dob;
 
-	/**
-	 * Validates that confirmPassword matches password.
-	 *
-	 * @return true when both passwords match
-	 */
 	@AssertTrue(message = "confirmPassword must equal password")
 	@JsonIgnore
 	public boolean isPasswordConfirmed() {
 		return password != null && password.equals(confirmPassword);
 	}
+
 }
