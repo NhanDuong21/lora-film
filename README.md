@@ -26,7 +26,11 @@ hcm26_cpl_java_05_group3/
 │   ├── movie-service/      # Service managing movies, cinemas, schedules
 │   ├── booking-service/    # Booking processing service
 │   ├── payment-service/    # Payment integration service
-│   └── notification-service/# Email/SMS notification service
+│   ├── notification-service/# Email/SMS notification service
+│   ├── user-service/       # User profiles and management service
+│   ├── analytics-service/  # Data insights and reporting service
+│   ├── promotion-service/  # Coupons and discount service
+│   └── score-service/      # Loyalty points and movie rating service
 ├── api-gateway/            # Intermediate API Gateway routing requests
 └── docs/                   # Project documentation (workflow, structure...)
 ```
@@ -56,7 +60,7 @@ npm run dev
 
 ## Backend Run Instructions
 
-The backend uses a Microservices architecture. Ensure that you have MySQL installed and the corresponding databases created (`auth_db`, `movie_db`, `booking_db`, `payment_db`, `notification_db`).
+The backend uses a Microservices architecture. Ensure that you have MySQL installed and the corresponding databases created (`auth_db`, `movie_db`, `booking_db`, `payment_db`, `notification_db`, `user_db`, `promotion_db`, `score_db`, `analytics_db`).
 
 Open a terminal in each service directory and run them independently. You can use the commands:
 
@@ -71,14 +75,22 @@ mvn spring-boot:run
 3. `cd server/booking-service && mvn spring-boot:run` (Port: `8083`)
 4. `cd server/payment-service && mvn spring-boot:run` (Port: `8084`)
 5. `cd server/notification-service && mvn spring-boot:run` (Port: `8085`)
-6. `cd api-gateway && mvn spring-boot:run` (Port: `8080`)
+6. `cd server/user-service && mvn spring-boot:run` (Port: `8086`)
+7. `cd server/promotion-service && mvn spring-boot:run` (Port: `8087`)
+8. `cd server/score-service && mvn spring-boot:run` (Port: `8088`)
+9. `cd server/analytics-service && mvn spring-boot:run` (Port: `8089`)
+10. `cd api-gateway && mvn spring-boot:run` (Port: `8080`)
 
-1. `auth-service`
-2. `movie-service`
-3. `booking-service`
-4. `payment-service`
-5. `notification-service`
-6. `api-gateway`
+1. `auth-service` (8081)
+2. `movie-service` (8082)
+3. `booking-service` (8083)
+4. `payment-service` (8084)
+5. `notification-service` (8085)
+6. `user-service` (8086)
+7. `promotion-service` (8087)
+8. `score-service` (8088)
+9. `analytics-service` (8089)
+10. `api-gateway` (8080)
 
 ## Docker Compose Local Development
 
@@ -152,8 +164,18 @@ You can also check Docker status directly:
 ```bash
 docker compose ps
 ```
-Check the health status via the `GET /health` endpoint for each service (e.g., `http://localhost:8081/health`). 
-The Gateway routes requests, for example: `/auth/**` -> `http://localhost:8081`.
+Check the health status via the `GET /health` endpoint for each service (e.g., `http://localhost:8081/health`, `http://localhost:8086/health`). 
+
+The Gateway routes requests using the following static routes:
+- `/api/auth/**` -> `http://localhost:8081` (auth-service)
+- `/api/movies/**` -> `http://localhost:8082` (movie-service)
+- `/api/bookings/**` -> `http://localhost:8083` (booking-service)
+- `/api/payments/**` -> `http://localhost:8084` (payment-service)
+- `/api/notifications/**` -> `http://localhost:8085` (notification-service)
+- `/api/users/**` -> `http://localhost:8086` (user-service)
+- `/api/promotions/**` -> `http://localhost:8087` (promotion-service)
+- `/api/scores/**` -> `http://localhost:8088` (score-service)
+- `/api/analytics/**` -> `http://localhost:8089` (analytics-service)
 
 ## Basic Branching Rules
 
