@@ -1,104 +1,164 @@
-# Luồng Nghiệp Vụ Đặt Vé Xem Phim - Sequence Diagram
+# Sequence Diagrams
 
-Tài liệu này mô tả chi tiết sơ đồ tuần tự và luồng xử lý nghiệp vụ cho tính năng **Đặt Vé Xem Phim** của hệ thống Đặt Vé Xem Phim Trực Tuyến.
+## Booking Flow
 
-*   **Thành viên phụ trách:** Hoàng
-*   **Trạng thái tài liệu:** Đang thực hiện (In-progress)
+> Đây là draft flow cho **Booking module** trong hệ thống đặt vé xem phim online.
+> Flow này mô tả quá trình user chọn phim, suất chiếu, ghế, giữ ghế tạm thời, thanh toán, lưu booking và gửi thông báo sau khi booking thành công.
 
----
+## Diagram liên quan
 
-## 1. Mục Đích (Purpose)
+```text
+docs/architecture/diagrams/booking-sequence.puml
+docs/architecture/diagrams/booking-sequence.drawio
+docs/architecture/diagrams/booking-sequence.png
+```
 
-Tài liệu thiết kế chi tiết quy trình đặt vé xem phim của khách hàng, bao gồm việc chọn phim, suất chiếu, ghế ngồi, khóa giữ chỗ tạm thời bằng Redis Cache, phối hợp thanh toán, cập nhật trạng thái đơn hàng và gửi email xác nhận.
+## Mục đích
 
----
+Tài liệu này mô tả luồng đặt vé chính của hệ thống, bao gồm:
 
-## 2. Phạm Vi Hệ Thống (Scope)
+* User chọn phim, suất chiếu và ghế
+* Frontend gửi request giữ ghế đến API Gateway
+* Booking Service kiểm tra trạng thái ghế
+* Redis giữ ghế tạm thời
+* Payment Service xử lý thanh toán
+* Booking Service lưu booking vào MySQL
+* Kafka publish event booking confirmed
+* Notification Service nhận event và gửi thông báo
 
-Bao gồm các thành phần: Client React, API Gateway, booking-service, payment-service, MySQL DB, Redis Cache, Apache Kafka và notification-service.
+## Mô tả flow
 
----
+### Bước 1: User chọn phim, suất chiếu và ghế
 
-## 3. Thành Phần Tham Gia (Participants)
+User thao tác trên React Frontend để chọn phim, suất chiếu và ghế muốn đặt.
 
-Dưới đây là danh sách chi tiết các đối tượng và dịch vụ xuất hiện trong sơ đồ tuần tự:
+### Bước 2: Frontend gửi request giữ ghế đến API Gateway
 
-| Thành Phần (Participant) | Loại (Actor / Service / DB / Cache) | Vai Trò & Nhiệm Vụ Trong Luồng |
-| :--- | :--- | :--- |
-| **Khách hàng** | Actor | Người dùng thực hiện chọn vé, ghế và thanh toán. |
-| **Client (React)** | Client | Giao diện hiển thị sơ đồ ghế, thời gian giữ ghế và xử lý các sự kiện click đặt chỗ. |
-| **API Gateway** | Gateway | Định tuyến các request API đến các microservice nghiệp vụ thích hợp. |
-| **booking-service** | Service | Xử lý nghiệp vụ chọn vé, giữ ghế tạm thời, cập nhật trạng thái đặt vé và tạo hóa đơn. |
-| **payment-service** | Service | Tiếp nhận thông tin và xử lý giao dịch tài chính với đối tác thanh toán. |
-| **Redis Cache** | Cache | Lưu trữ khóa giữ ghế tạm thời (seat reservation lock) với thời hạn tự giải phóng (TTL). |
-| **MySQL (Booking DB)** | DB | Lưu trữ thông tin hóa đơn đặt vé và sơ đồ ghế cố định. |
-| **Apache Kafka** | Broker | Truyền nhận thông điệp sự kiện đặt vé thành công (`booking.success`). |
-| **notification-service** | Service | Tiêu thụ event từ Kafka để gửi email xác nhận đặt vé thành công. |
+Sau khi user chọn ghế, React Frontend gửi request đến API Gateway để yêu cầu giữ ghế tạm thời.
 
----
+Ví dụ endpoint:
 
-## 4. Sơ Đồ Sequence Diagram (Diagram Image)
+```text
+POST /api/bookings/hold-seats
+```
 
-![Sơ đồ tuần tự Đặt Vé Xem Phim](../diagrams/booking-sequence.png)
+Request có thể gồm:
 
----
+```json
+{
+  "userId": "USER_ID",
+  "movieId": "MOVIE_ID",
+  "showtimeId": "SHOWTIME_ID",
+  "seatIds": ["A1", "A2"]
+}
+```
 
-## 5. Mô Tả Luồng Xử Lý Chính (Main Flow Steps)
+### Bước 3: API Gateway route request đến Booking Service
 
-1.  **Bước 1:** Khách hàng chọn bộ phim, suất chiếu và một hoặc nhiều ghế từ giao diện Client React.
-2.  **Bước 2:** Client gửi yêu cầu giữ ghế tạm thời (POST `/api/bookings/seat-lock`) qua API Gateway đến booking-service.
-3.  **Bước 3:** API Gateway chuyển tiếp request định tuyến tới booking-service.
-4.  **Bước 4:** booking-service truy vấn MySQL để kiểm tra xem các ghế đã chọn đã được mua từ trước chưa.
-5.  **Bước 5:** Nếu ghế còn trống, booking-service thiết lập khóa tạm thời trên Redis (Key format: `seat_lock:{showtimeId}:{seatId}`) với thời gian hết hạn (TTL) từ 5-10 phút để tránh tình trạng người dùng khác chọn trùng.
-6.  **Bước 6:** Khi giữ ghế thành công trên Redis, Client nhận phản hồi và hiển thị màn hình thanh toán cho người dùng.
-7.  **Bước 7:** Khách hàng xem xét thông tin hóa đơn và xác nhận thanh toán.
-8.  **Bước 8:** Client gửi yêu cầu xử lý thanh toán qua API Gateway tới payment-service.
-9.  **Bước 9:** Sau khi thanh toán thành công, booking-service cập nhật trạng thái đơn vé sang "Đã thanh toán" và ghi nhận vào MySQL.
-10. **Bước 10:** booking-service thực hiện xóa khóa giữ ghế tạm thời tương ứng trên Redis.
-11. **Bước 11:** booking-service bắn sự kiện đặt vé thành công (`booking.success`) lên Kafka Broker.
-12. **Bước 12:** notification-service tiêu thụ (consume) event đặt vé thành công từ Kafka và tiến hành gửi email xác nhận vé điện tử kèm mã QR Code cho khách hàng.
-13. **Bước 13:** Client hiển thị màn hình kết quả đặt vé thành công kèm mã đặt vé.
+API Gateway nhận request từ frontend và chuyển tiếp request đến Booking Service.
 
----
+Booking Service chịu trách nhiệm xử lý nghiệp vụ đặt vé và trạng thái ghế.
 
-## 6. Luồng Xử Lý Thay Thế / Ngoại lệ (Alternative/Error Flows)
+### Bước 4: Booking Service kiểm tra trạng thái ghế
 
-### Lỗi A: Ghế đã bị đặt trước đó (MySQL check)
-*   **Mô tả:** Ghế được chọn đã được người khác thanh toán thành công trước đó.
-*   **Xử lý:** booking-service trả về mã lỗi `409 Conflict`. Client yêu cầu người dùng chọn ghế khác.
+Booking Service kiểm tra các ghế được chọn có còn trống không.
 
-### Lỗi B: Ghế đang bị tạm giữ bởi người khác (Redis check)
-*   **Mô tả:** Ghế được chọn đang trong trạng thái khóa tạm thời bởi một khách hàng khác cũng đang thanh toán.
-*   **Xử lý:** booking-service trả về lỗi tạm giữ. Client thông báo lỗi và yêu cầu chọn ghế khác.
+Các điều kiện cần kiểm tra:
 
-### Lỗi C: Hết thời gian giữ ghế (Seat Lock Expired)
-*   **Mô tả:** Người dùng mất quá nhiều thời gian để hoàn thành thanh toán khiến TTL trên Redis hết hạn và tự động giải phóng ghế.
-*   **Xử lý:** Khách hàng phải thực hiện quy trình chọn ghế và đặt vé lại từ đầu.
+* Ghế có tồn tại trong phòng chiếu không
+* Ghế có thuộc đúng suất chiếu không
+* Ghế đã được đặt chưa
+* Ghế có đang bị user khác giữ tạm thời không
 
-### Lỗi D: Giao dịch thanh toán thất bại
-*   **Mô tả:** Người dùng hủy thanh toán hoặc tài khoản không đủ số dư.
-*   **Xử lý:** Đơn hàng chuyển trạng thái thất bại, booking-service xóa lock Redis của các ghế tương ứng để trả ghế lại cho sơ đồ trống.
+### Bước 5: Redis giữ ghế tạm thời
 
----
+Nếu ghế còn trống, Booking Service lưu trạng thái giữ ghế tạm thời vào Redis.
 
-## 7. Ghi Chú Thiết Kế (Design Notes)
+Redis có thể dùng TTL để tự động hết hạn giữ ghế.
 
-*   **Redis Key Format:** `lock:seat:{showtimeId}:{seatId}` với TTL mặc định là 600 giây (10 phút).
-*   **Kafka Event Payload:** Message sự kiện cần chứa thông tin tối giản (`bookingId`, `userId`, `email`, `seats`) để đảm bảo tốc độ truyền tin.
+Ví dụ:
 
----
+```text
+seat_hold:showtimeId:A1 -> userId
+TTL: 5 minutes
+```
 
-## 8. Checklist Tự Kiểm Tra (Self-Checklist)
+Nếu user không thanh toán trong thời gian giữ ghế, ghế sẽ tự động được mở lại.
 
-Lập trình viên phụ trách phải tự tích chọn kiểm tra trước khi yêu cầu review:
+### Bước 6: User xác nhận thanh toán
 
-- [x] Sơ đồ UML được vẽ rõ ràng, không bị chồng chéo các đường lifelines.
-- [x] Các HTTP status code trả về được ghi nhận cụ thể (`200 OK`, `409 Conflict`, v.v.).
-- [x] Đã mô tả đầy đủ các bước kiểm tra tính hợp lệ dữ liệu (Validation).
-- [x] Không có microservice nào truy cập chéo database của nhau.
-- [x] Đã nhúng đúng đường dẫn ảnh tương đối tới thư mục `diagrams/`.
+Sau khi ghế được giữ thành công, user xác nhận thanh toán trên frontend.
 
----
+Frontend gửi request thanh toán đến API Gateway.
 
-> [!NOTE]
-> **Lưu ý:** Sequence Diagram này đại diện cho thiết kế kiến trúc ban đầu của tính năng và có thể được điều chỉnh linh hoạt trong quá trình phát triển thực tế để phù hợp với các cải tiến công nghệ.
+Ví dụ endpoint:
+
+```text
+POST /api/bookings/confirm
+```
+
+### Bước 7: Payment Service xử lý thanh toán
+
+Booking Service gửi yêu cầu thanh toán sang Payment Service.
+
+Payment Service xử lý thanh toán dựa trên tổng tiền booking.
+
+Nếu thanh toán thất bại, hệ thống trả lỗi về frontend và có thể release ghế đang giữ.
+
+Nếu thanh toán thành công, Booking Service tiếp tục lưu booking chính thức.
+
+### Bước 8: Booking Service lưu booking vào MySQL
+
+Sau khi thanh toán thành công, Booking Service lưu thông tin booking vào MySQL.
+
+Dữ liệu booking có thể gồm:
+
+```json
+{
+  "bookingId": "BOOKING_ID",
+  "userId": "USER_ID",
+  "movieId": "MOVIE_ID",
+  "showtimeId": "SHOWTIME_ID",
+  "seatIds": ["A1", "A2"],
+  "totalAmount": 200000,
+  "paymentStatus": "PAID",
+  "bookingStatus": "CONFIRMED"
+}
+```
+
+### Bước 9: Kafka publish event booking confirmed
+
+Sau khi booking được lưu thành công, Booking Service publish event `BookingConfirmed` vào Kafka.
+
+Ví dụ event:
+
+```json
+{
+  "eventName": "BookingConfirmed",
+  "bookingId": "BOOKING_ID",
+  "userId": "USER_ID",
+  "showtimeId": "SHOWTIME_ID",
+  "seatIds": ["A1", "A2"],
+  "totalAmount": 200000,
+  "confirmedAt": "2026-06-04T10:00:00"
+}
+```
+
+### Bước 10: Notification Service nhận event và gửi thông báo
+
+Notification Service consume event `BookingConfirmed` từ Kafka.
+
+Sau đó Notification Service gửi thông báo cho user, ví dụ:
+
+* Email xác nhận đặt vé
+* Thông báo trong hệ thống
+* Push notification nếu sau này có mobile app
+
+## Ghi chú
+
+* Đây là draft flow cho Booking module.
+* Redis được dùng để giữ ghế tạm thời và tránh nhiều user đặt cùng một ghế.
+* MySQL được dùng để lưu booking chính thức sau khi thanh toán thành công.
+* Kafka được dùng để publish event sau khi booking confirmed.
+* Notification Service xử lý gửi thông báo bất đồng bộ sau khi nhận event từ Kafka.
+* Code PlantUML để vẽ diagram nằm trong file `booking-sequence.puml`.
