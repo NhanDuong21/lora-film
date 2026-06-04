@@ -98,7 +98,7 @@
         <mxCell id="HjocLtPqayYtDtlGQ7ZY-14" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="Admin" vertex="1">
           <mxGeometry height="60" width="30" x="-416" y="507" as="geometry" />
         </mxCell>
-        <mxCell id="HjocLtPqayYtDtlGQ7ZY-16" edge="1" parent="1" source="HjocLtPqayYtDtlGQ7ZY-4" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" value="REST API">
+        <mxCell id="HjocLtPqayYtDtlGQ7ZY-16" edge="1" parent="1" source="HjocLtPqayYtDtlGQ7ZY-4" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;startArrow=classic;startFill=1;" value="REST API">
           <mxGeometry height="50" relative="1" width="50" x="-0.0103" y="14" as="geometry">
             <mxPoint as="offset" />
             <mxPoint x="-107" y="657" as="sourcePoint" />
@@ -304,6 +304,13 @@
             </Array>
             <mxPoint x="-287" y="711" as="sourcePoint" />
             <mxPoint x="-198" y="772" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Uw54n21kX44c61M-oSzH-1" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" target="HjocLtPqayYtDtlGQ7ZY-17" value="Report response">
+          <mxGeometry height="50" relative="1" width="50" x="-0.0066" y="11" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="174" y="634" as="sourcePoint" />
+            <mxPoint x="116" y="626" as="targetPoint" />
           </mxGeometry>
         </mxCell>
       </root>
