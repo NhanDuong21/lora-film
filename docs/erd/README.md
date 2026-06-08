@@ -1,12 +1,42 @@
-# Tài Liệu Sơ Đồ Thực Thể Quan Hệ Vật Lý (Physical ERD)
+# Tài Liệu Physical ERD Theo Từng Service
 
-Thư mục này lưu trữ toàn bộ các sơ đồ thiết kế kiến trúc thực thể quan hệ mức vật lý (Physical Entity-Relationship Diagram) phục vụ công tác trực quan hóa luồng dữ liệu và hỗ trợ giải trình kiến trúc hệ thống LoraFilm với Mentor.
+Tài liệu này cung cấp sơ đồ thiết kế thực thể quan hệ mức vật lý (Physical Entity-Relationship Diagram) chi tiết cho từng dịch vụ riêng biệt trong hệ sinh thái LoraFilm.
 
-## Cấu Trúc Phân Vị
-* physical/: Thư mục chứa ảnh sơ đồ ERD độc lập dạng định dạng chất lượng cao (.png) được kết xuất (export) trực tiếp từ công cụ thiết kế dbdiagram.io.
+## Mục Đích Tài Liệu
 
-## Bản Đồ Theo Dõi Danh Mục Sơ Đồ (ERD Mapping)
-Dưới đây là danh sách quản lý và phân cấp các tệp tin sơ đồ tương ứng với từng phân hệ dịch vụ độc lập:
+Tài liệu này đóng vai trò như bản thiết kế chi tiết giúp trực quan hóa luồng dữ liệu, phân định ranh giới lưu trữ giữa các microservice, đồng thời hỗ trợ đội ngũ phát triển và Mentor trong các buổi rà soát, đánh giá kiến trúc hệ thống.
+
+## Cấu Trúc Thư Mục
+
+Dưới đây là sơ đồ cây cấu trúc lưu trữ của phân khu thiết kế ERD trong dự án:
+
+```plaintext
+docs/
+└── erd/
+    ├── README.md
+    └── physical/
+        ├── analytics-service-physical-erd.png
+        ├── auth-service-physical-erd.png
+        ├── booking-service-physical-erd.png
+        ├── movie-service-physical-erd.png
+        ├── notification-service-physical-erd.png
+        ├── payment-service-physical-erd.png
+        ├── promotion-service-physical-erd.png
+        ├── score-service-physical-erd.png
+        └── user-service-physical-erd.png
+```
+
+## Nguyên Tắc Database-per-Service
+
+Dự án LoraFilm được xây dựng dựa trên kiến trúc microservices phân tán. Để đảm bảo tính độc lập và khả năng mở rộng tối đa, hệ thống áp dụng nguyên tắc Database-per-Service:
+
+1. Mỗi dịch vụ microservice hoàn toàn sở hữu và quản lý một cơ sở dữ liệu tách biệt của riêng mình.
+2. Tuyệt đối không thiết lập liên kết khóa ngoại vật lý (Foreign Key) chéo giữa các cơ sở dữ liệu của các dịch vụ khác nhau.
+3. Liên kết dữ liệu liên dịch vụ được duy trì thông qua khái niệm Tham chiếu logic (Logical References). Các trường định danh như user_id, movie_id, booking_id, showtime_id, seat_id, promotion_id chỉ lưu trữ dưới dạng kiểu dữ liệu số nguyên thuần túy (bigint). Việc kiểm tra tính toàn vẹn dữ liệu được xử lý ở tầng mã nguồn ứng dụng Spring Boot hoặc thông qua cơ chế đồng bộ luồng sự kiện bất đồng bộ của Apache Kafka.
+
+## ERD Mapping
+
+Bảng danh mục quản lý sơ đồ ERD vật lý tương ứng với từng dịch vụ:
 
 | Tên Dịch Vụ (Service) | Tệp Tin Sơ Đồ PNG (docs/erd/physical/) | Công Cụ Thiết Kế Gốc | Trạng Thái Thiết Kế |
 | :--- | :--- | :--- | :--- |
@@ -20,10 +50,81 @@ Dưới đây là danh sách quản lý và phân cấp các tệp tin sơ đồ
 | 8. Notification Service | notification-service-physical-erd.png | dbdiagram.io | Hoàn thành |
 | 9. Analytics Service | analytics-service-physical-erd.png | dbdiagram.io | Hoàn thành |
 
-## Quy Định Cập Nhật Và Chỉnh Sửa Sơ Đồ
-* Không dùng một bản ERD tập trung độc nhất: Do hệ thống chạy theo mô hình cơ sở dữ liệu phân tán microservices, mỗi service bắt buộc phải giữ một sơ đồ ERD riêng biệt.
-* Quy trình cập nhật: Khi phát sinh yêu cầu thay đổi nghiệp vụ cần chỉnh sửa bảng:
-    * Bước 1: Thành viên phụ trách truy cập công cụ dbdiagram.io, cập nhật mã cấu trúc DBML tương ứng.
-    * Bước 2: Thực hiện Export -> Export to PNG và lưu đè file ảnh mới vào thư mục physical/.
-    * Bước 3: Thực hiện Export -> Export to MySQL để sinh file mã SQL mới lưu đè vào thư mục docs/database/mysql/ tương ứng.
-    * Bước 4: Tạo Merge Request để Leader Thành rà soát kiểm tra logic.
+## Physical ERD Chi Tiết Theo Service
+
+### Auth Service
+
+Quản lý đăng ký, đăng nhập, phân quyền (ADMIN, EMPLOYEE, CUSTOMER), mã hóa bảo mật mật khẩu và cấp phát token JWT.
+
+![Auth Service Physical ERD](./physical/auth-service-physical-erd.png)
+
+### User Service
+
+Quản lý thông tin hồ sơ cá nhân cốt lõi của khách hàng và hồ sơ nhân sự nội bộ của nhân viên rạp.
+
+![User Service Physical ERD](./physical/user-service-physical-erd.png)
+
+### Movie Service
+
+Quản lý danh mục phim, thể loại, cấu trúc phòng chiếu, cấu hình ghế ngồi vật lý và lịch trình suất chiếu chi tiết.
+
+![Movie Service Physical ERD](./physical/movie-service-physical-erd.png)
+
+### Booking Service
+
+Xử lý nghiệp vụ trung tâm về đặt vé, chi tiết vé lẻ trong hóa đơn và cơ chế khóa giữ ghế thời gian thực.
+
+![Booking Service Physical ERD](./physical/booking-service-physical-erd.png)
+
+### Payment Service
+
+Tích hợp cổng thanh toán bên thứ ba, theo dõi trạng thái giao dịch tài chính và lưu vết nhật ký phục vụ đối soát dòng tiền.
+
+![Payment Service Physical ERD](./physical/payment-service-physical-erd.png)
+
+### Promotion Service
+
+Quản lý chiến dịch ưu đãi, mã giảm giá voucher, giới hạn lượt dùng và lịch sử áp dụng khuyến mãi trên từng đơn hàng.
+
+![Promotion Service Physical ERD](./physical/promotion-service-physical-erd.png)
+
+### Score Service
+
+Quản lý ví điểm thưởng tích lũy của khách hàng, lịch sử biến động điểm và cấu hình các mốc thăng hạng thành viên.
+
+![Score Service Physical ERD](./physical/score-service-physical-erd.png)
+
+### Notification Service
+
+Quản lý cấu trúc biểu mẫu tin nhắn và nhật ký trạng thái gửi thông báo vé điện tử, mã QR qua các kênh Email, SMS, Push.
+
+![Notification Service Physical ERD](./physical/notification-service-physical-erd.png)
+
+### Analytics Service
+
+Kho dữ liệu đệm tổng hợp thông tin doanh thu theo ngày và theo phim phục vụ kết xuất báo cáo lên Dashboard quản trị.
+
+![Analytics Service Physical ERD](./physical/analytics-service-physical-erd.png)
+
+## Ghi Chú Về ERD Tổng Ban Đầu
+
+Mặc dù sơ đồ ERD tập trung ban đầu rất hữu ích cho các cuộc thảo luận ở cấp độ khái niệm tổng quan hệ thống, việc hiện thực hóa ở mức vật lý đòi hỏi cấu trúc cơ sở dữ liệu phân tán và độc lập cho từng microservice để tránh sự ràng buộc chặt chẽ (tight coupling) giữa các bảng dữ liệu, đồng thời nâng cao độ tin cậy và tính mô-đun hóa của hệ thống.
+
+## Quy Trình Cập Nhật ERD
+
+Khi phát sinh các thay đổi về nghiệp vụ liên quan đến cấu trúc cơ sở dữ liệu, các thành viên thực hiện theo quy trình sau:
+
+Bước 1: Thành viên phụ trách truy cập dbdiagram.io để điều chỉnh cấu trúc mã DBML.
+
+Bước 2: Xuất tệp ảnh PNG mới thông qua chức năng Export và ghi đè vào thư mục physical/.
+
+Bước 3: Xuất tệp SQL mới tương ứng và lưu trữ vào phân vùng docs/database/mysql/.
+
+Bước 4: Tạo Merge Request hướng về nhánh develop để Lead Thành tiến hành rà soát.
+
+## Lưu Ý Khi Thiết Kế ERD
+
+Khi thiết kế hoặc cập nhật sơ đồ ERD vật lý, cần chú ý các quy tắc sau:
+1. Đảm bảo khai báo chỉ mục (Index) trên các cột thường xuyên dùng làm điều kiện tìm kiếm hoặc truy vấn lọc để tối ưu hiệu năng.
+2. Dữ liệu đồng bộ liên dịch vụ cần được truyền tải một cách bất đồng bộ qua Kafka sự kiện nhằm giảm thiểu độ trễ phản hồi của API.
+3. Thiết kế bảng phải đảm bảo khả năng mở rộng cấu trúc linh hoạt mà không gây ảnh hưởng đến tính tương thích ngược của dữ liệu cũ khi tiến hành phân mảnh hoặc nâng cấp phiên bản hệ thống.
