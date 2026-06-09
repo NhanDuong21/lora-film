@@ -17,8 +17,8 @@ public class AccountMapper {
 		RegisterResponse response = new RegisterResponse();
 		response.setId(account.getId());
 		response.setEmail(account.getEmail());
-		response.setRole(account.getRole() != null ? account.getRole().getName() : null);
-		response.setStatus(account.getStatus() != null ? account.getStatus().name() : null);
+		response.setRole(account.getRole() != null ? account.getRole().getRoleName() : null);
 		return response;
 	}
+
 }

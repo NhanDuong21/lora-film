@@ -1,5 +1,7 @@
 package com.project.authservice.entity;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -9,9 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -24,46 +24,33 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "accounts")
-public class Account {
+@Table(name = "audit_logs")
+public class AuditLog {
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(name = "email", nullable = false, unique = true, length = 100)
-	private String email;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "account_id")
+	private Account account;
 
-	@Column(name = "password_hash", nullable = false, length = 255)
-	private String passwordHash;
+	@Column(name = "action", nullable = false, length = 100)
+	private String action;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "role_id", nullable = false)
-	private Role role;
+	@Column(name = "ip_address", length = 45)
+	private String ipAddress;
 
-	@Builder.Default
-	@Column(name = "is_active", nullable = false)
-	private Boolean isActive = true;
+	@Column(name = "user_agent", length = 255)
+	private String userAgent;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
-	@Column(name = "updated_at", nullable = false)
-	private LocalDateTime updatedAt;
-
 	@PrePersist
 	void prePersist() {
-		LocalDateTime now = LocalDateTime.now();
 		if (createdAt == null) {
-			createdAt = now;
+			createdAt = LocalDateTime.now();
 		}
-		updatedAt = now;
-		if (isActive == null) {
-			isActive = true;
-		}
-	}
-
-	@PreUpdate
-	void preUpdate() {
-		updatedAt = LocalDateTime.now();
 	}
 }
