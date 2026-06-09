@@ -30,6 +30,18 @@ public class GlobalExceptionHandler {
 	}
 
 	/**
+	 * Handles unauthorized access.
+	 *
+	 * @param exception unauthorized exception
+	 * @return error response
+	 */
+	@ExceptionHandler(UnauthorizedException.class)
+	public ResponseEntity<ApiResponse<Object>> handleUnauthorizedException(UnauthorizedException exception) {
+		log.warn("Unauthorized: {}", exception.getMessage());
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.failure(exception.getMessage()));
+	}
+
+	/**
 	 * Handles missing resources.
 	 *
 	 * @param exception resource not found exception

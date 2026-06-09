@@ -6,15 +6,19 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.project.authservice.dto.JwtResponse;
+import com.project.authservice.dto.LoginRequest;
 import com.project.authservice.dto.RegisterRequest;
 import com.project.authservice.dto.RegisterResponse;
 import com.project.authservice.entity.Account;
 import com.project.authservice.entity.Role;
 import com.project.authservice.exception.BusinessException;
 import com.project.authservice.exception.ResourceNotFoundException;
+import com.project.authservice.exception.UnauthorizedException;
 import com.project.authservice.mapper.AccountMapper;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.repository.RoleRepository;
+import com.project.authservice.util.JwtUtil;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +33,7 @@ public class AuthServiceImpl implements AuthService {
 	private final RoleRepository roleRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final AccountMapper accountMapper;
+	private final JwtUtil jwtUtil;
 
 	/**
 	 * Registers a new user account.
@@ -61,5 +66,38 @@ public class AuthServiceImpl implements AuthService {
 
 		log.info("Account registered successfully for email={} with id={}", email, Objects.requireNonNull(response.getId()));
 		return response;
+	}
+
+	/**
+	 * Authenticates user and generates JWT token.
+	 *
+	 * @param request login request
+	 * @return jwt response
+	 */
+	@Override
+	public JwtResponse login(LoginRequest request) {
+		String email = request.getEmail().trim().toLowerCase();
+		log.info("Login request received for email={}", email);
+
+		Account account = accountRepository.findByEmail(email)
+				.orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
+
+		if (!passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
+			throw new UnauthorizedException("Invalid email or password");
+		}
+
+		if (!account.getIsActive()) {
+			throw new UnauthorizedException("Account is disabled");
+		}
+
+		String token = jwtUtil.generateToken(account.getId(), account.getEmail(), account.getRole().getRoleName());
+
+		log.info("User {} logged in successfully", email);
+
+		return JwtResponse.builder()
+				.token(token)
+				.email(account.getEmail())
+				.role(account.getRole().getRoleName())
+				.build();
 	}
 }
