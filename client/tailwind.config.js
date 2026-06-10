@@ -7,9 +7,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        'brand-dark': '#111111',
-        'brand-coral': '#D88174',
-        'coral-500': '#D88174',
+        'brand-dark': '#050506',
+        'brand-coral': '#ff7a1a',
+        'coral-500': '#ff7a1a',
         'brand-gray': '#1A1A1D',
         'brand-yellow': '#EAB308',
       },
