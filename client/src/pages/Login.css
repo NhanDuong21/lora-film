@@ -62,7 +62,7 @@
     border-radius: 16px;
     width: 100%;
     max-width: 440px;
-    padding: 45px 35px;
+    padding: 40px 35px;
     box-sizing: border-box;
     box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(229, 9, 20, 0.05);
     backdrop-filter: blur(16px);
@@ -78,10 +78,31 @@
     border-color: rgba(229, 9, 20, 0.35);
 }
 
+/* Back Link Button */
+.back-link-btn {
+    background: none;
+    border: none;
+    color: #a1a1aa;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding: 0;
+    transition: color 0.3s ease;
+    text-decoration: none;
+}
+
+.back-link-btn:hover {
+    color: #ff3344;
+}
+
 /* Header Elements */
 .login-header {
     text-align: center;
-    margin-bottom: 35px;
+    margin-bottom: 28px;
 }
 
 .login-brand {
@@ -89,7 +110,7 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 /* Glowing Neon Ticket Icon */
@@ -116,17 +137,50 @@
 }
 
 .login-subtitle {
-    font-size: 14px;
+    font-size: 13px;
     color: #8c8c8c;
     margin: 0;
     letter-spacing: 0.3px;
+}
+
+/* Form Success Banner */
+.success-banner {
+    background-color: rgba(40, 167, 69, 0.15);
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    color: #28a745;
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 15px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    animation: pop-in 0.3s ease-out;
+}
+
+/* Error Notification Bar */
+.error-alert-banner {
+    background-color: rgba(69, 10, 10, 0.5);
+    border: 1px solid rgba(153, 27, 27, 0.8);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: #fca5a5;
+    font-size: 12.5px;
+    line-height: 1.5;
+    animation: shake 0.4s ease-in-out;
 }
 
 /* Form Fields */
 .login-form {
     display: flex;
     flex-direction: column;
-    gap: 22px;
+    gap: 20px;
 }
 
 .form-group {
@@ -139,7 +193,7 @@
 }
 
 .form-label {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: #aaaaaa;
     text-transform: uppercase;
@@ -213,37 +267,9 @@
     color: #ffffff;
 }
 
-/* Form Success Banner */
-.success-banner {
-    background-color: rgba(40, 167, 69, 0.15);
-    border: 1px solid rgba(40, 167, 69, 0.3);
-    color: #28a745;
-    padding: 12px;
-    border-radius: 8px;
-    margin-top: 15px;
-    font-size: 14px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    animation: pop-in 0.3s ease-out;
-}
-
-/* Form Errors */
-.error-container {
-    color: #ff3344;
-    font-size: 12.5px;
-    font-weight: 500;
-    margin-top: 4px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    animation: pop-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
 /* Submit Action Button */
 .login-btn {
+    width: 100%;
     background: linear-gradient(135deg, #E50914 0%, #b3060f 100%);
     color: #ffffff;
     border: none;
@@ -262,19 +288,24 @@
     user-select: none;
 }
 
-.login-btn:hover {
+.login-btn:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 8px 24px rgba(229, 9, 20, 0.45);
     background: linear-gradient(135deg, #f50a16 0%, #c40711 100%);
 }
 
-.login-btn:active {
+.login-btn:active:not(:disabled) {
     transform: translateY(0);
+}
+
+.login-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
 }
 
 /* Navigation Links Footer */
 .login-footer {
-    margin-top: 28px;
+    margin-top: 24px;
     text-align: center;
     font-size: 14px;
     color: #8c8c9c;
@@ -311,7 +342,124 @@
     transform-origin: bottom left;
 }
 
-/* Animation Frames */
+/* Demo Fast-Fill section styling */
+.demo-divider {
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.15em;
+    color: #52525b;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 24px 0 16px 0;
+}
+
+.demo-divider::before,
+.demo-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background-color: rgba(63, 63, 70, 0.6);
+}
+
+.demo-pills-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.demo-pill {
+    width: 100%;
+    text-align: left;
+    background-color: rgba(9, 9, 11, 0.6);
+    border: 1px solid rgba(63, 63, 70, 0.4);
+    color: #d4d4d8;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+}
+
+.demo-pill.admin {
+    border-color: rgba(127, 29, 29, 0.4);
+    background-color: rgba(127, 29, 29, 0.05);
+    color: #f87171;
+}
+
+.demo-pill.admin:hover {
+    background-color: rgba(127, 29, 29, 0.15);
+}
+
+.demo-pill.staff {
+    border-color: rgba(120, 53, 4, 0.4);
+    background-color: rgba(120, 53, 4, 0.05);
+    color: #fbbf24;
+}
+
+.demo-pill.staff:hover {
+    background-color: rgba(120, 53, 4, 0.15);
+}
+
+.demo-pill.member {
+    border-color: rgba(6, 78, 59, 0.4);
+    background-color: rgba(6, 78, 59, 0.05);
+    color: #34d399;
+}
+
+.demo-pill.member:hover {
+    background-color: rgba(6, 78, 59, 0.15);
+}
+
+.pill-badge {
+    font-size: 10px;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.pill-badge.admin {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.pill-badge.staff {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.pill-badge.member {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.pill-left-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Animations */
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 @keyframes logo-glow {
     0% {
         filter: drop-shadow(0 0 3px rgba(229, 9, 20, 0.4));
@@ -330,6 +478,12 @@
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
 }
 
 /* Responsive Adaptability */
