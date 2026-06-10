@@ -1,7 +1,9 @@
 import axios from "axios";
 
-// Dynamically resolve the API base URL from Vite's environment variables
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+// Dynamically resolve the API base URL. Use relative URL in development to route through Vite's proxy and bypass CORS.
+const API_BASE_URL = import.meta.env.DEV 
+    ? "" 
+    : (import.meta.env.VITE_API_BASE_URL || "http://localhost:8080");
 
 /**
  * Authenticates a user by sending credentials to the API Gateway.
