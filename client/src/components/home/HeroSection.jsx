@@ -12,7 +12,7 @@ export default function HeroSection() {
 
     return (
         <>
-            <section className="relative min-h-[85vh] md:min-h-[90vh] flex flex-col justify-between pt-28 pb-16 px-6 md:px-12 overflow-hidden bg-brand-dark">
+            <section className="relative min-h-[85vh] md:min-h-[90vh] flex flex-col justify-between pt-20 pb-16 px-6 md:px-12 overflow-hidden bg-brand-dark">
                 {/* Background Video */}
                 <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
                     <video
@@ -82,10 +82,10 @@ export default function HeroSection() {
 
             {/* Cinematic Capsule Booking Widget */}
             <div className="relative z-30 w-full max-w-5xl mx-auto -mt-10 px-4">
-                <div className="bg-zinc-900/90 backdrop-blur-md border border-zinc-800 rounded-2xl md:rounded-full flex flex-col md:flex-row items-center justify-between p-3 gap-4 shadow-2xl">
+                <div className="bg-zinc-900/90 backdrop-blur-md border border-zinc-800 rounded-xl md:rounded-full flex flex-col md:flex-row items-center justify-between p-2 gap-3 shadow-2xl">
                     <div className="flex-1 grid grid-cols-2 md:grid-cols-4 w-full gap-2 items-center">
                         {/* Step 1: Phim */}
-                        <div className="flex items-center gap-2 px-4 border-r border-zinc-800/60 h-10">
+                        <div className="flex items-center gap-2 px-3 border-r border-zinc-800/60 h-8">
                             <div className="flex-1 min-w-0">
                                 <label className="block text-[8px] font-black text-zinc-500 uppercase tracking-widest">Phim</label>
                                 <select
@@ -93,7 +93,7 @@ export default function HeroSection() {
                                     onChange={(e) => setSelectedMovie(e.target.value)}
                                     className="w-full bg-transparent text-xs font-bold text-zinc-300 outline-none cursor-pointer appearance-none border-0 p-0 focus:ring-0 focus:outline-none truncate"
                                 >
-                                    <option value="" className="bg-zinc-950 text-zinc-600">Chọn Phim...</option>
+                                    <option value="" className="bg-zinc-950 text-zinc-650">Chọn Phim...</option>
                                     <option value="1" className="bg-zinc-950 text-white">Chờ tải phim...</option>
                                 </select>
                             </div>
@@ -101,7 +101,7 @@ export default function HeroSection() {
                         </div>
 
                         {/* Step 2: Rạp */}
-                        <div className="flex items-center gap-2 px-4 border-r border-zinc-800/60 h-10">
+                        <div className="flex items-center gap-2 px-3 border-r border-zinc-800/60 h-8">
                             <div className="flex-1 min-w-0">
                                 <label className="block text-[8px] font-black text-zinc-500 uppercase tracking-widest">Rạp</label>
                                 <select
@@ -109,7 +109,7 @@ export default function HeroSection() {
                                     onChange={(e) => setSelectedCinema(e.target.value)}
                                     className="w-full bg-transparent text-xs font-bold text-zinc-300 outline-none cursor-pointer appearance-none border-0 p-0 focus:ring-0 focus:outline-none truncate"
                                 >
-                                    <option value="" className="bg-zinc-950 text-zinc-600">Chọn Rạp...</option>
+                                    <option value="" className="bg-zinc-950 text-zinc-650">Chọn Rạp...</option>
                                     <option value="1" className="bg-zinc-950 text-white">Chờ tải rạp...</option>
                                 </select>
                             </div>
@@ -117,7 +117,7 @@ export default function HeroSection() {
                         </div>
 
                         {/* Step 3: Ngày */}
-                        <div className="flex items-center gap-2 px-4 border-r border-zinc-800/60 h-10">
+                        <div className="flex items-center gap-2 px-3 border-r border-zinc-800/60 h-8">
                             <div className="flex-1 min-w-0">
                                 <label className="block text-[8px] font-black text-zinc-500 uppercase tracking-widest">Ngày</label>
                                 <select
@@ -125,7 +125,7 @@ export default function HeroSection() {
                                     onChange={(e) => setSelectedDate(e.target.value)}
                                     className="w-full bg-transparent text-xs font-bold text-zinc-300 outline-none cursor-pointer appearance-none border-0 p-0 focus:ring-0 focus:outline-none truncate"
                                 >
-                                    <option value="" className="bg-zinc-950 text-zinc-600">Chọn Ngày...</option>
+                                    <option value="" className="bg-zinc-950 text-zinc-650">Chọn Ngày...</option>
                                     <option value="1" className="bg-zinc-950 text-white">Hôm nay</option>
                                 </select>
                             </div>
@@ -133,7 +133,7 @@ export default function HeroSection() {
                         </div>
 
                         {/* Step 4: Suất */}
-                        <div className="flex items-center gap-2 px-4 h-10">
+                        <div className="flex items-center gap-2 px-3 h-8">
                             <div className="flex-1 min-w-0">
                                 <label className="block text-[8px] font-black text-zinc-500 uppercase tracking-widest">Suất</label>
                                 <select
@@ -141,7 +141,7 @@ export default function HeroSection() {
                                     onChange={(e) => setSelectedTime(e.target.value)}
                                     className="w-full bg-transparent text-xs font-bold text-zinc-300 outline-none cursor-pointer appearance-none border-0 p-0 focus:ring-0 focus:outline-none truncate"
                                 >
-                                    <option value="" className="bg-zinc-950 text-zinc-600">Chọn Suất...</option>
+                                    <option value="" className="bg-zinc-950 text-zinc-650">Chọn Suất...</option>
                                     <option value="1" className="bg-zinc-950 text-white">Chờ tải suất...</option>
                                 </select>
                             </div>
@@ -151,7 +151,7 @@ export default function HeroSection() {
 
                     <button
                         disabled
-                        className="bg-brand-coral opacity-60 text-white font-black px-8 h-12 rounded-xl md:rounded-full cursor-not-allowed text-xs uppercase tracking-widest shrink-0 w-full md:w-auto"
+                        className="bg-brand-coral opacity-60 text-white font-black px-6 h-9 rounded-lg md:rounded-full cursor-not-allowed text-[11px] uppercase tracking-widest shrink-0 w-full md:w-auto"
                     >
                         Mua vé nhanh
                     </button>

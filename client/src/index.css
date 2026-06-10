@@ -7,7 +7,7 @@
 @layer base {
   body {
     @apply bg-brand-dark text-white font-sans antialiased overflow-x-hidden;
-    background-color: #111111;
+    background-color: #050506;
   }
 }
 

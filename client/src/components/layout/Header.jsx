@@ -22,15 +22,19 @@ export default function Header() {
     };
 
     return (
-        <header className="fixed top-0 left-0 w-full z-50 bg-zinc-950/90 backdrop-blur-md px-6 md:px-12 py-4 flex justify-between items-center border-b border-zinc-800/80 select-none">
+        <header className="fixed top-0 left-0 w-full z-50 bg-zinc-950/90 backdrop-blur-md px-6 md:px-12 py-2.5 flex justify-between items-center border-b border-zinc-800/80 select-none">
             {/* Logo Section */}
             <div className="flex items-center gap-6">
-                <Link to="/" className="flex items-center gap-2 group decoration-none">
-                    <Film className="w-8 h-8 text-brand-coral group-hover:text-orange-400 transition-colors" />
+                <Link to="/" className="flex items-center gap-2.5 shrink-0 bg-transparent p-0 m-0 border-none shadow-none outline-none group mr-4 md:mr-6 select-none decoration-none transition-transform duration-200 hover:scale-[1.02]">
+                    <img 
+                        src="https://res.cloudinary.com/dqc4hufot/image/upload/q_auto/f_auto/v1781114108/main-logo_l5is5w.png" 
+                        alt="LoraFilm Mascot" 
+                        className="h-9 sm:h-10 w-auto object-contain bg-transparent will-change-transform"
+                    />
                     <span className="text-xl sm:text-2xl font-black tracking-tight text-white font-sans flex items-center leading-none">
                         Lora
-                        <span className="text-brand-coral ml-0.5 group-hover:text-orange-400 transition-colors">
-                            film
+                        <span className="text-brand-coral font-black ml-0.5 group-hover:text-orange-400 transition-colors">
+                            Film
                         </span>
                     </span>
                 </Link>
@@ -223,7 +227,7 @@ export default function Header() {
 
             {/* Mobile Menu drawer */}
             {mobileMenuOpen && (
-                <div className="absolute top-[72px] left-0 w-full bg-zinc-950 border-b border-zinc-800 px-6 py-6 flex flex-col gap-4 lg:hidden z-40">
+                <div className="absolute top-[60px] left-0 w-full bg-zinc-950 border-b border-zinc-800 px-6 py-6 flex flex-col gap-4 lg:hidden z-40">
                     <div className="space-y-1 border-b border-zinc-900 pb-2">
                         <span className="text-[10px] text-zinc-550 font-black tracking-wider uppercase block">Phim</span>
                         <Link

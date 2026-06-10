@@ -97,7 +97,7 @@ function Login() {
                             height="28"
                             viewBox="0 0 24 24"
                             fill="none"
-                            stroke="#D88174"
+                            stroke="#ff7a1a"
                             strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"

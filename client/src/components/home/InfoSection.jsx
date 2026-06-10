@@ -22,23 +22,23 @@ export default function InfoSection() {
                 >
                     <div className="space-y-4">
                         <p>
-                            Thanh lap tu nam 2003, <span className="text-zinc-100 font-bold">LoraFilm</span> da va dang khang dinh thuong hieu rap chieu phim hang dau Viet Nam. He thong LoraFilm noi tieng boi chat luong phong chieu hien dai, dich vu than thien va nhieu trai nghiem vuot chuan hon-ca-rap-chieu-phim. Ngoai cac cong nghe trinh chieu hang dau nhu <span className="text-brand-coral font-bold">IMAX Laser</span> va <span className="text-brand-coral font-bold">Onyx x Dolby Atmos</span>, LoraFilm con so huu nhung phong chieu dac biet dang cap nhu <span className="text-zinc-100 italic">Lagom</span>, <span className="text-zinc-100 italic">Romántico</span>, <span className="text-zinc-100 italic">Laurus</span>, <span className="text-zinc-100 italic">Aqualis</span>... mang lai khong gian dien anh dinh cao cho moi tin do dien anh.
+                            Thành lập từ năm 2003, <span className="text-zinc-100 font-bold">LoraFilm</span> đã và đang khẳng định thương hiệu rạp chiếu phim hàng đầu Việt Nam. Hệ thống LoraFilm nổi tiếng bởi chất lượng phòng chiếu hiện đại, dịch vụ thân thiện và nhiều trải nghiệm vượt chuẩn hơn-cả-rạp-chiếu-phim. Ngoài các công nghệ trình chiếu hàng đầu như <span className="text-brand-coral font-bold">IMAX Laser</span> và <span className="text-brand-coral font-bold">Onyx x Dolby Atmos</span>, LoraFilm còn sở hữu những phòng chiếu đặc biệt đẳng cấp như <span className="text-zinc-100 italic">Lagom</span>, <span className="text-zinc-100 italic">Romántico</span>, <span className="text-zinc-100 italic">Laurus</span>, <span className="text-zinc-100 italic">Aqualis</span>... mang lại không gian điện ảnh đỉnh cao cho mọi tín đồ điện ảnh.
                         </p>
 
                         <p>
-                            Den voi LoraFilm, quy khach co the trai nghiem phong cho thuong luu <span className="text-brand-coral font-bold">Boulevard Lounge</span>, khu am thuc phong phu <span className="text-brand-coral font-bold">CineMunch Eatery</span>, he thong cong nghe tuong tac DIDIM Playground cung khu vui choi phuc hop danh rieng cho tre em. Tat ca tao nen mot to hop giai tri All-in-one khep kin hoan hao ngay trong long cum rap.
+                            Đến với LoraFilm, quý khách có thể trải nghiệm phòng chờ thượng lưu <span className="text-brand-coral font-bold">Boulevard Lounge</span>, khu ẩm thực phong phú <span className="text-brand-coral font-bold">CineMunch Eatery</span>, hệ thống công nghệ tương tác DIDIM Playground cùng khu vui chơi phức hợp dành riêng cho trẻ em. Tất cả tạo nên một tổ hợp giải trí All-in-one khép kín hoàn hảo ngay trong lòng cụm rạp.
                         </p>
 
                         <p>
-                            Khong chi tien phong tai rap vat ly, LoraFilm con hap dan khan gia boi he thong website truc tuyen vo cung hien dai, toi uu trai nghiem Single-Page muot ma. Voi thanh tim kiem thong minh <span className="text-zinc-100 font-bold">Omni-Search Bar Interface</span> ngay tren Header, nguoi dung co the quet tu khoa song song theo Ten Phim, Dien Vien hoac Dao Dien de tim ra ket qua mong muon ngay lap tuc. Lich chieu tai tat ca he thong rap LoraFilm luon duoc cap nhat thuong xuyen, day du va chuan xac theo thoi gian thuc.
+                            Không chỉ tiên phong tại rạp vật lý, LoraFilm còn hấp dẫn khán giả bởi hệ thống website trực tuyến vô cùng hiện đại, tối ưu trải nghiệm Single-Page mượt mà. Với thanh tìm kiếm thông minh <span className="text-zinc-100 font-bold">Omni-Search Bar Interface</span> ngay trên Header, người dùng có thể quét từ khóa song song theo Tên Phim, Diễn Viên hoặc Đạo Diễn để tìm ra kết quả mong muốn ngay lập tức. Lịch chiếu tại tất cả hệ thống rạp LoraFilm luôn được cập nhật thường xuyên, đầy đủ và chuẩn xác theo thời gian thực.
                         </p>
 
                         <p>
-                            Dat ve tai LoraFilm tro nen de dang hon bao gio het nho thanh <span className="text-zinc-100 font-bold">Mua Ve Nhanh dang Capsule toi gian</span> duoc tich hop ngay tren Banner Hero trang chu. Chi voi 4 buoc bam tuan tu: <span className="text-brand-coral italic font-semibold">Chon Phim ➔ Chon Rap ➔ Chon Ngay ➔ Chon Suat Chieu</span>, he thong se mo khoa va dua thang quy khach vao so do chon ghe truc quan, ket hop menu bap nuoc tien loi va cong thanh toan bao mat cao. Sau khi hoan tat, ma QR dat ve thanh cong se duoc gui thang vao Email/SMS cua ban, giup ban mot buoc quet ma tien thang vao phong chieu ma khong can xep hang cho doi.
+                            Đặt vé tại LoraFilm trở nên dễ dàng hơn bao giờ hết nhờ thanh <span className="text-zinc-100 font-bold">Mua Vé Nhanh dạng Capsule tối giản</span> được tích hợp ngay trên Banner Hero trang chủ. Chỉ với 4 bước bấm tuần tự: <span className="text-brand-coral italic font-semibold">Chọn Phim {"->"} Chọn Rạp {"->"} Chọn Ngày {"->"} Chọn Suất Chiếu</span>, hệ thống sẽ mở khóa và đưa thẳng quý khách vào sơ đồ chọn ghế trực quan, kết hợp menu bắp nước tiện lợi và cổng thanh toán bảo mật cao. Sau khi hoàn tất, mã QR đặt vé thành công sẽ được gửi thẳng vào Email/SMS của bạn, giúp bạn một bước quét mã tiến thẳng vào phòng chiếu mà không cần xếp hàng chờ đợi.
                         </p>
 
                         <p>
-                            He thong website con so huu chuyen muc <span className="text-zinc-100 font-bold">Goc Dien Anh</span> – noi luu tru kho du lieu khong lo ve cac ngoi sao dien anh thong qua cac chuyen trang <span className="text-zinc-100 italic">Actor & Director Portfolio Directory</span>. Tai day, nguoi yeu phim de dang tra cuu tieu su, bo suu tap hinh anh cinematic cung nhu toan bo danh muc tac pham (Filmography) cua cac Dien vien va Dao dien minh yeu thich nho thuat toan lien ket du lieu tu dong. Ben canh do, LoraFilm luon mang den hang loat chuong trinh uu dai, su kien dong gia ve hap dan hang tuan, va dac quyen gia ve U22 cuc dinh danh rieng cho the he tre.
+                            Hệ thống website còn sở hữu chuyên mục <span className="text-zinc-100 font-bold">Góc Điện Ảnh</span> - nơi lưu trữ kho dữ liệu khổng lồ về các ngôi sao điện ảnh thông qua các chuyên trang <span className="text-zinc-100 italic">Actor & Director Portfolio Directory</span>. Tại đây, người yêu phim dễ dàng tra cứu tiểu sử, bộ sưu tập hình ảnh cinematic cũng như toàn bộ danh mục tác phẩm (Filmography) của các Diễn viên và Đạo diễn mình yêu thích nhờ thuật toán liên kết dữ liệu tự động. Bên cạnh đó, LoraFilm luôn mang đến hàng loạt chương trình ưu đãi, sự kiện đồng giá vé hấp dẫn hàng tuần, và đặc quyền giá vé U22 cực đỉnh dành riêng cho thế hệ trẻ.
                         </p>
                     </div>
 
@@ -54,7 +54,7 @@ export default function InfoSection() {
                         onClick={() => setIsExpanded(!isExpanded)}
                         className="flex items-center gap-1.5 text-zinc-100 hover:text-brand-coral font-bold text-xs uppercase tracking-wider transition-colors duration-300 py-1.5 px-4 bg-zinc-900 border border-zinc-800 rounded-full hover:border-brand-coral/50 shadow-md focus:outline-none"
                     >
-                        <span>{isExpanded ? "Thu gon" : "Xem them"}</span>
+                        <span>{isExpanded ? "Thu gọn" : "Xem thêm"}</span>
                         {isExpanded ? (
                             <ChevronUp className="w-4 h-4 text-zinc-400" />
                         ) : (
