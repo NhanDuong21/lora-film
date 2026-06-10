@@ -34,10 +34,6 @@ export default function MovieSection() {
                         </div>
                     ))}
                 </div>
-
-                <div className="text-center mt-12 text-zinc-550 text-xs tracking-wider uppercase font-semibold">
-                    Danh sach phim dang duoc cap nhat
-                </div>
             </div>
         </section>
     );

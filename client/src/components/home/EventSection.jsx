@@ -53,10 +53,6 @@ export default function EventSection() {
                     </div>
 
                 </div>
-
-                <div className="text-center mt-12 text-zinc-550 text-xs tracking-wider uppercase font-semibold">
-                    Danh sach su kien dang duoc cap nhat
-                </div>
             </div>
         </section>
     );

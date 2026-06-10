@@ -62,27 +62,27 @@ export default function Footer() {
                 {/* Column 2: Terms & Compliance */}
                 <div className="space-y-4">
                     <h3 className="text-zinc-100 font-bold uppercase tracking-wider text-xs">
-                        Dieu Khoan Su Dung
+                        ĐIỀU KHOẢN SỬ DỤNG
                     </h3>
                     <ul className="space-y-2 text-xs">
                         <li>
                             <a href="#/" className="hover:text-zinc-100 transition-colors duration-200">
-                                Dieu Khoan Chung
+                                Điều Khoản Chung
                             </a>
                         </li>
                         <li>
                             <a href="#/" className="hover:text-zinc-100 transition-colors duration-200">
-                                Chinh Sach Thanh Toan
+                                Chính Sách Thanh Toán
                             </a>
                         </li>
                         <li>
                             <a href="#/" className="hover:text-zinc-100 transition-colors duration-200">
-                                Chinh Sach Bao Mat
+                                Chính Sách Bảo Mật
                             </a>
                         </li>
                         <li>
                             <a href="#/" className="hover:text-zinc-100 transition-colors duration-200">
-                                Quy Che Hoat Dong
+                                Quy Chế Hoạt Động
                             </a>
                         </li>
                     </ul>
@@ -91,27 +91,27 @@ export default function Footer() {
                 {/* Column 3: Site Links */}
                 <div className="space-y-4">
                     <h3 className="text-zinc-100 font-bold uppercase tracking-wider text-xs">
-                        Danh Muc LoraFilm
+                        DANH MỤC LORAFILM
                     </h3>
                     <ul className="space-y-2 text-xs">
                         <li>
                             <a href="#/" className="hover:text-zinc-100 transition-colors duration-200">
-                                Phim Dang Chieu
+                                Phim Đang Chiếu
                             </a>
                         </li>
                         <li>
                             <a href="#/" className="hover:text-zinc-100 transition-colors duration-200">
-                                He Thong Rap
+                               Hệ Thống Rạp
                             </a>
                         </li>
                         <li>
                             <a href="#/" className="hover:text-zinc-100 transition-colors duration-200">
-                                Su Kien & Uu Dai
+                                Sự Kiện & Ưu Đãi
                             </a>
                         </li>
                         <li>
                             <a href="#/" className="hover:text-zinc-100 transition-colors duration-200">
-                                Goc Dien Anh
+                                Góc Điện Ảnh
                             </a>
                         </li>
                     </ul>
@@ -120,7 +120,7 @@ export default function Footer() {
                 {/* Column 4: Customer Support & Verification */}
                 <div className="space-y-4">
                     <h3 className="text-zinc-100 font-bold uppercase tracking-wider text-xs">
-                        Cham Soc Khach Hang
+                        CHĂM SÓC KHÁCH HÀNG
                     </h3>
                     <ul className="space-y-2 text-xs text-zinc-500">
                         <li className="text-zinc-400">
