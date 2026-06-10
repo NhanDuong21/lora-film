@@ -27,7 +27,7 @@ function Login() {
         }
 
         if (password.length < 6) {
-            setErrorMsg("Mật khẩu đăng nhập phải có ít nhất 6 ký tự!");
+            setErrorMsg("Mật khẩu đăng nhập phải có ít nhất 8 ký tự!");
             return;
         }
 
