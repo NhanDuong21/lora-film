@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "../pages/Home";
 import Login from "../pages/Login";
-import RegisterPage from "../pages/RegisterPage";
+import Register from "../pages/Register";
 
 function AppRoutes() {
     return (
@@ -9,7 +9,7 @@ function AppRoutes() {
             <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/register" element={<Register />} />
             </Routes>
         </BrowserRouter>
     );
