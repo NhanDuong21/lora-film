@@ -16,3 +16,15 @@ export const login = async (email, password) => {
         throw new Error("Network error occurred. Please try again later.");
     }
 };
+
+export const register = async (userData) => {
+    try {
+        const response = await axios.post(`${API_BASE_URL}/api/auth/register`, userData);
+        return response.data;
+    } catch (error) {
+        if (error.response && error.response.data) {
+            throw error.response.data;
+        }
+        throw new Error("Network error occurred. Please try again later.");
+    }
+};
