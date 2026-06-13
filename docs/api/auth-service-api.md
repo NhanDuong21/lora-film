@@ -616,6 +616,14 @@ Status: **404 Not Found**
 API này dùng để đăng nhập tài khoản người dùng.
 Frontend gửi `email` và `password` lên Backend. Backend kiểm tra thông tin đăng nhập. Nếu hợp lệ, Backend trả về cặp JWT token (Access Token & Refresh Token), loại token, hạn định thời gian hết hạn (`expiresIn`), email và role của người dùng.
 
+Refresh Token được tạo khi đăng nhập thành công có thời hạn sử dụng là **5 ngày kể từ thời điểm phát hành**.
+
+Thông tin Refresh Token được lưu trong bảng `refresh_tokens` với:
+- `expiry_date = created_at + 5 days`
+- `is_revoked = false`
+
+Sau khi hết thời hạn 5 ngày, người dùng phải đăng nhập lại để nhận bộ Token mới.
+
 ### 8.2. Trạng Thái Implement
 
 | Mục | Nội dung |
@@ -788,8 +796,25 @@ Status: **500 Internal Server Error**
 
 ### 9.1. Mục Tiêu API
 
-API này dùng để gia hạn lại phiên đăng nhập khi Access Token cũ hết hiệu lực. Frontend truyền lên mã `refreshToken`, hệ thống đối soát hợp lệ sẽ tiến hành đánh dấu hủy token cũ (`isRevoked = true`), phát sinh đồng thời một bộ Access Token & Refresh Token hoàn chỉnh mới trả về.
 
+API này dùng để gia hạn lại phiên đăng nhập khi Access Token hết hiệu lực.
+
+Refresh Token có thời hạn sử dụng là **5 ngày kể từ thời điểm được tạo**.
+
+Khi Frontend gửi lên một Refresh Token hợp lệ, hệ thống sẽ:
+
+- Kiểm tra Refresh Token có tồn tại.
+- Kiểm tra Refresh Token chưa hết hạn.
+- Kiểm tra Refresh Token chưa bị thu hồi (`isRevoked = false`).
+- Kiểm tra tài khoản tương ứng còn hoạt động và đã hoàn thành xác thực.
+
+Nếu hợp lệ, hệ thống sẽ:
+
+- Đánh dấu Refresh Token hiện tại là đã thu hồi (`isRevoked = true`).
+- Sinh Access Token mới.
+- Sinh Refresh Token mới với thời hạn **5 ngày**.
+- Lưu Refresh Token mới vào database.
+- Trả về bộ Token mới cho Frontend.
 ### 9.2. Thông Tin Endpoint
 
 | Mục | Nội dung |
@@ -828,7 +853,11 @@ Status: **200 OK**
   }
 }
 ```
+### Ghi chú
 
+- `expiresIn` là thời gian hết hạn của Access Token.
+- `refreshToken` trả về trong response là Refresh Token mới.
+- Refresh Token mới có thời hạn sử dụng **5 ngày kể từ thời điểm API Refresh Token được gọi thành công**.
 ### 9.5. Response Error
 
 **Case 1: Refresh Token đã hết hạn, bị hủy hoặc không tồn tại**
