@@ -67,6 +67,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
         // Verification successful
         otpStorage.remove(accountId);
         account.setRegistrationCompleted(1);
+        account.setIsActive(1);
         accountRepository.save(account);
         log.info("Account id={} verified successfully.", accountId);
     }

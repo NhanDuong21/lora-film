@@ -1,5 +1,6 @@
 package com.project.authservice.service.impl;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -135,6 +136,7 @@ public class AuthServiceImpl implements AuthService {
 					cccdInfo.getBirthYear()
 			);
 
+			// Propagate user profile to User Service (errors propagate to client)
 			try {
 				userServiceClient.createUserProfile(profileRequest);
 			} catch (Exception e) {
@@ -192,8 +194,8 @@ public class AuthServiceImpl implements AuthService {
 			throw new InvalidCredentialsException();
 		}
 
-		// 3. Check isActive == 0
-		if (account.getIsActive() == null || account.getIsActive() != 0) {
+		// 3. Check isActive == 1 (account must be active to log in)
+		if (account.getIsActive() == null || account.getIsActive() != 1) {
 			log.warn("Login failed: account is inactive for email {}", email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_INACTIVE_ACCOUNT", servletRequest);
 			throw new AccountInactiveException();
@@ -273,7 +275,7 @@ public class AuthServiceImpl implements AuthService {
 				throw new InvalidRefreshTokenException("Account not found");
 			}
 
-			if (account.getIsActive() == null || account.getIsActive() != 1) {
+			if (account.getIsActive() == null || account.getIsActive() != 0) {
 				throw new AccountInactiveException();
 			}
 
@@ -281,28 +283,40 @@ public class AuthServiceImpl implements AuthService {
 				throw new AccountNotVerifiedException();
 			}
 
-			// Rotation Strategy:
-			// Revoke old refresh token
-			refreshToken.setIsRevoked(true);
-			refreshTokenRepository.save(refreshToken);
+			// Calculate remaining duration until expiryDate
+			LocalDateTime now = LocalDateTime.now();
+			Duration remainingDuration = Duration.between(now, refreshToken.getExpiryDate());
 
 			// Generate new access token
 			String newAccessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), account.getRole().getRoleName());
 
-			// Generate new refresh token
-			RefreshToken newRefreshToken = new RefreshToken();
-			newRefreshToken.setAccount(account);
-			newRefreshToken.setToken(UUID.randomUUID().toString());
-			newRefreshToken.setExpiryDate(LocalDateTime.now().plusDays(7));
-			newRefreshToken.setIsRevoked(false);
-			refreshTokenRepository.save(newRefreshToken);
+			String responseRefreshToken;
+
+			if (remainingDuration.compareTo(Duration.ofDays(5)) <= 0) {
+				// Remaining duration is 5 days or less -> Rotate the refresh token
+				refreshToken.setIsRevoked(true);
+				refreshTokenRepository.save(refreshToken);
+
+				// Generate new refresh token
+				RefreshToken newRefreshToken = new RefreshToken();
+				newRefreshToken.setAccount(account);
+				newRefreshToken.setToken(UUID.randomUUID().toString());
+				newRefreshToken.setExpiryDate(now.plusDays(7));
+				newRefreshToken.setIsRevoked(false);
+				refreshTokenRepository.save(newRefreshToken);
+
+				responseRefreshToken = newRefreshToken.getToken();
+			} else {
+				// Remaining duration is greater than 5 days -> Keep the current refresh token
+				responseRefreshToken = refreshToken.getToken();
+			}
 
 			auditLogService.log(account.getId(), "REFRESH_TOKEN_SUCCESS", servletRequest);
 
 			long expiresInSeconds = jwtUtil.getJwtExpirationMs() / 1000;
 			return new JwtResponse(
 					newAccessToken,
-					newRefreshToken.getToken(),
+					responseRefreshToken,
 					expiresInSeconds,
 					account.getEmail(),
 					account.getRole().getRoleName()

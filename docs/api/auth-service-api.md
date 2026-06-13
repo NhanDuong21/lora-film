@@ -589,7 +589,7 @@ Status: **400 Bad Request**
 ```json
 {
   "success": false,
-  "message": "Verification code has expired",
+  "message": "Verification OTP code has expired",
   "errorCode": "AUTH_VERIFICATION_EXPIRED",
   "data": null
 }
@@ -675,13 +675,13 @@ Status: **200 OK**
   "success": true,
   "message": "Login successfully",
   "data": {
-    "token": "jwt-token-here",
-    "accessToken": "jwt-token-here",
-    "refreshToken": "uuid-refresh-token-here",
+    "token": "jwt-token",
     "tokenType": "Bearer",
-    "expiresIn": 300000,
-    "email": "nhan@gmail.com",
-    "role": "CUSTOMER"
+    "email": "user@gmail.com",
+    "role": "CUSTOMER",
+    "accessToken": "jwt-token",
+    "refreshToken": "uuid-token",
+    "expiresIn": 86400
   }
 }
 ```
@@ -696,7 +696,7 @@ Status: **200 OK**
 | data.accessToken| string | JWT access token mới dùng để gọi các API cần xác thực |
 | data.refreshToken| string | UUID token dùng để call API refresh-token gia hạn |
 | data.tokenType | string | Loại token, hiện tại là Bearer |
-| data.expiresIn | number | Thời gian sống của chuỗi Access Token tính bằng mili-giây |
+| data.expiresIn | number | Thời gian sống của chuỗi Access Token tính bằng giây |
 | data.email | string | Email của người dùng đăng nhập |
 | data.role | string | Vai trò của người dùng |
 
@@ -710,7 +710,8 @@ Status: **401 Unauthorized**
   "success": false,
   "message": "Invalid email or password",
   "errorCode": "AUTH_INVALID_CREDENTIALS",
-  "data": null
+  "data": null,
+  "errors": null
 }
 ```
 
@@ -720,7 +721,7 @@ Status: **403 Forbidden**
 ```json
 {
   "success": false,
-  "message": "Account registration is not completed. OTP verification required.",
+  "message": "Account is not verified",
   "errorCode": "AUTH_ACCOUNT_NOT_VERIFIED",
   "data": null
 }
@@ -749,11 +750,11 @@ Status: **400 Bad Request**
   "errors": [
     {
       "field": "email",
-      "message": "Email is invalid"
+      "message": "email is invalid"
     },
     {
       "field": "password",
-      "message": "Password is required"
+      "message": "password is required"
     }
   ]
 }
@@ -821,7 +822,7 @@ Status: **200 OK**
     "accessToken": "new-jwt-token-here",
     "refreshToken": "new-uuid-refresh-token-here",
     "tokenType": "Bearer",
-    "expiresIn": 300000,
+    "expiresIn": 86400,
     "email": "nhan@gmail.com",
     "role": "CUSTOMER"
   }
@@ -833,23 +834,52 @@ Status: **200 OK**
 **Case 1: Refresh Token đã hết hạn, bị hủy hoặc không tồn tại**
 Status: **401 Unauthorized**
 
+*Lưu ý: Có các thông báo lỗi cụ thể tương ứng từng trường hợp:*
+- `"Refresh token not found"`
+- `"Refresh token is revoked"`
+- `"Refresh token is expired"`
+
 ```json
 {
   "success": false,
-  "message": "Refresh token is invalid, expired or revoked",
+  "message": "Refresh token not found",
   "errorCode": "AUTH_INVALID_REFRESH_TOKEN",
   "data": null
 }
 ```
 
 **Case 2: Không tìm thấy thông tin tài khoản đính kèm**
-Status: **404 Not Found**
+Status: **401 Unauthorized**
 
 ```json
 {
   "success": false,
   "message": "Account not found",
-  "errorCode": "AUTH_ACCOUNT_NOT_FOUND",
+  "errorCode": "AUTH_INVALID_REFRESH_TOKEN",
+  "data": null
+}
+```
+
+**Case 3: Tài khoản đã bị khóa hoặc không hoạt động**
+Status: **403 Forbidden**
+
+```json
+{
+  "success": false,
+  "message": "Account is not active",
+  "errorCode": "AUTH_ACCOUNT_INACTIVE",
+  "data": null
+}
+```
+
+**Case 4: Tài khoản chưa hoàn thành xác thực OTP**
+Status: **403 Forbidden**
+
+```json
+{
+  "success": false,
+  "message": "Account is not verified",
+  "errorCode": "AUTH_ACCOUNT_NOT_VERIFIED",
   "data": null
 }
 ```
