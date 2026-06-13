@@ -116,7 +116,7 @@ public class AuthServiceImpl implements AuthService {
 			account.setEmail(email);
 			account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 			account.setRole(role);
-			account.setIsActive(1);
+			account.setIsActive(0);
 			account.setRegistrationCompleted(0);
 
 			Account savedAccount = accountRepository.save(account);
@@ -192,8 +192,8 @@ public class AuthServiceImpl implements AuthService {
 			throw new InvalidCredentialsException();
 		}
 
-		// 3. Check isActive == 1
-		if (account.getIsActive() == null || account.getIsActive() != 1) {
+		// 3. Check isActive == 0
+		if (account.getIsActive() == null || account.getIsActive() != 0) {
 			log.warn("Login failed: account is inactive for email {}", email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_INACTIVE_ACCOUNT", servletRequest);
 			throw new AccountInactiveException();

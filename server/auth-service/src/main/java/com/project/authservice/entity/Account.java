@@ -42,7 +42,7 @@ public class Account {
 
 	@Builder.Default
 	@Column(name = "is_active", nullable = false)
-	private Integer isActive = 1;
+	private Integer isActive = 0;
 
 	@Builder.Default
 	@Column(name = "registration_completed", nullable = false)
@@ -62,7 +62,7 @@ public class Account {
 		}
 		updatedAt = now;
 		if (isActive == null) {
-			isActive = 1;
+			isActive = 0;
 		}
 		if (registrationCompleted == null) {
 			registrationCompleted = 0;
