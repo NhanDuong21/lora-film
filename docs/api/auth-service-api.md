@@ -343,7 +343,7 @@ Receive register request
 → Validate request body
 → Check duplicate email in Auth Service
 → Check CCCD format / use CCCD derived information
-→ Create account in Auth Service (`is_active = 1`, `registration_completed = 0`)
+→ Create account in Auth Service (`is_active = 0`, `registration_completed = 0`)
 → Assign default role `CUSTOMER`
 → Hash password
 → Store account with status
