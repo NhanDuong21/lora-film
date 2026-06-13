@@ -2,6 +2,7 @@ package com.project.authservice.service.impl;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -212,7 +213,22 @@ public class AuthServiceImpl implements AuthService {
 		// 5. Generate JWT
 		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), account.getRole().getRoleName());
 
-		// 6. Generate Refresh Token
+		// 6. Revoke any existing active refresh tokens issued from the same browser/device.
+		//    Device identity is determined by matching the User-Agent header against the
+		//    user_agent stored in the audit_logs entry that was written during the original login.
+		String currentUserAgent = servletRequest.getHeader("User-Agent");
+		if (currentUserAgent != null && !currentUserAgent.isBlank()) {
+			List<RefreshToken> sameDeviceTokens = refreshTokenRepository
+					.findActiveTokensByAccountAndUserAgent(account.getId(), currentUserAgent);
+			if (!sameDeviceTokens.isEmpty()) {
+				sameDeviceTokens.forEach(t -> t.setIsRevoked(true));
+				refreshTokenRepository.saveAll(sameDeviceTokens);
+				log.info("Revoked {} active refresh token(s) for account {} from the same device (User-Agent match)",
+						sameDeviceTokens.size(), email);
+			}
+		}
+
+		// 7. Generate new Refresh Token
 		String plainRefreshToken = UUID.randomUUID().toString();
 		RefreshToken refreshToken = new RefreshToken();
 		refreshToken.setAccount(account);
@@ -220,15 +236,15 @@ public class AuthServiceImpl implements AuthService {
 		refreshToken.setExpiryDate(LocalDateTime.now().plusDays(7));
 		refreshToken.setIsRevoked(false);
 
-		// 7. Save Refresh Token
+		// 8. Save new Refresh Token
 		refreshTokenRepository.save(refreshToken);
 
-		// 8. Write Audit Log
+		// 9. Write Audit Log
 		auditLogService.log(account.getId(), "LOGIN_SUCCESS", servletRequest);
 
 		log.info("User {} logged in successfully", email);
 
-		// 9. Return response
+		// 10. Return response
 		long expiresInSeconds = jwtUtil.getJwtExpirationMs() / 1000;
 		return new JwtResponse(
 				accessToken,
