@@ -1,14 +1,17 @@
 import axios from "axios";
 
+const CCCD_API_URL = import.meta.env.VITE_CCCD_API_URL;
+const CCCD_API_KEY = import.meta.env.VITE_CCCD_API_KEY;
+
 export const checkCCCD = async (cccdValue) => {
     try {
         const response = await axios.post(
-            "https://api-check-cccd.lorafilm.xyz/api/cccd/check",
+            CCCD_API_URL,
             { cccd: cccdValue },
             {
                 headers: {
                     "Content-Type": "application/json",
-                    "x-api-key": "lora_cccd_2026_secret"
+                    "x-api-key": CCCD_API_KEY
                 }
             }
         );
