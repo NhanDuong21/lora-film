@@ -1,15 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "../services/authService";
+import { checkCCCD } from "../services/cccdService";
 
 function Register() {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         fullName: "",
         email: "",
-        citizenId: "",
-        gender: "",
-        dob: "",
+        phoneNumber: "",
+        cccd: "",
+        birthday: "",
         password: "",
         confirmPassword: ""
     });
@@ -21,78 +22,69 @@ function Register() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [globalError, setGlobalError] = useState("");
     const [globalSuccess, setGlobalSuccess] = useState("");
-    const dateInputRef = useRef(null);
+
+    // CCCD validation states
+    const [cccdData, setCccdData] = useState(null);
+    const [isCheckingCccd, setIsCheckingCccd] = useState(false);
+    const [cccdError, setCccdError] = useState("");
 
     useEffect(() => {
         document.title = "Đăng Ký Tài Khoản - LoraFilm";
     }, []);
 
-    const handleChange = (e) => {
-        let { name, value } = e.target;
-
-        if (name === "dob") {
-            const digits = value.replace(/\D/g, "");
-            const limitedDigits = digits.substring(0, 8);
-
-            let formattedValue = "";
-            if (limitedDigits.length > 0) {
-                formattedValue += limitedDigits.substring(0, 2);
-                if (limitedDigits.length > 2) {
-                    formattedValue += "/" + limitedDigits.substring(2, 4);
-                    if (limitedDigits.length > 4) {
-                        formattedValue += "/" + limitedDigits.substring(4, 8);
-                    }
-                }
-            }
-            value = formattedValue;
+    const handleCccdCheck = async (cccdValue) => {
+        const val = cccdValue || formData.cccd;
+        if (!/^\d{12}$/.test(val)) {
+            setCccdError("Số CCCD phải gồm đúng 12 chữ số.");
+            setCccdData(null);
+            return;
         }
+        setIsCheckingCccd(true);
+        setCccdError("");
+        try {
+            const result = await checkCCCD(val);
+            setIsCheckingCccd(false);
+            if (result && result.valid) {
+                setCccdData(result);
+            } else {
+                setCccdError("Số CCCD không hợp lệ.");
+                setCccdData(null);
+            }
+        } catch {
+            setIsCheckingCccd(false);
+            setCccdError("Số CCCD không hợp lệ hoặc lỗi kết nối hệ thống.");
+            setCccdData(null);
+        }
+    };
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
 
         setFormData(prev => ({
             ...prev,
             [name]: value
         }));
 
-        if (touched[name] || name === "dob") {
+        if (name === "cccd") {
+            if (value.length === 12 && /^\d{12}$/.test(value)) {
+                handleCccdCheck(value);
+            } else {
+                setCccdData(null);
+                if (value.length > 0 && !/^\d+$/.test(value)) {
+                    setCccdError("Số CCCD chỉ được phép chứa số.");
+                } else {
+                    setCccdError("");
+                }
+            }
+        }
+
+        if (touched[name]) {
             const fieldError = validateField(name, value);
             setErrors(prev => ({
                 ...prev,
                 [name]: fieldError
             }));
         }
-    };
-
-    const handleCalendarClick = () => {
-        if (dateInputRef.current) {
-            try {
-                if (typeof dateInputRef.current.showPicker === "function") {
-                    dateInputRef.current.showPicker();
-                } else {
-                    dateInputRef.current.click();
-                }
-            } catch {
-                dateInputRef.current.click();
-            }
-        }
-    };
-
-    const handleDateChange = (e) => {
-        const dateValue = e.target.value; 
-        if (!dateValue) return;
-
-        const [y, m, d] = dateValue.split("-");
-        const formattedDate = `${d}/${m}/${y}`;
-
-        setFormData(prev => ({
-            ...prev,
-            dob: formattedDate
-        }));
-
-        setTouched(prev => ({ ...prev, dob: true }));
-        const fieldError = validateField("dob", formattedDate);
-        setErrors(prev => ({
-            ...prev,
-            dob: fieldError
-        }));
     };
 
     const handleBlur = (e) => {
@@ -108,81 +100,70 @@ function Register() {
     const validateField = (name, value) => {
         switch (name) {
             case "fullName": {
-                if (!value.trim()) return "Họ và tên không được để trống";
-                if (!/^[a-zA-ZÀ-ỹ\s]+$/.test(value)) return "Họ và tên không được chứa số hoặc ký tự đặc biệt";
+                if (!value.trim()) return "Họ và tên không được để trống.";
+                if (!/^[a-zA-ZÀ-ỹ\s]+$/.test(value)) return "Họ và tên không được chứa số hoặc ký tự đặc biệt.";
                 const words = value.trim().split(/\s+/);
-                if (words.length < 2) return "Họ và tên phải có ít nhất 2 từ";
+                if (words.length < 2) return "Họ và tên phải có ít nhất 2 từ.";
                 return "";
             }
 
             case "email":
-                if (!value.trim()) return "Email không được để trống";
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Email không đúng định dạng (ví dụ: user@example.com)";
+                if (!value.trim()) return "Email không được để trống.";
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Email không đúng định dạng.";
                 return "";
 
-            case "citizenId":
-                if (!value.trim()) return "Số CCCD không được để trống";
-                if (!/^\d+$/.test(value)) return "Số CCCD chỉ được phép chứa số";
-                if (value.length !== 12) return "Số CCCD phải có đúng 12 chữ số";
+            case "phoneNumber":
+                if (!value.trim()) return "Số điện thoại không được để trống.";
+                if (!/^0\d{9}$/.test(value)) return "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.";
                 return "";
 
-            case "gender":
-                if (!value) return "Vui lòng chọn giới tính";
+            case "cccd":
+                if (!value.trim()) return "Số CCCD không được để trống.";
+                if (!/^\d{12}$/.test(value)) return "Số CCCD phải gồm đúng 12 chữ số.";
                 return "";
 
-            case "dob": {
-                if (!value.trim()) return "Ngày sinh không được để trống";
-                if (value.length < 10) return "Vui lòng nhập đầy đủ ngày sinh (DD/MM/YYYY)";
-
-                const dobRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-                if (!dobRegex.test(value)) return "Định dạng ngày sinh không hợp lệ";
-
-                const [dayStr, monthStr, yearStr] = value.split("/");
-                const day = parseInt(dayStr, 10);
-                const month = parseInt(monthStr, 10);
-                const year = parseInt(yearStr, 10);
-
-                if (month < 1 || month > 12) return "Tháng sinh phải từ 01 đến 12";
-
-                const birthDate = new Date(year, month - 1, day);
-
-                if (birthDate.getFullYear() !== year || birthDate.getMonth() !== month - 1 || birthDate.getDate() !== day) {
-                    return "Vui lòng nhập một ngày hợp lệ trên lịch";
-                }
-
+            case "birthday": {
+                if (!value.trim()) return "Ngày sinh không được để trống.";
+                const birthDate = new Date(value);
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-
-                if (birthDate > today) return "Ngày sinh không được ở tương lai";
-
+                if (birthDate > today) return "Ngày sinh không được ở tương lai.";
                 let age = today.getFullYear() - birthDate.getFullYear();
                 const m = today.getMonth() - birthDate.getMonth();
                 if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
                     age--;
                 }
-
-                if (age < 13) return "Bạn phải từ 13 tuổi trở lên";
+                if (age < 13) return "Bạn phải từ 13 tuổi trở lên.";
                 return "";
             }
 
             case "password":
-                if (!value) return "Mật khẩu không được để trống";
-                if (value.length < 8) return "Mật khẩu phải dài ít nhất 8 ký tự";
-                if (!/[A-Z]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ hoa";
-                if (!/[a-z]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ thường";
-                if (!/[0-9]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ số";
-                if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) return "Mật khẩu phải chứa ít nhất một ký tự đặc biệt";
+                if (!value) return "Mật khẩu không được để trống.";
+                if (value.length < 8) return "Mật khẩu phải dài ít nhất 8 ký tự.";
+                if (!/[A-Z]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ hoa.";
+                if (!/[a-z]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ thường.";
+                if (!/[0-9]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ số.";
+                if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) return "Mật khẩu phải chứa ít nhất một ký tự đặc biệt.";
                 return "";
 
             case "confirmPassword":
-                if (!value) return "Vui lòng nhập lại mật khẩu để xác nhận";
-                if (value !== formData.password) return "Mật khẩu xác nhận không trùng khớp";
+                if (!value) return "Vui lòng xác nhận mật khẩu.";
+                if (value !== formData.password) return "Mật khẩu xác nhận không trùng khớp.";
                 return "";
 
             default:
                 return "";
         }
     };
+
+    const getBirthdayYear = () => {
+        if (!formData.birthday) return null;
+        const parts = formData.birthday.split("-");
+        return parts[0] ? parseInt(parts[0], 10) : null;
+    };
+
+    const birthdayYear = getBirthdayYear();
+    const isYearMismatch = cccdData && birthdayYear && birthdayYear !== cccdData.birthYear;
 
     const validateForm = () => {
         const newErrors = {};
@@ -197,7 +178,13 @@ function Register() {
         });
 
         setErrors(newErrors);
-        return isValid;
+
+        if (!cccdData) {
+            setCccdError("Vui lòng thực hiện kiểm tra CCCD trước khi đăng ký.");
+            return false;
+        }
+
+        return isValid && !isYearMismatch;
     };
 
     const handleSubmit = async (e) => {
@@ -214,49 +201,45 @@ function Register() {
         if (validateForm()) {
             setIsSubmitting(true);
             try {
-                // Convert dob from DD/MM/YYYY to yyyy-MM-dd
-                const [dayStr, monthStr, yearStr] = formData.dob.split("/");
-                const dobIso = `${yearStr}-${monthStr}-${dayStr}`;
-
                 const payload = {
-                    email: formData.email,
-                    password: formData.password,
-                    confirmPassword: formData.confirmPassword,
                     fullName: formData.fullName,
-                    citizenId: formData.citizenId,
-                    gender: formData.gender,
-                    dob: dobIso
+                    email: formData.email,
+                    phoneNumber: formData.phoneNumber,
+                    cccd: formData.cccd,
+                    birthday: formData.birthday,
+                    password: formData.password
                 };
 
-                await register(payload);
+                const res = await register(payload);
                 setIsSubmitting(false);
 
-                setGlobalSuccess("Tài khoản đã được tạo thành công! Đang chuyển hướng sang Đăng nhập...");
-                
-                // Clear state variables
-                setFormData({
-                    fullName: "",
-                    email: "",
-                    citizenId: "",
-                    gender: "",
-                    dob: "",
-                    password: "",
-                    confirmPassword: ""
-                });
-                setTouched({});
-                setErrors({});
-
-                setTimeout(() => {
+                if (res.success) {
+                    setGlobalSuccess("Đăng ký thành công.");
+                    alert("Đăng ký thành công.");
                     navigate("/login");
-                }, 2000);
-
+                } else {
+                    setGlobalError("Đăng ký không thành công. Vui lòng thử lại.");
+                }
             } catch (error) {
                 setIsSubmitting(false);
-                const errorMessage = error?.message || error?.error || "Đăng ký không thành công. Vui lòng kiểm tra lại thông tin.";
+                const errorCode = error?.code || error?.error;
+                const errorMap = {
+                    AUTH_EMAIL_ALREADY_EXISTS: "Email này đã được sử dụng.",
+                    USER_PHONE_ALREADY_EXISTS: "Số điện thoại này đã được sử dụng.",
+                    USER_CCCD_ALREADY_EXISTS: "Số CCCD này đã được sử dụng.",
+                    USER_CCCD_INVALID: "Số CCCD không hợp lệ.",
+                    USER_BIRTHDAY_CCCD_MISMATCH: "Ngày sinh và số CCCD không khớp.",
+                    VALIDATION_ERROR: "Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại.",
+                    USER_PROFILE_CREATE_FAILED: "Không thể tạo hồ sơ người dùng.",
+                    INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
+                };
+                const errorMessage = errorMap[errorCode] || error?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.";
                 setGlobalError(errorMessage);
             }
         }
     };
+
+    const isSubmitDisabled = isSubmitting || isYearMismatch || !cccdData;
 
     return (
         <main className="bg-[#050506] text-white min-h-screen w-full flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden select-none">
@@ -337,6 +320,7 @@ function Register() {
                 )}
 
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5" noValidate>
+                    {/* Họ và tên */}
                     <div className="flex flex-col items-start gap-1.5 w-full relative sm:col-span-2">
                         <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="fullName">
                             Họ và tên
@@ -365,6 +349,7 @@ function Register() {
                         )}
                     </div>
 
+                    {/* Email */}
                     <div className="flex flex-col items-start gap-1.5 w-full relative sm:col-span-2">
                         <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="email">
                             Địa chỉ Email
@@ -393,109 +378,121 @@ function Register() {
                         )}
                     </div>
 
-                    <div className="flex flex-col items-start gap-1.5 w-full relative sm:col-span-2">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="citizenId">
-                            Số CCCD
+                    {/* Số điện thoại */}
+                    <div className="flex flex-col items-start gap-1.5 w-full relative">
+                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="phoneNumber">
+                            Số điện thoại
                         </label>
                         <div className="w-full relative flex items-center group">
                             <input
-                                id="citizenId"
-                                name="citizenId"
+                                id="phoneNumber"
+                                name="phoneNumber"
                                 type="text"
-                                placeholder="Nhập 12 số căn cước công dân"
-                                value={formData.citizenId}
+                                placeholder="Nhập số điện thoại"
+                                value={formData.phoneNumber}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                maxLength={12}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.citizenId && touched.citizenId ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.phoneNumber && touched.phoneNumber ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
                                 disabled={isSubmitting}
                             />
                             <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="12" x="3" y="6" rx="2" /><path d="M3 10h18" /><path d="M7 15h.01" /><path d="M11 15h.01" /></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
                             </div>
                         </div>
-                        {errors.citizenId && touched.citizenId && (
+                        {errors.phoneNumber && touched.phoneNumber && (
                             <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.citizenId}
+                                {errors.phoneNumber}
                             </span>
                         )}
                     </div>
 
+                    {/* Số CCCD */}
                     <div className="flex flex-col items-start gap-1.5 w-full relative">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="gender">
-                            Giới tính
+                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="cccd">
+                            Số CCCD
                         </label>
-                        <div className="w-full relative flex items-center group">
-                            <select
-                                id="gender"
-                                name="gender"
-                                value={formData.gender}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all outline-none appearance-none cursor-pointer ${errors.gender && touched.gender ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
-                                disabled={isSubmitting}
+                        <div className="w-full flex gap-2">
+                            <div className="w-full relative flex items-center group">
+                                <input
+                                    id="cccd"
+                                    name="cccd"
+                                    type="text"
+                                    placeholder="Nhập 12 số CCCD"
+                                    value={formData.cccd}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                    maxLength={12}
+                                    className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-4 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.cccd && touched.cccd ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                    disabled={isSubmitting}
+                                />
+                                <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="12" x="3" y="6" rx="2" /><path d="M3 10h18" /><path d="M7 15h.01" /><path d="M11 15h.01" /></svg>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => handleCccdCheck()}
+                                disabled={isCheckingCccd || formData.cccd.length !== 12}
+                                className="bg-[#ff7a1a] hover:bg-orange-500 disabled:opacity-40 disabled:hover:bg-[#ff7a1a] text-zinc-950 text-xs font-black px-4 rounded-xl transition-all cursor-pointer select-none shrink-0"
                             >
-                                <option value="" disabled>Chọn giới tính</option>
-                                <option value="male">Nam</option>
-                                <option value="female">Nữ</option>
-                                <option value="other">Khác</option>
-                            </select>
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M12 15l0 5" /><path d="M10 18l4 0" /><path d="M19 5l-4 4" /><path d="M19 9l-4 -4" /><path d="M16.5 7.5l3.5 -3.5" /></svg>
-                            </div>
-                            <div className="absolute right-4 pointer-events-none text-zinc-500">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                            </div>
+                                {isCheckingCccd ? "Check..." : "Kiểm tra"}
+                            </button>
                         </div>
-                        {errors.gender && touched.gender && (
+                        {cccdError && (
                             <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.gender}
+                                {cccdError}
                             </span>
+                        )}
+                        {errors.cccd && touched.cccd && !cccdError && (
+                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
+                                {errors.cccd}
+                            </span>
+                        )}
+                        {cccdData && cccdData.valid && (
+                            <div className="mt-2 p-3 bg-zinc-950 border border-zinc-800/80 rounded-xl text-xs space-y-1 text-zinc-400 w-full animate-fadeIn sm:col-span-2">
+                                <p><strong className="text-zinc-300">Mã CCCD:</strong> {cccdData.cccdMasked}</p>
+                                <p><strong className="text-zinc-300">Tỉnh thành:</strong> {cccdData.provinceName}</p>
+                                <p><strong className="text-zinc-300">Giới tính:</strong> {cccdData.genderLabel}</p>
+                                <p><strong className="text-zinc-300">Năm sinh:</strong> {cccdData.birthYear}</p>
+                            </div>
                         )}
                     </div>
 
-                    <div className="flex flex-col items-start gap-1.5 w-full relative">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="dob">
+                    {/* Ngày sinh */}
+                    <div className="flex flex-col items-start gap-1.5 w-full relative sm:col-span-2">
+                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="birthday">
                             Ngày sinh
                         </label>
                         <div className="w-full relative flex items-center group">
                             <input
-                                id="dob"
-                                name="dob"
-                                type="text"
-                                placeholder="DD/MM/YYYY"
-                                value={formData.dob}
+                                id="birthday"
+                                name="birthday"
+                                type="date"
+                                value={formData.birthday}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                maxLength={10}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.dob && touched.dob ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl px-4 py-3 text-sm text-zinc-100 transition-all outline-none appearance-none ${errors.birthday && touched.birthday ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
                                 disabled={isSubmitting}
                             />
-                            <div 
-                                className="absolute left-4 text-zinc-500 hover:text-brand-coral cursor-pointer flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral" 
-                                onClick={handleCalendarClick}
-                                title="Mở lịch chọn"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>
-                            </div>
-                            <input
-                                type="date"
-                                ref={dateInputRef}
-                                onChange={handleDateChange}
-                                style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
-                                max={new Date().toISOString().split("T")[0]}
-                            />
                         </div>
-                        {errors.dob && touched.dob && (
+                        {isYearMismatch && (
                             <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.dob}
+                                Năm sinh không trùng khớp với thông tin trên căn cước công dân
+                            </span>
+                        )}
+                        {errors.birthday && touched.birthday && !isYearMismatch && (
+                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
+                                {errors.birthday}
                             </span>
                         )}
                     </div>
 
+                    {/* Mật khẩu */}
                     <div className="flex flex-col items-start gap-1.5 w-full relative">
                         <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="password">
                             Mật khẩu
@@ -536,6 +533,7 @@ function Register() {
                         )}
                     </div>
 
+                    {/* Xác nhận mật khẩu */}
                     <div className="flex flex-col items-start gap-1.5 w-full relative">
                         <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="confirmPassword">
                             Xác nhận mật khẩu
@@ -579,8 +577,8 @@ function Register() {
                     <div className="sm:col-span-2 flex flex-col gap-4 mt-4">
                         <button 
                             type="submit" 
-                            className="w-full bg-gradient-to-r from-orange-400 to-amber-500 hover:opacity-95 disabled:opacity-50 text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer" 
-                            disabled={isSubmitting}
+                            className="w-full bg-[#ff7a1a] hover:bg-orange-500 disabled:opacity-40 disabled:hover:bg-[#ff7a1a] text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer" 
+                            disabled={isSubmitDisabled}
                         >
                             <span>{isSubmitting ? "Đang đăng ký..." : "Đăng ký tài khoản"}</span>
                             {!isSubmitting && (
