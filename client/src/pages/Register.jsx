@@ -69,7 +69,7 @@ function Register() {
                 } else {
                     dateInputRef.current.click();
                 }
-            } catch (err) {
+            } catch {
                 dateInputRef.current.click();
             }
         }
@@ -107,12 +107,13 @@ function Register() {
 
     const validateField = (name, value) => {
         switch (name) {
-            case "fullName":
+            case "fullName": {
                 if (!value.trim()) return "Họ và tên không được để trống";
                 if (!/^[a-zA-ZÀ-ỹ\s]+$/.test(value)) return "Họ và tên không được chứa số hoặc ký tự đặc biệt";
                 const words = value.trim().split(/\s+/);
                 if (words.length < 2) return "Họ và tên phải có ít nhất 2 từ";
                 return "";
+            }
 
             case "email":
                 if (!value.trim()) return "Email không được để trống";
@@ -129,7 +130,7 @@ function Register() {
                 if (!value) return "Vui lòng chọn giới tính";
                 return "";
 
-            case "dob":
+            case "dob": {
                 if (!value.trim()) return "Ngày sinh không được để trống";
                 if (value.length < 10) return "Vui lòng nhập đầy đủ ngày sinh (DD/MM/YYYY)";
 
@@ -162,6 +163,7 @@ function Register() {
 
                 if (age < 13) return "Bạn phải từ 13 tuổi trở lên";
                 return "";
+            }
 
             case "password":
                 if (!value) return "Mật khẩu không được để trống";

@@ -1,18 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Film, ChevronDown, Menu, X, Search, User, LogOut } from "lucide-react";
+import { ChevronDown, Menu, X, Search, User, LogOut } from "lucide-react";
 
 export default function Header() {
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null); // 'phim' | 'goc-dien-anh' | 'rap-gia-ve' | null
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-    useEffect(() => {
-        const token = localStorage.getItem("token");
-        setIsAuthenticated(!!token);
-    }, []);
+    const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem("token"));
 
     const handleLogout = () => {
         localStorage.removeItem("token");
