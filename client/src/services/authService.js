@@ -13,7 +13,7 @@ export const login = async (email, password) => {
         if (error.response && error.response.data) {
             throw error.response.data;
         }
-        throw new Error("Network error occurred. Please try again later.");
+        throw new Error("Network error occurred. Please try again later.", { cause: error });
     }
 };
 
@@ -25,6 +25,6 @@ export const register = async (userData) => {
         if (error.response && error.response.data) {
             throw error.response.data;
         }
-        throw new Error("Network error occurred. Please try again later.");
+        throw new Error("Network error occurred. Please try again later.", { cause: error });
     }
 };
