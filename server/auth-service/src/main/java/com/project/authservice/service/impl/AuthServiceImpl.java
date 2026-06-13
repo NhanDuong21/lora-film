@@ -35,6 +35,7 @@ import com.project.authservice.service.AuthService;
 import com.project.authservice.service.VerificationService;
 import com.project.authservice.service.AuditLogService;
 import com.project.authservice.util.JwtUtil;
+import com.project.authservice.util.RefreshTokenHashUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -212,9 +213,10 @@ public class AuthServiceImpl implements AuthService {
 		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), account.getRole().getRoleName());
 
 		// 6. Generate Refresh Token
+		String plainRefreshToken = UUID.randomUUID().toString();
 		RefreshToken refreshToken = new RefreshToken();
 		refreshToken.setAccount(account);
-		refreshToken.setToken(UUID.randomUUID().toString());
+		refreshToken.setToken(RefreshTokenHashUtil.hash(plainRefreshToken));
 		refreshToken.setExpiryDate(LocalDateTime.now().plusDays(7));
 		refreshToken.setIsRevoked(false);
 
@@ -230,7 +232,7 @@ public class AuthServiceImpl implements AuthService {
 		long expiresInSeconds = jwtUtil.getJwtExpirationMs() / 1000;
 		return new JwtResponse(
 				accessToken,
-				refreshToken.getToken(),
+				plainRefreshToken,
 				expiresInSeconds,
 				account.getEmail(),
 				account.getRole().getRoleName()
@@ -258,8 +260,9 @@ public class AuthServiceImpl implements AuthService {
 	@Transactional
 	public JwtResponse refreshToken(RefreshTokenRequest request) {
 		String tokenStr = request.getRefreshToken();
+		String hashedToken = RefreshTokenHashUtil.hash(tokenStr);
 		try {
-			RefreshToken refreshToken = refreshTokenRepository.findByToken(tokenStr)
+			RefreshToken refreshToken = refreshTokenRepository.findByToken(hashedToken)
 					.orElseThrow(() -> new InvalidRefreshTokenException("Refresh token not found"));
 
 			if (refreshToken.getIsRevoked() == null || refreshToken.getIsRevoked()) {
@@ -298,17 +301,18 @@ public class AuthServiceImpl implements AuthService {
 				refreshTokenRepository.save(refreshToken);
 
 				// Generate new refresh token
+				String newPlainRefreshToken = UUID.randomUUID().toString();
 				RefreshToken newRefreshToken = new RefreshToken();
 				newRefreshToken.setAccount(account);
-				newRefreshToken.setToken(UUID.randomUUID().toString());
+				newRefreshToken.setToken(RefreshTokenHashUtil.hash(newPlainRefreshToken));
 				newRefreshToken.setExpiryDate(now.plusDays(7));
 				newRefreshToken.setIsRevoked(false);
 				refreshTokenRepository.save(newRefreshToken);
 
-				responseRefreshToken = newRefreshToken.getToken();
+				responseRefreshToken = newPlainRefreshToken;
 			} else {
 				// Remaining duration is greater than 5 days -> Keep the current refresh token
-				responseRefreshToken = refreshToken.getToken();
+				responseRefreshToken = tokenStr;
 			}
 
 			auditLogService.log(account.getId(), "REFRESH_TOKEN_SUCCESS", servletRequest);
@@ -324,7 +328,7 @@ public class AuthServiceImpl implements AuthService {
 		} catch (Exception e) {
 			Long accountId = null;
 			try {
-				RefreshToken tempToken = refreshTokenRepository.findByToken(tokenStr).orElse(null);
+				RefreshToken tempToken = refreshTokenRepository.findByToken(hashedToken).orElse(null);
 				if (tempToken != null && tempToken.getAccount() != null) {
 					accountId = tempToken.getAccount().getId();
 				}

@@ -11,8 +11,8 @@ public class JwtResponse {
 
     public JwtResponse() {}
 
-    public JwtResponse(String token, String tokenType, String email, String role) {
-        this.token = token;
+    public JwtResponse(String tokenType, String email, String role) {
+        
         this.tokenType = tokenType;
         this.email = email;
         this.role = role;
@@ -20,7 +20,6 @@ public class JwtResponse {
     }
 
     public JwtResponse(String accessToken, String refreshToken, Long expiresIn, String email, String role) {
-        this.token = accessToken;
         this.accessToken = accessToken;
         this.refreshToken = refreshToken;
         this.expiresIn = expiresIn;
