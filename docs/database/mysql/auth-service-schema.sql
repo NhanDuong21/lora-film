@@ -3,7 +3,8 @@ CREATE TABLE `accounts` (
   `email` varchar(100) UNIQUE NOT NULL COMMENT 'Dùng làm tên đăng nhập chính',
   `password_hash` varchar(255) NOT NULL,
   `role_id` int NOT NULL,
-  `is_active` boolean DEFAULT true,
+  `is_active` int DEFAULT 1,
+  `registration_completed` int DEFAULT 0,
   `created_at` timestamp DEFAULT (now()),
   `updated_at` timestamp DEFAULT (now())
 );
