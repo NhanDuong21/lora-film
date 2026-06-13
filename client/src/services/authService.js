@@ -1,6 +1,7 @@
 import axios from "axios";
+import { mockRegister } from "../data/mock/authMock";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export const login = async (email, password) => {
     try {
@@ -18,13 +19,6 @@ export const login = async (email, password) => {
 };
 
 export const register = async (userData) => {
-    try {
-        const response = await axios.post(`${API_BASE_URL}/api/auth/register`, userData);
-        return response.data;
-    } catch (error) {
-        if (error.response && error.response.data) {
-            throw error.response.data;
-        }
-        throw new Error("Network error occurred. Please try again later.", { cause: error });
-    }
+    // Temporarily toggled to use mock register as backend endpoint refactoring is ongoing
+    return mockRegister(userData);
 };

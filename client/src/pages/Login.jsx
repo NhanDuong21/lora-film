@@ -20,14 +20,8 @@ function Login() {
         setErrorMsg("");
         setSuccessMessage("");
 
-        // Input Validation
         if (!email.trim() || !password.trim()) {
-            setErrorMsg("Vui lòng nhập đầy đủ email và mật khẩu!");
-            return;
-        }
-
-        if (password.length < 6) {
-            setErrorMsg("Mật khẩu đăng nhập phải có ít nhất 8 ký tự!");
+            setErrorMsg("Vui lòng nhập đầy đủ email và mật khẩu.");
             return;
         }
 
@@ -36,26 +30,31 @@ function Login() {
             const data = await login(email, password);
             setIsSubmitting(false);
 
-            // Extract token from standard API response structure
-            const token = data?.data?.token || data?.token;
+            const token = data?.data?.token;
 
             if (token) {
-                // Store the JWT token securely in localStorage
-                localStorage.setItem("token", token);
-                setSuccessMessage("Đăng nhập thành công! Đang chuyển hướng...");
+                localStorage.setItem("authToken", token);
+                if (data.data.tokenType) localStorage.setItem("tokenType", data.data.tokenType);
+                if (data.data.email) localStorage.setItem("userEmail", data.data.email);
+                if (data.data.role) localStorage.setItem("userRole", data.data.role);
 
-                // Short delay to allow user to see the success state transition
-                setTimeout(() => {
-                    navigate("/");
-                }, 1500);
+                setSuccessMessage("Đăng nhập thành công.");
+                navigate("/");
             } else {
-                setErrorMsg("Xác thực thành công nhưng máy chủ không trả về token.");
+                setErrorMsg("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
             }
         } catch (error) {
             setIsSubmitting(false);
 
-            // Extract the message payload from server error or default fallback
-            const errorMessage = error?.message || error?.error || "Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.";
+            const errorCode = error?.code || error?.error;
+            const errorMap = {
+                AUTH_INVALID_CREDENTIALS: "Email hoặc mật khẩu không chính xác.",
+                AUTH_ACCOUNT_INACTIVE: "Tài khoản của bạn đã bị khóa hoặc chưa kích hoạt.",
+                VALIDATION_ERROR: "Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại.",
+                INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
+            };
+
+            const errorMessage = errorMap[errorCode] || error?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.";
             setErrorMsg(errorMessage);
         }
     };

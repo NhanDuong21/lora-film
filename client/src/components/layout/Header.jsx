@@ -7,10 +7,10 @@ export default function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null); // 'phim' | 'goc-dien-anh' | 'rap-gia-ve' | null
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-    const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem("token"));
+    const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem("authToken"));
 
     const handleLogout = () => {
-        localStorage.removeItem("token");
+        localStorage.removeItem("authToken");
         setIsAuthenticated(false);
         setProfileDropdownOpen(false);
         navigate("/");
