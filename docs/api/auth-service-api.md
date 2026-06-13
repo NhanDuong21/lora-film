@@ -248,7 +248,7 @@ Khi người dùng nhập CCCD ở form Register:
 ### 6.1. Mục Tiêu API
 
 API này dùng để đăng ký tài khoản người dùng.
-Frontend gửi thông tin đăng ký lên Backend thông qua API Gateway. Backend tạo tài khoản đăng nhập trong `auth-service` (mặc định trạng thái `is_active = 1` và `registration_completed = 0`) và khởi tạo mã xác thực OTP 6 số in ra console. Đồng thời hệ thống lưu thông tin hồ sơ người dùng ở `user-service` hoặc schema tương ứng.
+Frontend gửi thông tin đăng ký lên Backend thông qua API Gateway. Backend tạo tài khoản đăng nhập trong `auth-service` (mặc định trạng thái `is_active = 0` và `registration_completed = 0`) và khởi tạo mã xác thực OTP 6 số in ra console. Đồng thời hệ thống lưu thông tin hồ sơ người dùng ở `user-service` hoặc schema tương ứng.
 
 ### 6.2. Trạng Thái Implement
 
@@ -334,7 +334,7 @@ Các field sau không nhất thiết để người dùng nhập tay. Hệ thố
 | Birthday match | Năm trong `birthday` nên khớp với `birthYear` suy ra từ CCCD |
 | Default role | User mới mặc định có role `CUSTOMER` |
 | Hash password | Mật khẩu phải được hash trước khi lưu |
-| Account status | Tài khoản mới tạo mặc định `is_active = 1` và `registration_completed = 0` |
+| Account status | Tài khoản mới tạo mặc định `is_active = 0` và `registration_completed = 0` |
 | OTP Generation | Sinh mã xác thực OTP ngẫu nhiên 6 chữ số có hiệu lực trong 5 phút và lưu tạm thời |
 
 ### 6.9. Backend Processing Flow
@@ -950,7 +950,7 @@ CREATE TABLE `accounts` (
   `email` varchar(100) UNIQUE NOT NULL COMMENT 'Dùng làm tên đăng nhập chính',
   `password_hash` varchar(255) NOT NULL,
   `role_id` int NOT NULL,
-  `is_active` int DEFAULT 1 COMMENT '1: Hoạt động, 0: Bị khóa',
+  `is_active` int DEFAULT 0 COMMENT '1: Hoạt động, 0: Bị khóa',
   `registration_completed` int DEFAULT 0 COMMENT '1: Đã xác thực OTP, 0: Tài khoản mới chờ xác thực',
   `created_at` timestamp DEFAULT (now()),
   `updated_at` timestamp DEFAULT (now())
