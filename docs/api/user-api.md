@@ -10,7 +10,13 @@
 | Người phụ trách BE | (Backend Developer)                    |
 | Người phụ trách FE | (Frontend Developer)                   |
 | Trạng thái         | Ready for Implement                    |
-| Ngày cập nhật      | 13/06/2026                             |
+| Ngày cập nhật      | 14/06/2026                             |
+
+---
+
+## Lịch Sử Chỉnh Sửa
+- **14/06/2026**: Cập nhật Local URL từ port `8082` sang `8086`. Đổi tên trường trả về từ `isVerifiedPhone` thành `verifiedPhone` (do gỡ bỏ Lombok).
+- **13/06/2026**: Khởi tạo tài liệu đặc tả User Profile APIs.
 
 ---
 
@@ -36,7 +42,7 @@ http://localhost:8080
 ### 3.2. User Service Direct URL
 Chỉ dùng cho Backend debug hoặc cho các service nội bộ giao tiếp với nhau (VD: Auth Service gọi sang User Service):
 ```txt
-http://localhost:8082
+http://localhost:8086
 ```
 
 ---
@@ -56,7 +62,7 @@ Lưu ý: Đây là **Internal API**, API Gateway không được phép expose en
 | ------------- | ----------------------------------------- |
 | Method        | `POST`                                    |
 | Endpoint      | `/internal/users`                         |
-| Local URL     | `http://localhost:8082/internal/users`    |
+| Local URL     | `http://localhost:8086/internal/users`    |
 | Gateway URL   | (Không expose qua API Gateway)            |
 | Content-Type  | `application/json`                        |
 | Auth Required | Có thể dùng Internal Token (TBD)          |
@@ -182,7 +188,7 @@ Lưu ý:
 | ------------- | ----------------------------------------- |
 | Method        | `GET`                                     |
 | Endpoint      | `/api/users/{accountId}`                  |
-| Local URL     | `http://localhost:8082/api/users/1`       |
+| Local URL     | `http://localhost:8086/api/users/1`       |
 | Gateway URL   | `http://localhost:8080/api/users/1`       |
 | Content-Type  | `application/json`                        |
 | Auth Required | Yes (Bearer Token)                        |
@@ -217,7 +223,7 @@ Status: `200 OK`
     "cccdMasked": "092******789",
     "provinceName": "Cần Thơ",
     "birthYear": 2005,
-    "isVerifiedPhone": false
+    "verifiedPhone": false
   }
 }
 ```
@@ -236,7 +242,7 @@ Status: `200 OK`
 | cccdMasked        | string  | CCCD đã được che một phần an toàn           |
 | provinceName      | string  | Tỉnh/thành nơi làm thẻ CCCD suy ra từ mã    |
 | birthYear         | number  | Năm sinh suy ra từ CCCD                     |
-| isVerifiedPhone   | boolean | Trạng thái SĐT đã xác thực hay chưa         |
+| verifiedPhone     | boolean | Trạng thái SĐT đã xác thực hay chưa         |
 
 ---
 

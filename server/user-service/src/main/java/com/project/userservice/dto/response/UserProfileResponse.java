@@ -1,18 +1,11 @@
 package com.project.userservice.dto.response;
 
 import com.project.userservice.enumtype.Gender;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class UserProfileResponse {
+
     private Long accountId;
     private String fullName;
     private String phoneNumber;
@@ -22,4 +15,93 @@ public class UserProfileResponse {
     private String provinceName;
     private Integer birthYear;
     private Boolean isVerifiedPhone;
+
+    public UserProfileResponse() {
+    }
+
+    public UserProfileResponse(Long accountId, String fullName, String phoneNumber, Gender gender,
+                               LocalDate birthday, String cccdMasked, String provinceName,
+                               Integer birthYear, Boolean isVerifiedPhone) {
+        this.accountId = accountId;
+        this.fullName = fullName;
+        this.phoneNumber = phoneNumber;
+        this.gender = gender;
+        this.birthday = birthday;
+        this.cccdMasked = cccdMasked;
+        this.provinceName = provinceName;
+        this.birthYear = birthYear;
+        this.isVerifiedPhone = isVerifiedPhone;
+    }
+
+    public Long getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(Long accountId) {
+        this.accountId = accountId;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public Gender getGender() {
+        return gender;
+    }
+
+    public void setGender(Gender gender) {
+        this.gender = gender;
+    }
+
+    public LocalDate getBirthday() {
+        return birthday;
+    }
+
+    public void setBirthday(LocalDate birthday) {
+        this.birthday = birthday;
+    }
+
+    public String getCccdMasked() {
+        return cccdMasked;
+    }
+
+    public void setCccdMasked(String cccdMasked) {
+        this.cccdMasked = cccdMasked;
+    }
+
+    public String getProvinceName() {
+        return provinceName;
+    }
+
+    public void setProvinceName(String provinceName) {
+        this.provinceName = provinceName;
+    }
+
+    public Integer getBirthYear() {
+        return birthYear;
+    }
+
+    public void setBirthYear(Integer birthYear) {
+        this.birthYear = birthYear;
+    }
+
+    public Boolean getVerifiedPhone() {
+        return isVerifiedPhone;
+    }
+
+    public void setVerifiedPhone(Boolean verifiedPhone) {
+        isVerifiedPhone = verifiedPhone;
+    }
 }

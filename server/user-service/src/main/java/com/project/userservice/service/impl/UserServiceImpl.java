@@ -6,15 +6,17 @@ import com.project.userservice.entity.User;
 import com.project.userservice.exception.BusinessException;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.service.UserService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+
+    public UserServiceImpl(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
     @Override
     @Transactional
@@ -31,20 +33,19 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("CCCD already exists", "USER_CCCD_ALREADY_EXISTS");
         }
 
-        User user = User.builder()
-                .accountId(request.getAccountId())
-                .fullName(request.getFullName())
-                .phoneNumber(request.getPhoneNumber())
-                .cccd(request.getCccd())
-                .cccdMasked(request.getCccdMasked())
-                .provinceCode(request.getProvinceCode())
-                .provinceName(request.getProvinceName())
-                .birthYear(request.getBirthYear())
-                .gender(request.getGender())
-                .birthday(request.getBirthday())
-                .cccdCheckNote(request.getCccdCheckNote())
-                .isVerifiedPhone(false)
-                .build();
+        User user = new User();
+        user.setAccountId(request.getAccountId());
+        user.setFullName(request.getFullName());
+        user.setPhoneNumber(request.getPhoneNumber());
+        user.setCccd(request.getCccd());
+        user.setCccdMasked(request.getCccdMasked());
+        user.setProvinceCode(request.getProvinceCode());
+        user.setProvinceName(request.getProvinceName());
+        user.setBirthYear(request.getBirthYear());
+        user.setGender(request.getGender());
+        user.setBirthday(request.getBirthday());
+        user.setCccdCheckNote(request.getCccdCheckNote());
+        user.setVerifiedPhone(false);
 
         user = userRepository.save(user);
 
@@ -60,16 +61,16 @@ public class UserServiceImpl implements UserService {
     }
 
     private UserProfileResponse mapToResponse(User user) {
-        return UserProfileResponse.builder()
-                .accountId(user.getAccountId())
-                .fullName(user.getFullName())
-                .phoneNumber(user.getPhoneNumber())
-                .gender(user.getGender())
-                .birthday(user.getBirthday())
-                .cccdMasked(user.getCccdMasked())
-                .provinceName(user.getProvinceName())
-                .birthYear(user.getBirthYear())
-                .isVerifiedPhone(user.getIsVerifiedPhone())
-                .build();
+        UserProfileResponse response = new UserProfileResponse();
+        response.setAccountId(user.getAccountId());
+        response.setFullName(user.getFullName());
+        response.setPhoneNumber(user.getPhoneNumber());
+        response.setGender(user.getGender());
+        response.setBirthday(user.getBirthday());
+        response.setCccdMasked(user.getCccdMasked());
+        response.setProvinceName(user.getProvinceName());
+        response.setBirthYear(user.getBirthYear());
+        response.setVerifiedPhone(user.getVerifiedPhone());
+        return response;
     }
 }
