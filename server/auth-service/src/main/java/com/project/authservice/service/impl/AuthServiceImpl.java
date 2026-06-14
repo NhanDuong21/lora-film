@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.project.authservice.client.CccdCheckClient;
 import com.project.authservice.client.UserServiceClient;
+import com.project.authservice.event.publisher.AuthAccountEventPublisher;
 import com.project.authservice.dto.request.LoginRequest;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.dto.request.VerifyRequest;
@@ -55,12 +56,14 @@ public class AuthServiceImpl implements AuthService {
 	private final AuditLogService auditLogService;
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final HttpServletRequest servletRequest;
+	private final AuthAccountEventPublisher eventPublisher;
 
 	public AuthServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository,
 						   PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
 						   CccdCheckClient cccdCheckClient, UserServiceClient userServiceClient,
 						   VerificationService verificationService, AuditLogService auditLogService,
-						   RefreshTokenRepository refreshTokenRepository, HttpServletRequest servletRequest) {
+						   RefreshTokenRepository refreshTokenRepository, HttpServletRequest servletRequest,
+						   AuthAccountEventPublisher eventPublisher) {
 		this.accountRepository = accountRepository;
 		this.roleRepository = roleRepository;
 		this.passwordEncoder = passwordEncoder;
@@ -71,6 +74,7 @@ public class AuthServiceImpl implements AuthService {
 		this.auditLogService = auditLogService;
 		this.refreshTokenRepository = refreshTokenRepository;
 		this.servletRequest = servletRequest;
+		this.eventPublisher = eventPublisher;
 	}
 
 	/**
@@ -123,34 +127,30 @@ public class AuthServiceImpl implements AuthService {
 			account.setRegistrationCompleted(0);
 
 			Account savedAccount = accountRepository.save(account);
-
-			// Propagate user profile to User Service
-			UserServiceClient.UserProfileRequest profileRequest = new UserServiceClient.UserProfileRequest(
-					savedAccount.getId(),
-					request.getFullName(),
-					request.getPhoneNumber(),
-					request.getCccd(),
-					cccdInfo.getCccdMasked(),
-					cccdInfo.getProvinceCode(),
-					cccdInfo.getProvinceName(),
-					cccdInfo.getGender(),
-					birthdayStr,
-					cccdInfo.getBirthYear()
-			);
-
-			// Propagate user profile to User Service (errors propagate to client)
-			try {
-				userServiceClient.createUserProfile(profileRequest);
-			} catch (Exception e) {
-				log.warn("User Service propagation failed or is unavailable. Continuing registration as mocked fallback. Error: {}", e.getMessage());
-			}
+			// DB row is now written; transaction will commit at method exit.
+			// Kafka event is published AFTER this save, ensuring no event on DB failure.
 
 			// Generate verification OTP
 			verificationService.generateVerification(savedAccount);
 
-			log.info("Account successfully registered and profile created for email={} with accountId={}", email, savedAccount.getId());
+			log.info("Account successfully registered for email={} with accountId={}", email, savedAccount.getId());
 
 			auditLogService.log(savedAccount.getId(), "REGISTER_SUCCESS", servletRequest);
+
+			// Publish ACCOUNT_CREATED event to Kafka.
+			// This runs inside the same @Transactional method; Spring Kafka's
+			// KafkaTemplate.send() is called AFTER accountRepository.save() succeeds,
+			// so a DB exception will prevent this line from being reached.
+			// If Kafka publish fails, we log the error but do NOT rollback the account
+			// (idempotent consumer design handles duplicates on retry).
+			try {
+				eventPublisher.publishAccountCreated(savedAccount, request, cccdInfo);
+			} catch (Exception kafkaEx) {
+				log.error("ACCOUNT_CREATED Kafka event failed for accountId={} email={}: {}",
+						savedAccount.getId(), email, kafkaEx.getMessage(), kafkaEx);
+				// Account creation is NOT rolled back – downstream will reconcile via
+				// idempotent consumer or a retry/dead-letter mechanism.
+			}
 
 			return new RegisterResponse(
 					savedAccount.getId(),
