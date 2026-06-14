@@ -3,7 +3,8 @@ CREATE TABLE `accounts` (
   `email` varchar(100) UNIQUE NOT NULL COMMENT 'Dùng làm tên đăng nhập chính',
   `password_hash` varchar(255) NOT NULL,
   `role_id` int NOT NULL,
-  `is_active` boolean DEFAULT true,
+  `is_active` int DEFAULT 0 COMMENT '0=inactive(pending email verify), 1=active',
+  `registration_completed` int DEFAULT 0 COMMENT '0=not verified, 1=email verified',
   `created_at` timestamp DEFAULT (now()),
   `updated_at` timestamp DEFAULT (now())
 );
@@ -44,6 +45,15 @@ CREATE TABLE `audit_logs` (
   `created_at` timestamp DEFAULT (now())
 );
 
+CREATE TABLE `email_verification_tokens` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `account_id` bigint NOT NULL,
+  `token` varchar(255) UNIQUE NOT NULL,
+  `expiry_date` timestamp NOT NULL,
+  `used` boolean DEFAULT false,
+  `created_at` timestamp DEFAULT (now())
+);
+
 ALTER TABLE `accounts` ADD FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
 
 ALTER TABLE `roles_permissions` ADD FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
@@ -51,3 +61,5 @@ ALTER TABLE `roles_permissions` ADD FOREIGN KEY (`role_id`) REFERENCES `roles` (
 ALTER TABLE `roles_permissions` ADD FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE;
 
 ALTER TABLE `refresh_tokens` ADD FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `email_verification_tokens` ADD FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;

@@ -42,7 +42,11 @@ public class Account {
 
 	@Builder.Default
 	@Column(name = "is_active", nullable = false)
-	private Boolean isActive = true;
+	private Integer isActive = 0;
+
+	@Builder.Default
+	@Column(name = "registration_completed", nullable = false)
+	private Integer registrationCompleted = 0;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
@@ -58,7 +62,10 @@ public class Account {
 		}
 		updatedAt = now;
 		if (isActive == null) {
-			isActive = true;
+			isActive = 0;
+		}
+		if (registrationCompleted == null) {
+			registrationCompleted = 0;
 		}
 	}
 

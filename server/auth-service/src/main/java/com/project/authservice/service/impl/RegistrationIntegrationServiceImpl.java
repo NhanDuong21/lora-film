@@ -1,6 +1,8 @@
-package com.project.authservice.service;
+package com.project.authservice.service.impl;
 
 import org.springframework.stereotype.Service;
+
+import com.project.authservice.service.RegistrationIntegrationService;
 
 import lombok.extern.slf4j.Slf4j;
 

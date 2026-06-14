@@ -8,10 +8,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.project.authservice.common.ApiResponse;
-import com.project.authservice.dto.JwtResponse;
-import com.project.authservice.dto.LoginRequest;
-import com.project.authservice.dto.RegisterRequest;
-import com.project.authservice.dto.RegisterResponse;
+import com.project.authservice.dto.request.LoginRequest;
+import com.project.authservice.dto.request.RegisterRequest;
+import com.project.authservice.dto.request.VerifyRequest;
+import com.project.authservice.dto.request.RefreshTokenRequest;
+import com.project.authservice.dto.response.JwtResponse;
+import com.project.authservice.dto.response.RegisterResponse;
 import com.project.authservice.service.AuthService;
 
 import jakarta.validation.Valid;
@@ -50,5 +52,31 @@ public class AuthController {
 		log.info("Login endpoint called for email={}", request.getEmail());
 		JwtResponse response = authService.login(request);
 		return ResponseEntity.ok(ApiResponse.success("Login successfully", response));
+	}
+
+	/**
+	 * Verifies account registration.
+	 *
+	 * @param request verification request payload
+	 * @return success response wrapped in ApiResponse
+	 */
+	@PostMapping("/verify")
+	public ResponseEntity<ApiResponse<Void>> verify(@Valid @RequestBody VerifyRequest request) {
+		log.info("Verify endpoint called for accountId={}", request.getAccountId());
+		authService.verify(request);
+		return ResponseEntity.ok(ApiResponse.success("Account verified successfully", null));
+	}
+
+	/**
+	 * Refreshes JWT token.
+	 *
+	 * @param request refresh token request payload
+	 * @return new jwt response wrapped in ApiResponse
+	 */
+	@PostMapping("/refresh-token")
+	public ResponseEntity<ApiResponse<JwtResponse>> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+		log.info("Refresh token endpoint called");
+		JwtResponse response = authService.refreshToken(request);
+		return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", response));
 	}
 }

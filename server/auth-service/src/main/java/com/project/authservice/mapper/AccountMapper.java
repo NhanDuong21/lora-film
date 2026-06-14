@@ -2,7 +2,7 @@ package com.project.authservice.mapper;
 
 import org.springframework.stereotype.Component;
 
-import com.project.authservice.dto.RegisterResponse;
+import com.project.authservice.dto.response.RegisterResponse;
 import com.project.authservice.entity.Account;
 
 @Component
@@ -15,7 +15,7 @@ public class AccountMapper {
 	 */
 	public RegisterResponse toRegisterResponse(Account account) {
 		RegisterResponse response = new RegisterResponse();
-		response.setId(account.getId());
+		response.setAccountId(account.getId());
 		response.setEmail(account.getEmail());
 		response.setRole(account.getRole() != null ? account.getRole().getRoleName() : null);
 		return response;

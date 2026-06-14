@@ -1,10 +1,13 @@
 package com.project.authservice.exception;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.ObjectError;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -12,13 +15,26 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.project.authservice.common.ApiResponse;
 
 import jakarta.validation.ConstraintViolationException;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
 	/**
-	 * Handles business rule violations.
+	 * Handles standard API contract exceptions (BaseAuthException).
+	 *
+	 * @param exception auth exception
+	 * @return structured error response
+	 */
+	@ExceptionHandler(BaseAuthException.class)
+	public ResponseEntity<ApiResponse<Object>> handleBaseAuthException(BaseAuthException exception) {
+		log.warn("Auth Exception [{}]: {}", exception.getErrorCode(), exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), exception.getErrorCode());
+		return ResponseEntity.status(exception.getStatus()).body(response);
+	}
+
+	/**
+	 * Handles business rule violations (legacy fallback).
 	 *
 	 * @param exception business exception
 	 * @return error response
@@ -26,11 +42,12 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException exception) {
 		log.warn("Business exception: {}", exception.getMessage());
-		return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(exception.getMessage()));
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), "BUSINESS_ERROR");
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
 	}
 
 	/**
-	 * Handles unauthorized access.
+	 * Handles unauthorized access (legacy fallback).
 	 *
 	 * @param exception unauthorized exception
 	 * @return error response
@@ -38,11 +55,12 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(UnauthorizedException.class)
 	public ResponseEntity<ApiResponse<Object>> handleUnauthorizedException(UnauthorizedException exception) {
 		log.warn("Unauthorized: {}", exception.getMessage());
-		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.failure(exception.getMessage()));
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), "UNAUTHORIZED");
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
 	}
 
 	/**
-	 * Handles missing resources.
+	 * Handles missing resources (legacy fallback).
 	 *
 	 * @param exception resource not found exception
 	 * @return error response
@@ -50,22 +68,25 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(ResourceNotFoundException.class)
 	public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(ResourceNotFoundException exception) {
 		log.warn("Resource not found: {}", exception.getMessage());
-		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(exception.getMessage()));
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), "RESOURCE_NOT_FOUND");
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
 	}
 
 	/**
 	 * Handles validation errors from request body binding.
 	 *
 	 * @param exception validation exception
-	 * @return error response
+	 * @return structured validation error response
 	 */
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(MethodArgumentNotValidException exception) {
-		String message = exception.getBindingResult().getAllErrors().stream()
-				.map(this::formatObjectError)
-				.collect(Collectors.joining(", "));
-		log.warn("Validation failed: {}", message);
-		return ResponseEntity.badRequest().body(ApiResponse.failure(message));
+		List<ApiResponse.ValidationError> validationErrors = exception.getBindingResult().getFieldErrors().stream()
+				.map(fieldError -> new ApiResponse.ValidationError(fieldError.getField(), fieldError.getDefaultMessage()))
+				.collect(Collectors.toList());
+
+		log.warn("Validation failed: {} field errors", validationErrors.size());
+		ApiResponse<Object> response = ApiResponse.validationError("Validation failed", validationErrors);
+		return ResponseEntity.badRequest().body(response);
 	}
 
 	/**
@@ -77,7 +98,15 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(ConstraintViolationException.class)
 	public ResponseEntity<ApiResponse<Object>> handleConstraintViolationException(ConstraintViolationException exception) {
 		log.warn("Constraint violation: {}", exception.getMessage());
-		return ResponseEntity.badRequest().body(ApiResponse.failure(exception.getMessage()));
+		List<ApiResponse.ValidationError> validationErrors = exception.getConstraintViolations().stream()
+				.map(violation -> {
+					String path = violation.getPropertyPath().toString();
+					String field = path.substring(path.lastIndexOf('.') + 1);
+					return new ApiResponse.ValidationError(field, violation.getMessage());
+				})
+				.collect(Collectors.toList());
+		ApiResponse<Object> response = ApiResponse.validationError("Validation failed", validationErrors);
+		return ResponseEntity.badRequest().body(response);
 	}
 
 	/**
@@ -89,14 +118,7 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Object>> handleException(Exception exception) {
 		log.error("Unexpected error", exception);
-		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-				.body(ApiResponse.failure("Internal server error"));
-	}
-
-	private String formatObjectError(ObjectError objectError) {
-		if (objectError instanceof org.springframework.validation.FieldError fieldError) {
-			return fieldError.getField() + ": " + fieldError.getDefaultMessage();
-		}
-		return objectError.getDefaultMessage();
+		ApiResponse<Object> response = ApiResponse.error("Internal server error", "INTERNAL_SERVER_ERROR");
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
 	}
 }
