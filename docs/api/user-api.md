@@ -15,6 +15,7 @@
 ---
 
 ## Lịch Sử Chỉnh Sửa
+- **15/06/2026**: Bổ sung đặc tả Event-Driven (Kafka Consumer) cho chức năng tự động tạo User Profile.
 - **14/06/2026**: Cập nhật Local URL từ port `8082` sang `8086`. Đổi tên trường trả về từ `isVerifiedPhone` thành `verifiedPhone` (do gỡ bỏ Lombok).
 - **13/06/2026**: Khởi tạo tài liệu đặc tả User Profile APIs.
 
@@ -265,7 +266,50 @@ Status: `401 Unauthorized`
 {
   "success": false,
   "message": "Unauthorized access",
-  "errorCode": "UNAUTHORIZED",
   "data": null
 }
 ```
+
+---
+
+# 6. Kafka Event Listeners (Event-Driven)
+
+## 6.1. ACCOUNT_CREATED Event
+Bên cạnh Internal API (`/internal/users`), hệ thống hỗ trợ mô hình giao tiếp bất đồng bộ (Asynchronous) thông qua Kafka. Khi người dùng đăng ký tài khoản thành công, User Service sẽ nhận được thông điệp từ Kafka và tự động tạo hồ sơ mà không cần chờ Frontend hay API Gateway gọi thêm.
+
+### Thông Tin Consumer
+
+| Mục                 | Nội dung                                            |
+| ------------------- | --------------------------------------------------- |
+| **Topic**           | `auth.account.created.v1`                           |
+| **Consumer Group**  | `user-service-account-created-consumer`             |
+| **Loại Sự Kiện**    | `ACCOUNT_CREATED`                                   |
+| **Hành động**       | Khởi tạo bản ghi hồ sơ mới trong Database           |
+
+### Payload Tiêu Thụ Điển Hình
+User Service sẽ tự động ép kiểu (Deserialize) JSON nhận được thành class `AccountCreatedEvent`. Dữ liệu quan trọng nằm trong biến `data` của Payload:
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "ACCOUNT_CREATED",
+  "timestamp": "2026-06-15T15:00:00Z",
+  "data": {
+    "accountId": 4,
+    "email": "levanc99@gmail.com",
+    "fullName": "Lê Văn C",
+    "phoneNumber": "0933112233",
+    "cccd": "048099123456",
+    "cccdMasked": "048******456",
+    "provinceCode": "048",
+    "provinceName": "Đà Nẵng",
+    "gender": "MALE",
+    "birthYear": 1999,
+    "birthday": "1999-05-15"
+  }
+}
+```
+
+### Cơ Chế Xử Lý Lỗi (Error Handling)
+1. **Idempotency (Chống trùng lặp):** Consumer sẽ tự động kiểm tra `accountId` trong bảng `users` trước khi Insert. Nếu đã tồn tại, Consumer ghi log cảnh báo trùng lặp và bỏ qua Message một cách an toàn.
+2. **Poison Pill Protection:** Sử dụng `ErrorHandlingDeserializer` để ngăn chặn các bản tin lỗi cấu trúc (ví dụ thiếu Type Header) gây ra tình trạng lặp vô tận (Infinite poll loop) làm treo dịch vụ.
