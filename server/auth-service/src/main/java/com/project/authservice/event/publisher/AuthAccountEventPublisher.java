@@ -17,16 +17,7 @@ import com.project.authservice.entity.Account;
 import com.project.authservice.event.dto.AccountCreatedEvent;
 import com.project.authservice.event.dto.AccountCreatedEventData;
 
-/**
- * Publishes {@code ACCOUNT_CREATED} events to Kafka after a successful
- * account registration transaction.
- *
- * <p><strong>Security rules enforced here:</strong>
- * <ul>
- *   <li>Raw CCCD is NEVER written to any log statement.</li>
- *   <li>Password / password hash is NEVER included in the event payload.</li>
- * </ul>
- */
+
 @Service
 public class AuthAccountEventPublisher {
 
