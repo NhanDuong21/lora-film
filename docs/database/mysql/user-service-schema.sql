@@ -8,12 +8,12 @@ CREATE TABLE `users` (
   `created_at` timestamp DEFAULT (now()),
   `updated_at` timestamp DEFAULT (now()),
   `cccd` varchar(12) UNIQUE,
-`cccd_masked` varchar(20),
-`province_code` varchar(10),
-`province_name` varchar(100),
-`birth_year` int,
-`cccd_checked_at` timestamp,
-`cccd_check_note` varchar(255)
+  `cccd_masked` varchar(20),
+  `province_code` varchar(10),
+  `province_name` varchar(100),
+  `birth_year` int,
+  `cccd_checked_at` timestamp,
+  `cccd_check_note` varchar(255)
 );
 
 CREATE TABLE `employee_profiles` (

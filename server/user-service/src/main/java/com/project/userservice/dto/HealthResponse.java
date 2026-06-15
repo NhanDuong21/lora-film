@@ -1,15 +1,30 @@
 package com.project.userservice.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class HealthResponse {
-	private String service;
-	private String status;
+    private String status;
+    private String message;
+
+    public HealthResponse() {
+    }
+
+    public HealthResponse(String status, String message) {
+        this.status = status;
+        this.message = message;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
 }

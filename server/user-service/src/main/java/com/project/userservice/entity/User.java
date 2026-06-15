@@ -1,0 +1,207 @@
+package com.project.userservice.entity;
+
+import com.project.userservice.enumtype.Gender;
+import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "users")
+public class User {
+
+    @Id
+    @Column(name = "account_id")
+    private Long accountId;
+
+    @Column(name = "full_name", nullable = false, length = 100)
+    private String fullName;
+
+    @Column(name = "phone_number", nullable = false, unique = true, length = 15)
+    private String phoneNumber;
+
+    @Column(name = "cccd", unique = true, length = 12)
+    private String cccd;
+
+    @Column(name = "cccd_masked", length = 20)
+    private String cccdMasked;
+
+    @Column(name = "province_code", length = 10)
+    private String provinceCode;
+
+    @Column(name = "province_name", length = 100)
+    private String provinceName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", length = 10)
+    private Gender gender;
+
+    @Column(name = "birthday")
+    private LocalDate birthday;
+
+    @Column(name = "birth_year")
+    private Integer birthYear;
+
+    @Column(name = "is_verified_phone")
+    private Boolean isVerifiedPhone = false;
+
+    @Column(name = "cccd_checked_at")
+    private LocalDateTime cccdCheckedAt;
+
+    @Column(name = "cccd_check_note")
+    private String cccdCheckNote;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    public User() {
+    }
+
+    public User(Long accountId, String fullName, String phoneNumber, String cccd, String cccdMasked,
+                String provinceCode, String provinceName, Gender gender, LocalDate birthday,
+                Integer birthYear, Boolean isVerifiedPhone, LocalDateTime cccdCheckedAt,
+                String cccdCheckNote, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this.accountId = accountId;
+        this.fullName = fullName;
+        this.phoneNumber = phoneNumber;
+        this.cccd = cccd;
+        this.cccdMasked = cccdMasked;
+        this.provinceCode = provinceCode;
+        this.provinceName = provinceName;
+        this.gender = gender;
+        this.birthday = birthday;
+        this.birthYear = birthYear;
+        this.isVerifiedPhone = isVerifiedPhone;
+        this.cccdCheckedAt = cccdCheckedAt;
+        this.cccdCheckNote = cccdCheckNote;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
+    public Long getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(Long accountId) {
+        this.accountId = accountId;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public String getCccd() {
+        return cccd;
+    }
+
+    public void setCccd(String cccd) {
+        this.cccd = cccd;
+    }
+
+    public String getCccdMasked() {
+        return cccdMasked;
+    }
+
+    public void setCccdMasked(String cccdMasked) {
+        this.cccdMasked = cccdMasked;
+    }
+
+    public String getProvinceCode() {
+        return provinceCode;
+    }
+
+    public void setProvinceCode(String provinceCode) {
+        this.provinceCode = provinceCode;
+    }
+
+    public String getProvinceName() {
+        return provinceName;
+    }
+
+    public void setProvinceName(String provinceName) {
+        this.provinceName = provinceName;
+    }
+
+    public Gender getGender() {
+        return gender;
+    }
+
+    public void setGender(Gender gender) {
+        this.gender = gender;
+    }
+
+    public LocalDate getBirthday() {
+        return birthday;
+    }
+
+    public void setBirthday(LocalDate birthday) {
+        this.birthday = birthday;
+    }
+
+    public Integer getBirthYear() {
+        return birthYear;
+    }
+
+    public void setBirthYear(Integer birthYear) {
+        this.birthYear = birthYear;
+    }
+
+    public Boolean getVerifiedPhone() {
+        return isVerifiedPhone;
+    }
+
+    public void setVerifiedPhone(Boolean verifiedPhone) {
+        isVerifiedPhone = verifiedPhone;
+    }
+
+    public LocalDateTime getCccdCheckedAt() {
+        return cccdCheckedAt;
+    }
+
+    public void setCccdCheckedAt(LocalDateTime cccdCheckedAt) {
+        this.cccdCheckedAt = cccdCheckedAt;
+    }
+
+    public String getCccdCheckNote() {
+        return cccdCheckNote;
+    }
+
+    public void setCccdCheckNote(String cccdCheckNote) {
+        this.cccdCheckNote = cccdCheckNote;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+}
