@@ -7,8 +7,8 @@
 | Service            | `user-service`                         |
 | Feature            | User Profile Management                |
 | API liên quan      | Create Profile, Get Profile            |
-| Người phụ trách BE | (Backend Developer)                    |
-| Người phụ trách FE | (Frontend Developer)                   |
+| Người phụ trách BE | Phan Tuấn Thành                    |
+| Người phụ trách FE | Dương Hoàng Nhân                   |
 | Trạng thái         | Ready for Implement                    |
 | Ngày cập nhật      | 14/06/2026                             |
 
@@ -297,6 +297,7 @@ User Service sẽ tự động ép kiểu (Deserialize) JSON nhận được th�
   "data": {
     "accountId": 4,
     "email": "levanc99@gmail.com",
+    "role": "CUSTOMER",
     "fullName": "Lê Văn C",
     "phoneNumber": "0933112233",
     "cccd": "048099123456",
