@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "../services/authService";
 import { checkCCCD } from "../services/cccdService";
+import { setPendingAccountId } from "../utils/authStorage";
 
 function Register() {
     const navigate = useNavigate();
@@ -214,9 +215,12 @@ function Register() {
                 setIsSubmitting(false);
 
                 if (res.success) {
-                    setGlobalSuccess("Đăng ký thành công.");
-                    alert("Đăng ký thành công.");
-                    navigate("/login");
+                    const accId = res?.data?.accountId || res?.accountId || res?.data?.id;
+                    setPendingAccountId(accId);
+                    setGlobalSuccess("Đăng ký thành công. Đang chuyển hướng sang trang xác thực OTP...");
+                    setTimeout(() => {
+                        navigate("/verify-otp");
+                    }, 1500);
                 } else {
                     setGlobalError("Đăng ký không thành công. Vui lòng thử lại.");
                 }
