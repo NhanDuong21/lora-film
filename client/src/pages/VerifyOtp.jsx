@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { verifyOtp } from "../services/authService";
+import { verifyOtp, resendOtp } from "../services/authService";
 import { getPendingAccountId, clearPendingAccountId } from "../utils/authStorage";
 
 function VerifyOtp() {
@@ -9,6 +9,8 @@ function VerifyOtp() {
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [countdown, setCountdown] = useState(30);
+    const [isResending, setIsResending] = useState(false);
     const pendingAccountId = getPendingAccountId();
 
     useEffect(() => {
@@ -18,9 +20,36 @@ function VerifyOtp() {
         }
     }, [pendingAccountId, navigate]);
 
+    useEffect(() => {
+        if (countdown <= 0) return;
+        const timer = setInterval(() => {
+            setCountdown(prev => prev - 1);
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [countdown]);
+
     if (!pendingAccountId) {
         return null;
     }
+
+    const handleResend = async () => {
+        setError("");
+        setSuccess("");
+        setIsResending(true);
+        try {
+            const res = await resendOtp(pendingAccountId);
+            setIsResending(false);
+            if (res.success) {
+                setSuccess("Mã OTP mới đã được gửi thành công.");
+                setCountdown(30);
+            } else {
+                setError(res.message || "Gửi lại mã thất bại. Vui lòng thử lại.");
+            }
+        } catch (err) {
+            setIsResending(false);
+            setError(err?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -164,6 +193,27 @@ function VerifyOtp() {
                     >
                         <span>{isSubmitting ? "Đang xác thực..." : "Xác nhận mã"}</span>
                     </button>
+
+                    <div className="text-center mt-4">
+                        {countdown > 0 ? (
+                            <button
+                                type="button"
+                                disabled
+                                className="text-zinc-500 font-bold text-xs uppercase tracking-widest bg-transparent border-none cursor-not-allowed select-none"
+                            >
+                                Gửi lại mã sau ({countdown}s)
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleResend}
+                                disabled={isResending}
+                                className="text-[#ff7a1a] hover:text-orange-400 font-black text-xs uppercase tracking-widest bg-transparent border-none cursor-pointer transition-colors focus:outline-none"
+                            >
+                                {isResending ? "Đang gửi..." : "Gửi lại mã"}
+                            </button>
+                        )}
+                    </div>
                 </form>
             </article>
         </main>

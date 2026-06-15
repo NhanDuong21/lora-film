@@ -64,3 +64,22 @@ export const refreshToken = async (tokenValue) => {
         throw new Error("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.", { cause: error });
     }
 };
+
+export const resendOtp = async (accountId) => {
+    try {
+        const response = await axios.post(`${API_BASE_URL}/api/auth/resend-otp`, {
+            accountId: Number(accountId)
+        }, {
+            headers: {
+                "Content-Type": "application/json",
+                "accountId": Number(accountId)
+            }
+        });
+        return response.data;
+    } catch (error) {
+        if (error.response && error.response.data) {
+            throw error.response.data;
+        }
+        throw new Error("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.", { cause: error });
+    }
+};
