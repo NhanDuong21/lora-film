@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, Menu, X, Search, User, LogOut } from "lucide-react";
+import { isAuthenticated, clearAuthData } from "../../utils/authStorage";
 
 export default function Header() {
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null); // 'phim' | 'goc-dien-anh' | 'rap-gia-ve' | null
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-    const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem("authToken"));
+    const [isAuthed, setIsAuthed] = useState(() => isAuthenticated());
 
     const handleLogout = () => {
-        localStorage.removeItem("authToken");
-        setIsAuthenticated(false);
+        clearAuthData();
+        setIsAuthed(false);
         setProfileDropdownOpen(false);
         navigate("/");
     };
@@ -195,7 +196,7 @@ export default function Header() {
                 </div>
 
                 {/* Auth Check */}
-                {isAuthenticated ? (
+                {isAuthed ? (
                     <div className="relative">
                         <button
                             onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
