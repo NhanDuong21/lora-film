@@ -5,24 +5,7 @@ import java.time.Instant;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
-/**
- * Top-level Kafka event envelope published to {@code auth.account.created.v1}.
- *
- * <p>Fixed metadata:
- * <ul>
- *   <li>{@code eventType}    = {@code ACCOUNT_CREATED}</li>
- *   <li>{@code eventVersion} = {@code 1.0}</li>
- *   <li>{@code source}       = {@code auth-service}</li>
- * </ul>
- *
- * <p>Generated per-event:
- * <ul>
- *   <li>{@code eventId}    = {@link java.util.UUID#randomUUID()}</li>
- *   <li>{@code occurredAt} = current UTC {@link Instant}</li>
- * </ul>
- *
- * <p>No setters are provided; use {@link Builder} for construction.
- */
+
 public class AccountCreatedEvent {
 
     /** Unique identifier for this specific event instance (UUID v4). */
