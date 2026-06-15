@@ -1,7 +1,10 @@
 package com.project.authservice.service.impl;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,6 +28,7 @@ import com.project.authservice.entity.Role;
 import com.project.authservice.entity.RefreshToken;
 import com.project.authservice.exception.AccountInactiveException;
 import com.project.authservice.exception.AccountNotVerifiedException;
+import com.project.authservice.exception.InvalidBirthdayFormatException;
 import com.project.authservice.exception.InvalidRefreshTokenException;
 import com.project.authservice.exception.CccdException.BirthdayCccdMismatchException;
 import com.project.authservice.exception.EmailAlreadyExistsException;
@@ -98,19 +102,21 @@ public class AuthServiceImpl implements AuthService {
 			// Perform CCCD Check and info derivation
 			CccdCheckClient.CccdInfo cccdInfo = cccdCheckClient.checkCccd(request.getCccd());
 
-			// Verify birthday matches birth year derived from CCCD
+			// Verify birthday matches birth year derived from CCCD.
+			// LocalDate.parse with ISO_LOCAL_DATE enforces strict YYYY-MM-DD and
+			// rejects impossible calendar dates (e.g. 2000-02-30).
 			String birthdayStr = request.getBirthday().trim();
-			int birthYearFromDate;
+			LocalDate birthday;
 			try {
-				String[] parts = birthdayStr.split("-");
-				birthYearFromDate = Integer.parseInt(parts[0]);
-			} catch (Exception e) {
-				log.warn("Failed to parse birth year from birthday='{}'", birthdayStr);
-				throw new BirthdayCccdMismatchException();
+				birthday = LocalDate.parse(birthdayStr, DateTimeFormatter.ISO_LOCAL_DATE);
+			} catch (DateTimeParseException e) {
+				log.warn("Invalid birthday format '{}': {}", birthdayStr, e.getMessage());
+				throw new InvalidBirthdayFormatException();
 			}
 
-			if (birthYearFromDate != cccdInfo.getBirthYear()) {
-				log.warn("Birthday birth year {} does not match CCCD birth year {}", birthYearFromDate, cccdInfo.getBirthYear());
+			if (birthday.getYear() != cccdInfo.getBirthYear()) {
+				log.warn("Birthday birth year {} does not match CCCD birth year {}",
+						birthday.getYear(), cccdInfo.getBirthYear());
 				throw new BirthdayCccdMismatchException();
 			}
 

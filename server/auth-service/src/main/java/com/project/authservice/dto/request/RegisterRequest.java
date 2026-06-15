@@ -24,7 +24,13 @@ public class RegisterRequest {
     private String cccd;
 
     @NotBlank(message = "birthday is required")
-    @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "birthday format is invalid")
+    // Strict YYYY-MM-DD pattern: 4-digit year, month 01-12, day 01-31.
+    // A deeper calendar check (e.g. Feb 30) is performed in the service layer
+    // via LocalDate.parse() which throws InvalidBirthdayFormatException.
+    @Pattern(
+        regexp = "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+        message = "Birthday must be in YYYY-MM-DD format"
+    )
     private String birthday;
 
     @NotBlank(message = "Password is required")
