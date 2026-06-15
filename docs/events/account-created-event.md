@@ -22,11 +22,11 @@ Gói tin được truyền tải qua Kafka sử dụng định dạng chuỗi JS
 ### Danh Mục Các Trường Dữ Liệu Gói Tin (Metadata & Data Fields)
 | Trường (Field) | Kiểu Dữ Liệu | Bắt Buộc | Thuộc Tính Phân Vùng | Mô Tả Kỹ Thuật |
 | :--- | :--- | :--- | :--- | :--- |
-| eventId | String (UUID) | Có | Metadata | Mã định danh duy nhất cho bản tin event |
+| eventId | String (UUID) | Có | Metadata | Mã định danh duy nhất cho bản tin event (UUID string) |
 | eventType | String | Có | Metadata | Giá trị hằng số cố định: `ACCOUNT_CREATED` |
 | eventVersion | String | Có | Metadata | Phiên bản hợp đồng gói tin: `1.0` |
 | source | String | Có | Metadata | Tên định danh dịch vụ phát hành: `auth-service` |
-| occurredAt | String (ISO 8601)| Có | Metadata | Thời điểm phát sinh sự kiện hệ thống (UTC) |
+| occurredAt | String (ISO 8601)| Có | Metadata | Thời điểm phát sinh sự kiện hệ thống dưới định dạng chuỗi ISO 8601 UTC (Ví dụ: `2026-06-15T02:20:30.007Z`) |
 | data | Object | Có | Payload | Khối dữ liệu chứa thông tin nghiệp vụ chi tiết |
 | data.accountId | Long / Bigint | Có | Payload | Khóa chính ID tài khoản vừa được tạo thành công |
 | data.email | String | Có | Payload | Địa chỉ Email đăng ký của tài khoản người dùng |
@@ -38,17 +38,17 @@ Gói tin được truyền tải qua Kafka sử dụng định dạng chuỗi JS
 | data.provinceCode | String | Có | Payload | Mã định danh tỉnh thành cấp thẻ CCCD (3 chữ số) |
 | data.provinceName | String | Có | Payload | Tên tỉnh thành tương ứng giải mã từ CCCD |
 | data.gender | String | Có | Payload | Định danh giới tính (Ví dụ: `MALE`, `FEMALE`) |
-| data.birthday | String (YYYY-MM-DD)| Có | Payload | Ngày tháng năm sinh đã qua kiểm tra hợp lệ |
+| data.birthday | String (YYYY-MM-DD)| Có | Payload | Ngày tháng năm sinh được serialized dưới định dạng `yyyy-MM-dd` |
 | data.birthYear | Integer | Có | Payload | Năm sinh bóc tách từ thông tin CCCD |
 
 ### Định Dạng Mẫu Gói Tin Gửi Đi (Standard Event Payload JSON)
 ```json
 {
-  "eventId": "a9b8c7d6-e5f4-3210-fedc-ba9876543210",
+  "eventId": "uuid-string",
   "eventType": "ACCOUNT_CREATED",
   "eventVersion": "1.0",
   "source": "auth-service",
-  "occurredAt": "2026-06-12T10:30:00Z",
+  "occurredAt": "2026-06-15T02:20:30.007Z",
   "data": {
     "accountId": 1,
     "email": "user@example.com",
@@ -67,18 +67,16 @@ Gói tin được truyền tải qua Kafka sử dụng định dạng chuỗi JS
 ```
 
 ## 4. Quy Tắc Bảo Mật Và Ràng Buộc Dữ Liệu (Security Constraints)
-Bảo vệ mật khẩu người dùng: Nghiêm cấm tuyệt đối việc nhúng trường dữ liệu mật khẩu (password) hoặc chuỗi mã hóa mật khẩu (password hash) vào gói tin Kafka này. Dịch vụ user-service hoàn toàn không có quyền hạn và không được phép phụ thuộc vào dữ liệu bảo mật mật khẩu.
-
-Nguyên tắc ghi nhật ký (Log Masking Policy): Trong quá trình vận hành luồng xử lý hoặc in vết debug hệ thống, cả hai phân hệ auth-service và user-service tuyệt đối không được phép in (log) chuỗi số CCCD nguyên bản (12 số) ra các hệ thống file nhật ký. Chỉ cho phép in trường dữ liệu cccdMasked nhằm tránh rò rỉ thông tin cá nhân của khách hàng.
-
-Độc quyền phân phối: Chỉ có dịch vụ auth-service được phép giữ quyền làm Producer phát bản tin này lên Topic.
+* **Bảo vệ mật khẩu người dùng:** Nghiêm cấm tuyệt đối việc nhúng trường dữ liệu mật khẩu (`password`) hoặc chuỗi mã hóa mật khẩu (`password_hash`) vào gói tin Kafka này. Dịch vụ `user-service` hoàn toàn không có quyền hạn và không được phép phụ thuộc vào dữ liệu bảo mật mật khẩu.
+* **Nguyên tắc ghi nhật ký (Log Masking Policy):** Trong quá trình vận hành luồng xử lý hoặc in vết debug hệ thống, cả hai phân hệ `auth-service` và `user-service` tuyệt đối không được phép in (log) chuỗi số CCCD nguyên bản (12 số) ra các hệ thống file nhật ký ứng dụng (application logs). Chỉ cho phép in trường dữ liệu `cccdMasked` nhằm tránh rò rỉ thông tin cá nhân của khách hàng.
+* **Độc quyền phân phối:** Chỉ có dịch vụ `auth-service` được phép giữ quyền làm Producer phát bản tin này lên Topic.
 
 ## 5. Cơ Chế Xử Lý Trùng Lặp Và Đảm Bảo Tính Bất Biến (Idempotency Rule)
 Do mạng lưới phân phối của Kafka hoạt động theo cơ chế đảm bảo gửi tin ít nhất một lần (At-least-once delivery), một bản tin sự kiện hoàn toàn có thể bị gửi trùng lặp nhiều lần do mất kết nối ACKs mạng.
 
-Nguyên tắc xử lý của Consumer (user-service): Trước khi thực hiện lệnh chèn (Insert) một bản ghi hồ sơ mới, user-service bắt buộc phải thực hiện truy vấn kiểm tra xem giá trị trường data.accountId nhận được từ gói tin đã tồn tại trong bảng dữ liệu nội bộ của mình hay chưa.
-
-Hành vi xử lý khi phát hiện trùng: Nếu trường account_id đã có sẵn trong database, Consumer phải hiểu đây là một bản tin gửi lặp. Consumer tiến hành Bỏ qua bản tin (Skip Event), in một dòng thông báo log cảnh báo an toàn hệ thống (Safe Warning Log) và thực hiện xác nhận ACK hoàn thành bản tin với Kafka Broker. Tuyệt đối không được phép ném ra lỗi ngoại lệ hệ thống (Fatal Exception) gây treo hoặc sập cụm Consumer.
+* **Idempotent Processing:** Dịch vụ `user-service` bắt buộc phải triển khai cơ chế xử lý trùng lặp đảm bảo tính bất biến (idempotent processing) dựa trên `accountId` để an toàn xử lý các sự kiện trùng lặp (duplicate events).
+* **Nguyên tắc xử lý của Consumer (user-service):** Trước khi thực hiện lệnh chèn (Insert) một bản ghi hồ sơ mới, `user-service` bắt buộc phải thực hiện truy vấn kiểm tra xem giá trị trường `data.accountId` nhận được từ gói tin đã tồn tại trong bảng dữ liệu nội bộ của mình hay chưa.
+* **Hành vi xử lý khi phát hiện trùng:** Nếu trường `account_id` đã có sẵn trong database, Consumer phải hiểu đây là một bản tin gửi lặp. Consumer tiến hành Bỏ qua bản tin (Skip Event), in một dòng thông báo log cảnh báo an toàn hệ thống (Safe Warning Log) và thực hiện xác nhận ACK hoàn thành bản tin với Kafka Broker. Tuyệt đối không được phép ném ra lỗi ngoại lệ hệ thống (Fatal Exception) gây treo hoặc sập cụm Consumer.
 
 ## 6. Cơ Chế Khôi Phục Lỗi Và Tái Thử Nghiệm (Retry & Error Handling)
 Trường hợp xảy ra sập kết nối cơ sở dữ liệu tạm thời (Database Connection Timeout) tại user-service, Consumer cấu hình cơ chế tự động thử lại (Retry) tối đa 3 lần với khoảng cách thời gian giãn cách tăng dần (Exponential Backoff).

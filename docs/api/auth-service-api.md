@@ -62,7 +62,8 @@ React Register Form
 → CCCD Check API
 → Fill / validate derived information
 → API Gateway :8080
-→ Auth Service :8081 (Tạo Account dạng chưa verify & Tạo User Profile)
+→ Auth Service :8081 (Tạo Account thành công trong DB, publish ACCOUNT_CREATED event sang Kafka)
+  ↳ Kafka → User Service (Tự động tạo User Profile bất đồng bộ)
 → Tạo mã OTP (In ra Console Log)
 → React OTP Verify Form
 → API Gateway :8080 → Auth Service :8081 (Kích hoạt Account)
@@ -248,7 +249,15 @@ Khi người dùng nhập CCCD ở form Register:
 ### 6.1. Mục Tiêu API
 
 API này dùng để đăng ký tài khoản người dùng.
-Frontend gửi thông tin đăng ký lên Backend thông qua API Gateway. Backend tạo tài khoản đăng nhập trong `auth-service` (mặc định trạng thái `is_active = 0` và `registration_completed = 0`) và khởi tạo mã xác thực OTP 6 số in ra console. Đồng thời hệ thống lưu thông tin hồ sơ người dùng ở `user-service` hoặc schema tương ứng.
+Frontend gửi thông tin đăng ký lên Backend thông qua API Gateway. Backend tạo tài khoản đăng nhập trong `auth-service` (mặc định trạng thái `is_active = 0` và `registration_completed = 0`) và khởi tạo mã xác thực OTP 6 số in ra console.
+
+Quy trình tích hợp bất đồng bộ qua Kafka:
+* Auth Service tạo tài khoản thành công trong cơ sở dữ liệu của mình.
+* Auth Service phát hành (publish) sự kiện `ACCOUNT_CREATED` lên Kafka.
+* User Service tiêu thụ (consume) sự kiện `ACCOUNT_CREATED`.
+* User Service tự động khởi tạo User Profile tương ứng.
+* Frontend không gọi trực tiếp User Service để tạo profile.
+* Auth Service không gọi trực tiếp User Service để tạo profile (không gọi đồng bộ qua Feign Client hay HTTP).
 
 ### 6.2. Trạng Thái Implement
 
@@ -347,13 +356,13 @@ Receive register request
 → Assign default role `CUSTOMER`
 → Hash password
 → Store account with status
-→ Call `UserServiceClient.createUserProfile` để tạo profile bên User Service
+→ Publish an `ACCOUNT_CREATED` event to Kafka (User Service will consume this event to automatically create the corresponding user profile asynchronously)
 → Sinh mã OTP thông qua `VerificationService` và log ra màn hình console
 → Return register response
 
 ### 6.10. User Profile Data Sau Khi Register
 
-Sau khi register thành công, hệ thống cần lưu hoặc chuẩn bị lưu các dữ liệu profile sau ở User Service:
+Sau khi register thành công, hệ thống tự động khởi tạo thông tin hồ sơ người dùng thông qua luồng Kafka Event `ACCOUNT_CREATED`. Các dữ liệu profile sau sẽ được User Service xử lý lưu trữ:
 
 | Field | Source |
 | :--- | :--- |
@@ -495,19 +504,7 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 7: Lỗi User Service khi tạo profile**
-Status: **502 Bad Gateway** hoặc **500 Internal Server Error**
-
-```json
-{
-  "success": false,
-  "message": "Failed to create user profile",
-  "errorCode": "USER_PROFILE_CREATE_FAILED",
-  "data": null
-}
-```
-
-**Case 8: Lỗi server**
+**Case 7: Lỗi server**
 Status: **500 Internal Server Error**
 
 ```json
@@ -524,10 +521,9 @@ Status: **500 Internal Server Error**
 | Status Code | Ý nghĩa | Khi nào xảy ra |
 | :--- | :--- | :--- |
 | 200 / 201 | Đăng ký thành công | User/account được tạo thành công, chờ verify OTP |
-| 400 | Bad Request | Dữ liệu gửi lên không hợp lệ hoặc ngày sinh không khớp với CCCD |
+| 400 | Bad Request | Dữ liệu gửi lên không đúng định dạng kiểm tra |
 | 409 | Conflict | Email, phone hoặc CCCD đã tồn tại |
-| 502 | Bad Gateway | Auth Service không tạo được profile bên User Service |
-| 500 | Internal Server Error | Lỗi server hệ thống |
+| 500 | Internal Server Error | Gặp lỗi không xác định tại hệ thống máy chủ |
 
 ---
 
@@ -1124,7 +1120,6 @@ Các chức năng sau chưa nằm trong scope hiện tại và được dời l�
 * Logout API hủy bỏ token chủ động từ người dùng
 * User profile API public hoàn chỉnh các trường mở rộng
 * Tách transaction hoàn chỉnh phân rã độc lập giữa Auth Service và User Service
-* Kafka event phát tín hiệu cho user registered
 
 ---
 

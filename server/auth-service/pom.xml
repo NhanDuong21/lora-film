@@ -87,6 +87,12 @@
 			<version>0.12.6</version>
 			<scope>runtime</scope>
 		</dependency>
+
+		<!-- ===== Kafka ===== -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

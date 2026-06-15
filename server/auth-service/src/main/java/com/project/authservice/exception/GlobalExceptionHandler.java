@@ -21,6 +21,25 @@ public class GlobalExceptionHandler {
 	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
 	/**
+	 * Handles invalid birthday format (HTTP 400).
+	 *
+	 * <p>Returns the exact contract shape:
+	 * <pre>{ "success": false, "message": "Birthday must be in YYYY-MM-DD format", "data": null }</pre>
+	 *
+	 * @param exception the birthday format exception
+	 * @return 400 Bad Request
+	 */
+	@ExceptionHandler(InvalidBirthdayFormatException.class)
+	public ResponseEntity<ApiResponse<Object>> handleInvalidBirthdayFormatException(
+			InvalidBirthdayFormatException exception) {
+		log.warn("Invalid birthday format: {}", exception.getMessage());
+		// ApiResponse.failure() produces { success:false, message:..., data:null }
+		// with no errorCode field – matching the required contract exactly.
+		ApiResponse<Object> response = ApiResponse.failure(exception.getMessage());
+		return ResponseEntity.badRequest().body(response);
+	}
+
+	/**
 	 * Handles standard API contract exceptions (BaseAuthException).
 	 *
 	 * @param exception auth exception
