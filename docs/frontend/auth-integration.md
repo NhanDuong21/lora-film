@@ -23,7 +23,7 @@ Cấu trúc các tệp liên quan đến xác thực và dữ liệu người d�
 - `client/src/pages/Login.jsx`: Giao diện và luồng xử lý đăng nhập tài khoản.
 - `client/src/pages/VerifyOtp.jsx`: Giao diện và luồng xác thực mã OTP.
 
-## 3. Quản Lý Trạng Thế Phiên Đăng Nhập (Token Storage)
+## 3. Quản Lý Trạng Thái Phiên Đăng Nhập (Token Storage)
 
 Tất cả các thông tin bảo mật và phiên được quản lý tập trung thông qua `authStorage.js` nhằm cô lập việc thao tác trực tiếp với localStorage:
 - `setAuthData(data)`: Lưu các thông tin `authToken` (chứa Access Token), `refreshToken`, `tokenType`, `userEmail`, và `userRole` vào localStorage.
@@ -54,7 +54,7 @@ Lưu ý bảo mật: Không bao giờ lưu trữ số căn cước công dân (C
 1. Giao diện `/verify-otp` kiểm tra sự tồn tại của `pendingAccountId`. Nếu không tìm thấy, điều hướng ngược lại trang đăng ký (`/register`).
 2. Người dùng nhập mã OTP gồm 6 chữ số.
 3. Gửi yêu cầu `POST` tới `${VITE_API_BASE_URL}/api/auth/verify` chứa `accountId` và `otp`.
-4. Nếu mã chính xác (`200 OK`), hệ thống kích hoạt tài khoản thành công. Xóa tài khoản chờ khỏi bộ nhớ tạm bằng `clearPendingAccountId()` và chuyển hướng về `/login`.
+4. Nếu mã chính xác (`200 OK`), hệ thống kích hoạt tài khoản thành công. Xóa tài khoản chờ khỏi bộ nhớ tạm bằng `clearPendingAccountId()` và chuyển hướng trực tiếp về giao diện đăng nhập (`/login`). Quy trình đảm bảo không chuyển hướng vòng qua trang đăng ký.
 5. Nếu thất bại, bắt lỗi và hiển thị phản hồi tương ứng:
    - Lỗi `AUTH_INVALID_OTP`: Hiển thị cảnh báo "OTP không chính xác".
    - Lỗi `AUTH_VERIFICATION_EXPIRED`: Hiển thị cảnh báo "Mã OTP đã hết hạn".
@@ -175,15 +175,15 @@ Dưới đây là đặc tả chi tiết ánh xạ dữ liệu đầu vào và �
   }
   ```
 
-## 6. Hạn Chế Kiến Trúc Hệ Thống Hiện Tại (Architecture Limitations)
+## 6. Hiện Trạng Kiến Trúc Hàng Đợi Tin Nhắn Kafka (Kafka Messaging Infrastructure Status)
 
-**Thông báo lỗi / Khối kiến trúc chưa hoàn thiện:**
-Trong giai đoạn hiện tại, cụm hàng đợi tin nhắn Apache Kafka dùng để đồng bộ hóa bất đồng bộ các dữ liệu liên quan đến luồng khởi tạo người dùng (`ACCOUNT_CREATED`) giữa dịch vụ `auth-service` và `user-service` chưa hoàn thành cấu hình hạ tầng mạng và phân vùng lắng nghe tin nhắn.
+Hệ thống hàng đợi tin nhắn Apache Kafka dùng để đồng bộ hóa bất đồng bộ các dữ liệu liên quan đến luồng khởi tạo người dùng (ACCOUNT_CREATED) giữa dịch vụ auth-service và user-service đã được cấu hình, triển khai và kiểm thử nghiệm thu thành công trên môi trường hệ thống.
 
 Do đó:
-- Luồng gửi và nhận thông tin sự kiện đăng ký tài khoản qua Kafka tạm thời bị bỏ qua hoặc bị chặn trên hệ thống chạy thử nghiệm.
-- Quá trình đăng ký tài khoản hiện tại được xử lý đồng bộ trực tiếp giữa `auth-service` và `user-service` thông qua cuộc gọi API nội bộ trực tiếp (`/internal/users`), bỏ qua hàng đợi tin nhắn để tránh lỗi tắc nghẽn giao dịch.
-- Khi hạ tầng Kafka được đội ngũ DevOps bàn giao hoàn thiện, các dịch vụ backend sẽ chuyển đổi sang cơ chế EDA (Kiến trúc hướng sự kiện) mà không làm ảnh hưởng hay thay đổi mã nguồn tích hợp của React Frontend.
+- Luồng gửi và nhận thông tin sự kiện đăng ký tài khoản qua Kafka hoạt động ổn định end-to-end theo đúng sơ đồ kiến trúc EDA (Kiến trúc hướng sự kiện).
+- Khi người dùng kích hoạt tài khoản thành công qua mã OTP tại trang /verify-otp, auth-service sẽ tự động publish một bản tin sự kiện dạng chuỗi JSON lên Kafka Topic với tên định danh auth.account.created.v1.
+- Phân hệ user-service liên tục lắng nghe và tiêu thụ (consume) bản tin từ topic trên để tự động khởi tạo bản ghi hồ sơ cá nhân (user_profiles) trong cơ sở dữ liệu của mình, đảm bảo tính bất biến (idempotency) và không gây trùng lặp dữ liệu. Các luồng gọi đồng bộ trực tiếp tạm thời thông qua endpoint nội bộ (/internal/users) đã hoàn toàn được gỡ bỏ để chuyển giao 100% sang kiến trúc hướng sự kiện sạch.
 
-**Hạn chế về dữ liệu đăng nhập:**
-Trường hợp API phản hồi đăng nhập thành công của một số phiên bản Backend cũ có thể thiếu thuộc tính `accountId` trong đối tượng phản hồi. Đây là lỗi thiết kế luồng dữ liệu cần được khắc phục từ phía backend. Frontend khuyến nghị lập trình viên backend duy trì cấu trúc dữ liệu phản hồi đăng nhập đồng nhất chứa trường thông tin định danh `accountId` để frontend có thể trực tiếp thực hiện việc truy vấn thông tin cá nhân khách hàng sau khi chuyển hướng trang.
+## 7. Hạn Chế Về Dữ Liệu Đăng Nhập Hiện Tại
+
+Trường hợp API phản hồi đăng nhập thành công của một số phiên bản Backend cũ có thể thiếu thuộc tính accountId trong đối tượng phản hồi. Đây là lỗi thiết kế luồng dữ liệu cần được khắc phục từ phía backend. Frontend khuyến nghị lập trình viên backend duy trì cấu trúc dữ liệu phản hồi đăng nhập đồng nhất chứa trường thông tin định danh accountId để frontend có thể trực tiếp thực hiện việc truy vấn thông tin cá nhân khách hàng sau khi chuyển hướng trang.

@@ -11,14 +11,15 @@ function VerifyOtp() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [countdown, setCountdown] = useState(30);
     const [isResending, setIsResending] = useState(false);
+    const [isVerified, setIsVerified] = useState(false);
     const pendingAccountId = getPendingAccountId();
 
     useEffect(() => {
         document.title = "Xác Thực OTP - LoraFilm";
-        if (!pendingAccountId) {
+        if (!pendingAccountId && !isVerified) {
             navigate("/register");
         }
-    }, [pendingAccountId, navigate]);
+    }, [pendingAccountId, navigate, isVerified]);
 
     useEffect(() => {
         if (countdown <= 0) return;
@@ -28,7 +29,7 @@ function VerifyOtp() {
         return () => clearInterval(timer);
     }, [countdown]);
 
-    if (!pendingAccountId) {
+    if (!pendingAccountId && !isVerified) {
         return null;
     }
 
@@ -71,11 +72,9 @@ function VerifyOtp() {
             const res = await verifyOtp(pendingAccountId, otpCode);
             setIsSubmitting(false);
             if (res.success) {
-                setSuccess("Xác thực tài khoản thành công.");
+                setIsVerified(true);
                 clearPendingAccountId();
-                setTimeout(() => {
-                    navigate("/login");
-                }, 2000);
+                navigate("/login");
             } else {
                 setError(res.message || "Xác thực thất bại. Vui lòng thử lại.");
             }
