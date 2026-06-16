@@ -4,6 +4,7 @@ import com.project.userservice.enumtype.Gender;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
@@ -13,10 +14,12 @@ public class InternalUserCreateRequest {
     private Long accountId;
 
     @NotBlank(message = "Full name cannot be blank")
+    @Size(min = 2, max = 200, message = "Full name must be between 2 and 200 characters")
+    @Pattern(regexp = "^\\s*[a-zA-ZÀ-ỹ]+(\\s+[a-zA-ZÀ-ỹ]+)+\\s*$", message = "Full name must not contain numbers or special characters and must have at least 2 words")
     private String fullName;
 
     @NotBlank(message = "Phone number cannot be blank")
-    @Pattern(regexp = "^(0|\\+84)[3|5|7|8|9][0-9]{8}$", message = "Invalid phone number format")
+    @Pattern(regexp = "^(0|\\+84)\\d{9}$", message = "Invalid phone number format")
     private String phoneNumber;
 
     @NotBlank(message = "CCCD cannot be blank")
