@@ -80,9 +80,12 @@ Lưu ý bảo mật: Không bao giờ lưu trữ số căn cước công dân (C
 3. Nếu mã Refresh Token không còn hiệu lực hoặc đã hết hạn, lập tức giải phóng mọi biến phiên bảo mật bằng `clearAuthData()` và điều hướng trình duyệt quay lại giao diện `/login` để yêu cầu người dùng thao tác đăng nhập lại từ đầu.
 
 ### Luồng 6: Lấy Thông Tin Cá Nhân (Profile)
-1. Gọi API `GET` tới cổng Gateway `${VITE_API_BASE_URL}/api/users/{accountId}`.
-2. Tự động đính kèm tiêu đề xác thực `Authorization: Bearer <authToken>` từ tiện ích `getAuthToken()`.
-3. Khi hiển thị hồ sơ cá nhân, chỉ được phép kết xuất giá trị thuộc tính `cccdMasked` để hiển thị trên màn hình. Tuyệt đối không lưu trữ hoặc hiển thị số CCCD gốc.
+1. Do phản hồi đăng nhập thành công từ đối tượng Login response ban đầu không chứa trực tiếp khóa `accountId` ở cấp cao nhất của cấu trúc dữ liệu trả về, Phân hệ Frontend triển khai Phương án 1 (Option 1) bằng cách thực hiện phân tích giải mã chuỗi JWT `accessToken` ở phía Client thông qua thư viện `jwt-decode` để trích xuất trường thông tin claim `userId`.
+2. Giá trị `userId` trích xuất được sử dụng làm thông tin định danh tương đương cho `accountId` phục vụ cho luồng truy vấn.
+3. Gửi yêu cầu `GET` tới API Gateway thông qua địa chỉ `${VITE_API_BASE_URL}/api/users/{accountId}`.
+4. Tự động đính kèm tiêu đề xác thực cấu trúc `Authorization: Bearer <authToken>` từ hàm `getAuthToken()`.
+5. Khi hiển thị hồ sơ thông tin cá nhân lên giao diện, chỉ được phép kết xuất trường thông tin đã được mã hóa che bớt ký tự `cccdMasked` (ví dụ: `092******789`). Nghiêm cấm hiển thị hoặc ghi chép số định danh căn cước gốc (CCCD) chưa mã hóa lên giao diện, in ra bảng ghi sự kiện (console log) hay ghi đè vào các khóa lưu trữ cục bộ (localStorage).
+6. Khuyến nghị: Phân hệ Backend nên bổ sung thuộc tính accountId trực tiếp vào cấu trúc Login response body hoặc đổi tên claim dữ liệu từ userId thành accountId để đồng bộ mã nguồn sạch hơn giữa các service.
 
 ## 5. Danh Sách Ánh Xạ Dữ Liệu (Data Mapping Blocks)
 

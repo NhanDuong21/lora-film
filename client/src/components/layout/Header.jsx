@@ -208,7 +208,7 @@ export default function Header() {
                         {profileDropdownOpen && (
                             <div className="absolute right-0 mt-3 w-48 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl z-50 py-2">
                                 <Link
-                                    to="/"
+                                    to="/profile"
                                     onClick={() => setProfileDropdownOpen(false)}
                                     className="block px-4 py-2 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
                                 >
