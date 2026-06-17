@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login } from "../services/authService";
-import { setAuthData, setPendingAccountId } from "../utils/authStorage";
+import { login } from "../../services/authService";
+import { setPendingAccountId } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/AuthContext";
 
 function Login() {
+    const { login: contextLogin } = useAuth();
     const navigate = useNavigate();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -32,7 +34,7 @@ function Login() {
             setIsSubmitting(false);
 
             if (data?.success && data?.data) {
-                setAuthData(data.data);
+                contextLogin(data.data);
                 setSuccessMessage("Đăng nhập thành công.");
                 navigate("/");
             } else {

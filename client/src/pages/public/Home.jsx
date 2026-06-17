@@ -1,11 +1,11 @@
 import { useEffect } from "react";
-import Header from "../components/layout/Header";
-import Footer from "../components/layout/Footer";
-import HeroSection from "../components/home/HeroSection";
-import MovieSection from "../components/home/MovieSection";
-import EventSection from "../components/home/EventSection";
-import BookingStepsSection from "../components/home/BookingStepsSection";
-import InfoSection from "../components/home/InfoSection";
+import Header from "../../components/layout/Header";
+import Footer from "../../components/layout/Footer";
+import HeroSection from "../../components/home/HeroSection";
+import MovieSection from "../../components/home/MovieSection";
+import EventSection from "../../components/home/EventSection";
+import BookingStepsSection from "../../components/home/BookingStepsSection";
+import InfoSection from "../../components/home/InfoSection";
 
 export default function Home() {
     useEffect(() => {

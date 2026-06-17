@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { register } from "../services/authService";
-import { checkCCCD } from "../services/cccdService";
-import { setPendingAccountId } from "../utils/authStorage";
+import { register } from "../../services/authService";
+import { checkCCCD } from "../../services/cccdService";
+import { setPendingAccountId } from "../../utils/authStorage";
 
 function Register() {
     const navigate = useNavigate();
