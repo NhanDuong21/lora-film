@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login } from "../services/authService";
-import { setAuthData, setPendingAccountId } from "../utils/authStorage";
+import { login } from "../../services/authService";
+import { setAuthData, setPendingAccountId } from "../../utils/authStorage";
 
 function Login() {
     const navigate = useNavigate();

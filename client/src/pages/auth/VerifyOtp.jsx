@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { verifyOtp, resendOtp } from "../services/authService";
-import { getPendingAccountId, clearPendingAccountId } from "../utils/authStorage";
+import { verifyOtp, resendOtp } from "../../services/authService";
+import { getPendingAccountId, clearPendingAccountId } from "../../utils/authStorage";
 
 function VerifyOtp() {
     const navigate = useNavigate();
