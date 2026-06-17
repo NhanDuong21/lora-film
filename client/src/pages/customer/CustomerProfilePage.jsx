@@ -1,5 +1,6 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
@@ -12,14 +13,12 @@ import {
 
 export default function CustomerProfileView({ onBackHome, initialTab = 'info' }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, updateUser, isAuthenticated } = useAuth();
 
   // Get active session identifiers
   const accountId = getUserAccountId();
   const token = getAuthToken();
-
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [profileError, setProfileError] = useState(null);
 
   useEffect(() => {
     document.title = "Tài Khoản Thành Viên - LoraFilm";
@@ -30,32 +29,24 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
   useEffect(() => {
     if (!accountId || !token) {
-      setProfileLoading(false);
       return;
     }
 
     let isMounted = true;
     const fetchUserData = async () => {
       try {
-        setProfileLoading(true);
         const data = await getUserProfile(accountId);
         if (isMounted && data) {
           updateUser(data.data || data);
         }
       } catch (err) {
-        if (isMounted) {
-          setProfileError(err.message || 'Lỗi tải thông tin');
-        }
-      } finally {
-        if (isMounted) {
-          setProfileLoading(false);
-        }
+        console.error("Failed to load user profile:", err);
       }
     };
 
     fetchUserData();
     return () => { isMounted = false; };
-  }, [accountId, token]);
+  }, [accountId, token, updateUser]);
 
   const handleBackHome = () => {
     if (onBackHome) {
@@ -65,47 +56,51 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
     }
   };
 
-  if (!accountId || !token) {
-    return (
-      <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans font-medium">
-        <Header />
-        <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full flex flex-col items-center justify-center text-center">
-          <div className="bg-zinc-900/40 border border-zinc-800 p-8 rounded-2xl max-w-md w-full space-y-4">
-            <h2 className="text-xl font-bold text-white uppercase tracking-wider">Vui lòng đăng nhập</h2>
-            <p className="text-sm text-zinc-400">Vui lòng đăng nhập để xem thông tin hồ sơ.</p>
-            <button
-              onClick={() => navigate('/login')}
-              className="w-full bg-brand-coral hover:bg-opacity-95 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-colors"
-            >
-              Đăng nhập ngay
-            </button>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
 
   // Local state for tabs: 'info', 'history', 'notifications', 'gifts', 'policy'
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(() => {
+    const searchParams = new URLSearchParams(location.search || (location.hash && location.hash.includes('?') ? location.hash.substring(location.hash.indexOf('?')) : ''));
+    const tabParam = searchParams.get('tab');
+    if (tabParam) return tabParam;
+    return initialTab;
+  });
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search || (location.hash && location.hash.includes('?') ? location.hash.substring(location.hash.indexOf('?')) : ''));
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+  }, [location]);
 
   // Load user data fields (Name, Birthday, Gender are strictly read-only disabled)
-  const fullName = user?.fullName || 'Dương Thiện Nhân';
-  const birthday = user?.birthday || '1998-05-15';
-  const gender = user?.gender || 'Nam';
+  const fullName = user?.fullName || '';
+  const birthday = user?.birthday || '';
+  const gender = user?.gender || '';
+  
+  // Normalize gender display
+  const displayGender = useMemo(() => {
+    if (!gender) return '';
+    const g = gender.toString().trim().toLowerCase();
+    if (g === 'nam' || g === 'male') return 'Nam';
+    if (g === 'nữ' || g === 'nu' || g === 'female') return 'Nữ';
+    return 'Khác';
+  }, [gender]);
   
   // Editable fields
-  const [email, setEmail] = useState(user?.email || 'member@gmail.com');
-  const [phone, setPhone] = useState(user?.phone || '0987654321');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phoneNumber || user?.phone || '');
   
   // Avatar URL state
   const [avatarUrl, setAvatarUrl] = useState(
-    user?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80'
+    user?.avatarUrl || ''
   );
 
   // Loyalty and spending states
-  const totalSpending = useMemo(() => user?.totalSpending ?? 2500000, [user]);
-  const points = useMemo(() => user?.points ?? 250, [user]);
+  // TODO: Connect to loyalty API
+  const totalSpending = useMemo(() => user?.totalSpending ?? 0, [user]);
+  // TODO: Connect to loyalty API
+  const points = useMemo(() => user?.points ?? 0, [user]);
 
   // Modal / toggle states
   const [showToast, setShowToast] = useState(false);
@@ -128,9 +123,9 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
     if (user) {
       const timer = setTimeout(() => {
         setEmail(user.email || '');
-        setPhone(user.phone || '');
-        setAvatarUrl(user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80');
-        setTempAvatarUrl(user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80');
+        setPhone(user.phoneNumber || user.phone || '');
+        setAvatarUrl(user.avatarUrl || '');
+        setTempAvatarUrl(user.avatarUrl || '');
         setNewEmail(user.email || '');
       }, 0);
       return () => clearTimeout(timer);
@@ -150,31 +145,6 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
       }
     }
 
-    // Pre-seed some default transactions if history is empty
-    if (list.length === 0) {
-      list = [
-        {
-          id: 'TKT-7829-1920',
-          movieTitle: 'Dinh Thinh La Yeu',
-          time: '19:30',
-          date: '28/05/2026',
-          seats: ['G6', 'G7'],
-          totalAmount: 220000,
-          paymentMethod: 'Ví điện tử LoraPay',
-          status: 'DA_XEM'
-        },
-        {
-          id: 'TKT-3129-8472',
-          movieTitle: 'Tu Vu Tru John Wick: Ballerina',
-          time: '22:15',
-          date: '29/05/2026',
-          seats: ['J3'],
-          totalAmount: 220000,
-          paymentMethod: 'Thẻ nội địa ATM',
-          status: 'CHUA_CHECKIN'
-        }
-      ];
-    }
     return list;
   }, [user]);
 
@@ -283,6 +253,27 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
     setIsEditingAvatar(false);
     triggerToast('Cập nhật ảnh đại diện thành công!');
   };
+
+  if (!accountId || !token) {
+    return (
+      <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans font-medium">
+        <Header />
+        <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full flex flex-col items-center justify-center text-center">
+          <div className="bg-zinc-900/40 border border-zinc-800 p-8 rounded-2xl max-w-md w-full space-y-4">
+            <h2 className="text-xl font-bold text-white uppercase tracking-wider">Vui lòng đăng nhập</h2>
+            <p className="text-sm text-zinc-400">Vui lòng đăng nhập để xem thông tin hồ sơ.</p>
+            <button
+              onClick={() => navigate('/login')}
+              className="w-full bg-brand-coral hover:bg-opacity-95 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-colors"
+            >
+              Đăng nhập ngay
+            </button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans">
@@ -616,7 +607,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="button"
                           disabled
                           className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
-                            gender === 'Nam' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                            displayGender === 'Nam' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
                           }`}
                         >
                           Nam
@@ -625,10 +616,19 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="button"
                           disabled
                           className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
-                            gender === 'Nữ' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                            displayGender === 'Nữ' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
                           }`}
                         >
                           Nữ
+                        </button>
+                        <button
+                          type="button"
+                          disabled
+                          className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
+                            displayGender === 'Khác' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                          }`}
+                        >
+                          Khác
                         </button>
                       </div>
                     </div>
@@ -707,7 +707,8 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-900 text-zinc-300 font-medium">
-                        {transactions.map((t, idx) => (
+                        {transactions.length > 0 ? (
+                          transactions.map((t, idx) => (
                           <tr key={idx} className="hover:bg-white/5 transition-colors">
                             <td className="p-4 font-bold text-white font-mono">{t.id}</td>
                             <td className="p-4 max-w-[180px] truncate font-black text-zinc-200">{t.movieTitle}</td>
@@ -721,7 +722,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                               </span>
                             </td>
                             <td className="p-4 font-bold text-brand-yellow">
-                              {t.totalAmount ? t.totalAmount.toLocaleString('vi-VN') : '220.000'}đ
+                              {t.totalAmount ? t.totalAmount.toLocaleString('vi-VN') : '0'}đ
                             </td>
                             <td className="p-4">
                               <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
@@ -733,7 +734,14 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                               </span>
                             </td>
                           </tr>
-                        ))}
+                        ))
+                        ) : (
+                          <tr>
+                            <td colSpan={6} className="p-8 text-center text-zinc-500 font-bold">
+                              Hiện tại chưa có dữ liệu.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -748,36 +756,8 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     <p className="text-zinc-500 text-[10px]">Cập nhật tin tức khuyến mãi và thay đổi suất chiếu</p>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-brand-coral/10 border border-brand-coral/20 flex items-center justify-center shrink-0">
-                        <Gift className="w-5 h-5 text-brand-coral" />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center">
-                          <h4 className="text-xs font-black text-white uppercase">Chào mừng thành viên VIP</h4>
-                          <span className="text-[10px] text-zinc-600 font-semibold">30/05/2026</span>
-                        </div>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
-                          Chúc mừng bạn đã thăng cấp thành công lên **{currentRank}**. LoraFilm đã gửi tặng bạn 01 mã voucher miễn phí bắp nước ngọt ngọt ngào. Hãy kiểm tra tab Quà Tặng ngay!
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center shrink-0">
-                        <Bell className="w-5 h-5 text-brand-yellow" />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center">
-                          <h4 className="text-xs font-black text-white uppercase">Lịch chiếu Ballerina hoành tráng</h4>
-                          <span className="text-[10px] text-zinc-600 font-semibold">28/05/2026</span>
-                        </div>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
-                          Đại tiệc điện ảnh hành động sát thủ John Wick: Ballerina đã chính thức đổ bộ LoraFilm với hàng loạt phòng chiếu IMAX 3D mãn nhãn. Nhanh tay đặt vé giữ chỗ đẹp nhất!
-                        </p>
-                      </div>
-                    </div>
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <p className="text-xs text-zinc-500 font-bold">Hiện tại chưa có dữ liệu.</p>
                   </div>
                 </div>
               )}
@@ -790,42 +770,8 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     <p className="text-zinc-500 text-[10px]">Danh sách voucher và quà tặng đang có hiệu lực sử dụng</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Gift 1 */}
-                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex justify-between items-center hover:border-brand-coral transition-colors group">
-                      <div className="space-y-2">
-                        <span className="inline-block text-[8px] font-black uppercase tracking-wider bg-brand-coral/10 text-brand-coral border border-brand-coral/20 px-2 py-0.5 rounded">
-                          VOUCHER
-                        </span>
-                        <h4 className="text-xs font-extrabold text-white">Miễn Phí Combo Solo bắp ngọt</h4>
-                        <p className="text-[9px] text-zinc-500">Hạn dùng: 30/06/2026</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => triggerToast('Mã quà tặng của bạn: LORA-SOLO-FREE', 'success')}
-                        className="bg-zinc-900 border border-zinc-800 group-hover:bg-brand-coral group-hover:border-brand-coral group-hover:text-white text-zinc-400 text-[10px] font-bold py-2 px-3.5 rounded-lg transition-all"
-                      >
-                        Nhận mã
-                      </button>
-                    </div>
-
-                    {/* Gift 2 */}
-                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex justify-between items-center hover:border-brand-yellow transition-colors group">
-                      <div className="space-y-2">
-                        <span className="inline-block text-[8px] font-black uppercase tracking-wider bg-brand-yellow/10 text-brand-yellow border border-brand-yellow/20 px-2 py-0.5 rounded">
-                          DISCOUNT
-                        </span>
-                        <h4 className="text-xs font-extrabold text-white">Giảm 20.000đ khi thanh toán LoraPay</h4>
-                        <p className="text-[9px] text-zinc-500">Hạn dùng: 15/06/2026</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => triggerToast('Mã quà tặng của bạn: LORAPAY-20K', 'success')}
-                        className="bg-zinc-900 border border-zinc-800 group-hover:bg-brand-yellow group-hover:border-brand-yellow group-hover:text-black text-zinc-400 text-[10px] font-bold py-2 px-3.5 rounded-lg transition-all"
-                      >
-                        Nhận mã
-                      </button>
-                    </div>
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <p className="text-xs text-zinc-500 font-bold">Hiện tại chưa có dữ liệu.</p>
                   </div>
                 </div>
               )}

@@ -1,21 +1,15 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
  ChevronDown, Menu, X, Bell, Star, Search, User, History, LogOut 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
-import * as authStorage from '../../utils/authStorage';
 
 export default function Header({ onNavigate }) {
   const navigate = useNavigate();
   const { user, userRole, isAuthenticated, logout } = useAuth();
   const { movies } = useData();
-
-  useEffect(() => {
-    // Authentication Initialization Rule: on mount, verify current session token
-    const token = authStorage.getAuthToken();
-  }, []);
 
   const handleNavigate = (target, params) => {
     if (onNavigate) {
@@ -100,7 +94,6 @@ export default function Header({ onNavigate }) {
   };
 
   const handleLogoutClick = () => {
-    authStorage.clearAuthData();
     logout();
     setProfileDropdownOpen(false);
     handleNavigate('home', null);
@@ -459,26 +452,30 @@ export default function Header({ onNavigate }) {
 
                   {userRole === 'CUSTOMER' ? (
                     <>
-                      <button
-                        onClick={() => {
+                      <a
+                        href="#/profile"
+                        onClick={(e) => {
+                          e.preventDefault();
                           setProfileDropdownOpen(false);
-                          handleNavigate('profile', { initialTab: 'info' });
+                          navigate('/profile');
                         }}
                         className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
                       >
                         <User className="w-3.5 h-3.5 text-zinc-500" />
                         <span>Hồ sơ cá nhân</span>
-                      </button>
-                      <button
-                        onClick={() => {
+                      </a>
+                      <a
+                        href="#/profile?tab=history"
+                        onClick={(e) => {
+                          e.preventDefault();
                           setProfileDropdownOpen(false);
-                          handleNavigate('profile', { initialTab: 'history' });
+                          navigate('/profile?tab=history');
                         }}
                         className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
                       >
                         <History className="w-3.5 h-3.5 text-zinc-500" />
                         <span>Lịch sử đặt vé</span>
-                      </button>
+                      </a>
                     </>
                   ) : (
                     <button
