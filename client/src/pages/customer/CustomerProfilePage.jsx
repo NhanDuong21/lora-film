@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
+import { getUserProfile } from '../../services/userService';
+import { getAuthToken, getUserAccountId } from '../../utils/authStorage';
 import { 
   User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight, 
   PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle 
@@ -12,12 +14,48 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   const navigate = useNavigate();
   const { user, updateUser, isAuthenticated } = useAuth();
 
+  // Get active session identifiers
+  const accountId = getUserAccountId();
+  const token = getAuthToken();
+
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState(null);
+
   useEffect(() => {
     document.title = "Tài Khoản Thành Viên - LoraFilm";
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !accountId || !token) {
       navigate('/login');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, accountId, token, navigate]);
+
+  useEffect(() => {
+    if (!accountId || !token) {
+      setProfileLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchUserData = async () => {
+      try {
+        setProfileLoading(true);
+        const data = await getUserProfile(accountId);
+        if (isMounted && data) {
+          updateUser(data.data || data);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setProfileError(err.message || 'Lỗi tải thông tin');
+        }
+      } finally {
+        if (isMounted) {
+          setProfileLoading(false);
+        }
+      }
+    };
+
+    fetchUserData();
+    return () => { isMounted = false; };
+  }, [accountId, token]);
 
   const handleBackHome = () => {
     if (onBackHome) {
@@ -26,6 +64,27 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
       navigate('/');
     }
   };
+
+  if (!accountId || !token) {
+    return (
+      <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans font-medium">
+        <Header />
+        <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full flex flex-col items-center justify-center text-center">
+          <div className="bg-zinc-900/40 border border-zinc-800 p-8 rounded-2xl max-w-md w-full space-y-4">
+            <h2 className="text-xl font-bold text-white uppercase tracking-wider">Vui lòng đăng nhập</h2>
+            <p className="text-sm text-zinc-400">Vui lòng đăng nhập để xem thông tin hồ sơ.</p>
+            <button
+              onClick={() => navigate('/login')}
+              className="w-full bg-brand-coral hover:bg-opacity-95 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-colors"
+            >
+              Đăng nhập ngay
+            </button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   // Local state for tabs: 'info', 'history', 'notifications', 'gifts', 'policy'
   const [activeTab, setActiveTab] = useState(initialTab);

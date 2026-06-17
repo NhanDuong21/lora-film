@@ -1,13 +1,35 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
  ChevronDown, Menu, X, Bell, Star, Search, User, History, LogOut 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
+import * as authStorage from '../../utils/authStorage';
 
 export default function Header({ onNavigate }) {
+  const navigate = useNavigate();
   const { user, userRole, isAuthenticated, logout } = useAuth();
   const { movies } = useData();
+
+  useEffect(() => {
+    // Authentication Initialization Rule: on mount, verify current session token
+    const token = authStorage.getAuthToken();
+  }, []);
+
+  const handleNavigate = (target, params) => {
+    if (onNavigate) {
+      onNavigate(target, params);
+    } else {
+      if (target === 'home') navigate('/');
+      else if (target === 'login') navigate('/login');
+      else if (target === 'register') navigate('/register');
+      else if (target === 'profile') navigate('/profile');
+      else {
+        navigate('/');
+      }
+    }
+  };
   
   // Mobile drawer state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -74,38 +96,39 @@ export default function Header({ onNavigate }) {
 
   const handleLogoClick = (e) => {
     e.preventDefault();
-    onNavigate('home', null);
+    handleNavigate('home', null);
   };
 
   const handleLogoutClick = () => {
+    authStorage.clearAuthData();
     logout();
     setProfileDropdownOpen(false);
-    onNavigate('home', null);
+    handleNavigate('home', null);
   };
 
   // Mua Ve ticket button click action (routes to booking funnel)
   const handleQuickTicketClick = () => {
-    onNavigate('booking-funnel', null);
+    handleNavigate('booking-funnel', null);
   };
 
   // Dropdown option handlers
   const handlePhimOptionClick = (tab) => {
     setActiveDropdown(null);
     setMobileMenuOpen(false);
-    onNavigate('home', { activeTab: tab });
+    handleNavigate('home', { activeTab: tab });
   };
 
   const handleInfoOptionClick = (optionName) => {
     setActiveDropdown(null);
     setMobileMenuOpen(false);
     if (optionName === 'Thể loại phim') {
-      onNavigate('discovery', null);
+      handleNavigate('discovery', null);
     } else if (optionName === 'Diễn viên') {
-      onNavigate('actors', null);
+      handleNavigate('actors', null);
     } else if (optionName === 'Đạo diễn') {
-      onNavigate('directors', null);
+      handleNavigate('directors', null);
     } else if (optionName === 'Khuyến mãi và Sự kiện') {
-      onNavigate('events', null);
+      handleNavigate('events', null);
     } else {
       setInfoModalContent(optionName);
     }
@@ -327,7 +350,7 @@ export default function Header({ onNavigate }) {
                         key={phim.id}
                         onClick={() => {
                           setSearchQuery('');
-                          onNavigate('detail', { movieId: phim.id });
+                          handleNavigate('detail', { movieId: phim.id });
                         }}
                         className="flex items-center gap-3 p-1.5 hover:bg-zinc-800/60 rounded-lg cursor-pointer transition-colors"
                       >
@@ -361,9 +384,9 @@ export default function Header({ onNavigate }) {
                         onClick={() => {
                           setSearchQuery('');
                           if (star.type === 'actor') {
-                            onNavigate('actor-detail', { actorName: star.name });
+                            handleNavigate('actor-detail', { actorName: star.name });
                           } else {
-                            onNavigate('director-detail', { directorName: star.name });
+                            handleNavigate('director-detail', { directorName: star.name });
                           }
                         }}
                         className="flex items-center gap-3 p-1.5 hover:bg-zinc-800/60 rounded-lg cursor-pointer transition-colors"
@@ -439,7 +462,7 @@ export default function Header({ onNavigate }) {
                       <button
                         onClick={() => {
                           setProfileDropdownOpen(false);
-                          onNavigate('profile', { initialTab: 'info' });
+                          handleNavigate('profile', { initialTab: 'info' });
                         }}
                         className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
                       >
@@ -449,7 +472,7 @@ export default function Header({ onNavigate }) {
                       <button
                         onClick={() => {
                           setProfileDropdownOpen(false);
-                          onNavigate('profile', { initialTab: 'history' });
+                          handleNavigate('profile', { initialTab: 'history' });
                         }}
                         className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
                       >
@@ -461,8 +484,8 @@ export default function Header({ onNavigate }) {
                     <button
                       onClick={() => {
                         setProfileDropdownOpen(false);
-                        if (userRole === 'ADMIN' || userRole === 'ROLE_ADMIN' || userRole === 'ROLE_ACCOUNTANT') onNavigate('admin', null);
-                        if (userRole === 'EMPLOYEE' || userRole === 'ROLE_STAFF') onNavigate('employee', null);
+                        if (userRole === 'ADMIN' || userRole === 'ROLE_ADMIN' || userRole === 'ROLE_ACCOUNTANT') handleNavigate('admin', null);
+                        if (userRole === 'EMPLOYEE' || userRole === 'ROLE_STAFF') handleNavigate('employee', null);
                       }}
                       className="w-full text-left px-4 py-2.5 text-xs text-orange-500 hover:bg-zinc-800 font-bold flex items-center gap-2"
                     >
@@ -484,12 +507,20 @@ export default function Header({ onNavigate }) {
 
           </div>
         ) : (
-          <button
-            onClick={() => onNavigate('login', { voluntary: true })}
-            className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black py-2.5 px-5 rounded-full transition-all duration-300 shadow-lg shadow-orange-500/10 uppercase tracking-wider focus:outline-none"
-          >
-            Đăng Nhập
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleNavigate('login', { voluntary: true })}
+              className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black py-2.5 px-4 rounded-full transition-all duration-300 shadow-lg shadow-orange-500/10 uppercase tracking-wider focus:outline-none cursor-pointer"
+            >
+              Đăng Nhập
+            </button>
+            <button
+              onClick={() => handleNavigate('register', null)}
+              className="bg-transparent hover:bg-zinc-800 text-zinc-300 border border-zinc-700 hover:text-white text-xs font-black py-2.5 px-4 rounded-full transition-all duration-300 uppercase tracking-wider focus:outline-none cursor-pointer"
+            >
+              Đăng Ký
+            </button>
+          </div>
         )}
 
         {/* Mobile Menu trigger */}
