@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { login } from "../services/authService";
+import { setAuthData, setPendingAccountId } from "../utils/authStorage";
 
 function Login() {
     const navigate = useNavigate();
@@ -30,14 +31,8 @@ function Login() {
             const data = await login(email, password);
             setIsSubmitting(false);
 
-            const token = data?.data?.token;
-
-            if (token) {
-                localStorage.setItem("authToken", token);
-                if (data.data.tokenType) localStorage.setItem("tokenType", data.data.tokenType);
-                if (data.data.email) localStorage.setItem("userEmail", data.data.email);
-                if (data.data.role) localStorage.setItem("userRole", data.data.role);
-
+            if (data?.success && data?.data) {
+                setAuthData(data.data);
                 setSuccessMessage("Đăng nhập thành công.");
                 navigate("/");
             } else {
@@ -46,7 +41,20 @@ function Login() {
         } catch (error) {
             setIsSubmitting(false);
 
-            const errorCode = error?.code || error?.error;
+            const errorCode = error?.errorCode || error?.code || error?.error;
+            
+            if (errorCode === "AUTH_ACCOUNT_NOT_VERIFIED") {
+                const accId = error?.data?.accountId || error?.accountId || error?.data?.id;
+                if (accId) {
+                    setPendingAccountId(accId);
+                }
+                setErrorMsg("Tài khoản chưa được xác thực. Đang chuyển hướng sang trang xác thực OTP...");
+                setTimeout(() => {
+                    navigate("/verify-otp");
+                }, 1500);
+                return;
+            }
+
             const errorMap = {
                 AUTH_INVALID_CREDENTIALS: "Email hoặc mật khẩu không chính xác.",
                 AUTH_ACCOUNT_INACTIVE: "Tài khoản của bạn đã bị khóa hoặc chưa kích hoạt.",
