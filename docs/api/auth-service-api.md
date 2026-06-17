@@ -11,7 +11,12 @@
 | Người phụ trách BE | Trần Hiển Vinh |
 | Người phụ trách FE | Dương Thiện Nhân |
 | Trạng thái | Ready for Review (Refactored) |
-| Ngày cập nhật | 13/06/2026 |
+| Ngày cập nhật | 17/06/2026 |
+
+---
+
+## Lịch Sử Chỉnh Sửa
+- **17/06/2026**: Cập nhật các quy tắc validate cho fullName, phoneNumber, password, birthday (giới hạn tuổi >= 13, không ở tương lai) để đồng bộ hoàn toàn với Frontend.
 
 ---
 
@@ -310,12 +315,12 @@ Content-Type: application/json
 
 | Field | Type | Required | Validate | Mô tả |
 | :--- | :--- | :--- | :--- | :--- |
-| fullName | string | Yes | Không rỗng | Họ tên người dùng |
-| email | string | Yes | Đúng format email | Email đăng ký, dùng làm tài khoản đăng nhập |
-| phoneNumber | string | Yes | Đúng format số điện thoại | Số điện thoại người dùng |
-| cccd | string | Yes | 12 chữ số | Số CCCD người dùng |
+| fullName | string | Yes | Dài 2-200 ký tự, chỉ chứa chữ cái và khoảng trắng, ít nhất 2 từ | Họ tên người dùng |
+| email | string | Yes | Đúng format email, tối đa 100 ký tự | Email đăng ký, dùng làm tài khoản đăng nhập |
+| phoneNumber | string | Yes | Đúng format số điện thoại Việt Nam gồm 10 chữ số bắt đầu bằng 0 | Số điện thoại người dùng |
+| cccd | string | Yes | Đúng 12 chữ số | Số CCCD người dùng |
 | birthday | date | Yes | Format `YYYY-MM-DD` | Ngày sinh người dùng nhập |
-| password | string | Yes | Không rỗng, tối thiểu 6 ký tự | Mật khẩu đăng ký |
+| password | string | Yes | Dài 8-50 ký tự, chứa ít nhất 1 chữ hoa, 1 chữ thường, 1 số, và 1 ký tự đặc biệt | Mật khẩu đăng ký |
 
 ### 6.7. Derived Fields Từ CCCD
 
@@ -341,6 +346,8 @@ Các field sau không nhất thiết để người dùng nhập tay. Hệ thố
 | CCCD unique | CCCD không được trùng nếu hệ thống lưu CCCD |
 | CCCD valid | CCCD phải hợp lệ theo CCCD Check API |
 | Birthday match | Năm trong `birthday` nên khớp với `birthYear` suy ra từ CCCD |
+| Birthday not in future | Ngày sinh không được ở tương lai |
+| Birthday age limit | Người dùng đăng ký phải từ 13 tuổi trở lên |
 | Default role | User mới mặc định có role `CUSTOMER` |
 | Hash password | Mật khẩu phải được hash trước khi lưu |
 | Account status | Tài khoản mới tạo mặc định `is_active = 0` và `registration_completed = 0` |
@@ -479,6 +486,28 @@ Status: **400 Bad Request**
 }
 ```
 
+**Case 5b: Ngày sinh ở tương lai**
+Status: **400 Bad Request**
+
+```json
+{
+  "success": false,
+  "message": "Birth dates cannot be in the future.",
+  "data": null
+}
+```
+
+**Case 5c: Chưa đủ 13 tuổi**
+Status: **400 Bad Request**
+
+```json
+{
+  "success": false,
+  "message": "You must be 13 years old or older.",
+  "data": null
+}
+```
+
 **Case 6: Dữ liệu gửi lên không hợp lệ**
 Status: **400 Bad Request**
 
@@ -494,7 +523,7 @@ Status: **400 Bad Request**
     },
     {
       "field": "password",
-      "message": "Password is required"
+      "message": "password length must be between 8 and 50"
     },
     {
       "field": "cccd",
