@@ -1,12 +1,31 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import Header from '../../components/layout/Header';
+import Footer from '../../components/layout/Footer';
 import { 
   User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight, 
   PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle 
 } from 'lucide-react';
 
 export default function CustomerProfileView({ onBackHome, initialTab = 'info' }) {
-  const { user, updateUser } = useAuth();
+  const navigate = useNavigate();
+  const { user, updateUser, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    document.title = "Tài Khoản Thành Viên - LoraFilm";
+    if (!isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleBackHome = () => {
+    if (onBackHome) {
+      onBackHome();
+    } else {
+      navigate('/');
+    }
+  };
 
   // Local state for tabs: 'info', 'history', 'notifications', 'gifts', 'policy'
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -45,6 +64,19 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
   const [isEditingAvatar, setIsEditingAvatar] = useState(false);
   const [tempAvatarUrl, setTempAvatarUrl] = useState(avatarUrl);
+
+  useEffect(() => {
+    if (user) {
+      const timer = setTimeout(() => {
+        setEmail(user.email || '');
+        setPhone(user.phone || '');
+        setAvatarUrl(user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80');
+        setTempAvatarUrl(user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80');
+        setNewEmail(user.email || '');
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
 
   // Load Transaction History
   const transactions = useMemo(() => {
@@ -194,36 +226,39 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   };
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen py-10 px-4 md:px-8">
-      {/* Toast alert popup */}
-      {showToast && (
-        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 py-3.5 px-6 rounded-2xl shadow-2xl border flex items-center gap-3 transition-all duration-300 ${
-          toastType === 'success' 
-            ? 'bg-emerald-950 border-emerald-500/30 text-emerald-400' 
-            : 'bg-red-950 border-red-500/30 text-red-400'
-        }`}>
-          {toastType === 'success' ? (
-            <CheckCircle className="w-5 h-5 shrink-0 text-emerald-500" />
-          ) : (
-            <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
-          )}
-          <span className="text-xs md:text-sm font-bold">{toastMessage}</span>
-        </div>
-      )}
+    <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans">
+      <Header />
 
-      {/* Main Container */}
-      <div className="max-w-6xl mx-auto space-y-8">
-        
-        {/* Breadcrumb back path */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-900">
-          <h1 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">TÀI KHOẢN THÀNH VIÊN</h1>
-          <button 
-            onClick={onBackHome}
-            className="text-xs font-bold text-zinc-500 hover:text-brand-coral transition-colors flex items-center gap-1"
-          >
-            Quay lại trang chủ
-          </button>
-        </div>
+      <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full">
+        {/* Toast alert popup */}
+        {showToast && (
+          <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 py-3.5 px-6 rounded-2xl shadow-2xl border flex items-center gap-3 transition-all duration-300 ${
+            toastType === 'success' 
+              ? 'bg-emerald-950 border-emerald-500/30 text-emerald-400' 
+              : 'bg-red-950 border-red-500/30 text-red-400'
+          }`}>
+            {toastType === 'success' ? (
+              <CheckCircle className="w-5 h-5 shrink-0 text-emerald-500" />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
+            )}
+            <span className="text-xs md:text-sm font-bold">{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Main Container */}
+        <div className="space-y-8">
+          
+          {/* Breadcrumb back path */}
+          <div className="flex items-center justify-between pb-4 border-b border-zinc-900">
+            <h1 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">TÀI KHOẢN THÀNH VIÊN</h1>
+            <button 
+              onClick={handleBackHome}
+              className="text-xs font-bold text-zinc-500 hover:text-brand-coral transition-colors flex items-center gap-1"
+            >
+              Quay lại trang chủ
+            </button>
+          </div>
 
         {/* Asymmetric Split Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -558,6 +593,22 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           disabled
                           value="••••••••••••"
                           className="w-full bg-zinc-950/40 border border-zinc-900 text-zinc-500 rounded-xl py-3 pl-11 pr-4 text-xs font-semibold select-none cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Citizen ID field (STRICTLY READ-ONLY DISABLED, MASKED) */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">
+                        Số Căn cước công dân (CCCD)
+                      </label>
+                      <div className="relative">
+                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-700" />
+                        <input
+                          type="text"
+                          disabled
+                          value={user?.cccdMasked || "092******749"}
+                          className="w-full bg-zinc-950/40 border border-zinc-900 text-zinc-500 rounded-xl py-3 pl-11 pr-4 text-xs font-semibold select-none cursor-not-allowed font-mono tracking-widest"
                         />
                       </div>
                     </div>
@@ -912,6 +963,9 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
         </div>
       )}
 
+      </main>
+
+      <Footer />
     </div>
   );
 }

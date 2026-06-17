@@ -109,6 +109,16 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const updateUser = (updatedFields) => {
+    setUser(prevUser => {
+      if (!prevUser) return null;
+      return {
+        ...prevUser,
+        ...updatedFields
+      };
+    });
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -116,6 +126,7 @@ export function AuthProvider({ children }) {
       isAuthenticated, 
       login, 
       logout,
+      updateUser,
       loading,
       refreshProfile: fetchProfile 
     }}>
