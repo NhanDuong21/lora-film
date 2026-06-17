@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "../pages/Home";
-import Login from "../pages/Login";
-import Register from "../pages/Register";
-import VerifyOtp from "../pages/VerifyOtp";
+import Login from "../pages/auth/Login";
+import Register from "../pages/auth/Register";
+import VerifyOtp from "../pages/auth/VerifyOtp";
 import Profile from "../pages/Profile";
 
 function AppRoutes() {

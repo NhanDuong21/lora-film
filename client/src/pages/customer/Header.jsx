@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { 
-  Film, ChevronDown, Menu, X, Bell, Star, Search, User, History, LogOut 
+  ChevronDown, Menu, X, Bell, Star, Search, User, History, LogOut 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
@@ -70,7 +70,7 @@ export default function Header({ onNavigate }) {
       movies: matchedMovies,
       stars: Array.from(matchedStarsMap.values())
     };
-  }, [searchQuery]);
+  }, [searchQuery, movies]);
 
   const handleLogoClick = (e) => {
     e.preventDefault();

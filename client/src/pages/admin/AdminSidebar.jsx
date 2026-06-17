@@ -8,8 +8,6 @@ import {
   Database, 
   Ticket, 
   Coffee, 
-  Clock, 
-  Settings, 
   Home, 
   LogOut, 
   ChevronDown,
