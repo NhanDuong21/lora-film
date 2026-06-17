@@ -7,7 +7,8 @@ import jakarta.validation.constraints.Size;
 
 public class RegisterRequest {
     @NotBlank(message = "fullName is required")
-    @Size(max = 200, message = "fullName max length is 200")
+    @Size(min = 2, max = 200, message = "fullName length must be between 2 and 200")
+    @Pattern(regexp = "^\\s*[a-zA-ZÀ-ỹ]+(\\s+[a-zA-ZÀ-ỹ]+)+\\s*$", message = "The full name must not contain numbers or special characters and must have at least two words.")
     private String fullName;
 
     @NotBlank(message = "email is required")
@@ -16,7 +17,7 @@ public class RegisterRequest {
     private String email;
 
     @NotBlank(message = "phoneNumber is required")
-    @Pattern(regexp = "^0\\d{9,10}$", message = "phoneNumber format is invalid")
+    @Pattern(regexp = "^0\\d{9}$", message = "phoneNumber format is invalid")
     private String phoneNumber;
 
     @NotBlank(message = "cccd is required")
@@ -34,7 +35,11 @@ public class RegisterRequest {
     private String birthday;
 
     @NotBlank(message = "Password is required")
-    @Size(min = 6, max = 50, message = "password length must be between 6 and 50")
+    @Size(min = 8, max = 50, message = "password length must be between 8 and 50")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*(),.?\":{}|<>]).+$",
+        message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
+    )
     private String password;
 
     public RegisterRequest() {}

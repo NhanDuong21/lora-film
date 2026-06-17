@@ -15,4 +15,10 @@ public class InvalidBirthdayFormatException extends BaseAuthException {
               "AUTH_INVALID_BIRTHDAY_FORMAT",
               HttpStatus.BAD_REQUEST);
     }
+
+    public InvalidBirthdayFormatException(String message) {
+        super(message,
+              "AUTH_INVALID_BIRTHDAY_FORMAT",
+              HttpStatus.BAD_REQUEST);
+    }
 }

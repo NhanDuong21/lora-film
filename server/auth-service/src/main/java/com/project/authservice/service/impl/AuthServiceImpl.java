@@ -120,6 +120,21 @@ public class AuthServiceImpl implements AuthService {
 				throw new BirthdayCccdMismatchException();
 			}
 
+			if (birthday.isAfter(LocalDate.now())) {
+				log.warn("Birthday cannot be in the future: {}", birthday);
+				throw new InvalidBirthdayFormatException("Birth dates cannot be in the future.");
+			}
+
+			LocalDate today = LocalDate.now();
+			int age = today.getYear() - birthday.getYear();
+			if (birthday.plusYears(age).isAfter(today)) {
+				age--;
+			}
+			if (age < 13) {
+				log.warn("Age under 13: {}", age);
+				throw new InvalidBirthdayFormatException("You must be 13 years old or older.");
+			}
+
 			// Load CUSTOMER role
 			Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
 					.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
@@ -300,7 +315,7 @@ public class AuthServiceImpl implements AuthService {
 				throw new InvalidRefreshTokenException("Account not found");
 			}
 
-			if (account.getIsActive() == null || account.getIsActive() != 0) {
+			if (account.getIsActive() == null || account.getIsActive() != 1) {
 				throw new AccountInactiveException();
 			}
 

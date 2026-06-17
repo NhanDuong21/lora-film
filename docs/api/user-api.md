@@ -10,12 +10,12 @@
 | Người phụ trách BE | Phan Tuấn Thành                    |
 | Người phụ trách FE | Dương Hoàng Nhân                   |
 | Trạng thái         | Ready for Implement                    |
-| Ngày cập nhật      | 14/06/2026                             |
+| Ngày cập nhật      | 17/06/2026                             |
 
 ---
 
 ## Lịch Sử Chỉnh Sửa
-- **15/06/2026**: Bổ sung đặc tả Event-Driven (Kafka Consumer) cho chức năng tự động tạo User Profile.
+- **17/06/2026**: Đồng bộ các quy tắc validate của internal create profile API (fullName, phoneNumber) với Auth Service và Frontend.
 - **14/06/2026**: Cập nhật Local URL từ port `8082` sang `8086`. Đổi tên trường trả về từ `isVerifiedPhone` thành `verifiedPhone` (do gỡ bỏ Lombok).
 - **13/06/2026**: Khởi tạo tài liệu đặc tả User Profile APIs.
 
@@ -104,9 +104,9 @@ Lưu ý: Đây là **Internal API**, API Gateway không được phép expose en
 | Field         | Type   | Required | Validate          | Mô tả                                      |
 | ------------- | ------ | -------: | ----------------- | ------------------------------------------ |
 | accountId     | number |      Yes | > 0               | ID của tài khoản từ Auth Service           |
-| fullName      | string |      Yes | Không rỗng        | Họ tên người dùng                          |
-| phoneNumber   | string |      Yes | Format SĐT        | Số điện thoại (Unique)                     |
-| cccd          | string |      Yes | 12 chữ số         | Số CCCD đầy đủ (Unique)                    |
+| fullName      | string |      Yes | Dài 2-200 ký tự, chỉ chứa chữ cái và khoảng trắng, ít nhất 2 từ | Họ tên người dùng |
+| phoneNumber   | string |      Yes | Gồm 10 chữ số bắt đầu bằng 0 hoặc 12 ký tự bắt đầu bằng +84 | Số điện thoại (Unique)                     |
+| cccd          | string |      Yes | Đúng 12 chữ số | Số CCCD đầy đủ (Unique)                    |
 | cccdMasked    | string |      Yes | Format che kí tự  | CCCD đã che để hiển thị                    |
 | provinceCode  | string |       No | -                 | Mã tỉnh/thành suy ra từ CCCD               |
 | provinceName  | string |       No | -                 | Tên tỉnh/thành suy ra từ CCCD              |
