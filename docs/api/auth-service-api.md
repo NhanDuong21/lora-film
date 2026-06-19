@@ -16,6 +16,12 @@
 ---
 
 ## Lịch Sử Chỉnh Sửa
+
+**Ngày:** 19/06/2026 | **Người chỉnh sửa:** Trần Hiển Vinh
+
+* **Cập nhật Backend:** Bổ sung trường `token` trong `JwtResponse.java` để đồng bộ hoàn toàn với API Contract.
+* **Cập nhật Backend:** Đồng bộ tên thuộc tính trong DTO Java `UserProfileResponse` từ `isVerifiedPhone` thành `verifiedPhone` để tránh nhầm lẫn bảo trì.
+
 - **17/06/2026**: Cập nhật các quy tắc validate cho fullName, phoneNumber, password, birthday (giới hạn tuổi >= 13, không ở tương lai) để đồng bộ hoàn toàn với Frontend.
 
 ---
@@ -577,10 +583,13 @@ API này dùng để xác thực mã định danh OTP sau khi đăng ký thành 
 
 ```json
 {
-  "accountId": 1,
-  "otp": "123456"
+  "accountId": 15,
+  "otp": "123456",
+  "purpose": "REGISTRATION"
 }
 ```
+
+* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `LOGIN`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
 
 ### 7.4. Response Success
 
@@ -629,6 +638,157 @@ Status: **404 Not Found**
   "message": "Account not found",
   "errorCode": "AUTH_ACCOUNT_NOT_FOUND",
   "data": null
+}
+```
+
+---
+
+## 7.5. Send OTP API
+
+### 7.5.1. Mục Tiêu API
+
+Gửi mã OTP cho các mục đích như REGISTER. 
+
+| Mục | Nội dung |
+| :--- | :--- |
+| Method | POST |
+| Endpoint | `/api/auth/send-otp` |
+| Local URL | `http://localhost:8081/api/auth/send-otp` |
+| Content-Type | application/json |
+
+### 7.5.2. Request Body
+
+```json
+{
+  "email": "user@example.com",
+  "purpose": "REGISTRATION"
+}
+```
+
+* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `LOGIN`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
+
+### 7.5.3. Response Success
+
+Status: **200 OK**
+
+```json
+{
+  "success": true,
+  "message": "If the request is valid, an OTP has been sent.",
+  "data": null
+}
+```
+
+### 7.5.4. Response Error
+
+**Case 1: Quá giới hạn rate limit (1 phút)**
+Status: **429 Too Many Requests**
+
+```json
+{
+  "success": false,
+  "message": "Please wait before requesting another OTP.",
+  "errorCode": "OTP_RATE_LIMIT",
+  "data": null
+}
+```
+
+---
+
+## 7.6. Resend OTP API
+
+### 7.6.1. Mục Tiêu API
+
+Gửi lại mã OTP trong trường hợp chưa xác thực đăng ký hoặc hết hạn.
+
+| Mục | Nội dung |
+| :--- | :--- |
+| Method | POST |
+| Endpoint | `/api/auth/resend-otp` |
+| Local URL | `http://localhost:8081/api/auth/resend-otp` |
+| Content-Type | application/json |
+
+### 7.6.2. Request Body
+
+```json
+{
+  "accountId": 15,
+  "purpose": "REGISTRATION"
+}
+```
+
+* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `LOGIN`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
+
+### 7.6.3. Response Success
+
+Status: **200 OK**
+
+```json
+{
+  "success": true,
+  "message": "OTP resent successfully",
+  "data": {
+    "accountId": 15,
+    "expiresIn": 300,
+    "resendAvailableIn": 60
+  }
+}
+```
+
+### 7.6.4. Response Error
+
+**Case 1: Quá giới hạn rate limit (1 phút)**
+Status: **429 Too Many Requests**
+
+```json
+{
+  "success": false,
+  "message": "Please wait before requesting another OTP.",
+  "errorCode": "OTP_RATE_LIMIT",
+  "data": {
+    "retryAfter": 45
+  }
+}
+```
+
+**Case 2: Tài khoản không tồn tại**
+Status: **404 Not Found**
+
+```json
+{
+  "success": false,
+  "message": "Account not found",
+  "errorCode": "AUTH_ACCOUNT_NOT_FOUND",
+  "data": null
+}
+```
+
+**Case 3: Tài khoản đã xác thực**
+Status: **409 Conflict**
+
+```json
+{
+  "success": false,
+  "message": "Account is already verified",
+  "errorCode": "AUTH_ACCOUNT_ALREADY_VERIFIED",
+  "data": null
+}
+```
+
+**Case 4: Validation error**
+Status: **400 Bad Request**
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errorCode": "VALIDATION_ERROR",
+  "errors": [
+    {
+      "field": "accountId",
+      "message": "Account ID is required"
+    }
+  ]
 }
 ```
 
@@ -712,6 +872,7 @@ Status: **200 OK**
     "tokenType": "Bearer",
     "email": "user@gmail.com",
     "role": "CUSTOMER",
+    "accountId": 1,
     "accessToken": "jwt-token",
     "refreshToken": "uuid-token",
     "expiresIn": 86400
@@ -732,6 +893,7 @@ Status: **200 OK**
 | data.expiresIn | number | Thời gian sống của chuỗi Access Token tính bằng giây |
 | data.email | string | Email của người dùng đăng nhập |
 | data.role | string | Vai trò của người dùng |
+| data.accountId | number | ID của tài khoản |
 
 ### 8.9. Response Error
 
@@ -756,7 +918,9 @@ Status: **403 Forbidden**
   "success": false,
   "message": "Account is not verified",
   "errorCode": "AUTH_ACCOUNT_NOT_VERIFIED",
-  "data": null
+  "data": {
+    "accountId": 1
+  }
 }
 ```
 
@@ -874,7 +1038,8 @@ Status: **200 OK**
     "tokenType": "Bearer",
     "expiresIn": 86400,
     "email": "nhan@gmail.com",
-    "role": "CUSTOMER"
+    "role": "CUSTOMER",
+    "accountId": 1
   }
 }
 ```
@@ -934,7 +1099,9 @@ Status: **403 Forbidden**
   "success": false,
   "message": "Account is not verified",
   "errorCode": "AUTH_ACCOUNT_NOT_VERIFIED",
-  "data": null
+  "data": {
+    "accountId": 1
+  }
 }
 ```
 

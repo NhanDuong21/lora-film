@@ -1,22 +1,35 @@
 package com.project.authservice.dto.response;
 
 public class JwtResponse {
+    private String token;
     private String tokenType = "Bearer";
     private String email;
     private String role;
     private String accessToken;
     private String refreshToken;
     private Long expiresIn;
+    private Long accountId;
 
-    public JwtResponse() {}
+    public JwtResponse() {
+    }
 
-    public JwtResponse(String accessToken, String refreshToken, Long expiresIn, String email, String role) {
+    public JwtResponse(String accessToken, String refreshToken, Long expiresIn, String email, String role, Long accountId) {
+        this.token = accessToken;
         this.accessToken = accessToken;
         this.refreshToken = refreshToken;
         this.expiresIn = expiresIn;
         this.tokenType = "Bearer";
         this.email = email;
         this.role = role;
+        this.accountId = accountId;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
     }
 
     public String getTokenType() {
@@ -65,5 +78,13 @@ public class JwtResponse {
 
     public void setExpiresIn(Long expiresIn) {
         this.expiresIn = expiresIn;
+    }
+
+    public Long getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(Long accountId) {
+        this.accountId = accountId;
     }
 }

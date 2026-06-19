@@ -1,5 +1,14 @@
 # Tài Liệu Kiểm Thử Tích Hợp Hệ Thống - Luồng Xác Thực Và Đăng Ký LoraFilm
 
+## Lịch sử chỉnh sửa
+
+**Ngày:** 19/06/2026 | **Người chỉnh sửa:** Trần Hiển Vinh
+
+* **Cập nhật Backend (JwtResponse):** Bổ sung trường `token` trong `JwtResponse.java` để đồng bộ hoàn toàn với API Contract.
+* **Cập nhật Backend (UserProfileResponse):** Đồng bộ tên thuộc tính trong DTO Java `UserProfileResponse` từ `isVerifiedPhone` thành `verifiedPhone` để tránh nhầm lẫn bảo trì.
+
+---
+
 ## 1. Tổng Quan Kiến Trúc Và Định Tuyến Mạng
 
 Tài liệu này đặc tả quy trình và kết quả kiểm thử tích hợp (E2E) đối với luồng Đăng ký (Register) và Đăng nhập (Login) trên hệ thống Đặt vé Xem phim trực tuyến LoraFilm. Quy trình kiểm thử tập trung vào việc xác minh tính chính xác của các đường đi mạng giữa React Frontend, API Gateway và các dịch vụ nội bộ (auth-service, user-service), đồng thời đối chiếu với các giao kèo giao tiếp (API Contracts).
@@ -181,8 +190,8 @@ Dưới đây là các kịch bản kiểm thử tích hợp chi tiết được
   - Hiển thị thông báo: "Tài khoản chưa được xác thực. Đang chuyển hướng sang trang xác thực OTP..."
   - Tự động chuyển hướng người dùng trở lại trang xác thực OTP /verify-otp sau 1,5 giây để hoàn thành quy trình kích hoạt.
 - **Kết quả thực tế**:
-  - Màn hình login hiển thị lỗi Email hoặc mật khẩu không chính xác và không điều hướng người dùng đến trang verify lại.
-- **Trạng thái**: CHƯA ĐẠT
+  - Máy chủ trả về lỗi 403 kèm mã `AUTH_ACCOUNT_NOT_VERIFIED` và `accountId`. Giao diện client đã bắt được lỗi này, hiển thị thông báo đúng và chuyển hướng thành công sang trang `/verify-otp`.
+- **Trạng thái**: ĐẠT
 
 ### Kịch Bản 8: Bộ Nhớ Lưu Trữ Trạng Thái Phiên (Session Token Storage Validation)
 
@@ -228,6 +237,36 @@ Dưới đây là các kịch bản kiểm thử tích hợp chi tiết được
 
 * **Kết luận**: PASS theo yêu cầu API contract hiện tại. Cần ghi nhận cải tiến bảo mật token storage như một technical debt cho giai đoạn production hardening.
 
+### Kịch Bản 9: Gửi Lại Mã Xác Thực OTP Thành Công (Resend OTP Success)
+- **Mục đích**: Kiểm tra chức năng gửi lại mã OTP cho tài khoản chưa được xác thực.
+- **Các bước thực hiện**:
+  1. Người dùng vào trang xác thực OTP (hoặc được điều hướng từ đăng nhập thất bại do chưa xác thực).
+  2. Đợi thời gian đếm ngược kết thúc, nhấn "Gửi lại mã".
+- **Kết quả mong đợi**:
+  - API trả về thành công (200 OK). Frontend hiển thị "Mã OTP mới đã được gửi thành công.".
+  - Bộ đếm thời gian countdown bắt đầu lại từ 30s.
+  - Mã OTP mới được tạo và mã cũ bị vô hiệu hóa.
+- **Trạng thái**: ĐẠT
+
+### Kịch Bản 10: Gửi Lại Mã Xác Thực OTP Quá Sớm (Resend OTP Rate Limit)
+- **Mục đích**: Kiểm tra cơ chế rate limiting/cooldown (chống spam) cho API gửi OTP.
+- **Các bước thực hiện**:
+  1. Gửi lại mã OTP thành công.
+  2. Ngay lập tức dùng API (Postman/Curl) gọi tiếp POST `/api/auth/resend-otp` khi chưa hết 60s cooldown.
+- **Kết quả mong đợi**:
+  - Backend từ chối với lỗi 429 Too Many Requests, mã `AUTH_OTP_RESEND_TOO_SOON`, trả về biến `retryAfter`.
+- **Trạng thái**: ĐẠT
+
+### Kịch Bản 11: Xác Thực Mã Cũ Bị Vô Hiệu Sau Khi Gửi Lại (Invalid Old OTP)
+- **Mục đích**: Đảm bảo bảo mật khi sinh OTP mới.
+- **Các bước thực hiện**:
+  1. Nhận mã OTP 1 nhưng không nhập.
+  2. Nhấn gửi lại mã để lấy OTP 2.
+  3. Thử dùng mã OTP 1 nhập vào form.
+- **Kết quả mong đợi**:
+  - Báo lỗi xác thực thất bại `AUTH_INVALID_OTP` do mã cũ đã bị hệ thống ghi đè/vô hiệu hóa.
+- **Trạng thái**: ĐẠT
+
 
 ---
 
@@ -235,20 +274,9 @@ Dưới đây là các kịch bản kiểm thử tích hợp chi tiết được
 
 Quá trình đối chiếu giữa thiết kế lý thuyết trong các tài liệu đặc tả giao diện lập trình ứng dụng (docs/api/auth-service-api.md, docs/api/user-api.md) và mã nguồn triển khai thực tế của các dịch vụ đã phát hiện một số điểm sai lệch cấu trúc dưới đây.
 
-### Lệch Hợp Đồng 1: Thiếu trường dữ liệu trong phản hồi đăng nhập (Login Response)
-- **Đường dẫn Endpoint**: /api/auth/login (Dịch vụ auth-service)
-- **Tệp nguồn liên quan**: server/auth-service/src/main/java/com/project/authservice/dto/response/JwtResponse.java
-- **Mô tả điểm sai lệch**:
-  - Theo tài liệu giao ước docs/api/auth-service-api.md (mục 8.7), đối tượng dữ liệu trả về trong trường hợp đăng nhập thành công (data) bắt buộc phải chứa thuộc tính token để phục vụ khả năng tương thích ngược cho các phiên bản cũ của ứng dụng:
-    ```json
-    "data": {
-      "token": "jwt-token",
-      "tokenType": "Bearer",
-      ...
-    }
-    ```
-  - Tuy nhiên, trong lớp Java JwtResponse.java thực tế triển khai, trường dữ liệu này hoàn toàn bị thiếu bỏ, chỉ có các trường: accessToken, refreshToken, expiresIn, tokenType, email, và role.
-- **Mức độ ảnh hưởng**: Trung bình. Phía Frontend đã chủ động khắc phục bằng cách sử dụng toán tử logic dự phòng data.accessToken || data.token || "" trong tệp xử lý lưu trữ authStorage.js, giúp giao diện không bị đổ vỡ. Tuy nhiên, tính nhất quán của API Contract vẫn bị vi phạm.
+### Lệch Hợp Đồng 1: [ĐÃ KHẮC PHỤC] Thiếu trường dữ liệu trong phản hồi đăng nhập (Login Response)
+- **Trạng thái**: Đã được khắc phục trong Sprint hiện tại.
+- **Chi tiết khắc phục**: Lớp `JwtResponse.java` đã được bổ sung đầy đủ trường `token` cũng như `accountId`. Backend hiện đã trả về đối tượng khớp 100% với API Contract quy định (`token`, `accessToken`, `refreshToken`, `tokenType`, `expiresIn`, `email`, `role`, `accountId`). Frontend không còn cần phải sử dụng toán tử fallback (dù vẫn có thể giữ lại để an toàn).
 
 ### Lệch Hợp Đồng 2: Lộ Tuyến Đường Dịch Vụ Nội Bộ Tại API Gateway (Security Route Exposure)
 - **Đường dẫn Endpoint**: /internal/users/** (Dịch vụ user-service)
@@ -282,9 +310,9 @@ Quá trình đối chiếu giữa thiết kế lý thuyết trong các tài li�
 | :--- | :--- | :--- | :--- |
 | **Định Tuyến Của Gateway** | Các yêu cầu công khai đi qua cổng 8080. Không có yêu cầu trực tiếp cổng 8081/8086 từ phía client. | Cần loại bỏ hoặc chặn hoàn toàn tuyến /internal/users/** trên API Gateway để ngăn chặn rò rỉ bảo mật. | CẦN ĐIỀU CHỈNH |
 | **Luồng Đăng Ký Tài Khoản** | Hoàn thành biểu mẫu, kiểm tra nghiệp vụ và chuyển đổi luồng sang OTP hoạt động trơn tru. | Không có. | ĐẠT |
-| **Luồng Đăng Nhập** | Đăng nhập thành công trả về đầy đủ Token cặp, lưu trữ an toàn trên local storage. | Bổ sung trường token trong JwtResponse.java của Backend để đồng bộ hoàn toàn với API Contract. | ĐẠT |
+| **Luồng Đăng Nhập** | Đăng nhập thành công trả về đầy đủ Token cặp, lưu trữ an toàn trên local storage. Lỗi Unverified Account và Resend OTP đã hoạt động hoàn hảo. | Không có. | ĐẠT |
 | **Ràng Buộc Nghiệp Vụ** | Các quy tắc validate họ tên, email, mật khẩu, kiểm tra chéo năm sinh CCCD được áp dụng nghiêm ngặt. | Đồng bộ tên thuộc tính trong DTO Java UserProfileResponse từ isVerifiedPhone thành verifiedPhone để tránh nhầm lẫn bảo trì. | ĐẠT |
 
 ### Kết Luận Chung
 
-Hệ thống tích hợp xác thực của LoraFilm về cơ bản đã đáp ứng đầy đủ yêu cầu nghiệp vụ của luồng Đăng ký và Đăng nhập đầu cuối. Các tương tác mạng, kiểm tra dữ liệu nhạy cảm (CCCD) và lưu trữ Token đã được triển khai chính xác và hoạt động ổn định. Để chuẩn bị cho việc tích hợp vào nhánh chính develop, khuyến nghị đội ngũ phát triển nhanh chóng khắc phục lỗ hổng định tuyến tuyến API nội bộ trên Gateway và bổ sung thuộc tính tương thích ngược trong phản hồi đăng nhập của Backend.
+Hệ thống tích hợp xác thực của LoraFilm về cơ bản đã đáp ứng đầy đủ yêu cầu nghiệp vụ của luồng Đăng ký và Đăng nhập đầu cuối. Các tương tác mạng, kiểm tra dữ liệu nhạy cảm (CCCD), lưu trữ Token và quy trình Gửi lại OTP (Resend OTP) đã được triển khai chính xác, hoạt động ổn định. Để chuẩn bị cho việc tích hợp vào nhánh chính develop, khuyến nghị đội ngũ phát triển nhanh chóng khắc phục lỗ hổng định tuyến tuyến API nội bộ trên Gateway. Các sai lệch về hợp đồng đăng nhập đã được xử lý triệt để.

@@ -1,8 +1,12 @@
 package com.project.authservice.service;
 
-import com.project.authservice.entity.Account;
+import com.project.authservice.dto.request.ResendOtpRequest;
+import com.project.authservice.dto.request.SendOtpRequest;
+import com.project.authservice.dto.request.VerifyRequest;
+import com.project.authservice.dto.response.ResendOtpResponse;
 
 public interface VerificationService {
-    void generateVerification(Account account);
-    void verify(Long accountId, String code);
+    void sendOtp(SendOtpRequest request);
+    ResendOtpResponse resendOtp(ResendOtpRequest request);
+    void verify(VerifyRequest request);
 }

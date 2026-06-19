@@ -1,19 +1,28 @@
 package com.project.authservice.service.impl;
 
+import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.project.authservice.dto.request.ResendOtpRequest;
+import com.project.authservice.dto.request.SendOtpRequest;
+import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.entity.Account;
+import com.project.authservice.entity.RedisOtpData;
+import com.project.authservice.exception.AccountAlreadyVerifiedException;
 import com.project.authservice.exception.AccountNotFoundException;
 import com.project.authservice.exception.InvalidOtpException;
-import com.project.authservice.exception.VerificationExpiredException;
+import com.project.authservice.exception.OtpRateLimitException;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.service.VerificationService;
 
@@ -22,71 +31,153 @@ public class OtpVerificationServiceImpl implements VerificationService {
     private static final Logger log = LoggerFactory.getLogger(OtpVerificationServiceImpl.class);
 
     private final AccountRepository accountRepository;
-    private final Map<Long, OtpData> otpStorage = new ConcurrentHashMap<>();
-    private final Random random = new Random();
+    private final StringRedisTemplate redisTemplate;
+    private final PasswordEncoder passwordEncoder;
+    private final ObjectMapper objectMapper;
+    private final SecureRandom secureRandom = new SecureRandom();
 
-    public OtpVerificationServiceImpl(AccountRepository accountRepository) {
+    public OtpVerificationServiceImpl(AccountRepository accountRepository, StringRedisTemplate redisTemplate, PasswordEncoder passwordEncoder) {
         this.accountRepository = accountRepository;
+        this.redisTemplate = redisTemplate;
+        this.passwordEncoder = passwordEncoder;
+        this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    }
+
+    private String getRedisKey(String purpose, String email) {
+        return "otp:" + purpose + ":" + email;
+    }
+
+    private RedisOtpData getRedisOtpData(String key) {
+        String json = redisTemplate.opsForValue().get(key);
+        if (json == null) return null;
+        try {
+            return objectMapper.readValue(json, RedisOtpData.class);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to parse RedisOtpData from JSON", e);
+            return null;
+        }
+    }
+
+    private void saveRedisOtpData(String key, RedisOtpData data) {
+        try {
+            String json = objectMapper.writeValueAsString(data);
+            redisTemplate.opsForValue().set(key, json, Duration.ofMinutes(5));
+        } catch (JsonProcessingException e) {
+            log.error("Failed to write RedisOtpData to JSON", e);
+        }
+    }
+
+    private String generateSecureOtp() {
+        int number = secureRandom.nextInt(1000000);
+        return String.format("%06d", number);
     }
 
     @Override
-    public void generateVerification(Account account) {
-        String otp = String.format("%06d", random.nextInt(1000000));
-        LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(5);
+    public void sendOtp(SendOtpRequest request) {
+        String email = request.getEmail();
+        String purpose = request.getPurpose();
+        
+        Account account = accountRepository.findByEmail(email)
+                .orElseThrow(AccountNotFoundException::new);
+        Long accountId = account.getId();
 
-        otpStorage.put(account.getId(), new OtpData(otp, expiryTime));
+        String key = getRedisKey(purpose, email);
 
-        String verificationMessage = 
-                "\n==================================\n" +
-                "ACCOUNT VERIFICATION REQUIRED\n" +
-                "AccountId: " + account.getId() + "\n" +
-                "OTP: " + otp + "\n" +
-                "Verify API: POST /auth/verify\n" +
-                "==================================";
+        RedisOtpData existingData = getRedisOtpData(key);
+        if (existingData != null) {
+            LocalDateTime lastSentAt = existingData.getLastSentAt();
+            if (lastSentAt != null) {
+                long elapsedSeconds = Duration.between(lastSentAt, LocalDateTime.now()).getSeconds();
+                if (elapsedSeconds < 60) {
+                    throw new OtpRateLimitException(60 - elapsedSeconds);
+                }
+            }
+        }
 
-        System.out.println(verificationMessage);
-        log.info("Verification generated: accountId={}, otp={}", account.getId(), otp);
+        String otp = generateSecureOtp();
+        String otpHash = passwordEncoder.encode(otp);
+
+        RedisOtpData newData = new RedisOtpData();
+        newData.setOtpHash(otpHash);
+        newData.setFailedAttempts(0);
+        newData.setCreatedAt(existingData != null ? existingData.getCreatedAt() : LocalDateTime.now());
+        newData.setLastSentAt(LocalDateTime.now());
+
+        saveRedisOtpData(key, newData);
+
+        System.out.println("\n==================================");
+        System.out.println("OTP GENERATED (Do not use in production)");
+        System.out.println("AccountId: " + accountId);
+        System.out.println("Email: " + email);
+        System.out.println("Purpose: " + purpose);
+        System.out.println("OTP: " + otp);
+        System.out.println("==================================\n");
+
+        log.info("OTP generated for email={} purpose={}", email, purpose);
+    }
+
+    @Override
+    public com.project.authservice.dto.response.ResendOtpResponse resendOtp(ResendOtpRequest request) {
+        Long accountId = request.getAccountId();
+
+        Account account = accountRepository.findById(accountId).orElseThrow(AccountNotFoundException::new);
+        if (account.getRegistrationCompleted() != null && account.getRegistrationCompleted() == 1) {
+            throw new AccountAlreadyVerifiedException();
+        }
+
+        String email = account.getEmail();
+        String purpose = request.getPurpose();
+
+        sendOtp(new SendOtpRequest(email, purpose));
+
+        return new com.project.authservice.dto.response.ResendOtpResponse(accountId, 300L, 60L);
     }
 
     @Override
     @Transactional
-    public void verify(Long accountId, String code) {
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(AccountNotFoundException::new);
+    public void verify(VerifyRequest request) {
+        Long accountId = request.getAccountId();
+        String otp = request.getOtp();
+        String purpose = request.getPurpose();
+        
+        Account account = accountRepository.findById(accountId).orElseThrow(AccountNotFoundException::new);
+        String email = account.getEmail();
+        String key = getRedisKey(purpose, email);
 
-        OtpData otpData = otpStorage.get(accountId);
-        if (otpData == null || !otpData.getCode().equals(code)) {
+        RedisOtpData existingData = getRedisOtpData(key);
+        if (existingData == null) {
             throw new InvalidOtpException();
         }
 
-        if (otpData.isExpired()) {
-            otpStorage.remove(accountId);
-            throw new VerificationExpiredException();
+        if (!passwordEncoder.matches(otp, existingData.getOtpHash())) {
+            int attempts = existingData.getFailedAttempts() + 1;
+            if (attempts >= 5) {
+                redisTemplate.delete(key);
+                log.warn("OTP max failed attempts reached for email={} purpose={}. Key deleted.", email, purpose);
+            } else {
+                existingData.setFailedAttempts(attempts);
+                // Preserve remaining TTL when updating attempts
+                Long expireSecs = redisTemplate.getExpire(key);
+                if (expireSecs != null && expireSecs > 0) {
+                    try {
+                        String json = objectMapper.writeValueAsString(existingData);
+                        redisTemplate.opsForValue().set(key, json, Duration.ofSeconds(expireSecs));
+                    } catch (JsonProcessingException e) {
+                        log.error("Failed to write RedisOtpData to JSON", e);
+                    }
+                }
+            }
+            throw new InvalidOtpException();
         }
 
-        // Verification successful
-        otpStorage.remove(accountId);
+        // Success
+        redisTemplate.delete(key);
+        log.info("OTP verified successfully for email={} purpose={}", email, purpose);
+
+        // Activate account
         account.setRegistrationCompleted(1);
         account.setIsActive(1);
         accountRepository.save(account);
-        log.info("Account id={} verified successfully.", accountId);
-    }
-
-    private static class OtpData {
-        private final String code;
-        private final LocalDateTime expiryTime;
-
-        public OtpData(String code, LocalDateTime expiryTime) {
-            this.code = code;
-            this.expiryTime = expiryTime;
-        }
-
-        public String getCode() {
-            return code;
-        }
-
-        public boolean isExpired() {
-            return LocalDateTime.now().isAfter(expiryTime);
-        }
+        log.info("Account {} activated successfully.", email);
     }
 }

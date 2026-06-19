@@ -15,7 +15,8 @@ public class ApiResponse<T> {
 	private T data;
 	private List<ValidationError> errors;
 
-	public ApiResponse() {}
+	public ApiResponse() {
+	}
 
 	public ApiResponse(boolean success, String message, String errorCode, T data, List<ValidationError> errors) {
 		this.success = success;
@@ -85,7 +86,8 @@ public class ApiResponse<T> {
 		private String field;
 		private String message;
 
-		public ValidationError() {}
+		public ValidationError() {
+		}
 
 		public ValidationError(String field, String message) {
 			this.field = field;
@@ -111,7 +113,8 @@ public class ApiResponse<T> {
 
 	public static class Serializer extends JsonSerializer<ApiResponse<?>> {
 		@Override
-		public void serialize(ApiResponse<?> value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+		public void serialize(ApiResponse<?> value, JsonGenerator gen, SerializerProvider serializers)
+				throws IOException {
 			gen.writeStartObject();
 			gen.writeBooleanField("success", value.success);
 			gen.writeStringField("message", value.message);
