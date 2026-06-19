@@ -737,6 +737,52 @@ Status: **200 OK**
 
 ### 7.6.4. Response Error
 
+**Case 1: Tài khoản không tồn tại**
+Status: **404 Not Found**
+
+```json
+{
+  "success": false,
+  "message": "Account not found",
+  "errorCode": "AUTH_ACCOUNT_NOT_FOUND",
+  "data": null
+}
+```
+
+**Case 2: Tài khoản đã xác thực**
+Status: **409 Conflict**
+
+```json
+{
+  "success": false,
+  "message": "Account is already verified",
+  "errorCode": "AUTH_ACCOUNT_ALREADY_VERIFIED",
+  "data": null
+}
+```
+
+**Case 3: Quá giới hạn rate limit (1 phút)**
+Status: **429 Too Many Requests**
+
+```json
+{
+  "success": false,
+  "message": "Please wait before requesting another OTP",
+  "errorCode": "OTP_RATE_LIMIT",
+  "data": {
+    "retryAfter": 45
+  }
+}
+```
+
+### 7.6.5. Ghi Chú Bảo Mật & Business Rules
+
+* Account gọi API bắt buộc phải tồn tại và chưa được kích hoạt thành công (`registration_completed` = 0).
+* Mỗi lần gọi `Resend OTP`, mã OTP cũ chưa sử dụng sẽ bị thay thế (ghi đè trên Redis) và tự động hết hiệu lực.
+* Không trả mã OTP mới sinh dưới dạng chuỗi rõ ràng (plaintext) qua phản hồi HTTP.
+* Nếu Notification Service chưa sẵn sàng (như trong môi trường DEV/TEST), hệ thống tạm thời chỉ log mã OTP ra Console.
+* Áp dụng nghiêm ngặt thời gian chờ (cooldown 60s) giữa mỗi lần yêu cầu để chống spam.
+
 **Case 1: Quá giới hạn rate limit (1 phút)**
 Status: **429 Too Many Requests**
 

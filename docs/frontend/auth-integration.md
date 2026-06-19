@@ -531,7 +531,8 @@ Request body:
 ```json
 {
   "accountId": 1,
-  "otp": "123456"
+  "otp": "123456",
+  "purpose": "REGISTRATION"
 }
 ```
 
