@@ -6,7 +6,7 @@ import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.dto.response.ResendOtpResponse;
 
 public interface VerificationService {
-    void sendOtp(SendOtpRequest request);
+    ResendOtpResponse sendOtp(SendOtpRequest request);
     ResendOtpResponse resendOtp(ResendOtpRequest request);
     void verify(VerifyRequest request);
 }

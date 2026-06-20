@@ -73,14 +73,14 @@ public class OtpVerificationServiceImpl implements VerificationService {
     }
 
     @Override
-    public void sendOtp(SendOtpRequest request) {
+    public com.project.authservice.dto.response.ResendOtpResponse sendOtp(SendOtpRequest request) {
         String email = request.getEmail();
         String purpose = request.getPurpose();
         
         Account account = accountRepository.findByEmail(email)
                 .orElseThrow(AccountNotFoundException::new);
         Long accountId = account.getId();
-
+        
         String key = getRedisKey(purpose, email);
 
         RedisOtpData existingData = getRedisOtpData(key);
@@ -114,23 +114,22 @@ public class OtpVerificationServiceImpl implements VerificationService {
         System.out.println("==================================\n");
 
         log.info("OTP generated for email={} purpose={}", email, purpose);
+        
+        return new com.project.authservice.dto.response.ResendOtpResponse(accountId, 300L, 60L);
     }
 
     @Override
     public com.project.authservice.dto.response.ResendOtpResponse resendOtp(ResendOtpRequest request) {
-        Long accountId = request.getAccountId();
+        String email = request.getEmail();
+        String purpose = request.getPurpose();
 
-        Account account = accountRepository.findById(accountId).orElseThrow(AccountNotFoundException::new);
+        Account account = accountRepository.findByEmail(email).orElseThrow(AccountNotFoundException::new);
+        
         if (account.getRegistrationCompleted() != null && account.getRegistrationCompleted() == 1) {
             throw new AccountAlreadyVerifiedException();
         }
 
-        String email = account.getEmail();
-        String purpose = request.getPurpose();
-
-        sendOtp(new SendOtpRequest(email, purpose));
-
-        return new com.project.authservice.dto.response.ResendOtpResponse(accountId, 300L, 60L);
+        return sendOtp(new SendOtpRequest(email, purpose));
     }
 
     @Override

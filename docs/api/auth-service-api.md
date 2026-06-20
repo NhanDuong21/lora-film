@@ -19,7 +19,7 @@
 
 **Ngày:** 19/06/2026 | **Người chỉnh sửa:** Trần Hiển Vinh
 
-* **Cập nhật Backend:** Bổ sung trường `token` trong `JwtResponse.java` để đồng bộ hoàn toàn với API Contract.
+* **Cập nhật Backend:** Loại bỏ trường `token` trong `JwtResponse.java` để dọn dẹp API Contract (chỉ giữ lại `accessToken`).
 * **Cập nhật Backend:** Đồng bộ tên thuộc tính trong DTO Java `UserProfileResponse` từ `isVerifiedPhone` thành `verifiedPhone` để tránh nhầm lẫn bảo trì.
 
 - **17/06/2026**: Cập nhật các quy tắc validate cho fullName, phoneNumber, password, birthday (giới hạn tuổi >= 13, không ở tương lai) để đồng bộ hoàn toàn với Frontend.
@@ -674,8 +674,12 @@ Status: **200 OK**
 ```json
 {
   "success": true,
-  "message": "If the request is valid, an OTP has been sent.",
-  "data": null
+  "message": "OTP sent successfully",
+  "data": {
+    "accountId": 15,
+    "expiresIn": 300,
+    "resendAvailableIn": 60
+  }
 }
 ```
 
@@ -689,7 +693,9 @@ Status: **429 Too Many Requests**
   "success": false,
   "message": "Please wait before requesting another OTP.",
   "errorCode": "OTP_RATE_LIMIT",
-  "data": null
+  "data": {
+    "retryAfter": 45
+  }
 }
 ```
 
@@ -712,7 +718,7 @@ Gửi lại mã OTP trong trường hợp chưa xác thực đăng ký hoặc h�
 
 ```json
 {
-  "accountId": 15,
+  "email": "user@example.com",
   "purpose": "REGISTRATION"
 }
 ```
@@ -914,7 +920,6 @@ Status: **200 OK**
   "success": true,
   "message": "Login successfully",
   "data": {
-    "token": "jwt-token",
     "tokenType": "Bearer",
     "email": "user@gmail.com",
     "role": "CUSTOMER",
@@ -932,7 +937,6 @@ Status: **200 OK**
 | :--- | :--- | :--- |
 | success | boolean | Trạng thái xử lý thành công hay thất bại |
 | message | string | Thông báo kết quả |
-| data.token | string | JWT token chính (Dùng song song phục vụ tương thích ngược) |
 | data.accessToken| string | JWT access token mới dùng để gọi các API cần xác thực |
 | data.refreshToken| string | UUID token dùng để call API refresh-token gia hạn |
 | data.tokenType | string | Loại token, hiện tại là Bearer |
@@ -1078,7 +1082,6 @@ Status: **200 OK**
   "success": true,
   "message": "Token refreshed successfully",
   "data": {
-    "token": "new-jwt-token-here",
     "accessToken": "new-jwt-token-here",
     "refreshToken": "new-uuid-refresh-token-here",
     "tokenType": "Bearer",

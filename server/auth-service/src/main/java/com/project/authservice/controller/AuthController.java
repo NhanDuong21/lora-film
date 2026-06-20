@@ -78,10 +78,10 @@ public class AuthController {
 	 * @return success response wrapped in ApiResponse
 	 */
 	@PostMapping("/send-otp")
-	public ResponseEntity<ApiResponse<Void>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+	public ResponseEntity<ApiResponse<com.project.authservice.dto.response.ResendOtpResponse>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
 		log.info("Send OTP endpoint called for email={}", request.getEmail());
-		verificationService.sendOtp(request);
-		return ResponseEntity.ok(ApiResponse.success("If the request is valid, an OTP has been sent.", null));
+		com.project.authservice.dto.response.ResendOtpResponse response = verificationService.sendOtp(request);
+		return ResponseEntity.ok(ApiResponse.success("OTP sent successfully", response));
 	}
 
 	/**
@@ -92,7 +92,7 @@ public class AuthController {
 	 */
 	@PostMapping("/resend-otp")
 	public ResponseEntity<ApiResponse<com.project.authservice.dto.response.ResendOtpResponse>> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-		log.info("Resend OTP endpoint called for accountId={}", request.getAccountId());
+		log.info("Resend OTP endpoint called for email={}", request.getEmail());
 		com.project.authservice.dto.response.ResendOtpResponse response = verificationService.resendOtp(request);
 		return ResponseEntity.ok(ApiResponse.success("OTP resent successfully", response));
 	}

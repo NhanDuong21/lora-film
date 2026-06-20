@@ -165,11 +165,24 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.badRequest().body(response);
 	}
 
+	@ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+	public ResponseEntity<ApiResponse<Object>> handleHttpRequestMethodNotSupportedException(
+			org.springframework.web.HttpRequestMethodNotSupportedException exception) {
+		log.warn("Method not supported: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), "METHOD_NOT_SUPPORTED");
+		return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+	public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadableException(
+			org.springframework.http.converter.HttpMessageNotReadableException exception) {
+		log.warn("Message not readable: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Invalid JSON format or unreadable request body", "VALIDATION_ERROR");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
 	/**
-	 * Handles unexpected failures.
-	 *
-	 * @param exception unexpected exception
-	 * @return error response
+	 * Catch-all cho các lỗi server chưa được handle.
 	 */
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Object>> handleException(Exception exception) {

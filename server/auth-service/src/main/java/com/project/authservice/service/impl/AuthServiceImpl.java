@@ -215,18 +215,18 @@ public class AuthServiceImpl implements AuthService {
 			throw new InvalidCredentialsException();
 		}
 
-		// 3. Check isActive == 1 (account must be active to log in)
-		if (account.getIsActive() == null || account.getIsActive() != 1) {
-			log.warn("Login failed: account is inactive for email {}", email);
-			auditLogService.log(account.getId(), "LOGIN_FAILED_INACTIVE_ACCOUNT", servletRequest);
-			throw new AccountInactiveException();
-		}
-
-		// 4. Check registrationCompleted == 1
+		// 3. Check registrationCompleted == 1
 		if (account.getRegistrationCompleted() == null || account.getRegistrationCompleted() != 1) {
 			log.warn("Login failed: account is not verified for email {}", email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_NOT_VERIFIED", servletRequest);
 			throw new AccountNotVerifiedException(account.getId());
+		}
+
+		// 4. Check isActive == 1 (account must be active to log in)
+		if (account.getIsActive() == null || account.getIsActive() != 1) {
+			log.warn("Login failed: account is inactive for email {}", email);
+			auditLogService.log(account.getId(), "LOGIN_FAILED_INACTIVE_ACCOUNT", servletRequest);
+			throw new AccountInactiveException();
 		}
 
 		// 5. Generate JWT
