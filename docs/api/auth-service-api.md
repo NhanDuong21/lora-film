@@ -17,10 +17,15 @@
 
 ## Lịch Sử Chỉnh Sửa
 
+**Ngày:** 20/06/2026
+
+* **Cập nhật Backend:** Đồng bộ request body của hai API `send-otp` và `resend-otp` (chỉ nhận trường `email` thay vì `accountId`).
+* **Cập nhật Backend:** Mở rộng logic `resend-otp` cho nhiều mục đích (FORGOTTEN PASSWORD, LOGIN...) thay vì chỉ giới hạn xác thực tài khoản (REGISTRATION).
+* **Cập nhật API Contract:** Xóa bỏ hoàn toàn trường `token` bị trùng lặp trong cấu trúc phản hồi của API Login và Refresh Token.
+
 **Ngày:** 19/06/2026 | **Người chỉnh sửa:** Trần Hiển Vinh
 
 * **Cập nhật Backend:** Loại bỏ trường `token` trong `JwtResponse.java` để dọn dẹp API Contract (chỉ giữ lại `accessToken`).
-* **Cập nhật Backend:** Đồng bộ tên thuộc tính trong DTO Java `UserProfileResponse` từ `isVerifiedPhone` thành `verifiedPhone` để tránh nhầm lẫn bảo trì.
 
 - **17/06/2026**: Cập nhật các quy tắc validate cho fullName, phoneNumber, password, birthday (giới hạn tuổi >= 13, không ở tương lai) để đồng bộ hoàn toàn với Frontend.
 
@@ -705,7 +710,7 @@ Status: **429 Too Many Requests**
 
 ### 7.6.1. Mục Tiêu API
 
-Gửi lại mã OTP trong trường hợp chưa xác thực đăng ký hoặc hết hạn.
+Gửi lại mã OTP trong trường hợp mã cũ bị hết hạn, chưa nhận được hoặc cần lấy lại mã mới. Dùng chung cho tất cả các mục đích (REGISTRATION, FORGOTTEN PASSWORD, LOGIN...).
 
 | Mục | Nội dung |
 | :--- | :--- |
@@ -783,7 +788,8 @@ Status: **429 Too Many Requests**
 
 ### 7.6.5. Ghi Chú Bảo Mật & Business Rules
 
-* Account gọi API bắt buộc phải tồn tại và chưa được kích hoạt thành công (`registration_completed` = 0).
+* Account gọi API bắt buộc phải tồn tại.
+* Nếu `purpose` là `REGISTRATION` thì tài khoản phải chưa được kích hoạt thành công (`registration_completed` = 0). Các mục đích khác không bị giới hạn.
 * Mỗi lần gọi `Resend OTP`, mã OTP cũ chưa sử dụng sẽ bị thay thế (ghi đè trên Redis) và tự động hết hiệu lực.
 * Không trả mã OTP mới sinh dưới dạng chuỗi rõ ràng (plaintext) qua phản hồi HTTP.
 * Nếu Notification Service chưa sẵn sàng (như trong môi trường DEV/TEST), hệ thống tạm thời chỉ log mã OTP ra Console.

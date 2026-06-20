@@ -125,8 +125,10 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         Account account = accountRepository.findByEmail(email).orElseThrow(AccountNotFoundException::new);
         
-        if (account.getRegistrationCompleted() != null && account.getRegistrationCompleted() == 1) {
-            throw new AccountAlreadyVerifiedException();
+        if ("REGISTRATION".equals(purpose)) {
+            if (account.getRegistrationCompleted() != null && account.getRegistrationCompleted() == 1) {
+                throw new AccountAlreadyVerifiedException();
+            }
         }
 
         return sendOtp(new SendOtpRequest(email, purpose));
