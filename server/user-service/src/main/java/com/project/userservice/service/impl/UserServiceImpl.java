@@ -70,7 +70,7 @@ public class UserServiceImpl implements UserService {
         response.setCccdMasked(user.getCccdMasked());
         response.setProvinceName(user.getProvinceName());
         response.setBirthYear(user.getBirthYear());
-        response.setVerifiedPhone(user.getVerifiedPhone());
+        response.setIsVerifiedPhone(user.getVerifiedPhone());
         return response;
     }
 }

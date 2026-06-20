@@ -23,8 +23,12 @@ public class GlobalExceptionHandler {
 	/**
 	 * Handles invalid birthday format (HTTP 400).
 	 *
-	 * <p>Returns the exact contract shape:
-	 * <pre>{ "success": false, "message": "Birthday must be in YYYY-MM-DD format", "data": null }</pre>
+	 * <p>
+	 * Returns the exact contract shape:
+	 * 
+	 * <pre>
+	 * { "success": false, "message": "Birthday must be in YYYY-MM-DD format", "data": null }
+	 * </pre>
 	 *
 	 * @param exception the birthday format exception
 	 * @return 400 Bad Request
@@ -37,6 +41,36 @@ public class GlobalExceptionHandler {
 		// with no errorCode field – matching the required contract exactly.
 		ApiResponse<Object> response = ApiResponse.failure(exception.getMessage());
 		return ResponseEntity.badRequest().body(response);
+	}
+
+	/**
+	 * Handles specific unverified account errors.
+	 *
+	 * @param exception auth exception
+	 * @return structured error response with accountId
+	 */
+	@ExceptionHandler(AccountNotVerifiedException.class)
+	public ResponseEntity<ApiResponse<Object>> handleAccountNotVerifiedException(AccountNotVerifiedException exception) {
+		log.warn("Auth Exception [{}]: {}", exception.getErrorCode(), exception.getMessage());
+		java.util.Map<String, Long> data = new java.util.HashMap<>();
+		data.put("accountId", exception.getAccountId());
+		ApiResponse<Object> response = new ApiResponse<>(false, exception.getMessage(), exception.getErrorCode(), data, null);
+		return ResponseEntity.status(exception.getStatus()).body(response);
+	}
+
+	/**
+	 * Handles specific OTP rate limit errors.
+	 *
+	 * @param exception auth exception
+	 * @return structured error response with retryAfter
+	 */
+	@ExceptionHandler(OtpRateLimitException.class)
+	public ResponseEntity<ApiResponse<Object>> handleOtpRateLimitException(OtpRateLimitException exception) {
+		log.warn("Auth Exception [{}]: {}", exception.getErrorCode(), exception.getMessage());
+		java.util.Map<String, Long> data = new java.util.HashMap<>();
+		data.put("retryAfter", exception.getRetryAfter());
+		ApiResponse<Object> response = new ApiResponse<>(false, exception.getMessage(), exception.getErrorCode(), data, null);
+		return ResponseEntity.status(exception.getStatus()).body(response);
 	}
 
 	/**
@@ -98,9 +132,11 @@ public class GlobalExceptionHandler {
 	 * @return structured validation error response
 	 */
 	@ExceptionHandler(MethodArgumentNotValidException.class)
-	public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(MethodArgumentNotValidException exception) {
+	public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(
+			MethodArgumentNotValidException exception) {
 		List<ApiResponse.ValidationError> validationErrors = exception.getBindingResult().getFieldErrors().stream()
-				.map(fieldError -> new ApiResponse.ValidationError(fieldError.getField(), fieldError.getDefaultMessage()))
+				.map(fieldError -> new ApiResponse.ValidationError(fieldError.getField(),
+						fieldError.getDefaultMessage()))
 				.collect(Collectors.toList());
 
 		log.warn("Validation failed: {} field errors", validationErrors.size());
@@ -115,7 +151,8 @@ public class GlobalExceptionHandler {
 	 * @return error response
 	 */
 	@ExceptionHandler(ConstraintViolationException.class)
-	public ResponseEntity<ApiResponse<Object>> handleConstraintViolationException(ConstraintViolationException exception) {
+	public ResponseEntity<ApiResponse<Object>> handleConstraintViolationException(
+			ConstraintViolationException exception) {
 		log.warn("Constraint violation: {}", exception.getMessage());
 		List<ApiResponse.ValidationError> validationErrors = exception.getConstraintViolations().stream()
 				.map(violation -> {
@@ -128,11 +165,24 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.badRequest().body(response);
 	}
 
+	@ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+	public ResponseEntity<ApiResponse<Object>> handleHttpRequestMethodNotSupportedException(
+			org.springframework.web.HttpRequestMethodNotSupportedException exception) {
+		log.warn("Method not supported: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), "METHOD_NOT_SUPPORTED");
+		return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+	public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadableException(
+			org.springframework.http.converter.HttpMessageNotReadableException exception) {
+		log.warn("Message not readable: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Invalid JSON format or unreadable request body", "VALIDATION_ERROR");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
 	/**
-	 * Handles unexpected failures.
-	 *
-	 * @param exception unexpected exception
-	 * @return error response
+	 * Catch-all cho các lỗi server chưa được handle.
 	 */
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Object>> handleException(Exception exception) {

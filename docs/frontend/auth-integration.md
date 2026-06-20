@@ -1,5 +1,14 @@
 # Frontend Auth & Real API Integration Specification - LoraFilm
 
+## Lịch sử chỉnh sửa
+
+**Ngày:** 19/06/2026 | **Người chỉnh sửa:** Trần Hiển Vinh
+
+* **Cập nhật Backend:** Bổ sung trường `token` trong `JwtResponse.java` để đồng bộ hoàn toàn với API Contract.
+* **Cập nhật Backend:** Đồng bộ tên thuộc tính trong DTO Java `UserProfileResponse` từ `isVerifiedPhone` thành `verifiedPhone` để tránh nhầm lẫn bảo trì.
+
+---
+
 Tài liệu này mô tả cách React Frontend tích hợp với hệ thống Backend thông qua API Gateway trong dự án LoraFilm.
 
 Tài liệu này phản ánh trạng thái mới của Frontend sau khi đã migrate các màn hình từ UI prototype vào repo chính và chuyển repo thật sang nguyên tắc:
@@ -173,9 +182,10 @@ Chứa các function:
 
 ```js
 register(payload)
-verifyOtp(payload)
-login(payload)
+verifyOtp(accountId, otpCode, purpose)
+login(email, password)
 refreshToken(refreshToken)
+resendOtp(accountId, purpose)
 ```
 
 Mapping API:
@@ -185,6 +195,7 @@ register     -> POST /api/auth/register
 verifyOtp    -> POST /api/auth/verify
 login        -> POST /api/auth/login
 refreshToken -> POST /api/auth/refresh-token
+resendOtp    -> POST /api/auth/resend-otp
 ```
 
 ---
@@ -520,7 +531,8 @@ Request body:
 ```json
 {
   "accountId": 1,
-  "otp": "123456"
+  "otp": "123456",
+  "purpose": "REGISTRATION"
 }
 ```
 
@@ -539,6 +551,25 @@ Error handling:
 AUTH_INVALID_OTP              -> OTP không chính xác.
 AUTH_VERIFICATION_EXPIRED     -> OTP đã hết hạn.
 AUTH_ACCOUNT_NOT_FOUND        -> Không tìm thấy tài khoản.
+```
+
+### 12.1. Verify OTP Resend Flow
+
+Để hỗ trợ người dùng nhận lại OTP nếu chưa nhận được hoặc OTP bị hết hạn:
+
+1. Bổ sung nút **Gửi lại OTP**.
+2. Gọi API `resendOtp(pendingAccountId)`.
+3. Nhận response chứa `expiresIn` (300 giây) và `resendAvailableIn` (60 giây).
+4. Update lại UI và khởi động lại countdown (60 giây cooldown).
+5. Disable nút **Gửi lại OTP** trong thời gian cooldown.
+
+Error mapping khi Resend OTP:
+
+```txt
+AUTH_ACCOUNT_NOT_FOUND        -> Tài khoản không tồn tại.
+AUTH_ACCOUNT_ALREADY_VERIFIED -> Tài khoản đã xác thực rồi.
+OTP_RATE_LIMIT                -> Phản hồi trả kèm `data: { "retryAfter": X }`. Frontend dùng X để setup lại countdown chờ.
+VALIDATION_ERROR              -> Thiếu accountId.
 ```
 
 ---

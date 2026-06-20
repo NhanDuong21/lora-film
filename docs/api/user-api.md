@@ -16,7 +16,7 @@
 
 ## Lịch Sử Chỉnh Sửa
 - **17/06/2026**: Đồng bộ các quy tắc validate của internal create profile API (fullName, phoneNumber) với Auth Service và Frontend.
-- **14/06/2026**: Cập nhật Local URL từ port `8082` sang `8086`. Đổi tên trường trả về từ `isVerifiedPhone` thành `verifiedPhone` (do gỡ bỏ Lombok).
+- **14/06/2026**: Cập nhật Local URL từ port `8082` sang `8086`.
 - **13/06/2026**: Khởi tạo tài liệu đặc tả User Profile APIs.
 
 ---
@@ -224,7 +224,7 @@ Status: `200 OK`
     "cccdMasked": "092******789",
     "provinceName": "Cần Thơ",
     "birthYear": 2005,
-    "verifiedPhone": false
+    "isVerifiedPhone": false
   }
 }
 ```
@@ -243,7 +243,7 @@ Status: `200 OK`
 | cccdMasked        | string  | CCCD đã được che một phần an toàn           |
 | provinceName      | string  | Tỉnh/thành nơi làm thẻ CCCD suy ra từ mã    |
 | birthYear         | number  | Năm sinh suy ra từ CCCD                     |
-| verifiedPhone     | boolean | Trạng thái SĐT đã xác thực hay chưa         |
+| isVerifiedPhone   | boolean | Trạng thái SĐT đã xác thực hay chưa         |
 
 ---
 

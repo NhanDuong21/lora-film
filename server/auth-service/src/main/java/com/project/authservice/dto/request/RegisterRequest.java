@@ -5,25 +5,32 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public class RegisterRequest {
+    @Schema(example = "Nguyen Van A")
     @NotBlank(message = "fullName is required")
     @Size(min = 2, max = 200, message = "fullName length must be between 2 and 200")
     @Pattern(regexp = "^\\s*[a-zA-ZÀ-ỹ]+(\\s+[a-zA-ZÀ-ỹ]+)+\\s*$", message = "The full name must not contain numbers or special characters and must have at least two words.")
     private String fullName;
 
+    @Schema(example = "user@example.com")
     @NotBlank(message = "email is required")
     @Email(message = "Email is invalid")
     @Size(max = 100, message = "email max length is 100")
     private String email;
 
+    @Schema(example = "0901234567")
     @NotBlank(message = "phoneNumber is required")
     @Pattern(regexp = "^0\\d{9}$", message = "phoneNumber format is invalid")
     private String phoneNumber;
 
+    @Schema(example = "092205006789")
     @NotBlank(message = "cccd is required")
     @Pattern(regexp = "^\\d{12}$", message = "CCCD must contain 12 digits")
     private String cccd;
 
+    @Schema(example = "2005-06-12")
     @NotBlank(message = "birthday is required")
     // Strict YYYY-MM-DD pattern: 4-digit year, month 01-12, day 01-31.
     // A deeper calendar check (e.g. Feb 30) is performed in the service layer
@@ -34,6 +41,7 @@ public class RegisterRequest {
     )
     private String birthday;
 
+    @Schema(example = "User@123")
     @NotBlank(message = "Password is required")
     @Size(min = 8, max = 50, message = "password length must be between 8 and 50")
     @Pattern(
