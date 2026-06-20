@@ -2,16 +2,16 @@
 
 ## 1. Thông Tin Chung
 
-| Mục                | Nội dung                                           |
-| ------------------ | -------------------------------------------------- |
-| Service            | `api-gateway`                                      |
-| Feature            | Gateway Routing for Auth Service and User Service  |
-| API liên quan      | Auth API, User API                                 |
-| Issue liên quan    | #53                                               |
-| Người phụ trách    | Trương Hoàng Khang                                |
-| Trạng thái         | Ready for Development / Testing                    |
-| Branch             | `feature/issue-53-api-gateway-auth-user-routes`    |
-| Ngày cập nhật      | 12/06/2026                                        |
+| Mục             | Nội dung                                                    |
+| --------------- | ----------------------------------------------------------- |
+| Service         | `api-gateway`                                               |
+| Feature         | Secure Gateway Routing for Auth Service and User Service    |
+| API liên quan   | Auth API, User API, Internal API Policy                     |
+| Issue liên quan | Secure Internal Routes and Review API Gateway Configuration |
+| Người phụ trách | Trương Hoàng Khang                                          |
+| Trạng thái      | Ready for Review / Testing                                  |
+| Branch          | `fix/issue-secure-internal-gateway-routes`                  |
+| Ngày cập nhật   | 19/06/2026                                                  |
 
 ---
 
@@ -24,9 +24,10 @@ Mục tiêu chính:
 * Đảm bảo Frontend chỉ gọi **một base URL duy nhất** thông qua API Gateway.
 * Route các request Authentication từ Frontend đến `auth-service`.
 * Route các request User/Profile từ Frontend đến `user-service`.
-* Ghi rõ port local của Gateway và các service liên quan.
+* Phân loại rõ route theo nhóm: **Public API**, **Protected API**, **Internal API**.
+* Đảm bảo các endpoint nội bộ như `/internal/users/**` không bị expose qua API Gateway.
 * Làm tài liệu tham chiếu để Frontend, Backend và Tester thống nhất cách gọi API.
-* Hỗ trợ test login/register và user API thông qua Gateway.
+* Hỗ trợ test login/register/profile và kiểm tra bảo mật internal route qua Gateway.
 
 ---
 
@@ -49,6 +50,8 @@ Auth Service: http://localhost:8081
 User Service: http://localhost:8086
 ```
 
+Frontend không được gọi trực tiếp các service port này.
+
 ### 3.3. Request Flow Chính
 
 ```txt
@@ -58,66 +61,173 @@ React Frontend
 → MySQL
 ```
 
+### 3.4. Internal Backend Flow
+
+Các internal flow không đi qua Frontend và không được expose qua API Gateway.
+
+Ví dụ tạo user profile sau khi đăng ký tài khoản:
+
+```txt
+Auth Service
+→ Kafka ACCOUNT_CREATED event
+→ User Service
+→ Create User Profile
+```
+
+Hoặc trong trường hợp backend-to-backend call trực tiếp:
+
+```txt
+Auth Service
+→ http://localhost:8086/internal/users
+→ User Service
+```
+
+Lưu ý: Direct internal call chỉ dành cho backend/internal flow. Frontend và external client không được gọi endpoint này.
+
 ---
 
 ## 4. Danh Sách Port Local
 
-| Thành phần    | Port | Base URL                | Ghi chú                                  |
-| ------------- | ---- | ----------------------- | ---------------------------------------- |
-| Frontend      | 5173 | `http://localhost:5173` | React/Vite local dev server              |
-| API Gateway   | 8080 | `http://localhost:8080` | Frontend gọi API qua Gateway             |
-| Auth Service  | 8081 | `http://localhost:8081` | Xử lý register, login, JWT/authentication |
-| User Service  | 8086 | `http://localhost:8086` | Xử lý user profile và user management    |
-| MySQL         | 3306 | `localhost:3306`        | Database local                           |
+| Thành phần   | Port | Base URL                | Ghi chú                                              |
+| ------------ | ---- | ----------------------- | ---------------------------------------------------- |
+| Frontend     | 5173 | `http://localhost:5173` | React/Vite local dev server                          |
+| Frontend     | 5174 | `http://localhost:5174` | React/Vite local dev server nếu đổi port             |
+| API Gateway  | 8080 | `http://localhost:8080` | Frontend gọi API qua Gateway                         |
+| Auth Service | 8081 | `http://localhost:8081` | Xử lý register, login, JWT/authentication            |
+| User Service | 8086 | `http://localhost:8086` | Xử lý user profile và user management                |
+| MySQL        | 3307 | `localhost:3307`        | Docker host port map tới MySQL container port `3306` |
+| Kafka        | 9092 | `localhost:9092`        | Event broker cho backend internal flow               |
+| Redis        | 6379 | `localhost:6379`        | Cache/session/token nếu service sử dụng              |
+
+Lưu ý: Trong Docker, MySQL container dùng port `3306`, nhưng máy host truy cập qua port `3307` nếu docker compose đang map `3307:3306`.
 
 ---
 
-## 5. Quy Tắc Gọi API Từ Frontend
+## 5. Route Classification
+
+| Route                | Target Service | Type                            | Exposed via Gateway | Authentication        | Expected                                         |
+| -------------------- | -------------- | ------------------------------- | ------------------- | --------------------- | ------------------------------------------------ |
+| `/api/auth/**`       | `auth-service` | Public / Protected tùy endpoint | Yes                 | Tùy endpoint          | Register/Login hoạt động qua Gateway             |
+| `/api/users/**`      | `user-service` | Protected API                   | Yes                 | Bearer JWT            | User/Profile API hoạt động qua Gateway           |
+| `/internal/users/**` | `user-service` | Internal API                    | No                  | Internal backend only | Gateway trả `404 Not Found` hoặc `403 Forbidden` |
+
+---
+
+## 6. Quy Tắc Gọi API Từ Frontend
 
 Frontend **chỉ được gọi API thông qua API Gateway**.
 
-### 5.1. Đúng
+### 6.1. Đúng
 
 ```txt
 POST http://localhost:8080/api/auth/register
 POST http://localhost:8080/api/auth/login
-GET  http://localhost:8080/api/users/{id}
+POST http://localhost:8080/api/auth/verify
+POST http://localhost:8080/api/auth/refresh-token
+GET  http://localhost:8080/api/users/{accountId}
 ```
 
-### 5.2. Không Đúng
+### 6.2. Không Đúng
 
-Frontend không gọi trực tiếp service nội bộ:
+Frontend không gọi trực tiếp service port:
 
 ```txt
 POST http://localhost:8081/api/auth/register
 POST http://localhost:8081/api/auth/login
-GET  http://localhost:8086/api/users/{id}
+GET  http://localhost:8086/api/users/{accountId}
 ```
 
-Các direct URL chỉ dùng cho Backend developer debug hoặc test service độc lập.
+Frontend không gọi internal API:
+
+```txt
+POST http://localhost:8080/internal/users
+POST http://localhost:8086/internal/users
+```
+
+Các direct service URL chỉ dùng cho Backend developer debug hoặc test service độc lập.
 
 ---
 
-## 6. Route `/api/auth/**` Đến Auth Service
+## 7. Public API, Protected API, Internal API
 
-### 6.1. Mục Tiêu
+### 7.1. Public API
 
-Route này dùng để chuyển toàn bộ request liên quan đến Authentication từ API Gateway sang `auth-service`.
+Public API là API được phép gọi từ Frontend hoặc external client mà không cần đăng nhập, nếu nghiệp vụ cho phép.
 
-### 6.2. Route Mapping
+Ví dụ:
 
-| Gateway Path  | Target Service | Target URL              | Mô tả                         |
-| ------------- | -------------- | ----------------------- | ----------------------------- |
-| `/api/auth/**` | `auth-service` | `http://localhost:8081` | Register, login, auth-related |
+```txt
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/verify
+```
 
-### 6.3. Endpoint Chính
+### 7.2. Protected API
 
-| Method | Gateway Endpoint          | Target Endpoint                 | Mô tả              |
-| ------ | ------------------------- | ------------------------------- | ------------------ |
-| POST   | `/api/auth/register`      | `http://localhost:8081/api/auth/register` | Đăng ký tài khoản |
-| POST   | `/api/auth/login`         | `http://localhost:8081/api/auth/login`    | Đăng nhập          |
+Protected API là API được phép gọi từ Frontend hoặc external client thông qua Gateway, nhưng phải có token hợp lệ.
 
-### 6.4. Request Flow
+Ví dụ:
+
+```txt
+GET /api/users/{accountId}
+PUT /api/users/{accountId}
+GET /api/users/me
+```
+
+Các request protected API cần gửi header:
+
+```txt
+Authorization: Bearer <authToken>
+```
+
+### 7.3. Internal API
+
+Internal API là API chỉ dành cho backend/internal flow, không dành cho Frontend hoặc external client.
+
+Ví dụ:
+
+```txt
+POST /internal/users
+```
+
+Internal API không được expose qua API Gateway.
+
+Nếu backend cần tạo user profile sau khi đăng ký tài khoản, flow ưu tiên là Kafka event:
+
+```txt
+Auth Service
+→ publish ACCOUNT_CREATED event
+→ Kafka
+→ User Service consume event
+→ create user profile
+```
+
+Nếu cần backend-to-backend call trực tiếp, service phải gọi direct service URL hoặc internal network URL, không đi qua Gateway public route.
+
+---
+
+## 8. Route `/api/auth/**` Đến Auth Service
+
+### 8.1. Mục Tiêu
+
+Route này dùng để chuyển request liên quan đến Authentication từ API Gateway sang `auth-service`.
+
+### 8.2. Route Mapping
+
+| Gateway Path   | Target Service | Target URL              | Type                            | Mô tả                                                         |
+| -------------- | -------------- | ----------------------- | ------------------------------- | ------------------------------------------------------------- |
+| `/api/auth/**` | `auth-service` | `http://localhost:8081` | Public / Protected tùy endpoint | Register, verify OTP, login, refresh token, auth-related APIs |
+
+### 8.3. Endpoint Chính
+
+| Method | Gateway Endpoint          | Target Endpoint                                | Type                    | Mô tả                |
+| ------ | ------------------------- | ---------------------------------------------- | ----------------------- | -------------------- |
+| POST   | `/api/auth/register`      | `http://localhost:8081/api/auth/register`      | Public                  | Đăng ký tài khoản    |
+| POST   | `/api/auth/verify`        | `http://localhost:8081/api/auth/verify`        | Public                  | Xác thực OTP         |
+| POST   | `/api/auth/login`         | `http://localhost:8081/api/auth/login`         | Public                  | Đăng nhập            |
+| POST   | `/api/auth/refresh-token` | `http://localhost:8081/api/auth/refresh-token` | Protected / Token-based | Làm mới access token |
+
+### 8.4. Request Flow
 
 ```txt
 Frontend
@@ -130,53 +240,186 @@ Frontend
 
 ---
 
-## 7. Route `/api/users/**` Đến User Service
+## 9. Route `/api/users/**` Đến User Service
 
-### 7.1. Mục Tiêu
+### 9.1. Mục Tiêu
 
 Route này dùng để chuyển các request liên quan đến user profile hoặc user management từ API Gateway sang `user-service`.
 
-### 7.2. Route Mapping
+Đây là **Protected API**, Frontend được gọi nhưng phải có JWT token hợp lệ.
 
-| Gateway Path   | Target Service | Target URL              | Mô tả                              |
-| -------------- | -------------- | ----------------------- | ---------------------------------- |
-| `/api/users/**` | `user-service` | `http://localhost:8086` | User profile, user management APIs |
+### 9.2. Route Mapping
 
-### 7.3. Endpoint Dự Kiến
+| Gateway Path    | Target Service | Target URL              | Type          | Mô tả                              |
+| --------------- | -------------- | ----------------------- | ------------- | ---------------------------------- |
+| `/api/users/**` | `user-service` | `http://localhost:8086` | Protected API | User profile, user management APIs |
 
-| Method | Gateway Endpoint       | Target Endpoint              | Mô tả                         |
-| ------ | ---------------------- | ---------------------------- | ----------------------------- |
-| GET    | `/api/users/{id}`      | `http://localhost:8086/api/users/{id}`      | Lấy thông tin user theo ID    |
-| GET    | `/api/users/me`        | `http://localhost:8086/api/users/me`        | Lấy thông tin user hiện tại   |
-| PUT    | `/api/users/{id}`      | `http://localhost:8086/api/users/{id}`      | Cập nhật thông tin user       |
+### 9.3. Endpoint Dự Kiến
 
-> Lưu ý: Endpoint cụ thể phụ thuộc vào trạng thái implement của `user-service`. Nếu User Service chưa hoàn chỉnh, chỉ test các endpoint đã sẵn sàng.
+| Method | Gateway Endpoint         | Target Endpoint                               | Auth Required | Mô tả                             |
+| ------ | ------------------------ | --------------------------------------------- | ------------- | --------------------------------- |
+| GET    | `/api/users/{accountId}` | `http://localhost:8086/api/users/{accountId}` | Yes           | Lấy thông tin user theo accountId |
+| GET    | `/api/users/me`          | `http://localhost:8086/api/users/me`          | Yes           | Lấy thông tin user hiện tại       |
+| PUT    | `/api/users/{accountId}` | `http://localhost:8086/api/users/{accountId}` | Yes           | Cập nhật thông tin user           |
+
+Lưu ý: Endpoint cụ thể phụ thuộc vào trạng thái implement của `user-service`. Nếu User Service chưa hoàn chỉnh, chỉ test các endpoint đã sẵn sàng.
+
+### 9.4. Request Flow
+
+```txt
+Frontend
+→ GET http://localhost:8080/api/users/{accountId}
+→ API Gateway
+→ http://localhost:8086/api/users/{accountId}
+→ User Service xử lý
+→ API Gateway trả response về Frontend
+```
+
+Request cần header:
+
+```txt
+Authorization: Bearer <authToken>
+```
 
 ---
 
-## 8. Route `/internal/users/**` Nếu Cần Test Nội Bộ
+## 10. Internal Routes Policy
 
-### 8.1. Mục Tiêu
+### 10.1. Mục Tiêu
 
-Route này chỉ dùng khi cần test nội bộ giữa các service hoặc test riêng User Service thông qua Gateway.
+Các endpoint `/internal/**` chỉ dành cho backend/internal flow.
 
-### 8.2. Route Mapping
+API Gateway không được expose các route internal ra ngoài cho Frontend hoặc External Client gọi.
 
-| Gateway Path        | Target Service | Target URL              | Mục đích              |
-| ------------------- | -------------- | ----------------------- | --------------------- |
-| `/internal/users/**` | `user-service` | `http://localhost:8086` | Internal/debug testing |
+### 10.2. Internal User Route
 
-### 8.3. Quy Ước Sử Dụng
+| Path                 | Type         | Exposed via Gateway | Expected Gateway Result              |
+| -------------------- | ------------ | ------------------- | ------------------------------------ |
+| `/internal/users/**` | Internal API | No                  | `404 Not Found` hoặc `403 Forbidden` |
 
-* Không dùng route `/internal/users/**` cho Frontend production flow.
-* Chỉ dùng khi Backend cần test nhanh User Service thông qua Gateway.
-* Có thể disable hoặc giới hạn route này sau khi hoàn tất testing.
+### 10.3. Quy Ước Sử Dụng
+
+* Frontend không được gọi `/internal/users`.
+* External client không được gọi `/internal/users` qua API Gateway.
+* Không thêm route `/internal/**` vào API Gateway nếu chưa có security design rõ ràng.
+* Nếu cần giữ route dev-only, route đó phải được bảo vệ bằng security filter, internal token hoặc profile cấu hình riêng.
+* Production config không được expose `/internal/**`.
+* Backend service nếu cần giao tiếp nội bộ thì dùng Kafka/event flow hoặc direct service URL trong internal network.
+
+### 10.4. Expected Result Sau Khi Fix
+
+Request:
+
+```txt
+POST http://localhost:8080/internal/users
+```
+
+Expected:
+
+```txt
+404 Not Found
+```
+
+hoặc:
+
+```txt
+403 Forbidden
+```
+
+Không được trả về:
+
+```txt
+200 OK
+201 Created
+```
+
+### 10.5. Response Mẫu Nếu Dùng Internal Block Filter
+
+Nếu Gateway có filter chặn `/internal/**`, response có thể là:
+
+```json
+{
+  "success": false,
+  "status": 403,
+  "errorCode": "INTERNAL_API_NOT_EXPOSED",
+  "message": "This endpoint is internal and is not exposed through API Gateway.",
+  "path": "/internal/users",
+  "timestamp": "2026-06-19T17:02:08.382Z"
+}
+```
+
+Nếu không dùng filter, Gateway có thể trả `404 Not Found`. Cả hai kết quả đều hợp lệ theo acceptance criteria.
 
 ---
 
-## 9. Cấu Hình Route Đề Xuất Cho Spring Cloud Gateway
+## 11. Cấu Hình Route Spring Cloud Gateway
 
-Có thể cấu hình trong `api-gateway/src/main/resources/application.yml` như sau:
+Project hiện tại có thể dùng `application.properties` hoặc `application.yml`.
+
+### 11.1. Cấu Hình `application.properties`
+
+File:
+
+```txt
+api-gateway/src/main/resources/application.properties
+```
+
+Cấu hình route đề xuất:
+
+```properties
+server.port=8080
+
+spring.application.name=api-gateway
+
+# =========================================================
+# Route: auth-service
+# Public / Protected APIs depending on endpoint
+# =========================================================
+spring.cloud.gateway.routes[0].id=auth-service
+spring.cloud.gateway.routes[0].uri=http://localhost:8081
+spring.cloud.gateway.routes[0].predicates[0]=Path=/api/auth/**
+
+# =========================================================
+# Route: user-service
+# Protected API for frontend user/profile operations
+# =========================================================
+spring.cloud.gateway.routes[1].id=user-service
+spring.cloud.gateway.routes[1].uri=http://localhost:8086
+spring.cloud.gateway.routes[1].predicates[0]=Path=/api/users/**
+
+# =========================================================
+# CORS Configuration
+# Frontend local development origins
+# =========================================================
+spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedOrigins=http://localhost:5173,http://localhost:5174
+spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedMethods=GET,POST,PUT,DELETE,OPTIONS
+spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedHeaders=*
+spring.cloud.gateway.globalcors.cors-configurations.[/**].allowCredentials=true
+
+spring.cloud.gateway.default-filters[0].name=DedupeResponseHeader
+spring.cloud.gateway.default-filters[0].args.name=Access-Control-Allow-Origin Access-Control-Allow-Credentials
+spring.cloud.gateway.default-filters[0].args.strategy=RETAIN_UNIQUE
+
+# =========================================================
+# Internal Routes Policy
+# Do NOT expose /internal/** routes through API Gateway.
+#
+# Removed:
+# - /internal/users/**
+# =========================================================
+```
+
+Không được cấu hình route sau:
+
+```properties
+spring.cloud.gateway.routes[x].id=internal-user-service
+spring.cloud.gateway.routes[x].uri=http://localhost:8086
+spring.cloud.gateway.routes[x].predicates[0]=Path=/internal/users/**
+```
+
+### 11.2. Cấu Hình `application.yml`
+
+Nếu project dùng YAML, cấu hình tương đương:
 
 ```yml
 server:
@@ -199,70 +442,90 @@ spring:
           predicates:
             - Path=/api/users/**
 
-        - id: internal-user-service
-          uri: http://localhost:8086
-          predicates:
-            - Path=/internal/users/**
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"
+              - "http://localhost:5174"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+
+      default-filters:
+        - name: DedupeResponseHeader
+          args:
+            name: Access-Control-Allow-Origin Access-Control-Allow-Credentials
+            strategy: RETAIN_UNIQUE
 ```
 
-> Nếu project đang dùng Java Config thay vì `application.yml`, cần giữ nguyên logic mapping tương đương với các route trên.
+Không được thêm route sau:
+
+```yml
+- id: internal-user-service
+  uri: http://localhost:8086
+  predicates:
+    - Path=/internal/users/**
+```
 
 ---
 
-## 10. Cấu Hình CORS Cho Frontend Local
+## 12. Cấu Hình CORS Cho Frontend Local
 
-### 10.1. Mục Tiêu
+### 12.1. Mục Tiêu
 
-Cho phép Frontend local tại `http://localhost:5173` gọi API qua Gateway `http://localhost:8080`.
+Cho phép Frontend local tại `http://localhost:5173` hoặc `http://localhost:5174` gọi API qua Gateway `http://localhost:8080`.
 
-### 10.2. CORS Origin Được Cho Phép
+### 12.2. CORS Origin Được Cho Phép
 
 ```txt
 http://localhost:5173
+http://localhost:5174
 ```
 
-### 10.3. Headers Được Cho Phép
+### 12.3. Headers Được Cho Phép
 
 ```txt
 Content-Type
 Authorization
 ```
 
-### 10.4. Methods Được Cho Phép
+Hiện tại local config có thể dùng:
 
 ```txt
-GET, POST, PUT, PATCH, DELETE, OPTIONS
+*
 ```
 
-### 10.5. Cấu Hình CORS Đề Xuất
+Tuy nhiên production config không nên dùng wildcard nếu không cần thiết.
 
-```yml
-spring:
-  cloud:
-    gateway:
-      globalcors:
-        corsConfigurations:
-          '[/**]':
-            allowedOrigins:
-              - "http://localhost:5173"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - PATCH
-              - DELETE
-              - OPTIONS
-            allowedHeaders:
-              - Content-Type
-              - Authorization
-            allowCredentials: true
+### 12.4. Methods Được Cho Phép
+
+```txt
+GET, POST, PUT, DELETE, OPTIONS
 ```
+
+Nếu sau này API cần `PATCH`, có thể bổ sung `PATCH` vào allowed methods.
+
+### 12.5. Production CORS Rule
+
+Trong production config:
+
+* Không dùng wildcard origin nếu không cần thiết.
+* Chỉ allow domain frontend chính thức.
+* Giữ `allowCredentials=true` nếu frontend cần gửi credentials/token theo policy.
+* Kiểm tra không làm hỏng Register/Login/Profile flow.
 
 ---
 
-## 11. Test Auth API Qua Gateway
+## 13. Test Auth API Qua Gateway
 
-### 11.1. Điều Kiện Trước Khi Test
+### 13.1. Điều Kiện Trước Khi Test
 
 Đảm bảo các service đã chạy:
 
@@ -283,7 +546,7 @@ Auth Service: http://localhost:8081
 API Gateway : http://localhost:8080
 ```
 
-### 11.2. Test Register Qua Gateway
+### 13.2. Test Register Qua Gateway
 
 ```bash
 curl -X POST http://localhost:8080/api/auth/register \
@@ -298,7 +561,19 @@ curl -X POST http://localhost:8080/api/auth/register \
   }'
 ```
 
-### 11.3. Response Register Thành Công Dự Kiến
+Expected:
+
+```txt
+200 OK
+```
+
+hoặc theo implementation hiện tại:
+
+```txt
+201 Created
+```
+
+Response mẫu:
 
 ```json
 {
@@ -312,7 +587,7 @@ curl -X POST http://localhost:8080/api/auth/register \
 }
 ```
 
-### 11.4. Test Login Qua Gateway
+### 13.3. Test Login Qua Gateway
 
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
@@ -323,7 +598,13 @@ curl -X POST http://localhost:8080/api/auth/login \
   }'
 ```
 
-### 11.5. Response Login Thành Công Dự Kiến
+Expected:
+
+```txt
+200 OK
+```
+
+Response mẫu:
 
 ```json
 {
@@ -331,18 +612,21 @@ curl -X POST http://localhost:8080/api/auth/login \
   "message": "Login successfully",
   "data": {
     "token": "jwt-token-here",
+    "accessToken": "jwt-token-here",
+    "refreshToken": "refresh-token-here",
     "tokenType": "Bearer",
     "email": "user@example.com",
-    "role": "CUSTOMER"
+    "role": "CUSTOMER",
+    "expiresIn": 86400
   }
 }
 ```
 
 ---
 
-## 12. Test User API Qua Gateway
+## 14. Test User API Qua Gateway
 
-### 12.1. Điều Kiện Trước Khi Test
+### 14.1. Điều Kiện Trước Khi Test
 
 Đảm bảo các service đã chạy:
 
@@ -363,56 +647,232 @@ User Service: http://localhost:8086
 API Gateway : http://localhost:8080
 ```
 
-### 12.2. Test User API Không Cần Token
+### 14.2. Test User Profile API Cần Token
 
-Nếu User Service có endpoint public hoặc health check:
-
-```bash
-curl -X GET http://localhost:8080/api/users/health
-```
-
-Hoặc:
+Dùng token lấy từ Login API:
 
 ```bash
-curl -X GET http://localhost:8080/api/users/1
-```
-
-### 12.3. Test User API Cần Token
-
-Nếu endpoint yêu cầu đăng nhập, dùng token lấy từ Login API:
-
-```bash
-curl -X GET http://localhost:8080/api/users/me \
+curl -X GET http://localhost:8080/api/users/15 \
   -H "Authorization: Bearer <jwt-token-here>"
 ```
 
-> Nếu User Service chưa sẵn sàng, ghi rõ trong MR/test note: `User Service route configured, pending endpoint implementation/testing`.
+Expected:
+
+```txt
+200 OK
+```
+
+Response mẫu:
+
+```json
+{
+  "success": true,
+  "message": "User profile retrieved successfully",
+  "data": {
+    "accountId": 15,
+    "fullName": "Nguyen Van A",
+    "phoneNumber": "0901234567",
+    "gender": "MALE",
+    "birthday": "2005-06-12",
+    "cccdMasked": "092******789",
+    "provinceName": "Cần Thơ",
+    "birthYear": 2005,
+    "verifiedPhone": false
+  }
+}
+```
+
+Lưu ý: Nếu User Service chưa sẵn sàng hoặc chưa có data user tương ứng, ghi rõ trong MR/test note.
 
 ---
 
-## 13. Acceptance Criteria
+## 15. Test Internal Route Bị Chặn
 
-| STT | Tiêu chí | Trạng thái |
-| --- | -------- | ---------- |
-| 1 | Có file `docs/api/api-gateway-routes.md` | Done |
-| 2 | Route `/api/auth/**` đến `auth-service` port `8081` | To Verify |
-| 3 | Route `/api/users/**` đến `user-service` port `8086` | To Verify |
-| 4 | Route `/internal/users/**` được cấu hình nếu cần test nội bộ | Optional |
-| 5 | CORS cho Frontend local `http://localhost:5173` | To Verify |
-| 6 | Test register qua Gateway | To Verify |
-| 7 | Test login qua Gateway | To Verify |
-| 8 | Test user API qua Gateway nếu User Service đã sẵn sàng | To Verify |
-| 9 | Tài liệu ghi rõ port local từng service | Done |
+### 15.1. Mục Tiêu
+
+Đảm bảo `/internal/users/**` không còn public qua API Gateway.
+
+### 15.2. Request Test
+
+```bash
+curl -X POST http://localhost:8080/internal/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accountId": 999,
+    "fullName": "Unauthorized Test",
+    "phoneNumber": "0900000000"
+  }'
+```
+
+### 15.3. Expected Result
+
+Kết quả hợp lệ:
+
+```txt
+404 Not Found
+```
+
+hoặc:
+
+```txt
+403 Forbidden
+```
+
+Không được trả về:
+
+```txt
+200 OK
+201 Created
+```
+
+### 15.4. Ý Nghĩa
+
+Nếu response là `404 Not Found`, nghĩa là Gateway không có route `/internal/users/**`.
+
+Nếu response là `403 Forbidden`, nghĩa là Gateway có security filter chủ động chặn `/internal/**`.
+
+Cả hai đều hợp lệ theo security requirement.
+
+Nếu response là `200 OK` hoặc `201 Created`, nghĩa là internal route vẫn đang bị expose qua Gateway và issue chưa được fix.
 
 ---
 
-## 14. Notes Cho Frontend
+## 16. Forbidden String Check
 
-Frontend nên cấu hình Axios base URL như sau:
+### 16.1. Kiểm Tra Frontend Không Gọi Internal API
+
+PowerShell:
+
+```powershell
+Get-ChildItem -Path client\src -Recurse -File |
+Select-String -SimpleMatch -Pattern "/internal/users"
+```
+
+Expected:
+
+```txt
+No result
+```
+
+### 16.2. Kiểm Tra Frontend Không Gọi Trực Tiếp Service Port
+
+PowerShell:
+
+```powershell
+Get-ChildItem -Path client\src -Recurse -File |
+Select-String -SimpleMatch -Pattern "localhost:8081","localhost:8086"
+```
+
+Expected:
+
+```txt
+No result
+```
+
+### 16.3. Kiểm Tra Gateway Không Còn Internal Route
+
+PowerShell:
+
+```powershell
+Get-ChildItem -Path api-gateway\src\main\resources -Recurse -File |
+Select-String -SimpleMatch -Pattern "Path=/internal/users", "/internal/users/**", "internal-user-service"
+```
+
+Expected:
+
+```txt
+No result
+```
+
+Nếu các chuỗi này chỉ xuất hiện trong tài liệu Markdown để mô tả policy/test case thì không sao. Không được xuất hiện trong file config chạy thật như `application.properties` hoặc `application.yml`.
+
+---
+
+## 17. Sprint 2 Service Route Pattern
+
+Các service route Sprint 2 chỉ được expose khi API đã có service contract rõ ràng.
+
+Pattern dự kiến:
+
+```txt
+/api/movies/**
+/api/bookings/**
+/api/payments/**
+/api/promotions/**
+/api/scores/**
+/api/notifications/**
+/api/analytics/**
+```
+
+Quy tắc:
+
+* Chỉ expose API public/protected.
+* Không expose `/internal/**`.
+* Mỗi route mới phải có owner/service contract.
+* Protected API phải có security design rõ ràng.
+* Route mới phải được cập nhật vào tài liệu này.
+
+Không được expose:
+
+```txt
+/internal/**
+```
+
+---
+
+## 18. Route Review Checklist
+
+Trước khi thêm route mới vào Gateway, cần kiểm tra:
+
+```txt
+[ ] Route có owner service rõ ràng
+[ ] Route có service API contract
+[ ] Route đã được phân loại Public / Protected / Internal
+[ ] Public API không chứa dữ liệu nhạy cảm
+[ ] Protected API có JWT/security design
+[ ] Internal API không expose qua Gateway
+[ ] Frontend có nhu cầu dùng route này
+[ ] CORS impact đã được kiểm tra
+[ ] Validation steps đã được cập nhật
+[ ] Documentation đã được cập nhật
+```
+
+---
+
+## 19. Acceptance Criteria
+
+| STT | Tiêu chí                                                                           | Trạng thái |
+| --- | ---------------------------------------------------------------------------------- | ---------- |
+| 1   | Có file `docs/api/api-gateway-routes.md`                                           | Done       |
+| 2   | Route `/internal/users/**` không còn public qua Gateway                            | Done       |
+| 3   | External client gọi `/internal/users/**` nhận `404 Not Found` hoặc `403 Forbidden` | Done       |
+| 4   | Route `/api/auth/**` đến `auth-service` port `8081`                                | To Verify  |
+| 5   | Route `/api/users/**` đến `user-service` port `8086`                               | To Verify  |
+| 6   | `/api/auth/login` vẫn hoạt động qua Gateway                                        | To Verify  |
+| 7   | `/api/users/{accountId}` vẫn hoạt động qua Gateway với token                       | To Verify  |
+| 8   | Frontend không gọi trực tiếp `localhost:8081` hoặc `localhost:8086`                | To Verify  |
+| 9   | Frontend không gọi `/internal/users`                                               | To Verify  |
+| 10  | CORS cho Frontend local `http://localhost:5173` không bị hỏng                      | To Verify  |
+| 11  | Gateway routes được phân loại rõ Public / Protected / Internal                     | Done       |
+| 12  | Documentation được cập nhật                                                        | Done       |
+| 13  | E2E Auth/Register/Profile flow vẫn pass                                            | To Verify  |
+| 14  | MR target vào `develop`                                                            | To Do      |
+
+---
+
+## 20. Notes Cho Frontend
+
+Frontend nên cấu hình Axios base URL bằng biến môi trường:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+Ví dụ tạo Axios instance:
 
 ```js
 const api = axios.create({
-  baseURL: "http://localhost:8080",
+  baseURL: import.meta.env.VITE_API_BASE_URL,
   headers: {
     "Content-Type": "application/json"
   }
@@ -431,47 +891,104 @@ api.post("/api/auth/login", {
 Ví dụ gọi User API có token:
 
 ```js
-api.get("/api/users/me", {
+api.get("/api/users/15", {
   headers: {
     Authorization: `Bearer ${localStorage.getItem("authToken")}`
   }
 });
 ```
 
+Frontend không được gọi:
+
+```txt
+http://localhost:8081
+http://localhost:8086
+/internal/users
+```
+
 ---
 
-## 15. Scope Chưa Bao Gồm
+## 21. Scope Chưa Bao Gồm
 
 Các nội dung sau không nằm trong scope của issue này:
 
-* Implement logic Register/Login trong Auth Service.
-* Implement đầy đủ User Profile API trong User Service.
-* JWT validation filter tại Gateway nếu chưa có issue riêng.
-* Service discovery bằng Eureka/Consul.
-* Docker Compose cho toàn bộ microservices.
-* Deploy Gateway lên server thật.
+* Không implement service APIs Sprint 2.
+* Không redesign authentication system.
+* Không thay đổi Kafka event.
+* Không implement service discovery.
+* Không deploy production Gateway trong issue này.
+* Không thêm rate limiting nếu chưa có requirement.
+* Không implement đầy đủ JWT validation filter tại Gateway nếu chưa có issue riêng.
 
 ---
 
-## 16. Ghi Chú Khi Merge Request
+## 22. Ghi Chú Khi Merge Request
 
 Branch thực hiện:
 
 ```txt
-feature/issue-53-api-gateway-auth-user-routes
+fix/issue-secure-internal-gateway-routes
+```
+
+MR target:
+
+```txt
+develop
 ```
 
 MR nên ghi rõ:
 
 ```txt
-Closes #53
+Secure internal routes by removing /internal/users/** from API Gateway.
 ```
 
 Checklist MR:
 
-* Đã thêm/cập nhật `docs/api/api-gateway-routes.md`.
-* Đã cấu hình route Auth Service qua Gateway.
-* Đã cấu hình route User Service qua Gateway.
-* Đã kiểm tra CORS với Frontend local.
-* Đã test Login/Register qua Gateway hoặc ghi rõ lý do chưa test được.
-* Đã test User API qua Gateway nếu User Service đã sẵn sàng.
+```txt
+[ ] Đã xóa route /internal/users/** khỏi Gateway config
+[ ] Đã đổi route /api/users/** thành index hợp lệ nếu dùng application.properties
+[ ] Đã test POST http://localhost:8080/internal/users trả 404 hoặc 403
+[ ] Đã test /api/auth/login vẫn hoạt động
+[ ] Đã test /api/users/{accountId} vẫn hoạt động với token
+[ ] Đã kiểm tra Frontend không gọi /internal/users
+[ ] Đã kiểm tra Frontend không gọi trực tiếp localhost:8081/8086
+[ ] Đã kiểm tra CORS với Frontend local
+[ ] Đã cập nhật docs/api/api-gateway-routes.md
+[ ] Đã cập nhật docs/api/user-service-api.md nếu cần
+[ ] Đã cập nhật docs/frontend/auth-integration.md nếu cần
+[ ] Đã cập nhật docs/test/auth-flow-test-cases.md nếu cần
+[ ] MR target vào develop
+```
+
+---
+
+## 23. Summary
+
+API Gateway hiện chỉ expose các route public/protected cần thiết cho Frontend:
+
+```txt
+/api/auth/**
+/api/users/**
+```
+
+Internal route sau đã bị loại khỏi API Gateway:
+
+```txt
+/internal/users/**
+```
+
+Kết quả mong đợi:
+
+```txt
+POST http://localhost:8080/internal/users
+→ 404 Not Found
+```
+
+hoặc:
+
+```txt
+POST http://localhost:8080/internal/users
+→ 403 Forbidden
+```
+
+Điều này đảm bảo internal/backend API không bị public ra ngoài thông qua Gateway, đồng thời Register/Login/Profile flow vẫn tiếp tục đi qua API Gateway theo đúng kiến trúc.

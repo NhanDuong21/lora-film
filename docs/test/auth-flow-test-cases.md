@@ -251,18 +251,107 @@ Quá trình đối chiếu giữa thiết kế lý thuyết trong các tài li�
 - **Mức độ ảnh hưởng**: Trung bình. Phía Frontend đã chủ động khắc phục bằng cách sử dụng toán tử logic dự phòng data.accessToken || data.token || "" trong tệp xử lý lưu trữ authStorage.js, giúp giao diện không bị đổ vỡ. Tuy nhiên, tính nhất quán của API Contract vẫn bị vi phạm.
 
 ### Lệch Hợp Đồng 2: Lộ Tuyến Đường Dịch Vụ Nội Bộ Tại API Gateway (Security Route Exposure)
-- **Đường dẫn Endpoint**: /internal/users/** (Dịch vụ user-service)
-- **Tệp nguồn liên quan**: api-gateway/src/main/resources/application.properties
-- **Mô tả điểm sai lệch**:
-  - Theo tài liệu giao ước docs/api/user-api.md (mục 4.1 và 4.2), endpoint /internal/users là một API nội bộ (Internal API) dành riêng cho việc giao tiếp giữa các dịch vụ phía sau máy chủ (như auth-service gọi sang để tạo Profile). Tài liệu nêu rõ: "API Gateway không được phép expose endpoint này ra ngoài cho Frontend hay External Client gọi."
-  - Tuy nhiên, trong tệp cấu hình của API Gateway thực tế, tuyến đường này vẫn được khai báo công khai cho phép truy cập từ bên ngoài:
-    ```properties
-    # Route: internal user-service
-    spring.cloud.gateway.routes[1].id=internal-user-service
-    spring.cloud.gateway.routes[1].uri=http://localhost:8086
-    spring.cloud.gateway.routes[1].predicates[0]=Path=/internal/users/**
-    ```
-- **Mức độ ảnh hưởng**: Cao. Bất kỳ đối tượng bên ngoài nào cũng có thể gửi yêu cầu HTTP trực tiếp tới cổng http://localhost:8080/internal/users thông qua API Gateway để tùy ý tạo lập hoặc can thiệp dữ liệu người dùng mà không qua kiểm tra quyền hạn của Gateway. Đây là một lỗ hổng bảo mật nghiêm trọng.
+
+> **Trạng thái xử lý: ĐÃ FIX**
+> Route `/internal/users/**` đã được gỡ khỏi API Gateway.
+> Kết quả kiểm thử hiện tại: `POST http://localhost:8080/internal/users` trả về `404 Not Found` hoặc `403 Forbidden`, không còn trả về `201 Created`.
+
+* **Đường dẫn Endpoint**: `/internal/users/**` - Dịch vụ `user-service`
+* **Tệp nguồn liên quan**: `api-gateway/src/main/resources/application.properties`
+
+#### Mô tả điểm sai lệch trước khi fix
+
+Theo tài liệu giao ước `docs/api/user-api.md` mục 4.1 và 4.2, endpoint `/internal/users` là một **Internal API** chỉ dành cho giao tiếp nội bộ giữa các service backend, ví dụ `auth-service` hoặc Kafka-driven backend flow tạo User Profile sau khi đăng ký tài khoản thành công.
+
+Tài liệu nêu rõ: API Gateway không được expose endpoint này ra ngoài cho Frontend hoặc External Client gọi.
+
+Tuy nhiên, trước khi fix, trong tệp cấu hình API Gateway có khai báo route sau:
+
+```properties
+# Route: internal user-service
+spring.cloud.gateway.routes[1].id=internal-user-service
+spring.cloud.gateway.routes[1].uri=http://localhost:8086
+spring.cloud.gateway.routes[1].predicates[0]=Path=/internal/users/**
+```
+
+Điều này khiến external client có thể gọi trực tiếp:
+
+```txt
+POST http://localhost:8080/internal/users
+```
+
+và request vẫn được Gateway chuyển tiếp vào `user-service`.
+
+#### Mức độ ảnh hưởng trước khi fix
+
+**Cao.** Bất kỳ client bên ngoài nào cũng có thể gửi request tới API Gateway để truy cập endpoint nội bộ `/internal/users`, từ đó có nguy cơ tạo hoặc can thiệp dữ liệu User Profile mà không đi qua flow đăng ký chính thức và không qua kiểm soát bảo mật phù hợp.
+
+#### Cách xử lý đã thực hiện
+
+Đã gỡ bỏ route internal khỏi API Gateway:
+
+```properties
+# Removed:
+# spring.cloud.gateway.routes[x].id=internal-user-service
+# spring.cloud.gateway.routes[x].uri=http://localhost:8086
+# spring.cloud.gateway.routes[x].predicates[0]=Path=/internal/users/**
+```
+
+Gateway hiện chỉ giữ các route public/protected hợp lệ:
+
+```properties
+spring.cloud.gateway.routes[0].id=auth-service
+spring.cloud.gateway.routes[0].uri=http://localhost:8081
+spring.cloud.gateway.routes[0].predicates[0]=Path=/api/auth/**
+
+spring.cloud.gateway.routes[1].id=user-service
+spring.cloud.gateway.routes[1].uri=http://localhost:8086
+spring.cloud.gateway.routes[1].predicates[0]=Path=/api/users/**
+```
+
+#### Kết quả sau khi fix
+
+Request kiểm thử:
+
+```bash
+{
+  "accountId": 0,
+  "fullName": "                                                                            gOZMBmVzTbFtTBlPeHuviNjeLOsatzvelyqfmomivsJBVxsPqbfwQyCaWKZnWMk                                                             ",
+  "phoneNumber": "0672579278",
+  "cccd": "343086700780",
+  "cccdMasked": "string",
+  "provinceCode": "string",
+  "provinceName": "string",
+  "birthYear": 0,
+  "gender": "MALE",
+  "birthday": "2026-06-19",
+  "cccdCheckNote": "string"
+}
+```
+
+Kết quả hợp lệ sau khi fix:
+
+```txt
+404 Not Found
+```
+
+hoặc nếu Gateway có filter chặn internal route:
+
+```txt
+403 Forbidden
+```
+
+Không còn trả về:
+
+```txt
+200 OK
+201 Created
+```
+
+#### Kết luận xử lý
+
+**Đã fix.** Endpoint `/internal/users/**` không còn public qua API Gateway. Frontend và external client không thể gọi internal User Service API thông qua `http://localhost:8080/internal/users` nữa.
+
 
 ### Lệch Hợp Đồng 3: Sai Biệt Tên Thuộc Tính Xác Thực Điện Thoại (Java Field Mismatch)
 - **Đường dẫn Endpoint**: /api/users/{accountId} (Dịch vụ user-service)
@@ -278,12 +367,12 @@ Quá trình đối chiếu giữa thiết kế lý thuyết trong các tài li�
 
 ### Bảng Tổng Hợp Kết Quả Đánh Giá Tích Hợp
 
-| Tiêu Chí Đánh Giá | Kết Quả Đạt Được | Kiến Nghị Khắc Phục | Kết Luận |
-| :--- | :--- | :--- | :--- |
-| **Định Tuyến Của Gateway** | Các yêu cầu công khai đi qua cổng 8080. Không có yêu cầu trực tiếp cổng 8081/8086 từ phía client. | Cần loại bỏ hoặc chặn hoàn toàn tuyến /internal/users/** trên API Gateway để ngăn chặn rò rỉ bảo mật. | CẦN ĐIỀU CHỈNH |
-| **Luồng Đăng Ký Tài Khoản** | Hoàn thành biểu mẫu, kiểm tra nghiệp vụ và chuyển đổi luồng sang OTP hoạt động trơn tru. | Không có. | ĐẠT |
-| **Luồng Đăng Nhập** | Đăng nhập thành công trả về đầy đủ Token cặp, lưu trữ an toàn trên local storage. | Bổ sung trường token trong JwtResponse.java của Backend để đồng bộ hoàn toàn với API Contract. | ĐẠT |
-| **Ràng Buộc Nghiệp Vụ** | Các quy tắc validate họ tên, email, mật khẩu, kiểm tra chéo năm sinh CCCD được áp dụng nghiêm ngặt. | Đồng bộ tên thuộc tính trong DTO Java UserProfileResponse từ isVerifiedPhone thành verifiedPhone để tránh nhầm lẫn bảo trì. | ĐẠT |
+| Tiêu Chí Đánh Giá           | Kết Quả Đạt Được                                                                                                                                                                                                                                                                     | Kiến Nghị Khắc Phục                                                                                                               | Kết Luận |
+| :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| **Định Tuyến Của Gateway**  | Các yêu cầu public/protected đi qua API Gateway `:8080`. Frontend không gọi trực tiếp cổng `8081` hoặc `8086`. Route nội bộ `/internal/users/**` đã được gỡ khỏi Gateway. Khi gọi `POST http://localhost:8080/internal/users`, hệ thống trả về `404 Not Found` hoặc `403 Forbidden`. | Đã fix. Tiếp tục duy trì rule không expose `/internal/**` qua Gateway trong các route mới.                                        | ĐẠT      |
+| **Luồng Đăng Ký Tài Khoản** | Hoàn thành biểu mẫu, kiểm tra nghiệp vụ và chuyển đổi luồng sang OTP hoạt động trơn tru.                                                                                                                                                                                             | Không có.                                                                                                                         | ĐẠT      |
+| **Luồng Đăng Nhập**         | Đăng nhập thành công trả về đầy đủ Token cặp, lưu trữ an toàn trên local storage.                                                                                                                                                                                                    | Bổ sung trường `token` trong `JwtResponse.java` của Backend nếu cần đồng bộ hoàn toàn với API Contract cũ.                        | ĐẠT      |
+| **Ràng Buộc Nghiệp Vụ**     | Các quy tắc validate họ tên, email, mật khẩu, kiểm tra chéo năm sinh CCCD được áp dụng nghiêm ngặt.                                                                                                                                                                                  | Đồng bộ tên thuộc tính trong DTO Java `UserProfileResponse` từ `isVerifiedPhone` thành `verifiedPhone` để tránh nhầm lẫn bảo trì. | ĐẠT      |
 
 ### Kết Luận Chung
 
