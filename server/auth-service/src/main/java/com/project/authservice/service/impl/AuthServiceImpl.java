@@ -19,7 +19,6 @@ import com.project.authservice.client.UserServiceClient;
 import com.project.authservice.event.publisher.AuthAccountEventPublisher;
 import com.project.authservice.dto.request.LoginRequest;
 import com.project.authservice.dto.request.RegisterRequest;
-import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.dto.request.RefreshTokenRequest;
 import com.project.authservice.dto.response.JwtResponse;
 import com.project.authservice.dto.response.RegisterResponse;
@@ -63,11 +62,11 @@ public class AuthServiceImpl implements AuthService {
 	private final AuthAccountEventPublisher eventPublisher;
 
 	public AuthServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository,
-						   PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
-						   CccdCheckClient cccdCheckClient, UserServiceClient userServiceClient,
-						   VerificationService verificationService, AuditLogService auditLogService,
-						   RefreshTokenRepository refreshTokenRepository, HttpServletRequest servletRequest,
-						   AuthAccountEventPublisher eventPublisher) {
+			PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
+			CccdCheckClient cccdCheckClient, UserServiceClient userServiceClient,
+			VerificationService verificationService, AuditLogService auditLogService,
+			RefreshTokenRepository refreshTokenRepository, HttpServletRequest servletRequest,
+			AuthAccountEventPublisher eventPublisher) {
 		this.accountRepository = accountRepository;
 		this.roleRepository = roleRepository;
 		this.passwordEncoder = passwordEncoder;
@@ -152,7 +151,7 @@ public class AuthServiceImpl implements AuthService {
 			// Kafka event is published AFTER this save, ensuring no event on DB failure.
 
 			// Generate verification OTP
-			verificationService.generateVerification(savedAccount);
+			verificationService.sendOtp(new com.project.authservice.dto.request.SendOtpRequest(email, "REGISTRATION"));
 
 			log.info("Account successfully registered for email={} with accountId={}", email, savedAccount.getId());
 
@@ -182,8 +181,7 @@ public class AuthServiceImpl implements AuthService {
 					cccdInfo.getCccdMasked(),
 					cccdInfo.getProvinceName(),
 					cccdInfo.getGender(),
-					cccdInfo.getBirthYear()
-			);
+					cccdInfo.getBirthYear());
 		} catch (Exception e) {
 			auditLogService.log(null, "REGISTER_FAILED", servletRequest);
 			throw e;
@@ -217,26 +215,29 @@ public class AuthServiceImpl implements AuthService {
 			throw new InvalidCredentialsException();
 		}
 
-		// 3. Check isActive == 1 (account must be active to log in)
+		// 3. Check registrationCompleted == 1
+		if (account.getRegistrationCompleted() == null || account.getRegistrationCompleted() != 1) {
+			log.warn("Login failed: account is not verified for email {}", email);
+			auditLogService.log(account.getId(), "LOGIN_FAILED_NOT_VERIFIED", servletRequest);
+			throw new AccountNotVerifiedException(account.getId());
+		}
+
+		// 4. Check isActive == 1 (account must be active to log in)
 		if (account.getIsActive() == null || account.getIsActive() != 1) {
 			log.warn("Login failed: account is inactive for email {}", email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_INACTIVE_ACCOUNT", servletRequest);
 			throw new AccountInactiveException();
 		}
 
-		// 4. Check registrationCompleted == 1
-		if (account.getRegistrationCompleted() == null || account.getRegistrationCompleted() != 1) {
-			log.warn("Login failed: account is not verified for email {}", email);
-			auditLogService.log(account.getId(), "LOGIN_FAILED_NOT_VERIFIED", servletRequest);
-			throw new AccountNotVerifiedException();
-		}
-
 		// 5. Generate JWT
-		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), account.getRole().getRoleName());
+		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(),
+				account.getRole().getRoleName());
 
-		// 6. Revoke any existing active refresh tokens issued from the same browser/device.
-		//    Device identity is determined by matching the User-Agent header against the
-		//    user_agent stored in the audit_logs entry that was written during the original login.
+		// 6. Revoke any existing active refresh tokens issued from the same
+		// browser/device.
+		// Device identity is determined by matching the User-Agent header against the
+		// user_agent stored in the audit_logs entry that was written during the
+		// original login.
 		String currentUserAgent = servletRequest.getHeader("User-Agent");
 		if (currentUserAgent != null && !currentUserAgent.isBlank()) {
 			List<RefreshToken> sameDeviceTokens = refreshTokenRepository
@@ -272,19 +273,8 @@ public class AuthServiceImpl implements AuthService {
 				plainRefreshToken,
 				expiresInSeconds,
 				account.getEmail(),
-				account.getRole().getRoleName()
-		);
-	}
-
-	/**
-	 * Verifies account using OTP.
-	 *
-	 * @param request verification request
-	 */
-	@Override
-	@Transactional
-	public void verify(VerifyRequest request) {
-		verificationService.verify(request.getAccountId(), request.getOtp());
+				account.getRole().getRoleName(),
+				account.getId());
 	}
 
 	/**
@@ -320,7 +310,7 @@ public class AuthServiceImpl implements AuthService {
 			}
 
 			if (account.getRegistrationCompleted() == null || account.getRegistrationCompleted() != 1) {
-				throw new AccountNotVerifiedException();
+				throw new AccountNotVerifiedException(account.getId());
 			}
 
 			// Calculate remaining duration until expiryDate
@@ -328,7 +318,8 @@ public class AuthServiceImpl implements AuthService {
 			Duration remainingDuration = Duration.between(now, refreshToken.getExpiryDate());
 
 			// Generate new access token
-			String newAccessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), account.getRole().getRoleName());
+			String newAccessToken = jwtUtil.generateToken(account.getId(), account.getEmail(),
+					account.getRole().getRoleName());
 
 			String responseRefreshToken;
 
@@ -360,8 +351,8 @@ public class AuthServiceImpl implements AuthService {
 					responseRefreshToken,
 					expiresInSeconds,
 					account.getEmail(),
-					account.getRole().getRoleName()
-			);
+					account.getRole().getRoleName(),
+					account.getId());
 		} catch (Exception e) {
 			Long accountId = null;
 			try {
@@ -369,7 +360,8 @@ public class AuthServiceImpl implements AuthService {
 				if (tempToken != null && tempToken.getAccount() != null) {
 					accountId = tempToken.getAccount().getId();
 				}
-			} catch (Exception ignore) {}
+			} catch (Exception ignore) {
+			}
 			auditLogService.log(accountId, "REFRESH_TOKEN_FAILED", servletRequest);
 			throw e;
 		}

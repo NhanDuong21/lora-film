@@ -97,11 +97,11 @@ public class UserProfileResponse {
         this.birthYear = birthYear;
     }
 
-    public Boolean getVerifiedPhone() {
+    public Boolean getIsVerifiedPhone() {
         return isVerifiedPhone;
     }
 
-    public void setVerifiedPhone(Boolean verifiedPhone) {
-        isVerifiedPhone = verifiedPhone;
+    public void setIsVerifiedPhone(Boolean isVerifiedPhone) {
+        this.isVerifiedPhone = isVerifiedPhone;
     }
 }
