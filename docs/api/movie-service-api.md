@@ -10,7 +10,7 @@
 | Contract Owner | Dương Thiện Nhân                                 |
 | Backend Owner  | Phan Tuấn Thành                                  |
 | Reviewer       | Phan Tuấn Thành                                  |
-| Trạng thái     | Draft / Ready for Review                         |
+| Trạng thái     | Ready for Review                                 |
 | Milestone      | Sprint 2 - Core Service API Foundation           |
 | Ngày cập nhật  | 20/06/2026                                       |
 
@@ -71,7 +71,7 @@ Các nghiệp vụ trên thuộc Booking, Payment, Promotion, Score và Analytic
 ---
 
 ## 4. Physical Schema
-
+- Physical schema trong tài liệu phản ánh cấu trúc dữ liệu hiện tại và chỉ dùng làm căn cứ đối chiếu API contract. Schema, constraint, index và migration cuối cùng do Movie Service Owner xác nhận. Nếu schema hiện tại không đáp ứng contract, contract và implementation phải được thống nhất trong quá trình review.
 ### 4.1. Bảng `movies`
 
 | Field            | Type         | Ghi chú                       |
@@ -2247,9 +2247,9 @@ Contract phải được cập nhật trong cùng MR.
 
 Contract được xem là hoàn thành khi:
 
-* [ ] Có endpoint summary đầy đủ.
-* [ ] Có Public/Protected/Admin classification.
-* [ ] Có request headers.
+* [x] Có endpoint summary đầy đủ.
+* [x] Có Public/Protected/Admin classification.
+* [x] Có request headers.
 * [ ] Có path/query parameter definitions.
 * [ ] Có field definitions.
 * [ ] Có success response.
