@@ -594,7 +594,7 @@ API này dùng để xác thực mã định danh OTP sau khi đăng ký thành 
 }
 ```
 
-* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `LOGIN`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
+* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
 
 ### 7.4. Response Success
 
