@@ -670,7 +670,7 @@ Gửi mã OTP cho các mục đích như REGISTER.
 }
 ```
 
-* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `LOGIN`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
+* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
 
 ### 7.5.3. Response Success
 
@@ -710,7 +710,7 @@ Status: **429 Too Many Requests**
 
 ### 7.6.1. Mục Tiêu API
 
-Gửi lại mã OTP trong trường hợp mã cũ bị hết hạn, chưa nhận được hoặc cần lấy lại mã mới. Dùng chung cho tất cả các mục đích (REGISTRATION, FORGOTTEN PASSWORD, LOGIN...).
+Gửi lại mã OTP trong trường hợp mã cũ bị hết hạn, chưa nhận được hoặc cần lấy lại mã mới. Dùng chung cho tất cả các mục đích (REGISTRATION, FORGOTTEN PASSWORD...).
 
 | Mục | Nội dung |
 | :--- | :--- |
@@ -728,7 +728,7 @@ Gửi lại mã OTP trong trường hợp mã cũ bị hết hạn, chưa nhận
 }
 ```
 
-* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `LOGIN`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
+* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
 
 ### 7.6.3. Response Success
 

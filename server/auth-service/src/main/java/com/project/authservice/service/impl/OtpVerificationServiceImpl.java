@@ -85,9 +85,9 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         RedisOtpData existingData = getRedisOtpData(key);
         if (existingData != null) {
-            LocalDateTime lastSentAt = existingData.getLastSentAt();
-            if (lastSentAt != null) {
-                long elapsedSeconds = Duration.between(lastSentAt, LocalDateTime.now()).getSeconds();
+            long lastSentAt = existingData.getLastSentAt();
+            if (lastSentAt > 0) {
+                long elapsedSeconds = (System.currentTimeMillis() - lastSentAt) / 1000;
                 if (elapsedSeconds < 60) {
                     throw new OtpRateLimitException(60 - elapsedSeconds);
                 }
@@ -100,8 +100,8 @@ public class OtpVerificationServiceImpl implements VerificationService {
         RedisOtpData newData = new RedisOtpData();
         newData.setOtpHash(otpHash);
         newData.setFailedAttempts(0);
-        newData.setCreatedAt(existingData != null ? existingData.getCreatedAt() : LocalDateTime.now());
-        newData.setLastSentAt(LocalDateTime.now());
+        newData.setCreatedAt(existingData != null && existingData.getCreatedAt() > 0 ? existingData.getCreatedAt() : System.currentTimeMillis());
+        newData.setLastSentAt(System.currentTimeMillis());
 
         saveRedisOtpData(key, newData);
 

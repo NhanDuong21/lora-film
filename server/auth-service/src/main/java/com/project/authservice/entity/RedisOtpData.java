@@ -1,16 +1,14 @@
 package com.project.authservice.entity;
 
-import java.time.LocalDateTime;
-
 public class RedisOtpData {
     private String otpHash;
     private int failedAttempts;
-    private LocalDateTime createdAt;
-    private LocalDateTime lastSentAt;
+    private long createdAt;
+    private long lastSentAt;
 
     public RedisOtpData() {}
 
-    public RedisOtpData(String otpHash, int failedAttempts, LocalDateTime createdAt, LocalDateTime lastSentAt) {
+    public RedisOtpData(String otpHash, int failedAttempts, long createdAt, long lastSentAt) {
         this.otpHash = otpHash;
         this.failedAttempts = failedAttempts;
         this.createdAt = createdAt;
@@ -33,19 +31,19 @@ public class RedisOtpData {
         this.failedAttempts = failedAttempts;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public long getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(long createdAt) {
         this.createdAt = createdAt;
     }
 
-    public LocalDateTime getLastSentAt() {
+    public long getLastSentAt() {
         return lastSentAt;
     }
 
-    public void setLastSentAt(LocalDateTime lastSentAt) {
+    public void setLastSentAt(long lastSentAt) {
         this.lastSentAt = lastSentAt;
     }
 }

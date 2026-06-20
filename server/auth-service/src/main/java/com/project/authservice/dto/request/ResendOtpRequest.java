@@ -12,7 +12,7 @@ public class ResendOtpRequest {
     private String email;
 
     @NotBlank(message = "Purpose is required")
-    @Pattern(regexp = "^(REGISTRATION|LOGIN|FORGOTTEN PASSWORD|CHANGE EMAIL|CHANGE PASSWORD)$", message = "Invalid OTP purpose")
+    @Pattern(regexp = "^(REGISTRATION|FORGOTTEN PASSWORD|CHANGE EMAIL|CHANGE PASSWORD)$", message = "Invalid OTP purpose")
     @Schema(example = "REGISTRATION")
     private String purpose;
 
