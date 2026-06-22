@@ -10,9 +10,9 @@
 | Contract Owner | Dương Thiện Nhân                                |
 | Backend Owner  | Trần Hiển Vinh                                  |
 | Reviewer       | Trần Hiển Vinh                                  |
-| Trạng thái     | Draft / Ready for Review                        |
+| Trạng thái     | Updated after Owner Review / Ready for Re-review |
 | Milestone      | Sprint 2 - Core Service API Foundation          |
-| Ngày cập nhật  | 21/06/2026                                      |
+| Ngày cập nhật  | 22/06/2026                                      |
 
 ---
 
@@ -103,16 +103,23 @@ Booking Service không chịu trách nhiệm:
 
 ---
 
-## 5. Giới Hạn Schema Hiện Tại
+## 5. Schema Alignment Bắt Buộc Trước Implementation
 
-Schema hiện tại chưa có các field:
+Sau khi Booking Service Owner review contract, một số thay đổi schema được xác định là bắt buộc trước khi triển khai Backend.
+
+### 5.1. Các field chưa có trong schema hiện tại
+
+Schema hiện tại chưa có:
 
 ```txt
+bookings.expires_at
+bookings.version
+seat_reservations.version
+
 bookings.promotion_id
 bookings.payment_id
 bookings.discount_amount
 bookings.final_amount
-bookings.expires_at
 
 tickets.ticket_code
 tickets.qr_code
@@ -120,13 +127,119 @@ tickets.status
 tickets.checked_in_at
 ```
 
-Vì vậy:
+### 5.2. Các thay đổi bắt buộc trong Sprint 2
 
-* Booking Service chưa lưu trực tiếp `promotionId`.
-* Booking Service chưa lưu trực tiếp `paymentId`.
-* Promotion và Payment được liên kết bằng `bookingId` tại service tương ứng.
-* Ticket check-in/QR verification chưa nằm trong API implementation Sprint 2.
-* Nếu cần các chức năng trên, phải tạo schema change issue và cập nhật ERD/SQL/contract trong cùng MR.
+Trước khi các Booking implementation issue được chuyển sang `Ready`, schema phải được cập nhật:
+
+```txt
+Add bookings.expires_at
+Add bookings.version
+Add seat_reservations.version
+Drop unique index (showtime_id, seat_id)
+Update BookingStatus comment/default
+Update SeatReservationStatus comment/default
+```
+
+Booking status chính thức:
+
+```txt
+PENDING_PAYMENT
+CONFIRMED
+CANCELLED
+EXPIRED
+```
+
+Seat reservation status chính thức:
+
+```txt
+HELD
+RELEASED
+EXPIRED
+CONVERTED
+```
+
+Default của `seat_reservations.status` phải đổi từ:
+
+```txt
+RESERVED
+```
+
+thành:
+
+```txt
+HELD
+```
+
+### 5.3. Unique Index của Seat Reservation
+
+Unique index hiện tại:
+
+```txt
+(showtime_id, seat_id)
+```
+
+phải được xóa.
+
+Lý do:
+
+- Reservation `RELEASED` và `EXPIRED` vẫn được giữ lại để audit.
+- Nếu giữ unique index, một ghế đã từng được reservation sẽ không thể được giữ lại trong tương lai.
+- Redis seat lock là lớp chính chống double booking real-time.
+- Database transaction và locking tiếp tục bảo vệ tính nhất quán khi ghi dữ liệu.
+
+Có thể thay bằng non-unique index:
+
+```txt
+(showtime_id, seat_id, status)
+```
+
+để tối ưu query trạng thái ghế.
+
+### 5.4. Logical References
+
+Booking Service không lưu trực tiếp:
+
+```txt
+paymentId
+promotionId
+```
+
+Payment Service chịu trách nhiệm lưu `bookingId`.
+
+Promotion Service chịu trách nhiệm lưu usage liên kết theo `bookingId`.
+
+### 5.5. Ticket Scope
+
+Ticket chỉ được tạo sau khi payment thành công và booking chuyển sang:
+
+```txt
+CONFIRMED
+```
+
+Không tạo ticket khi booking còn:
+
+```txt
+PENDING_PAYMENT
+```
+
+Các chức năng sau chưa nằm trong Sprint 2:
+
+```txt
+Ticket code
+QR code
+Ticket status lifecycle
+Ticket check-in
+```
+
+### 5.6. Related Schema Issue
+
+Các thay đổi bắt buộc được tracking trong issue:
+
+```txt
+[Database] Align Booking Schema with Booking API Contract
+```
+
+Booking implementation chưa được bắt đầu trước khi Schema Alignment MR được merge.
 
 ---
 
@@ -172,7 +285,7 @@ http://localhost:8080
 Chỉ dùng để debug hoặc test nội bộ:
 
 ```txt
-http://localhost:<BOOKING_SERVICE_PORT>
+http://localhost:8083
 ```
 
 Port chính thức phải lấy từ cấu hình project.
@@ -202,14 +315,43 @@ Authorization: Bearer <accessToken>
 Content-Type: application/json
 ```
 
+Các POST API tạo hoặc thay đổi dữ liệu quan trọng phải gửi:
+
+```http
+Idempotency-Key: <UUID>
+```
+
+Các endpoint bắt buộc sử dụng `Idempotency-Key`:
+
+```txt
+POST /api/bookings/seat-reservations
+POST /api/bookings
+POST /api/bookings/{bookingId}/cancel
+POST /internal/bookings/{bookingId}/confirm-payment
+POST /internal/bookings/{bookingId}/fail-payment
+```
+
 Internal API:
 
 ```http
 Content-Type: application/json
 X-Internal-Token: <internal-token>
+Idempotency-Key: <UUID>
 ```
 
-`X-Internal-Token` là hướng bảo vệ đề xuất; implementation cụ thể cần đồng bộ với API Gateway/security design.
+`X-Internal-Token` được sử dụng trong Sprint 2 để xác thực giao tiếp nội bộ.
+
+Trong các sprint sau, các endpoint cập nhật trạng thái thanh toán cần được nâng cấp sang cơ chế ký request bằng HMAC signature.
+
+Payment provider như VNPay hoặc MoMo không được gọi trực tiếp Booking Service.
+
+Flow đúng:
+
+```txt
+VNPay / MoMo
+→ Payment Service xác minh chữ ký provider
+→ Payment Service gọi Booking Internal API
+```
 
 ### 8.2. Date and Time
 
@@ -243,9 +385,38 @@ Response trả amount dạng number:
 
 ### 8.4. Pagination
 
-* `page` bắt đầu từ `0`.
-* `size` mặc định `10`.
-* `size` tối đa `50`.
+- `page` bắt đầu từ `0`.
+- `size` mặc định `10`.
+- `size` tối đa `50`.
+
+### 8.5. Idempotency Rules
+
+`Idempotency-Key` phải là một UUID do caller tạo cho mỗi logical request.
+
+Ví dụ:
+
+```http
+Idempotency-Key: 97605cf2-56c7-4d08-a5bc-c8910fb61239
+```
+
+Nếu cùng user hoặc internal service gửi lại cùng request với cùng `Idempotency-Key`:
+
+```txt
+Không tạo reservation lần hai
+Không tạo booking lần hai
+Không tạo ticket lần hai
+Không thực hiện status transition lần hai
+```
+
+Service phải trả lại kết quả tương đương request đầu tiên.
+
+Nếu cùng `Idempotency-Key` nhưng request payload khác:
+
+```txt
+Trả 409 BOOKING_IDEMPOTENCY_CONFLICT
+```
+
+Idempotency record có thể được quản lý bằng Redis hoặc database tùy implementation, nhưng phải có thời gian lưu đủ để bao phủ retry window.
 
 ---
 
@@ -374,16 +545,29 @@ PENDING_PAYMENT
 → CONFIRMED khi Payment Service xác nhận thanh toán thành công
 
 PENDING_PAYMENT
-→ CANCELLED khi user hủy hợp lệ
+→ CANCELLED khi customer hủy hợp lệ
 
 PENDING_PAYMENT
-→ EXPIRED khi quá thời gian thanh toán
+→ EXPIRED khi quá bookings.expiresAt
 
 CONFIRMED
-→ CANCELLED chỉ thông qua flow nghiệp vụ đặc biệt
+→ CANCELLED chỉ bởi Admin/Employee thông qua nghiệp vụ đặc biệt
 ```
 
-Sprint 2 chưa xử lý hoàn tiền hoàn chỉnh khi hủy booking đã `CONFIRMED`.
+Customer không được tự hủy booking `CONFIRMED` trong Sprint 2 vì chưa có refund flow.
+
+Ticket chỉ được tạo tại transition:
+
+```txt
+PENDING_PAYMENT
+→ CONFIRMED
+```
+
+Nếu booking chuyển từ `PENDING_PAYMENT` sang `CANCELLED` hoặc `EXPIRED`:
+
+- Không tạo ticket.
+- Redis seat lock được release nếu còn tồn tại.
+- Các reservation `CONVERTED` không còn làm ghế unavailable vì booking liên kết đã kết thúc.
 
 ---
 
@@ -391,7 +575,7 @@ Sprint 2 chưa xử lý hoàn tiền hoàn chỉnh khi hủy booking đã `CONFI
 
 ### 12.1. Seat Reservation TTL
 
-Đề xuất:
+Thời gian giữ ghế:
 
 ```txt
 5 phút
@@ -403,9 +587,17 @@ Cấu hình:
 booking.seat-reservation-ttl-minutes=5
 ```
 
+`seat_reservations.expires_at` được tính tại thời điểm tạo reservation:
+
+```txt
+expiresAt = createdAt + 5 phút
+```
+
+Redis seat lock sử dụng TTL tương ứng.
+
 ### 12.2. Booking Payment Timeout
 
-Đề xuất:
+Thời gian chờ thanh toán:
 
 ```txt
 15 phút
@@ -417,13 +609,63 @@ Cấu hình:
 booking.payment-timeout-minutes=15
 ```
 
-Nếu schema chưa có `bookings.expires_at`, timeout có thể được tính từ:
+Khi tạo booking:
 
 ```txt
-createdAt + booking.payment-timeout-minutes
+bookings.expires_at = createdAt + 15 phút
 ```
 
-Nếu cần lưu expiry rõ ràng, phải tạo schema change issue.
+`bookings.expires_at` là field bắt buộc phải được bổ sung trong Schema Alignment Issue.
+
+Không tính expiry on-the-fly từ `createdAt` khi query booking.
+
+### 12.3. System Worker
+
+Booking Service phải có background worker hoặc scheduled job để chủ động xử lý record hết hạn.
+
+Reservation expiration:
+
+```txt
+status = HELD
+AND expiresAt < now
+→ status = EXPIRED
+→ release Redis lock
+```
+
+Booking expiration:
+
+```txt
+status = PENDING_PAYMENT
+AND expiresAt < now
+→ status = EXPIRED
+→ release Redis lock liên quan nếu còn tồn tại
+→ ghế thuộc reservation CONVERTED được xem là available trở lại
+```
+
+Worker phải idempotent.
+
+Chạy lại worker không được:
+
+- Expire cùng booking nhiều lần.
+- Release cùng lock gây lỗi nghiệp vụ.
+- Tạo duplicate event.
+- Thay đổi booking đã `CONFIRMED`, `CANCELLED` hoặc `EXPIRED`.
+
+### 12.4. Redis TTL và Database Worker
+
+Redis TTL chịu trách nhiệm:
+
+```txt
+Giải phóng lock real-time
+```
+
+Database worker chịu trách nhiệm:
+
+```txt
+Cập nhật trạng thái nghiệp vụ lâu dài
+```
+
+Không chỉ dựa vào Redis TTL để xác định trạng thái booking hoặc reservation trong database.
 
 ---
 
@@ -495,6 +737,16 @@ Internal API không được expose công khai qua API Gateway.
 POST /api/bookings/seat-reservations
 ```
 
+### Request Headers
+
+```http
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+Idempotency-Key: <UUID>
+```
+
+`Idempotency-Key` là bắt buộc.
+
 ### Request Body
 
 ```json
@@ -510,22 +762,24 @@ Backend lấy `userId/accountId` từ JWT.
 
 ### Field Definitions
 
-| Field      | Type          | Required | Validation              |
-| ---------- | ------------- | -------: | ----------------------- |
-| showtimeId | number        |      Yes | > 0                     |
-| seatIds    | array<number> |      Yes | Không rỗng, không trùng |
-| seatIds[]  | number        |      Yes | > 0                     |
+| Field | Type | Required | Validation |
+|---|---|---:|---|
+| showtimeId | number | Yes | > 0 |
+| seatIds | array<number> | Yes | Không rỗng, không trùng |
+| seatIds[] | number | Yes | > 0 |
 
 ### Processing Flow
 
 ```txt
-Validate request
+Validate request và Idempotency-Key
 → Resolve authenticated userId
+→ Check idempotency result
 → Validate showtime exists and is bookable
 → Validate all seats belong to showtime room
-→ Check physical seat is active
-→ Acquire Redis locks atomically
-→ Create seat_reservations records
+→ Check physical seats are active
+→ Acquire all Redis locks atomically
+→ Create seat_reservations với status HELD
+→ Store idempotency result
 → Return reservation group
 ```
 
@@ -537,6 +791,14 @@ Giữ nhiều ghế là một operation atomic:
 Nếu một ghế không giữ được
 → không giữ bất kỳ ghế nào trong request
 ```
+
+### Idempotency Behavior
+
+Nếu cùng request được gửi lại với cùng `Idempotency-Key`:
+
+- Không tạo reservation mới.
+- Không acquire lock mới.
+- Trả lại reservation group đã được tạo ở request đầu tiên.
 
 ### Response Success
 
@@ -796,6 +1058,16 @@ Lý do:
 POST /api/bookings
 ```
 
+### Request Headers
+
+```http
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+Idempotency-Key: <UUID>
+```
+
+`Idempotency-Key` là bắt buộc.
+
 ### Request Body
 
 ```json
@@ -812,22 +1084,26 @@ totalAmount
 ticketPrice
 bookingCode
 status
+expiresAt
 ```
 
 Các giá trị trên do Backend xác định.
 
 ### Field Definitions
 
-| Field            | Type          | Required | Validation              |
-| ---------------- | ------------- | -------: | ----------------------- |
-| reservationIds   | array<number> |      Yes | Không rỗng, không trùng |
-| reservationIds[] | number        |      Yes | > 0                     |
+| Field | Type | Required | Validation |
+|---|---|---:|---|
+| reservationIds | array<number> | Yes | Không rỗng, không trùng |
+| reservationIds[] | number | Yes | > 0 |
 
 ### Processing Flow
 
 ```txt
-Resolve authenticated userId
+Validate request và Idempotency-Key
+→ Resolve authenticated userId
+→ Check idempotency result
 → Load all reservations
+→ Lock hoặc version-check reservations
 → Ensure all reservations belong to user
 → Ensure all reservations belong to same showtime
 → Ensure all status = HELD
@@ -835,10 +1111,50 @@ Resolve authenticated userId
 → Resolve showtime and base ticket price from Movie Service
 → Calculate totalAmount
 → Generate unique bookingCode
-→ Create booking with PENDING_PAYMENT
-→ Create one ticket per seat
+→ Calculate expiresAt = now + 15 phút
+→ Create booking với status PENDING_PAYMENT
 → Mark reservations as CONVERTED
-→ Return booking
+→ Store idempotency result
+→ Commit transaction
+→ Return booking without tickets
+```
+
+### Important Ticket Rule
+
+Không tạo record trong bảng `tickets` tại bước này.
+
+Trong trạng thái:
+
+```txt
+PENDING_PAYMENT
+```
+
+ghế của booking được liên kết thông qua:
+
+```txt
+seat_reservations.status = CONVERTED
+```
+
+Ticket chỉ được tạo sau khi payment thành công tại:
+
+```txt
+POST /internal/bookings/{bookingId}/confirm-payment
+```
+
+### Seat Availability While Waiting for Payment
+
+Ghế được xem là unavailable khi:
+
+```txt
+seat_reservation.status = CONVERTED
+AND booking.status IN (PENDING_PAYMENT, CONFIRMED)
+```
+
+Ghế được xem là available trở lại khi booking liên kết chuyển sang:
+
+```txt
+CANCELLED
+EXPIRED
 ```
 
 ### Price Source of Truth
@@ -851,20 +1167,29 @@ Backend lấy giá vé từ Movie Service:
 showtime.ticketPrice
 ```
 
-Sau đó lưu snapshot:
+Sau đó lưu tổng tiền snapshot:
 
 ```txt
-tickets.price
 bookings.totalAmount
 ```
+
+Sprint 2 giả định các ghế trong cùng showtime có cùng `ticketPrice`.
+
+Khi payment thành công, `tickets.price` được tạo từ snapshot:
+
+```txt
+ticketPrice = booking.totalAmount / numberOfSeats
+```
+
+Nếu sau này hỗ trợ nhiều loại giá ghế trong cùng booking, phải bổ sung booking item/seat price snapshot trước khi tạo ticket.
 
 Công thức Sprint 2:
 
 ```txt
-totalAmount = sum(ticket.price)
+totalAmount = showtime.ticketPrice × numberOfSeats
 ```
 
-Promotion và Score chưa được đưa vào công thức này trong Sprint 2.
+Promotion và Score chưa được đưa vào công thức Booking Sprint 2.
 
 ### Response Success
 
@@ -882,24 +1207,50 @@ Status: `201 Created`
     "totalAmount": 240000,
     "status": "PENDING_PAYMENT",
     "paymentExpiresAt": "2026-06-21T20:20:00",
-    "tickets": [
+    "reservedSeats": [
       {
-        "ticketId": 2001,
-        "seatId": 101,
-        "price": 120000
+        "reservationId": 501,
+        "seatId": 101
       },
       {
-        "ticketId": 2002,
-        "seatId": 102,
-        "price": 120000
+        "reservationId": 502,
+        "seatId": 102
       }
     ],
+    "tickets": [],
     "createdAt": "2026-06-21T20:05:00"
   }
 }
 ```
 
-`paymentExpiresAt` có thể được tính từ `createdAt` nếu chưa lưu trực tiếp trong schema.
+`paymentExpiresAt` được lấy trực tiếp từ:
+
+```txt
+bookings.expires_at
+```
+
+### Idempotency Behavior
+
+Nếu cùng request được gửi lại với cùng `Idempotency-Key`:
+
+- Không tạo booking mới.
+- Không convert reservation lần hai.
+- Không thay đổi expiry.
+- Trả lại booking đã tạo ở request đầu tiên.
+
+### Error: Idempotency Conflict
+
+Status: `409 Conflict`
+
+```json
+{
+  "success": false,
+  "message": "Idempotency key was already used with a different request",
+  "errorCode": "BOOKING_IDEMPOTENCY_CONFLICT",
+  "data": null,
+  "errors": null
+}
+```
 
 ### Error: Reservation Not Found
 
@@ -1001,7 +1352,7 @@ Customer chỉ được xem booking của mình.
 
 Admin/Employee xem qua Admin API.
 
-### Response Success
+### Response Success — Pending Payment
 
 ```json
 {
@@ -1015,19 +1366,26 @@ Admin/Employee xem qua Admin API.
     "totalAmount": 240000,
     "status": "PENDING_PAYMENT",
     "paymentExpiresAt": "2026-06-21T20:20:00",
-    "tickets": [
+    "reservedSeats": [
       {
-        "ticketId": 2001,
-        "seatId": 101,
-        "price": 120000,
-        "createdAt": "2026-06-21T20:05:00"
+        "reservationId": 501,
+        "seatId": 101
+      },
+      {
+        "reservationId": 502,
+        "seatId": 102
       }
     ],
+    "tickets": [],
     "createdAt": "2026-06-21T20:05:00",
     "updatedAt": "2026-06-21T20:05:00"
   }
 }
 ```
+
+Nếu booking đang `PENDING_PAYMENT`, response chưa có ticket.
+
+Nếu booking đã `CONFIRMED`, response có thể trả danh sách ticket được tạo sau payment success.
 
 ### Error: Booking Not Found
 
@@ -1150,6 +1508,14 @@ Status: `400 Bad Request`
 POST /api/bookings/{bookingId}/cancel
 ```
 
+### Request Headers
+
+```http
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+Idempotency-Key: <UUID>
+```
+
 ### Request Body
 
 ```json
@@ -1199,17 +1565,45 @@ Status: `409 Conflict`
 
 ### Side Effects
 
-Khi cancel:
+Khi customer cancel booking `PENDING_PAYMENT`:
 
-* Booking chuyển `CANCELLED`.
-* Reservation không quay lại `HELD`.
-* Redis seat locks liên quan được release nếu còn tồn tại.
-* Payment cancellation/refund chưa được tự động xử lý trong Sprint 2.
-* Có thể publish `BOOKING_CANCELLED` ở sprint sau.
+- Booking chuyển sang `CANCELLED`.
+- Không tạo ticket.
+- Reservation liên quan vẫn giữ trạng thái lịch sử `CONVERTED`.
+- Ghế không còn bị xem là unavailable vì booking đã `CANCELLED`.
+- Redis seat locks liên quan được release nếu còn tồn tại.
+- Payment refund không được xử lý vì customer không thể cancel booking `CONFIRMED`.
+- Có thể publish `BOOKING_CANCELLED` ở sprint sau.
+
+Operation phải idempotent theo `Idempotency-Key`.
+
+Nếu booking đã `CANCELLED` bởi cùng request:
+
+```txt
+Trả 200 OK với status CANCELLED
+```
 
 ---
 
 # 17. Ticket APIs
+
+Ticket chỉ tồn tại đối với booking đã:
+
+```txt
+CONFIRMED
+```
+
+Booking `PENDING_PAYMENT`, `CANCELLED` hoặc `EXPIRED` không được tạo ticket.
+
+Nếu truy vấn ticket của booking `PENDING_PAYMENT`:
+
+```json
+{
+  "success": true,
+  "message": "Tickets retrieved successfully",
+  "data": []
+}
+```
 
 ## 17.1. Get Tickets by Booking
 
@@ -1425,6 +1819,14 @@ Status: `409 Conflict`
 POST /internal/bookings/{bookingId}/confirm-payment
 ```
 
+### Request Headers
+
+```http
+Content-Type: application/json
+X-Internal-Token: <internal-token>
+Idempotency-Key: <UUID>
+```
+
 ### Request
 
 ```json
@@ -1436,16 +1838,84 @@ POST /internal/bookings/{bookingId}/confirm-payment
 }
 ```
 
-`paymentId` không được lưu vào bảng booking theo schema hiện tại. Nó chỉ phục vụ validation/audit/log ở tầng ứng dụng.
+`paymentId` không được lưu trực tiếp trong bảng `bookings`.
+
+Payment Service là service sở hữu liên kết:
+
+```txt
+payment.bookingId
+```
+
+### Security Flow
+
+Provider bên thứ ba không gọi trực tiếp endpoint này.
+
+Flow:
+
+```txt
+VNPay / MoMo callback
+→ Payment Service xác minh chữ ký provider
+→ Payment Service xác nhận payment result
+→ Payment Service gọi Booking Internal API
+```
+
+Sprint 2 dùng:
+
+```txt
+X-Internal-Token
+```
+
+Các sprint sau cần nâng cấp request Payment Service → Booking Service sang HMAC signature.
 
 ### Business Rules
 
-* Booking phải tồn tại.
-* Booking phải `PENDING_PAYMENT`.
-* Booking chưa hết payment timeout.
-* `paidAmount` phải bằng `booking.totalAmount`.
-* Request phải được bảo vệ như internal communication.
-* Xử lý phải idempotent.
+- Booking phải tồn tại.
+- Booking phải thuộc trạng thái `PENDING_PAYMENT`.
+- `bookings.expires_at` phải lớn hơn thời điểm xử lý.
+- `paidAmount` phải bằng `booking.totalAmount`.
+- Internal token phải hợp lệ.
+- `Idempotency-Key` là bắt buộc.
+- Payment callback phải idempotent.
+- Ticket chỉ được tạo trong operation này.
+
+### Processing Flow
+
+```txt
+Validate X-Internal-Token
+→ Validate Idempotency-Key
+→ Check idempotency result
+→ Load và lock/version-check booking
+→ Ensure booking status = PENDING_PAYMENT
+→ Ensure booking has not expired
+→ Validate paidAmount
+→ Load reservations CONVERTED của booking
+→ Change booking status to CONFIRMED
+→ Create one ticket for each converted reservation
+→ Store ticket price snapshot
+→ Store idempotency result
+→ Commit transaction
+→ Return confirmed booking and tickets
+```
+
+### Transaction Rule
+
+Các bước sau phải nằm trong cùng transaction:
+
+```txt
+Confirm booking
++
+Create tickets
++
+Store idempotency result
+```
+
+Nếu tạo một ticket thất bại:
+
+```txt
+Rollback booking status
+Rollback toàn bộ tickets
+Không trả booking CONFIRMED
+```
 
 ### Response Success
 
@@ -1455,19 +1925,39 @@ POST /internal/bookings/{bookingId}/confirm-payment
   "message": "Booking confirmed successfully",
   "data": {
     "bookingId": 1001,
-    "status": "CONFIRMED"
+    "bookingCode": "LORA-20260621-0001",
+    "status": "CONFIRMED",
+    "tickets": [
+      {
+        "ticketId": 2001,
+        "seatId": 101,
+        "price": 120000
+      },
+      {
+        "ticketId": 2002,
+        "seatId": 102,
+        "price": 120000
+      }
+    ],
+    "confirmedAt": "2026-06-21T20:10:00"
   }
 }
 ```
 
 ### Idempotency
 
-Nếu booking đã `CONFIRMED` do cùng payment callback:
+Nếu booking đã được `CONFIRMED` bởi cùng callback:
 
 ```txt
-Trả 200 OK với trạng thái CONFIRMED
+Trả 200 OK
 Không tạo thêm ticket
 Không publish duplicate event
+```
+
+Nếu booking đã `CONFIRMED` bởi payment transaction khác:
+
+```txt
+Trả 409 BOOKING_PAYMENT_CONFIRMATION_CONFLICT
 ```
 
 ### Error: Amount Mismatch
@@ -1508,6 +1998,14 @@ Status: `409 Conflict`
 POST /internal/bookings/{bookingId}/fail-payment
 ```
 
+### Request Headers
+
+```http
+Content-Type: application/json
+X-Internal-Token: <internal-token>
+Idempotency-Key: <UUID>
+```
+
 ### Request
 
 ```json
@@ -1519,14 +2017,16 @@ POST /internal/bookings/{bookingId}/fail-payment
 
 ### Rule
 
-Payment failed không bắt buộc hủy booking ngay nếu booking vẫn còn payment timeout.
+Payment failed request phải idempotent.
 
-Sprint 2 behavior:
+Payment failed không tự động hủy booking nếu:
 
 ```txt
-Giữ booking ở PENDING_PAYMENT
-cho phép user thực hiện payment attempt khác
+booking.status = PENDING_PAYMENT
+AND booking.expiresAt > now
 ```
+
+User vẫn được thực hiện payment attempt khác.
 
 Khi hết timeout, booking chuyển `EXPIRED`.
 
@@ -1623,28 +2123,60 @@ Response:
 
 ---
 
-# 21. Expiration Jobs
+# 21. Expiration Worker
 
-Booking Service cần scheduled process hoặc background worker:
+Booking Service phải triển khai scheduled worker hoặc background worker trong Sprint 2.
 
-### Reservation Expiration
+## 21.1. Reservation Expiration
 
-```txt
-HELD + expiresAt < now
-→ EXPIRED
-→ release Redis lock
-```
-
-### Booking Expiration
+Query:
 
 ```txt
-PENDING_PAYMENT + createdAt + paymentTimeout < now
-→ EXPIRED
+status = HELD
+AND expires_at < now
 ```
 
-Scheduler phải idempotent.
+Xử lý:
 
-Chạy lại không được gây lỗi hoặc thay đổi record đã xử lý.
+```txt
+HELD
+→ EXPIRED
+→ release Redis seat lock
+```
+
+## 21.2. Booking Expiration
+
+Query:
+
+```txt
+status = PENDING_PAYMENT
+AND expires_at < now
+```
+
+Xử lý:
+
+```txt
+PENDING_PAYMENT
+→ EXPIRED
+→ release Redis seat lock nếu còn tồn tại
+→ ghế thuộc reservations CONVERTED được xem là available trở lại
+```
+
+Không tạo ticket cho booking hết hạn.
+
+## 21.3. Worker Requirements
+
+Worker phải:
+
+- Chạy idempotent.
+- Có thể chạy lại an toàn.
+- Không expire booking đã `CONFIRMED`.
+- Không thay đổi booking đã `CANCELLED` hoặc `EXPIRED`.
+- Không tạo duplicate event.
+- Xử lý theo batch nếu số lượng record lớn.
+- Ghi log số record đã xử lý và số record lỗi.
+
+Redis TTL giải phóng lock real-time, còn worker đồng bộ trạng thái nghiệp vụ trong database.
 
 ---
 
@@ -1658,7 +2190,7 @@ Một cặp:
 showtimeId + seatId
 ```
 
-chỉ có một active lock tại một thời điểm.
+chỉ có một active Redis lock tại một thời điểm.
 
 ### Booking Creation
 
@@ -1667,12 +2199,14 @@ Một reservation chỉ được convert một lần.
 Create booking phải chạy trong transaction:
 
 ```txt
-Validate reservations
-→ Create booking
-→ Create tickets
+Validate và lock/version-check reservations
+→ Create booking PENDING_PAYMENT
 → Mark reservations CONVERTED
+→ Store idempotency result
 → Commit
 ```
+
+Không tạo ticket trong transaction Create Booking.
 
 Nếu bất kỳ bước nào lỗi:
 
@@ -1682,13 +2216,39 @@ Rollback toàn bộ transaction
 
 ### Payment Confirmation
 
+Confirm payment phải chạy trong transaction:
+
+```txt
+Validate callback
+→ Lock/version-check booking
+→ Change booking to CONFIRMED
+→ Create tickets
+→ Store idempotency result
+→ Commit
+```
+
 Payment confirmation phải idempotent.
 
 Không được:
 
-* Confirm booking hai lần.
-* Tạo ticket hai lần.
-* Publish event hai lần cho cùng transaction.
+- Confirm booking hai lần.
+- Tạo ticket hai lần.
+- Publish event hai lần cho cùng payment.
+
+### Optimistic Locking
+
+Schema phải bổ sung:
+
+```txt
+bookings.version
+seat_reservations.version
+```
+
+Entity tương ứng sử dụng `@Version`.
+
+Optimistic locking được dùng để phát hiện concurrent update.
+
+Redis vẫn là cơ chế chính chống giữ trùng ghế real-time.
 
 ---
 
@@ -1877,6 +2437,10 @@ Lý do:
 | `SEAT_LOCK_SERVICE_UNAVAILABLE`          |  503 | Redis seat lock lỗi          |
 | `TICKET_NOT_FOUND`                       |  404 | Không tìm thấy ticket        |
 | `MOVIE_SERVICE_UNAVAILABLE`              |  503 | Movie Service không khả dụng |
+| `BOOKING_IDEMPOTENCY_KEY_REQUIRED`      |  400 | Thiếu Idempotency-Key        |
+| `BOOKING_IDEMPOTENCY_CONFLICT`          |  409 | Key đã dùng với payload khác |
+| `BOOKING_PAYMENT_CONFIRMATION_CONFLICT` |  409 | Booking đã confirm bởi payment khác |
+| `BOOKING_OPTIMISTIC_LOCK_CONFLICT`      |  409 | Dữ liệu bị cập nhật đồng thời |
 | `VALIDATION_ERROR`                       |  400 | Request validation lỗi       |
 | `UNAUTHORIZED`                           |  401 | Chưa đăng nhập               |
 | `FORBIDDEN`                              |  403 | Không có quyền               |
@@ -1910,24 +2474,39 @@ Không nằm trong Sprint 2 contract hiện tại:
 
 # 29. Implementation Issue Direction
 
-Sau khi contract được duyệt, có thể tách:
+Contract implementation chỉ bắt đầu sau khi:
+
+```txt
+Booking Contract MR được merge
++
+Booking Schema Alignment MR được merge
++
+SQL, ERD và entity đã đồng bộ
+```
+
+Các implementation issue đề xuất:
 
 ```txt
 [Backend] Implement Seat Reservation and Redis Lock APIs
 
 [Backend] Implement Booking Core APIs
 
+[Backend] Implement Payment Confirmation and Ticket Creation
+
 [Backend] Implement Ticket Query APIs
 
-[Backend] Implement Booking Payment Integration and Expiration Jobs
+[Backend] Implement Booking and Reservation Expiration Worker
 ```
 
-Nếu Sprint 2 cần giảm scope:
+Thứ tự implementation:
 
 ```txt
-Issue 1: Seat reservation foundation
-Issue 2: Create/Get/Cancel booking
-Issue 3: Ticket creation and query
+Schema Alignment
+→ Redis Seat Reservation
+→ Booking Core
+→ Payment Confirmation + Ticket Creation
+→ Expiration Worker
+→ Ticket Query
 ```
 
 Mọi thay đổi endpoint, request, response hoặc business rule phải cập nhật contract trong cùng MR.
@@ -1938,51 +2517,107 @@ Mọi thay đổi endpoint, request, response hoặc business rule phải cập 
 
 Contract hoàn thành khi:
 
-* [ ] Có endpoint summary.
-* [ ] Có Protected/Admin/Internal classification.
-* [ ] Có request headers.
-* [ ] Có request/response mẫu.
-* [ ] Có field definitions.
-* [ ] Có success/error response.
-* [ ] Có booking lifecycle.
-* [ ] Có seat reservation lifecycle.
-* [ ] Có timeout rules.
-* [ ] Có Redis seat lock direction.
-* [ ] Có atomic multi-seat reservation rule.
-* [ ] Có concurrency rule.
-* [ ] Có transaction rule khi tạo booking.
-* [ ] Có payment confirmation idempotency.
-* [ ] Có ownership/authorization rule.
-* [ ] Có logical reference notes.
-* [ ] Có snapshot price rule.
-* [ ] Có delete policy.
-* [ ] Có schema limitations.
-* [ ] Không giả định `promotionId` hoặc `paymentId` đã được lưu.
-* [ ] Không giả định ticket đã có QR/status.
-* [ ] Vinh xác nhận feasibility.
-* [ ] Tài liệu đủ rõ để tách implementation issues.
-* [ ] MR target vào `develop`.
+- [x] Có endpoint summary.
+- [x] Có Protected/Admin/Internal classification.
+- [x] Có request headers.
+- [x] Có `Idempotency-Key` rules.
+- [x] Có request/response mẫu.
+- [x] Có field definitions.
+- [x] Có success/error response.
+- [x] Có booking lifecycle.
+- [x] Có seat reservation lifecycle.
+- [x] Có timeout rules.
+- [x] Có expiration worker direction.
+- [x] Có Redis seat lock direction.
+- [x] Có atomic multi-seat reservation rule.
+- [x] Có concurrency rule.
+- [x] Có Optimistic Locking direction.
+- [x] Create Booking không tạo ticket.
+- [x] Confirm Payment tạo ticket trong transaction.
+- [x] Có payment confirmation idempotency.
+- [x] Có ownership/authorization rule.
+- [x] Có logical reference notes.
+- [x] Có snapshot price rule.
+- [x] Có delete policy.
+- [x] Có schema alignment requirements.
+- [x] Không giả định `promotionId` hoặc `paymentId` đã được lưu.
+- [x] Không giả định ticket đã có QR/status.
+- [x] Vinh đã review feasibility và cung cấp design decisions.
+- [ ] Vinh xác nhận bản contract đã cập nhật.
+- [ ] Schema Alignment Issue đã được tạo và liên kết.
+- [ ] Tài liệu đủ rõ để tách implementation issues.
+- [x] MR target vào `develop`.
 
 ---
 
-# 31. Các Điểm Reviewer Cần Xác Nhận
+# 31. Review Decisions
 
-Vinh cần xác nhận:
+Booking Service Owner đã review và xác nhận:
 
-1. Booking Service port chính thức.
-2. Reservation TTL là `5 phút`.
-3. Payment timeout là `15 phút`.
-4. Có dùng Redis ngay Sprint 2 hay chỉ chuẩn bị foundation.
-5. Bộ `SeatReservationStatus`.
-6. Bộ `BookingStatus`.
-7. Có giữ `PENDING_PAYMENT` hay dùng tên khác.
-8. Tickets được tạo khi booking được tạo hay sau khi payment thành công.
-9. Contract hiện đề xuất tạo tickets khi booking `PENDING_PAYMENT`.
-10. Có cho customer cancel booking `CONFIRMED` không.
-11. Internal payment confirmation dùng REST hay Kafka.
-12. Cách bảo vệ `/internal/bookings/**`.
-13. Có cần thêm `bookings.expires_at`.
-14. Có cần thêm unique/index cho active reservation theo `showtimeId + seatId`.
-15. Có cần snapshot movie/showtime/seat label trong Booking DB.
-16. Có cần ticket code/QR/check-in trong Sprint 3.
-17. Có chấp nhận không tích hợp Promotion/Score trong Sprint 2.
+1. Booking status:
+
+   ```txt
+   PENDING_PAYMENT
+   CONFIRMED
+   CANCELLED
+   EXPIRED
+   ```
+
+2. Reservation status:
+
+   ```txt
+   HELD
+   RELEASED
+   EXPIRED
+   CONVERTED
+   ```
+
+3. Reservation TTL: `5 phút`.
+
+4. Booking payment timeout: `15 phút`.
+
+5. Redis seat lock được triển khai trong Sprint 2.
+
+6. Ghế có reservation `CONVERTED` được xem là unavailable khi booking còn:
+
+   ```txt
+   PENDING_PAYMENT
+   CONFIRMED
+   ```
+
+7. Unique index `(showtime_id, seat_id)` phải được xóa.
+
+8. Ticket chỉ được tạo sau payment success.
+
+9. Customer chỉ được cancel booking `PENDING_PAYMENT`.
+
+10. Payment Service lưu `bookingId`; Booking Service không lưu `paymentId`.
+
+11. Internal API dùng `X-Internal-Token` trong Sprint 2.
+
+12. `Idempotency-Key` bắt buộc cho POST API quan trọng.
+
+13. HMAC signature là hướng nâng cấp bảo mật cho sprint sau.
+
+14. Schema phải bổ sung:
+
+   ```txt
+   bookings.expires_at
+   bookings.version
+   seat_reservations.version
+   ```
+
+15. Booking Service phải có expiration worker.
+
+16. Schema Alignment Issue phải được merge trước Backend implementation.
+
+---
+
+# 32. Lịch Sử Chỉnh Sửa
+
+| Ngày | Nội dung | Người thực hiện |
+|---|---|---|
+| 21/06/2026 | Khởi tạo Booking Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
+| 22/06/2026 | Cập nhật contract theo review của Booking Service Owner: đổi thời điểm tạo ticket, bổ sung Idempotency-Key, expiration worker, schema alignment, Optimistic Locking và webhook security direction | Dương Thiện Nhân |
+
+Các thay đổi schema chỉ được ghi nhận là hoàn tất tại tài liệu sau khi Schema Alignment MR tương ứng được merge.
