@@ -224,7 +224,7 @@ Status: `200 OK`
     "cccdMasked": "092******789",
     "provinceName": "Cần Thơ",
     "birthYear": 2005,
-    "isVerifiedPhone": false
+    "verifiedPhone": false
   }
 }
 ```
@@ -243,7 +243,7 @@ Status: `200 OK`
 | cccdMasked        | string  | CCCD đã được che một phần an toàn           |
 | provinceName      | string  | Tỉnh/thành nơi làm thẻ CCCD suy ra từ mã    |
 | birthYear         | number  | Năm sinh suy ra từ CCCD                     |
-| isVerifiedPhone   | boolean | Trạng thái SĐT đã xác thực hay chưa         |
+| verifiedPhone     | boolean | Trạng thái SĐT đã xác thực hay chưa         |
 
 ---
 

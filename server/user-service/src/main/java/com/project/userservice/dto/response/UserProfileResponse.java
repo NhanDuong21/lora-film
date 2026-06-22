@@ -14,14 +14,14 @@ public class UserProfileResponse {
     private String cccdMasked;
     private String provinceName;
     private Integer birthYear;
-    private Boolean isVerifiedPhone;
+    private Boolean verifiedPhone;
 
     public UserProfileResponse() {
     }
 
     public UserProfileResponse(Long accountId, String fullName, String phoneNumber, Gender gender,
                                LocalDate birthday, String cccdMasked, String provinceName,
-                               Integer birthYear, Boolean isVerifiedPhone) {
+                               Integer birthYear, Boolean verifiedPhone) {
         this.accountId = accountId;
         this.fullName = fullName;
         this.phoneNumber = phoneNumber;
@@ -30,7 +30,7 @@ public class UserProfileResponse {
         this.cccdMasked = cccdMasked;
         this.provinceName = provinceName;
         this.birthYear = birthYear;
-        this.isVerifiedPhone = isVerifiedPhone;
+        this.verifiedPhone = verifiedPhone;
     }
 
     public Long getAccountId() {
@@ -97,11 +97,11 @@ public class UserProfileResponse {
         this.birthYear = birthYear;
     }
 
-    public Boolean getIsVerifiedPhone() {
-        return isVerifiedPhone;
+    public Boolean getVerifiedPhone() {
+        return verifiedPhone;
     }
 
-    public void setIsVerifiedPhone(Boolean isVerifiedPhone) {
-        this.isVerifiedPhone = isVerifiedPhone;
+    public void setVerifiedPhone(Boolean verifiedPhone) {
+        this.verifiedPhone = verifiedPhone;
     }
 }
