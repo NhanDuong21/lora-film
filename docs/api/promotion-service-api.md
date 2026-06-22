@@ -10,9 +10,9 @@
 | Contract Owner | Dương Thiện Nhân                                                          |
 | Backend Owner  | Trần Lương Thiện Hoàng                                                    |
 | Reviewer       | Trần Lương Thiện Hoàng                                                    |
-| Trạng thái     | Draft / Ready for Review                                                  |
+| Trạng thái     | Updated after Owner Review / Ready for Re-review                          |
 | Milestone      | Sprint 2 - Core Service API Foundation                                    |
-| Ngày cập nhật  | 21/06/2026                                                                |
+| Ngày cập nhật  | 22/06/2026                                                                |
 
 ---
 
@@ -132,9 +132,9 @@ ON DELETE CASCADE;
 
 ---
 
-## 5. Phân Tích Schema Hiện Tại
+## 5. Phân Tích Schema và Quyết Định Chính Thức
 
-### 5.1. Những nghiệp vụ schema hỗ trợ
+### 5.1. Những nghiệp vụ schema Sprint 0 hỗ trợ
 
 Schema hiện tại hỗ trợ:
 
@@ -149,58 +149,25 @@ Schema hiện tại hỗ trợ:
 * Ghi nhận promotion đã được áp dụng vào booking.
 * Mỗi booking chỉ được gắn với một usage record.
 
-### 5.2. Ý nghĩa của `booking_id UNIQUE`
+### 5.2. Một promotion cho mỗi booking
 
-Constraint hiện tại:
+Sprint 2 giữ constraint:
 
 ```txt
 promotion_usages.booking_id UNIQUE
 ```
 
-có nghĩa:
+Điều này có nghĩa:
 
 ```txt
 Một booking chỉ được áp dụng tối đa một promotion.
 ```
 
-Contract Sprint 2 giữ rule này.
+Promotion stacking không nằm trong Sprint 2.
 
-Nếu tương lai hỗ trợ stacking nhiều promotion trên cùng booking, phải:
+### 5.3. Promotion Usage Lifecycle
 
-* Gỡ unique khỏi `booking_id`.
-* Thiết kế priority/combination rule.
-* Cập nhật Booking, Payment và Promotion Contract.
-* Tạo schema alignment issue riêng.
-
-### 5.3. Giới hạn schema hiện tại
-
-Schema chưa có:
-
-```txt
-promotion_usages.status
-promotion_usages.discount_amount
-promotion_usages.original_amount
-promotion_usages.final_amount
-promotion_usages.reverted_at
-promotion_usages.revert_reason
-promotion_usages.updated_at
-
-promotions.version
-promotions.deleted_at
-```
-
-Do đó schema hiện tại chưa thể hiện rõ:
-
-* Usage đang được reserve hay đã áp dụng chính thức.
-* Usage đã bị revert hay chưa.
-* Discount snapshot tại thời điểm apply.
-* Amount trước và sau khi giảm.
-* Lý do hoàn lại lượt dùng.
-* Optimistic locking version.
-
-### 5.4. Hướng Sprint 2
-
-Contract đề xuất lifecycle usage:
+Lifecycle chính thức:
 
 ```txt
 RESERVED
@@ -208,30 +175,143 @@ APPLIED
 REVERTED
 ```
 
-Tuy nhiên schema hiện chưa có `status`.
+Allowed transitions:
 
-Reviewer cần quyết định một trong hai hướng:
+```txt
+RESERVED → APPLIED
+RESERVED → REVERTED
+```
 
-#### Hướng A — Bổ sung status
+Không cho:
+
+```txt
+APPLIED → RESERVED
+REVERTED → RESERVED
+REVERTED → APPLIED
+```
+
+Usage được tạo ngay khi Apply:
+
+```txt
+Apply
+→ Create RESERVED usage
+→ Increment used_count
+```
+
+Payment success:
+
+```txt
+RESERVED → APPLIED
+```
+
+Booking cancelled hoặc expired:
+
+```txt
+RESERVED → REVERTED
+→ Decrement used_count đúng một lần
+```
+
+Payment `FAILED` nhưng booking vẫn còn thời gian retry:
+
+```txt
+Giữ usage ở RESERVED
+```
+
+### 5.4. Discount Snapshot và Source of Truth
+
+Promotion Service bắt buộc lưu snapshot tại thời điểm apply:
+
+```txt
+original_amount
+discount_amount
+final_amount
+```
+
+Source of truth được chốt:
+
+```txt
+Promotion Service
+→ tính discount
+→ lưu discount snapshot để audit
+
+Booking Service
+→ lưu finalAmount chính thức của booking
+
+Payment Service
+→ lấy payable amount từ Booking Service
+→ không tự tính lại discount
+```
+
+### 5.5. Revert Audit và Expiration
+
+Promotion usage phải lưu:
+
+```txt
+reverted_at
+revert_reason
+updated_at
+expires_at
+```
+
+`expires_at` là snapshot của `booking.expires_at` tại thời điểm apply.
+
+Booking Service vẫn là source of truth của booking expiry.
+
+Promotion Service dùng `promotion_usages.expires_at` cho:
+
+* Reconciliation.
+* Cleanup usage bị treo.
+* Phục hồi khi internal call từ Booking Service bị lỗi.
+
+### 5.6. Concurrency và Optimistic Locking
+
+Schema phải bổ sung:
+
+```txt
+promotions.version
+promotion_usages.version
+```
+
+Entity tương ứng dùng `@Version`.
+
+Ngoài optimistic locking, tăng `used_count` vẫn phải dùng atomic conditional update để không vượt `usage_limit`.
+
+### 5.7. Delete Policy
+
+Sprint 2 không hard delete campaign hoặc promotion.
+
+Chỉ disable bằng:
+
+```txt
+is_active = false
+```
+
+Foreign key nội bộ phải dùng `ON DELETE RESTRICT` hoặc behavior tương đương để tránh mất usage history.
+
+### 5.8. Schema Alignment Bắt Buộc
+
+Trước Backend implementation, schema phải bổ sung:
 
 ```txt
 promotion_usages.status
+promotion_usages.original_amount
 promotion_usages.discount_amount
+promotion_usages.final_amount
+promotion_usages.expires_at
 promotion_usages.reverted_at
+promotion_usages.revert_reason
+promotion_usages.updated_at
+promotion_usages.version
+promotions.version
+index (promotion_id, user_id, status)
+index (status, expires_at)
 ```
 
-Đây là hướng khuyến nghị nếu Sprint 2 cần apply/revert usage đúng nghiệp vụ.
+Schema được cập nhật trong issue:
 
-#### Hướng B — Không sửa schema trong Sprint 2
-
-* Chỉ insert `promotion_usages` khi booking/payment đã được xác nhận.
-* Discount preview không tạo usage.
-* Khi cần revert thì xóa usage và giảm `used_count`.
-* Audit và lịch sử revert sẽ hạn chế.
-
-Hướng B đơn giản nhưng khó audit hơn.
-
----
+```txt
+[Database] Align Promotion Schema with Promotion API Contract
+```
 
 ## 6. Database-per-Service và Logical Reference
 
@@ -445,7 +525,7 @@ OUT_OF_USAGE
 
 Không nhất thiết lưu trực tiếp trong database.
 
-### 10.3. PromotionUsageStatus Đề Xuất
+### 10.3. PromotionUsageStatus
 
 ```txt
 RESERVED
@@ -459,7 +539,7 @@ REVERTED
 | APPLIED  | Booking/payment đã thành công, lượt dùng được xác nhận |
 | REVERTED | Booking thất bại/hủy và lượt dùng đã được hoàn lại     |
 
-Status này cần schema alignment nếu được implement.
+Status này là bắt buộc và cần schema alignment trước implementation.
 
 ---
 
@@ -573,26 +653,22 @@ Không được trả final amount âm.
 
 ### 13.4. Rounding
 
-Với VND:
+Discount calculation dùng:
 
 ```txt
-discountAmount và finalAmount làm tròn về số nguyên VND
+Data type: BigDecimal
+Rounding mode: HALF_UP
+Scale: 0 đối với VND
 ```
 
-Reviewer cần xác nhận rounding strategy:
+Không dùng `double` hoặc `float` cho phép tính tài chính.
 
-```txt
-HALF_UP
-FLOOR
+Ví dụ:
+
+```java
+discountAmount = rawDiscount.setScale(0, RoundingMode.HALF_UP);
+finalAmount = bookingAmount.subtract(discountAmount).max(BigDecimal.ZERO);
 ```
-
-Đề xuất:
-
-```txt
-HALF_UP
-```
-
----
 
 ## 14. API Classification
 
@@ -1102,12 +1178,15 @@ Status: `201 Created`
     "discountAmount": 24000,
     "finalAmount": 216000,
     "usageStatus": "RESERVED",
+    "expiresAt": "2026-06-21T20:30:00",
     "appliedAt": "2026-06-21T20:15:00"
   }
 }
 ```
 
-Nếu schema không bổ sung status, response có thể bỏ `usageStatus` hoặc trả trạng thái derive.
+`usageStatus` được lưu trực tiếp trong `promotion_usages.status`.
+
+`expiresAt` được copy từ `booking.expires_at` tại thời điểm apply.
 
 ---
 
@@ -1266,18 +1345,18 @@ promotions.used_count → used_count - 1
 
 Không để `used_count` nhỏ hơn `0`.
 
-### Schema Limitation
+### Audit Fields
 
-Schema hiện tại không có `status`.
-
-Nếu không refactor schema, implementation có thể:
+Khi revert phải cập nhật:
 
 ```txt
-DELETE promotion_usages
-DECREMENT promotions.used_count
+status = REVERTED
+reverted_at = thời điểm revert
+revert_reason = lý do nghiệp vụ
+updated_at = thời điểm cập nhật
 ```
 
-Nhưng cách này mất lịch sử usage và không khuyến nghị cho production.
+Không xóa `promotion_usages` vì phải giữ lịch sử audit.
 
 ---
 
@@ -1929,11 +2008,13 @@ Booking được tạo với original amount
 → User nhập promotion code
 → Frontend gọi validate/preview
 → Booking Service gọi internal apply
+→ Promotion Service tính discount
+→ Promotion Service lưu discount snapshot
 → Promotion Service trả discountAmount/finalAmount
-→ Booking Service lưu hoặc sử dụng discount snapshot
-→ Payment Service lấy final payable amount
+→ Booking Service lưu finalAmount chính thức
+→ Payment Service lấy payable amount từ Booking Service
 → Payment success
-→ Promotion usage được confirm
+→ Promotion usage được confirm APPLIED
 ```
 
 ## 29.2. Booking Failure
@@ -1941,7 +2022,8 @@ Booking được tạo với original amount
 ```txt
 Booking CANCELLED hoặc EXPIRED
 → Booking Service gọi revert usage
-→ Promotion Service hoàn usedCount
+→ Promotion Service chuyển RESERVED → REVERTED
+→ Promotion Service giảm used_count đúng một lần
 ```
 
 ## 29.3. Payment Failure
@@ -1949,53 +2031,78 @@ Booking CANCELLED hoặc EXPIRED
 Payment `FAILED` nhưng Booking vẫn còn thời gian retry:
 
 ```txt
-Không revert usage ngay
+Không revert usage
+Giữ usage ở RESERVED
 ```
 
-Chỉ revert khi:
+Chỉ revert khi Booking Service xác nhận booking đã:
 
 ```txt
-Booking bị CANCELLED hoặc EXPIRED
+CANCELLED
+EXPIRED
 ```
 
-## 29.4. Source of Truth cho Final Amount
-
-Cần chốt giữa các contract:
+## 29.4. Source of Truth cho Amount
 
 ```txt
-Promotion Service tính discount
-Booking Service lưu/giữ final booking amount
-Payment Service lấy payable amount từ Booking Service
+Promotion Service
+→ source of truth cho promotion rule và discount calculation
+→ lưu originalAmount, discountAmount, finalAmount để audit
+
+Booking Service
+→ source of truth cho finalAmount chính thức của booking
+
+Payment Service
+→ chỉ lấy payable amount từ Booking Service
+→ không tự gọi Promotion Service để tính lại discount
 ```
 
-Payment Service không tự gọi Promotion Service để tính lại discount sau khi Booking đã chốt.
+## 29.5. Internal Communication
 
----
+Sprint 2 dùng Internal REST API:
+
+```txt
+POST /internal/promotions/apply
+POST /internal/promotions/usages/{usageId}/confirm
+POST /internal/promotions/usages/{usageId}/revert
+GET  /internal/promotions/bookings/{bookingId}
+```
+
+Internal API sử dụng:
+
+```http
+X-Internal-Token: <internal-token>
+```
+
+Frontend không được gọi trực tiếp các endpoint này.
 
 # 30. Usage Reservation Timeout
 
-Nếu usage được tạo ở trạng thái `RESERVED`, nó phải gắn với thời hạn booking.
+Booking Service là source of truth của booking expiry.
 
-Khi booking hết hạn:
+Khi tạo usage:
+
+```txt
+promotion_usages.expires_at = booking.expires_at
+```
+
+Nếu booking hết hạn:
 
 ```txt
 RESERVED → REVERTED
+→ decrement used_count đúng một lần
 ```
 
-Promotion Service có thể:
-
-* Nhận event/call từ Booking Service.
-* Hoặc chạy reconciliation job để kiểm tra reservation cũ.
-
-Schema hiện chưa có:
+Promotion Service có thể nhận internal call từ Booking Service hoặc chạy reconciliation worker dựa trên:
 
 ```txt
-expires_at
+status = RESERVED
+AND expires_at < now
 ```
 
-Có thể dùng booking expiry từ Booking Service hoặc bổ sung usage expiry nếu cần.
+Worker chỉ là cơ chế phục hồi; không thay thế Booking Service notification.
 
----
+Worker phải idempotent và không được revert usage đã `APPLIED` hoặc `REVERTED`.
 
 # 31. Security Rules
 
@@ -2024,9 +2131,9 @@ PROMOTION_USAGE_READ
 
 # 32. Delete Policy
 
-Không hard delete campaign hoặc promotion đã có usage.
+Sprint 2 không expose Hard Delete API cho campaign hoặc promotion.
 
-Khuyến nghị:
+Campaign và promotion chỉ được disable bằng:
 
 ```txt
 is_active = false
@@ -2039,21 +2146,15 @@ Lý do:
 * Không phá dữ liệu usage.
 * Không làm mất thông tin đối soát.
 
-`ON DELETE CASCADE` hiện có thể xóa promotion và toàn bộ usage nếu campaign/promotion bị xóa vật lý.
-
-Reviewer cần xác nhận:
+Foreign key nội bộ phải dùng:
 
 ```txt
-Có cho phép hard delete hay không.
+ON DELETE RESTRICT
 ```
 
-Khuyến nghị:
+hoặc behavior tương đương.
 
-```txt
-Không expose hard delete API trong Sprint 2.
-```
-
----
+Không dùng `ON DELETE CASCADE` nếu có thể làm mất `promotion_usages`.
 
 # 33. Error Code Catalog
 
@@ -2080,6 +2181,7 @@ Không expose hard delete API trong Sprint 2.
 | `PROMOTION_USAGE_ALREADY_CONFIRMED`    |  409 | Usage đã confirm               |
 | `PROMOTION_USAGE_ALREADY_REVERTED`     |  409 | Usage đã revert                |
 | `PROMOTION_USAGE_INVALID_TRANSITION`   |  409 | Chuyển trạng thái sai          |
+| `PROMOTION_OPTIMISTIC_LOCK_CONFLICT`    |  409 | Dữ liệu bị cập nhật đồng thời  |
 | `PROMOTION_BOOKING_NOT_FOUND`          |  404 | Booking không tồn tại          |
 | `PROMOTION_BOOKING_NOT_ELIGIBLE`       |  409 | Booking không đủ điều kiện     |
 | `PROMOTION_BOOKING_OWNERSHIP_MISMATCH` |  403 | Booking không thuộc user       |
@@ -2095,7 +2197,13 @@ Không expose hard delete API trong Sprint 2.
 
 ## 34.1. Usage Status
 
-Contract đề xuất:
+Bắt buộc bổ sung:
+
+```txt
+promotion_usages.status
+```
+
+Allowed values:
 
 ```txt
 RESERVED
@@ -2103,78 +2211,116 @@ APPLIED
 REVERTED
 ```
 
-Schema chưa có `promotion_usages.status`.
-
 ## 34.2. Discount Snapshot
 
-Contract trả:
+Bắt buộc lưu:
 
 ```txt
-originalAmount
-discountAmount
-finalAmount
+original_amount
+discount_amount
+final_amount
 ```
 
-Schema usage chưa lưu các field này.
+Promotion Service lưu snapshot này để audit.
 
-Nếu Booking Service lưu snapshot đầy đủ thì Promotion Service có thể không cần lưu. Reviewer phải chốt source of truth.
+Booking Service lưu `finalAmount` chính thức của booking.
 
 ## 34.3. Revert Tracking
 
-Schema chưa có:
+Bắt buộc bổ sung:
 
 ```txt
 reverted_at
 revert_reason
+updated_at
 ```
 
-## 34.4. User Usage Index
+Không xóa usage record khi revert.
 
-Nên xem xét index:
+## 34.4. Usage Expiration
+
+Bắt buộc bổ sung:
 
 ```txt
-(promotion_id, user_id)
+expires_at
 ```
 
-để kiểm tra per-user limit.
+Giá trị được copy từ `booking.expires_at` khi apply.
 
-## 34.5. Usage Uniqueness
+## 34.5. User Usage Index
 
-Schema hiện chỉ unique:
+Bắt buộc bổ sung:
 
 ```txt
-booking_id
+(promotion_id, user_id, status)
 ```
 
-Có thể cần thêm rule/index phù hợp tùy lifecycle.
+để tối ưu kiểm tra per-user limit trên usage `RESERVED` và `APPLIED`.
 
-## 34.6. Optimistic Locking
+## 34.6. Expiration Index
 
-Schema chưa có:
+Bắt buộc bổ sung:
 
 ```txt
-version
+(status, expires_at)
 ```
 
-Có thể dùng atomic update trên `used_count` thay vì optimistic locking.
+để hỗ trợ reconciliation worker.
 
-## 34.7. Cascade Delete
+## 34.7. Usage Uniqueness
 
-`ON DELETE CASCADE` có thể làm mất usage history nếu hard delete.
+Tiếp tục giữ:
 
-Khuyến nghị không hard delete qua API.
+```txt
+booking_id UNIQUE
+```
 
-## 34.8. Used Count Consistency
+Sprint 2 không hỗ trợ promotion stacking.
 
-`used_count` có thể lệch với số record usage nếu:
+## 34.8. Optimistic Locking
 
-* Transaction không atomic.
-* Revert lỗi.
-* Manual data update.
+Bắt buộc bổ sung:
 
-Có thể cần reconciliation job hoặc query kiểm tra định kỳ.
+```txt
+promotions.version
+promotion_usages.version
+```
 
----
+Entity sử dụng `@Version`.
+
+## 34.9. Cascade Delete
+
+Rà soát và loại bỏ `ON DELETE CASCADE` có thể làm mất usage history.
+
+Dùng `ON DELETE RESTRICT` hoặc disable bằng `is_active = false`.
+
+## 34.10. Used Count Consistency
+
+Apply phải atomic:
+
+```txt
+Increment used_count
++
+Insert RESERVED usage
+```
+
+Revert phải atomic:
+
+```txt
+RESERVED → REVERTED
++
+Decrement used_count đúng một lần
+```
+
+Có thể bổ sung reconciliation job để phát hiện lệch dữ liệu.
+
+## 34.11. Related Schema Issue
+
+```txt
+[Database] Align Promotion Schema with Promotion API Contract
+```
+
+Schema Alignment MR phải merge trước Backend implementation.
 
 # 35. Out of Scope
 
@@ -2199,7 +2345,17 @@ Có thể cần reconciliation job hoặc query kiểm tra định kỳ.
 
 # 36. Implementation Issue Direction
 
-Sau khi contract được review và schema alignment hoàn tất nếu cần, có thể tách:
+Implementation chỉ bắt đầu sau khi:
+
+```txt
+Promotion Contract MR được merge
++
+Promotion Schema Alignment MR được merge
++
+SQL và Physical ERD đã đồng bộ
+```
+
+Các implementation issue đề xuất:
 
 ```txt
 [Backend] Implement Promotion Campaign Management APIs
@@ -2209,27 +2365,22 @@ Sau khi contract được review và schema alignment hoàn tất nếu cần, c
 [Backend] Implement Promotion Validation and Discount Calculation
 
 [Backend] Implement Promotion Usage Apply, Confirm and Revert Flow
+
+[Backend] Implement Promotion Usage Reconciliation Worker
 ```
 
-Nếu giảm scope Sprint 2:
+Thứ tự đề xuất:
 
 ```txt
-Issue 1: Campaign and Promotion CRUD
-Issue 2: Validate and Preview Promotion
-Issue 3: Apply and Usage Tracking Foundation
+Schema Alignment
+→ Campaign/Promotion Management
+→ Validate/Preview
+→ Apply RESERVED Usage
+→ Confirm/Revert Flow
+→ Reconciliation Worker
 ```
 
-Implementation issue chỉ chuyển `Ready` khi:
-
-```txt
-Contract đã được duyệt
-+
-Schema bắt buộc đã align
-+
-Hoàng xác nhận feasibility
-```
-
----
+Mọi thay đổi endpoint, request, response hoặc business rule phải cập nhật contract trong cùng MR.
 
 # 37. Acceptance Criteria
 
@@ -2254,44 +2405,108 @@ Hoàng xác nhận feasibility
 * [ ] Có Booking/Payment integration direction.
 * [ ] Có security notes.
 * [ ] Có status/error code.
-* [ ] Có schema mismatch notes.
+* [ ] Có schema alignment requirements.
+* [ ] Có discount snapshot source-of-truth decision.
+* [ ] Có usage expiry và reconciliation direction.
+* [ ] Có optimistic locking direction.
+* [ ] Có soft-delete/restrict delete policy.
 * [ ] Hoàng review feasibility.
 * [ ] Contract sẵn sàng cho implementation.
 * [ ] MR target `develop`.
 
 ---
 
-# 38. Các Điểm Reviewer Cần Xác Nhận
+# 38. Review Decisions
 
-Hoàng cần xác nhận:
+Promotion Service Owner đã review và xác nhận:
 
-1. Promotion Service port chính thức.
-2. Một booking chỉ được áp dụng một promotion hay không.
-3. Có giữ `promotion_usages.booking_id UNIQUE` không.
-4. Usage được tạo lúc apply hay chỉ sau payment success.
-5. Có cần lifecycle `RESERVED/APPLIED/REVERTED` không.
-6. Có thêm `promotion_usages.status` không.
-7. Có lưu `discount_amount` snapshot trong usage không.
-8. Booking Service hay Promotion Service giữ final amount snapshot.
-9. Revert usage dùng status hay xóa record.
-10. Có thêm `reverted_at` và `revert_reason` không.
-11. `used_count` tăng lúc reserve hay lúc payment success.
-12. Nếu tăng lúc reserve, khi booking expire phải revert thế nào.
-13. Payment fail nhưng booking còn retry có giữ usage không.
-14. Discount rounding dùng `HALF_UP` hay rule khác.
-15. Promotion time phải nằm hoàn toàn trong campaign time không.
-16. Có cho sửa promotion sau khi đã có usage không.
-17. Có cần index `(promotion_id, user_id)` không.
-18. Có giữ `ON DELETE CASCADE` không.
-19. Internal apply được Booking Service gọi qua REST hay Kafka.
-20. Có cần schema alignment issue trước implementation không.
+1. Promotion Usage Lifecycle:
 
----
+   ```txt
+   RESERVED
+   APPLIED
+   REVERTED
+   ```
+
+2. Usage được tạo và `used_count` tăng ngay khi Apply.
+
+3. Payment Success chuyển usage:
+
+   ```txt
+   RESERVED → APPLIED
+   ```
+
+4. Booking `CANCELLED` hoặc `EXPIRED` chuyển usage:
+
+   ```txt
+   RESERVED → REVERTED
+   ```
+
+5. Payment `FAILED` không revert nếu booking vẫn còn thời gian retry.
+
+6. Một booking chỉ áp dụng một promotion trong Sprint 2.
+
+7. Tiếp tục giữ:
+
+   ```txt
+   promotion_usages.booking_id UNIQUE
+   ```
+
+8. Promotion Service lưu:
+
+   ```txt
+   originalAmount
+   discountAmount
+   finalAmount
+   ```
+
+   để audit.
+
+9. Booking Service lưu `finalAmount` chính thức của booking.
+
+10. Payment Service chỉ lấy payable amount từ Booking Service.
+
+11. Promotion usage lưu:
+
+    ```txt
+    reverted_at
+    revert_reason
+    updated_at
+    expires_at
+    ```
+
+12. `expires_at` được copy từ booking expiry.
+
+13. Internal integration sử dụng REST và `X-Internal-Token` trong Sprint 2.
+
+14. Discount calculation sử dụng:
+
+    ```txt
+    BigDecimal
+    RoundingMode.HALF_UP
+    Scale 0 cho VND
+    ```
+
+15. Bắt buộc có optimistic locking bằng `version` cho `promotions` và `promotion_usages`.
+
+16. Bắt buộc có index:
+
+    ```txt
+    (promotion_id, user_id, status)
+    (status, expires_at)
+    ```
+
+17. Không hard delete campaign hoặc promotion trong Sprint 2.
+
+18. Phải rà soát và loại bỏ `ON DELETE CASCADE` có thể làm mất usage history.
+
+19. Schema alignment phải hoàn thành trước Backend implementation.
 
 # 39. Lịch Sử Chỉnh Sửa
 
 | Ngày       | Nội dung                                                         | Người thực hiện  |
 | ---------- | ---------------------------------------------------------------- | ---------------- |
 | 21/06/2026 | Khởi tạo Promotion Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
+| 22/06/2026 | Cập nhật theo review của Promotion Service Owner: usage lifecycle, discount snapshot, revert audit, expiry, optimistic locking, indexes và delete policy | Dương Thiện Nhân |
 
 Các thay đổi schema chỉ được ghi nhận tại đây sau khi schema MR tương ứng đã được merge.
