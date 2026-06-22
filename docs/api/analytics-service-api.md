@@ -10,7 +10,7 @@
 | Contract Owner | Dương Thiện Nhân                                                                  |
 | Backend Owner  | Trương Hoàng Khang                                                                |
 | Reviewer       | Trương Hoàng Khang                                                                |
-| Trạng thái     | Draft / Ready for Review                                                          |
+| Trạng thái     | Approved / Ready for Implementation                                               |
 | Milestone      | Sprint 2 - Core Service API Foundation                                            |
 | Ngày cập nhật  | 22/06/2026                                                                        |
 
@@ -499,17 +499,33 @@ endDate = ngày hiện tại
 
 ### 10.3. Maximum Query Range
 
-Đề xuất:
+Dashboard, Revenue Summary, Daily Revenue và các API query theo khoảng ngày chỉ hỗ trợ tối đa:
 
 ```txt
-366 ngày
+92 ngày
 ```
 
-Nếu vượt:
+Nếu khoảng thời gian vượt quá 92 ngày:
 
 ```txt
 ANALYTICS_DATE_RANGE_TOO_LARGE
 ```
+
+Response:
+
+```json
+{
+  "success": false,
+  "message": "Analytics date range must not exceed 92 days",
+  "errorCode": "ANALYTICS_DATE_RANGE_TOO_LARGE",
+  "data": null,
+  "errors": null
+}
+```
+
+Giới hạn này áp dụng để bảo đảm hiệu năng query trong Sprint 2.
+
+Các báo cáo dài hơn 92 ngày phải được chia thành nhiều request hoặc xử lý thông qua cơ chế export/report riêng trong sprint sau.
 
 ### 10.4. Future Dates
 
@@ -673,13 +689,6 @@ GET /api/analytics/dashboard
       "cancelledBookings": 2,
       "totalTicketsSold": 44
     },
-    "currentMonth": {
-      "month": "2026-06",
-      "totalRevenue": 12500000,
-      "successfulBookings": 320,
-      "cancelledBookings": 27,
-      "totalTicketsSold": 645
-    },
     "topMovies": [
       {
         "rank": 1,
@@ -695,6 +704,25 @@ GET /api/analytics/dashboard
 }
 ```
 
+### Dashboard Scope
+
+Dashboard response không trả object `currentMonth`.
+
+Frontend cần dữ liệu tổng hợp theo tháng sẽ gọi:
+
+```http
+GET /api/analytics/revenue/summary
+```
+
+với:
+
+```txt
+startDate = ngày đầu tháng
+endDate = ngày hiện tại hoặc ngày cuối tháng
+```
+
+Việc loại bỏ `currentMonth` giúp tránh trùng logic giữa Dashboard API và Revenue Summary API.
+
 ### Ticket Count Source
 
 `summary.totalTicketsSold` được tính bằng tổng:
@@ -709,16 +737,40 @@ Field này chỉ được implement sau khi Schema Alignment MR bổ sung cột 
 
 ### Average Order Value
 
+Công thức:
+
 ```txt
 averageOrderValue =
 totalRevenue / totalSuccessfulBookings
 ```
 
-Nếu booking count bằng `0`:
+Quy tắc tính toán Backend:
 
 ```txt
-averageOrderValue = 0
+Data type: BigDecimal
+Scale: 2
+Rounding mode: HALF_UP
 ```
+
+Ví dụ:
+
+```java
+averageOrderValue = totalRevenue.divide(
+    BigDecimal.valueOf(totalSuccessfulBookings),
+    2,
+    RoundingMode.HALF_UP
+);
+```
+
+Nếu `totalSuccessfulBookings = 0`:
+
+```txt
+averageOrderValue = 0.00
+```
+
+Không dùng `double` hoặc `float` để tính dữ liệu tài chính.
+
+Quy tắc `BigDecimal`, scale `2`, `HALF_UP` cũng áp dụng cho các phép chia tài chính tương tự như `averageRevenuePerTicket`.
 
 ---
 
@@ -1180,7 +1232,56 @@ BOOKING_CANCELLED
 
 Internal HTTP endpoint trong các phần dưới chỉ là contract hỗ trợ testing, replay có kiểm soát hoặc recovery. Production integration ưu tiên Kafka consumer.
 
-## 20.2. `PAYMENT_SUCCEEDED`
+## 20.2. Event Time Consistency
+
+Analytics Consumer bắt buộc sử dụng field:
+
+```txt
+occurredAt
+```
+
+từ event để xác định `statDate`.
+
+Processing rule:
+
+```txt
+event.occurredAt
+→ parse ISO-8601 datetime
+→ convert sang Asia/Ho_Chi_Minh
+→ lấy LocalDate
+→ sử dụng làm statDate
+```
+
+Không được sử dụng:
+
+```java
+LocalDateTime.now()
+LocalDate.now()
+Instant.now()
+```
+
+để xác định ngày aggregate cho event.
+
+System time chỉ có thể dùng cho:
+
+- `processedAt`
+- Logging
+- Monitoring
+- Technical timestamp
+
+Không dùng system time thay thế business event time.
+
+Ví dụ:
+
+```txt
+Event occurredAt: 2026-06-21T23:59:58+07:00
+Consumer xử lý lúc: 2026-06-22T00:00:03+07:00
+statDate bắt buộc: 2026-06-21
+```
+
+Rebuild và replay cũng phải giữ nguyên `statDate` được tính từ `occurredAt`, không dựa trên thời điểm replay.
+
+## 20.3. `PAYMENT_SUCCEEDED`
 
 Topic đề xuất:
 
@@ -1251,7 +1352,7 @@ ticketsSold += ticketCount
 
 ---
 
-## 20.3. `PAYMENT_REFUNDED`
+## 20.4. `PAYMENT_REFUNDED`
 
 Topic đề xuất:
 
@@ -1283,6 +1384,46 @@ Payload:
 }
 ```
 
+### Refund Business Window
+
+Theo business rule hiện tại, refund chỉ được xử lý trong tối đa:
+
+```txt
+1 giờ kể từ thời điểm đặt vé/thanh toán thành công
+```
+
+Analytics không chịu trách nhiệm quyết định refund có hợp lệ hay không.
+
+Payment Service là service xác thực refund window trước khi publish:
+
+```txt
+PAYMENT_REFUNDED
+```
+
+Khi Analytics nhận event refund hợp lệ:
+
+```txt
+statDate = ngày của occurredAt trong event refund
+```
+
+Không backdate về ngày payment gốc.
+
+Ví dụ:
+
+```txt
+Payment success: 2026-06-21T23:40:00+07:00
+Refund occurred: 2026-06-22T00:20:00+07:00
+```
+
+Analytics ghi nhận:
+
+```txt
+Payment revenue: 2026-06-21
+Refund deduction: 2026-06-22
+```
+
+Rebuild hoặc replay event phải giữ nguyên quy tắc này.
+
 Refund được trừ vào ngày refund xảy ra.
 
 Update:
@@ -1303,7 +1444,7 @@ Daily net revenue có thể âm.
 
 ---
 
-## 20.4. `BOOKING_CANCELLED`
+## 20.5. `BOOKING_CANCELLED`
 
 Topic đề xuất:
 
@@ -2151,11 +2292,40 @@ Analytics Service Owner đã review và xác nhận:
 
 12. Schema alignment phải hoàn thành trước Backend implementation.
 
+13. Dashboard và Revenue Summary chỉ cho query tối đa:
+
+    ```txt
+    92 ngày
+    ```
+
+14. Dashboard response không trả `currentMonth`.
+
+15. Frontend cần dữ liệu tháng phải gọi Revenue Summary API.
+
+16. Average Order Value sử dụng:
+
+    ```txt
+    BigDecimal
+    Scale 2
+    RoundingMode.HALF_UP
+    ```
+
+17. Consumer bắt buộc dùng `occurredAt` để xác định `statDate`.
+
+18. Consumer không được dùng system time để xác định ngày aggregate.
+
+19. Refund được ghi nhận vào ngày refund xảy ra, kể cả khi refund sang ngày hôm sau.
+
+20. Refund business window tối đa 1 giờ được kiểm tra bởi Payment Service trước khi publish event.
+
+21. Rebuild và replay phải dựa trên `occurredAt`, không backdate về transaction gốc.
+
 # 45. Lịch Sử Chỉnh Sửa
 
 | Ngày       | Nội dung                                                         | Người thực hiện  |
 | ---------- | ---------------------------------------------------------------- | ---------------- |
 | 21/06/2026 | Khởi tạo Analytics Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
 | 22/06/2026 | Cập nhật theo review của Analytics Service Owner: Kafka aggregation, Net Revenue, movie date-range/trend, daily ticket count, processed events và schema alignment | Dương Thiện Nhân |
+| 22/06/2026 | Cập nhật quyết định review cuối: query limit 92 ngày, remove `currentMonth`, BigDecimal HALF_UP scale 2, `occurredAt` consistency và refund window 1 giờ | Dương Thiện Nhân |
 
 Các thay đổi schema chỉ được ghi nhận tại đây sau khi schema MR tương ứng đã được merge.
