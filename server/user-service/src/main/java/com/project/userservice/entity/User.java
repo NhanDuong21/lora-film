@@ -45,7 +45,7 @@ public class User {
     private Integer birthYear;
 
     @Column(name = "is_verified_phone")
-    private Boolean isVerifiedPhone = false;
+    private Boolean verifiedPhone = false;
 
     @Column(name = "cccd_checked_at")
     private LocalDateTime cccdCheckedAt;
@@ -66,7 +66,7 @@ public class User {
 
     public User(Long accountId, String fullName, String phoneNumber, String cccd, String cccdMasked,
                 String provinceCode, String provinceName, Gender gender, LocalDate birthday,
-                Integer birthYear, Boolean isVerifiedPhone, LocalDateTime cccdCheckedAt,
+                Integer birthYear, Boolean verifiedPhone, LocalDateTime cccdCheckedAt,
                 String cccdCheckNote, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.accountId = accountId;
         this.fullName = fullName;
@@ -78,7 +78,7 @@ public class User {
         this.gender = gender;
         this.birthday = birthday;
         this.birthYear = birthYear;
-        this.isVerifiedPhone = isVerifiedPhone;
+        this.verifiedPhone = verifiedPhone;
         this.cccdCheckedAt = cccdCheckedAt;
         this.cccdCheckNote = cccdCheckNote;
         this.createdAt = createdAt;
@@ -166,11 +166,11 @@ public class User {
     }
 
     public Boolean getVerifiedPhone() {
-        return isVerifiedPhone;
+        return verifiedPhone;
     }
 
     public void setVerifiedPhone(Boolean verifiedPhone) {
-        isVerifiedPhone = verifiedPhone;
+        this.verifiedPhone = verifiedPhone;
     }
 
     public LocalDateTime getCccdCheckedAt() {

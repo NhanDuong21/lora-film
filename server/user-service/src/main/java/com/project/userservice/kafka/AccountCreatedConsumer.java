@@ -47,6 +47,18 @@ public class AccountCreatedConsumer {
                 return;
             }
 
+            if (event.getData().getPhoneNumber() != null && userRepository.existsByPhoneNumber(event.getData().getPhoneNumber())) {
+                log.warn("Phone number already exists. Skipping event for accountId: {}. EventId: {}", accountId, event.getEventId());
+                acknowledgment.acknowledge();
+                return;
+            }
+
+            if (event.getData().getCccd() != null && userRepository.existsByCccd(event.getData().getCccd())) {
+                log.warn("CCCD already exists. Skipping event for accountId: {}. EventId: {}", accountId, event.getEventId());
+                acknowledgment.acknowledge();
+                return;
+            }
+
             User user = new User();
             user.setAccountId(accountId);
             user.setFullName(event.getData().getFullName());
