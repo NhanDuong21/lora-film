@@ -12,7 +12,7 @@
 | Reviewer       | Trần Hiển Vinh                                                                 |
 | Trạng thái     | Draft / Ready for Review                                                       |
 | Milestone      | Sprint 2 - Core Service API Foundation                                         |
-| Ngày cập nhật  | 21/06/2026                                                                     |
+| Ngày cập nhật  | 22/06/2026                                                                     |
 
 ---
 
@@ -106,85 +106,130 @@ ON DELETE CASCADE;
 
 ---
 
-## 5. Phân Tích Schema Hiện Tại
+## 5. Schema Alignment Bắt Buộc Trước Implementation
 
-### 5.1. Những nghiệp vụ schema hiện tại hỗ trợ
+Sau khi Payment Service Owner review contract, các thay đổi schema sau được xác định là blocker và phải hoàn thành trước khi triển khai Backend.
 
-Schema hiện tại hỗ trợ:
+### 5.1. Mô hình nhiều payment attempts
 
-* Một payment record cho một booking.
-* Sinh mã giao dịch nội bộ.
-* Lưu amount snapshot.
-* Lưu payment method.
-* Lưu external transaction ID.
-* Lưu trạng thái payment.
-* Lưu provider response.
-* Lưu lịch sử chuyển trạng thái.
+Một booking có thể có nhiều payment attempts.
 
-### 5.2. Giới hạn hiện tại
-
-Schema hiện tại chưa có:
+Mỗi attempt phải là một payment record riêng với:
 
 ```txt
-provider
+payment_transaction_code riêng
+external_transaction_id riêng
+provider_session_id riêng
+payment_url riêng
+status riêng
+payment_logs riêng
+```
+
+Không được reset hoặc ghi đè payment attempt cũ khi user retry.
+
+Unique constraint hiện tại:
+
+```txt
+payments.booking_id UNIQUE
+```
+
+phải được xóa và thay bằng non-unique index:
+
+```txt
+INDEX idx_payments_booking_id (booking_id)
+```
+
+### 5.2. Các thay đổi schema bắt buộc
+
+Schema phải bổ sung:
+
+```txt
+payments.expires_at
+payments.payment_url
+payments.provider_session_id
+payments.version
+```
+
+Schema phải bổ sung unique constraint:
+
+```txt
+payments.external_transaction_id UNIQUE
+```
+
+Constraint cho `external_transaction_id` chỉ áp dụng khi giá trị khác `NULL` theo behavior của MySQL.
+
+### 5.3. Payment status chính thức
+
+```txt
+PENDING
+PROCESSING
+SUCCESS
+FAILED
+CANCELLED
+EXPIRED
+REFUNDED
+```
+
+SQL comment, Backend enum và contract phải dùng cùng bộ status.
+
+### 5.4. Payment session timeout
+
+Payment session timeout trong Sprint 2:
+
+```txt
+15 phút
+```
+
+`payments.expires_at` được lưu trực tiếp trong database để worker/cronjob xử lý payment hết hạn.
+
+### 5.5. Persist payment session
+
+Các field sau phải được persist:
+
+```txt
 payment_url
-payment_session_id
-expired_at
-paid_at
-failed_at
-cancelled_at
-refunded_at
-refund_amount
-failure_code
-failure_reason
-callback_received_at
-signature_verified
-currency
-created_by
+provider_session_id
+expires_at
 ```
 
-### 5.3. Điểm cần reviewer xác nhận
+Không xem các field này là response-derived-only.
 
-`booking_id` hiện đang là:
+### 5.6. Optimistic Locking
+
+Bảng `payments` phải có:
 
 ```txt
-UNIQUE NOT NULL
+version INT NOT NULL DEFAULT 0
 ```
 
-Điều này có nghĩa:
+Entity tương ứng sử dụng `@Version` để chống race condition giữa callback, CASH confirmation, cancel và expiry worker.
+
+### 5.7. Raw response payload
+
+`raw_response_payload` tiếp tục được lưu để audit và reconciliation, nhưng phải sanitize trước khi insert.
+
+Không được lưu:
 
 ```txt
-Một booking chỉ có tối đa một payment record.
+full card number
+CVV
+OTP
+password
+provider secret
+private key
+access token
+authorization header
 ```
 
-Nếu payment thất bại và user thử lại:
+### 5.8. Related Schema Issue
+
+Các thay đổi được tracking trong issue:
 
 ```txt
-Không tạo payment row mới.
-Payment Service cập nhật lại record hiện có và ghi thêm payment_logs.
+[Database] Align Payment Schema with Payment API Contract
 ```
 
-Nếu team muốn:
-
-```txt
-Một booking có nhiều payment attempts riêng biệt
-```
-
-thì phải:
-
-* Gỡ unique khỏi `payments.booking_id`.
-* Thêm `attempt_number` hoặc thiết kế payment attempt table.
-* Tạo schema alignment issue riêng.
-* Cập nhật contract trước implementation.
-
-Trong Sprint 2, contract này mặc định sử dụng:
-
-```txt
-Một booking = một payment record
-Nhiều lần thử = nhiều payment log trên cùng payment
-```
-
----
+Payment implementation chưa được bắt đầu trước khi Schema Alignment MR được merge.
 
 ## 6. Database-per-Service và Logical Reference
 
@@ -267,14 +312,30 @@ Authorization: Bearer <accessToken>
 Content-Type: application/json
 ```
 
+Các POST API tạo hoặc thay đổi dữ liệu quan trọng phải gửi:
+
+```http
+Idempotency-Key: <UUID>
+```
+
+Bắt buộc cho:
+
+```txt
+POST /api/payments
+POST /api/payments/{paymentId}/cancel
+POST /api/admin/payments/{paymentId}/confirm-cash
+POST /api/admin/payments/{paymentId}/mark-failed
+```
+
 ### 8.3. Internal API Header
 
 ```http
 X-Internal-Token: <internal-token>
+Idempotency-Key: <UUID>
 Content-Type: application/json
 ```
 
-Cơ chế internal token có thể thay đổi theo security design chính thức.
+Internal API chỉ được gọi qua network/gateway nội bộ được bảo vệ.
 
 ### 8.4. Callback/Webhook Header
 
@@ -286,6 +347,8 @@ Content-Type: application/json
 ```
 
 Provider callback không dùng JWT của user.
+
+Callback phải xác minh HMAC/RSA hoặc signature mechanism đúng theo provider specification.
 
 ### 8.5. Datetime Format
 
@@ -308,23 +371,32 @@ Sprint 2 chỉ hỗ trợ:
 VND
 ```
 
-Amount trả dưới dạng number:
+Amount trả dưới dạng number.
 
-```json
-{
-  "amount": 240000
-}
+### 8.8. Idempotency Rules
+
+`Idempotency-Key` phải là UUID do caller tạo cho mỗi logical request.
+
+Nếu cùng user gửi lại cùng payload với cùng key:
+
+```txt
+Không tạo payment attempt lần hai
+Trả lại kết quả của request đầu tiên
 ```
 
-Không gửi chuỗi:
+Nếu cùng key nhưng payload khác:
 
-```json
-{
-  "amount": "240.000 VND"
-}
+```txt
+409 PAYMENT_IDEMPOTENCY_CONFLICT
 ```
 
----
+Create Payment có thể dùng Redis lock:
+
+```txt
+payment:create:{userId}:{idempotencyKey}
+```
+
+Idempotency không được dựa vào unique constraint của `booking_id`.
 
 ## 9. Common Response Contract
 
@@ -414,7 +486,7 @@ Frontend không được tự gọi API confirm payment thành công.
 
 ## 11. Payment Status Lifecycle
 
-### 11.1. PaymentStatus đề xuất
+### 11.1. PaymentStatus chính thức
 
 ```txt
 PENDING
@@ -422,39 +494,21 @@ PROCESSING
 SUCCESS
 FAILED
 CANCELLED
-REFUNDED
-```
-
-Schema comment hiện chỉ có:
-
-```txt
-PENDING
-SUCCESS
-FAILED
-REFUNDED
-```
-
-`PROCESSING` và `CANCELLED` là status đề xuất cần Vinh review.
-
-Nếu không muốn đổi schema comment, Sprint 2 có thể dùng tối thiểu:
-
-```txt
-PENDING
-SUCCESS
-FAILED
+EXPIRED
 REFUNDED
 ```
 
 ### 11.2. Allowed Transitions
 
-| Current    | Allowed Next                           |
-| ---------- | -------------------------------------- |
-| PENDING    | PROCESSING, SUCCESS, FAILED, CANCELLED |
-| PROCESSING | SUCCESS, FAILED, CANCELLED             |
-| FAILED     | PENDING, PROCESSING                    |
-| SUCCESS    | REFUNDED                               |
-| CANCELLED  | Không có                               |
-| REFUNDED   | Không có                               |
+| Current | Allowed Next |
+|---|---|
+| PENDING | PROCESSING, SUCCESS, FAILED, CANCELLED, EXPIRED |
+| PROCESSING | SUCCESS, FAILED, CANCELLED, EXPIRED |
+| SUCCESS | REFUNDED |
+| FAILED | Không chuyển lại; retry tạo payment record mới |
+| CANCELLED | Không chuyển lại; retry tạo payment record mới |
+| EXPIRED | Không chuyển lại; retry tạo payment record mới |
+| REFUNDED | Không có |
 
 ### 11.3. Transition Rules
 
@@ -463,13 +517,27 @@ Không cho:
 ```txt
 SUCCESS → PENDING
 SUCCESS → FAILED
+FAILED → PENDING
+CANCELLED → PENDING
+EXPIRED → PENDING
 REFUNDED → SUCCESS
-CANCELLED → SUCCESS
 ```
 
-Callback lặp lại với cùng trạng thái `SUCCESS` phải được xử lý idempotent.
+Callback lặp lại cùng kết quả phải được xử lý idempotent.
 
----
+### 11.4. Terminal Status
+
+Frontend dừng polling khi payment có một trong các status:
+
+```txt
+SUCCESS
+FAILED
+CANCELLED
+EXPIRED
+REFUNDED
+```
+
+`REFUNDED` được giữ trong enum để mở rộng nhưng refund API hoàn chỉnh nằm ngoài Sprint 2.
 
 ## 12. API Classification
 
@@ -555,7 +623,10 @@ POST /api/payments
 ```http
 Authorization: Bearer <accessToken>
 Content-Type: application/json
+Idempotency-Key: <UUID>
 ```
+
+`Idempotency-Key` là bắt buộc.
 
 ### Request Body
 
@@ -573,61 +644,88 @@ amount
 status
 paymentTransactionCode
 externalTransactionId
+paymentUrl
+providerSessionId
+expiresAt
 ```
 
 ### Field Definitions
 
-| Field         | Type   | Required | Validation         |
-| ------------- | ------ | -------: | ------------------ |
-| bookingId     | number |      Yes | > 0                |
-| paymentMethod | string |      Yes | PaymentMethod enum |
+| Field | Type | Required | Validation |
+|---|---|---:|---|
+| bookingId | number | Yes | > 0 |
+| paymentMethod | string | Yes | PaymentMethod enum |
 
 ### Processing Flow
 
 ```txt
-Resolve authenticated user
+Validate Idempotency-Key
+→ Resolve authenticated user
+→ Check idempotency result
+→ Acquire Redis lock cho logical request
 → Validate booking exists
 → Validate booking belongs to current user
 → Validate booking status = PENDING_PAYMENT
 → Validate booking is not expired
 → Get totalAmount from Booking Service
-→ Check existing payment for bookingId
-→ Generate paymentTransactionCode
-→ Create payment with PENDING
+→ Check booking chưa có payment SUCCESS
+→ Check active attempt PENDING/PROCESSING chưa hết hạn
+→ Generate paymentTransactionCode mới
+→ Create payment record mới với PENDING
+→ Calculate expiresAt = now + 15 phút
+→ Create provider/mock session
+→ Persist paymentUrl và providerSessionId
 → Create initial payment log
-→ Create mock/sandbox session if required
+→ Store idempotency result
 → Return payment response
 ```
 
 ### Amount Source of Truth
 
-Payment Service lấy amount từ Booking Service:
+Payment Service lấy amount từ:
 
 ```txt
 booking.totalAmount
 ```
 
-Không tin:
+Không tin amount do Frontend gửi.
+
+### Retry Behavior
+
+Nếu attempt trước có status:
 
 ```txt
-amount do Frontend gửi
+FAILED
+CANCELLED
+EXPIRED
 ```
 
-### Internal Transaction Code
-
-Format đề xuất:
+user retry sẽ tạo payment record mới với:
 
 ```txt
-PAY-LORAFILM-<timestamp-or-random>
+paymentId mới
+paymentTransactionCode mới
+providerSessionId mới
+paymentUrl mới
+expiresAt mới
+payment log mới
 ```
 
-Ví dụ:
+Không reset attempt cũ về `PENDING`.
+
+Nếu booking đã có payment `SUCCESS`:
 
 ```txt
-PAY-LORAFILM-20260621-998877
+Không tạo attempt mới
+Trả 409 PAYMENT_ALREADY_SUCCESSFUL
 ```
 
-Mã phải unique.
+Nếu booking đang có attempt `PENDING` hoặc `PROCESSING` chưa hết hạn:
+
+```txt
+Trả attempt active hiện tại nếu cùng Idempotency-Key
+Nếu là logical request khác, trả 409 PAYMENT_ACTIVE_ATTEMPT_EXISTS
+```
 
 ### Response Success
 
@@ -638,132 +736,60 @@ Status: `201 Created`
   "success": true,
   "message": "Payment created successfully",
   "data": {
-    "paymentId": 3001,
-    "paymentTransactionCode": "PAY-LORAFILM-20260621-998877",
+    "paymentId": 3002,
+    "paymentTransactionCode": "PAY-LORAFILM-20260622-002",
     "bookingId": 1001,
     "amount": 240000,
     "currency": "VND",
     "paymentMethod": "MOCK",
     "status": "PENDING",
     "paymentSession": {
-      "paymentUrl": "http://localhost:8080/api/payments/mock/3001",
-      "expiresAt": "2026-06-21T20:20:00"
+      "providerSessionId": "MOCK-SESSION-3002",
+      "paymentUrl": "http://localhost:8080/api/payments/mock/3002",
+      "expiresAt": "2026-06-22T10:30:00"
     },
-    "createdAt": "2026-06-21T20:10:00"
+    "createdAt": "2026-06-22T10:15:00"
   }
 }
 ```
 
-`paymentUrl` và `expiresAt` là response-derived fields, chưa được lưu trong schema hiện tại.
-
-### Existing Payment Behavior
-
-Vì `booking_id` đang unique:
-
-Nếu booking đã có payment `PENDING`, API trả payment hiện tại:
+Các field session được persist tại:
 
 ```txt
-200 OK
+payments.provider_session_id
+payments.payment_url
+payments.expires_at
 ```
 
-Không tạo row mới.
-
-Nếu payment hiện tại `FAILED`, service có thể:
-
-* Đặt lại status thành `PENDING`.
-* Cập nhật payment method.
-* Tạo log retry.
-* Sinh payment session mới.
-
-Nếu payment đã `SUCCESS`, không tạo hoặc retry payment.
-
-### Error: Booking Not Found
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "Booking not found",
-  "errorCode": "PAYMENT_BOOKING_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
-
-### Error: Booking Ownership Mismatch
-
-Status: `403 Forbidden`
-
-```json
-{
-  "success": false,
-  "message": "You cannot create payment for this booking",
-  "errorCode": "PAYMENT_BOOKING_OWNERSHIP_MISMATCH",
-  "data": null,
-  "errors": null
-}
-```
-
-### Error: Booking Not Payable
+### Error: Active Attempt Exists
 
 Status: `409 Conflict`
 
 ```json
 {
   "success": false,
-  "message": "Booking is not available for payment",
-  "errorCode": "PAYMENT_BOOKING_NOT_PAYABLE",
+  "message": "An active payment attempt already exists for this booking",
+  "errorCode": "PAYMENT_ACTIVE_ATTEMPT_EXISTS",
   "data": null,
   "errors": null
 }
 ```
 
-### Error: Booking Expired
+### Error: Idempotency Conflict
 
 Status: `409 Conflict`
 
 ```json
 {
   "success": false,
-  "message": "Booking payment period has expired",
-  "errorCode": "PAYMENT_BOOKING_EXPIRED",
+  "message": "Idempotency key was already used with a different request",
+  "errorCode": "PAYMENT_IDEMPOTENCY_CONFLICT",
   "data": null,
   "errors": null
 }
 ```
 
-### Error: Payment Already Successful
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Booking has already been paid successfully",
-  "errorCode": "PAYMENT_ALREADY_SUCCESSFUL",
-  "data": null,
-  "errors": null
-}
-```
-
-### Error: Booking Service Unavailable
-
-Status: `503 Service Unavailable`
-
-```json
-{
-  "success": false,
-  "message": "Booking information is temporarily unavailable",
-  "errorCode": "BOOKING_SERVICE_UNAVAILABLE",
-  "data": null,
-  "errors": null
-}
-```
-
-Không tạo payment khi chưa xác minh được amount hợp lệ.
-
----
+Các error case Booking Not Found, Ownership Mismatch, Booking Not Payable, Booking Expired, Payment Already Successful và Booking Service Unavailable giữ nguyên như contract hiện tại.
 
 ## 14.2. Get Payment Detail
 
@@ -828,7 +854,7 @@ Status: `403 Forbidden`
 
 ---
 
-## 14.3. Get Payment by Booking
+## 14.3. Get Payment Attempts by Booking
 
 ### Endpoint
 
@@ -836,20 +862,68 @@ Status: `403 Forbidden`
 GET /api/payments/booking/{bookingId}
 ```
 
+Customer chỉ được xem attempts thuộc booking của mình.
+
+### Query Parameters
+
+| Parameter | Type | Required | Validation |
+|---|---|---:|---|
+| page | integer | No | >= 0 |
+| size | integer | No | 1–50 |
+| status | PaymentStatus | No | Enum hợp lệ |
+| sort | string | No | Mặc định `createdAt,desc` |
+
 ### Response Success
 
-Response giống Payment Detail.
+```json
+{
+  "success": true,
+  "message": "Payment attempts retrieved successfully",
+  "data": {
+    "content": [
+      {
+        "paymentId": 3002,
+        "paymentTransactionCode": "PAY-LORAFILM-20260622-002",
+        "bookingId": 1001,
+        "paymentMethod": "MOCK",
+        "amount": 240000,
+        "status": "PENDING",
+        "providerSessionId": "MOCK-SESSION-3002",
+        "paymentUrl": "http://localhost:8080/api/payments/mock/3002",
+        "expiresAt": "2026-06-22T10:30:00",
+        "createdAt": "2026-06-22T10:15:00"
+      },
+      {
+        "paymentId": 3001,
+        "paymentTransactionCode": "PAY-LORAFILM-20260622-001",
+        "bookingId": 1001,
+        "paymentMethod": "MOCK",
+        "amount": 240000,
+        "status": "FAILED",
+        "expiresAt": "2026-06-22T10:10:00",
+        "createdAt": "2026-06-22T09:55:00"
+      }
+    ],
+    "page": 0,
+    "size": 10,
+    "totalElements": 2,
+    "totalPages": 1
+  }
+}
+```
+
+### Latest Attempt Endpoint
+
+```http
+GET /api/payments/booking/{bookingId}/latest
+```
+
+Endpoint này trả payment attempt mới nhất theo `createdAt DESC`.
 
 ### Response Error
 
-* `404 PAYMENT_NOT_FOUND`
-* `403 FORBIDDEN`
-
-Do `booking_id` đang unique, response chỉ trả một payment object, không trả danh sách.
-
-Nếu schema sau này hỗ trợ nhiều attempt, endpoint này phải đổi thành list hoặc có endpoint `/attempts`.
-
----
+- `404 PAYMENT_NOT_FOUND`
+- `403 FORBIDDEN`
 
 ## 14.4. Query Payment Status
 
@@ -888,6 +962,7 @@ Frontend phải dừng polling khi status là:
 SUCCESS
 FAILED
 CANCELLED
+EXPIRED
 REFUNDED
 ```
 
@@ -1046,13 +1121,9 @@ Booking vẫn có thể ở `PENDING_PAYMENT` nếu chưa hết payment timeout.
 POST /api/payments/callback/vnpay
 ```
 
-Hoặc theo provider requirement có thể dùng:
+Hoặc theo provider requirement có thể dùng `GET`.
 
-```http
-GET /api/payments/callback/vnpay
-```
-
-Endpoint cuối cùng phải đồng bộ với tài liệu VNPay khi tích hợp thật.
+Endpoint cuối cùng phải đồng bộ với tài liệu VNPay chính thức khi tích hợp.
 
 ## 16.2. MoMo Callback
 
@@ -1064,59 +1135,70 @@ POST /api/payments/callback/momo
 
 Callback phải:
 
-* Xác minh signature.
-* Xác minh transaction code.
-* Xác minh amount.
-* Xác minh external transaction ID.
-* Kiểm tra payment tồn tại.
-* Kiểm tra callback không bị xử lý trùng.
-* Không tin status chỉ dựa trên request body.
-* Lưu log kết quả xác minh.
-* Không expose secret key trong log hoặc response.
+- Xác minh HMAC/RSA hoặc signature đúng theo provider.
+- Xác minh transaction code.
+- Xác minh amount.
+- Xác minh external transaction ID.
+- Kiểm tra payment tồn tại.
+- Kiểm tra session chưa hết hạn nếu provider rule yêu cầu.
+- Kiểm tra callback không bị xử lý trùng.
+- Dùng optimistic locking qua `payments.version`.
+- Sanitize raw payload trước khi lưu.
+- Tạo payment log.
+- Không expose provider secret trong log hoặc response.
 
-## 16.4. Invalid Signature
+## 16.4. Provider Response Format
 
-Status: `401 Unauthorized`
+Provider callback response **không tuân theo Common Response Contract của LoraFilm**.
 
-```json
-{
-  "success": false,
-  "message": "Invalid payment callback signature",
-  "errorCode": "PAYMENT_INVALID_SIGNATURE",
-  "data": null,
-  "errors": null
-}
-```
+Response phải đúng HTTP status, header và body mà provider yêu cầu.
 
-## 16.5. Amount Mismatch
-
-Status: `409 Conflict`
+Ví dụ hướng VNPay:
 
 ```json
 {
-  "success": false,
-  "message": "Callback amount does not match payment amount",
-  "errorCode": "PAYMENT_AMOUNT_MISMATCH",
-  "data": null,
-  "errors": null
+  "RspCode": "00",
+  "Message": "Confirm Success"
 }
 ```
 
-## 16.6. Transaction Not Found
+MoMo phải trả đúng format theo tài liệu MoMo.
 
-Status: `404 Not Found`
+Common response dạng:
 
 ```json
 {
-  "success": false,
-  "message": "Payment transaction not found",
-  "errorCode": "PAYMENT_TRANSACTION_NOT_FOUND",
-  "data": null,
-  "errors": null
+  "success": true,
+  "message": "..."
 }
 ```
 
----
+chỉ áp dụng cho:
+
+- Customer API
+- Admin API
+- Internal API của LoraFilm
+- Mock callback do LoraFilm kiểm soát
+
+Không áp dụng mặc định cho callback thật từ provider.
+
+## 16.5. Invalid Signature
+
+Payment Service phải ghi log verification failure và trả response đúng provider specification.
+
+Không nhất thiết trả Common Error DTO.
+
+## 16.6. Amount Mismatch
+
+Không cập nhật payment sang `SUCCESS`.
+
+Ghi audit log và trả provider acknowledgement/error đúng provider specification.
+
+## 16.7. Transaction Not Found
+
+Không tạo payment mới từ callback.
+
+Ghi audit log và trả response đúng provider specification.
 
 # 17. Callback Idempotency
 
@@ -1185,69 +1267,78 @@ Sau khi payment chuyển `SUCCESS`, Payment Service gọi:
 POST /internal/bookings/{bookingId}/confirm-payment
 ```
 
-Request giả định:
+Headers:
+
+```http
+X-Internal-Token: <internal-token>
+Idempotency-Key: <UUID>
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "paymentId": 3002,
+  "paymentTransactionCode": "PAY-LORAFILM-20260622-002",
+  "paidAmount": 240000,
+  "paidAt": "2026-06-22T10:20:00"
+}
+```
+
+Booking Service xử lý idempotent và tạo ticket khi booking chuyển sang `CONFIRMED`.
+
+## 18.2. Payment Failed
+
+Khi một attempt chuyển `FAILED`, Payment Service có thể gọi:
+
+```http
+POST /internal/bookings/{bookingId}/fail-payment
+```
+
+Request:
 
 ```json
 {
   "paymentId": 3001,
-  "paymentTransactionCode": "PAY-LORAFILM-20260621-998877",
-  "paidAmount": 240000,
-  "paidAt": "2026-06-21T20:12:00"
+  "paymentTransactionCode": "PAY-LORAFILM-20260622-001",
+  "status": "FAILED",
+  "reason": "Provider rejected transaction"
 }
 ```
 
-### Expected Booking Response
+`FAILED` của một payment attempt không tự động làm booking thất bại.
 
-```json
-{
-  "success": true,
-  "message": "Booking confirmed successfully",
-  "data": {
-    "bookingId": 1001,
-    "status": "CONFIRMED"
-  }
-}
-```
+Booking vẫn có thể ở `PENDING_PAYMENT` để user tạo attempt mới nếu chưa hết `bookings.expires_at`.
 
-## 18.2. Payment Failed
+## 18.3. Payment Expired hoặc Cancelled
 
-Payment failure không bắt buộc hủy Booking ngay.
+Payment Service có thể thông báo Booking Service để phục vụ audit/UI, nhưng Booking không bắt buộc chuyển trạng thái ngay nếu vẫn còn payment window.
 
-Flow Sprint 2:
+Canonical booking expiration vẫn do Booking Service worker quản lý theo `bookings.expires_at`.
+
+## 18.4. Endpoint Consistency Decision
+
+Sprint 2 giữ hai endpoint đã có trong Booking Contract:
 
 ```txt
-Payment FAILED
-→ Booking vẫn PENDING_PAYMENT
-→ user có thể retry payment nếu booking chưa hết hạn
+/internal/bookings/{bookingId}/confirm-payment
+/internal/bookings/{bookingId}/fail-payment
 ```
 
-## 18.3. Booking Confirmation Failure
+Không dùng endpoint generic `/update-payment-status` trừ khi cả Booking Contract và Payment Contract cùng được cập nhật trong một đợt review.
 
-Tình huống:
+## 18.5. Booking Confirmation Failure
 
-```txt
-Payment đã SUCCESS
-nhưng Booking Service tạm thời không khả dụng
-```
+Nếu payment đã `SUCCESS` nhưng Booking Service tạm thời không khả dụng:
 
-Payment không được rollback từ `SUCCESS` về `FAILED`.
+- Payment giữ nguyên `SUCCESS`.
+- Ghi payment log.
+- Retry internal REST request.
+- Không yêu cầu user thanh toán lại.
+- Không rollback payment.
 
-Payment Service phải:
-
-* Giữ `SUCCESS`.
-* Ghi log booking confirmation failed.
-* Retry thông báo Booking Service.
-* Không yêu cầu user thanh toán lại.
-
-Error log ví dụ:
-
-```txt
-Payment succeeded but booking confirmation is pending retry.
-```
-
-Trong hệ thống production, nên dùng event/outbox; Sprint 2 có thể dùng internal REST + retry foundation.
-
----
+Sprint 2 dùng internal REST + retry; Kafka/outbox là hướng mở rộng.
 
 # 19. Payment Log Contract
 
@@ -1563,86 +1654,129 @@ Admin API cũng chỉ trả payload đã sanitized nếu thật sự cần.
 
 ## 23.1. Create Payment
 
-Hai request đồng thời cho cùng `bookingId`:
+Hai request đồng thời không được tạo duplicate attempt cho cùng logical request.
+
+Cơ chế:
 
 ```txt
-Chỉ được tạo một payment record.
+Idempotency-Key
++
+Redis lock
++
+Database transaction
 ```
 
-Dựa trên:
-
-```txt
-UNIQUE payments.booking_id
-```
-
-Request còn lại:
-
-* Trả payment hiện có.
-* Hoặc trả `409 PAYMENT_ALREADY_EXISTS`.
-
-Contract Sprint 2 ưu tiên trả payment hiện có nếu trạng thái còn có thể sử dụng.
+Không dùng `UNIQUE(booking_id)` để chống duplicate request vì một booking được phép có nhiều attempts.
 
 ## 23.2. Callback
 
-Hai callback đồng thời:
+Hai callback đồng thời phải:
 
-* Phải lock payment record hoặc dùng optimistic locking.
-* Chỉ một transition được thực hiện.
-* Không tạo duplicate log/event ngoài ý muốn.
+- Lock payment record hoặc dùng optimistic locking.
+- Kiểm tra `external_transaction_id` unique.
+- Chỉ thực hiện một status transition.
+- Không tạo duplicate log hoặc duplicate effect sang Booking Service.
 
-## 23.3. Cash Confirmation và Callback
+## 23.3. Cash Confirmation, Callback và Expiry Worker
 
-Nếu cash confirm và provider callback xảy ra trên cùng payment:
+Admin confirm CASH, provider callback, customer cancel và expiry worker có thể chạy đồng thời.
 
-* Payment method validation phải ngăn flow không hợp lệ.
-* Không được xác nhận payment hai lần.
+Bảng `payments` phải có:
 
----
+```txt
+version INT NOT NULL DEFAULT 0
+```
+
+Entity sử dụng:
+
+```java
+@Version
+```
+
+Optimistic lock conflict trả:
+
+```txt
+409 PAYMENT_OPTIMISTIC_LOCK_CONFLICT
+```
+
+Không được ghi đè status mới hơn bằng dữ liệu stale.
 
 # 24. Idempotency Rules
 
-### Create Payment
+## 24.1. Create Payment
 
-Idempotency nghiệp vụ dựa trên:
+Create Payment bắt buộc có:
 
-```txt
-bookingId
+```http
+Idempotency-Key: <UUID>
 ```
 
-Do `booking_id UNIQUE`.
+Idempotency identity:
 
-### Callback
+```txt
+userId + Idempotency-Key
+```
 
-Idempotency dựa trên:
+Cùng key và cùng payload:
+
+```txt
+Trả kết quả request đầu tiên
+Không tạo payment record mới
+```
+
+Cùng key nhưng payload khác:
+
+```txt
+409 PAYMENT_IDEMPOTENCY_CONFLICT
+```
+
+## 24.2. Callback
+
+Callback idempotency dựa trên:
 
 ```txt
 paymentTransactionCode
 externalTransactionId
-callback result
+provider result
 ```
 
-### Booking Confirmation
+`external_transaction_id` phải unique khi khác `NULL`.
+
+## 24.3. Booking Notification
 
 Payment Service không được gửi duplicate effect sang Booking Service.
 
-Booking confirmation request phải mang:
+Internal request phải có:
 
-```txt
-paymentId
-paymentTransactionCode
+```http
+Idempotency-Key: <UUID>
 ```
 
 Booking Service cũng phải xử lý idempotent.
 
----
+## 24.4. Payment Attempts
+
+Một booking có nhiều attempts không đồng nghĩa mọi request đều tạo attempt mới.
+
+Attempt mới chỉ được tạo khi:
+
+```txt
+Logical request mới
++
+Không có payment SUCCESS
++
+Attempt trước FAILED/CANCELLED/EXPIRED hoặc không còn active
+```
+
+Duplicate HTTP retry của cùng logical request phải trả attempt đã tạo trước đó.
 
 # 25. Retry Rules
 
 Payment Service có thể retry:
 
-* Booking validation tạm thời lỗi.
-* Booking confirmation sau payment success.
-* Provider query status nếu callback bị thiếu.
+- Booking validation lỗi tạm thời.
+- Booking notification sau payment success.
+- Provider status query khi callback bị thiếu.
 
 Không retry vô hạn.
 
@@ -1655,15 +1789,53 @@ Backoff: 5s, 15s, 30s
 
 Nếu vẫn thất bại:
 
-* Ghi payment log.
-* Đánh dấu cần manual reconciliation.
-* Không đổi `SUCCESS` thành `FAILED`.
+- Ghi payment log.
+- Đánh dấu cần manual reconciliation.
+- Không đổi `SUCCESS` thành `FAILED`.
 
-Schema hiện chưa có `reconciliation_status`; nếu cần tracking rõ phải schema change.
+Schema chưa có `reconciliation_status`; nếu cần tracking rõ phải có schema change riêng.
 
----
+# 26. Payment Expiration Worker
 
-# 26. Security Rules
+Payment Service phải triển khai scheduled worker hoặc background worker trong Sprint 2.
+
+## 26.1. Expiration Query
+
+```txt
+status IN (PENDING, PROCESSING)
+AND expires_at < now
+```
+
+## 26.2. Processing
+
+```txt
+PENDING / PROCESSING
+→ EXPIRED
+→ tạo payment log
+→ không xóa payment attempt
+→ không reuse payment record
+```
+
+## 26.3. Worker Requirements
+
+Worker phải:
+
+- Idempotent.
+- Có thể chạy lại an toàn.
+- Không thay đổi `SUCCESS`, `FAILED`, `CANCELLED`, `EXPIRED`, `REFUNDED`.
+- Dùng optimistic locking qua `version`.
+- Không tạo duplicate log/event.
+- Có thể xử lý theo batch.
+- Ghi log số record thành công và thất bại.
+
+Payment `EXPIRED` được phân biệt với `FAILED`:
+
+```txt
+EXPIRED = user không hoàn tất trước timeout
+FAILED = provider hoặc nghiệp vụ từ chối attempt
+```
+
+# 27. Security Rules
 
 * Customer phải authenticated khi tạo hoặc xem payment.
 * Customer chỉ xem payment thuộc booking của mình.
@@ -1689,13 +1861,18 @@ PAYMENT_CASH_CONFIRM
 
 ---
 
-# 27. Error Code Catalog
+# 28. Error Code Catalog
 
 | Error Code                              | HTTP | Ý nghĩa                       |
 | --------------------------------------- | ---: | ----------------------------- |
 | `PAYMENT_NOT_FOUND`                     |  404 | Không tìm thấy payment        |
 | `PAYMENT_TRANSACTION_NOT_FOUND`         |  404 | Không tìm thấy transaction    |
 | `PAYMENT_ALREADY_EXISTS`                |  409 | Booking đã có payment         |
+| `PAYMENT_ACTIVE_ATTEMPT_EXISTS`          |  409 | Đang có payment attempt active |
+| `PAYMENT_IDEMPOTENCY_KEY_REQUIRED`       |  400 | Thiếu Idempotency-Key         |
+| `PAYMENT_IDEMPOTENCY_CONFLICT`           |  409 | Key đã dùng với payload khác  |
+| `PAYMENT_OPTIMISTIC_LOCK_CONFLICT`       |  409 | Payment bị cập nhật đồng thời |
+| `PAYMENT_EXPIRED`                        |  409 | Payment session đã hết hạn    |
 | `PAYMENT_ALREADY_SUCCESSFUL`            |  409 | Booking đã thanh toán         |
 | `PAYMENT_BOOKING_NOT_FOUND`             |  404 | Không tìm thấy booking        |
 | `PAYMENT_BOOKING_NOT_PAYABLE`           |  409 | Booking không được thanh toán |
@@ -1720,84 +1897,73 @@ PAYMENT_CASH_CONFIRM
 
 ---
 
-# 28. Schema Alignment Notes
+# 29. Schema Alignment Notes
 
-Các điểm contract có thể mismatch với schema Sprint 0:
+Các thay đổi sau là bắt buộc trước implementation:
 
-## 28.1. Payment statuses
+## 29.1. Multiple Payment Attempts
 
-Contract đề xuất thêm:
+- Drop unique constraint của `booking_id`.
+- Thêm non-unique index cho `booking_id`.
+- Mỗi retry tạo payment row mới.
+
+## 29.2. External Transaction Uniqueness
+
+Thêm unique constraint cho:
 
 ```txt
+external_transaction_id
+```
+
+## 29.3. Payment Session Fields
+
+Thêm:
+
+```txt
+expires_at
+payment_url
+provider_session_id
+```
+
+## 29.4. Optimistic Locking
+
+Thêm:
+
+```txt
+version INT NOT NULL DEFAULT 0
+```
+
+## 29.5. Status Synchronization
+
+Đồng bộ comment/enum:
+
+```txt
+PENDING
 PROCESSING
+SUCCESS
+FAILED
 CANCELLED
+EXPIRED
+REFUNDED
 ```
 
-Schema comment hiện chưa liệt kê hai trạng thái này.
+## 29.6. Raw Payload Sanitization
 
-## 28.2. External transaction uniqueness
+Raw payload được giữ nhưng phải sanitize trước khi lưu.
 
-Contract yêu cầu:
+## 29.7. Refund
 
-```txt
-external_transaction_id unique khi không null
-```
+Refund nằm ngoài Sprint 2 và cần schema mở rộng riêng.
 
-Schema hiện chưa có unique constraint.
-
-## 28.3. Payment expiry
-
-Contract trả:
-
-```txt
-paymentSession.expiresAt
-```
-
-nhưng schema chưa có `expires_at`.
-
-Có thể dùng derived value trong Sprint 2 hoặc thêm column nếu cần persist.
-
-## 28.4. Retry attempts
-
-Schema chỉ cho một payment record mỗi booking.
-
-Nếu muốn nhiều payment attempts riêng:
-
-```txt
-Phải refactor booking_id UNIQUE.
-```
-
-## 28.5. Refund
-
-Schema chưa đủ field theo dõi refund chi tiết.
-
-## 28.6. Reconciliation
-
-Schema chưa có trạng thái đối soát/manual review.
-
-## 28.7. Raw payload
-
-Cần xác định sanitization và maximum length.
-
-### Required Review Result
-
-Reviewer phải phân loại từng mismatch:
-
-```txt
-Có thể xử lý bằng derived field
-Out of Scope Sprint 2
-Bắt buộc refactor schema trước implementation
-```
-
-Nếu có mục bắt buộc, tạo issue:
+## 29.8. Required Schema Issue
 
 ```txt
 [Database] Align Payment Schema with Payment API Contract
 ```
 
----
+Backend implementation chỉ bắt đầu sau khi Schema Alignment MR được merge.
 
-# 29. Out of Scope
+# 30. Out of Scope
 
 * Production VNPay integration nếu chưa có account/config.
 * Production MoMo integration.
@@ -1807,7 +1973,7 @@ Nếu có mục bắt buộc, tạo issue:
 * Chargeback.
 * Settlement automation.
 * Multi-currency.
-* Multiple payment attempts table.
+* Refund implementation đầy đủ.
 * Payment dispute.
 * PCI DSS card processing.
 * Advanced reconciliation dashboard.
@@ -1818,33 +1984,49 @@ Nếu có mục bắt buộc, tạo issue:
 
 ---
 
-# 30. Implementation Issue Direction
+# 31. Implementation Issue Direction
 
-Sau khi contract được review và schema alignment hoàn thành nếu cần, có thể tách:
+Implementation chỉ bắt đầu sau khi:
 
 ```txt
-[Backend] Implement Payment Core and Query APIs
+Payment Contract MR được merge
++
+Payment Schema Alignment MR được merge
++
+SQL, ERD và entity đã đồng bộ
+```
+
+Các implementation issue đề xuất:
+
+```txt
+[Backend] Implement Payment Core and Multiple Attempt APIs
 
 [Backend] Implement Mock Payment Session and Callback Flow
 
-[Backend] Implement Payment Logs and Admin Management APIs
+[Backend] Implement CASH Payment and Customer Cancel Flow
 
-[Backend] Implement Booking Confirmation and Payment Retry Flow
+[Backend] Implement Payment Expiration Worker
+
+[Backend] Implement Booking Notification and Retry Flow
+
+[Backend] Implement Payment Logs and Admin Query APIs
 ```
 
-Nếu giảm scope Sprint 2:
+Thứ tự đề xuất:
 
 ```txt
-Issue 1: Create/Get Payment
-Issue 2: Mock Success/Failed Callback
-Issue 3: Payment Log and Booking Confirmation
+Schema Alignment
+→ Payment Core + Idempotency
+→ Mock/CASH Session
+→ Callback + Signature Validation
+→ Booking Notification
+→ Expiration Worker
+→ Logs/Admin Query
 ```
 
-Mọi thay đổi endpoint, request, response hoặc business rule phải cập nhật contract trong cùng MR.
+Refund và provider production integration nằm ngoài Sprint 2.
 
----
-
-# 31. Acceptance Criteria
+# 32. Acceptance Criteria
 
 Contract hoàn thành khi:
 
@@ -1878,27 +2060,84 @@ Contract hoàn thành khi:
 
 ---
 
-# 32. Các Điểm Reviewer Cần Xác Nhận
+# 33. Review Decisions
 
-Vinh cần xác nhận:
+Payment Service Owner đã review và xác nhận:
 
-1. Payment Service port chính thức.
-2. Sprint 2 sử dụng `MOCK`, `CASH` hay provider sandbox nào.
-3. Có thêm status `PROCESSING` không.
-4. Có thêm status `CANCELLED` không.
-5. Một booking có một payment record hay nhiều attempts.
-6. Có giữ `booking_id UNIQUE` không.
-7. Retry failed payment có reuse record hiện tại không.
-8. `external_transaction_id` có cần unique constraint không.
-9. Có cần lưu `expires_at` không.
-10. Payment URL/session có cần persist không.
-11. Payment success thông báo Booking bằng REST hay Kafka.
-12. Có dùng `/internal/bookings/{id}/confirm-payment` đúng như Booking Contract không.
-13. Cách bảo vệ callback endpoint.
-14. Cách bảo vệ internal endpoint.
-15. Có lưu raw provider payload không.
-16. Raw payload cần sanitize field nào.
-17. Có implement CASH trong Sprint 2 không.
-18. Có cho customer cancel payment không.
-19. Refund có hoàn toàn Out of Scope không.
-20. Có cần schema change trước implementation không.
+1. Payment status chính thức:
+
+   ```txt
+   PENDING
+   PROCESSING
+   SUCCESS
+   FAILED
+   CANCELLED
+   EXPIRED
+   REFUNDED
+   ```
+
+2. Một booking có nhiều payment attempts.
+
+3. Không reuse hoặc reset payment record khi retry.
+
+4. Retry tạo payment record và `paymentTransactionCode` mới.
+
+5. Drop unique constraint của `booking_id`.
+
+6. Thêm unique constraint cho `external_transaction_id` khi khác `NULL`.
+
+7. Payment session timeout là `15 phút`.
+
+8. Persist:
+
+   ```txt
+   expires_at
+   payment_url
+   provider_session_id
+   ```
+
+9. Thêm `version` và dùng Optimistic Locking.
+
+10. Sprint 2 triển khai:
+
+    ```txt
+    MOCK
+    CASH
+    Customer Cancel
+    ```
+
+11. Refund hoàn toàn Out of Scope Sprint 2.
+
+12. VNPay/MoMo Sandbox chỉ thực hiện nếu còn thời gian.
+
+13. Payment success thông báo Booking Service bằng Internal REST + retry.
+
+14. Sprint 2 giữ hai Booking endpoint:
+
+    ```txt
+    /internal/bookings/{bookingId}/confirm-payment
+    /internal/bookings/{bookingId}/fail-payment
+    ```
+
+15. Callback thật phải xác minh signature HMAC/RSA theo provider.
+
+16. Payment Service port `8084` không được expose trực tiếp ngoài Gateway/network nội bộ.
+
+17. Raw provider payload được lưu sau khi sanitize.
+
+18. Provider webhook response phải đúng provider specification, không dùng Common Response DTO.
+
+19. Payment expiration worker phải được triển khai.
+
+20. Schema Alignment MR phải merge trước Backend implementation.
+
+---
+
+# 34. Lịch Sử Chỉnh Sửa
+
+| Ngày | Nội dung | Người thực hiện |
+|---|---|---|
+| 21/06/2026 | Khởi tạo Payment Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
+| 22/06/2026 | Cập nhật contract theo review của Payment Service Owner: multiple attempts, idempotency, EXPIRED, persisted session, webhook response, optimistic locking và expiration worker | Dương Thiện Nhân |
+
+Các thay đổi schema chỉ được ghi nhận là đã hoàn tất sau khi Schema Alignment MR tương ứng được merge.
