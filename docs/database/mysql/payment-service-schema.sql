@@ -3,7 +3,7 @@ CREATE TABLE `payments` (
   `payment_transaction_code` varchar(100) UNIQUE NOT NULL COMMENT 'Ma giao dich noi bo tu sinh, e.g., PAY-LORAFILM-998877',
   `booking_id` bigint NOT NULL COMMENT 'Logical Ref sang bookings.id cua Booking Service',
   `amount` decimal(10,2) NOT NULL,
-  `payment_method` varchar(30) NOT NULL COMMENT 'VNPAY, MOMO, CASH',
+  `payment_method` varchar(30) NOT NULL COMMENT 'MOCK, CASH, VNPAY, MOMO',
   `external_transaction_id` varchar(100) UNIQUE COMMENT 'Ma giao dich tra ve tu phia Cong thanh toan (VNPAY/MOMO ID)',
   `provider_session_id` varchar(150),
   `payment_url` text,
@@ -13,7 +13,8 @@ CREATE TABLE `payments` (
   `version` int NOT NULL DEFAULT 0,
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_payments_booking_id (`booking_id`)
+  INDEX idx_payments_booking_id (`booking_id`),
+  INDEX idx_payments_status_expires_at (`status`, `expires_at`)
 );
 
 CREATE TABLE `payment_logs` (
