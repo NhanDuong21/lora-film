@@ -12,7 +12,7 @@
 | Reviewer       | Trương Hoàng Khang                                                                |
 | Trạng thái     | Draft / Ready for Review                                                          |
 | Milestone      | Sprint 2 - Core Service API Foundation                                            |
-| Ngày cập nhật  | 21/06/2026                                                                        |
+| Ngày cập nhật  | 22/06/2026                                                                        |
 
 ---
 
@@ -69,9 +69,11 @@ Analytics Service không chịu trách nhiệm:
 
 ---
 
-## 4. Physical Schema Sprint 0
+## 4. Physical Schema và Schema Alignment Direction
 
 ### 4.1. Bảng `daily_revenue_stats`
+
+Schema Sprint 0:
 
 ```sql
 CREATE TABLE `daily_revenue_stats` (
@@ -84,7 +86,17 @@ CREATE TABLE `daily_revenue_stats` (
 );
 ```
 
+Schema cần bổ sung trước implementation:
+
+```sql
+ALTER TABLE `daily_revenue_stats`
+ADD COLUMN `total_tickets_sold` int NOT NULL DEFAULT 0
+COMMENT 'Tong so ve da ban thanh cong trong ngay';
+```
+
 ### 4.2. Bảng `movie_revenue_stats`
+
+Schema Sprint 0:
 
 ```sql
 CREATE TABLE `movie_revenue_stats` (
@@ -97,147 +109,190 @@ CREATE TABLE `movie_revenue_stats` (
 );
 ```
 
----
+Bảng này tiếp tục lưu lifetime aggregate theo movie.
 
-## 5. Phân Tích Schema Hiện Tại
+### 4.3. Bảng `movie_daily_revenue_stats`
 
-### 5.1. Nghiệp vụ schema hỗ trợ
+Analytics Service hỗ trợ revenue theo date range và trend theo movie, vì vậy cần bổ sung bảng:
 
-Schema hiện tại hỗ trợ:
-
-* Tổng doanh thu từng ngày.
-* Tổng booking thành công từng ngày.
-* Tổng booking hủy hoặc timeout từng ngày.
-* Doanh thu tích lũy theo phim.
-* Số vé bán tích lũy theo phim.
-* Hiển thị nhanh tên phim mà không cần gọi Movie Service.
-* Top phim theo tổng doanh thu.
-* Top phim theo tổng số vé bán.
-* Dashboard doanh thu cơ bản.
-
-### 5.2. Ý nghĩa `stat_date UNIQUE`
-
-Mỗi ngày chỉ có một record:
-
-```txt
-daily_revenue_stats.stat_date UNIQUE
+```sql
+CREATE TABLE `movie_daily_revenue_stats` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `movie_id` bigint NOT NULL COMMENT 'Logical Ref sang movies.id cua Movie Service',
+  `movie_title` varchar(255) NOT NULL COMMENT 'Movie title snapshot',
+  `stat_date` date NOT NULL,
+  `tickets_sold` int NOT NULL DEFAULT 0,
+  `revenue` decimal(14,2) NOT NULL DEFAULT 0,
+  `updated_at` timestamp DEFAULT (now()),
+  UNIQUE (`movie_id`, `stat_date`)
+);
 ```
 
-Update dữ liệu ngày phải dùng:
+Bảng này dùng cho:
 
-```txt
-upsert theo statDate
+- Revenue từng phim theo ngày.
+- Revenue theo date range.
+- Ticket count theo date range.
+- Trend revenue theo movie.
+- Top movie trong một khoảng thời gian.
+
+### 4.4. Bảng `processed_analytics_events`
+
+Analytics Service sử dụng Kafka aggregation và cần replay event an toàn.
+
+Bổ sung:
+
+```sql
+CREATE TABLE `processed_analytics_events` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `event_id` varchar(150) UNIQUE NOT NULL,
+  `event_type` varchar(100) NOT NULL,
+  `source_service` varchar(100) NOT NULL,
+  `processed_at` timestamp DEFAULT (now())
+);
 ```
 
-Không tạo nhiều row cho cùng một ngày.
+Bảng này bảo đảm:
 
-### 5.3. Ý nghĩa `movie_id UNIQUE`
+- Không aggregate cùng event hai lần.
+- Consumer có thể retry/replay an toàn.
+- Idempotency không chỉ phụ thuộc Kafka consumer offset.
 
-Mỗi phim chỉ có một record tổng hợp:
+### 4.5. Schema Alignment Requirement
 
-```txt
-movie_revenue_stats.movie_id UNIQUE
-```
-
-Điều này có nghĩa bảng hiện tại lưu:
-
-```txt
-Tổng doanh thu tích lũy toàn thời gian theo phim
-```
-
-Bảng này chưa hỗ trợ:
-
-```txt
-Doanh thu từng phim theo từng ngày
-Doanh thu phim trong khoảng thời gian tùy chọn
-Trend doanh thu riêng của một phim
-```
-
-Để hỗ trợ các báo cáo đó, cần bảng dạng:
-
-```txt
-movie_daily_revenue_stats
-```
-
-với unique:
-
-```txt
-movie_id + stat_date
-```
-
-Trong Sprint 2, contract mặc định:
-
-* Daily API trả tổng toàn hệ thống theo ngày.
-* Movie API trả tổng tích lũy toàn thời gian theo phim.
-* Không tuyên bố movie revenue filter theo ngày nếu schema chưa align.
-
-### 5.4. Giới hạn schema hiện tại
-
-Schema chưa có:
+Các thay đổi sau là bắt buộc trước Backend implementation:
 
 ```txt
 daily_revenue_stats.total_tickets_sold
-daily_revenue_stats.refunded_bookings_count
-daily_revenue_stats.refund_amount
-daily_revenue_stats.gross_revenue
-daily_revenue_stats.discount_amount
-daily_revenue_stats.average_order_value
-daily_revenue_stats.currency
-daily_revenue_stats.last_event_at
-
-movie_revenue_stats.total_bookings_count
-movie_revenue_stats.cancelled_bookings_count
-movie_revenue_stats.refund_amount
-movie_revenue_stats.stat_date
-
-processed_analytics_events.event_id
+movie_daily_revenue_stats
+processed_analytics_events
 ```
 
-### 5.5. Doanh thu gross hay net
-
-Schema dùng field:
+Schema được cập nhật trong issue riêng:
 
 ```txt
-total_revenue
+[Database] Align Analytics Schema with Analytics API Contract
 ```
 
-nhưng chưa ghi rõ đây là:
+## 5. Phân Tích Schema và Quyết Định Chính Thức
+
+### 5.1. Lifetime và Daily Aggregate
+
+Analytics Service duy trì hai mức aggregate theo phim:
 
 ```txt
-Gross revenue
+movie_revenue_stats
+→ lifetime revenue và lifetime tickets sold
+
+movie_daily_revenue_stats
+→ revenue và tickets sold theo từng ngày
 ```
 
-hay:
+`movie_revenue_stats.movie_id UNIQUE` tiếp tục bảo đảm mỗi phim chỉ có một lifetime record.
+
+`movie_daily_revenue_stats` sử dụng:
 
 ```txt
-Net revenue
+UNIQUE(movie_id, stat_date)
 ```
 
-Contract Sprint 2 đề xuất:
+để hỗ trợ date range và trend.
+
+### 5.2. Daily Aggregate
+
+`daily_revenue_stats.stat_date UNIQUE` nghĩa là mỗi ngày chỉ có một record tổng hợp toàn hệ thống.
+
+Update phải dùng upsert theo `statDate`.
+
+Sau schema alignment, bảng hỗ trợ:
+
+- Net revenue theo ngày.
+- Successful booking count theo ngày.
+- Cancelled booking count theo ngày.
+- Total tickets sold theo ngày.
+
+### 5.3. Revenue Definition
+
+`total_revenue` được xác nhận là:
 
 ```txt
-totalRevenue = số tiền thực tế đã thanh toán thành công
-             - số tiền đã refund thành công
+Net Revenue
 ```
 
-Tức là:
+Công thức nghiệp vụ:
 
 ```txt
-Net recognized revenue
+Net Revenue
+= Tổng số tiền thanh toán SUCCESS
+- Tổng số tiền refund SUCCESS
 ```
 
 Không tính:
 
-* Payment `PENDING`
-* Payment `FAILED`
-* Payment `CANCELLED`
-* Booking chưa thanh toán
-* Giá trị promotion discount
-* Giá trị score redeem không được thanh toán bằng tiền
+- Payment `PENDING`.
+- Payment `PROCESSING`.
+- Payment `FAILED`.
+- Payment `CANCELLED`.
+- Booking chưa thanh toán.
 
-Reviewer phải xác nhận định nghĩa này.
+Refund được trừ vào:
 
----
+```txt
+Ngày refund xảy ra
+```
+
+Doanh thu theo ngày có thể âm nếu tổng refund trong ngày lớn hơn tổng payment success trong ngày.
+
+### 5.4. Promotion và Membership Discount
+
+Analytics không cần biết discount đến từ nguồn nào.
+
+Revenue được aggregate theo:
+
+```txt
+paidAmount cuối cùng đã được Payment Service xác nhận
+```
+
+Ví dụ:
+
+```txt
+Original amount = 240000
+Silver membership discount = 10%
+Paid amount = 216000
+Revenue = 216000
+```
+
+Promotion discount và Membership discount đã được phản ánh trong `paidAmount`.
+
+Hệ thống không có Score Redeem và không dùng điểm để thanh toán vé.
+
+### 5.5. Kafka Aggregation
+
+Analytics Service sử dụng Kafka làm hướng tích hợp chính trong Sprint 2.
+
+Các event chính:
+
+```txt
+PAYMENT_SUCCEEDED
+PAYMENT_REFUNDED
+BOOKING_CANCELLED
+```
+
+Analytics là read model và không được dùng để:
+
+- Xác nhận booking.
+- Xác nhận payment.
+- Quyết định user có nhận vé hay không.
+
+### 5.6. Schema Alignment
+
+Contract yêu cầu schema alignment trước implementation để bổ sung:
+
+```txt
+daily_revenue_stats.total_tickets_sold
+movie_daily_revenue_stats
+processed_analytics_events
+```
 
 ## 6. Analytics Là Read Model
 
@@ -250,7 +305,7 @@ Analytics Service chỉ lưu dữ liệu đã tổng hợp.
 | Payment status và paid amount  | Payment Service              |
 | Booking status và ticket count | Booking Service              |
 | Movie ID và movie metadata     | Movie Service                |
-| Promotion discount             | Promotion Service            |
+| Promotion và Membership discount | Đã phản ánh trong paidAmount từ Payment Service |
 | Analytics aggregate            | Analytics Service read model |
 
 Analytics Service không được dùng để trả lời:
@@ -301,6 +356,12 @@ Frontend gọi Analytics API qua:
 http://localhost:8080
 ```
 
+Gateway route chính thức:
+
+```txt
+/api/analytics/**
+```
+
 ### 8.2. Analytics Service Direct URL
 
 Chỉ dùng cho debug hoặc backend integration:
@@ -309,27 +370,30 @@ Chỉ dùng cho debug hoặc backend integration:
 http://localhost:8089
 ```
 
-Port chính thức lấy từ cấu hình project.
+Port `8089` không được expose trực tiếp ra Internet.
 
 ### 8.3. Query Flow
 
 ```txt
-Admin Dashboard
+Admin / Manager Dashboard
 → API Gateway
-→ Analytics Service
+→ /api/analytics/**
+→ Analytics Service :8089
 → Analytics Database
 ```
 
-### 8.4. Aggregation Flow
+### 8.4. Kafka Aggregation Flow
 
 ```txt
-Booking / Payment Event
-→ Kafka hoặc Internal Aggregation API
-→ Analytics Service
+Payment / Booking Service
+→ Kafka event
+→ Analytics Consumer
+→ Idempotency check
 → Upsert aggregate tables
+→ Record processed event
 ```
 
----
+Internal HTTP aggregation endpoints trong tài liệu chỉ dùng cho testing, recovery hoặc controlled administration nếu được bảo vệ; Kafka là hướng tích hợp chính.
 
 ## 9. Quy Ước Chung
 
@@ -511,7 +575,7 @@ startDate <= statDate <= endDate
 ### 12.1. Admin/Manager APIs
 
 ```txt
-/api/admin/analytics/**
+/api/analytics/**
 ```
 
 Dùng cho:
@@ -550,12 +614,12 @@ Sprint 2 không có Customer Analytics API.
 
 | Method | Endpoint                                       | Access                    | Mục đích                   |
 | ------ | ---------------------------------------------- | ------------------------- | -------------------------- |
-| GET    | `/api/admin/analytics/dashboard`               | Admin/Manager             | Dashboard summary          |
-| GET    | `/api/admin/analytics/revenue/daily`           | Admin/Manager             | Doanh thu từng ngày        |
-| GET    | `/api/admin/analytics/revenue/summary`         | Admin/Manager             | Tổng hợp trong khoảng ngày |
-| GET    | `/api/admin/analytics/movies`                  | Admin/Manager             | Revenue theo phim          |
-| GET    | `/api/admin/analytics/movies/{movieId}`        | Admin/Manager             | Chi tiết aggregate phim    |
-| GET    | `/api/admin/analytics/movies/top`              | Admin/Manager             | Top phim                   |
+| GET    | `/api/analytics/dashboard`               | Admin/Manager             | Dashboard summary          |
+| GET    | `/api/analytics/revenue/daily`           | Admin/Manager             | Doanh thu từng ngày        |
+| GET    | `/api/analytics/revenue/summary`         | Admin/Manager             | Tổng hợp trong khoảng ngày |
+| GET    | `/api/analytics/movies`                  | Admin/Manager             | Revenue theo phim          |
+| GET    | `/api/analytics/movies/{movieId}`        | Admin/Manager             | Chi tiết aggregate phim    |
+| GET    | `/api/analytics/movies/top`              | Admin/Manager             | Top phim                   |
 | POST   | `/internal/analytics/events/payment-succeeded` | Internal                  | Aggregate payment success  |
 | POST   | `/internal/analytics/events/payment-refunded`  | Internal                  | Aggregate refund           |
 | POST   | `/internal/analytics/events/booking-cancelled` | Internal                  | Aggregate cancel           |
@@ -570,7 +634,7 @@ Sprint 2 không có Customer Analytics API.
 ## 14.1. Endpoint
 
 ```http
-GET /api/admin/analytics/dashboard
+GET /api/analytics/dashboard
 ```
 
 ### Query Parameters
@@ -599,20 +663,22 @@ GET /api/admin/analytics/dashboard
       "totalRevenue": 12500000,
       "totalSuccessfulBookings": 320,
       "totalCancelledBookings": 27,
-      "totalTicketsSold": null,
+      "totalTicketsSold": 645,
       "averageOrderValue": 39062.5
     },
     "today": {
       "date": "2026-06-21",
       "totalRevenue": 850000,
       "successfulBookings": 22,
-      "cancelledBookings": 2
+      "cancelledBookings": 2,
+      "totalTicketsSold": 44
     },
     "currentMonth": {
       "month": "2026-06",
       "totalRevenue": 12500000,
       "successfulBookings": 320,
-      "cancelledBookings": 27
+      "cancelledBookings": 27,
+      "totalTicketsSold": 645
     },
     "topMovies": [
       {
@@ -629,17 +695,17 @@ GET /api/admin/analytics/dashboard
 }
 ```
 
-### Schema Limitation
+### Ticket Count Source
 
-`totalTicketsSold` trong dashboard period không thể tính chính xác từ schema hiện tại theo khoảng ngày.
+`summary.totalTicketsSold` được tính bằng tổng:
 
-Có thể:
+```txt
+daily_revenue_stats.total_tickets_sold
+```
 
-* Trả `null`.
-* Bỏ field khỏi response Sprint 2.
-* Hoặc bổ sung `total_tickets_sold` vào daily stats.
+trong khoảng ngày được query.
 
-Không được lấy tổng lifetime của tất cả movie rồi giả định đó là ticket count của date range.
+Field này chỉ được implement sau khi Schema Alignment MR bổ sung cột tương ứng.
 
 ### Average Order Value
 
@@ -715,7 +781,7 @@ Contract đề xuất trả `null` để tránh chia cho `0`.
 ## 15.1. Endpoint
 
 ```http
-GET /api/admin/analytics/revenue/daily
+GET /api/analytics/revenue/daily
 ```
 
 ### Query Parameters
@@ -744,6 +810,7 @@ GET /api/admin/analytics/revenue/daily
         "totalRevenue": 700000,
         "successfulBookings": 18,
         "cancelledBookings": 1,
+        "totalTicketsSold": 36,
         "updatedAt": "2026-06-19T23:59:00"
       },
       {
@@ -751,6 +818,7 @@ GET /api/admin/analytics/revenue/daily
         "totalRevenue": 0,
         "successfulBookings": 0,
         "cancelledBookings": 0,
+        "totalTicketsSold": 0,
         "updatedAt": null
       },
       {
@@ -758,6 +826,7 @@ GET /api/admin/analytics/revenue/daily
         "totalRevenue": 850000,
         "successfulBookings": 22,
         "cancelledBookings": 2,
+        "totalTicketsSold": 44,
         "updatedAt": "2026-06-21T21:30:00"
       }
     ]
@@ -784,7 +853,7 @@ Nếu `includeEmptyDates = false`:
 ## 16.1. Endpoint
 
 ```http
-GET /api/admin/analytics/revenue/summary
+GET /api/analytics/revenue/summary
 ```
 
 ### Query Parameters
@@ -806,6 +875,7 @@ endDate
     "totalRevenue": 12500000,
     "successfulBookings": 320,
     "cancelledBookings": 27,
+    "totalTicketsSold": 645,
     "averageOrderValue": 39062.5,
     "currency": "VND",
     "timezone": "Asia/Ho_Chi_Minh",
@@ -826,6 +896,7 @@ endDate
     "totalRevenue": 0,
     "successfulBookings": 0,
     "cancelledBookings": 0,
+    "totalTicketsSold": 0,
     "averageOrderValue": 0,
     "currency": "VND",
     "timezone": "Asia/Ho_Chi_Minh",
@@ -836,33 +907,41 @@ endDate
 
 ---
 
-# 17. Movie Revenue List API
+# 17. Movie Revenue APIs
 
-## 17.1. Endpoint
+## 17.1. Get Movie Revenue List
+
+### Endpoint
 
 ```http
-GET /api/admin/analytics/movies
+GET /api/analytics/movies
 ```
 
 ### Query Parameters
 
-| Parameter  | Type    | Required | Validation                                       |
-| ---------- | ------- | -------: | ------------------------------------------------ |
-| page       | integer |       No | >= 0                                             |
-| size       | integer |       No | 1–100                                            |
-| movieId    | number  |       No | > 0                                              |
-| movieTitle | string  |       No | Search text                                      |
-| sortBy     | string  |       No | `totalRevenue`, `totalTicketsSold`, `movieTitle` |
-| direction  | string  |       No | `asc`, `desc`                                    |
+| Parameter | Type | Required | Validation |
+|---|---|---:|---|
+| page | integer | No | >= 0 |
+| size | integer | No | 1–100 |
+| movieId | number | No | > 0 |
+| movieTitle | string | No | Search text |
+| startDate | date | No | Phải đi cùng `endDate` |
+| endDate | date | No | Không trước `startDate` |
+| sortBy | string | No | `totalRevenue`, `totalTicketsSold`, `movieTitle` |
+| direction | string | No | `asc`, `desc` |
 
-### Important Limitation
+### Query Mode
 
-Không hỗ trợ `startDate/endDate` trong endpoint này với schema hiện tại.
-
-Dữ liệu là:
+Nếu không truyền `startDate/endDate`:
 
 ```txt
-Lifetime aggregate theo movie
+Trả lifetime aggregate từ movie_revenue_stats
+```
+
+Nếu truyền đủ `startDate/endDate`:
+
+```txt
+Aggregate từ movie_daily_revenue_stats trong khoảng ngày
 ```
 
 ### Response Success
@@ -872,12 +951,17 @@ Lifetime aggregate theo movie
   "success": true,
   "message": "Movie revenue statistics retrieved successfully",
   "data": {
+    "mode": "DATE_RANGE",
+    "period": {
+      "startDate": "2026-06-01",
+      "endDate": "2026-06-21"
+    },
     "content": [
       {
         "movieId": 101,
         "movieTitle": "Avengers",
-        "totalTicketsSold": 850,
-        "totalRevenue": 98500000,
+        "totalTicketsSold": 420,
+        "totalRevenue": 48600000,
         "currency": "VND",
         "updatedAt": "2026-06-21T21:30:00"
       }
@@ -894,13 +978,24 @@ Lifetime aggregate theo movie
 
 ---
 
-# 18. Movie Revenue Detail API
+## 17.2. Get Movie Revenue Detail
 
-## 18.1. Endpoint
+### Endpoint
 
 ```http
-GET /api/admin/analytics/movies/{movieId}
+GET /api/analytics/movies/{movieId}
 ```
+
+### Query Parameters
+
+| Parameter | Type | Required |
+|---|---|---:|
+| startDate | date | No |
+| endDate | date | No |
+
+Không truyền date range thì trả lifetime aggregate.
+
+Có date range thì aggregate từ `movie_daily_revenue_stats`.
 
 ### Response Success
 
@@ -911,20 +1006,16 @@ GET /api/admin/analytics/movies/{movieId}
   "data": {
     "movieId": 101,
     "movieTitle": "Avengers",
-    "totalTicketsSold": 850,
-    "totalRevenue": 98500000,
-    "averageRevenuePerTicket": 115882.35,
+    "mode": "DATE_RANGE",
+    "startDate": "2026-06-01",
+    "endDate": "2026-06-21",
+    "totalTicketsSold": 420,
+    "totalRevenue": 48600000,
+    "averageRevenuePerTicket": 115714.29,
     "currency": "VND",
     "updatedAt": "2026-06-21T21:30:00"
   }
 }
-```
-
-### Average Revenue per Ticket
-
-```txt
-averageRevenuePerTicket =
-totalRevenue / totalTicketsSold
 ```
 
 Nếu ticket count bằng `0`:
@@ -933,7 +1024,7 @@ Nếu ticket count bằng `0`:
 averageRevenuePerTicket = 0
 ```
 
-### Error: Movie Stats Not Found
+### Error
 
 Status: `404 Not Found`
 
@@ -951,21 +1042,84 @@ Không có analytics row không đồng nghĩa Movie Service không có phim đ�
 
 ---
 
+## 17.3. Get Movie Revenue Trend
+
+### Endpoint
+
+```http
+GET /api/analytics/movies/{movieId}/trend
+```
+
+### Query Parameters
+
+| Parameter | Type | Required |
+|---|---|---:|
+| startDate | date | Yes |
+| endDate | date | Yes |
+| includeEmptyDates | boolean | No |
+
+### Response Success
+
+```json
+{
+  "success": true,
+  "message": "Movie revenue trend retrieved successfully",
+  "data": {
+    "movieId": 101,
+    "movieTitle": "Avengers",
+    "startDate": "2026-06-19",
+    "endDate": "2026-06-21",
+    "currency": "VND",
+    "statistics": [
+      {
+        "statDate": "2026-06-19",
+        "ticketsSold": 20,
+        "revenue": 2300000
+      },
+      {
+        "statDate": "2026-06-20",
+        "ticketsSold": 0,
+        "revenue": 0
+      },
+      {
+        "statDate": "2026-06-21",
+        "ticketsSold": 24,
+        "revenue": 2780000
+      }
+    ]
+  }
+}
+```
+
 # 19. Top Movies API
 
 ## 19.1. Endpoint
 
 ```http
-GET /api/admin/analytics/movies/top
+GET /api/analytics/movies/top
 ```
 
 ### Query Parameters
 
-| Parameter | Type    | Required | Validation                |
-| --------- | ------- | -------: | ------------------------- |
-| metric    | string  |       No | `REVENUE`, `TICKETS_SOLD` |
-| limit     | integer |       No | 1–50, mặc định 10         |
-| direction | string  |       No | Mặc định `desc`           |
+| Parameter | Type | Required | Validation |
+|---|---|---:|---|
+| metric | string | No | `REVENUE`, `TICKETS_SOLD` |
+| limit | integer | No | 1–50, mặc định 10 |
+| direction | string | No | Mặc định `desc` |
+| startDate | date | No | Phải đi cùng `endDate` |
+| endDate | date | No | Không trước `startDate` |
+
+Không truyền date range:
+
+```txt
+Top movie theo lifetime aggregate
+```
+
+Có date range:
+
+```txt
+Top movie từ movie_daily_revenue_stats trong khoảng ngày
+```
 
 ### Response Success
 
@@ -975,21 +1129,19 @@ GET /api/admin/analytics/movies/top
   "message": "Top movies retrieved successfully",
   "data": {
     "metric": "REVENUE",
+    "mode": "DATE_RANGE",
+    "period": {
+      "startDate": "2026-06-01",
+      "endDate": "2026-06-21"
+    },
     "currency": "VND",
     "movies": [
       {
         "rank": 1,
         "movieId": 101,
         "movieTitle": "Avengers",
-        "totalTicketsSold": 850,
-        "totalRevenue": 98500000
-      },
-      {
-        "rank": 2,
-        "movieId": 102,
-        "movieTitle": "Doraemon",
-        "totalTicketsSold": 760,
-        "totalRevenue": 76000000
+        "totalTicketsSold": 420,
+        "totalRevenue": 48600000
       }
     ],
     "lastUpdatedAt": "2026-06-21T21:30:00"
@@ -997,7 +1149,7 @@ GET /api/admin/analytics/movies/top
 }
 ```
 
-### Empty Data
+Không có dữ liệu trả:
 
 ```json
 {
@@ -1005,37 +1157,53 @@ GET /api/admin/analytics/movies/top
   "message": "Top movies retrieved successfully",
   "data": {
     "metric": "REVENUE",
-    "currency": "VND",
+    "mode": "DATE_RANGE",
     "movies": [],
     "lastUpdatedAt": null
   }
 }
 ```
 
----
+# 20. Kafka Event Aggregation
 
-# 20. Internal Payment Success Aggregation
+## 20.1. Primary Integration Direction
 
-## 20.1. Endpoint
+Analytics Service sử dụng Kafka để cập nhật read model.
 
-```http
-POST /internal/analytics/events/payment-succeeded
+Các event chính:
+
+```txt
+PAYMENT_SUCCEEDED
+PAYMENT_REFUNDED
+BOOKING_CANCELLED
 ```
 
-Endpoint này mô tả contract nội bộ.
+Internal HTTP endpoint trong các phần dưới chỉ là contract hỗ trợ testing, replay có kiểm soát hoặc recovery. Production integration ưu tiên Kafka consumer.
 
-Production có thể thay bằng Kafka consumer.
+## 20.2. `PAYMENT_SUCCEEDED`
 
-### Request
+Topic đề xuất:
+
+```txt
+payment.payment-succeeded.v1
+```
+
+Message key:
+
+```txt
+paymentId
+```
+
+Payload:
 
 ```json
 {
   "eventId": "PAYMENT-SUCCESS-3001",
   "eventType": "PAYMENT_SUCCEEDED",
+  "sourceService": "payment-service",
   "occurredAt": "2026-06-21T20:12:00",
   "paymentId": 3001,
   "bookingId": 1001,
-  "userId": 15,
   "paidAmount": 216000,
   "currency": "VND",
   "movieId": 101,
@@ -1044,33 +1212,17 @@ Production có thể thay bằng Kafka consumer.
 }
 ```
 
-### Field Definitions
-
-| Field       | Type     | Required | Validation            |
-| ----------- | -------- | -------: | --------------------- |
-| eventId     | string   |      Yes | Unique idempotency ID |
-| eventType   | string   |      Yes | `PAYMENT_SUCCEEDED`   |
-| occurredAt  | datetime |      Yes | ISO-8601              |
-| paymentId   | number   |      Yes | > 0                   |
-| bookingId   | number   |      Yes | > 0                   |
-| userId      | number   |       No | > 0 nếu có            |
-| paidAmount  | number   |      Yes | >= 0                  |
-| currency    | string   |      Yes | `VND`                 |
-| movieId     | number   |      Yes | > 0                   |
-| movieTitle  | string   |      Yes | Không rỗng            |
-| ticketCount | integer  |      Yes | > 0                   |
-
 ### Processing
 
 ```txt
 Validate event
-→ Check eventId chưa xử lý
+→ Insert/check processed_analytics_events
 → Convert occurredAt sang Asia/Ho_Chi_Minh
 → Determine statDate
-→ Upsert daily revenue
-→ Upsert movie revenue
-→ Mark event processed
-→ Commit
+→ Upsert daily_revenue_stats
+→ Upsert movie_revenue_stats
+→ Upsert movie_daily_revenue_stats
+→ Commit transaction
 ```
 
 ### Daily Update
@@ -1078,45 +1230,48 @@ Validate event
 ```txt
 totalRevenue += paidAmount
 totalBookingsCount += 1
+totalTicketsSold += ticketCount
 ```
 
-### Movie Update
+### Lifetime Movie Update
 
 ```txt
 totalRevenue += paidAmount
 totalTicketsSold += ticketCount
 ```
 
-### Response
+### Daily Movie Update
 
-```json
-{
-  "success": true,
-  "message": "Payment success event aggregated successfully",
-  "data": {
-    "eventId": "PAYMENT-SUCCESS-3001",
-    "statDate": "2026-06-21",
-    "processed": true
-  }
-}
+```txt
+revenue += paidAmount
+ticketsSold += ticketCount
 ```
+
+`paidAmount` là số tiền cuối cùng sau Promotion hoặc Membership discount.
 
 ---
 
-# 21. Internal Payment Refund Aggregation
+## 20.3. `PAYMENT_REFUNDED`
 
-## 21.1. Endpoint
+Topic đề xuất:
 
-```http
-POST /internal/analytics/events/payment-refunded
+```txt
+payment.payment-refunded.v1
 ```
 
-### Request
+Message key:
+
+```txt
+paymentId
+```
+
+Payload:
 
 ```json
 {
   "eventId": "PAYMENT-REFUNDED-3001",
   "eventType": "PAYMENT_REFUNDED",
+  "sourceService": "payment-service",
   "occurredAt": "2026-06-22T09:00:00",
   "paymentId": 3001,
   "bookingId": 1001,
@@ -1124,100 +1279,51 @@ POST /internal/analytics/events/payment-refunded
   "currency": "VND",
   "movieId": 101,
   "movieTitle": "Avengers",
-  "refundedTicketCount": 2,
-  "originalPaymentDate": "2026-06-21"
+  "refundedTicketCount": 2
 }
 ```
 
-### Refund Date Attribution
+Refund được trừ vào ngày refund xảy ra.
 
-Reviewer cần chốt một trong hai hướng:
-
-#### Hướng A — Trừ vào ngày refund
+Update:
 
 ```txt
-statDate = refund occurred date
+daily_revenue_stats.totalRevenue -= refundAmount
+
+movie_revenue_stats.totalRevenue -= refundAmount
+movie_revenue_stats.totalTicketsSold -= refundedTicketCount
+
+movie_daily_revenue_stats.revenue -= refundAmount
+movie_daily_revenue_stats.ticketsSold -= refundedTicketCount
 ```
 
-Ưu điểm:
+Không để lifetime ticket count nhỏ hơn `0`.
 
-* Phản ánh dòng tiền theo ngày.
-* Không sửa dữ liệu lịch sử cũ.
-
-Nhược điểm:
-
-* Một ngày có thể có doanh thu âm nếu refund lớn.
-
-#### Hướng B — Điều chỉnh ngày payment gốc
-
-```txt
-statDate = original payment date
-```
-
-Ưu điểm:
-
-* Báo cáo ngày bán phản ánh net cuối cùng.
-
-Nhược điểm:
-
-* Dữ liệu lịch sử bị thay đổi.
-
-Contract đề xuất:
-
-```txt
-Hướng A — trừ vào ngày refund
-```
-
-### Update Direction
-
-Daily:
-
-```txt
-totalRevenue -= refundAmount
-```
-
-Movie:
-
-```txt
-totalRevenue -= refundAmount
-totalTicketsSold -= refundedTicketCount
-```
-
-Không để:
-
-```txt
-totalTicketsSold < 0
-```
-
-Việc totalRevenue có được âm theo ngày hay không cần reviewer xác nhận.
-
-### Schema Limitation
-
-Schema không lưu riêng:
-
-```txt
-refundAmount
-refundedBookingCount
-```
-
-Refund chỉ làm thay đổi `total_revenue`, nên khó phân biệt gross và refund trên dashboard.
+Daily net revenue có thể âm.
 
 ---
 
-# 22. Internal Booking Cancelled Aggregation
+## 20.4. `BOOKING_CANCELLED`
 
-## 22.1. Endpoint
+Topic đề xuất:
 
-```http
-POST /internal/analytics/events/booking-cancelled
+```txt
+booking.booking-cancelled.v1
 ```
 
-### Request
+Message key:
+
+```txt
+bookingId
+```
+
+Payload:
 
 ```json
 {
   "eventId": "BOOKING-CANCELLED-1002",
   "eventType": "BOOKING_CANCELLED",
+  "sourceService": "booking-service",
   "occurredAt": "2026-06-21T20:30:00",
   "bookingId": 1002,
   "previousStatus": "PENDING_PAYMENT",
@@ -1226,37 +1332,38 @@ POST /internal/analytics/events/booking-cancelled
 }
 ```
 
-### Processing
+Processing:
 
 ```txt
 cancelledBookingsCount += 1
 ```
 
-Không giảm revenue nếu booking chưa thanh toán.
+Không giảm revenue từ `BOOKING_CANCELLED`.
 
-Nếu booking đã thanh toán rồi refund, revenue adjustment phải đến từ:
-
-```txt
-PAYMENT_REFUNDED
-```
-
-Không trừ revenue từ cả hai event để tránh double subtraction.
-
----
+Nếu booking đã thanh toán và được refund, revenue chỉ được trừ bởi `PAYMENT_REFUNDED` để tránh double subtraction.
 
 # 23. Idempotency Rules
 
-## 23.1. Required Idempotency
+## 23.1. Processed Events Table
 
-Mỗi aggregation event phải có:
+Mỗi Kafka event phải có `eventId` duy nhất.
+
+Consumer xử lý trong cùng transaction:
 
 ```txt
-eventId
+Insert processed_analytics_events(eventId)
+→ Nếu duplicate key: bỏ qua event
+→ Nếu insert thành công: update toàn bộ aggregate
+→ Commit
 ```
 
 Cùng event không được aggregate hai lần.
 
-### Duplicate Response
+### Duplicate Handling
+
+Duplicate event được acknowledge thành công và không tạo side effect mới.
+
+Ví dụ internal/debug response:
 
 ```json
 {
@@ -1270,28 +1377,7 @@ Cùng event không được aggregate hai lần.
 }
 ```
 
-### Schema Limitation
-
-Schema hiện chưa có bảng:
-
-```txt
-processed_analytics_events
-```
-
-Khuyến nghị bổ sung:
-
-```txt
-event_id UNIQUE
-event_type
-processed_at
-source_service
-```
-
-Hoặc dùng Kafka exactly-once/outbox pattern phù hợp.
-
-Không được chỉ tin consumer offset nếu dữ liệu cần có khả năng replay an toàn.
-
----
+Không được chỉ dựa vào Kafka consumer offset để bảo đảm idempotency.
 
 # 24. Atomic Aggregation Rules
 
@@ -1302,7 +1388,9 @@ daily_revenue_stats
 +
 movie_revenue_stats
 +
-processed event marker
+movie_daily_revenue_stats
++
+processed_analytics_events
 ```
 
 Tất cả phải nằm trong cùng transaction.
@@ -1328,29 +1416,30 @@ rồi vẫn mark event processed.
 
 ### Daily Stats
 
-Pseudo SQL:
-
 ```sql
 INSERT INTO daily_revenue_stats (
   stat_date,
   total_revenue,
   total_bookings_count,
-  cancelled_bookings_count
+  cancelled_bookings_count,
+  total_tickets_sold
 )
 VALUES (
   :statDate,
-  :revenue,
-  :bookingCount,
-  :cancelledCount
+  :revenueDelta,
+  :bookingDelta,
+  :cancelledDelta,
+  :ticketDelta
 )
 ON DUPLICATE KEY UPDATE
-  total_revenue = total_revenue + :revenue,
-  total_bookings_count = total_bookings_count + :bookingCount,
-  cancelled_bookings_count = cancelled_bookings_count + :cancelledCount,
+  total_revenue = total_revenue + :revenueDelta,
+  total_bookings_count = total_bookings_count + :bookingDelta,
+  cancelled_bookings_count = cancelled_bookings_count + :cancelledDelta,
+  total_tickets_sold = total_tickets_sold + :ticketDelta,
   updated_at = CURRENT_TIMESTAMP;
 ```
 
-### Movie Stats
+### Lifetime Movie Stats
 
 ```sql
 INSERT INTO movie_revenue_stats (
@@ -1362,19 +1451,41 @@ INSERT INTO movie_revenue_stats (
 VALUES (
   :movieId,
   :movieTitle,
-  :ticketCount,
-  :revenue
+  :ticketDelta,
+  :revenueDelta
 )
 ON DUPLICATE KEY UPDATE
   movie_title = :movieTitle,
-  total_tickets_sold = total_tickets_sold + :ticketCount,
-  total_revenue = total_revenue + :revenue,
+  total_tickets_sold = total_tickets_sold + :ticketDelta,
+  total_revenue = total_revenue + :revenueDelta,
   updated_at = CURRENT_TIMESTAMP;
 ```
 
-Các ví dụ SQL chỉ mô tả direction, không bắt buộc implementation cụ thể.
+### Daily Movie Stats
 
----
+```sql
+INSERT INTO movie_daily_revenue_stats (
+  movie_id,
+  movie_title,
+  stat_date,
+  tickets_sold,
+  revenue
+)
+VALUES (
+  :movieId,
+  :movieTitle,
+  :statDate,
+  :ticketDelta,
+  :revenueDelta
+)
+ON DUPLICATE KEY UPDATE
+  movie_title = :movieTitle,
+  tickets_sold = tickets_sold + :ticketDelta,
+  revenue = revenue + :revenueDelta,
+  updated_at = CURRENT_TIMESTAMP;
+```
+
+Các ví dụ SQL chỉ mô tả direction; implementation phải bảo đảm atomic transaction và không để lifetime ticket count âm.
 
 # 26. Scheduled Recalculation Direction
 
@@ -1583,7 +1694,17 @@ Analytics Service không dùng `movie_title` làm định danh.
 
 # 32. Revenue Calculation Rules
 
-## 32.1. Included
+## 32.1. Net Revenue
+
+Analytics ghi nhận:
+
+```txt
+Net Revenue
+= Payment SUCCESS paidAmount
+- Payment REFUNDED refundAmount
+```
+
+## 32.2. Included
 
 Chỉ tính:
 
@@ -1591,9 +1712,9 @@ Chỉ tính:
 Payment SUCCESS
 ```
 
-với amount thực tế được xác nhận.
+với `paidAmount` cuối cùng được Payment Service xác nhận.
 
-## 32.2. Excluded
+## 32.3. Excluded
 
 Không tính:
 
@@ -1603,119 +1724,63 @@ Payment PROCESSING
 Payment FAILED
 Payment CANCELLED
 Booking PENDING_PAYMENT
-Promotion discount
-Score redeem value
 ```
 
-## 32.3. Refund
+## 32.4. Refund
 
-Khi `Payment REFUNDED`:
+Khi nhận `PAYMENT_REFUNDED`:
 
 ```txt
 totalRevenue -= refundAmount
 ```
 
-## 32.4. Promotion
+Refund được ghi nhận vào ngày refund.
+
+## 32.5. Promotion và Membership Discount
+
+Analytics không tách nguồn discount.
 
 Ví dụ:
 
 ```txt
-Original booking amount = 240000
-Promotion discount = 24000
+Original amount = 240000
+Silver membership discount = 10%
 Paid amount = 216000
+Revenue = 216000
 ```
 
-Revenue ghi nhận:
+Tương tự, nếu có Promotion discount, Analytics vẫn chỉ nhận và aggregate `paidAmount` cuối cùng.
 
-```txt
-216000
-```
-
-Không phải `240000`.
-
-## 32.5. Score Redeem
-
-Nếu user dùng:
-
-```txt
-50000 VND bằng điểm
-```
-
-và thanh toán tiền mặt/cổng:
-
-```txt
-166000 VND
-```
-
-Contract đề xuất revenue là:
-
-```txt
-166000 VND
-```
-
-vì đó là số tiền thực thu.
-
-Reviewer cần xác nhận policy này.
-
----
+Hệ thống không có Score Redeem, không dùng điểm để thanh toán vé và không quy đổi score thành tiền.
 
 # 33. Booking and Ticket Count Rules
 
-### Successful Booking
+### Successful Booking và Ticket Count
 
-Tăng khi payment success và booking được xác nhận thành công.
-
-Cần tránh cả:
+Event `PAYMENT_SUCCEEDED` là event enriched dùng để cập nhật:
 
 ```txt
-PAYMENT_SUCCESS
+daily_revenue_stats.total_bookings_count
+daily_revenue_stats.total_tickets_sold
+movie_revenue_stats.total_tickets_sold
+movie_daily_revenue_stats.tickets_sold
 ```
 
-và:
+Payload phải chứa `bookingId`, `movieId` và `ticketCount`.
+
+Không tăng các count trên từ event khác cho cùng nghiệp vụ để tránh double counting.
+
+### Cancelled Booking Count
+
+`BOOKING_CANCELLED` chỉ tăng:
 
 ```txt
-BOOKING_CONFIRMED
+daily_revenue_stats.cancelled_bookings_count
 ```
 
-đều tăng booking count.
+Không giảm successful booking hoặc ticket count nếu booking chưa từng thanh toán thành công.
 
-Phải chọn một canonical aggregation event.
-
-Contract đề xuất:
-
-```txt
-BOOKING_CONFIRMED
-```
-
-là event cập nhật booking/ticket count.
-
-Trong khi:
-
-```txt
-PAYMENT_SUCCESS
-```
-
-cập nhật revenue.
-
-Tuy nhiên để transaction thống nhất, team cũng có thể dùng một event enriched:
-
-```txt
-BOOKING_CONFIRMED_WITH_PAYMENT
-```
-
-Reviewer cần chốt.
-
-### Ticket Count
-
-Movie stats tăng bằng số ticket của booking confirmed.
-
-Không tính ticket thuộc:
-
-* Booking pending.
-* Booking cancelled trước payment.
-* Reservation.
-
----
+Nếu booking đã thanh toán rồi refund, adjustment doanh thu và ticket count đến từ `PAYMENT_REFUNDED`.
 
 # 34. Concurrency Rules
 
@@ -1765,7 +1830,7 @@ Full out-of-order handling nằm ngoài Sprint 2 foundation.
 
 # 36. Seed Data Direction
 
-Sprint 2 cho phép dùng seed data để triển khai query APIs.
+Sprint 2 có thể dùng seed data cho development/test query, nhưng hướng tích hợp chính thức là Kafka aggregation.
 
 Seed data phải:
 
@@ -1861,92 +1926,74 @@ Caching không bắt buộc trong Sprint 2.
 
 ## 40.1. Daily Ticket Count
 
-Dashboard cần tổng ticket theo khoảng ngày nhưng schema chưa có:
+Bắt buộc bổ sung:
 
 ```txt
 daily_revenue_stats.total_tickets_sold
 ```
 
-Nếu đây là requirement Sprint 2, cần thêm field.
+để Dashboard và Revenue Summary trả ticket count theo date range.
 
 ## 40.2. Movie Revenue by Date
 
-Schema hiện tại chỉ có lifetime movie aggregate.
-
-Muốn hỗ trợ movie revenue theo khoảng thời gian cần bảng:
+Bắt buộc bổ sung:
 
 ```txt
 movie_daily_revenue_stats
 ```
 
-## 40.3. Gross, Refund và Net Revenue
-
-Schema chỉ có:
+với:
 
 ```txt
-total_revenue
+UNIQUE(movie_id, stat_date)
 ```
 
-Nếu dashboard cần breakdown phải thêm:
+để hỗ trợ:
 
-```txt
-gross_revenue
-refund_amount
-net_revenue
-```
+- Revenue theo date range.
+- Ticket count theo date range.
+- Movie trend.
+- Top movie theo period.
 
-## 40.4. Event Idempotency
+## 40.3. Processed Events
 
-Schema chưa có processed events table.
-
-Khuyến nghị thêm:
+Bắt buộc bổ sung:
 
 ```txt
 processed_analytics_events
 ```
 
+với `event_id UNIQUE` để Kafka consumer replay an toàn.
+
+## 40.4. Net Revenue
+
+`total_revenue` được xác nhận là Net Revenue.
+
+Contract không yêu cầu tách `gross_revenue`, `refund_amount`, `net_revenue` trong Sprint 2 nếu dashboard chỉ cần số net cuối cùng.
+
 ## 40.5. Rebuild Job Tracking
 
-Schema chưa có:
+Schema chưa có `analytics_jobs`.
 
-```txt
-analytics_jobs
-```
-
-Nếu implement async rebuild cần job table hoặc external job tracking.
+Nếu implement async rebuild đầy đủ, cần issue riêng hoặc external job tracking.
 
 ## 40.6. Cancellation Type
 
-`cancelled_bookings_count` đang gộp:
+`cancelled_bookings_count` đang gộp user cancel, system timeout và admin cancel.
+
+Nếu cần breakdown phải bổ sung dimension sau.
+
+## 40.7. Updated Timestamp
+
+Implementation phải chủ động set `updated_at` trong upsert hoặc dùng `ON UPDATE CURRENT_TIMESTAMP`.
+
+## 40.8. Related Issue
 
 ```txt
-User cancelled
-System timeout
-Admin cancelled
+[Database] Align Analytics Schema with Analytics API Contract
 ```
 
-Nếu cần breakdown phải bổ sung field hoặc dimension.
-
-## 40.7. Movie Snapshot
-
-Chỉ lưu movie title, chưa lưu:
-
-```txt
-genre
-duration
-rating
-releaseDate
-```
-
-Không cần thêm nếu dashboard Sprint 2 không yêu cầu.
-
-## 40.8. Updated Timestamp
-
-`updated_at DEFAULT now()` không tự động cập nhật ở mọi MySQL configuration.
-
-Implementation cần chủ động set `updated_at` khi upsert hoặc thêm `ON UPDATE`.
-
----
+Schema Alignment MR phải merge trước Backend implementation.
 
 # 41. Out of Scope
 
@@ -1967,7 +2014,7 @@ Implementation cần chủ động set `updated_at` khi upsert hoặc thêm `ON 
 * Employee performance analytics.
 * Promotion performance nâng cao.
 * Score analytics nâng cao.
-* Production Kafka/outbox implementation.
+* Kafka event publishing contract ngoài ba event đã chốt hoặc outbox production nâng cao.
 * Direct access database service khác.
 * Backend code trong issue contract này.
 * Schema update ngoài review process.
@@ -1976,43 +2023,44 @@ Implementation cần chủ động set `updated_at` khi upsert hoặc thêm `ON 
 
 # 42. Implementation Issue Direction
 
-Sau khi contract được review và schema alignment hoàn tất nếu cần, có thể tách:
+Implementation chỉ bắt đầu sau khi:
+
+```txt
+Analytics Contract MR được merge
++
+Analytics Schema Alignment MR được merge
++
+SQL và Physical ERD đã đồng bộ
+```
+
+Các implementation issue đề xuất:
 
 ```txt
 [Backend] Implement Analytics Dashboard and Daily Revenue APIs
 
-[Backend] Implement Movie Revenue and Top Movie APIs
+[Backend] Implement Lifetime and Date-Range Movie Analytics APIs
 
-[Backend] Implement Analytics Event Aggregation Foundation
+[Backend] Implement Kafka Analytics Event Consumers
 
 [Backend] Implement Analytics Recalculation and Rebuild Direction
 ```
 
-Nếu giảm scope Sprint 2:
+Thứ tự đề xuất:
 
 ```txt
-Issue 1: Seed Analytics Data
-Issue 2: Dashboard + Daily Revenue Query
-Issue 3: Movie Revenue + Top Movies Query
+Schema Alignment
+→ Kafka Consumer Foundation
+→ Daily/Lifetime Aggregation
+→ Movie Date-Range Aggregation
+→ Dashboard Query
+→ Recalculate/Rebuild
 ```
 
-Event aggregation có thể chuyển sang Sprint sau nếu Sprint 2 chỉ làm query foundation.
-
-Implementation issue chỉ chuyển `Ready` khi:
-
-```txt
-Contract đã được duyệt
-+
-Schema bắt buộc đã align
-+
-Khang xác nhận feasibility
-```
-
----
+Seed data chỉ phục vụ development/test, không thay thế Kafka integration chính thức.
 
 # 43. Acceptance Criteria
 
-* [ ] Có schema Sprint 0 baseline.
+* [ ] Có schema Sprint 0 baseline và schema alignment direction.
 * [ ] Có source-of-truth clarification.
 * [ ] Có eventual consistency notes.
 * [ ] Có timezone và currency rule.
@@ -2021,7 +2069,9 @@ Khang xác nhận feasibility
 * [ ] Có dashboard summary API.
 * [ ] Có daily revenue API.
 * [ ] Có revenue summary API.
-* [ ] Có movie revenue API.
+* [ ] Có lifetime movie revenue API.
+* [ ] Có movie revenue theo date range.
+* [ ] Có movie revenue trend API.
 * [ ] Có top movie API.
 * [ ] Có empty data behavior.
 * [ ] Có revenue calculation rules.
@@ -2030,55 +2080,82 @@ Khang xác nhận feasibility
 * [ ] Có internal aggregation direction.
 * [ ] Có scheduled recalculation direction.
 * [ ] Có rebuild direction.
-* [ ] Có event idempotency.
+* [ ] Có Kafka event aggregation.
+* [ ] Có processed events idempotency.
 * [ ] Có atomic update rules.
 * [ ] Có seed data direction.
 * [ ] Có Admin/Internal security classification.
 * [ ] Có error code catalog.
-* [ ] Có schema mismatch notes.
+* [ ] Có schema alignment requirements.
 * [ ] Khang review feasibility.
 * [ ] Contract sẵn sàng implementation.
 * [ ] MR target `develop`.
 
 ---
 
-# 44. Các Điểm Reviewer Cần Xác Nhận
+# 44. Review Decisions
 
-Khang cần xác nhận:
+Analytics Service Owner đã review và xác nhận:
 
-1. Analytics Service port chính thức.
-2. `total_revenue` là gross hay net revenue.
-3. Refund được trừ vào ngày refund hay ngày payment gốc.
-4. Có cho daily revenue âm do refund không.
-5. Revenue tính theo amount thực trả sau promotion không.
-6. Có cộng revenue trên phần thanh toán bằng score không.
-7. Canonical event nào tăng successful booking count.
-8. Canonical event nào tăng ticket count.
-9. Có dùng `PAYMENT_SUCCESS` hay `BOOKING_CONFIRMED` làm event chính.
-10. Có cần `total_tickets_sold` trong daily stats không.
-11. Có cần movie revenue theo date range trong Sprint 2 không.
-12. Có cần bảng `movie_daily_revenue_stats` không.
-13. Có cần gross/refund/net breakdown không.
-14. Maximum query range là bao nhiêu ngày.
-15. Có hỗ trợ comparison trend trong Sprint 2 không.
-16. Analytics query dùng seed data hay event integration.
-17. Có dùng Kafka trong Sprint 2 không.
-18. Message key là `bookingId` hay `paymentId`.
-19. Có cần processed events table không.
-20. Có implement refund aggregation không.
-21. Có implement cancelled booking aggregation không.
-22. Recalculate/rebuild có nằm trong Sprint 2 không.
-23. Có cần job tracking table không.
-24. Dashboard role là Admin, Manager hay cả hai.
-25. Có cache dashboard không.
-26. Có cần schema alignment issue trước implementation không.
+1. Analytics Service port:
 
----
+   ```txt
+   8089
+   ```
+
+2. API Gateway route:
+
+   ```txt
+   /api/analytics/**
+   ```
+
+3. Revenue sử dụng:
+
+   ```txt
+   Net Revenue
+   ```
+
+4. Refund được trừ vào ngày refund xảy ra.
+
+5. Analytics aggregate `paidAmount` cuối cùng sau Promotion hoặc Membership discount.
+
+6. Hệ thống không có Score Redeem và không dùng điểm để thanh toán.
+
+7. Analytics sử dụng Kafka aggregation.
+
+8. Các event chính:
+
+   ```txt
+   PAYMENT_SUCCEEDED
+   PAYMENT_REFUNDED
+   BOOKING_CANCELLED
+   ```
+
+9. Analytics hỗ trợ cả:
+
+   ```txt
+   Lifetime statistics
+   Date-range statistics
+   Movie revenue trend
+   ```
+
+10. Bắt buộc bổ sung:
+
+    ```txt
+    daily_revenue_stats.total_tickets_sold
+    movie_daily_revenue_stats
+    processed_analytics_events
+    ```
+
+11. Analytics là read model, không phải source of truth của Booking hoặc Payment.
+
+12. Schema alignment phải hoàn thành trước Backend implementation.
 
 # 45. Lịch Sử Chỉnh Sửa
 
 | Ngày       | Nội dung                                                         | Người thực hiện  |
 | ---------- | ---------------------------------------------------------------- | ---------------- |
 | 21/06/2026 | Khởi tạo Analytics Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
+| 22/06/2026 | Cập nhật theo review của Analytics Service Owner: Kafka aggregation, Net Revenue, movie date-range/trend, daily ticket count, processed events và schema alignment | Dương Thiện Nhân |
 
 Các thay đổi schema chỉ được ghi nhận tại đây sau khi schema MR tương ứng đã được merge.
