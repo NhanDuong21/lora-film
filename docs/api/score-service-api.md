@@ -10,9 +10,9 @@
 | Contract Owner | Dương Thiện Nhân                                                                |
 | Backend Owner  | Trương Hoàng Khang                                                              |
 | Reviewer       | Trương Hoàng Khang                                                              |
-| Trạng thái     | Draft / Ready for Review                                                        |
+| Trạng thái     | Updated after Owner Review / Ready for Re-review                                |
 | Milestone      | Sprint 2 - Core Service API Foundation                                          |
-| Ngày cập nhật  | 21/06/2026                                                                      |
+| Ngày cập nhật  | 22/06/2026                                                                      |
 
 ---
 
@@ -195,19 +195,13 @@ Contract Sprint 2 mặc định:
 * Có thể giảm khi điểm earn bị thu hồi do refund/cancel.
 * Không tự giảm do điểm khả dụng hết hạn nếu tier dùng lifetime points.
 
-Reviewer phải xác nhận accumulated point là:
+Quyết định chính thức cho Sprint 2:
 
 ```txt
-Lifetime accumulated points
+accumulatedPoints = Lifetime Accumulated Points
 ```
 
-hay:
-
-```txt
-Points accumulated trong một chu kỳ thành viên
-```
-
-Schema hiện tại phù hợp hơn với lifetime accumulated points.
+Không áp dụng membership cycle, tier expiration hoặc reset schedule trong Sprint 2.
 
 ### 6.3. Giới hạn schema hiện tại
 
@@ -436,7 +430,7 @@ Không sử dụng point dạng decimal trong Sprint 2.
 
 ## 11. Transaction Type Definitions
 
-### 11.1. ScoreTransactionType đề xuất
+### 11.1. ScoreTransactionType chính thức
 
 ```txt
 EARN_BY_BOOKING
@@ -468,9 +462,15 @@ SPEND_FOR_REWARD
 EXPIRED
 ```
 
-Reviewer cần xác nhận bộ enum chính thức.
+Bộ enum trên là chính thức cho Sprint 2.
 
-Có thể giữ tên `SPEND_FOR_REWARD`, nhưng để đồng bộ booking flow, contract đề xuất:
+Không tiếp tục sử dụng:
+
+```txt
+SPEND_FOR_REWARD
+```
+
+Tên chuẩn là:
 
 ```txt
 REDEEM_FOR_BOOKING
@@ -530,7 +530,7 @@ nếu 1 điểm không tương đương 1 VND.
 
 Cần có conversion unit rõ ràng.
 
-Contract Sprint 2 đề xuất:
+Công thức chính thức cho Sprint 2:
 
 ```txt
 earnedPoints =
@@ -554,14 +554,14 @@ earnedPoints = floor(240000 × 0.05 / 1000)
              = 12 điểm
 ```
 
-Reviewer cần xác nhận conversion rule chính thức.
+Đây là công thức chính thức cho Sprint 2.
 
 ### 12.3. Eligible Amount
 
-Contract đề xuất:
+Quyết định chính thức:
 
 ```txt
-eligibleAmount = số tiền thực trả sau promotion
+eligibleAmount = số tiền thực trả bằng tiền sau promotion và sau phần giá trị được thanh toán bằng score
 ```
 
 Không cộng điểm trên giá gốc trước giảm giá.
@@ -584,15 +584,15 @@ Nếu tier thay đổi:
 
 ### 12.5. Tier Downgrade
 
-Contract mặc định:
+Sprint 2 cho phép tier downgrade khi `accumulatedPoints` giảm do `REVOKE_EARN_BY_REFUND` hoặc admin adjustment có ảnh hưởng accumulated points.
+
+Ví dụ:
 
 ```txt
-Cho phép downgrade nếu accumulatedPoints giảm do revoke/refund
+600 points → DIAMOND
+Revoke 400 accumulated points
+200 points → GOLD
 ```
-
-Reviewer cần xác nhận.
-
-Nếu dùng lifetime accumulated points không giảm, tier chỉ upgrade, không downgrade.
 
 ---
 
@@ -625,19 +625,99 @@ redeemPoints <= currentPoints
 | Manual deduct          |          Giảm |                   Tùy loại adjustment |
 | Expired                |          Giảm | Không đổi nếu accumulated là lifetime |
 
-Reviewer cần chốt behavior của manual adjustment.
+Behavior của `affectAccumulatedPoints` trong Admin Adjustment vẫn cần Score Service Owner xác nhận trước khi contract được approve. Nếu accumulated points được phép thay đổi, bắt buộc recalculate tier.
 
 ---
 
-## 14. API Classification
+## 14. Production Readiness Decisions
 
-### 14.1. Public APIs
+Các quyết định sau đã được Score Service Owner chốt cho Sprint 2:
+
+| Nội dung | Quyết định |
+|---|---|
+| `accumulatedPoints` | Lifetime accumulated points |
+| Tier downgrade | Có |
+| Redeem giảm accumulated | Không |
+| Refund redeem tăng accumulated | Không |
+| Revoke earn giảm accumulated | Có |
+| Balance âm | Không cho phép |
+| Earn trên phần thanh toán bằng điểm | Không |
+| 1 point | 1.000 VND |
+| Earn formula | `floor(eligibleAmount × earningRate / 1000)` |
+| Database-level idempotency | Bắt buộc |
+| Balance audit snapshot | Bắt buộc |
+| Reference transaction | Bắt buộc cho refund/revoke |
+| Admin adjustment audit | Bắt buộc |
+
+## 14.1. Database-level Idempotency
+
+Mọi transaction thay đổi score phải có `idempotencyKey` và được bảo vệ bằng unique constraint tại database.
+
+```txt
+score_history.idempotency_key UNIQUE NOT NULL
+```
+
+Duplicate event/request không được thay đổi balance lần hai.
+
+## 14.2. Audit Snapshot
+
+Mọi `score_history` record phải lưu:
+
+```txt
+balanceBefore
+balanceAfter
+accumulatedBefore
+accumulatedAfter
+```
+
+Balance update và history insert phải nằm trong cùng transaction.
+
+## 14.3. Original Transaction Reference
+
+`REFUND_REDEEM` và `REVOKE_EARN_BY_REFUND` phải tham chiếu transaction gốc bằng:
+
+```txt
+referenceHistoryId
+```
+
+## 14.4. Admin Adjustment Audit
+
+Admin adjustment phải lưu:
+
+```txt
+createdBy
+requestId
+reason
+```
+
+`requestId` phải idempotent.
+
+## 14.5. Redeem Concurrency
+
+Không dùng flow `SELECT → check → UPDATE` nếu không lock.
+
+Hướng bắt buộc:
+
+```sql
+UPDATE user_scores
+SET current_points = current_points - :points
+WHERE user_id = :userId
+  AND current_points >= :points;
+```
+
+Nếu affected rows bằng `0`, trả `SCORE_INSUFFICIENT_BALANCE`.
+
+---
+
+## 15. API Classification
+
+### 15.1. Public APIs
 
 ```txt
 GET /api/membership-tiers
 ```
 
-### 14.2. Protected Customer APIs
+### 15.2. Protected Customer APIs
 
 ```txt
 GET  /api/scores/me
@@ -648,7 +728,7 @@ POST /api/scores/me/redeem-preview
 
 Customer không được tự gọi earn, redeem commit, refund hoặc adjustment.
 
-### 14.3. Internal APIs
+### 15.3. Internal APIs
 
 ```txt
 POST /internal/scores/earn
@@ -659,7 +739,7 @@ POST /internal/scores/users/{userId}/recalculate-tier
 GET  /internal/scores/users/{userId}
 ```
 
-### 14.4. Admin APIs
+### 15.4. Admin APIs
 
 ```txt
 GET   /api/admin/scores/users/{userId}
@@ -675,7 +755,7 @@ PUT   /api/admin/membership-tiers/{tierId}
 
 ---
 
-## 15. Endpoint Summary
+# 16. Endpoint Summary
 
 | Method | Endpoint                                        | Access    | Mục đích                |
 | ------ | ----------------------------------------------- | --------- | ----------------------- |
@@ -701,9 +781,9 @@ PUT   /api/admin/membership-tiers/{tierId}
 
 ---
 
-# 16. Membership Tier Query APIs
+# 17. Membership Tier Query APIs
 
-## 16.1. Get Membership Tiers
+## 17.1. Get Membership Tiers
 
 ### Endpoint
 
@@ -748,9 +828,9 @@ minPoints ASC
 
 ---
 
-# 17. Customer Score Query APIs
+# 18. Customer Score Query APIs
 
-## 17.1. Get Current User Score Balance
+## 18.1. Get Current User Score Balance
 
 ### Endpoint
 
@@ -803,7 +883,7 @@ Contract khuyến nghị lazy initialization khi user lần đầu truy vấn ho
 
 ---
 
-## 17.2. Get Current Membership Tier
+## 18.2. Get Current Membership Tier
 
 ### Endpoint
 
@@ -834,7 +914,7 @@ GET /api/scores/me/tier
 
 ---
 
-## 17.3. Get Current User Score History
+## 18.3. Get Current User Score History
 
 ### Endpoint
 
@@ -867,6 +947,11 @@ GET /api/scores/me/history
         "bookingId": 1001,
         "pointChange": 12,
         "transactionType": "EARN_BY_BOOKING",
+        "balanceBefore": 150,
+        "balanceAfter": 162,
+        "accumulatedBefore": 350,
+        "accumulatedAfter": 362,
+        "referenceHistoryId": null,
         "description": "Earned points from booking LORA-20260621-0001",
         "createdAt": "2026-06-21T20:30:00"
       },
@@ -875,6 +960,11 @@ GET /api/scores/me/history
         "bookingId": 1002,
         "pointChange": -50,
         "transactionType": "REDEEM_FOR_BOOKING",
+        "balanceBefore": 162,
+        "balanceAfter": 112,
+        "accumulatedBefore": 362,
+        "accumulatedAfter": 362,
+        "referenceHistoryId": null,
         "description": "Redeemed points for booking LORA-20260621-0002",
         "createdAt": "2026-06-21T21:00:00"
       }
@@ -891,9 +981,9 @@ GET /api/scores/me/history
 
 ---
 
-# 18. Redeem Preview API
+# 19. Redeem Preview API
 
-## 18.1. Endpoint
+## 19.1. Endpoint
 
 ```http
 POST /api/scores/me/redeem-preview
@@ -923,7 +1013,7 @@ Resolve user from JWT
 
 ### Point Redemption Rate
 
-Contract Sprint 2 đề xuất:
+Quyết định chính thức cho Sprint 2:
 
 ```txt
 1 point = 1,000 VND
@@ -935,7 +1025,7 @@ Ví dụ:
 100 points = 100,000 VND
 ```
 
-Reviewer cần xác nhận conversion rate.
+Tỷ lệ này là cố định trong Sprint 2 và phải được cấu hình tập trung, không hardcode rải rác trong service.
 
 ### Response Success
 
@@ -973,9 +1063,9 @@ Status: `409 Conflict`
 
 ---
 
-# 19. Earn Score Internal API
+# 20. Earn Score Internal API
 
-## 19.1. Endpoint
+## 20.1. Endpoint
 
 ```http
 POST /internal/scores/earn
@@ -993,7 +1083,8 @@ Frontend không được gọi.
   "bookingId": 1001,
   "eligibleAmount": 240000,
   "paymentTransactionCode": "PAY-LORAFILM-20260621-998877",
-  "eventId": "PAYMENT-SUCCESS-3001"
+  "eventId": "PAYMENT-SUCCESS-3001",
+  "idempotencyKey": "EARN:BOOKING:1001"
 }
 ```
 
@@ -1005,7 +1096,8 @@ Frontend không được gọi.
 | bookingId              | number |      Yes | > 0                    |
 | eligibleAmount         | number |      Yes | >= 0                   |
 | paymentTransactionCode | string |       No | Không rỗng nếu có      |
-| eventId                | string |      Yes | Idempotency identifier |
+| eventId                | string |      Yes | Business event identifier |
+| idempotencyKey         | string |      Yes | Unique database idempotency key |
 
 ### Source of Truth
 
@@ -1099,9 +1191,9 @@ Status: `500 Internal Server Error`
 
 ---
 
-# 20. Redeem Score Internal API
+# 21. Redeem Score Internal API
 
-## 20.1. Endpoint
+## 21.1. Endpoint
 
 ```http
 POST /internal/scores/redeem
@@ -1116,7 +1208,8 @@ Do Booking Service hoặc orchestration layer gọi.
   "userId": 15,
   "bookingId": 1002,
   "points": 50,
-  "eventId": "SCORE-REDEEM-BOOKING-1002"
+  "eventId": "SCORE-REDEEM-BOOKING-1002",
+  "idempotencyKey": "REDEEM:BOOKING:1002"
 }
 ```
 
@@ -1195,9 +1288,9 @@ SCORE_INSUFFICIENT_BALANCE
 
 ---
 
-# 21. Refund Redeemed Points
+# 22. Refund Redeemed Points
 
-## 21.1. Endpoint
+## 22.1. Endpoint
 
 ```http
 POST /internal/scores/refund-redeem
@@ -1219,6 +1312,7 @@ Dùng khi:
   "points": 50,
   "originalRedeemEventId": "SCORE-REDEEM-BOOKING-1002",
   "eventId": "SCORE-REFUND-BOOKING-1002",
+  "idempotencyKey": "REFUND_REDEEM:BOOKING:1002",
   "reason": "Booking expired before payment"
 }
 ```
@@ -1248,9 +1342,9 @@ Dùng khi:
 
 ---
 
-# 22. Revoke Earned Points
+# 23. Revoke Earned Points
 
-## 22.1. Endpoint
+## 23.1. Endpoint
 
 ```http
 POST /internal/scores/revoke-earn
@@ -1267,6 +1361,7 @@ Dùng khi booking/payment đã được refund hoặc giao dịch earn bị đ�
   "points": 12,
   "originalEarnEventId": "PAYMENT-SUCCESS-3001",
   "eventId": "PAYMENT-REFUND-3001",
+  "idempotencyKey": "REVOKE_EARN:BOOKING:1001:PAYMENT-REFUND-3001",
   "reason": "Payment refunded"
 }
 ```
@@ -1319,15 +1414,15 @@ Contract khuyến nghị Hướng A trong Sprint 2 và ghi log cảnh báo.
 
 ---
 
-# 23. Recalculate Membership Tier
+# 24. Recalculate Membership Tier
 
-## 23.1. Internal Endpoint
+## 24.1. Internal Endpoint
 
 ```http
 POST /internal/scores/users/{userId}/recalculate-tier
 ```
 
-## 23.2. Admin Endpoint
+## 24.2. Admin Endpoint
 
 ```http
 POST /api/admin/scores/users/{userId}/recalculate-tier
@@ -1361,9 +1456,9 @@ Load accumulatedPoints
 
 ---
 
-# 24. Internal Score Query
+# 25. Internal Score Query
 
-## 24.1. Endpoint
+## 25.1. Endpoint
 
 ```http
 GET /internal/scores/users/{userId}
@@ -1389,9 +1484,9 @@ Dùng cho Booking hoặc service nội bộ cần kiểm tra balance.
 
 ---
 
-# 25. Admin Score APIs
+# 26. Admin Score APIs
 
-## 25.1. Get User Score Detail
+## 26.1. Get User Score Detail
 
 ```http
 GET /api/admin/scores/users/{userId}
@@ -1419,7 +1514,7 @@ GET /api/admin/scores/users/{userId}
 
 ---
 
-## 25.2. Get User Score History
+## 26.2. Get User Score History
 
 ```http
 GET /api/admin/scores/users/{userId}/history
@@ -1439,7 +1534,7 @@ sort
 
 ---
 
-## 25.3. Manual Score Adjustment
+## 26.3. Manual Score Adjustment
 
 ### Endpoint
 
@@ -1510,9 +1605,9 @@ Nếu cần audit/idempotency đầy đủ, phải schema alignment.
 
 ---
 
-# 26. Membership Tier Admin APIs
+# 27. Membership Tier Admin APIs
 
-## 26.1. Create Membership Tier
+## 27.1. Create Membership Tier
 
 ### Endpoint
 
@@ -1558,7 +1653,7 @@ Status: `201 Created`
 
 ---
 
-## 26.2. Get Admin Membership Tiers
+## 27.2. Get Admin Membership Tiers
 
 ```http
 GET /api/admin/membership-tiers
@@ -1568,7 +1663,7 @@ Trả thêm số lượng user nếu implementation hỗ trợ.
 
 ---
 
-## 26.3. Get Membership Tier Detail
+## 27.3. Get Membership Tier Detail
 
 ```http
 GET /api/admin/membership-tiers/{tierId}
@@ -1576,7 +1671,7 @@ GET /api/admin/membership-tiers/{tierId}
 
 ---
 
-## 26.4. Update Membership Tier
+## 27.4. Update Membership Tier
 
 ```http
 PUT /api/admin/membership-tiers/{tierId}
@@ -1598,7 +1693,7 @@ Nếu thay đổi `earningRate`:
 
 ---
 
-# 27. Score History Behavior
+# 28. Score History Behavior
 
 Mỗi biến động score phải tạo một `score_history` record trong cùng transaction.
 
@@ -1636,9 +1731,9 @@ Rollback balance update
 
 ---
 
-# 28. Concurrency Rules
+# 29. Concurrency Rules
 
-## 28.1. Earn Concurrent Requests
+## 29.1. Earn Concurrent Requests
 
 Hai earn request cùng event:
 
@@ -1648,7 +1743,7 @@ Chỉ cộng một lần
 
 Cần idempotency check và transaction.
 
-## 28.2. Redeem Concurrent Requests
+## 29.2. Redeem Concurrent Requests
 
 Hai redeem request đồng thời:
 
@@ -1658,7 +1753,7 @@ Không được làm currentPoints âm
 
 Khuyến nghị atomic conditional update.
 
-## 28.3. Balance and History
+## 29.3. Balance and History
 
 Operation phải atomic:
 
@@ -1675,7 +1770,7 @@ Nếu bất kỳ bước nào lỗi:
 Rollback toàn bộ
 ```
 
-## 28.4. User Score Initialization
+## 29.4. User Score Initialization
 
 Hai request đầu tiên đồng thời không được tạo trùng `user_scores`.
 
@@ -1689,7 +1784,7 @@ Request còn lại phải đọc record đã tồn tại.
 
 ---
 
-# 29. Idempotency Rules
+# 30. Idempotency Rules
 
 ### Earn
 
@@ -1727,7 +1822,7 @@ Nếu không sửa schema, service có thể dùng bảng idempotency riêng ho�
 
 ---
 
-# 30. Score Expiry Direction
+# 31. Score Expiry Direction
 
 Schema hiện có transaction type:
 
@@ -1746,11 +1841,13 @@ remaining_points
 
 Vì vậy không thể xác định chính xác điểm nào hết hạn theo FIFO.
 
-Sprint 2:
+Direction hiện tại cho Sprint 2:
 
 ```txt
 Không implement point expiry hoàn chỉnh
 ```
+
+Điểm này cần Score Service Owner xác nhận lần cuối trước khi contract được approve.
 
 Có thể giữ `EXPIRED` như hướng mở rộng.
 
@@ -1766,9 +1863,9 @@ Cần schema issue riêng.
 
 ---
 
-# 31. Booking, Payment và Promotion Integration
+# 32. Booking, Payment và Promotion Integration
 
-## 31.1. Earn Direction
+## 32.1. Earn Direction
 
 ```txt
 Booking CONFIRMED
@@ -1790,7 +1887,7 @@ Payment SUCCESS
 
 Reviewer cần xác nhận source event cuối cùng.
 
-## 31.2. Eligible Amount
+## 32.2. Eligible Amount
 
 Điểm earn dựa trên:
 
@@ -1803,19 +1900,14 @@ sau:
 * Promotion discount.
 * Redeemed points nếu nghiệp vụ quy định.
 
-Reviewer cần chốt:
+Quyết định chính thức:
 
 ```txt
-Có cộng điểm trên phần tiền thanh toán bằng score hay không?
+Không cộng điểm trên phần giá trị được thanh toán bằng score.
+Chỉ cộng điểm trên số tiền thực trả bằng tiền.
 ```
 
-Khuyến nghị:
-
-```txt
-Chỉ cộng điểm trên số tiền thực trả bằng tiền
-```
-
-## 31.3. Redeem Direction
+## 32.3. Redeem Direction
 
 ```txt
 Booking đang PENDING_PAYMENT
@@ -1824,14 +1916,14 @@ Booking đang PENDING_PAYMENT
 → Booking/Payment sử dụng redeemValue
 ```
 
-## 31.4. Booking Failure
+## 32.4. Booking Failure
 
 ```txt
 Booking CANCELLED hoặc EXPIRED
 → hoàn điểm đã redeem
 ```
 
-## 31.5. Refund Direction
+## 32.5. Refund Direction
 
 ```txt
 Payment REFUNDED
@@ -1841,7 +1933,7 @@ Payment REFUNDED
 
 ---
 
-# 32. Security Rules
+# 33. Security Rules
 
 * Customer chỉ được xem score của chính mình.
 * Frontend không được tự gọi earn/redeem commit/refund.
@@ -1866,7 +1958,7 @@ MEMBERSHIP_TIER_MANAGE
 
 ---
 
-# 33. Delete Policy
+# 34. Delete Policy
 
 Không hard delete:
 
@@ -1894,7 +1986,7 @@ Không expose delete API trong Sprint 2.
 
 ---
 
-# 34. Error Code Catalog
+# 35. Error Code Catalog
 
 | Error Code                             |         HTTP | Ý nghĩa                        |
 | -------------------------------------- | -----------: | ------------------------------ |
@@ -1925,86 +2017,64 @@ Không expose delete API trong Sprint 2.
 
 ---
 
-# 35. Schema Alignment Notes
+# 36. Schema Alignment Bắt Buộc Trước Implementation
 
-## 35.1. Idempotency Key
+Score implementation chưa được bắt đầu trước khi Schema Alignment MR được merge.
 
-Contract yêu cầu idempotency theo event/request.
-
-Schema chưa có:
+## 36.1. Bắt buộc bổ sung vào `score_history`
 
 ```txt
-score_history.idempotency_key
+idempotency_key VARCHAR(100) UNIQUE NOT NULL
+balance_before INT NOT NULL
+balance_after INT NOT NULL
+accumulated_before INT NOT NULL
+accumulated_after INT NOT NULL
+reference_history_id BIGINT NULL
+created_by BIGINT NULL
+request_id VARCHAR(100) NULL
 ```
 
-Khuyến nghị thêm unique field hoặc bảng processed events.
-
-## 35.2. Balance Snapshot
-
-Schema chưa có:
+## 36.2. Constraint và index
 
 ```txt
-balance_before
-balance_after
+UNIQUE(idempotency_key)
+UNIQUE(request_id)
+INDEX(user_id, created_at)
+INDEX(user_id, transaction_type, created_at)
+INDEX(booking_id)
 ```
 
-Nên bổ sung nếu cần audit rõ ràng.
+`reference_history_id` là self-reference nội bộ tới `score_history.id`.
 
-## 35.3. Original Transaction Reference
+Không tạo physical FK cho `booking_id` hoặc `created_by` sang database service khác.
 
-Refund/revoke cần tham chiếu transaction gốc.
-
-Schema chưa có:
+## 36.3. Transaction Types Chính Thức
 
 ```txt
-reference_history_id
+EARN_BY_BOOKING
+REDEEM_FOR_BOOKING
+REFUND_REDEEM
+REVOKE_EARN_BY_REFUND
+MANUAL_ADD
+MANUAL_DEDUCT
+EXPIRED
 ```
 
-## 35.4. Payment Reference
+## 36.4. Blocker Rule
 
-Schema chỉ có `booking_id`, chưa có `payment_id`.
-
-Có thể dùng booking/event ID mà không cần payment ID nếu event contract đủ rõ.
-
-## 35.5. Admin Audit
-
-Manual adjustment chưa lưu:
+Implementation issue chỉ được chuyển sang `Ready` khi:
 
 ```txt
-created_by
-request_id
-reason riêng biệt
+Contract MR đã được approve và merge
++
+Score Schema Alignment MR đã merge
++
+Score Service Owner xác nhận Ready for Implementation
 ```
-
-Description có thể chứa reason nhưng không đủ audit mạnh.
-
-## 35.6. Tier Active Status
-
-Membership tier chưa có:
-
-```txt
-is_active
-```
-
-Nếu cần disable tier phải schema alignment.
-
-## 35.7. Score Expiry
-
-Schema không đủ để implement expiry theo từng batch.
-
-## 35.8. Optimistic Locking
-
-`user_scores` chưa có:
-
-```txt
-version
-```
-
-Có thể dùng row lock hoặc atomic SQL update trong Sprint 2.
 
 ---
 
-# 36. Out of Scope
+# 37. Out of Scope
 
 * Movie rating/review.
 * Star rating.
@@ -2025,7 +2095,7 @@ Có thể dùng row lock hoặc atomic SQL update trong Sprint 2.
 
 ---
 
-# 37. Implementation Issue Direction
+# 38. Implementation Issue Direction
 
 Sau khi contract được duyệt và schema alignment hoàn tất nếu cần, có thể tách:
 
@@ -2059,7 +2129,7 @@ Khang xác nhận feasibility
 
 ---
 
-# 38. Acceptance Criteria
+# 39. Acceptance Criteria
 
 * [ ] Có schema Sprint 0 baseline.
 * [ ] Có naming clarification Score vs Rating.
@@ -2089,41 +2159,24 @@ Khang xác nhận feasibility
 
 ---
 
-# 39. Các Điểm Reviewer Cần Xác Nhận
+# 40. Các Điểm Còn Cần Owner Xác Nhận
 
-Khang cần xác nhận:
+Các quyết định production chính đã được chốt. Còn các điểm sau cần Khang xác nhận trước khi contract chuyển sang `Approved`:
 
-1. Score Service port chính thức.
-2. `accumulatedPoints` là lifetime hay theo chu kỳ.
-3. Redeem có làm giảm accumulated points không.
-4. Refund/revoke có làm giảm accumulated points không.
-5. Tier có downgrade không.
-6. Bộ transaction type chính thức.
-7. Có dùng `REDEEM_FOR_BOOKING` hay giữ `SPEND_FOR_REWARD`.
-8. Earning formula chính thức.
-9. Earning rate `0.05` có nghĩa 5% theo công thức nào.
-10. Eligible amount là giá trước hay sau promotion.
-11. Có cộng điểm trên phần thanh toán bằng điểm không.
-12. Redemption rate là bao nhiêu VND cho một point.
-13. Earn được trigger từ `PAYMENT_SUCCESS` hay `BOOKING_CONFIRMED`.
-14. Có cần `idempotency_key` trong score history không.
-15. Có cần `balance_before` và `balance_after` không.
-16. Có cần reference tới history transaction gốc không.
-17. Có cần payment ID trong score history không.
-18. Refund/revoke khi current balance thiếu xử lý thế nào.
-19. Manual adjustment có ảnh hưởng accumulated points không.
-20. Có cần lưu admin identity khi adjustment không.
-21. Có lazy initialization `user_scores` không.
-22. Có thêm `is_active` cho membership tier không.
-23. Có implement point expiry trong Sprint 2 không.
-24. Có cần schema alignment issue trước implementation không.
+1. Earn chỉ được trigger duy nhất từ `BOOKING_CONFIRMED` hay `PAYMENT_SUCCESS`.
+2. Khi revoke nhưng `currentPoints` nhỏ hơn số điểm cần thu hồi, Sprint 2 dùng partial deduction + reconciliation hay reject toàn bộ.
+3. Có hỗ trợ `affectAccumulatedPoints = true` cho Admin Adjustment trong Sprint 2 không.
+4. Có sử dụng lazy initialization cho `user_scores` không.
+5. Có bổ sung `membership_tiers.is_active` trong Sprint 2 không.
+6. Point expiry được xác nhận là ngoài scope Sprint 2 hay không.
 
 ---
 
-# 40. Lịch Sử Chỉnh Sửa
+# 41. Lịch Sử Chỉnh Sửa
 
 | Ngày       | Nội dung                                                     | Người thực hiện  |
 | ---------- | ------------------------------------------------------------ | ---------------- |
 | 21/06/2026 | Khởi tạo Score Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
+| 22/06/2026 | Cập nhật theo Production Readiness Review của Score Service Owner; chốt business rules, idempotency, audit snapshot, reference transaction, concurrency và schema alignment bắt buộc | Dương Thiện Nhân |
 
 Các thay đổi schema chỉ được ghi nhận tại đây sau khi schema MR tương ứng đã được merge.
