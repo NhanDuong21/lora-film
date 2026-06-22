@@ -7,6 +7,10 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,13 +19,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.project.authservice.client.CccdCheckClient;
-import com.project.authservice.client.UserServiceClient;
 import com.project.authservice.event.publisher.AuthAccountEventPublisher;
 import com.project.authservice.dto.request.LoginRequest;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.dto.request.RefreshTokenRequest;
+import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.dto.response.JwtResponse;
-import com.project.authservice.dto.response.RegisterResponse;
+import com.project.authservice.dto.response.RegistrationInitiatedResponse;
+import com.project.authservice.dto.request.SendOtpRequest;
+import com.project.authservice.dto.ValidationResult;
+import com.project.authservice.entity.PendingRegistrationData;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.authservice.entity.Account;
 import com.project.authservice.entity.Role;
 import com.project.authservice.entity.RefreshToken;
@@ -33,6 +42,7 @@ import com.project.authservice.exception.CccdException.BirthdayCccdMismatchExcep
 import com.project.authservice.exception.EmailAlreadyExistsException;
 import com.project.authservice.exception.InvalidCredentialsException;
 import com.project.authservice.exception.ResourceNotFoundException;
+import com.project.authservice.exception.DuplicateResourceException;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.repository.RefreshTokenRepository;
@@ -54,30 +64,34 @@ public class AuthServiceImpl implements AuthService {
 	private final PasswordEncoder passwordEncoder;
 	private final JwtUtil jwtUtil;
 	private final CccdCheckClient cccdCheckClient;
-	private final UserServiceClient userServiceClient;
 	private final VerificationService verificationService;
 	private final AuditLogService auditLogService;
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final HttpServletRequest servletRequest;
 	private final AuthAccountEventPublisher eventPublisher;
+	private final StringRedisTemplate redisTemplate;
+	private final ObjectMapper objectMapper;
+	
+	private final ConcurrentHashMap<String, CompletableFuture<ValidationResult>> pendingRequests = new ConcurrentHashMap<>();
 
 	public AuthServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository,
 			PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
-			CccdCheckClient cccdCheckClient, UserServiceClient userServiceClient,
+			CccdCheckClient cccdCheckClient,
 			VerificationService verificationService, AuditLogService auditLogService,
 			RefreshTokenRepository refreshTokenRepository, HttpServletRequest servletRequest,
-			AuthAccountEventPublisher eventPublisher) {
+			AuthAccountEventPublisher eventPublisher, StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
 		this.accountRepository = accountRepository;
 		this.roleRepository = roleRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtUtil = jwtUtil;
 		this.cccdCheckClient = cccdCheckClient;
-		this.userServiceClient = userServiceClient;
 		this.verificationService = verificationService;
 		this.auditLogService = auditLogService;
 		this.refreshTokenRepository = refreshTokenRepository;
 		this.servletRequest = servletRequest;
 		this.eventPublisher = eventPublisher;
+		this.redisTemplate = redisTemplate;
+		this.objectMapper = objectMapper;
 	}
 
 	/**
@@ -86,9 +100,15 @@ public class AuthServiceImpl implements AuthService {
 	 * @param request registration request
 	 * @return register response
 	 */
+	public void completeValidation(String requestId, ValidationResult result) {
+		CompletableFuture<ValidationResult> future = pendingRequests.get(requestId);
+		if (future != null) {
+			future.complete(result);
+		}
+	}
+
 	@Override
-	@Transactional
-	public RegisterResponse register(RegisterRequest request) {
+	public RegistrationInitiatedResponse register(RegisterRequest request) {
 		try {
 			String email = request.getEmail().trim().toLowerCase();
 			log.info("Register request received for email={}", email);
@@ -102,8 +122,6 @@ public class AuthServiceImpl implements AuthService {
 			CccdCheckClient.CccdInfo cccdInfo = cccdCheckClient.checkCccd(request.getCccd());
 
 			// Verify birthday matches birth year derived from CCCD.
-			// LocalDate.parse with ISO_LOCAL_DATE enforces strict YYYY-MM-DD and
-			// rejects impossible calendar dates (e.g. 2000-02-30).
 			String birthdayStr = request.getBirthday().trim();
 			LocalDate birthday;
 			try {
@@ -134,58 +152,104 @@ public class AuthServiceImpl implements AuthService {
 				throw new InvalidBirthdayFormatException("You must be 13 years old or older.");
 			}
 
-			// Load CUSTOMER role
-			Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
-					.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
+			String requestId = UUID.randomUUID().toString();
+			PendingRegistrationData pendingData = new PendingRegistrationData(request, cccdInfo);
+			String json;
 
-			// Save account locally
-			Account account = new Account();
-			account.setEmail(email);
-			account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-			account.setRole(role);
-			account.setIsActive(0);
-			account.setRegistrationCompleted(0);
-
-			Account savedAccount = accountRepository.save(account);
-			// DB row is now written; transaction will commit at method exit.
-			// Kafka event is published AFTER this save, ensuring no event on DB failure.
-
-			// Generate verification OTP
-			verificationService.sendOtp(new com.project.authservice.dto.request.SendOtpRequest(email, "REGISTRATION"));
-
-			log.info("Account successfully registered for email={} with accountId={}", email, savedAccount.getId());
-
-			auditLogService.log(savedAccount.getId(), "REGISTER_SUCCESS", servletRequest);
-
-			// Publish ACCOUNT_CREATED event to Kafka.
-			// This runs inside the same @Transactional method; Spring Kafka's
-			// KafkaTemplate.send() is called AFTER accountRepository.save() succeeds,
-			// so a DB exception will prevent this line from being reached.
-			// If Kafka publish fails, we log the error but do NOT rollback the account
-			// (idempotent consumer design handles duplicates on retry).
 			try {
-				eventPublisher.publishAccountCreated(savedAccount, request, cccdInfo);
-			} catch (Exception kafkaEx) {
-				log.error("ACCOUNT_CREATED Kafka event failed for accountId={} email={}: {}",
-						savedAccount.getId(), email, kafkaEx.getMessage(), kafkaEx);
-				// Account creation is NOT rolled back – downstream will reconcile via
-				// idempotent consumer or a retry/dead-letter mechanism.
+				json = objectMapper.writeValueAsString(pendingData);
+				redisTemplate.opsForValue().set("temp_request:" + requestId, json, Duration.ofMinutes(5));
+			} catch (Exception e) {
+				log.error("Failed to save temp registration request to Redis", e);
+				throw new RuntimeException("Internal error processing registration");
 			}
 
-			return new RegisterResponse(
-					savedAccount.getId(),
-					savedAccount.getEmail(),
-					savedAccount.getRole().getRoleName(),
-					request.getFullName(),
-					request.getPhoneNumber(),
-					cccdInfo.getCccdMasked(),
-					cccdInfo.getProvinceName(),
-					cccdInfo.getGender(),
-					cccdInfo.getBirthYear());
+			CompletableFuture<ValidationResult> future = new CompletableFuture<>();
+			pendingRequests.put(requestId, future);
+
+			try {
+				eventPublisher.publishRegistrationValidationRequested(request, requestId);
+				
+				ValidationResult result = future.get(10, TimeUnit.SECONDS);
+				if ("SUCCESS".equalsIgnoreCase(result.getStatus())) {
+					String pendingKey = "pending_registration:" + email;
+					redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
+					verificationService.sendOtp(new SendOtpRequest(email, "REGISTRATION"));
+					redisTemplate.delete("temp_request:" + requestId);
+					
+					return new RegistrationInitiatedResponse(requestId, "Registration successful, please check your email for OTP");
+				} else {
+					redisTemplate.delete("temp_request:" + requestId);
+					throw new DuplicateResourceException("Registration information (Phone number or CCCD) already exists.");
+				}
+			} catch (TimeoutException e) {
+				redisTemplate.delete("temp_request:" + requestId);
+				throw new RuntimeException("Request timeout waiting for validation", e);
+			} catch (DuplicateResourceException e) {
+				throw e;
+			} catch (Exception e) {
+				redisTemplate.delete("temp_request:" + requestId);
+				throw new RuntimeException("Internal error processing registration", e);
+			} finally {
+				pendingRequests.remove(requestId);
+			}
+		} catch (DuplicateResourceException e) {
+			auditLogService.log(null, "REGISTER_FAILED_DUPLICATE", servletRequest);
+			throw e;
 		} catch (Exception e) {
 			auditLogService.log(null, "REGISTER_FAILED", servletRequest);
 			throw e;
 		}
+	}
+
+	@Override
+	@Transactional
+	public void verifyRegistration(VerifyRequest request) {
+		verificationService.verify(request);
+
+		String email = request.getEmail();
+		String pendingKey = "pending_registration:" + email;
+
+		String json = redisTemplate.opsForValue().get(pendingKey);
+		if (json == null) {
+			log.error("Pending registration data not found for verified email {}", email);
+			throw new ResourceNotFoundException("Pending registration data not found");
+		}
+
+		PendingRegistrationData data;
+		try {
+			data = objectMapper.readValue(json, PendingRegistrationData.class);
+		} catch (Exception e) {
+			log.error("Failed to deserialize pending registration data", e);
+			throw new RuntimeException("Internal error");
+		}
+
+		RegisterRequest registerRequest = data.getRequest();
+		CccdCheckClient.CccdInfo cccdInfo = data.getCccdInfo();
+
+		Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
+				.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
+
+		Account account = new Account();
+		account.setEmail(email);
+		account.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
+		account.setRole(role);
+		account.setIsActive(1);
+		account.setRegistrationCompleted(1);
+
+		Account savedAccount = accountRepository.save(account);
+
+		log.info("Account successfully created upon verification for email={} with accountId={}", email, savedAccount.getId());
+		auditLogService.log(savedAccount.getId(), "REGISTER_SUCCESS", servletRequest);
+
+		try {
+			eventPublisher.publishAccountVerified(savedAccount, registerRequest, cccdInfo);
+		} catch (Exception kafkaEx) {
+			log.error("ACCOUNT_VERIFIED Kafka event failed for accountId={} email={}: {}",
+					savedAccount.getId(), email, kafkaEx.getMessage(), kafkaEx);
+		}
+
+		redisTemplate.delete(pendingKey);
 	}
 
 	/**

@@ -1,6 +1,5 @@
 package com.project.userservice.service.impl;
 
-import com.project.userservice.dto.request.InternalUserCreateRequest;
 import com.project.userservice.dto.response.UserProfileResponse;
 import com.project.userservice.entity.User;
 import com.project.userservice.exception.BusinessException;
@@ -16,40 +15,6 @@ public class UserServiceImpl implements UserService {
 
     public UserServiceImpl(UserRepository userRepository) {
         this.userRepository = userRepository;
-    }
-
-    @Override
-    @Transactional
-    public UserProfileResponse createUserProfile(InternalUserCreateRequest request) {
-        if (userRepository.existsById(request.getAccountId())) {
-            throw new BusinessException("User profile already exists for this account", "USER_PROFILE_ALREADY_EXISTS");
-        }
-
-        if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
-            throw new BusinessException("Phone number already exists", "USER_PHONE_ALREADY_EXISTS");
-        }
-
-        if (userRepository.existsByCccd(request.getCccd())) {
-            throw new BusinessException("CCCD already exists", "USER_CCCD_ALREADY_EXISTS");
-        }
-
-        User user = new User();
-        user.setAccountId(request.getAccountId());
-        user.setFullName(request.getFullName());
-        user.setPhoneNumber(request.getPhoneNumber());
-        user.setCccd(request.getCccd());
-        user.setCccdMasked(request.getCccdMasked());
-        user.setProvinceCode(request.getProvinceCode());
-        user.setProvinceName(request.getProvinceName());
-        user.setBirthYear(request.getBirthYear());
-        user.setGender(request.getGender());
-        user.setBirthday(request.getBirthday());
-        user.setCccdCheckNote(request.getCccdCheckNote());
-        user.setVerifiedPhone(false);
-
-        user = userRepository.save(user);
-
-        return mapToResponse(user);
     }
 
     @Override

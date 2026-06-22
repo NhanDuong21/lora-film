@@ -6,9 +6,9 @@ import jakarta.validation.constraints.Pattern;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public class VerifyRequest {
-    @NotNull(message = "Account ID is required")
-    @Schema(example = "15")
-    private Long accountId;
+    @Schema(example = "test@example.com", description = "Required for all verifications")
+    @NotBlank(message = "Email is required")
+    private String email;
 
     @Schema(example = "123456")
     @NotBlank(message = "OTP is required")
@@ -20,20 +20,21 @@ public class VerifyRequest {
     @Schema(example = "REGISTRATION")
     private String purpose;
 
-    public VerifyRequest() {}
+    public VerifyRequest() {
+    }
 
-    public VerifyRequest(Long accountId, String otp, String purpose) {
-        this.accountId = accountId;
+    public VerifyRequest(String email, String otp, String purpose) {
+        this.email = email;
         this.otp = otp;
         this.purpose = purpose;
     }
 
-    public Long getAccountId() {
-        return accountId;
+    public String getEmail() {
+        return email;
     }
 
-    public void setAccountId(Long accountId) {
-        this.accountId = accountId;
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public String getOtp() {

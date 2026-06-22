@@ -8,7 +8,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.JsonSerializer;
@@ -16,7 +15,7 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.project.authservice.event.dto.AccountCreatedEvent;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 
 /**
  * Production-safe Kafka producer configuration.
@@ -82,17 +81,17 @@ public class KafkaProducerConfig {
     }
 
     /**
-     * Producer factory for {@link AccountCreatedEvent} payloads.
+     * Producer factory for event payloads.
      * Uses a custom {@link ObjectMapper} that serializes Java-time types as
      * ISO-8601 strings.
      */
     @Bean
-    public ProducerFactory<String, AccountCreatedEvent> accountCreatedProducerFactory() {
+    public ProducerFactory<String, Object> eventProducerFactory() {
         // Build serializer with the custom ObjectMapper (Java-time → ISO-8601 strings).
         // setAddTypeInfo(false) is the ONLY place we configure this flag – the props
         // map above intentionally carries no JsonSerializer keys to avoid the
         // "configured with property setters … not both" IllegalStateException.
-        JsonSerializer<AccountCreatedEvent> valueSerializer =
+        JsonSerializer<Object> valueSerializer =
                 new JsonSerializer<>(kafkaObjectMapper());
         valueSerializer.setAddTypeInfo(false);
 
@@ -106,7 +105,7 @@ public class KafkaProducerConfig {
      * KafkaTemplate used by {@code AuthAccountEventPublisher}.
      */
     @Bean
-    public KafkaTemplate<String, AccountCreatedEvent> accountCreatedKafkaTemplate() {
-        return new KafkaTemplate<>(accountCreatedProducerFactory());
+    public KafkaTemplate<String, Object> eventKafkaTemplate() {
+        return new KafkaTemplate<>(eventProducerFactory());
     }
 }

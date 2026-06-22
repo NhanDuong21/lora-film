@@ -1,9 +1,11 @@
 package com.project.userservice.kafka;
 
-import com.project.userservice.dto.AccountCreatedEvent;
+import com.project.userservice.dto.AccountVerifiedEvent;
 import com.project.userservice.entity.User;
 import com.project.userservice.enumtype.Gender;
 import com.project.userservice.repository.UserRepository;
+import com.project.userservice.service.impl.ReservationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -14,20 +16,25 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 
 @Component
-public class AccountCreatedConsumer {
+public class AccountVerifiedConsumer {
 
-    private static final Logger log = LoggerFactory.getLogger(AccountCreatedConsumer.class);
+    private static final Logger log = LoggerFactory.getLogger(AccountVerifiedConsumer.class);
     private final UserRepository userRepository;
+    private final ReservationService reservationService;
+    private final ObjectMapper objectMapper;
 
-    public AccountCreatedConsumer(UserRepository userRepository) {
+    public AccountVerifiedConsumer(UserRepository userRepository, ReservationService reservationService, ObjectMapper objectMapper) {
         this.userRepository = userRepository;
+        this.reservationService = reservationService;
+        this.objectMapper = objectMapper;
     }
 
-    @KafkaListener(topics = "auth.account.created.v1", groupId = "user-service-account-created-consumer")
+    @KafkaListener(topics = "${app.kafka.topic.account-verified}", groupId = "user-service-account-verified-consumer")
     @Transactional
-    public void consume(AccountCreatedEvent event, Acknowledgment acknowledgment) {
+    public void consume(String message, Acknowledgment acknowledgment) {
         try {
-            if (!"ACCOUNT_CREATED".equals(event.getEventType())) {
+            AccountVerifiedEvent event = objectMapper.readValue(message, AccountVerifiedEvent.class);
+            if (!"ACCOUNT_VERIFIED".equals(event.getEventType())) {
                 log.warn("Ignored event type: {}", event.getEventType());
                 acknowledgment.acknowledge();
                 return;
@@ -39,22 +46,27 @@ public class AccountCreatedConsumer {
             }
 
             Long accountId = event.getData().getAccountId();
-            
+            String phoneNumber = event.getData().getPhoneNumber();
+            String cccd = event.getData().getCccd();
+
             // Duplicate event check (Idempotency)
             if (userRepository.existsById(accountId)) {
                 log.warn("Duplicate event skipped. User profile already exists for accountId: {}. EventId: {}", accountId, event.getEventId());
+                reservationService.release(phoneNumber, cccd);
                 acknowledgment.acknowledge();
                 return;
             }
 
-            if (event.getData().getPhoneNumber() != null && userRepository.existsByPhoneNumber(event.getData().getPhoneNumber())) {
+            if (phoneNumber != null && userRepository.existsByPhoneNumber(phoneNumber)) {
                 log.warn("Phone number already exists. Skipping event for accountId: {}. EventId: {}", accountId, event.getEventId());
+                reservationService.release(phoneNumber, cccd);
                 acknowledgment.acknowledge();
                 return;
             }
 
-            if (event.getData().getCccd() != null && userRepository.existsByCccd(event.getData().getCccd())) {
+            if (cccd != null && userRepository.existsByCccd(cccd)) {
                 log.warn("CCCD already exists. Skipping event for accountId: {}. EventId: {}", accountId, event.getEventId());
+                reservationService.release(phoneNumber, cccd);
                 acknowledgment.acknowledge();
                 return;
             }
@@ -62,8 +74,8 @@ public class AccountCreatedConsumer {
             User user = new User();
             user.setAccountId(accountId);
             user.setFullName(event.getData().getFullName());
-            user.setPhoneNumber(event.getData().getPhoneNumber());
-            user.setCccd(event.getData().getCccd());
+            user.setPhoneNumber(phoneNumber);
+            user.setCccd(cccd);
             user.setCccdMasked(event.getData().getCccdMasked());
             user.setProvinceCode(event.getData().getProvinceCode());
             user.setProvinceName(event.getData().getProvinceName());
@@ -85,16 +97,21 @@ public class AccountCreatedConsumer {
                 }
             }
 
-            user.setBirthYear(event.getData().getBirthYear());
+            if (event.getData().getBirthYear() != null) {
+                user.setBirthYear(event.getData().getBirthYear());
+            }
 
             userRepository.save(user);
+
+            // Clean up Redis reservations
+            reservationService.release(phoneNumber, cccd);
 
             log.info("Successfully created user profile for accountId: {}. Masked CCCD: {}", accountId, event.getData().getCccdMasked());
             acknowledgment.acknowledge();
             
         } catch (Exception e) {
-            log.error("Error processing event: {}", event.getEventId(), e);
-            throw e; // Rethrow to trigger retry and DLQ
+            log.error("Error processing event message: {}", message, e);
+            throw new RuntimeException(e); // Rethrow to trigger retry and DLQ
         }
     }
 }

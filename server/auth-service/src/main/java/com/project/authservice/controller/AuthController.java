@@ -15,7 +15,7 @@ import com.project.authservice.dto.request.ResendOtpRequest;
 import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.dto.request.RefreshTokenRequest;
 import com.project.authservice.dto.response.JwtResponse;
-import com.project.authservice.dto.response.RegisterResponse;
+import com.project.authservice.dto.response.RegistrationInitiatedResponse;
 import com.project.authservice.service.AuthService;
 import com.project.authservice.service.VerificationService;
 
@@ -38,11 +38,11 @@ public class AuthController {
 	 * @return register response wrapped in ApiResponse
 	 */
 	@PostMapping("/register")
-	public ResponseEntity<ApiResponse<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {
+	public ResponseEntity<ApiResponse<RegistrationInitiatedResponse>> register(@Valid @RequestBody RegisterRequest request) {
 		log.info("Register endpoint called for email={}", request.getEmail());
-		RegisterResponse response = authService.register(request);
-		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(ApiResponse.success("Register successfully", response));
+		RegistrationInitiatedResponse response = authService.register(request);
+		return ResponseEntity.status(HttpStatus.ACCEPTED)
+				.body(ApiResponse.success("Registration initiated", response));
 	}
 
 	/**
@@ -66,8 +66,12 @@ public class AuthController {
 	 */
 	@PostMapping("/verify")
 	public ResponseEntity<ApiResponse<Void>> verify(@Valid @RequestBody VerifyRequest request) {
-		log.info("Verify endpoint called for accountId={}", request.getAccountId());
-		verificationService.verify(request);
+		log.info("Verify endpoint called for email={} purpose={}", request.getEmail(), request.getPurpose());
+		if ("REGISTRATION".equals(request.getPurpose())) {
+			authService.verifyRegistration(request);
+		} else {
+			verificationService.verify(request);
+		}
 		return ResponseEntity.ok(ApiResponse.success("Account verified successfully", null));
 	}
 
