@@ -25,10 +25,10 @@ public class UserEventPublisher {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    public void publishRegistrationValidationResult(String requestId, String status, String errorCode) {
+    public void publishRegistrationValidationResult(String requestId, String status, String errorCode, Long retryAfterSeconds) {
         log.info("Building REGISTRATION_VALIDATION_RESULT event for requestId={} status={}", requestId, status);
 
-        RegistrationValidationResultPayload payload = new RegistrationValidationResultPayload(requestId, status, errorCode);
+        RegistrationValidationResultPayload payload = new RegistrationValidationResultPayload(requestId, status, errorCode, retryAfterSeconds);
         RegistrationValidationResultEvent event = new RegistrationValidationResultEvent(
                 UUID.randomUUID().toString(),
                 Instant.now(),

@@ -43,6 +43,8 @@ import com.project.authservice.exception.EmailAlreadyExistsException;
 import com.project.authservice.exception.InvalidCredentialsException;
 import com.project.authservice.exception.ResourceNotFoundException;
 import com.project.authservice.exception.DuplicateResourceException;
+import com.project.authservice.exception.RegistrationConflictException;
+import com.project.authservice.exception.RegistrationAlreadyPendingException;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.repository.RefreshTokenRepository;
@@ -118,6 +120,12 @@ public class AuthServiceImpl implements AuthService {
 				throw new EmailAlreadyExistsException();
 			}
 
+            String pendingKeyCheck = "pending_registration:" + email;
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(pendingKeyCheck))) {
+                log.warn("Registration already pending for email: {}", email);
+                throw new RegistrationAlreadyPendingException("Registration is already pending verification. Please verify the OTP or request a new OTP.");
+            }
+
 			// Perform CCCD Check and info derivation
 			CccdCheckClient.CccdInfo cccdInfo = cccdCheckClient.checkCccd(request.getCccd());
 
@@ -180,11 +188,31 @@ public class AuthServiceImpl implements AuthService {
 					return new RegistrationInitiatedResponse(requestId, "Registration successful, please check your email for OTP");
 				} else {
 					redisTemplate.delete("temp_request:" + requestId);
-					throw new DuplicateResourceException("Registration information (Phone number or CCCD) already exists.");
+                    
+                    String message = "Registration information (Phone number or CCCD) already exists.";
+                    if ("PHONE_NUMBER_RESERVED".equals(result.getErrorCode())) {
+                        message = "Phone number is currently reserved by another pending registration. Please try again later.";
+                    } else if ("CCCD_RESERVED".equals(result.getErrorCode())) {
+                        message = "CCCD is currently reserved by another pending registration. Please try again later.";
+                    } else if ("PHONE_NUMBER_ALREADY_EXISTS".equals(result.getErrorCode())) {
+                        message = "Phone number already exists.";
+                    } else if ("CCCD_ALREADY_EXISTS".equals(result.getErrorCode())) {
+                        message = "CCCD already exists.";
+                    }
+                    
+                    if (result.getRetryAfterSeconds() != null) {
+                        throw new RegistrationConflictException(message, result.getErrorCode(), result.getRetryAfterSeconds());
+                    }
+                    // For already exists, use DuplicateResourceException mapped to BUSINESS_ERROR previously, 
+                    // but since the requirement says "Replace the generic error code with the following specific error codes",
+                    // we will throw RegistrationConflictException for all to carry the correct errorCode.
+					throw new RegistrationConflictException(message, result.getErrorCode() != null ? result.getErrorCode() : "BUSINESS_ERROR", null);
 				}
 			} catch (TimeoutException e) {
 				redisTemplate.delete("temp_request:" + requestId);
 				throw new RuntimeException("Request timeout waiting for validation", e);
+			} catch (RegistrationConflictException | RegistrationAlreadyPendingException e) {
+				throw e;
 			} catch (DuplicateResourceException e) {
 				throw e;
 			} catch (Exception e) {

@@ -100,7 +100,7 @@ User Service lắng nghe sự kiện này từ Auth Service khi có yêu cầu �
 | Mục                | Nội dung                                            |
 | ------------------ | --------------------------------------------------- |
 | **Topic**          | `auth.registration.validation.result.v1`            |
-| **Payload**        | `{ requestId, status: "SUCCESS"/"FAILED", errorCode }` |
+| **Payload**        | `{ requestId, status: "SUCCESS"/"FAILED", errorCode, retryAfterSeconds }` |
 
 ```json
 {
@@ -109,8 +109,9 @@ User Service lắng nghe sự kiện này từ Auth Service khi có yêu cầu �
   "occurredAt": "2026-06-23T00:00:00Z",
   "data": {
     "requestId": "uuid",
-    "status": "SUCCESS",
-    "errorCode": null
+    "status": "FAILED",
+    "errorCode": "PHONE_NUMBER_RESERVED",
+    "retryAfterSeconds": 472
   }
 }
 ```

@@ -444,19 +444,70 @@ Status: **409 Conflict**
 }
 ```
 
-**Case 2: Số điện thoại hoặc CCCD đã tồn tại (được phát hiện qua Kafka validation)**
+**Case 2: Lỗi trùng lặp dữ liệu (Đã tồn tại)**
+Status: **409 Conflict**
+
+Trùng Số Điện Thoại:
+```json
+{
+  "success": false,
+  "message": "Phone number already exists.",
+  "errorCode": "PHONE_NUMBER_ALREADY_EXISTS",
+  "data": null
+}
+```
+
+Trùng CCCD:
+```json
+{
+  "success": false,
+  "message": "CCCD already exists.",
+  "errorCode": "CCCD_ALREADY_EXISTS",
+  "data": null
+}
+```
+
+**Case 3: Lỗi dữ liệu đang được giữ chỗ (Reserved)**
+Status: **409 Conflict**
+*HTTP Header kèm theo:* `Retry-After: 472`
+
+Số điện thoại đang được đăng ký (chờ OTP):
+```json
+{
+  "success": false,
+  "message": "Phone number is currently reserved by another pending registration. Please try again later.",
+  "errorCode": "PHONE_NUMBER_RESERVED",
+  "data": {
+    "retryAfterSeconds": 472
+  }
+}
+```
+
+CCCD đang được đăng ký (chờ OTP):
+```json
+{
+  "success": false,
+  "message": "CCCD is currently reserved by another pending registration. Please try again later.",
+  "errorCode": "CCCD_RESERVED",
+  "data": {
+    "retryAfterSeconds": 472
+  }
+}
+```
+
+**Case 4: Email đã có yêu cầu đăng ký đang chờ (Pending Registration)**
 Status: **409 Conflict**
 
 ```json
 {
   "success": false,
-  "message": "Registration information (Phone number or CCCD) already exists.",
-  "errorCode": "BUSINESS_ERROR",
+  "message": "Registration is already pending verification. Please verify the OTP or request a new OTP.",
+  "errorCode": "REGISTRATION_ALREADY_PENDING",
   "data": null
 }
 ```
 
-**Case 3: CCCD không hợp lệ**
+**Case 5: CCCD không hợp lệ**
 Status: **400 Bad Request**
 
 ```json
@@ -468,7 +519,7 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 4: Ngày sinh không khớp với CCCD**
+**Case 6: Ngày sinh không khớp với CCCD**
 Status: **400 Bad Request**
 
 ```json
@@ -480,7 +531,7 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 5: Ngày sinh ở tương lai**
+**Case 7: Ngày sinh ở tương lai**
 Status: **400 Bad Request**
 
 ```json

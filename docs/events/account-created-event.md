@@ -76,12 +76,13 @@ Gói tin được truyền tải qua Kafka sử dụng định dạng chuỗi JS
   "occurredAt": "2026-06-23T02:20:31.007Z",
   "data": {
     "requestId": "request-uuid-1234",
-    "status": "SUCCESS", 
-    "errorCode": null
+    "status": "FAILED", 
+    "errorCode": "PHONE_NUMBER_RESERVED",
+    "retryAfterSeconds": 472
   }
 }
 ```
-*(Ghi chú: Nếu thất bại, `status` là `FAILED` và `errorCode` có thể là `PHONE_NUMBER_ALREADY_EXISTS` hoặc `CCCD_ALREADY_EXISTS`)*
+*(Ghi chú: Nếu thất bại, `status` là `FAILED` và `errorCode` có thể là `PHONE_NUMBER_ALREADY_EXISTS`, `CCCD_ALREADY_EXISTS`, `PHONE_NUMBER_RESERVED`, hoặc `CCCD_RESERVED`. Trường `retryAfterSeconds` chỉ xuất hiện nếu đang bị reserve)*
 
 ### 3.3. Event: ACCOUNT_VERIFIED
 

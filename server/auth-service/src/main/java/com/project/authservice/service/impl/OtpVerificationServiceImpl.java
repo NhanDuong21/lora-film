@@ -110,7 +110,6 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         System.out.println("\n==================================");
         System.out.println("OTP GENERATED (Do not use in production)");
-        System.out.println("AccountId: " + accountId);
         System.out.println("Email: " + email);
         System.out.println("Purpose: " + purpose);
         System.out.println("OTP: " + otp);

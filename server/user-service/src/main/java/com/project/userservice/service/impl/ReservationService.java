@@ -3,6 +3,8 @@ package com.project.userservice.service.impl;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import com.project.userservice.dto.ReservationResult;
 
 @Service
 public class ReservationService {
@@ -15,25 +17,37 @@ public class ReservationService {
 
     /**
      * Attempts to reserve a phone number and CCCD atomically.
-     * Returns true if both were successfully reserved, false if either is already reserved.
-     * If one succeeds but the other fails, it rolls back the successful one.
+     * Returns a ReservationResult containing success status, errorCode, and retryAfterSeconds.
      */
-    public boolean reserve(String phoneNumber, String cccd, Duration ttl) {
+    public ReservationResult reserve(String phoneNumber, String cccd, Duration ttl) {
         String phoneKey = "reserved_phone:" + phoneNumber;
         String cccdKey = "reserved_cccd:" + cccd;
+
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(phoneKey))) {
+            Long expire = redisTemplate.getExpire(phoneKey, TimeUnit.SECONDS);
+            return new ReservationResult(false, "PHONE_NUMBER_RESERVED", expire != null && expire > 0 ? expire : null);
+        }
+
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(cccdKey))) {
+            Long expire = redisTemplate.getExpire(cccdKey, TimeUnit.SECONDS);
+            return new ReservationResult(false, "CCCD_RESERVED", expire != null && expire > 0 ? expire : null);
+        }
 
         Boolean phoneReserved = redisTemplate.opsForValue().setIfAbsent(phoneKey, "reserved", ttl);
         if (Boolean.TRUE.equals(phoneReserved)) {
             Boolean cccdReserved = redisTemplate.opsForValue().setIfAbsent(cccdKey, "reserved", ttl);
             if (Boolean.TRUE.equals(cccdReserved)) {
-                return true;
+                return new ReservationResult(true, null, null);
             } else {
                 // Rollback phone reservation
                 redisTemplate.delete(phoneKey);
-                return false;
+                Long expire = redisTemplate.getExpire(cccdKey, TimeUnit.SECONDS);
+                return new ReservationResult(false, "CCCD_RESERVED", expire != null && expire > 0 ? expire : null);
             }
         }
-        return false;
+        
+        Long expire = redisTemplate.getExpire(phoneKey, TimeUnit.SECONDS);
+        return new ReservationResult(false, "PHONE_NUMBER_RESERVED", expire != null && expire > 0 ? expire : null);
     }
 
     public void release(String phoneNumber, String cccd) {

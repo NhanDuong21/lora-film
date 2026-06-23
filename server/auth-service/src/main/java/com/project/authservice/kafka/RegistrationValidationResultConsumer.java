@@ -25,12 +25,12 @@ public class RegistrationValidationResultConsumer {
     public void consume(String message) {
         try {
             RegistrationValidationResultEvent event = objectMapper.readValue(message, RegistrationValidationResultEvent.class);
-            String requestId = event.getData().getRequestId();
-            String status = event.getData().getStatus();
-            String errorCode = event.getData().getErrorCode();
-            log.info("Received REGISTRATION_VALIDATION_RESULT for requestId={} status={}", requestId, status);
+            var payload = event.getData();
+            String requestId = payload.getRequestId();
+            log.info("Received REGISTRATION_VALIDATION_RESULT for requestId={} status={}", requestId, payload.getStatus());
 
-            authService.completeValidation(requestId, new ValidationResult(status, errorCode));
+            ValidationResult result = new ValidationResult(payload.getStatus(), payload.getErrorCode(), payload.getRetryAfterSeconds());
+            authService.completeValidation(requestId, result);
         } catch (Exception e) {
             log.error("Failed to parse REGISTRATION_VALIDATION_RESULT event", e);
         }
