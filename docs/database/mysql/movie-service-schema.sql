@@ -5,14 +5,16 @@ CREATE TABLE `movies` (
   `duration_minutes` int NOT NULL,
   `director` varchar(100),
   `actor` varchar(255),
-  `release_date` date,
-  `end_date` date,
+  `release_date` date NOT NULL,
+  `end_date` date NOT NULL,
   `poster_url` varchar(255),
   `trailer_url` varchar(255),
-  `age_rating` varchar(10) COMMENT 'P, T13, T16, T18',
+  `age_rating` varchar(10) COMMENT 'P, K, T13, T16, T18',
   `status` varchar(30) NOT NULL DEFAULT 'UPCOMING' COMMENT 'UPCOMING, NOW_SHOWING, ENDED, INACTIVE',
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT `chk_movies_duration` CHECK (`duration_minutes` > 0),
+  CONSTRAINT `chk_movies_dates` CHECK (`end_date` >= `release_date`)
 );
 
 CREATE TABLE `genres` (
@@ -30,7 +32,7 @@ CREATE TABLE `rooms` (
   `id` int PRIMARY KEY AUTO_INCREMENT,
   `room_name` varchar(50) UNIQUE NOT NULL COMMENT 'e.g., Phong 01, Phong 02 (IMAX)',
   `total_seats` int NOT NULL,
-  `screen_type` varchar(20) DEFAULT '2D' COMMENT '2D, 3D, IMAX',
+  `screen_type` varchar(20) NOT NULL DEFAULT 'STANDARD' COMMENT 'STANDARD, IMAX, 4DX',
   `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, MAINTENANCE, INACTIVE'
 );
 
@@ -39,7 +41,7 @@ CREATE TABLE `seats` (
   `room_id` int NOT NULL,
   `seat_row` varchar(5) NOT NULL COMMENT 'e.g., A, B, C',
   `seat_number` int NOT NULL,
-  `seat_type` varchar(20) DEFAULT 'STANDARD' COMMENT 'STANDARD, VIP, SWEETBOX',
+  `seat_type` varchar(20) NOT NULL DEFAULT 'STANDARD' COMMENT 'STANDARD, VIP, COUPLE',
   `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, MAINTENANCE, INACTIVE',
   UNIQUE KEY `uk_seats_room_position` (`room_id`, `seat_row`, `seat_number`)
 );
@@ -61,7 +63,7 @@ ALTER TABLE `movies_genres` ADD FOREIGN KEY (`movie_id`) REFERENCES `movies` (`i
 
 ALTER TABLE `movies_genres` ADD FOREIGN KEY (`genre_id`) REFERENCES `genres` (`id`) ON DELETE CASCADE;
 
-ALTER TABLE `seats` ADD FOREIGN KEY (`room_id`) REFERENCES `rooms` (`id`) ON DELETE CASCADE;
+ALTER TABLE `seats` ADD FOREIGN KEY (`room_id`) REFERENCES `rooms` (`id`) ON DELETE RESTRICT;
 
 ALTER TABLE `showtimes` ADD FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`);
 

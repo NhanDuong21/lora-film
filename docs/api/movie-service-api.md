@@ -10,9 +10,9 @@
 | Contract Owner | Dương Thiện Nhân                                 |
 | Backend Owner  | Phan Tuấn Thành                                  |
 | Reviewer       | Phan Tuấn Thành                                  |
-| Trạng thái     | Ready for Review                                 |
+| Trạng thái     | Approved                                         |
 | Milestone      | Sprint 2 - Core Service API Foundation           |
-| Ngày cập nhật  | 20/06/2026                                       |
+| Ngày cập nhật  | 23/06/2026                                       |
 
 ---
 
@@ -82,12 +82,12 @@ Các nghiệp vụ trên thuộc Booking, Payment, Promotion, Score và Analytic
 | duration_minutes | int          | Thời lượng phim               |
 | director         | varchar(100) | Đạo diễn                      |
 | actor            | varchar(255) | Danh sách diễn viên dạng text |
-| release_date     | date         | Ngày khởi chiếu               |
-| end_date         | date         | Ngày kết thúc chiếu           |
+| release_date     | date         | Ngày khởi chiếu (NOT NULL)    |
+| end_date         | date         | Ngày kết thúc chiếu (NOT NULL)|
 | poster_url       | varchar(255) | URL poster                    |
 | trailer_url      | varchar(255) | URL trailer                   |
-| age_rating       | varchar(10)  | Phân loại độ tuổi             |
-| status           | varchar(30)  | Trạng thái phim               |
+| age_rating       | varchar(10)  | P, K, T13, T16, T18           |
+| status           | varchar(30)  | Trạng thái phim (NOT NULL)    |
 | created_at       | timestamp    | Ngày tạo                      |
 | updated_at       | timestamp    | Ngày cập nhật                 |
 
@@ -112,8 +112,8 @@ Các nghiệp vụ trên thuộc Booking, Payment, Promotion, Score và Analytic
 | id          | int         | Primary key       |
 | room_name   | varchar(50) | Tên phòng, unique |
 | total_seats | int         | Tổng số ghế       |
-| screen_type | varchar(20) | Loại màn hình     |
-| status      | varchar(20) | Trạng thái phòng  |
+| screen_type | varchar(20) | Loại màn hình (NOT NULL) |
+| status      | varchar(20) | Trạng thái phòng (NOT NULL)|
 
 ### 4.5. Bảng `seats`
 
@@ -123,8 +123,8 @@ Các nghiệp vụ trên thuộc Booking, Payment, Promotion, Score và Analytic
 | room_id     | int         | FK nội bộ tới `rooms.id` |
 | seat_row    | varchar(5)  | Hàng ghế                 |
 | seat_number | int         | Số ghế                   |
-| seat_type   | varchar(20) | Loại ghế                 |
-| status      | varchar(20) | Trạng thái vật lý        |
+| seat_type   | varchar(20) | Loại ghế (NOT NULL)      |
+| status      | varchar(20) | Trạng thái vật lý (NOT NULL)|
 
 ### 4.6. Bảng `showtimes`
 
@@ -136,7 +136,7 @@ Các nghiệp vụ trên thuộc Booking, Payment, Promotion, Score và Analytic
 | start_time   | timestamp     | Thời gian bắt đầu         |
 | end_time     | timestamp     | Thời gian kết thúc        |
 | ticket_price | decimal(10,2) | Giá vé cơ bản             |
-| status       | varchar(20)   | Trạng thái suất chiếu     |
+| status       | varchar(20)   | Trạng thái suất chiếu (NOT NULL)|
 | created_at   | timestamp     | Ngày tạo                  |
 | updated_at   | timestamp     | Ngày cập nhật             |
 
@@ -2250,24 +2250,24 @@ Contract được xem là hoàn thành khi:
 * [x] Có endpoint summary đầy đủ.
 * [x] Có Public/Protected/Admin classification.
 * [x] Có request headers.
-* [ ] Có path/query parameter definitions.
-* [ ] Có field definitions.
-* [ ] Có success response.
-* [ ] Có error response cho từng nhóm API.
-* [ ] Có pagination/filter/sort.
-* [ ] Có business rules.
-* [ ] Có enum/status.
-* [ ] Có status transition rules.
-* [ ] Có date/time/timezone convention.
-* [ ] Có currency convention.
-* [ ] Có logical reference notes.
-* [ ] Có concurrency rule cho Showtime.
-* [ ] Có idempotency/duplicate request note.
-* [ ] Có delete policy.
-* [ ] Không tạo Room/Seat/Showtime Service riêng.
-* [ ] Thành xác nhận contract khả thi với code hiện tại.
-* [ ] Tài liệu đủ rõ để tách implementation issues.
-* [ ] MR target vào `develop`.
+* [x] Có path/query parameter definitions.
+* [x] Có field definitions.
+* [x] Có success response.
+* [x] Có error response cho từng nhóm API.
+* [x] Có pagination/filter/sort.
+* [x] Có business rules.
+* [x] Có enum/status.
+* [x] Có status transition rules.
+* [x] Có date/time/timezone convention.
+* [x] Có currency convention.
+* [x] Có logical reference notes.
+* [x] Có concurrency rule cho Showtime.
+* [x] Có idempotency/duplicate request note.
+* [x] Có delete policy.
+* [x] Không tạo Room/Seat/Showtime Service riêng.
+* [x] Thành xác nhận contract khả thi với code hiện tại.
+* [x] Tài liệu đủ rõ để tách implementation issues.
+* [x] MR target vào `develop`.
 
 ---
 
@@ -2275,16 +2275,16 @@ Contract được xem là hoàn thành khi:
 
 Reviewer cần xác nhận:
 
-1. Prefix `/api/admin/**` có phù hợp với Gateway/Security hiện tại không.
-2. Movie Service port chính thức.
-3. `cleanupBuffer = 15 phút`.
-4. Backend tự tính `endTime`.
-5. Bộ enum status.
-6. Age rating enum.
-7. API xem seat structure là Protected.
-8. Bulk create seats rollback toàn bộ khi một item lỗi.
-9. Không hard delete dữ liệu.
-10. PUT là full update.
-11. Không cho đổi duration khi có future showtime.
-12. Showtime không được sửa khi đã có booking.
-13. Phân quyền ADMIN/EMPLOYEE và permission code.
+1. [x] Prefix `/api/admin/**` có phù hợp với Gateway/Security hiện tại không.
+2. [x] Movie Service port chính thức.
+3. [x] `cleanupBuffer = 15 phút`.
+4. [x] Backend tự tính `endTime`.
+5. [x] Bộ enum status.
+6. [x] Age rating enum.
+7. [x] API xem seat structure là Protected.
+8. [x] Bulk create seats rollback toàn bộ khi một item lỗi.
+9. [x] Không hard delete dữ liệu.
+10. [x] PUT là full update.
+11. [x] Không cho đổi duration khi có future showtime.
+12. [x] Showtime không được sửa khi đã có booking.
+13. [x] Phân quyền ADMIN/EMPLOYEE và permission code.
