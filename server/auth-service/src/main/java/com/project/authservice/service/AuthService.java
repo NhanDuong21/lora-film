@@ -4,16 +4,32 @@ import com.project.authservice.dto.request.LoginRequest;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.dto.request.RefreshTokenRequest;
 import com.project.authservice.dto.response.JwtResponse;
-import com.project.authservice.dto.response.RegisterResponse;
+import com.project.authservice.dto.request.VerifyRequest;
+import com.project.authservice.dto.response.RegistrationInitiatedResponse;
+import com.project.authservice.dto.ValidationResult;
 
 public interface AuthService {
 	/**
-	 * Registers a new user account.
+	 * Initiates a new user account registration.
 	 *
 	 * @param request registration request
-	 * @return register response
+	 * @return registration initiated response
 	 */
-	RegisterResponse register(RegisterRequest request);
+	RegistrationInitiatedResponse register(RegisterRequest request);
+
+	/**
+	 * Completes the validation request.
+	 * @param requestId the request ID
+	 * @param result the validation result
+	 */
+	void completeValidation(String requestId, ValidationResult result);
+
+	/**
+	 * Verifies account registration.
+	 *
+	 * @param request verification request
+	 */
+	void verifyRegistration(VerifyRequest request);
 
 	/**
 	 * Authenticates user and generates JWT token.

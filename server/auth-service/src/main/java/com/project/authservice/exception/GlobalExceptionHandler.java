@@ -182,6 +182,39 @@ public class GlobalExceptionHandler {
 	}
 
 	/**
+	 * Handles specific registration conflict errors (reserved data or existing data).
+	 */
+	@ExceptionHandler(RegistrationConflictException.class)
+	public ResponseEntity<ApiResponse<Object>> handleRegistrationConflictException(RegistrationConflictException exception) {
+		log.warn("Registration Conflict [{}]: {}", exception.getErrorCode(), exception.getMessage());
+		
+		java.util.Map<String, Long> data = null;
+		if (exception.getRetryAfterSeconds() != null) {
+			data = new java.util.HashMap<>();
+			data.put("retryAfterSeconds", exception.getRetryAfterSeconds());
+		}
+		
+		ApiResponse<Object> response = new ApiResponse<>(false, exception.getMessage(), exception.getErrorCode(), data, null);
+		
+		ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.CONFLICT);
+		if (exception.getRetryAfterSeconds() != null) {
+			builder.header("Retry-After", String.valueOf(exception.getRetryAfterSeconds()));
+		}
+		
+		return builder.body(response);
+	}
+
+	/**
+	 * Handles registration pending error.
+	 */
+	@ExceptionHandler(RegistrationAlreadyPendingException.class)
+	public ResponseEntity<ApiResponse<Object>> handleRegistrationAlreadyPendingException(RegistrationAlreadyPendingException exception) {
+		log.warn("Registration Pending: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), exception.getErrorCode());
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+	}
+
+	/**
 	 * Catch-all cho các lỗi server chưa được handle.
 	 */
 	@ExceptionHandler(Exception.class)

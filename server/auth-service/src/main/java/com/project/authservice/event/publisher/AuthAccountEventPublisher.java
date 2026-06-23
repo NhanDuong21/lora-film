@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import com.project.authservice.client.CccdCheckClient;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.entity.Account;
-import com.project.authservice.event.dto.AccountCreatedEvent;
 import com.project.authservice.event.dto.AccountCreatedEventData;
 
 
@@ -27,50 +26,65 @@ public class AuthAccountEventPublisher {
     private static final String EVENT_VERSION = "1.0";
     private static final String EVENT_SOURCE  = "auth-service";
 
-    private final KafkaTemplate<String, AccountCreatedEvent> kafkaTemplate;
+    @Value("${app.kafka.topic.registration-validation-requested}")
+    private String registrationValidationRequestedTopic;
 
-    @Value("${app.kafka.topic.account-created}")
-    private String accountCreatedTopic;
+    @Value("${app.kafka.topic.account-verified}")
+    private String accountVerifiedTopic;
 
-    public AuthAccountEventPublisher(KafkaTemplate<String, AccountCreatedEvent> kafkaTemplate) {
+
+
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    public AuthAccountEventPublisher(KafkaTemplate<String, Object> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    /**
-     * Builds and publishes an {@link AccountCreatedEvent} to Kafka.
-     *
-     * <p>This method must be called <em>after</em> the database transaction has
-     * committed successfully. If Kafka delivery fails, the account creation is
-     * NOT rolled back – the error is logged and a {@link RuntimeException} is
-     * thrown so callers can decide on compensating action.
-     *
-     * @param savedAccount  persisted {@link Account} entity (ID must be non-null)
-     * @param request       original registration request (used for profile fields)
-     * @param cccdInfo      CCCD validation result (provides masked value, province, gender, etc.)
-     */
-    public void publishAccountCreated(Account savedAccount,
-                                      RegisterRequest request,
-                                      CccdCheckClient.CccdInfo cccdInfo) {
 
-        Long accountId    = savedAccount.getId();
-        String email      = savedAccount.getEmail();
+    public void publishRegistrationValidationRequested(RegisterRequest request, String requestId) {
+        log.info("Building REGISTRATION_VALIDATION_REQUESTED event for requestId={} email={}", requestId, request.getEmail());
+
+        com.project.authservice.event.dto.RegistrationValidationRequestedEventData data = 
+            com.project.authservice.event.dto.RegistrationValidationRequestedEventData.builder()
+                .requestId(requestId)
+                .email(request.getEmail())
+                .phoneNumber(request.getPhoneNumber())
+                .cccd(request.getCccd())
+                .build();
+
+        com.project.authservice.event.dto.RegistrationValidationRequestedEvent event = 
+            com.project.authservice.event.dto.RegistrationValidationRequestedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .occurredAt(Instant.now())
+                .data(data)
+                .build();
+
+        try {
+            kafkaTemplate.send(registrationValidationRequestedTopic, requestId, event).get();
+            log.info("Published REGISTRATION_VALIDATION_REQUESTED event for requestId={}", requestId);
+        } catch (Exception ex) {
+            log.error("Failed to publish REGISTRATION_VALIDATION_REQUESTED event for requestId={}", requestId, ex);
+            throw new RuntimeException("Kafka publish failed for requestId=" + requestId, ex);
+        }
+    }
+
+    public void publishAccountVerified(Account savedAccount, RegisterRequest request, CccdCheckClient.CccdInfo cccdInfo) {
+        Long accountId = savedAccount.getId();
+        String email = savedAccount.getEmail();
         String cccdMasked = cccdInfo.getCccdMasked();
 
-        // ── Safe logging: masked CCCD only ──────────────────────────────────
-        log.info("Building ACCOUNT_CREATED event for accountId={} email={} cccdMasked={}",
+        log.info("Building ACCOUNT_VERIFIED event for accountId={} email={} cccdMasked={}",
                 accountId, email, cccdMasked);
 
-        // ── Parse birthday to LocalDate ──────────────────────────────────────
         LocalDate birthday = LocalDate.parse(request.getBirthday().trim());
 
-        // ── Build inner data payload ─────────────────────────────────────────
         AccountCreatedEventData data = AccountCreatedEventData.builder()
                 .accountId(accountId)
                 .email(email)
                 .role(savedAccount.getRole().getRoleName())
                 .fullName(request.getFullName())
                 .phoneNumber(request.getPhoneNumber())
-                .cccd(request.getCccd())            // raw CCCD – NEVER logged
+                .cccd(request.getCccd())
                 .cccdMasked(cccdMasked)
                 .provinceCode(cccdInfo.getProvinceCode())
                 .provinceName(cccdInfo.getProvinceName())
@@ -79,41 +93,19 @@ public class AuthAccountEventPublisher {
                 .birthYear(cccdInfo.getBirthYear())
                 .build();
 
-        // ── Build event envelope ─────────────────────────────────────────────
-        AccountCreatedEvent event = AccountCreatedEvent.builder()
+        com.project.authservice.event.dto.AccountVerifiedEvent event = 
+            com.project.authservice.event.dto.AccountVerifiedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
-                .eventType(EVENT_TYPE)
-                .eventVersion(EVENT_VERSION)
-                .source(EVENT_SOURCE)
                 .occurredAt(Instant.now())
                 .data(data)
                 .build();
 
-        // ── Publish with accountId as Kafka message key ──────────────────────
-        String messageKey = String.valueOf(accountId);
         try {
-            SendResult<String, AccountCreatedEvent> result =
-                    kafkaTemplate.send(accountCreatedTopic, messageKey, event).get();
-
-            log.info("Published ACCOUNT_CREATED event: topic={} partition={} offset={} "
-                            + "accountId={} email={} cccdMasked={}",
-                    result.getRecordMetadata().topic(),
-                    result.getRecordMetadata().partition(),
-                    result.getRecordMetadata().offset(),
-                    accountId, email, cccdMasked);
-
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            log.error("Interrupted while publishing ACCOUNT_CREATED event for accountId={} email={}",
-                    accountId, email, ie);
-            throw new RuntimeException(
-                    "Kafka publish interrupted for accountId=" + accountId, ie);
-
+            kafkaTemplate.send(accountVerifiedTopic, String.valueOf(accountId), event).get();
+            log.info("Published ACCOUNT_VERIFIED event for accountId={}", accountId);
         } catch (Exception ex) {
-            log.error("Failed to publish ACCOUNT_CREATED event for accountId={} email={}: {}",
-                    accountId, email, ex.getMessage(), ex);
-            throw new RuntimeException(
-                    "Kafka publish failed for accountId=" + accountId, ex);
+            log.error("Failed to publish ACCOUNT_VERIFIED event for accountId={}", accountId, ex);
+            throw new RuntimeException("Kafka publish failed for accountId=" + accountId, ex);
         }
     }
 }

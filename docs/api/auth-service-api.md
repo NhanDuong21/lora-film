@@ -10,12 +10,19 @@
 | Issue liên quan | #15, #16, #19, #42, #48, #49, #50, #51 |
 | Người phụ trách BE | Trần Hiển Vinh |
 | Người phụ trách FE | Dương Thiện Nhân |
-| Trạng thái | Ready for Review (Refactored) |
-| Ngày cập nhật | 17/06/2026 |
+| Trạng thái         | Ready for Review (Refactored) |
+| Ngày cập nhật      | 23/06/2026 |
 
 ---
 
 ## Lịch Sử Chỉnh Sửa
+
+**Ngày:** 23/06/2026
+
+* **Kiến trúc mới:** Thay toàn bộ luồng đăng ký sang Event-Driven với Kafka Request-Reply Pattern. Auth Service không còn publish `ACCOUNT_CREATED` hay gọi HTTP sang User Service nữa.
+* **Luồng mới:** Register → `REGISTRATION_VALIDATION_REQUESTED` → User Service validate → `REGISTRATION_VALIDATION_RESULT` → Auth tạo account + gửi OTP → Verify OTP → `ACCOUNT_VERIFIED` → User Service tạo profile.
+* **Response mới:** API Register giờ chỉ trả về `requestId` và `message`, không còn trả về profile data.
+* **Verify mới:** API Verify chỉ nhận `email` (không còn `accountId`).
 
 **Ngày:** 20/06/2026
 
@@ -75,15 +82,28 @@ React Frontend
 
 ```txt
 React Register Form
-→ CCCD Check API
+→ CCCD Check API (validate CCCD format)
 → Fill / validate derived information
 → API Gateway :8080
-→ Auth Service :8081 (Tạo Account thành công trong DB, publish ACCOUNT_CREATED event sang Kafka)
-  ↳ Kafka → User Service (Tự động tạo User Profile bất đồng bộ)
-→ Tạo mã OTP (In ra Console Log)
+→ Auth Service :8081
+   ↳ Check duplicate email
+   ↳ Validate CCCD via CCCD Check API
+   ↳ Save registration data temporarily in Redis
+   ↳ Publish REGISTRATION_VALIDATION_REQUESTED to Kafka
+   ↳ Wait (up to 10s) for validation result
+← User Service consumes event, checks phone/CCCD in DB + Redis reservation
+← User Service publishes REGISTRATION_VALIDATION_RESULT to Kafka
+→ Auth Service resumes:
+   ↳ If FAILED → return 409 Conflict
+   ↳ If SUCCESS → create account in DB (is_active=0, registration_completed=0)
+   ↳ Send OTP to email
+   ↳ Return 202 Accepted with requestId
 → React OTP Verify Form
-→ API Gateway :8080 → Auth Service :8081 (Kích hoạt Account)
-→ Chuyển hướng sang Login
+→ API Gateway :8080 → Auth Service :8081 (verify OTP)
+   ↳ Activate account (registration_completed=1)
+   ↳ Publish ACCOUNT_VERIFIED to Kafka
+← User Service consumes ACCOUNT_VERIFIED → creates User Profile in DB
+→ Redirect to Login
 ```
 
 ---
@@ -265,15 +285,16 @@ Khi người dùng nhập CCCD ở form Register:
 ### 6.1. Mục Tiêu API
 
 API này dùng để đăng ký tài khoản người dùng.
-Frontend gửi thông tin đăng ký lên Backend thông qua API Gateway. Backend tạo tài khoản đăng nhập trong `auth-service` (mặc định trạng thái `is_active = 0` và `registration_completed = 0`) và khởi tạo mã xác thực OTP 6 số in ra console.
+Frontend gửi thông tin đăng ký lên Backend thông qua API Gateway. Backend thực hiện:
+1. Kiểm tra email không trùng lặp.
+2. Validate format CCCD qua CCCD Check API.
+3. Lưu dữ liệu đăng ký tạm thời vào Redis.
+4. Publish sự kiện `REGISTRATION_VALIDATION_REQUESTED` lên Kafka để User Service kiểm tra phone/CCCD.
+5. Chờ kết quả validation (tối đa 10 giây).
+6. Nếu validation thành công: tạo tài khoản trong DB (`is_active=0`, `registration_completed=0`) và gửi OTP qua email.
+7. Trả về `requestId` cho Frontend.
 
-Quy trình tích hợp bất đồng bộ qua Kafka:
-* Auth Service tạo tài khoản thành công trong cơ sở dữ liệu của mình.
-* Auth Service phát hành (publish) sự kiện `ACCOUNT_CREATED` lên Kafka.
-* User Service tiêu thụ (consume) sự kiện `ACCOUNT_CREATED`.
-* User Service tự động khởi tạo User Profile tương ứng.
-* Frontend không gọi trực tiếp User Service để tạo profile.
-* Auth Service không gọi trực tiếp User Service để tạo profile (không gọi đồng bộ qua Feign Client hay HTTP).
+Sau khi OTP được xác thực thành công (qua `/api/auth/verify`), Auth Service mới publish sự kiện `ACCOUNT_VERIFIED` lên Kafka để User Service tạo User Profile.
 
 ### 6.2. Trạng Thái Implement
 
@@ -352,69 +373,50 @@ Các field sau không nhất thiết để người dùng nhập tay. Hệ thố
 
 | Rule | Mô tả |
 | :--- | :--- |
-| Email unique | Email không được trùng với tài khoản đã có (nếu trùng ghi log `REGISTER_FAILED`) |
-| Phone unique | Số điện thoại không được trùng nếu hệ thống yêu cầu |
-| CCCD unique | CCCD không được trùng nếu hệ thống lưu CCCD |
-| CCCD valid | CCCD phải hợp lệ theo CCCD Check API |
-| Birthday match | Năm trong `birthday` nên khớp với `birthYear` suy ra từ CCCD |
-| Birthday not in future | Ngày sinh không được ở tương lai |
-| Birthday age limit | Người dùng đăng ký phải từ 13 tuổi trở lên |
-| Default role | User mới mặc định có role `CUSTOMER` |
-| Hash password | Mật khẩu phải được hash trước khi lưu |
-| Account status | Tài khoản mới tạo mặc định `is_active = 0` và `registration_completed = 0` |
-| OTP Generation | Sinh mã xác thực OTP ngẫu nhiên 6 chữ số có hiệu lực trong 5 phút và lưu tạm thời |
+| Email unique            | Email không được trùng với tài khoản đã có trong DB (kiểm tra ngay tại Auth Service) |
+| Phone/CCCD unique       | Auth Service hỏi User Service qua Kafka event trước khi tạo account; nếu trùng thì trả 409 |
+| CCCD valid              | CCCD phải hợp lệ theo CCCD Check API |
+| Birthday match          | Năm trong `birthday` nên khớp với `birthYear` suy ra từ CCCD |
+| Birthday not in future  | Ngày sinh không được ở tương lai |
+| Birthday age limit      | Người dùng đăng ký phải từ 13 tuổi trở lên |
+| Default role            | User mới mặc định có role `CUSTOMER` |
+| Hash password           | Mật khẩu phải được hash trước khi lưu |
+| Account status          | Tài khoản mới tạo mặc định `is_active = 0` và `registration_completed = 0` |
+| OTP Generation          | Sinh mã xác thực OTP ngẫu nhiên 6 chữ số có hiệu lực trong 5 phút và lưu tạm thời |
+| Kafka Validation Timeout| Nếu User Service không phản hồi trong 10 giây → trả 500 Internal Server Error |
 
 ### 6.9. Backend Processing Flow
 
 Receive register request
 → Validate request body
-→ Check duplicate email in Auth Service
-→ Check CCCD format / use CCCD derived information
-→ Create account in Auth Service (`is_active = 0`, `registration_completed = 0`)
+→ Check duplicate email in Auth Service DB
+→ Check CCCD format via CCCD Check API / use CCCD derived information
+→ Save registration data temporarily in Redis (TTL 15 minutes)
+→ Publish `REGISTRATION_VALIDATION_REQUESTED` to Kafka (with requestId, phoneNumber, cccd)
+→ Wait up to 10 seconds for `REGISTRATION_VALIDATION_RESULT` from User Service
+   ↳ If FAILED (phone/CCCD duplicate) → return 409 Conflict
+   ↳ If TIMEOUT → return 500 Internal Server Error
+→ Create account in Auth Service DB (`is_active = 0`, `registration_completed = 0`)
 → Assign default role `CUSTOMER`
 → Hash password
-→ Store account with status
-→ Publish an `ACCOUNT_CREATED` event to Kafka (User Service will consume this event to automatically create the corresponding user profile asynchronously)
-→ Sinh mã OTP thông qua `VerificationService` và log ra màn hình console
-→ Return register response
+→ Send OTP via email
+→ Return 202 Accepted with requestId and message
 
-### 6.10. User Profile Data Sau Khi Register
+### 6.10. Thông Tin Tạo User Profile
 
-Sau khi register thành công, hệ thống tự động khởi tạo thông tin hồ sơ người dùng thông qua luồng Kafka Event `ACCOUNT_CREATED`. Các dữ liệu profile sau sẽ được User Service xử lý lưu trữ:
-
-| Field | Source |
-| :--- | :--- |
-| accountId | Auth Service |
-| fullName | Register request |
-| phoneNumber | Register request |
-| cccd | Register request |
-| cccdMasked | CCCD Check API |
-| provinceCode | CCCD Check API |
-| provinceName | CCCD Check API |
-| gender | CCCD Check API |
-| birthday | Register request |
-| birthYear | CCCD Check API |
-| cccdCheckedAt | System time |
-| cccdCheckNote | CCCD Check API |
+User Profile **không được tạo ngay** khi Register. Nó chỉ được tạo sau khi OTP xác thực thành công (Verify OTP), thông qua sự kiện Kafka `ACCOUNT_VERIFIED`. Dữ liệu profile sẽ được lấy từ bản ghi tạm thời trong Redis.
 
 ### 6.11. Response Success
 
-Status: **200 OK** hoặc **201 Created**
+Status: **202 Accepted**
 
 ```json
 {
   "success": true,
-  "message": "Register successfully",
+  "message": "Registration initiated",
   "data": {
-    "accountId": 1,
-    "email": "user@example.com",
-    "role": "CUSTOMER",
-    "fullName": "Nguyen Van A",
-    "phoneNumber": "0901234567",
-    "cccdMasked": "092******789",
-    "provinceName": "Cần Thơ",
-    "gender": "MALE",
-    "birthYear": 2005
+    "requestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "message": "Registration successful, please check your email for OTP"
   }
 }
 ```
@@ -425,15 +427,8 @@ Status: **200 OK** hoặc **201 Created**
 | :--- | :--- | :--- |
 | success | boolean | Trạng thái xử lý thành công hay thất bại |
 | message | string | Thông báo kết quả |
-| data.accountId | number | ID tài khoản vừa tạo |
-| data.email | string | Email vừa đăng ký |
-| data.role | string | Vai trò mặc định của người dùng |
-| data.fullName | string | Họ tên người dùng |
-| data.phoneNumber | string | Số điện thoại người dùng |
-| data.cccdMasked | string | CCCD đã che bớt |
-| data.provinceName | string | Tỉnh/thành suy ra từ CCCD |
-| data.gender | string | Giới tính suy ra từ CCCD |
-| data.birthYear | number | Năm sinh suy ra từ CCCD |
+| data.requestId | string | UUID request (dùng để tracking, không cần gửi lại) |
+| data.message | string | Thông báo hướng dẫn người dùng kiểm tra email OTP |
 
 ### 6.13. Response Error
 
@@ -449,31 +444,70 @@ Status: **409 Conflict**
 }
 ```
 
-**Case 2: Số điện thoại đã tồn tại**
+**Case 2: Lỗi trùng lặp dữ liệu (Đã tồn tại)**
+Status: **409 Conflict**
+
+Trùng Số Điện Thoại:
+```json
+{
+  "success": false,
+  "message": "Phone number already exists.",
+  "errorCode": "PHONE_NUMBER_ALREADY_EXISTS",
+  "data": null
+}
+```
+
+Trùng CCCD:
+```json
+{
+  "success": false,
+  "message": "CCCD already exists.",
+  "errorCode": "CCCD_ALREADY_EXISTS",
+  "data": null
+}
+```
+
+**Case 3: Lỗi dữ liệu đang được giữ chỗ (Reserved)**
+Status: **409 Conflict**
+*HTTP Header kèm theo:* `Retry-After: 472`
+
+Số điện thoại đang được đăng ký (chờ OTP):
+```json
+{
+  "success": false,
+  "message": "Phone number is currently reserved by another pending registration. Please try again later.",
+  "errorCode": "PHONE_NUMBER_RESERVED",
+  "data": {
+    "retryAfterSeconds": 472
+  }
+}
+```
+
+CCCD đang được đăng ký (chờ OTP):
+```json
+{
+  "success": false,
+  "message": "CCCD is currently reserved by another pending registration. Please try again later.",
+  "errorCode": "CCCD_RESERVED",
+  "data": {
+    "retryAfterSeconds": 472
+  }
+}
+```
+
+**Case 4: Email đã có yêu cầu đăng ký đang chờ (Pending Registration)**
 Status: **409 Conflict**
 
 ```json
 {
   "success": false,
-  "message": "Phone number already exists",
-  "errorCode": "USER_PHONE_ALREADY_EXISTS",
+  "message": "Registration is already pending verification. Please verify the OTP or request a new OTP.",
+  "errorCode": "REGISTRATION_ALREADY_PENDING",
   "data": null
 }
 ```
 
-**Case 3: CCCD đã tồn tại**
-Status: **409 Conflict**
-
-```json
-{
-  "success": false,
-  "message": "CCCD already exists",
-  "errorCode": "USER_CCCD_ALREADY_EXISTS",
-  "data": null
-}
-```
-
-**Case 4: CCCD không hợp lệ**
+**Case 5: CCCD không hợp lệ**
 Status: **400 Bad Request**
 
 ```json
@@ -485,7 +519,7 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 5: Ngày sinh không khớp với CCCD**
+**Case 6: Ngày sinh không khớp với CCCD**
 Status: **400 Bad Request**
 
 ```json
@@ -497,7 +531,7 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 5b: Ngày sinh ở tương lai**
+**Case 7: Ngày sinh ở tương lai**
 Status: **400 Bad Request**
 
 ```json
@@ -508,7 +542,7 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 5c: Chưa đủ 13 tuổi**
+**Case 6: Chưa đủ 13 tuổi**
 Status: **400 Bad Request**
 
 ```json
@@ -519,7 +553,7 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 6: Dữ liệu gửi lên không hợp lệ**
+**Case 7: Dữ liệu gửi lên không hợp lệ**
 Status: **400 Bad Request**
 
 ```json
@@ -544,7 +578,7 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 7: Lỗi server**
+**Case 8: Kafka validation timeout (User Service không phản hồi trong 10s)**
 Status: **500 Internal Server Error**
 
 ```json
@@ -560,10 +594,10 @@ Status: **500 Internal Server Error**
 
 | Status Code | Ý nghĩa | Khi nào xảy ra |
 | :--- | :--- | :--- |
-| 200 / 201 | Đăng ký thành công | User/account được tạo thành công, chờ verify OTP |
+| 202 | Accepted | Đăng ký thành công, OTP đã gửi qua email |
 | 400 | Bad Request | Dữ liệu gửi lên không đúng định dạng kiểm tra |
 | 409 | Conflict | Email, phone hoặc CCCD đã tồn tại |
-| 500 | Internal Server Error | Gặp lỗi không xác định tại hệ thống máy chủ |
+| 500 | Internal Server Error | Gặp lỗi không xác định hoặc Kafka timeout |
 
 ---
 
@@ -588,7 +622,7 @@ API này dùng để xác thực mã định danh OTP sau khi đăng ký thành 
 
 ```json
 {
-  "accountId": 15,
+  "email": "user@example.com",
   "otp": "123456",
   "purpose": "REGISTRATION"
 }

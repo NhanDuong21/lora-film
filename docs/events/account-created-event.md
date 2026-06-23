@@ -1,54 +1,101 @@
-# Đặc Tả Hợp Đồng Event: ACCOUNT_CREATED (Event Contract)
+# Đặc Tả Hợp Đồng Event Đăng Ký Tài Khoản (Registration Events Contract)
 
-Tài liệu này quy định cấu trúc gói tin (Message Schema), định dạng phân phối và các nguyên tắc xử lý bất đồng bộ đối với sự kiện khởi tạo tài khoản thành công (`ACCOUNT_CREATED`) trong hệ thống LoraFilm. Tài liệu này đóng vai trò là hợp đồng kỹ thuật bắt buộc giữa phân hệ Xác thực (`auth-service`) và phân hệ Hồ sơ cá nhân (`user-service`).
+Tài liệu này quy định cấu trúc gói tin (Message Schema), định dạng phân phối và các nguyên tắc xử lý bất đồng bộ đối với luồng đăng ký tài khoản trong hệ thống LoraFilm. 
+
+> **Lưu ý Lịch sử (23/06/2026):** Event `ACCOUNT_CREATED` cũ đã được thay thế bằng bộ 3 sự kiện Kafka theo mô hình Request-Reply Pattern nhằm đảm bảo tính toàn vẹn dữ liệu (không trùng lặp phone/CCCD) và tránh tạo "orphan accounts" (hồ sơ rác).
+
+---
 
 ## 1. Kiến Trúc Luồng Đi Dữ Liệu (Message Topology Flow)
-Luồng xử lý nghiệp vụ diễn ra theo trình tự tuyến tính sau:
-Ứng dụng React Frontend -> API Gateway -> Auth Service (Lưu cơ sở dữ liệu `accounts` thành công) -> Phát hành (Publish) Event `ACCOUNT_CREATED` -> Hệ thống hàng đợi Kafka -> User Service (Tiếp nhận Consumer và khởi tạo hồ sơ trong bảng `users`).
+
+Luồng xử lý nghiệp vụ đăng ký hiện tại diễn ra theo 3 giai đoạn (3 Kafka Events):
+
+1. **Giai đoạn 1: Yêu cầu Validate**
+   - Ứng dụng React -> API Gateway -> Auth Service.
+   - Auth Service phát hành Event `REGISTRATION_VALIDATION_REQUESTED` lên Kafka.
+2. **Giai đoạn 2: Trả kết quả Validate**
+   - User Service tiêu thụ (consume) Event, kiểm tra Phone/CCCD trong Database và Redis (reservation).
+   - User Service phát hành Event `REGISTRATION_VALIDATION_RESULT` trả lại cho Auth Service.
+   - Auth Service nhận kết quả. Nếu `SUCCESS` -> Tạo tài khoản, gửi OTP. Nếu `FAILED` -> Hủy đăng ký.
+3. **Giai đoạn 3: Xác thực OTP & Tạo User Profile**
+   - Người dùng nhập OTP -> Auth Service xác thực OTP thành công.
+   - Auth Service phát hành Event `ACCOUNT_VERIFIED`.
+   - User Service tiêu thụ Event, chính thức tạo User Profile trong Database và xóa reservation trên Redis.
+
+---
 
 ## 2. Thông Tin Cấu Hình Hàng Đợi Kafka (Kafka Stream Configurations)
-* **Tên Kafka Topic:** `auth.account.created.v1`
-* **Kafka Message Key:** `accountId`
-* **Consumer Group:** `user-service-account-created-consumer`
-* **Loại Sự Kiện (Event Type):** `ACCOUNT_CREATED`
-* **Phiên Bản Hợp Đồng (Event Version):** `1.0`
-* **Thành Phần Phát Hành (Producer):** `auth-service`
-* **Thành Phần Tiếp Nhận (Consumer):** `user-service`
-* **Payload Format:** JSON
+
+| Thuộc tính | Sự kiện 1 (Validate Request) | Sự kiện 2 (Validate Result) | Sự kiện 3 (Account Verified) |
+| :--- | :--- | :--- | :--- |
+| **Topic** | `auth.registration.validation.requested.v1` | `auth.registration.validation.result.v1` | `auth.account.verified.v1` |
+| **Loại Sự Kiện** | `REGISTRATION_VALIDATION_REQUESTED` | `REGISTRATION_VALIDATION_RESULT` | `ACCOUNT_VERIFIED` |
+| **Producer** | `auth-service` | `user-service` | `auth-service` |
+| **Consumer** | `user-service` | `auth-service` | `user-service` |
+| **Consumer Group** | `user-service-validation-group` | `auth-service-registration-group` | `user-service-account-verified-consumer` |
+| **Message Key** | `requestId` | `requestId` | `accountId` |
+
+---
 
 ## 3. Đặc Tả Gói Tin Sự Kiện (Event Payload Specification)
+
 Gói tin được truyền tải qua Kafka sử dụng định dạng chuỗi JSON thuần ký tự.
 
-### Danh Mục Các Trường Dữ Liệu Gói Tin (Metadata & Data Fields)
-| Trường (Field) | Kiểu Dữ Liệu | Bắt Buộc | Thuộc Tính Phân Vùng | Mô Tả Kỹ Thuật |
-| :--- | :--- | :--- | :--- | :--- |
-| eventId | String (UUID) | Có | Metadata | Mã định danh duy nhất cho bản tin event (UUID string) |
-| eventType | String | Có | Metadata | Giá trị hằng số cố định: `ACCOUNT_CREATED` |
-| eventVersion | String | Có | Metadata | Phiên bản hợp đồng gói tin: `1.0` |
-| source | String | Có | Metadata | Tên định danh dịch vụ phát hành: `auth-service` |
-| occurredAt | String (ISO 8601)| Có | Metadata | Thời điểm phát sinh sự kiện hệ thống dưới định dạng chuỗi ISO 8601 UTC (Ví dụ: `2026-06-15T02:20:30.007Z`) |
-| data | Object | Có | Payload | Khối dữ liệu chứa thông tin nghiệp vụ chi tiết |
-| data.accountId | Long / Bigint | Có | Payload | Khóa chính ID tài khoản vừa được tạo thành công |
-| data.email | String | Có | Payload | Địa chỉ Email đăng ký của tài khoản người dùng |
-| data.role | String | Có | Payload | Phân quyền mặc định hệ thống cấp (Ví dụ: `CUSTOMER`) |
-| data.fullName | String | Có | Payload | Họ và tên đầy đủ của người dùng |
-| data.phoneNumber| String | Có | Payload | Số điện thoại liên hệ |
-| data.cccd | String | Có | Payload | Số Căn cước công dân gốc (12 chữ số) |
-| data.cccdMasked | String | Có | Payload | Số CCCD đã được che một phần để hiển thị an toàn |
-| data.provinceCode | String | Có | Payload | Mã định danh tỉnh thành cấp thẻ CCCD (3 chữ số) |
-| data.provinceName | String | Có | Payload | Tên tỉnh thành tương ứng giải mã từ CCCD |
-| data.gender | String | Có | Payload | Định danh giới tính (Ví dụ: `MALE`, `FEMALE`) |
-| data.birthday | String (YYYY-MM-DD)| Có | Payload | Ngày tháng năm sinh được serialized dưới định dạng `yyyy-MM-dd` |
-| data.birthYear | Integer | Có | Payload | Năm sinh bóc tách từ thông tin CCCD |
+### 3.1. Event: REGISTRATION_VALIDATION_REQUESTED
 
-### Định Dạng Mẫu Gói Tin Gửi Đi (Standard Event Payload JSON)
+**Mô tả:** Auth Service gửi thông tin người dùng muốn đăng ký sang User Service để kiểm tra trùng lặp.
+
+**Định Dạng Mẫu (JSON):**
 ```json
 {
-  "eventId": "uuid-string",
-  "eventType": "ACCOUNT_CREATED",
+  "eventId": "uuid-string-1",
+  "eventType": "REGISTRATION_VALIDATION_REQUESTED",
   "eventVersion": "1.0",
   "source": "auth-service",
-  "occurredAt": "2026-06-15T02:20:30.007Z",
+  "occurredAt": "2026-06-23T02:20:30.007Z",
+  "data": {
+    "requestId": "request-uuid-1234",
+    "email": "user@example.com",
+    "phoneNumber": "0901234567",
+    "cccd": "092205006789"
+  }
+}
+```
+
+### 3.2. Event: REGISTRATION_VALIDATION_RESULT
+
+**Mô tả:** User Service trả lời Auth Service về việc Phone và CCCD có hợp lệ để đăng ký tiếp hay không.
+
+**Định Dạng Mẫu (JSON):**
+```json
+{
+  "eventId": "uuid-string-2",
+  "eventType": "REGISTRATION_VALIDATION_RESULT",
+  "eventVersion": "1.0",
+  "source": "user-service",
+  "occurredAt": "2026-06-23T02:20:31.007Z",
+  "data": {
+    "requestId": "request-uuid-1234",
+    "status": "FAILED", 
+    "errorCode": "PHONE_NUMBER_RESERVED",
+    "retryAfterSeconds": 472
+  }
+}
+```
+*(Ghi chú: Nếu thất bại, `status` là `FAILED` và `errorCode` có thể là `PHONE_NUMBER_ALREADY_EXISTS`, `CCCD_ALREADY_EXISTS`, `PHONE_NUMBER_RESERVED`, hoặc `CCCD_RESERVED`. Trường `retryAfterSeconds` chỉ xuất hiện nếu đang bị reserve)*
+
+### 3.3. Event: ACCOUNT_VERIFIED
+
+**Mô tả:** Được Auth Service phát hành sau khi người dùng xác nhận đúng mã OTP. Báo hiệu cho User Service tạo User Profile.
+
+**Định Dạng Mẫu (JSON):**
+```json
+{
+  "eventId": "uuid-string-3",
+  "eventType": "ACCOUNT_VERIFIED",
+  "eventVersion": "1.0",
+  "source": "auth-service",
+  "occurredAt": "2026-06-23T02:25:30.007Z",
   "data": {
     "accountId": 1,
     "email": "user@example.com",
@@ -66,22 +113,19 @@ Gói tin được truyền tải qua Kafka sử dụng định dạng chuỗi JS
 }
 ```
 
+---
+
 ## 4. Quy Tắc Bảo Mật Và Ràng Buộc Dữ Liệu (Security Constraints)
-* **Bảo vệ mật khẩu người dùng:** Nghiêm cấm tuyệt đối việc nhúng trường dữ liệu mật khẩu (`password`) hoặc chuỗi mã hóa mật khẩu (`password_hash`) vào gói tin Kafka này. Dịch vụ `user-service` hoàn toàn không có quyền hạn và không được phép phụ thuộc vào dữ liệu bảo mật mật khẩu.
-* **Nguyên tắc ghi nhật ký (Log Masking Policy):** Trong quá trình vận hành luồng xử lý hoặc in vết debug hệ thống, cả hai phân hệ `auth-service` và `user-service` tuyệt đối không được phép in (log) chuỗi số CCCD nguyên bản (12 số) ra các hệ thống file nhật ký ứng dụng (application logs). Chỉ cho phép in trường dữ liệu `cccdMasked` nhằm tránh rò rỉ thông tin cá nhân của khách hàng.
-* **Độc quyền phân phối:** Chỉ có dịch vụ `auth-service` được phép giữ quyền làm Producer phát bản tin này lên Topic.
 
-## 5. Cơ Chế Xử Lý Trùng Lặp Và Đảm Bảo Tính Bất Biến (Idempotency Rule)
-Do mạng lưới phân phối của Kafka hoạt động theo cơ chế đảm bảo gửi tin ít nhất một lần (At-least-once delivery), một bản tin sự kiện hoàn toàn có thể bị gửi trùng lặp nhiều lần do mất kết nối ACKs mạng.
+* **Bảo vệ mật khẩu người dùng:** Nghiêm cấm tuyệt đối việc nhúng trường dữ liệu mật khẩu (`password`) vào bất kỳ gói tin Kafka nào. 
+* **Nguyên tắc ghi nhật ký (Log Masking Policy):** Cả hai phân hệ `auth-service` và `user-service` tuyệt đối không được phép in (log) chuỗi số CCCD nguyên bản (12 số) ra các hệ thống file nhật ký. Chỉ cho phép in trường dữ liệu `cccdMasked`.
 
-* **Idempotent Processing:** Dịch vụ `user-service` bắt buộc phải triển khai cơ chế xử lý trùng lặp đảm bảo tính bất biến (idempotent processing) dựa trên `accountId` để an toàn xử lý các sự kiện trùng lặp (duplicate events).
-* **Nguyên tắc xử lý của Consumer (user-service):** Trước khi thực hiện lệnh chèn (Insert) một bản ghi hồ sơ mới, `user-service` bắt buộc phải thực hiện truy vấn kiểm tra xem giá trị trường `data.accountId` nhận được từ gói tin đã tồn tại trong bảng dữ liệu nội bộ của mình hay chưa.
-* **Hành vi xử lý khi phát hiện trùng:** Nếu trường `account_id` đã có sẵn trong database, Consumer phải hiểu đây là một bản tin gửi lặp. Consumer tiến hành Bỏ qua bản tin (Skip Event), in một dòng thông báo log cảnh báo an toàn hệ thống (Safe Warning Log) và thực hiện xác nhận ACK hoàn thành bản tin với Kafka Broker. Tuyệt đối không được phép ném ra lỗi ngoại lệ hệ thống (Fatal Exception) gây treo hoặc sập cụm Consumer.
+---
 
-## 6. Cơ Chế Khôi Phục Lỗi Và Tái Thử Nghiệm (Retry & Error Handling)
-Trường hợp xảy ra sập kết nối cơ sở dữ liệu tạm thời (Database Connection Timeout) tại user-service, Consumer cấu hình cơ chế tự động thử lại (Retry) tối đa 3 lần với khoảng cách thời gian giãn cách tăng dần (Exponential Backoff).
+## 5. Cơ Chế Xử Lý Trùng Lặp Và Khôi Phục Lỗi (Idempotency & Retry)
 
-Nếu sau 3 lần thử lại vẫn thất bại do lỗi logic hệ thống (Data Malformation Lỗi dữ liệu), bản tin lỗi phải được điều hướng tự động sang hàng đợi riêng biệt (Dead Letter Queue - DLQ) có tên là auth.account.created.v1.dlq để đội ngũ vận hành rà soát thủ công, tránh gây tắc nghẽn luồng xử lý của các tài khoản đăng ký tiếp theo.
+Do mạng lưới Kafka có thể gửi tin trùng lặp (At-least-once delivery):
 
-## 7. Đồng Bộ Môi Trường Docker-Compose
-Toàn bộ đội ngũ phát triển Backend thống nhất sử dụng chung cấu hình cụm Kafka Broker (Zookeeper hoặc KRaft mode) được định nghĩa tập trung trong tệp cấu hình docker-compose.yml ở thư mục gốc dự án để đảm bảo tính đồng bộ môi trường phát triển dưới máy local.
+* **Tại User Service (ACCOUNT_VERIFIED):** Bắt buộc kiểm tra xem `accountId` (hoặc email/phone) đã tồn tại trong bảng `users` chưa trước khi Insert. Nếu đã tồn tại -> Bỏ qua bản tin (Skip Event) và in log cảnh báo, không throw Exception.
+* **Cơ chế Reserve:** User Service sử dụng Redis để "tạm giữ" (reserve) Phone và CCCD trong thời gian 15 phút ngay khi nhận được `REGISTRATION_VALIDATION_REQUESTED`. Reservation này sẽ được xóa (release) khi nhận được `ACCOUNT_VERIFIED`.
+* **DLQ (Dead Letter Queue):** Nếu có lỗi parse JSON (Poison Pill), Kafka Deserializer cấu hình mặc định đẩy log và bỏ qua hoặc gửi sang topic lỗi. Lỗi Database cục bộ được ném Exception để Kafka tự động Re-poll.

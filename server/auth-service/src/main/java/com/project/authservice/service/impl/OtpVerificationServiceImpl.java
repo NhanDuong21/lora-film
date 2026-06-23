@@ -77,9 +77,12 @@ public class OtpVerificationServiceImpl implements VerificationService {
         String email = request.getEmail();
         String purpose = request.getPurpose();
         
-        Account account = accountRepository.findByEmail(email)
-                .orElseThrow(AccountNotFoundException::new);
-        Long accountId = account.getId();
+        Long accountId = null;
+        if (!"REGISTRATION".equals(purpose)) {
+            Account account = accountRepository.findByEmail(email)
+                    .orElseThrow(AccountNotFoundException::new);
+            accountId = account.getId();
+        }
         
         String key = getRedisKey(purpose, email);
 
@@ -107,7 +110,6 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         System.out.println("\n==================================");
         System.out.println("OTP GENERATED (Do not use in production)");
-        System.out.println("AccountId: " + accountId);
         System.out.println("Email: " + email);
         System.out.println("Purpose: " + purpose);
         System.out.println("OTP: " + otp);
@@ -123,12 +125,16 @@ public class OtpVerificationServiceImpl implements VerificationService {
         String email = request.getEmail();
         String purpose = request.getPurpose();
 
-        Account account = accountRepository.findByEmail(email).orElseThrow(AccountNotFoundException::new);
-        
         if ("REGISTRATION".equals(purpose)) {
-            if (account.getRegistrationCompleted() != null && account.getRegistrationCompleted() == 1) {
-                throw new AccountAlreadyVerifiedException();
+            String pendingKey = "pending_registration:" + email;
+            if (Boolean.FALSE.equals(redisTemplate.hasKey(pendingKey))) {
+                if (accountRepository.existsByEmail(email)) {
+                    throw new AccountAlreadyVerifiedException();
+                }
+                throw new AccountNotFoundException();
             }
+        } else {
+            Account account = accountRepository.findByEmail(email).orElseThrow(AccountNotFoundException::new);
         }
 
         return sendOtp(new SendOtpRequest(email, purpose));
@@ -137,12 +143,20 @@ public class OtpVerificationServiceImpl implements VerificationService {
     @Override
     @Transactional
     public void verify(VerifyRequest request) {
-        Long accountId = request.getAccountId();
+        String email = request.getEmail();
         String otp = request.getOtp();
         String purpose = request.getPurpose();
         
-        Account account = accountRepository.findById(accountId).orElseThrow(AccountNotFoundException::new);
-        String email = account.getEmail();
+        if (!"REGISTRATION".equals(purpose)) {
+            if (email != null) {
+                if (!accountRepository.existsByEmail(email)) {
+                    throw new AccountNotFoundException();
+                }
+            } else {
+                throw new AccountNotFoundException();
+            }
+        }
+        
         String key = getRedisKey(purpose, email);
 
         RedisOtpData existingData = getRedisOtpData(key);
@@ -175,10 +189,16 @@ public class OtpVerificationServiceImpl implements VerificationService {
         redisTemplate.delete(key);
         log.info("OTP verified successfully for email={} purpose={}", email, purpose);
 
-        // Activate account
-        account.setRegistrationCompleted(1);
-        account.setIsActive(1);
-        accountRepository.save(account);
-        log.info("Account {} activated successfully.", email);
+        if (!"REGISTRATION".equals(purpose)) {
+            if (email != null) {
+                Account account = accountRepository.findByEmail(email).orElse(null);
+                if (account != null) {
+                    account.setRegistrationCompleted(1);
+                    account.setIsActive(1);
+                    accountRepository.save(account);
+                    log.info("Account {} activated successfully.", email);
+                }
+            }
+        }
     }
 }
