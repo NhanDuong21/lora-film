@@ -111,7 +111,7 @@ CREATE TABLE `notification_logs` (
     FOREIGN KEY (`template_code`)
     REFERENCES `notification_templates` (`template_code`)
     ON DELETE RESTRICT
-    ON UPDATE CASCADE,
+    ON UPDATE RESTRICT,
 
   CONSTRAINT `uk_notification_logs_event_id`
     UNIQUE (`event_id`),
@@ -119,9 +119,6 @@ CREATE TABLE `notification_logs` (
   CONSTRAINT `uk_notification_logs_idempotency_key`
     UNIQUE (`idempotency_key`)
 );
-
-CREATE INDEX `idx_notification_event`
-ON `notification_logs` (`event_id`);
 
 CREATE INDEX `idx_notification_retry`
 ON `notification_logs`
@@ -154,7 +151,3 @@ ON `notification_logs`
 CREATE INDEX `idx_notification_template_created`
 ON `notification_logs`
 (`template_code`, `created_at`);
-
-CREATE INDEX `idx_notification_template`
-ON `notification_logs`
-(`template_code`);
