@@ -9,12 +9,13 @@
 | API liên quan      | Create Profile, Get Profile            |
 | Người phụ trách BE | Phan Tuấn Thành                    |
 | Người phụ trách FE | Dương Hoàng Nhân                   |
-| Trạng thái         | Ready for Implement                    |
-| Ngày cập nhật      | 17/06/2026                             |
+| Trạng thái         | Updated (Event-Driven Architecture)    |
+| Ngày cập nhật      | 23/06/2026                             |
 
 ---
 
 ## Lịch Sử Chỉnh Sửa
+- **23/06/2026**: Refactor toàn bộ theo kiến trúc Event-Driven. Xóa bỏ Internal HTTP API (`/internal/users`). User Service giờ chỉ giao tiếp qua Kafka Events (`REGISTRATION_VALIDATION_REQUESTED` và `ACCOUNT_VERIFIED`).
 - **17/06/2026**: Đồng bộ các quy tắc validate của internal create profile API (fullName, phoneNumber) với Auth Service và Frontend.
 - **14/06/2026**: Cập nhật Local URL từ port `8082` sang `8086`.
 - **13/06/2026**: Khởi tạo tài liệu đặc tả User Profile APIs.
@@ -26,9 +27,11 @@
 Tài liệu này đặc tả các API liên quan đến thông tin cá nhân (Profile) của người dùng thuộc **User Service**.
 
 Mục tiêu chính:
-* Định nghĩa rõ ràng API nội bộ (`/internal/users`) để Auth Service gọi sau khi đăng ký tài khoản thành công.
+* Định nghĩa các Kafka Event mà User Service lắng nghe để thực hiện validate và tạo User Profile bất đồng bộ.
 * Định nghĩa API public/protected (`/api/users/{accountId}`) để Frontend có thể truy xuất thông tin hồ sơ của người dùng.
 * Đảm bảo tính thống nhất trong kiểu dữ liệu và field response, đặc biệt với các thông tin nhạy cảm như CCCD.
+
+> **Lưu ý kiến trúc:** User Service **không còn** cung cấp Internal HTTP API (`/internal/users`) nữa. Toàn bộ giao tiếp giữa Auth Service và User Service được thực hiện qua Kafka Events.
 
 ---
 
@@ -41,135 +44,121 @@ http://localhost:8080
 ```
 
 ### 3.2. User Service Direct URL
-Chỉ dùng cho Backend debug hoặc cho các service nội bộ giao tiếp với nhau (VD: Auth Service gọi sang User Service):
+Chỉ dùng cho Backend debug hoặc test trực tiếp service:
 ```txt
 http://localhost:8086
 ```
 
----
-
-# 4. Internal Create User Profile API
-
-## 4.1. Mục Tiêu API
-API này được Auth Service gọi đồng bộ (hoặc bất đồng bộ tùy kiến trúc) ngay sau khi tài khoản người dùng được khởi tạo thành công tại Auth Service. Mục đích là để cấp phát và lưu trữ dữ liệu hồ sơ cá nhân cơ bản ở User Service.
-
-Lưu ý: Đây là **Internal API**, API Gateway không được phép expose endpoint này ra ngoài cho Frontend hay External Client gọi.
+> **Lưu ý:** Auth Service không gọi trực tiếp sang User Service qua HTTP. Toàn bộ giao tiếp nội bộ thực hiện qua Kafka.
 
 ---
 
-## 4.2. Thông Tin Endpoint
+# 4. Kafka Event Consumers (Event-Driven Architecture)
 
-| Mục           | Nội dung                                  |
-| ------------- | ----------------------------------------- |
-| Method        | `POST`                                    |
-| Endpoint      | `/internal/users`                         |
-| Local URL     | `http://localhost:8086/internal/users`    |
-| Gateway URL   | (Không expose qua API Gateway)            |
-| Content-Type  | `application/json`                        |
-| Auth Required | Có thể dùng Internal Token (TBD)          |
-| Role Required | None (Internal)                           |
+> **Quan trọng:** User Service không còn cung cấp REST API nội bộ (`/internal/users`) nữa. Toàn bộ giao tiếp với Auth Service được thực hiện qua Kafka theo mô hình **Request-Reply Pattern**.
 
 ---
 
-## 4.3. Request Headers
+## 4.1. REGISTRATION_VALIDATION_REQUESTED Consumer
 
-| Header       | Required | Example            | Mô tả                |
-| ------------ | -------: | ------------------ | -------------------- |
-| Content-Type |      Yes | `application/json` | Kiểu dữ liệu gửi lên |
+### Mô Tả
+User Service lắng nghe sự kiện này từ Auth Service khi có yêu cầu đăng ký mới. User Service sẽ kiểm tra xem `phoneNumber` và `cccd` có bị trùng lặp không (kiểm tra cả DB và Redis reservation), sau đó publish kết quả lại.
 
----
+### Thông Tin Consumer
 
-## 4.4. Request Body
+| Mục                | Nội dung                                             |
+| ------------------ | ---------------------------------------------------- |
+| **Topic**          | `auth.registration.validation.requested.v1`          |
+| **Consumer Group** | `user-service-validation-group`                      |
+| **Loại Sự Kiện**   | `REGISTRATION_VALIDATION_REQUESTED`                  |
+| **Hành động**      | Kiểm tra phone/CCCD, reserve Redis, publish result   |
+
+### Payload Nhận Vào
 
 ```json
 {
-  "accountId": 1,
-  "fullName": "Nguyen Van A",
-  "phoneNumber": "0901234567",
-  "cccd": "092205006789",
-  "cccdMasked": "092******789",
-  "provinceCode": "092",
-  "provinceName": "Cần Thơ",
-  "birthYear": 2005,
-  "gender": "MALE",
-  "birthday": "2005-06-12",
-  "cccdCheckNote": "This API only checks CCCD format."
+  "eventId": "uuid",
+  "eventType": "REGISTRATION_VALIDATION_REQUESTED",
+  "occurredAt": "2026-06-23T00:00:00Z",
+  "data": {
+    "requestId": "uuid",
+    "email": "user@example.com",
+    "phoneNumber": "0901234567",
+    "cccd": "092205006789"
+  }
 }
 ```
 
----
+### Logic Xử Lý
+1. Kiểm tra `phoneNumber` trong DB → nếu tồn tại: publish FAILED với reason `PHONE_NUMBER_ALREADY_EXISTS`
+2. Kiểm tra `cccd` trong DB → nếu tồn tại: publish FAILED với reason `CCCD_ALREADY_EXISTS`
+3. Thử reserve `phoneNumber` và `cccd` trong Redis (TTL 15 phút) → nếu đang được reserve: publish FAILED với reason `REGISTRATION_CONFLICT`
+4. Nếu tất cả OK → publish SUCCESS
 
-## 4.5. Giải Thích Field Request
+### Sự Kiện Publish Lại (REGISTRATION_VALIDATION_RESULT)
 
-| Field         | Type   | Required | Validate          | Mô tả                                      |
-| ------------- | ------ | -------: | ----------------- | ------------------------------------------ |
-| accountId     | number |      Yes | > 0               | ID của tài khoản từ Auth Service           |
-| fullName      | string |      Yes | Dài 2-200 ký tự, chỉ chứa chữ cái và khoảng trắng, ít nhất 2 từ | Họ tên người dùng |
-| phoneNumber   | string |      Yes | Gồm 10 chữ số bắt đầu bằng 0 hoặc 12 ký tự bắt đầu bằng +84 | Số điện thoại (Unique)                     |
-| cccd          | string |      Yes | Đúng 12 chữ số | Số CCCD đầy đủ (Unique)                    |
-| cccdMasked    | string |      Yes | Format che kí tự  | CCCD đã che để hiển thị                    |
-| provinceCode  | string |       No | -                 | Mã tỉnh/thành suy ra từ CCCD               |
-| provinceName  | string |       No | -                 | Tên tỉnh/thành suy ra từ CCCD              |
-| birthYear     | number |       No | > 1900            | Năm sinh suy ra từ CCCD                    |
-| gender        | string |      Yes | Enum              | `MALE`, `FEMALE`, `OTHER`                  |
-| birthday      | date   |      Yes | Format YYYY-MM-DD | Ngày sinh người dùng nhập                  |
-| cccdCheckNote | string |       No | -                 | Note/Log từ CCCD Validation lúc đăng ký    |
-
----
-
-## 4.6. Response Success
-
-Status: `201 Created`
+| Mục                | Nội dung                                            |
+| ------------------ | --------------------------------------------------- |
+| **Topic**          | `auth.registration.validation.result.v1`            |
+| **Payload**        | `{ requestId, status: "SUCCESS"/"FAILED", errorCode }` |
 
 ```json
 {
-  "success": true,
-  "message": "User profile created successfully",
+  "eventId": "uuid",
+  "eventType": "REGISTRATION_VALIDATION_RESULT",
+  "occurredAt": "2026-06-23T00:00:00Z",
   "data": {
-    "accountId": 1,
-    "fullName": "Nguyen Van A",
-    "phoneNumber": "0901234567",
-    "gender": "MALE"
+    "requestId": "uuid",
+    "status": "SUCCESS",
+    "errorCode": null
   }
 }
 ```
 
 ---
 
-## 4.7. Response Error
+## 4.2. ACCOUNT_VERIFIED Consumer
 
-### Case 1: CCCD đã tồn tại
-Status: `409 Conflict`
+### Mô Tả
+User Service lắng nghe sự kiện này từ Auth Service sau khi người dùng đã xác thực OTP thành công. User Service sẽ tạo bản ghi User Profile trong database.
+
+### Thông Tin Consumer
+
+| Mục                | Nội dung                                            |
+| ------------------ | --------------------------------------------------- |
+| **Topic**          | `auth.account.verified.v1`                          |
+| **Consumer Group** | `user-service-account-verified-consumer`            |
+| **Loại Sự Kiện**   | `ACCOUNT_VERIFIED`                                  |
+| **Hành động**      | Tạo bản ghi User Profile trong DB, giải phóng Redis reservation |
+
+### Payload Nhận Vào
+
 ```json
 {
-  "success": false,
-  "message": "CCCD already exists",
-  "errorCode": "USER_CCCD_ALREADY_EXISTS",
-  "data": null
+  "eventId": "uuid",
+  "eventType": "ACCOUNT_VERIFIED",
+  "occurredAt": "2026-06-23T00:00:00Z",
+  "data": {
+    "accountId": 1,
+    "email": "user@example.com",
+    "role": "CUSTOMER",
+    "fullName": "Nguyen Van A",
+    "phoneNumber": "0901234567",
+    "cccd": "092205006789",
+    "cccdMasked": "092******789",
+    "provinceCode": "092",
+    "provinceName": "Cần Thơ",
+    "gender": "MALE",
+    "birthYear": 2005,
+    "birthday": "2005-06-12"
+  }
 }
 ```
 
-### Case 2: Số điện thoại đã tồn tại
-Status: `409 Conflict`
-```json
-{
-  "success": false,
-  "message": "Phone number already exists",
-  "errorCode": "USER_PHONE_ALREADY_EXISTS",
-  "data": null
-}
-```
-
-### Case 3: Account ID đã có hồ sơ
-Status: `409 Conflict`
-```json
-{
-  "success": false,
-  "message": "User profile already exists for this account",
-  "errorCode": "USER_PROFILE_ALREADY_EXISTS",
-  "data": null
-}
-```
+### Cơ Chế Xử Lý Lỗi (Error Handling)
+1. **Idempotency (Chống trùng lặp):** Consumer kiểm tra `accountId`, `phoneNumber`, `cccd` trong DB trước khi Insert. Nếu đã tồn tại, ghi log cảnh báo và bỏ qua Message.
+2. **Redis Cleanup:** Sau khi tạo User Profile thành công, giải phóng reservation phone/CCCD trong Redis.
+3. **Retry & DLQ:** Nếu xảy ra lỗi, RuntimeException được throw để Kafka trigger retry và Dead Letter Queue.
 
 ---
 
@@ -272,45 +261,46 @@ Status: `401 Unauthorized`
 
 ---
 
-# 6. Kafka Event Listeners (Event-Driven)
+# 6. Tổng Quan Luồng Event-Driven
 
-## 6.1. ACCOUNT_CREATED Event
-Bên cạnh Internal API (`/internal/users`), hệ thống hỗ trợ mô hình giao tiếp bất đồng bộ (Asynchronous) thông qua Kafka. Khi người dùng đăng ký tài khoản thành công, User Service sẽ nhận được thông điệp từ Kafka và tự động tạo hồ sơ mà không cần chờ Frontend hay API Gateway gọi thêm.
+## 6.1. Toàn Bộ Luồng Đăng Ký
 
-### Thông Tin Consumer
-
-| Mục                 | Nội dung                                            |
-| ------------------- | --------------------------------------------------- |
-| **Topic**           | `auth.account.created.v1`                           |
-| **Consumer Group**  | `user-service-account-created-consumer`             |
-| **Loại Sự Kiện**    | `ACCOUNT_CREATED`                                   |
-| **Hành động**       | Khởi tạo bản ghi hồ sơ mới trong Database           |
-
-### Payload Tiêu Thụ Điển Hình
-User Service sẽ tự động ép kiểu (Deserialize) JSON nhận được thành class `AccountCreatedEvent`. Dữ liệu quan trọng nằm trong biến `data` của Payload:
-
-```json
-{
-  "eventId": "uuid",
-  "eventType": "ACCOUNT_CREATED",
-  "timestamp": "2026-06-15T15:00:00Z",
-  "data": {
-    "accountId": 4,
-    "email": "levanc99@gmail.com",
-    "role": "CUSTOMER",
-    "fullName": "Lê Văn C",
-    "phoneNumber": "0933112233",
-    "cccd": "048099123456",
-    "cccdMasked": "048******456",
-    "provinceCode": "048",
-    "provinceName": "Đà Nẵng",
-    "gender": "MALE",
-    "birthYear": 1999,
-    "birthday": "1999-05-15"
-  }
-}
+```txt
+[Client] POST /api/auth/register
+      ↓
+[Auth Service]
+  - Check duplicate email (Auth DB)
+  - Validate CCCD format
+  - Save PendingRegistrationData to Redis
+  - Publish REGISTRATION_VALIDATION_REQUESTED
+      ↓ Kafka
+[User Service]
+  - Check phone/CCCD in DB
+  - Reserve phone/CCCD in Redis (TTL 15 min)
+  - Publish REGISTRATION_VALIDATION_RESULT
+      ↓ Kafka
+[Auth Service]
+  - If FAILED → return 409
+  - If SUCCESS → create Account in DB
+  - Send OTP via email
+  - Return 202 Accepted { requestId, message }
+      ↓
+[Client] POST /api/auth/verify { email, otp, purpose: "REGISTRATION" }
+      ↓
+[Auth Service]
+  - Verify OTP
+  - Activate Account (registration_completed=1)
+  - Publish ACCOUNT_VERIFIED
+      ↓ Kafka
+[User Service]
+  - Create User Profile in DB
+  - Release Redis reservation
 ```
 
-### Cơ Chế Xử Lý Lỗi (Error Handling)
-1. **Idempotency (Chống trùng lặp):** Consumer sẽ tự động kiểm tra `accountId` trong bảng `users` trước khi Insert. Nếu đã tồn tại, Consumer ghi log cảnh báo trùng lặp và bỏ qua Message một cách an toàn.
-2. **Poison Pill Protection:** Sử dụng `ErrorHandlingDeserializer` để ngăn chặn các bản tin lỗi cấu trúc (ví dụ thiếu Type Header) gây ra tình trạng lặp vô tận (Infinite poll loop) làm treo dịch vụ.
+## 6.2. Danh Sách Kafka Topics
+
+| Topic | Publisher | Consumer | Mô tả |
+| ----- | --------- | -------- | ------ |
+| `auth.registration.validation.requested.v1` | Auth Service | User Service | Yêu cầu validate phone/CCCD |
+| `auth.registration.validation.result.v1` | User Service | Auth Service | Kết quả validate |
+| `auth.account.verified.v1` | Auth Service | User Service | Trigger tạo User Profile |
