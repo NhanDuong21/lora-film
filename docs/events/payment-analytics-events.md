@@ -93,8 +93,10 @@ Bao gồm các trường metadata chuẩn: `eventId`, `eventType`, `eventVersion
 
 **Hành vi hỗ trợ hoàn tiền:**
 *   **Full & Partial Refund:** Hỗ trợ hoàn tiền toàn bộ hoặc một phần.
-*   **`refundAmount` & `refundedTicketCount`:** Là số tiền và số vé của **lần refund hiện tại**, KHÔNG phải số cộng dồn (cumulative refund).
 *   **Multiple Refund Events:** Cho phép nhiều sự kiện hoàn tiền trên cùng một `paymentId` (ví dụ: hoàn tiền làm nhiều đợt).
+*   **Refund Event Semantics (Quan trọng):**
+    *   Mỗi `PAYMENT_REFUNDED` event đại diện cho một refund transaction độc lập.
+    *   `refundAmount` và `refundedTicketCount` là giá trị của lần refund đó, **không phải** giá trị cộng dồn (cumulative) của toàn bộ payment.
 *   **Ordering:** Đảm bảo `PAYMENT_REFUNDED` luôn được consume sau `PAYMENT_SUCCEEDED` đối với cùng một `paymentId` bằng cách sử dụng chung Message Key.
 
 **Định Dạng Mẫu (JSON):**
