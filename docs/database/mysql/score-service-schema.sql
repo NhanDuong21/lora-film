@@ -10,7 +10,7 @@ CREATE TABLE `membership_tiers` (
     `tier_name` VARCHAR(50) NOT NULL
         COMMENT 'SILVER, GOLD, DIAMOND',
 
-    `min_accumulated_points` INT NOT NULL
+    `min_points` INT NOT NULL
         COMMENT 'Minimum accumulated points required to reach this tier',
 
     `earning_rate` DECIMAL(5,2) NOT NULL
@@ -38,7 +38,7 @@ CREATE TABLE `user_scores` (
         COMMENT 'Lifetime accumulated points for tier calculation',
 
     `current_tier_id` INT NOT NULL
-        COMMENT 'Current membership tier (resolved via tier rules)',
+        COMMENT 'Current membership tier',
 
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -59,28 +59,22 @@ CREATE TABLE `score_history` (
     `booking_id` BIGINT NULL
         COMMENT 'Logical Ref to Booking Service',
 
+    `event_id` VARCHAR(150) NULL
+        COMMENT 'Business event identifier received from upstream service',
+
     `point_change` INT NOT NULL
         COMMENT 'Actual applied point change (+/-)',
 
     `transaction_type` VARCHAR(50) NOT NULL
         COMMENT 'EARN_BY_BOOKING, REDEEM_FOR_BOOKING, REFUND_REDEEM, REVOKE_EARN_BY_REFUND, MANUAL_ADD, MANUAL_DEDUCT, EXPIRED',
 
-    -- =========================
-    -- BALANCE SNAPSHOT (REQUIRED)
-    -- =========================
     `balance_before` INT NOT NULL,
     `balance_after` INT NOT NULL,
     `accumulated_before` INT NOT NULL,
     `accumulated_after` INT NOT NULL,
 
-    -- =========================
-    -- IDEMPOTENCY (REQUIRED)
-    -- =========================
     `idempotency_key` VARCHAR(100) NOT NULL,
 
-    -- =========================
-    -- REFERENCE / AUDIT
-    -- =========================
     `reference_history_id` BIGINT NULL
         COMMENT 'Self reference to original transaction',
 
@@ -93,9 +87,6 @@ CREATE TABLE `score_history` (
 
     `description` TEXT NULL,
 
-    -- =========================
-    -- PARTIAL REVOKE RECONCILIATION (REQUIRED)
-    -- =========================
     `requested_point_change` INT NULL
         COMMENT 'Original requested change before partial apply',
 
@@ -107,9 +98,6 @@ CREATE TABLE `score_history` (
 
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    -- =========================
-    -- CONSTRAINTS
-    -- =========================
     CONSTRAINT `fk_score_history_user`
         FOREIGN KEY (`user_id`)
         REFERENCES `user_scores` (`user_id`),
@@ -119,9 +107,14 @@ CREATE TABLE `score_history` (
         REFERENCES `score_history` (`id`)
         ON DELETE RESTRICT,
 
-    UNIQUE KEY `uk_score_history_idempotency` (`idempotency_key`),
+    UNIQUE KEY `uk_score_history_idempotency`
+        (`idempotency_key`),
 
-    UNIQUE KEY `uk_score_history_request_id` (`request_id`),
+    UNIQUE KEY `uk_score_history_event_id`
+        (`event_id`),
+
+    UNIQUE KEY `uk_score_history_request_id`
+        (`request_id`),
 
     INDEX `idx_score_history_user_created`
         (`user_id`, `created_at`),
@@ -131,6 +124,9 @@ CREATE TABLE `score_history` (
 
     INDEX `idx_score_history_booking`
         (`booking_id`),
+
+    INDEX `idx_score_history_event`
+        (`event_id`),
 
     INDEX `idx_score_history_reconciliation`
         (`reconciliation_status`, `created_at`)
