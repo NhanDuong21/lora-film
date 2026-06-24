@@ -10,9 +10,9 @@
 | Contract Owner | Dương Thiện Nhân                                                                |
 | Backend Owner  | Trương Hoàng Khang                                                              |
 | Reviewer       | Trương Hoàng Khang                                                              |
-| Trạng thái     | Updated after Owner Re-review / Pending Final Approval                           |
+| Trạng thái     | Approved / Ready for Implementation                                               |
 | Milestone      | Sprint 2 - Core Service API Foundation                                          |
-| Ngày cập nhật  | 23/06/2026                                                                      |
+| Ngày cập nhật  | 24/06/2026                                                                      |
 
 ---
 
@@ -30,7 +30,7 @@ Mục tiêu:
 * Xác định rõ idempotency theo booking hoặc event.
 * Xác định rõ cách tính membership tier.
 * Chuẩn hóa endpoint, request, response, validation, HTTP status và error code.
-* Ghi rõ các điểm có thể chưa khớp với schema Sprint 0 để service owner review.
+* Ghi nhận schema Sprint 2 đã được align và làm cơ sở triển khai Backend.
 * Làm cơ sở tách implementation issue sau khi contract được duyệt.
 
 ---
@@ -95,18 +95,32 @@ Score Service không chịu trách nhiệm:
 
 ---
 
-## 5. Physical Schema Sprint 0
+## 5. Physical Schema Chính Thức Sprint 2
 
 ### 5.1. Bảng `membership_tiers`
 
 ```sql
 CREATE TABLE `membership_tiers` (
-  `id` int PRIMARY KEY AUTO_INCREMENT COMMENT 'Primary Key - Tier ID',
-  `tier_name` varchar(50) UNIQUE NOT NULL COMMENT 'SILVER, GOLD, DIAMOND',
-  `min_points` int NOT NULL COMMENT 'So diem toi thieu de dat duoc hang nay, e.g., 0, 200, 500',
-  `earning_rate` decimal(5,2) NOT NULL DEFAULT 0.05 COMMENT 'Ty le tich diem, e.g., hang Vang duoc tich 7% gia tri don hang',
-  `created_at` timestamp DEFAULT (now()),
-  `updated_at` timestamp DEFAULT (now())
+    `id` INT PRIMARY KEY AUTO_INCREMENT
+        COMMENT 'Primary Key - Tier ID',
+
+    `tier_name` VARCHAR(50) NOT NULL
+        COMMENT 'SILVER, GOLD, DIAMOND',
+
+    `min_points` INT NOT NULL
+        COMMENT 'Minimum accumulated points required to reach this tier',
+
+    `earning_rate` DECIMAL(5,2) NOT NULL
+        COMMENT 'Fractional earning rate, e.g. 0.05 = 5%, 0.07 = 7%, 0.10 = 10%',
+
+    `description` TEXT NULL,
+
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY `uk_membership_tier_name` (`tier_name`)
 );
 ```
 
@@ -114,11 +128,26 @@ CREATE TABLE `membership_tiers` (
 
 ```sql
 CREATE TABLE `user_scores` (
-  `user_id` bigint PRIMARY KEY COMMENT 'Shared Primary Key - Logical Ref sang users.account_id cua User Service',
-  `current_points` int NOT NULL DEFAULT 0 COMMENT 'So diem kha dung hien tai de doi qua',
-  `accumulated_points` int NOT NULL DEFAULT 0 COMMENT 'Tong diem da tich luy trong doi de xet hang thanh vien',
-  `current_tier_id` int NOT NULL DEFAULT 1,
-  `updated_at` timestamp DEFAULT (now())
+    `user_id` BIGINT PRIMARY KEY
+        COMMENT 'Logical Ref to User Service',
+
+    `current_points` INT NOT NULL DEFAULT 0
+        COMMENT 'Available points balance',
+
+    `accumulated_points` INT NOT NULL DEFAULT 0
+        COMMENT 'Lifetime accumulated points for tier calculation',
+
+    `current_tier_id` INT NOT NULL
+        COMMENT 'Current membership tier',
+
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT `fk_user_scores_tier`
+        FOREIGN KEY (`current_tier_id`)
+        REFERENCES `membership_tiers` (`id`)
 );
 ```
 
@@ -126,30 +155,127 @@ CREATE TABLE `user_scores` (
 
 ```sql
 CREATE TABLE `score_history` (
-  `id` bigint PRIMARY KEY AUTO_INCREMENT,
-  `user_id` bigint NOT NULL,
-  `booking_id` bigint COMMENT 'Nullable neu la doi qua, Logical Ref sang bookings.id cua Booking Service',
-  `point_change` int NOT NULL COMMENT 'Gia tri diem bien dong, e.g., +15 hoac -50',
-  `transaction_type` varchar(30) NOT NULL COMMENT 'EARN_BY_BOOKING, SPEND_FOR_REWARD, EXPIRED',
-  `description` text COMMENT 'Chi tiet su kien, e.g., Tich diem tu don hang LORAFILM-123',
-  `created_at` timestamp DEFAULT (now())
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    `user_id` BIGINT NOT NULL,
+
+    `booking_id` BIGINT NULL
+        COMMENT 'Logical Ref to Booking Service',
+
+    `event_id` VARCHAR(150) NULL
+        COMMENT 'Business event identifier received from upstream service',
+
+    `point_change` INT NOT NULL
+        COMMENT 'Actual applied point change (+/-)',
+
+    `transaction_type` VARCHAR(50) NOT NULL
+        COMMENT 'EARN_BY_BOOKING, REDEEM_FOR_BOOKING, REFUND_REDEEM, REVOKE_EARN_BY_REFUND, MANUAL_ADD, MANUAL_DEDUCT, EXPIRED',
+
+    `balance_before` INT NOT NULL,
+    `balance_after` INT NOT NULL,
+
+    `accumulated_before` INT NOT NULL,
+    `accumulated_after` INT NOT NULL,
+
+    `idempotency_key` VARCHAR(100) NOT NULL,
+
+    `reference_history_id` BIGINT NULL
+        COMMENT 'Self reference to original transaction',
+
+    `created_by` BIGINT NULL
+        COMMENT 'Admin/Employee ID if manual action',
+
+    `request_id` VARCHAR(100) NULL,
+
+    `reason` VARCHAR(255) NULL,
+
+    `description` TEXT NULL,
+
+    `requested_point_change` INT NULL
+        COMMENT 'Original requested change before partial apply',
+
+    `outstanding_points` INT NOT NULL DEFAULT 0
+        COMMENT 'Unprocessed points due to insufficient balance',
+
+    `reconciliation_status` VARCHAR(30) NOT NULL DEFAULT 'NONE'
+        COMMENT 'NONE, PENDING, RESOLVED',
+
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT `fk_score_history_user`
+        FOREIGN KEY (`user_id`)
+        REFERENCES `user_scores` (`user_id`),
+
+    CONSTRAINT `fk_score_history_reference`
+        FOREIGN KEY (`reference_history_id`)
+        REFERENCES `score_history` (`id`)
+        ON DELETE RESTRICT,
+
+    UNIQUE KEY `uk_score_history_idempotency`
+        (`idempotency_key`),
+
+    UNIQUE KEY `uk_score_history_event_id`
+        (`event_id`),
+
+    UNIQUE KEY `uk_score_history_request_id`
+        (`request_id`),
+
+    INDEX `idx_score_history_user_created`
+        (`user_id`, `created_at`),
+
+    INDEX `idx_score_history_user_type_created`
+        (`user_id`, `transaction_type`, `created_at`),
+
+    INDEX `idx_score_history_booking`
+        (`booking_id`),
+
+    INDEX `idx_score_history_reconciliation`
+        (`reconciliation_status`, `created_at`)
 );
 ```
 
-### 5.4. Quan hệ nội bộ
+### 5.4. Quan hệ và Database Boundary
 
-```sql
-ALTER TABLE `user_scores`
-ADD FOREIGN KEY (`current_tier_id`)
-REFERENCES `membership_tiers` (`id`);
+Foreign key chỉ tồn tại nội bộ trong Score Service:
 
-ALTER TABLE `score_history`
-ADD FOREIGN KEY (`user_id`)
-REFERENCES `user_scores` (`user_id`)
-ON DELETE CASCADE;
+```txt
+user_scores.current_tier_id
+→ membership_tiers.id
+
+score_history.user_id
+→ user_scores.user_id
+
+score_history.reference_history_id
+→ score_history.id
 ```
 
----
+Các field sau chỉ là logical references và không có physical foreign key sang service khác:
+
+```txt
+user_scores.user_id
+score_history.booking_id
+score_history.created_by
+```
+
+### 5.5. Schema Decisions Chính Thức
+
+Schema Sprint 2 đã hỗ trợ:
+
+```txt
+Business Event ID tracking
+Database-level idempotency
+Balance audit snapshot
+Accumulated point audit snapshot
+Original transaction reference
+Admin Adjustment audit
+Partial revoke reconciliation
+Customer/Admin history query indexes
+Database-per-Service compliance
+```
+
+`event_id` và `request_id` nullable nhưng unique khi khác `NULL` theo behavior của MySQL.
+
+
 
 ## 6. Phân Tích Schema Hiện Tại
 
@@ -157,14 +283,18 @@ ON DELETE CASCADE;
 
 Schema hiện tại hỗ trợ:
 
-* Định nghĩa nhiều membership tier.
-* Thiết lập ngưỡng điểm tối thiểu cho tier.
-* Thiết lập earning rate theo tier.
-* Quản lý điểm khả dụng.
-* Quản lý điểm tích lũy.
+* Định nghĩa membership tier.
+* Quản lý điểm khả dụng và điểm tích lũy.
 * Lưu tier hiện tại.
-* Ghi lịch sử cộng/trừ điểm.
-* Liên kết score history với booking nếu có.
+* Ghi lịch sử mọi biến động điểm.
+* Lưu balance snapshot trước và sau transaction.
+* Lưu accumulated point snapshot trước và sau transaction.
+* Database-level idempotency.
+* Business event tracing từ upstream.
+* Liên kết refund/revoke với transaction gốc.
+* Audit Admin Adjustment.
+* Partial revoke reconciliation.
+* Query lịch sử theo user, transaction type, booking và reconciliation status.
 
 ### 6.2. Ý nghĩa của các loại điểm
 
@@ -188,74 +318,115 @@ Schema hiện tại hỗ trợ:
 Tổng điểm tích lũy dùng để xét tier
 ```
 
-Contract Sprint 2 mặc định:
+Contract Sprint 2:
 
 * Tăng khi earn point hợp lệ.
 * Không giảm khi user redeem point.
+* Không tăng khi refund redeem.
 * Có thể giảm khi điểm earn bị thu hồi do refund/cancel.
-* Không tự giảm do điểm khả dụng hết hạn nếu tier dùng lifetime points.
+* Có thể thay đổi bởi Admin Adjustment khi `affectAccumulatedPoints = true`.
+* Không tự giảm do point expiry vì Point Expiry ngoài scope Sprint 2.
 
-Quyết định chính thức cho Sprint 2:
+Quyết định chính thức:
 
 ```txt
 accumulatedPoints = Lifetime Accumulated Points
 ```
 
-Không áp dụng membership cycle, tier expiration hoặc reset schedule trong Sprint 2.
+### 6.3. Event Tracking và Idempotency
 
-### 6.3. Giới hạn schema hiện tại
+Các field có mục đích riêng:
 
-Schema chưa có:
+| Field | Mục đích |
+|---|---|
+| `event_id` | Business event identifier từ upstream; dùng tracing và chống duplicate upstream event |
+| `idempotency_key` | Idempotency key của score transaction; bắt buộc và unique |
+| `reference_history_id` | Liên kết refund/revoke với transaction score gốc |
+| `request_id` | Audit và idempotency cho Admin Adjustment |
 
-```txt
-score_history.balance_before
-score_history.balance_after
-score_history.accumulated_before
-score_history.accumulated_after
-score_history.idempotency_key
-score_history.reference_history_id
-score_history.payment_id
-score_history.reward_id
-score_history.created_by
-score_history.requested_point_change
-score_history.outstanding_points
-score_history.reconciliation_status
-score_history.expired_at
-
-user_scores.version
-membership_tiers.max_points
-membership_tiers.benefit_description
-```
-
-### 6.4. Vấn đề idempotency
-
-Schema hiện tại không có unique field để ngăn:
+Quy tắc:
 
 ```txt
-Cộng điểm hai lần cho cùng booking
+event_id
+→ nullable cho transaction không phát sinh từ upstream event
+→ unique khi khác NULL
+
+idempotency_key
+→ NOT NULL
+→ unique cho mọi score transaction
+
+reference_history_id
+→ nullable
+→ self-reference tới score_history.id
+
+request_id
+→ nullable
+→ unique khi khác NULL
+→ bắt buộc với Admin Adjustment
 ```
 
-Chỉ có `booking_id`, nhưng không unique và có thể được dùng cho cả earn lẫn refund.
+Không dùng các field trên thay thế lẫn nhau.
 
-Sprint 2 bắt buộc bổ sung:
+### 6.4. Original Transaction Lookup
+
+Refund/Revoke có thể thực hiện:
 
 ```txt
-score_history.idempotency_key
+Receive originalEarnEventId/originalRedeemEventId
+→ Find score_history by event_id
+→ Validate transaction type và business context
+→ Resolve original history record
+→ Save original history.id vào reference_history_id
 ```
 
-và unique constraint ở database level.
+### 6.5. Admin Adjustment Audit Support
 
-Ví dụ:
+Schema đã hỗ trợ đầy đủ:
 
 ```txt
-EARN:BOOKING:1001
-REFUND:BOOKING:1001
-REDEEM:BOOKING:1001:REQUEST-ABC
+created_by
+request_id
+reason
 ```
 
-Không sử dụng `booking_id + transaction_type` làm cơ chế idempotency chính thức vì một booking có thể phát sinh nhiều loại transaction và retry khác nhau.
+Trong đó:
 
----
+* `created_by` lưu Admin/Employee thực hiện adjustment.
+* `request_id` dùng audit/idempotency và unique khi khác `NULL`.
+* `reason` là bắt buộc ở API layer.
+
+### 6.6. Partial Revoke Reconciliation
+
+Schema đã hỗ trợ:
+
+```txt
+requested_point_change
+outstanding_points
+reconciliation_status
+```
+
+Quy ước:
+
+* `point_change`: thay đổi thực tế đã áp dụng.
+* `requested_point_change`: thay đổi nghiệp vụ yêu cầu.
+* `outstanding_points`: phần chưa xử lý.
+* `reconciliation_status`: `NONE`, `PENDING`, `RESOLVED`.
+
+### 6.7. Điểm ngoài scope schema Sprint 2
+
+Không triển khai:
+
+```txt
+Point expiration batches
+Point FIFO
+Tier period reset
+Tier disable
+Reward catalog
+```
+
+Point Expiry vẫn ngoài scope Sprint 2.
+
+
 
 ## 7. Database-per-Service và Logical Reference
 
@@ -499,18 +670,26 @@ Tier có minPoints lớn nhất
 mà minPoints <= accumulatedPoints
 ```
 
-Ví dụ:
+Ngưỡng tier chính thức Sprint 2:
 
 | Tier    | Min Points | Earning Rate |
 | ------- | ---------: | -----------: |
 | SILVER  |          0 |         0.05 |
-| GOLD    |        200 |         0.07 |
-| DIAMOND |        500 |         0.10 |
+| GOLD    |        400 |         0.07 |
+| DIAMOND |       1000 |         0.10 |
+
+Quy tắc:
+
+```txt
+SILVER  : accumulatedPoints >= 0
+GOLD    : accumulatedPoints >= 400
+DIAMOND : accumulatedPoints >= 1000
+```
 
 User có:
 
 ```txt
-accumulatedPoints = 350
+accumulatedPoints = 450
 ```
 
 thì tier là:
@@ -599,9 +778,9 @@ Sprint 2 cho phép tier downgrade khi `accumulatedPoints` giảm do `REVOKE_EARN
 Ví dụ:
 
 ```txt
-600 points → DIAMOND
-Revoke 400 accumulated points
-200 points → GOLD
+1200 points → DIAMOND
+Revoke 800 accumulated points
+400 points → GOLD
 ```
 
 ---
@@ -836,13 +1015,13 @@ GET /api/membership-tiers
     {
       "tierId": 2,
       "tierName": "GOLD",
-      "minPoints": 200,
+      "minPoints": 400,
       "earningRate": 0.07
     },
     {
       "tierId": 3,
       "tierName": "DIAMOND",
-      "minPoints": 500,
+      "minPoints": 1000,
       "earningRate": 0.10
     }
   ]
@@ -880,18 +1059,18 @@ Frontend không truyền user ID.
   "data": {
     "userId": 15,
     "currentPoints": 150,
-    "accumulatedPoints": 350,
+    "accumulatedPoints": 450,
     "currentTier": {
       "tierId": 2,
       "tierName": "GOLD",
-      "minPoints": 200,
+      "minPoints": 400,
       "earningRate": 0.07
     },
     "nextTier": {
       "tierId": 3,
       "tierName": "DIAMOND",
-      "minPoints": 500,
-      "pointsRequired": 150
+      "minPoints": 1000,
+      "pointsRequired": 550
     },
     "updatedAt": "2026-06-21T20:30:00"
   }
@@ -931,7 +1110,7 @@ GET /api/scores/me/tier
     "tierName": "GOLD",
     "minPoints": 200,
     "earningRate": 0.07,
-    "accumulatedPoints": 350,
+    "accumulatedPoints": 450,
     "nextTier": {
       "tierId": 3,
       "tierName": "DIAMOND",
@@ -973,6 +1152,7 @@ GET /api/scores/me/history
     "content": [
       {
         "historyId": 7001,
+        "eventId": "PAYMENT-SUCCESS-3001",
         "bookingId": 1001,
         "pointChange": 12,
         "transactionType": "EARN_BY_BOOKING",
@@ -986,6 +1166,7 @@ GET /api/scores/me/history
       },
       {
         "historyId": 7002,
+        "eventId": "SCORE-REDEEM-BOOKING-1002",
         "bookingId": 1002,
         "pointChange": -50,
         "transactionType": "REDEEM_FOR_BOOKING",
@@ -1524,7 +1705,7 @@ Dùng cho Booking hoặc service nội bộ cần kiểm tra balance.
   "data": {
     "userId": 15,
     "currentPoints": 150,
-    "accumulatedPoints": 350,
+    "accumulatedPoints": 450,
     "tierName": "GOLD",
     "earningRate": 0.07
   }
@@ -1550,7 +1731,7 @@ GET /api/admin/scores/users/{userId}
   "data": {
     "userId": 15,
     "currentPoints": 150,
-    "accumulatedPoints": 350,
+    "accumulatedPoints": 450,
     "currentTier": {
       "tierId": 2,
       "tierName": "GOLD",
@@ -1635,22 +1816,31 @@ POST /api/admin/scores/users/{userId}/adjustments
     "adjustmentType": "ADD",
     "pointChange": 100,
     "currentPoints": 250,
-    "accumulatedPoints": 350,
+    "accumulatedPoints": 450,
     "historyId": 7007
   }
 }
 ```
 
-### Schema Limitation
+### Schema Support
 
-Schema hiện chưa có:
+Schema hiện đã hỗ trợ đầy đủ Admin Adjustment audit và idempotency:
 
 ```txt
 created_by
 request_id
+reason
 ```
 
-Nếu cần audit/idempotency đầy đủ, phải schema alignment.
+`request_id` có unique constraint khi khác `NULL`.
+
+Admin Adjustment có thể để:
+
+```txt
+event_id = NULL
+```
+
+vì transaction này không bắt buộc đến từ upstream business event.
 
 ---
 
@@ -1865,7 +2055,7 @@ originalEarnEventId + revoke eventId
 requestId unique
 ```
 
-Schema Sprint 0 chưa có idempotency key.
+Schema Sprint 2 đã có database-level idempotency.
 
 Schema Alignment bắt buộc bổ sung `score_history.idempotency_key UNIQUE NOT NULL` trước implementation. Không dùng `bookingId + transactionType` làm cơ chế thay thế chính thức.
 
@@ -2067,13 +2257,14 @@ Quy tắc:
 
 ---
 
-# 36. Schema Alignment Bắt Buộc Trước Implementation
+# 36. Schema Alignment Chính Thức
 
-Score implementation chưa được bắt đầu trước khi Schema Alignment MR được merge.
+Score Schema Alignment đã hoàn thành và khớp với API Contract.
 
-## 36.1. Bắt buộc bổ sung vào `score_history`
+## 36.1. `score_history` Fields Chính Thức
 
 ```txt
+event_id VARCHAR(150) NULL
 idempotency_key VARCHAR(100) UNIQUE NOT NULL
 balance_before INT NOT NULL
 balance_after INT NOT NULL
@@ -2082,74 +2273,219 @@ accumulated_after INT NOT NULL
 reference_history_id BIGINT NULL
 created_by BIGINT NULL
 request_id VARCHAR(100) NULL
-requested_point_change INT NULL
-outstanding_points INT NOT NULL DEFAULT 0
-reconciliation_status VARCHAR(30) NOT NULL DEFAULT 'NONE' 
-```
-
-## 36.2. Partial Revoke Reconciliation
-
-Bổ sung vào `score_history`:
-
-```txt
+reason VARCHAR(255) NULL
 requested_point_change INT NULL
 outstanding_points INT NOT NULL DEFAULT 0
 reconciliation_status VARCHAR(30) NOT NULL DEFAULT 'NONE'
 ```
 
-Quy ước:
-
-- `point_change`: số điểm thực tế đã áp dụng.
-- `requested_point_change`: số điểm nghiệp vụ yêu cầu thay đổi.
-- `outstanding_points`: phần chưa thu hồi.
-- `reconciliation_status`: `NONE`, `PENDING`, `RESOLVED`.
-
-Bổ sung index:
+## 36.2. Business Event ID
 
 ```txt
-INDEX(reconciliation_status, created_at)
+score_history.event_id
 ```
 
-## 36.3. Constraint và index
+là Business Event ID nhận từ upstream service.
+
+Use cases:
+
+```txt
+EARN
+REDEEM
+REFUND_REDEEM
+REVOKE_EARN
+```
+
+Admin Adjustment có thể dùng:
+
+```txt
+event_id = NULL
+```
+
+Constraint:
+
+```txt
+UNIQUE(event_id)
+```
+
+Theo behavior của MySQL:
+
+* Nhiều giá trị `NULL` được phép.
+* Hai giá trị non-null giống nhau bị từ chối.
+
+## 36.3. Database-level Idempotency
+
+```txt
+score_history.idempotency_key
+```
+
+bắt buộc:
+
+```txt
+NOT NULL
+UNIQUE
+```
+
+Mọi transaction thay đổi score phải có một idempotency key ổn định.
+
+Duplicate request/event không được thay đổi balance lần hai.
+
+## 36.4. Original Transaction Reference
+
+```txt
+score_history.reference_history_id
+```
+
+là self-reference nội bộ tới:
+
+```txt
+score_history.id
+```
+
+Dùng cho:
+
+```txt
+REFUND_REDEEM
+REVOKE_EARN_BY_REFUND
+```
+
+Flow:
+
+```txt
+original business event ID
+→ find score_history.event_id
+→ resolve score_history.id
+→ save reference_history_id
+```
+
+## 36.5. Admin Adjustment Audit
+
+Schema đã hỗ trợ:
+
+```txt
+created_by
+request_id
+reason
+```
+
+Constraint:
+
+```txt
+UNIQUE(request_id)
+```
+
+`request_id` nullable cho transaction không phải Admin Adjustment.
+
+## 36.6. Partial Revoke Reconciliation
+
+```txt
+requested_point_change
+outstanding_points
+reconciliation_status
+```
+
+Values:
+
+```txt
+NONE
+PENDING
+RESOLVED
+```
+
+Index:
+
+```txt
+(reconciliation_status, created_at)
+```
+
+## 36.7. Balance Audit Snapshot
+
+Mọi history record phải lưu:
+
+```txt
+balance_before
+balance_after
+accumulated_before
+accumulated_after
+```
+
+Balance update và history insert phải nằm trong cùng transaction.
+
+## 36.8. Constraints và Indexes
 
 ```txt
 UNIQUE(idempotency_key)
+UNIQUE(event_id)
 UNIQUE(request_id)
+
 INDEX(user_id, created_at)
 INDEX(user_id, transaction_type, created_at)
 INDEX(booking_id)
 INDEX(reconciliation_status, created_at)
 ```
 
-`reference_history_id` là self-reference nội bộ tới `score_history.id`.
+## 36.9. Database Boundary
 
-Không tạo physical FK cho `booking_id` hoặc `created_by` sang database service khác.
-
-## 36.4. Transaction Types Chính Thức
+Không tạo physical foreign key sang:
 
 ```txt
-EARN_BY_BOOKING
-REDEEM_FOR_BOOKING
-REFUND_REDEEM
-REVOKE_EARN_BY_REFUND
-MANUAL_ADD
-MANUAL_DEDUCT
-EXPIRED
+User Service
+Booking Service
+Payment Service
 ```
 
-## 36.5. Blocker Rule
-
-Implementation issue chỉ được chuyển sang `Ready` khi:
+Logical references:
 
 ```txt
-Contract MR đã được approve và merge
+user_scores.user_id
+score_history.booking_id
+score_history.created_by
+```
+
+Internal foreign keys được phép:
+
+```txt
+user_scores.current_tier_id → membership_tiers.id
+score_history.user_id → user_scores.user_id
+score_history.reference_history_id → score_history.id
+```
+
+## 36.10. Membership Tier Thresholds
+
+Ngưỡng chính thức:
+
+```txt
+SILVER  : accumulated_points >= 0
+GOLD    : accumulated_points >= 400
+DIAMOND : accumulated_points >= 1000
+```
+
+Seed/configuration của `membership_tiers` phải sử dụng cùng bộ ngưỡng này.
+
+## 36.11. Removed from Sprint 2
+
+Không có:
+
+```txt
+score_expirations
+hardcoded current_tier_id default
+point expiry worker
+tier disable
+```
+
+## 36.12. Ready for Implementation
+
+Implementation issue có thể chuyển sang `Ready` khi:
+
+```txt
+Score API Contract MR đã merge
 +
 Score Schema Alignment MR đã merge
 +
 Score Service Owner xác nhận Ready for Implementation
 ```
 
----
+
 
 # 37. Out of Scope
 
@@ -2208,31 +2544,35 @@ Khang xác nhận feasibility
 
 # 39. Acceptance Criteria
 
-* [ ] Có schema Sprint 0 baseline.
-* [ ] Có naming clarification Score vs Rating.
-* [ ] Có score balance API.
-* [ ] Có score history API.
-* [ ] Có membership tier APIs.
-* [ ] Có earn API direction.
-* [ ] Có redeem API direction.
-* [ ] Có refund redeem direction.
-* [ ] Có revoke earn direction.
-* [ ] Có admin adjustment API.
-* [ ] Có tier calculation rule.
-* [ ] Có earning point formula.
-* [ ] Có redeem conversion rule.
-* [ ] Có non-negative balance rule.
-* [ ] Có transaction/history atomic rule.
-* [ ] Có concurrency rule.
-* [ ] Có idempotency rule.
-* [ ] Có logical reference notes.
-* [ ] Có Booking/Payment integration direction.
-* [ ] Có internal/admin security rules.
-* [ ] Có error code catalog.
-* [ ] Có schema mismatch notes.
-* [ ] Khang review feasibility.
-* [ ] Contract sẵn sàng implementation.
-* [ ] MR target `develop`.
+* [x] Có schema Sprint 0 baseline.
+* [x] Có naming clarification Score vs Rating.
+* [x] Có score balance API.
+* [x] Có score history API.
+* [x] Có membership tier APIs.
+* [x] Có earn API direction.
+* [x] Có redeem API direction.
+* [x] Có refund redeem direction.
+* [x] Có revoke earn direction.
+* [x] Có admin adjustment API.
+* [x] Có tier calculation rule.
+* [x] Có earning point formula.
+* [x] Có redeem conversion rule.
+* [x] Có non-negative balance rule.
+* [x] Có transaction/history atomic rule.
+* [x] Có concurrency rule.
+* [x] Có idempotency rule.
+* [x] Có Business Event ID tracking bằng `eventId`.
+* [x] Có phân biệt `eventId`, `idempotencyKey`, `referenceHistoryId`, `requestId`.
+* [x] Có Admin Adjustment audit support.
+* [x] Có tier thresholds 0 / 400 / 1000.
+* [x] Có logical reference notes.
+* [x] Có Booking/Payment integration direction.
+* [x] Có internal/admin security rules.
+* [x] Có error code catalog.
+* [x] Có schema mismatch notes.
+* [x] Khang review feasibility.
+* [x] Contract sẵn sàng implementation.
+* [x] MR target `develop`.
 
 ---
 
@@ -2249,13 +2589,25 @@ Score Service Owner đã xác nhận:
 
 Từ phía Score Service không còn business decision mở.
 
-Contract chỉ được chuyển sang `Approved` sau khi:
+7. `score_history.event_id` là Business Event ID từ upstream, nullable và unique khi khác `NULL`.
+8. `event_id`, `idempotency_key`, `reference_history_id` và `request_id` có mục đích riêng, không thay thế lẫn nhau.
+9. Membership Tier thresholds chính thức:
+
+   ```txt
+   SILVER  >= 0
+   GOLD    >= 400
+   DIAMOND >= 1000
+   ```
+
+10. Score Schema Alignment đã hoàn thành.
+
+Contract status:
 
 ```txt
-Score Service Owner re-review và approve MR
+Approved / Ready for Implementation
 ```
 
-Backend implementation chỉ được mở khóa sau khi:
+Backend implementation được mở khóa sau khi:
 
 ```txt
 Contract MR merge
@@ -2274,5 +2626,6 @@ Score Service Owner xác nhận Ready for Implementation
 | 21/06/2026 | Khởi tạo Score Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
 | 22/06/2026 | Cập nhật theo Production Readiness Review của Score Service Owner; chốt business rules, idempotency, audit snapshot, reference transaction, concurrency và schema alignment bắt buộc | Dương Thiện Nhân |
 | 23/06/2026 | Chốt Earn trigger boundary, partial revoke reconciliation, Admin Adjustment, lazy initialization, Point Expiry và Tier delete policy theo Owner re-review | Dương Thiện Nhân |
+| 24/06/2026 | Đồng bộ Business Event ID, schema hiện tại, Admin audit, tier thresholds và approve implementation | Dương Thiện Nhân |
 
 Các thay đổi schema chỉ được ghi nhận tại đây sau khi schema MR tương ứng đã được merge.
