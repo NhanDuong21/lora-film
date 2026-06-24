@@ -70,6 +70,7 @@ CREATE TABLE `score_history` (
 
     `balance_before` INT NOT NULL,
     `balance_after` INT NOT NULL,
+
     `accumulated_before` INT NOT NULL,
     `accumulated_after` INT NOT NULL,
 
@@ -124,9 +125,6 @@ CREATE TABLE `score_history` (
 
     INDEX `idx_score_history_booking`
         (`booking_id`),
-
-    INDEX `idx_score_history_event`
-        (`event_id`),
 
     INDEX `idx_score_history_reconciliation`
         (`reconciliation_status`, `created_at`)
