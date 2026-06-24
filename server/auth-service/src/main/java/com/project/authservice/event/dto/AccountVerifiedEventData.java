@@ -5,12 +5,15 @@ import java.time.LocalDate;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 /**
- * Immutable data payload embedded inside {@link AccountCreatedEvent}.
+ * Immutable data payload embedded inside {@link AccountVerifiedEvent}.
  *
  * <p>Field names MUST match the event contract exactly – do not rename.
  * <p>No setters are provided; use the {@link Builder} for construction.
  */
-public class AccountCreatedEventData {
+public class AccountVerifiedEventData {
+
+    /** Request correlation id. */
+    private final String requestId;
 
     /** Internal account identifier (primary key). */
     private final Long accountId;
@@ -57,7 +60,8 @@ public class AccountCreatedEventData {
     private final Integer birthYear;
 
     /** All-args constructor used by {@link Builder}. */
-    public AccountCreatedEventData(Long accountId,
+    public AccountVerifiedEventData(String requestId,
+                                   Long accountId,
                                    String email,
                                    String role,
                                    String fullName,
@@ -69,6 +73,7 @@ public class AccountCreatedEventData {
                                    String gender,
                                    LocalDate birthday,
                                    Integer birthYear) {
+        this.requestId    = requestId;
         this.accountId    = accountId;
         this.email        = email;
         this.role         = role;
@@ -85,6 +90,7 @@ public class AccountCreatedEventData {
 
     // ── Getters ──────────────────────────────────────────────────────────────
 
+    public String  getRequestId()   { return requestId; }
     public Long    getAccountId()   { return accountId; }
     public String  getEmail()       { return email; }
     public String  getRole()        { return role; }
@@ -105,6 +111,7 @@ public class AccountCreatedEventData {
     }
 
     public static final class Builder {
+        private String   requestId;
         private Long     accountId;
         private String   email;
         private String   role;
@@ -120,6 +127,7 @@ public class AccountCreatedEventData {
 
         private Builder() {}
 
+        public Builder requestId(String requestId)     { this.requestId = requestId;       return this; }
         public Builder accountId(Long accountId)       { this.accountId = accountId;       return this; }
         public Builder email(String email)             { this.email = email;               return this; }
         public Builder role(String role)               { this.role = role;                 return this; }
@@ -133,9 +141,9 @@ public class AccountCreatedEventData {
         public Builder birthday(LocalDate birthday)    { this.birthday = birthday;         return this; }
         public Builder birthYear(Integer birthYear)    { this.birthYear = birthYear;       return this; }
 
-        public AccountCreatedEventData build() {
-            return new AccountCreatedEventData(
-                    accountId, email, role, fullName, phoneNumber,
+        public AccountVerifiedEventData build() {
+            return new AccountVerifiedEventData(
+                    requestId, accountId, email, role, fullName, phoneNumber,
                     cccd, cccdMasked, provinceCode, provinceName,
                     gender, birthday, birthYear);
         }

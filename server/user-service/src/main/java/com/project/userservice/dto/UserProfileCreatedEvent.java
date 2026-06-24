@@ -1,12 +1,23 @@
 package com.project.userservice.dto;
 
-public class AccountVerifiedEvent {
+import java.time.Instant;
+
+public class UserProfileCreatedEvent {
     private String eventId;
-    private String eventType;
-    private String eventVersion;
-    private String source;
+    private String eventType = "USER_PROFILE_CREATED";
+    private String eventVersion = "1.0";
+    private String source = "user-service";
     private String occurredAt;
-    private AccountVerifiedPayload data;
+    private UserProfileCreatedEventPayload data;
+
+    public UserProfileCreatedEvent() {
+    }
+
+    public UserProfileCreatedEvent(String eventId, String occurredAt, UserProfileCreatedEventPayload data) {
+        this.eventId = eventId;
+        this.occurredAt = occurredAt;
+        this.data = data;
+    }
 
     public String getEventId() { return eventId; }
     public void setEventId(String eventId) { this.eventId = eventId; }
@@ -18,6 +29,6 @@ public class AccountVerifiedEvent {
     public void setSource(String source) { this.source = source; }
     public String getOccurredAt() { return occurredAt; }
     public void setOccurredAt(String occurredAt) { this.occurredAt = occurredAt; }
-    public AccountVerifiedPayload getData() { return data; }
-    public void setData(AccountVerifiedPayload data) { this.data = data; }
+    public UserProfileCreatedEventPayload getData() { return data; }
+    public void setData(UserProfileCreatedEventPayload data) { this.data = data; }
 }

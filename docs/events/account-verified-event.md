@@ -2,7 +2,7 @@
 
 Tài liệu này quy định cấu trúc gói tin (Message Schema), định dạng phân phối và các nguyên tắc xử lý bất đồng bộ đối với luồng đăng ký tài khoản trong hệ thống LoraFilm. 
 
-> **Lưu ý Lịch sử (23/06/2026):** Event `ACCOUNT_CREATED` cũ đã được thay thế bằng bộ 3 sự kiện Kafka theo mô hình Request-Reply Pattern nhằm đảm bảo tính toàn vẹn dữ liệu (không trùng lặp phone/CCCD) và tránh tạo "orphan accounts" (hồ sơ rác).
+> **Lưu ý Lịch sử (23/06/2026):** Event `ACCOUNT_VERIFIED` cũ đã được thay thế bằng bộ 3 sự kiện Kafka theo mô hình Request-Reply Pattern nhằm đảm bảo tính toàn vẹn dữ liệu (không trùng lặp phone/CCCD) và tránh tạo "orphan accounts" (hồ sơ rác).
 
 ---
 
@@ -14,7 +14,7 @@ Luồng xử lý nghiệp vụ đăng ký hiện tại diễn ra theo 3 giai đo
    - Ứng dụng React -> API Gateway -> Auth Service.
    - Auth Service phát hành Event `REGISTRATION_VALIDATION_REQUESTED` lên Kafka.
 2. **Giai đoạn 2: Trả kết quả Validate**
-   - User Service tiêu thụ (consume) Event, kiểm tra Phone/CCCD trong Database và Redis (reservation).
+   - User Service tiêu thụ (AccountVerifiedEvent, kiểm tra Phone/CCCD trong Database và Redis (reservation).
    - User Service phát hành Event `REGISTRATION_VALIDATION_RESULT` trả lại cho Auth Service.
    - Auth Service nhận kết quả. Nếu `SUCCESS` -> Tạo tài khoản, gửi OTP. Nếu `FAILED` -> Hủy đăng ký.
 3. **Giai đoạn 3: Xác thực OTP & Tạo User Profile**
@@ -26,7 +26,7 @@ Luồng xử lý nghiệp vụ đăng ký hiện tại diễn ra theo 3 giai đo
 
 ## 2. Thông Tin Cấu Hình Hàng Đợi Kafka (Kafka Stream Configurations)
 
-| Thuộc tính | Sự kiện 1 (Validate Request) | Sự kiện 2 (Validate Result) | Sự kiện 3 (Account Verified) |
+| Thuộc tính | Sự kiện 1 (Validate Request) | Sự kiện 2 (Validate Result) | Sự kiện 3 (AccountVerifiedPayload) |
 | :--- | :--- | :--- | :--- |
 | **Topic** | `auth.registration.validation.requested.v1` | `auth.registration.validation.result.v1` | `auth.account.verified.v1` |
 | **Loại Sự Kiện** | `REGISTRATION_VALIDATION_REQUESTED` | `REGISTRATION_VALIDATION_RESULT` | `ACCOUNT_VERIFIED` |
