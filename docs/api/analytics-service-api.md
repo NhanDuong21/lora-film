@@ -264,7 +264,32 @@ Revenue = 216000
 
 Promotion discount và Membership discount đã được phản ánh trong `paidAmount`.
 
-Hệ thống không có Score Redeem và không dùng điểm để thanh toán vé.
+Analytics không tự tính toán Promotion discount,
+Membership discount hoặc Score Redeem.
+
+Revenue luôn được aggregate từ paidAmount cuối cùng
+được Payment Service xác nhận.
+
+Nếu booking sử dụng Promotion, Membership discount
+hoặc Score Redeem thì các khoản giảm giá này phải
+được phản ánh vào paidAmount trước khi
+PAYMENT_SUCCEEDED được publish.
+
+Analytics không lưu riêng giá trị Promotion,
+Membership discount hoặc Score Redeem trong Sprint 2.
+
+Ví dụ:
+
+Original amount = 240000
+
+Promotion discount = 10000
+
+Score Redeem = 20000
+
+Final paidAmount = 210000
+
+Revenue aggregate = 210000
+
 
 ### 5.5. Kafka Aggregation
 
@@ -1440,6 +1465,25 @@ movie_daily_revenue_stats.ticketsSold -= refundedTicketCount
 
 Không để lifetime ticket count nhỏ hơn `0`.
 
+Validation Rule
+
+Consumer phải bảo đảm:
+
+movie_revenue_stats.total_tickets_sold >= 0
+
+movie_daily_revenue_stats.tickets_sold >= 0
+
+Refund event không được làm ticket count âm.
+
+Nếu aggregate hiện tại nhỏ hơn số lượng ticket
+cần giảm thì event phải:
+
+- bị reject
+hoặc
+- được chuyển sang reconciliation flow
+
+không được ghi dữ liệu âm vào aggregate table.
+
 Daily net revenue có thể âm.
 
 ---
@@ -1541,6 +1585,23 @@ Nếu một bước lỗi:
 ```txt
 Rollback toàn bộ
 ```
+Implementation Requirement
+
+processed_analytics_events insertion
+
+daily_revenue_stats update
+
+movie_revenue_stats update
+
+movie_daily_revenue_stats update
+
+phải nằm trong cùng một database transaction.
+
+Không được mark event là processed nếu
+bất kỳ aggregate update nào thất bại.
+
+Event chỉ được coi là aggregate thành công
+sau khi toàn bộ transaction commit thành công.
 
 Không được:
 
@@ -1892,7 +1953,33 @@ Revenue = 216000
 
 Tương tự, nếu có Promotion discount, Analytics vẫn chỉ nhận và aggregate `paidAmount` cuối cùng.
 
-Hệ thống không có Score Redeem, không dùng điểm để thanh toán vé và không quy đổi score thành tiền.
+Analytics không phân biệt nguồn discount.
+
+Revenue được aggregate từ paidAmount cuối cùng
+do Payment Service xác nhận.
+
+paidAmount có thể đã bao gồm:
+
+* Promotion discount
+* Membership discount
+* Score Redeem
+* Các cơ chế giảm giá khác trong tương lai
+
+Analytics không lưu riêng từng loại discount
+và không thực hiện tính toán discount.
+
+Ví dụ:
+
+Original amount = 240000
+
+Membership discount = 10000
+
+Score Redeem = 20000
+
+Final paidAmount = 210000
+
+Revenue aggregate = 210000
+
 
 # 33. Booking and Ticket Count Rules
 
