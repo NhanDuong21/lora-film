@@ -1,6 +1,7 @@
 package com.project.userservice.dto;
 
-public class AccountCreatedPayload {
+public class AccountVerifiedPayload {
+    private String requestId;
     private Long accountId;
     private String email;
     private String role;
@@ -13,6 +14,14 @@ public class AccountCreatedPayload {
     private String gender;
     private String birthday; // Storing as String to avoid Jackson JavaTimeModule issues with default Kafka JsonDeserializer
     private Integer birthYear;
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
 
     public Long getAccountId() {
         return accountId;

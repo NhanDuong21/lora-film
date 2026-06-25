@@ -21,6 +21,9 @@ public class UserEventPublisher {
     @Value("${app.kafka.topic.registration-validation-result}")
     private String registrationValidationResultTopic;
 
+    @Value("${app.kafka.topic.user-profile-created:user.profile.created.v1}")
+    private String userProfileCreatedTopic;
+
     public UserEventPublisher(KafkaTemplate<String, Object> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
@@ -41,6 +44,25 @@ public class UserEventPublisher {
         } catch (Exception ex) {
             log.error("Failed to publish REGISTRATION_VALIDATION_RESULT event for requestId={}", requestId, ex);
             throw new RuntimeException("Kafka publish failed for requestId=" + requestId, ex);
+        }
+    }
+
+    public void publishUserProfileCreated(Long accountId, String requestId, String createdAt) {
+        log.info("Building USER_PROFILE_CREATED event for accountId={}", accountId);
+
+        com.project.userservice.dto.UserProfileCreatedEventPayload payload = new com.project.userservice.dto.UserProfileCreatedEventPayload(accountId, requestId, createdAt);
+        com.project.userservice.dto.UserProfileCreatedEvent event = new com.project.userservice.dto.UserProfileCreatedEvent(
+                UUID.randomUUID().toString(),
+                Instant.now().toString(),
+                payload
+        );
+
+        try {
+            kafkaTemplate.send(userProfileCreatedTopic, String.valueOf(accountId), event).get();
+            log.info("Published USER_PROFILE_CREATED event for accountId={}", accountId);
+        } catch (Exception ex) {
+            log.error("Failed to publish USER_PROFILE_CREATED event for accountId={}", accountId, ex);
+            throw new RuntimeException("Kafka publish failed for accountId=" + accountId, ex);
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.project.userservice.kafka;
 
 import com.project.userservice.dto.AccountVerifiedEvent;
+import com.project.userservice.dto.AccountVerifiedPayload;
 import com.project.userservice.entity.User;
 import com.project.userservice.enumtype.Gender;
 import com.project.userservice.repository.UserRepository;
@@ -9,7 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.Acknowledgment;
+
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,25 +23,27 @@ public class AccountVerifiedConsumer {
     private final UserRepository userRepository;
     private final ReservationService reservationService;
     private final ObjectMapper objectMapper;
+    private final UserEventPublisher userEventPublisher;
 
-    public AccountVerifiedConsumer(UserRepository userRepository, ReservationService reservationService, ObjectMapper objectMapper) {
+    public AccountVerifiedConsumer(UserRepository userRepository, ReservationService reservationService, ObjectMapper objectMapper, UserEventPublisher userEventPublisher) {
         this.userRepository = userRepository;
         this.reservationService = reservationService;
         this.objectMapper = objectMapper;
+        this.userEventPublisher = userEventPublisher;
     }
 
     @KafkaListener(topics = "${app.kafka.topic.account-verified}", groupId = "user-service-account-verified-consumer")
     @Transactional
-    public void consume(String message, Acknowledgment acknowledgment) {
+    public void consume(String message) {
         try {
             AccountVerifiedEvent event = objectMapper.readValue(message, AccountVerifiedEvent.class);
             if (!"ACCOUNT_VERIFIED".equals(event.getEventType())) {
                 log.warn("Ignored event type: {}", event.getEventType());
-                acknowledgment.acknowledge();
                 return;
             }
 
-            if (event.getData() == null || event.getData().getAccountId() == null) {
+            AccountVerifiedPayload payload = event.getData();
+            if (payload == null || payload.getAccountId() == null) {
                 log.error("Invalid event data: accountId is null for eventId {}", event.getEventId());
                 throw new IllegalArgumentException("Invalid event data: accountId is null");
             }
@@ -53,21 +56,18 @@ public class AccountVerifiedConsumer {
             if (userRepository.existsById(accountId)) {
                 log.warn("Duplicate event skipped. User profile already exists for accountId: {}. EventId: {}", accountId, event.getEventId());
                 reservationService.release(phoneNumber, cccd);
-                acknowledgment.acknowledge();
                 return;
             }
 
             if (phoneNumber != null && userRepository.existsByPhoneNumber(phoneNumber)) {
                 log.warn("Phone number already exists. Skipping event for accountId: {}. EventId: {}", accountId, event.getEventId());
                 reservationService.release(phoneNumber, cccd);
-                acknowledgment.acknowledge();
                 return;
             }
 
             if (cccd != null && userRepository.existsByCccd(cccd)) {
                 log.warn("CCCD already exists. Skipping event for accountId: {}. EventId: {}", accountId, event.getEventId());
                 reservationService.release(phoneNumber, cccd);
-                acknowledgment.acknowledge();
                 return;
             }
 
@@ -106,10 +106,13 @@ public class AccountVerifiedConsumer {
             // Clean up Redis reservations
             reservationService.release(phoneNumber, cccd);
 
+            String requestId = event.getData().getRequestId();
+            String createdAt = java.time.Instant.now().toString();
+            userEventPublisher.publishUserProfileCreated(accountId, requestId, createdAt);
+
             log.info("Successfully created user profile for accountId: {}. Masked CCCD: {}", accountId, event.getData().getCccdMasked());
-            acknowledgment.acknowledge();
             
-        } catch (Exception e) {
+        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException e) {
             log.error("Error processing event message: {}", message, e);
             throw new RuntimeException(e); // Rethrow to trigger retry and DLQ
         }

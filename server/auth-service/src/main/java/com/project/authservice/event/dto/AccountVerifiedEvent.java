@@ -13,9 +13,9 @@ public class AccountVerifiedEvent {
     @JsonSerialize(using = ToStringSerializer.class)
     private final Instant occurredAt;
     
-    private final AccountCreatedEventData data; // Reuse AccountCreatedEventData structure
+    private final AccountVerifiedEventData data; // Reuse AccountVerifiedEventData structure
 
-    public AccountVerifiedEvent(String eventId, Instant occurredAt, AccountCreatedEventData data) {
+    public AccountVerifiedEvent(String eventId, Instant occurredAt, AccountVerifiedEventData data) {
         this.eventId = eventId;
         this.occurredAt = occurredAt;
         this.data = data;
@@ -26,20 +26,20 @@ public class AccountVerifiedEvent {
     public String getEventVersion() { return eventVersion; }
     public String getSource() { return source; }
     public Instant getOccurredAt() { return occurredAt; }
-    public AccountCreatedEventData getData() { return data; }
+    public AccountVerifiedEventData getData() { return data; }
 
     public static Builder builder() { return new Builder(); }
 
     public static final class Builder {
         private String eventId;
         private Instant occurredAt;
-        private AccountCreatedEventData data;
+        private AccountVerifiedEventData data;
 
         private Builder() {}
 
         public Builder eventId(String eventId) { this.eventId = eventId; return this; }
         public Builder occurredAt(Instant occurredAt) { this.occurredAt = occurredAt; return this; }
-        public Builder data(AccountCreatedEventData data) { this.data = data; return this; }
+        public Builder data(AccountVerifiedEventData data) { this.data = data; return this; }
 
         public AccountVerifiedEvent build() {
             return new AccountVerifiedEvent(eventId, occurredAt, data);
