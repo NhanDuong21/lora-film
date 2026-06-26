@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .accessDeniedHandler(accessDeniedHandler)
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.GET, "/api/genres/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/genres/**", "/api/movies/**").permitAll()
                 .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENRE_MANAGE")
                 .anyRequest().authenticated()
             )
