@@ -10,7 +10,7 @@ public class UpdateNotificationTemplateRequest {
 
     @NotBlank(message = "Template code is required")
     @Size(max = 100, message = "Template code must not exceed 100 characters")
-    @Pattern(regexp = "^[A-Za-z0-9_]+$", message = "Template code must only contain alphanumeric characters and underscores")
+    @Pattern(regexp = "^\\s*[A-Za-z0-9_]+\\s*$", message = "Template code must only contain alphanumeric characters and underscores")
     private String templateCode;
 
     @NotBlank(message = "Title is required")

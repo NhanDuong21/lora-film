@@ -155,7 +155,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         template.setChannelType(request.getChannelType());
         template.setIsActive(request.getIsActive());
 
-        NotificationTemplate saved = repository.save(template);
+        NotificationTemplate saved = repository.saveAndFlush(template);
         return NotificationTemplateMapper.toResponse(saved);
     }
 
@@ -187,7 +187,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         }
 
         template.setIsActive(request.getIsActive());
-        NotificationTemplate saved = repository.save(template);
+        NotificationTemplate saved = repository.saveAndFlush(template);
         return NotificationTemplateMapper.toResponse(saved);
     }
 
