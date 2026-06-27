@@ -52,7 +52,7 @@ Kiểm thử viên đã gửi các yêu cầu trực tiếp đến endpoint `POS
 | **7. Xác thực OTP đúng** | Xác thực thành công tài khoản bằng OTP từ Redis. | **ĐẠT** | Lấy mã OTP lưu tại Redis key `otp:REGISTRATION:...` (mã giả lập `123456`), nhập thành công và được tự động chuyển hướng về `/login`. |
 | **8. Đăng nhập thành công**| Đăng nhập tài khoản đã xác thực. | **ĐẠT** | Nhập thông tin tài khoản vừa xác thực, đăng nhập thành công và chuyển hướng về trang chủ. |
 | **9. Lưu trữ Token** | Kiểm tra Token và dữ liệu được lưu tại `localStorage`. | **ĐẠT** | Ghi nhận sự tồn tại của `authToken`, `refreshToken`, `tokenType: Bearer`, `userEmail`, `userRole` và `userAccountId` trong Local Storage. CCCD gốc không bị lưu. |
-| **10. Hồ sơ thành viên** | Xem chi tiết thông tin cá nhân và kiểm tra trễ Kafka. | **ĐẠT** | Trang `/profile` hiển thị thông tin khớp chính xác: Họ tên `EtwoE Tester`, SĐT `0989009999`, CCCD che mặt nạ `092******234`. Hồ sơ được đồng bộ ngay lập tức. |
+| **10. Hồ sơ thành viên** | Xem chi tiết thông tin cá nhân và kiểm tra trễ Kafka. | **ĐÃ FIX — CHỜ RETEST API THỰC** | Bằng chứng cũ chỉ xác nhận họ tên, SĐT và CCCD nên chưa bao phủ đầy đủ `birthday` và `gender`. Review sau đó phát hiện UI bỏ trống `phoneNumber`, `birthday`, `gender`. Mapping đã được sửa; xem [Retest sau Review Request Changes](#retest-sau-review-request-changes). |
 | **11. Khôi phục phiên** | Tải lại trang (F5) kiểm tra tính bền bỉ của phiên làm việc. | **ĐẠT** | Sau khi F5 trang `/profile`, người dùng vẫn giữ trạng thái đăng nhập, dữ liệu hồ sơ hiển thị đầy đủ mà không bị đá ra ngoài. |
 | **12. Route Guard & Role** | Chặn tài khoản CUSTOMER truy cập trang ADMIN `/admin`. | **ĐẠT** | Truy cập `/admin` bằng tài khoản customer bị chặn hoàn toàn và tự động chuyển hướng về trang chủ `/`. |
 | **13. Đăng xuất (Logout)** | Nhấn nút đăng xuất để hủy phiên làm việc. | **ĐẠT** | Các token trong `localStorage` bị xóa hoàn toàn. Truy cập trực tiếp vào `/profile` lập tức bị điều hướng về `/login`. |
@@ -86,7 +86,7 @@ Avatar người dùng hiển thị chữ cái đầu tên người dùng ("E") t
 ## 5. Phân Tích Lỗi Hệ Thống và Hạn Chế Môi Trường (Defects vs. Environment Blockers)
 
 ### Lỗi Frontend (Frontend Defects)
-* **Không phát hiện lỗi nghiêm trọng**: Luồng xử lý giao diện từ việc validate form, gọi API Gateway, quản lý trạng thái qua `AuthContext` và lưu trữ token hoạt động rất chính xác và mượt mà.
+* **Profile mapping (đã sửa trong mã nguồn)**: Review phát hiện dữ liệu `phoneNumber`, `birthday`, `gender` có trong API response nhưng chưa được liên kết ổn định vào UI. Kết quả retest chi tiết được ghi ở phần bên dưới.
 
 ### Hạn Chế/Rào Cản Môi Trường (Environment Blockers)
 * **Thiếu Tài Khoản Nhân Viên (Staff Account Missing)**:
@@ -98,6 +98,68 @@ Avatar người dùng hiển thị chữ cái đầu tên người dùng ("E") t
 
 ---
 
-## 6. Kết Luận và Đánh Giá Sẵn Sàng (Acceptance & Readiness Sign-off)
+## Retest sau Review Request Changes
 
-Hệ thống xác thực và hồ sơ người dùng của LoraFilm trên Frontend **ĐẠT yêu cầu nghiệm thu chất lượng** cho luồng Đăng ký $\rightarrow$ Xác thực CCCD $\rightarrow$ OTP $\rightarrow$ Đăng nhập $\rightarrow$ Quản lý hồ sơ thành viên. Hệ thống sẵn sàng để đưa lên môi trường Staging và sẵn sàng tích hợp vào nhánh chính `develop`.
+### Vấn đề được review
+
+Backend trả đầy đủ hồ sơ, nhưng Frontend chưa hiển thị ổn định:
+
+- `phoneNumber`
+- `birthday`
+- `gender`
+
+Bằng chứng E2E cũ chỉ kiểm tra một phần dữ liệu Profile và đã đánh dấu ĐẠT quá sớm. Nội dung cũ được giữ trong bảng kịch bản, đồng thời test case 10 được liên kết đến kết quả retest này.
+
+### Nguyên nhân gốc
+
+- `getUserProfile()` trả API wrapper, trong khi từng consumer tự unwrap; `CustomerProfilePage` còn gọi API lần thứ hai thay vì dùng `AuthContext` làm nguồn dữ liệu duy nhất.
+- State cục bộ của email/SĐT khởi tạo trước khi profile bất đồng bộ tải xong và đồng bộ theo object `user` tổng hợp thay vì theo `profile` và email phiên.
+- Birthday chưa được chuẩn hóa rõ ràng cho `input[type="date"]`.
+- Gender được so sánh qua nhãn hiển thị thay vì enum `MALE`, `FEMALE`, `OTHER`.
+- CCCD có fallback giả hard-code khi API chưa có dữ liệu.
+
+### Thay đổi đã thực hiện
+
+- `client/src/services/userService.js`: unwrap duy nhất tại service và trả `response.data.data`.
+- `client/src/contexts/AuthContext.jsx`: lưu trực tiếp profile object; tách loading, pending và real-error state.
+- `client/src/pages/customer/CustomerProfilePage.jsx`: bỏ request trùng; đồng bộ email/SĐT sau khi profile tải; bind `phoneNumber`; chuẩn hóa birthday; bind gender theo enum; chỉ hiển thị `cccdMasked`; bổ sung loading/error UI.
+- `client/src/utils/authStorage.js`: đã kiểm tra, không cần đổi; email lấy từ phiên và không lưu CCCD.
+
+### Kết quả retest
+
+Retest binding bằng trình duyệt headless trên `/profile`, sử dụng đúng cấu trúc response Backend đã xác nhận. Dữ liệu cá nhân được mô tả theo trạng thái để tránh lặp PII.
+
+| Field | API trả về | Frontend hiển thị | Kết quả |
+|---|---|---|---|
+| fullName | Có | Có | PASS |
+| email | Auth session | Có | PASS |
+| phoneNumber | Có | Có | PASS |
+| birthday | Có, `yyyy-MM-dd` | Có, date đúng định dạng | PASS |
+| gender | Có, enum `MALE` | Có, nhãn `Nam` được chọn | PASS |
+| cccdMasked | Có | Có, chỉ bản đã che | PASS |
+
+### Regression Result
+
+| Hạng mục | Kết quả |
+|---|---|
+| `npm run build` | PASS — Vite production build thành công |
+| `npm run lint` | FAIL — 12 lỗi, 1 cảnh báo còn lại ở các file ngoài phạm vi thay đổi; targeted lint cho bốn file Profile/Auth PASS |
+| `npm test` | NOT RUN — `package.json` không có script `test` |
+| Profile initial load | PASS — sáu trường yêu cầu bind đúng trong browser test |
+| Refresh Profile | PASS — các trường vẫn populated |
+| Navigate away / return | PASS — các trường vẫn populated |
+| Auth session restoration | PASS trong browser binding test; API thực chưa xác nhận vì test credential trả `401` |
+| Route guard khi không có session | PASS — `/profile` chuyển về `/login` |
+| Logout qua UI | BLOCKED — không có credential hợp lệ để tạo phiên API thực |
+| URL bị cấm | PASS — không có request tới port `8086` hoặc `/internal/users`; Profile chỉ gọi `/api/users/{accountId}` qua Gateway |
+| Full CCCD / null / undefined | PASS — chỉ bind `cccdMasked`, dùng controlled empty values và đã xóa fallback giả |
+
+### Kết luận retest
+
+**BLOCKED — Không đủ môi trường kiểm thử.** Mapping và browser binding đã được sửa và xác nhận, nhưng chưa thể kết luận review comment được giải quyết hoàn toàn ở runtime API thực: tài khoản E2E hiện có trả `401 Unauthorized` với credential trong tài liệu. Cần credential hợp lệ và chạy lại login → Profile → refresh → navigate → logout trước khi đổi kết luận thành PASS.
+
+---
+
+## 7. Kết Luận và Đánh Giá Sẵn Sàng (Acceptance & Readiness Sign-off)
+
+Mapping và binding Profile đã đạt kiểm tra build và browser binding. Luồng E2E với API thực cần được chạy lại bằng tài khoản hợp lệ trước khi xác nhận sẵn sàng nghiệm thu và merge.

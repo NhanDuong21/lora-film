@@ -1,6 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-/* eslint-disable react-hooks/set-state-in-effect */
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   isAuthenticated as checkAuthenticated,
   getUserEmail,
@@ -26,10 +25,11 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profilePending, setProfilePending] = useState(false);
+  const [profileError, setProfileError] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
   // loadProfile with bounded retry strategy for eventual consistency
-  const loadProfile = async (targetAccountId, retryCount = 0) => {
+  const loadProfile = useCallback(async function loadProfile(targetAccountId, retryCount = 0) {
     const accId = targetAccountId || getUserAccountId();
     if (!accId) {
       setProfileLoading(false);
@@ -38,18 +38,18 @@ export function AuthProvider({ children }) {
 
     setProfileLoading(true);
     setProfilePending(false);
+    setProfileError(null);
 
     try {
-      const response = await getUserProfile(accId);
-      if (response && response.success && response.data) {
-        setProfile(response.data);
+      const profileData = await getUserProfile(accId);
+      if (profileData) {
+        setProfile(profileData);
         setProfilePending(false);
         setProfileLoading(false);
-        return response.data;
+        return profileData;
       }
+      throw new Error('Profile response did not contain data');
     } catch (error) {
-      console.error("Failed to load user profile:", error);
-      
       const errorCode = error?.errorCode || error?.code || error?.error;
       const status = error?.status || error?.response?.status;
       const isUserNotFound = errorCode === "USER_NOT_FOUND" || status === 404;
@@ -62,14 +62,16 @@ export function AuthProvider({ children }) {
         setProfileLoading(false);
         if (isUserNotFound) {
           setProfilePending(true);
+        } else {
+          setProfileError('Không thể tải hồ sơ. Vui lòng thử lại.');
         }
         setProfile(null);
       }
     }
     return null;
-  };
+  }, []);
 
-  const initializeAuth = async () => {
+  const initializeAuth = useCallback(async () => {
     const authed = checkAuthenticated();
     setIsAuthenticated(authed);
     if (authed) {
@@ -90,7 +92,7 @@ export function AuthProvider({ children }) {
       }
     }
     setIsInitializing(false);
-  };
+  }, [loadProfile]);
 
   useEffect(() => {
     initializeAuth();
@@ -113,11 +115,12 @@ export function AuthProvider({ children }) {
         setRefreshToken(null);
         setProfile(null);
         setProfilePending(false);
+        setProfileError(null);
       }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [initializeAuth, loadProfile]);
 
   const login = async (authSessionData) => {
     saveAuthData(authSessionData);
@@ -150,6 +153,7 @@ export function AuthProvider({ children }) {
     setRefreshToken(null);
     setProfile(null);
     setProfilePending(false);
+    setProfileError(null);
   };
 
   const updateUser = (updatedFields) => {
@@ -189,6 +193,7 @@ export function AuthProvider({ children }) {
       profile,
       profileLoading,
       profilePending,
+      profileError,
       isInitializing,
       loading: isInitializing, // legacy support for 'loading'
       login, 
