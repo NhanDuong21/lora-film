@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
+import com.project.scoreservice.enumtype.ReconciliationStatus;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -15,4 +17,8 @@ public interface ScoreHistoryRepository extends JpaRepository<ScoreHistory, Long
     Optional<ScoreHistory> findByEventId(String eventId);
 
     Optional<ScoreHistory> findByRequestId(String requestId);
+
+    List<ScoreHistory> findByBookingId(Long bookingId);
+
+    List<ScoreHistory> findByReconciliationStatusOrderByCreatedAtAsc(ReconciliationStatus reconciliationStatus);
 }

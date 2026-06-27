@@ -567,4 +567,138 @@ public class ScorePersistenceIntegrationTest {
             });
         });
     }
+
+    @Test
+    void testAtomicAddition() {
+        MembershipTier tier = createAndSaveTier("SILVER", 0, 0.05);
+        final Long userId = 800L;
+        createAndSaveUserScore(userId, 100, tier);
+
+        int rows = transactionTemplate.execute(status ->
+                userScoreRepository.addPointsAtomic(userId, 50)
+        );
+        assertThat(rows).isEqualTo(1);
+
+        Optional<UserScore> scoreOpt = userScoreRepository.findByUserId(userId);
+        assertThat(scoreOpt).isPresent();
+        assertThat(scoreOpt.get().getCurrentPoints()).isEqualTo(150);
+        assertThat(scoreOpt.get().getAccumulatedPoints()).isEqualTo(150);
+    }
+
+    @Test
+    void testAtomicAdditionCurrentPointsOnly() {
+        MembershipTier tier = createAndSaveTier("SILVER", 0, 0.05);
+        final Long userId = 900L;
+        createAndSaveUserScore(userId, 100, tier);
+
+        int rows = transactionTemplate.execute(status ->
+                userScoreRepository.addCurrentPointsOnlyAtomic(userId, 50)
+        );
+        assertThat(rows).isEqualTo(1);
+
+        Optional<UserScore> scoreOpt = userScoreRepository.findByUserId(userId);
+        assertThat(scoreOpt).isPresent();
+        assertThat(scoreOpt.get().getCurrentPoints()).isEqualTo(150);
+        assertThat(scoreOpt.get().getAccumulatedPoints()).isEqualTo(100); // remains unchanged
+    }
+
+    @Test
+    void testFindByBookingId() {
+        MembershipTier tier = createAndSaveTier("SILVER", 0, 0.05);
+        UserScore score = createAndSaveUserScore(1000L, 100, tier);
+
+        transactionTemplate.execute(status -> {
+            ScoreHistory h1 = ScoreHistory.builder()
+                    .userScore(score)
+                    .bookingId(888L)
+                    .pointChange(10)
+                    .transactionType(ScoreTransactionType.EARN_BY_BOOKING)
+                    .balanceBefore(100)
+                    .balanceAfter(110)
+                    .accumulatedBefore(100)
+                    .accumulatedAfter(110)
+                    .idempotencyKey("idemp-b1")
+                    .build();
+            scoreHistoryRepository.save(h1);
+
+            ScoreHistory h2 = ScoreHistory.builder()
+                    .userScore(score)
+                    .bookingId(888L)
+                    .pointChange(-20)
+                    .transactionType(ScoreTransactionType.REDEEM_FOR_BOOKING)
+                    .balanceBefore(110)
+                    .balanceAfter(90)
+                    .accumulatedBefore(110)
+                    .accumulatedAfter(110)
+                    .idempotencyKey("idemp-b2")
+                    .build();
+            scoreHistoryRepository.save(h2);
+
+            ScoreHistory h3 = ScoreHistory.builder()
+                    .userScore(score)
+                    .bookingId(999L)
+                    .pointChange(5)
+                    .transactionType(ScoreTransactionType.EARN_BY_BOOKING)
+                    .balanceBefore(90)
+                    .balanceAfter(95)
+                    .accumulatedBefore(110)
+                    .accumulatedAfter(115)
+                    .idempotencyKey("idemp-b3")
+                    .build();
+            scoreHistoryRepository.save(h3);
+
+            return null;
+        });
+
+        List<ScoreHistory> histories = scoreHistoryRepository.findByBookingId(888L);
+        assertThat(histories).hasSize(2);
+        assertThat(histories).extracting(ScoreHistory::getIdempotencyKey)
+                .containsExactlyInAnyOrder("idemp-b1", "idemp-b2");
+    }
+
+    @Test
+    void testFindByReconciliationStatusOrderByCreatedAtAsc() throws Exception {
+        MembershipTier tier = createAndSaveTier("SILVER", 0, 0.05);
+        UserScore score = createAndSaveUserScore(1100L, 100, tier);
+
+        transactionTemplate.execute(status -> {
+            ScoreHistory h1 = ScoreHistory.builder()
+                    .userScore(score)
+                    .pointChange(-50)
+                    .transactionType(ScoreTransactionType.REDEEM_FOR_BOOKING)
+                    .balanceBefore(100)
+                    .balanceAfter(50)
+                    .accumulatedBefore(100)
+                    .accumulatedAfter(100)
+                    .idempotencyKey("idemp-rec-1")
+                    .reconciliationStatus(ReconciliationStatus.PENDING)
+                    .build();
+            scoreHistoryRepository.save(h1);
+            return null;
+        });
+
+        // sleep brief moment to guarantee distinct createdAt timestamps
+        Thread.sleep(100);
+
+        transactionTemplate.execute(status -> {
+            ScoreHistory h2 = ScoreHistory.builder()
+                    .userScore(score)
+                    .pointChange(-30)
+                    .transactionType(ScoreTransactionType.REDEEM_FOR_BOOKING)
+                    .balanceBefore(50)
+                    .balanceAfter(20)
+                    .accumulatedBefore(100)
+                    .accumulatedAfter(100)
+                    .idempotencyKey("idemp-rec-2")
+                    .reconciliationStatus(ReconciliationStatus.PENDING)
+                    .build();
+            scoreHistoryRepository.save(h2);
+            return null;
+        });
+
+        List<ScoreHistory> pendingHistories = scoreHistoryRepository.findByReconciliationStatusOrderByCreatedAtAsc(ReconciliationStatus.PENDING);
+        assertThat(pendingHistories).hasSize(2);
+        assertThat(pendingHistories.get(0).getIdempotencyKey()).isEqualTo("idemp-rec-1");
+        assertThat(pendingHistories.get(1).getIdempotencyKey()).isEqualTo("idemp-rec-2");
+    }
 }
