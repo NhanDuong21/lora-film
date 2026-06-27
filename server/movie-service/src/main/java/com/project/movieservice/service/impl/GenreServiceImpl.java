@@ -94,6 +94,9 @@ public class GenreServiceImpl implements GenreService {
         if (trimmed.length() > 100) {
             throw new BusinessException("Genre name must not exceed 100 characters", "VALIDATION_ERROR", HttpStatus.BAD_REQUEST);
         }
+        if (!trimmed.matches("^(?=.*[a-zA-ZÀ-ỹ])[a-zA-ZÀ-ỹ0-9\\s\\-&]+$")) {
+            throw new BusinessException("Genre name must contain at least one letter and only allow letters, numbers, spaces, hyphens or ampersands", "VALIDATION_ERROR", HttpStatus.BAD_REQUEST);
+        }
         return trimmed;
     }
 
