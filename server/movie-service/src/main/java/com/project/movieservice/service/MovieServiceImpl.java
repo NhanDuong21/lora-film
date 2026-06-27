@@ -86,7 +86,7 @@ public class MovieServiceImpl implements MovieService {
                 status = MovieStatus.valueOf(statusStr);
                 if (!PUBLIC_STATUSES.contains(status)) {
                     // Even if client asks for INACTIVE, return empty based on rule or bad request if invalid
-                    // Wait, instruction says: "Không được hiển thị: INACTIVE. Kể cả khi client gọi ?status=INACTIVE (trả danh sách rỗng)."
+                    // Wait, instruction says: "Không được hiển thị: INACTIVE. Kể cả khi client gọi ?status=INACTIVE (trả danh sách rỗng). "
                     if (status == MovieStatus.INACTIVE) {
                         return new MoviePageResponse<>(new ArrayList<>(), page, size, 0, 0, true, true);
                     }
@@ -266,4 +266,5 @@ public class MovieServiceImpl implements MovieService {
         dto.setGenres(genreResponses);
         return dto;
     }
+
 }
