@@ -26,4 +26,52 @@ public class PromotionCampaignAdminController {
         ApiResponse<CampaignResponse> apiResponse = ApiResponse.success("Promotion campaign created successfully", response);
         return new ResponseEntity<>(apiResponse, HttpStatus.CREATED);
     }
+
+    @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'PROMOTION_READ')")
+    public ResponseEntity<ApiResponse<CampaignPageResponse>> getCampaigns(
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) String availabilityStatus,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime from,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime to,
+            @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
+        
+        validateSort(pageable.getSort());
+        CampaignPageResponse response = campaignService.getCampaigns(isActive, availabilityStatus, from, to, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Promotion campaigns retrieved successfully", response));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'PROMOTION_READ')")
+    public ResponseEntity<ApiResponse<CampaignResponse>> getCampaignById(@PathVariable Long id) {
+        CampaignResponse response = campaignService.getCampaignById(id);
+        return ResponseEntity.ok(ApiResponse.success("Promotion campaign retrieved successfully", response));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'PROMOTION_UPDATE')")
+    public ResponseEntity<ApiResponse<CampaignResponse>> updateCampaign(@PathVariable Long id, @Valid @RequestBody UpdateCampaignRequest request) {
+        CampaignResponse response = campaignService.updateCampaign(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Promotion campaign updated successfully", response));
+    }
+
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'PROMOTION_UPDATE')")
+    public ResponseEntity<ApiResponse<CampaignResponse>> updateCampaignStatus(@PathVariable Long id, @Valid @RequestBody UpdateCampaignStatusRequest request) {
+        CampaignResponse response = campaignService.updateCampaignStatus(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Promotion campaign status updated successfully", response));
+    }
+
+    private void validateSort(org.springframework.data.domain.Sort sort) {
+        if (sort == null) return;
+        java.util.Set<String> allowedFields = java.util.Set.of("id", "campaignName", "startDate", "endDate", "createdAt", "updatedAt");
+        for (org.springframework.data.domain.Sort.Order order : sort) {
+            if (!allowedFields.contains(order.getProperty())) {
+                throw new com.project.promotionservice.exception.BusinessException(
+                        "Invalid sort property: " + order.getProperty(),
+                        "PROMOTION_INVALID_SORT",
+                        HttpStatus.BAD_REQUEST);
+            }
+        }
+    }
 }

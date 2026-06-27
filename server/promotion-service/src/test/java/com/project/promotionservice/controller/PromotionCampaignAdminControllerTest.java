@@ -152,4 +152,183 @@ class PromotionCampaignAdminControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("CAMPAIGN_INVALID_DATE_RANGE"));
     }
+
+    @Test
+    @WithMockUser(authorities = "PROMOTION_READ")
+    void getCampaigns_ShouldReturn200_WhenAuthorized() throws Exception {
+        com.project.promotionservice.dto.CampaignPageResponse pageResponse = com.project.promotionservice.dto.CampaignPageResponse.builder()
+                .content(java.util.Collections.emptyList())
+                .page(0)
+                .size(10)
+                .totalElements(0)
+                .totalPages(0)
+                .first(true)
+                .last(true)
+                .build();
+
+        when(campaignService.getCampaigns(any(), any(), any(), any(), any())).thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/promotion-campaigns")
+                .param("page", "0")
+                .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void getCampaigns_ShouldReturn400_WhenInvalidSortProperty() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/promotion-campaigns")
+                .param("sort", "unallowedField,desc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("PROMOTION_INVALID_SORT"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "PROMOTION_READ")
+    void getCampaignById_ShouldReturn200_WhenFound() throws Exception {
+        CampaignResponse response = CampaignResponse.builder()
+                .campaignId(1L)
+                .campaignName("Summer 2026")
+                .promotionCount(5)
+                .isActive(true)
+                .availabilityStatus("ACTIVE")
+                .build();
+
+        when(campaignService.getCampaignById(1L)).thenReturn(response);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/promotion-campaigns/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.campaignId").value(1))
+                .andExpect(jsonPath("$.data.promotionCount").value(5));
+    }
+
+    @Test
+    @WithMockUser(authorities = "PROMOTION_READ")
+    void getCampaignById_ShouldReturn404_WhenNotFound() throws Exception {
+        when(campaignService.getCampaignById(999L))
+                .thenThrow(new BusinessException("Campaign not found with id: 999", "CAMPAIGN_NOT_FOUND", HttpStatus.NOT_FOUND));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/promotion-campaigns/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("CAMPAIGN_NOT_FOUND"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void updateCampaign_ShouldReturn200_WhenValid() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        LocalDateTime end = LocalDateTime.now().plusDays(10);
+        com.project.promotionservice.dto.UpdateCampaignRequest request = com.project.promotionservice.dto.UpdateCampaignRequest.builder()
+                .campaignName("Summer 2026 Updated")
+                .description("Summer discount")
+                .startDate(start)
+                .endDate(end)
+                .isActive(true)
+                .build();
+
+        CampaignResponse response = CampaignResponse.builder()
+                .campaignId(1L)
+                .campaignName("Summer 2026 Updated")
+                .description("Summer discount")
+                .startDate(start)
+                .endDate(end)
+                .isActive(true)
+                .availabilityStatus("UPCOMING")
+                .build();
+
+        when(campaignService.updateCampaign(any(Long.class), any(com.project.promotionservice.dto.UpdateCampaignRequest.class))).thenReturn(response);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/promotion-campaigns/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.campaignName").value("Summer 2026 Updated"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void updateCampaign_ShouldReturn404_WhenNotFound() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        LocalDateTime end = LocalDateTime.now().plusDays(10);
+        com.project.promotionservice.dto.UpdateCampaignRequest request = com.project.promotionservice.dto.UpdateCampaignRequest.builder()
+                .campaignName("Summer 2026 Updated")
+                .startDate(start)
+                .endDate(end)
+                .build();
+
+        when(campaignService.updateCampaign(any(Long.class), any(com.project.promotionservice.dto.UpdateCampaignRequest.class)))
+                .thenThrow(new BusinessException("Campaign not found with id: 999", "CAMPAIGN_NOT_FOUND", HttpStatus.NOT_FOUND));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/promotion-campaigns/999")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("CAMPAIGN_NOT_FOUND"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void updateCampaign_ShouldReturn400_WhenInvalidDateRange() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime end = LocalDateTime.now().plusDays(5);
+        com.project.promotionservice.dto.UpdateCampaignRequest request = com.project.promotionservice.dto.UpdateCampaignRequest.builder()
+                .campaignName("Summer 2026 Updated")
+                .startDate(start)
+                .endDate(end)
+                .build();
+
+        when(campaignService.updateCampaign(any(Long.class), any(com.project.promotionservice.dto.UpdateCampaignRequest.class)))
+                .thenThrow(new BusinessException("endDate must be after startDate", "CAMPAIGN_INVALID_DATE_RANGE", HttpStatus.BAD_REQUEST));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/promotion-campaigns/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("CAMPAIGN_INVALID_DATE_RANGE"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void updateCampaignStatus_ShouldReturn200_WhenValid() throws Exception {
+        com.project.promotionservice.dto.UpdateCampaignStatusRequest request = com.project.promotionservice.dto.UpdateCampaignStatusRequest.builder()
+                .isActive(false)
+                .build();
+
+        CampaignResponse response = CampaignResponse.builder()
+                .campaignId(1L)
+                .campaignName("Summer 2026")
+                .isActive(false)
+                .availabilityStatus("DISABLED")
+                .build();
+
+        when(campaignService.updateCampaignStatus(any(Long.class), any(com.project.promotionservice.dto.UpdateCampaignStatusRequest.class))).thenReturn(response);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/admin/promotion-campaigns/1/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.isActive").value(false))
+                .andExpect(jsonPath("$.data.availabilityStatus").value("DISABLED"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void updateCampaignStatus_ShouldReturn404_WhenNotFound() throws Exception {
+        com.project.promotionservice.dto.UpdateCampaignStatusRequest request = com.project.promotionservice.dto.UpdateCampaignStatusRequest.builder()
+                .isActive(false)
+                .build();
+
+        when(campaignService.updateCampaignStatus(any(Long.class), any(com.project.promotionservice.dto.UpdateCampaignStatusRequest.class)))
+                .thenThrow(new BusinessException("Campaign not found with id: 999", "CAMPAIGN_NOT_FOUND", HttpStatus.NOT_FOUND));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/admin/promotion-campaigns/999/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("CAMPAIGN_NOT_FOUND"));
+    }
 }

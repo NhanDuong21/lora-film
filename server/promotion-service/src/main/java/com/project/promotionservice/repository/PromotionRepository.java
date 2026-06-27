@@ -20,6 +20,8 @@ public interface PromotionRepository extends JpaRepository<Promotion, Long>, Jpa
 
     Page<Promotion> findByCampaignId(Long campaignId, Pageable pageable);
 
+    long countByCampaignId(Long campaignId);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Promotion p SET p.usedCount = p.usedCount + 1, p.version = p.version + 1 " +
            "WHERE p.id = :promotionId AND p.usedCount < p.usageLimit")
