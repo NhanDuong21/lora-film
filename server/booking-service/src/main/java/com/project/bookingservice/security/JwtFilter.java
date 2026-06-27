@@ -34,8 +34,9 @@ public class JwtFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(jwt) && jwtProvider.validateToken(jwt)) {
                 Claims claims = jwtProvider.getClaimsFromToken(jwt);
                 
-                // Assuming "userId" or "sub" contains the user id
-                Long userId = claims.get("userId", Long.class);
+                Number userIdNumber = claims.get("userId", Number.class);
+                Long userId = userIdNumber != null ? userIdNumber.longValue() : null;
+                
                 if (userId == null && claims.getSubject() != null) {
                     try {
                         userId = Long.parseLong(claims.getSubject());

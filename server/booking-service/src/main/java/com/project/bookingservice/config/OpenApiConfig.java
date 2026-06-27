@@ -20,6 +20,7 @@ public class OpenApiConfig {
                         .title("Booking Service API")
                         .version("v1")
                         .description("Booking, seat reservation and ticket management APIs"))
+                .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
                 .components(
                         new Components()
                                 .addSecuritySchemes(

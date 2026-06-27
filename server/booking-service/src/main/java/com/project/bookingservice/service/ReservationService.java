@@ -4,7 +4,9 @@ import com.project.bookingservice.config.BookingProperties;
 import com.project.bookingservice.dto.movie.SeatInfo;
 import com.project.bookingservice.dto.movie.ShowtimeInfo;
 import com.project.bookingservice.dto.reservation.CreateReservationRequest;
+import com.project.bookingservice.dto.reservation.ReservationGroupResponse;
 import com.project.bookingservice.dto.reservation.ReservationResponse;
+import com.project.bookingservice.dto.reservation.ReservationSeatResponse;
 import com.project.bookingservice.entity.SeatReservation;
 import com.project.bookingservice.enumtype.ReservationStatus;
 import com.project.bookingservice.exception.BusinessException;
@@ -17,9 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -40,11 +39,11 @@ public class ReservationService {
     private final BookingProperties bookingProperties;
 
     public ReservationService(SeatReservationRepository seatReservationRepository,
-                              MovieServiceClient movieServiceClient,
-                              SeatLockManager seatLockManager,
-                              IdempotencyService idempotencyService,
-                              CurrentUserProvider currentUserProvider,
-                              BookingProperties bookingProperties) {
+            MovieServiceClient movieServiceClient,
+            SeatLockManager seatLockManager,
+            IdempotencyService idempotencyService,
+            CurrentUserProvider currentUserProvider,
+            BookingProperties bookingProperties) {
         this.seatReservationRepository = seatReservationRepository;
         this.movieServiceClient = movieServiceClient;
         this.seatLockManager = seatLockManager;
@@ -54,7 +53,7 @@ public class ReservationService {
     }
 
     @Transactional
-    public List<ReservationResponse> createReservation(CreateReservationRequest request, String idempotencyKey) {
+    public ReservationGroupResponse createReservation(CreateReservationRequest request, String idempotencyKey) {
         if (request.getSeatIds() == null || request.getSeatIds().isEmpty()) {
             throw new BusinessException("VALIDATION_ERROR", "seatIds cannot be empty");
         }
@@ -62,17 +61,12 @@ public class ReservationService {
         if (request.getSeatIds().size() != new HashSet<>(request.getSeatIds()).size()) {
             throw new BusinessException("VALIDATION_ERROR", "seatIds contains duplicates");
         }
-        for (Long seatId : request.getSeatIds()) {
-            if (seatId == null || seatId <= 0) {
-                throw new BusinessException("VALIDATION_ERROR", "seatId must be positive");
-            }
-        }
 
         Long userId = currentUserProvider.getCurrentUserId();
 
         // 1. Idempotency Check
-        if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
-            List<ReservationResponse> previousResponse = idempotencyService.getResponse(userId, idempotencyKey, request);
+        if (idempotencyService.hasKey(userId, idempotencyKey)) {
+            ReservationGroupResponse previousResponse = idempotencyService.getResponse(userId, idempotencyKey, request);
             if (previousResponse != null) {
                 logger.info("Idempotency replay for key {}", idempotencyKey);
                 return previousResponse;
@@ -111,7 +105,7 @@ public class ReservationService {
             }
         }
 
-        // 4. Check DB for existing active reservations (HELD or valid CONVERTED)
+        // 4. Check DB for existing HELD reservations
         List<SeatReservation> existingReservations = seatReservationRepository.findActiveReservations(
                 showtimeId, request.getSeatIds());
         if (!existingReservations.isEmpty()) {
@@ -119,23 +113,12 @@ public class ReservationService {
         }
 
         // 5. Acquire Redis Locks atomically
-        String lockOwner = String.valueOf(userId);
-        boolean locksAcquired = seatLockManager.acquireLocks(showtimeId, request.getSeatIds(), lockOwner);
+        boolean locksAcquired = seatLockManager.acquireLocks(showtimeId, request.getSeatIds(), idempotencyKey);
         if (!locksAcquired) {
-            logger.warn("Failed to acquire Redis locks for showtimeId: {}, seatIds: {}", showtimeId, request.getSeatIds());
+            logger.warn("Failed to acquire Redis locks for showtimeId: {}, seatIds: {}", showtimeId,
+                    request.getSeatIds());
             throw new BusinessException("BOOKING_SEAT_ALREADY_HELD");
         }
-
-        // 5.1 Register Transaction Synchronization for Rollback
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                if (status == STATUS_ROLLED_BACK || status == STATUS_UNKNOWN) {
-                    seatLockManager.releaseLocks(showtimeId, request.getSeatIds(), lockOwner);
-                    logger.info("Transaction rolled back. Released redis locks for showtimeId: {}, seatIds: {}", showtimeId, request.getSeatIds());
-                }
-            }
-        });
 
         try {
             // 6. Create reservations
@@ -151,17 +134,27 @@ public class ReservationService {
 
             List<SeatReservation> savedReservations = seatReservationRepository.saveAll(newReservations);
 
-            List<ReservationResponse> responses = savedReservations.stream()
-                    .map(r -> new ReservationResponse(r.getId(), r.getUserId(), r.getShowtimeId(), r.getSeatId(), r.getStatus(), r.getExpiresAt(), r.getCreatedAt()))
+            List<ReservationSeatResponse> seatResponses = savedReservations.stream()
+                    .map(r -> new ReservationSeatResponse(r.getId(), r.getSeatId()))
                     .collect(Collectors.toList());
+                    
+            ReservationGroupResponse groupResponse = new ReservationGroupResponse(
+                    showtimeId,
+                    userId,
+                    ReservationStatus.HELD,
+                    expiresAt,
+                    seatResponses
+            );
 
             // 7. Save idempotency result
-            idempotencyService.saveResponse(userId, idempotencyKey, request, responses);
+            idempotencyService.saveResponse(userId, idempotencyKey, request, groupResponse);
             logger.info("Reservation created successfully for idempotencyKey: {}", idempotencyKey);
-            return responses;
+            return groupResponse;
         } catch (Exception e) {
-            // Lock release is handled by TransactionSynchronizationManager afterCompletion
-            logger.error("Error creating reservation for showtimeId: {}, seatIds: {}", showtimeId, request.getSeatIds(), e);
+            // Rollback locks on failure
+            seatLockManager.releaseLocks(showtimeId, request.getSeatIds(), idempotencyKey);
+            logger.error("Error creating reservation, releasing locks for showtimeId: {}, seatIds: {}", showtimeId,
+                    request.getSeatIds(), e);
             throw e;
         }
     }
@@ -176,7 +169,8 @@ public class ReservationService {
             throw new BusinessException("FORBIDDEN");
         }
 
-        return new ReservationResponse(reservation.getId(), reservation.getUserId(), reservation.getShowtimeId(), reservation.getSeatId(), reservation.getStatus(), reservation.getExpiresAt(), reservation.getCreatedAt());
+        return new ReservationResponse(reservation.getId(), reservation.getUserId(), reservation.getShowtimeId(), reservation.getSeatId(),
+                reservation.getStatus(), reservation.getExpiresAt(), reservation.getCreatedAt());
     }
 
     @Transactional
@@ -202,9 +196,9 @@ public class ReservationService {
         }
 
         // Release lock
-        String lockOwner = String.valueOf(currentUserId);
-        seatLockManager.releaseLocks(reservation.getShowtimeId(), List.of(reservation.getSeatId()), lockOwner);
-        logger.info("Released redis lock for showtime {}, seat {}", reservation.getShowtimeId(), reservation.getSeatId());
+        seatLockManager.forceReleaseLocks(reservation.getShowtimeId(), List.of(reservation.getSeatId()));
+        logger.info("Released redis lock for showtime {}, seat {}", reservation.getShowtimeId(),
+                reservation.getSeatId());
 
         reservation.setStatus(ReservationStatus.RELEASED);
         seatReservationRepository.save(reservation);
