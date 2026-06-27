@@ -701,4 +701,70 @@ public class ScorePersistenceIntegrationTest {
         assertThat(pendingHistories.get(0).getIdempotencyKey()).isEqualTo("idemp-rec-1");
         assertThat(pendingHistories.get(1).getIdempotencyKey()).isEqualTo("idemp-rec-2");
     }
+
+    @Test
+    void testDeductAccumulatedPointsAtomic() {
+        MembershipTier tier = createAndSaveTier("SILVER", 0, 0.05);
+        final Long userId = 1200L;
+        createAndSaveUserScore(userId, 100, tier);
+
+        // Deduct 40 points -> should succeed (returns 1 row)
+        int rows1 = transactionTemplate.execute(status ->
+                userScoreRepository.deductAccumulatedPointsAtomic(userId, 40)
+        );
+        assertThat(rows1).isEqualTo(1);
+
+        Optional<UserScore> scoreOpt1 = userScoreRepository.findByUserId(userId);
+        assertThat(scoreOpt1).isPresent();
+        assertThat(scoreOpt1.get().getAccumulatedPoints()).isEqualTo(60);
+
+        // Deduct 70 points -> should fail because 60 < 70 (returns 0 rows)
+        int rows2 = transactionTemplate.execute(status ->
+                userScoreRepository.deductAccumulatedPointsAtomic(userId, 70)
+        );
+        assertThat(rows2).isEqualTo(0);
+
+        Optional<UserScore> scoreOpt2 = userScoreRepository.findByUserId(userId);
+        assertThat(scoreOpt2).isPresent();
+        assertThat(scoreOpt2.get().getAccumulatedPoints()).isEqualTo(60); // remains 60
+    }
+
+    @Test
+    void testUserScoreLazyInitialization() {
+        // Create only the MembershipTier records (do not manually insert a UserScore)
+        createAndSaveTier("SILVER", 0, 0.05);
+        createAndSaveTier("GOLD", 400, 0.07);
+        createAndSaveTier("DIAMOND", 1000, 0.10);
+
+        final Long brandNewUserId = 1300L;
+
+        // Trigger the persistence initialization flow exactly as the application would on first access
+        UserScore initializedScore = transactionTemplate.execute(status -> {
+            Optional<UserScore> existingScore = userScoreRepository.findByUserId(brandNewUserId);
+            if (existingScore.isPresent()) {
+                return existingScore.get();
+            } else {
+                MembershipTier lowestTier = membershipTierRepository.findFirstByOrderByMinPointsAsc()
+                        .orElseThrow(() -> new IllegalStateException("No membership tiers configured"));
+                
+                UserScore newScore = UserScore.builder()
+                        .userId(brandNewUserId)
+                        .currentPoints(0)
+                        .accumulatedPoints(0)
+                        .currentTier(lowestTier)
+                        .build();
+                return userScoreRepository.save(newScore);
+            }
+        });
+
+        // Verify that the created record has correct values
+        assertThat(initializedScore).isNotNull();
+        assertThat(initializedScore.getUserId()).isEqualTo(brandNewUserId);
+        assertThat(initializedScore.getCurrentPoints()).isEqualTo(0);
+        assertThat(initializedScore.getAccumulatedPoints()).isEqualTo(0);
+        
+        MembershipTier expectedLowestTier = membershipTierRepository.findFirstByOrderByMinPointsAsc().orElseThrow();
+        assertThat(initializedScore.getCurrentTier().getId()).isEqualTo(expectedLowestTier.getId());
+        assertThat(initializedScore.getCurrentTier().getTierName()).isEqualTo(expectedLowestTier.getTierName());
+    }
 }

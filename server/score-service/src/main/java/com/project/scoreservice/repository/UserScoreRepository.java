@@ -35,4 +35,9 @@ public interface UserScoreRepository extends JpaRepository<UserScore, Long> {
     @Query("UPDATE UserScore u SET u.currentPoints = u.currentPoints + :points " +
            "WHERE u.userId = :userId")
     int addCurrentPointsOnlyAtomic(@Param("userId") Long userId, @Param("points") Integer points);
+
+    @Modifying
+    @Query("UPDATE UserScore u SET u.accumulatedPoints = u.accumulatedPoints - :points " +
+           "WHERE u.userId = :userId AND u.accumulatedPoints >= :points")
+    int deductAccumulatedPointsAtomic(@Param("userId") Long userId, @Param("points") Integer points);
 }
