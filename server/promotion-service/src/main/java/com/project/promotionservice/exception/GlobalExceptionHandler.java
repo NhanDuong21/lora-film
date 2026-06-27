@@ -22,9 +22,15 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, ex.getStatus());
     }
 
-    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailureException(ObjectOptimisticLockingFailureException ex) {
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class})
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailureException(Exception ex) {
         ApiResponse<Void> response = ApiResponse.error("The resource was updated by another transaction. Please retry.", "PROMOTION_UPDATE_CONFLICT");
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(org.springframework.dao.DataIntegrityViolationException ex) {
+        ApiResponse<Void> response = ApiResponse.error("Database conflict or constraint violation. Please check data consistency.", "CAMPAIGN_UPDATE_CONFLICT");
         return new ResponseEntity<>(response, HttpStatus.CONFLICT);
     }
 

@@ -108,7 +108,7 @@ class PromotionAdminControllerTest {
                 .usedCount(0)
                 .startDate(start)
                 .endDate(end)
-                .isActive(true)
+                .status("ACTIVE")
                 .availabilityStatus("UPCOMING")
                 .campaignId(1L)
                 .build();
@@ -246,7 +246,7 @@ class PromotionAdminControllerTest {
                 .promotionCode("SUMMER50")
                 .discountType(DiscountType.FIXED_AMOUNT)
                 .discountValue(new BigDecimal("50000.0"))
-                .isActive(true)
+                .status("ACTIVE")
                 .availabilityStatus("ACTIVE")
                 .build();
 
@@ -298,7 +298,7 @@ class PromotionAdminControllerTest {
                 .limitPerUser(1)
                 .startDate(start)
                 .endDate(end)
-                .isActive(true)
+                .status("ACTIVE")
                 .availabilityStatus("UPCOMING")
                 .campaignId(1L)
                 .build();
@@ -350,7 +350,7 @@ class PromotionAdminControllerTest {
         PromotionResponse response = PromotionResponse.builder()
                 .promotionId(1L)
                 .promotionCode("SUMMER50")
-                .isActive(false)
+                .status("INACTIVE")
                 .availabilityStatus("DISABLED")
                 .build();
 
@@ -361,7 +361,7 @@ class PromotionAdminControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.isActive").value(false))
+                .andExpect(jsonPath("$.data.status").value("INACTIVE"))
                 .andExpect(jsonPath("$.data.availabilityStatus").value("DISABLED"));
     }
 

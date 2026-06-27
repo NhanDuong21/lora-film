@@ -18,7 +18,7 @@ public class PromotionListItemResponse {
     private Integer usedCount;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
-    private Boolean isActive;
+    private String status;
     private String availabilityStatus;
     private Long campaignId;
     private LocalDateTime createdAt;

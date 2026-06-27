@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@DiscountConstraint
 public class CreatePromotionRequest {
 
     @NotBlank(message = "promotionCode is required")

@@ -5,9 +5,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 import java.util.Optional;
 
 public interface PromotionRepository extends JpaRepository<Promotion, Long>, JpaSpecificationExecutor<Promotion> {
@@ -17,6 +19,14 @@ public interface PromotionRepository extends JpaRepository<Promotion, Long>, Jpa
     boolean existsByPromotionCode(String code);
 
     Optional<Promotion> findByPromotionCodeIgnoreCase(String code);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Promotion p WHERE p.id = :id")
+    Optional<Promotion> findByIdForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Promotion p WHERE p.promotionCode = :code")
+    Optional<Promotion> findByPromotionCodeForUpdate(@Param("code") String code);
 
     Page<Promotion> findByCampaignId(Long campaignId, Pageable pageable);
 
