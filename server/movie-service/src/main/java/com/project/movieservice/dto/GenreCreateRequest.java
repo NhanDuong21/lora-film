@@ -8,7 +8,7 @@ public class GenreCreateRequest {
     
     @NotBlank(message = "Genre name is required")
     @Size(max = 100, message = "Genre name must not exceed 100 characters")
-    @Pattern(regexp = "^(?=.*[a-zA-ZÀ-ỹ])[a-zA-ZÀ-ỹ0-9\\s\\-&]+$", message = "Genre name must contain at least one letter and only allow letters, numbers, spaces, hyphens or ampersands")
+    @Pattern(regexp = "^(?=.*[a-zA-ZÀ-ỹ])[a-zA-ZÀ-ỹ0-9\\s\\-&]+$", message = "Genre name must contain at least one letter and can only include letters, numbers, spaces, hyphens, and ampersands")
     private String genreName;
 
     public GenreCreateRequest() {
