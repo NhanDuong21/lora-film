@@ -2,6 +2,7 @@ package com.project.bookingservice.service.lock;
 
 import com.project.bookingservice.config.BookingProperties;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
@@ -13,12 +14,12 @@ import org.springframework.data.redis.core.script.RedisScript;
 @Service
 public class SeatLockManager {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate redisTemplate;
     private final BookingProperties bookingProperties;
 
     private static final String LOCK_PREFIX = "booking:seat-lock:";
 
-    public SeatLockManager(RedisTemplate<String, Object> redisTemplate,
+    public SeatLockManager(StringRedisTemplate redisTemplate,
                            BookingProperties bookingProperties) {
         this.redisTemplate = redisTemplate;
         this.bookingProperties = bookingProperties;

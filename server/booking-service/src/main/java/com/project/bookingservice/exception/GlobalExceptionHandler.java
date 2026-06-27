@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
-        logger.warn("Business exception occurred: {}", ex.getErrorCode(), ex);
+        logger.warn("Business exception occurred: {} - {}", ex.getErrorCode(), ex.getMessage());
         
         HttpStatus status = HttpStatus.BAD_REQUEST;
         String errorCode = ex.getErrorCode();
@@ -66,5 +66,17 @@ public class GlobalExceptionHandler {
         logger.warn("Missing request header: {}", ex.getHeaderName());
         String errorCode = "Idempotency-Key".equalsIgnoreCase(ex.getHeaderName()) ? "BOOKING_IDEMPOTENCY_KEY_REQUIRED" : "MISSING_HEADER";
         return new ResponseEntity<>(ApiResponse.error("Missing required header: " + ex.getHeaderName(), errorCode), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatchException(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        logger.warn("Type mismatch error: {} = {}", ex.getName(), ex.getValue());
+        return new ResponseEntity<>(ApiResponse.error("Invalid path variable or parameter format: " + ex.getName(), "INVALID_PARAM_FORMAT"), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
+        logger.error("Unexpected error occurred: {}", ex.getMessage(), ex);
+        return new ResponseEntity<>(ApiResponse.error("An unexpected error occurred", "INTERNAL_SERVER_ERROR"), HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
