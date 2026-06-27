@@ -19,6 +19,8 @@ import com.project.bookingservice.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -26,6 +28,7 @@ import java.util.HashMap;
 @RestController
 @RequestMapping("/api/bookings/seat-reservations")
 @Tag(name = "Seat Reservations", description = "Endpoints for managing seat reservations")
+@SecurityRequirement(name = "bearerAuth")
 public class SeatReservationController {
 
     private final ReservationService reservationService;
