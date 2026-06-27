@@ -48,6 +48,9 @@ public class IdempotencyService {
         Object value = redisTemplate.opsForValue().get(key);
 
         if (value instanceof IdempotencyRecord record) {
+            if ("PROCESSING".equals(record.getRequestHash())) {
+                return null;
+            }
             try {
                 String currentRequestHash = serializeCanonicalPayload(requestPayload);
                 if (record.getRequestHash().equals(currentRequestHash)) {
@@ -62,8 +65,10 @@ public class IdempotencyService {
         return null;
     }
 
-    public boolean hasKey(Long userId, String idempotencyKey) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(getKey(userId, idempotencyKey)));
+    public boolean tryAcquire(Long userId, String idempotencyKey) {
+        String key = getKey(userId, idempotencyKey);
+        IdempotencyRecord pendingRecord = new IdempotencyRecord("PROCESSING", null);
+        return Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(key, pendingRecord, 5, TimeUnit.MINUTES));
     }
 
     private String getKey(Long userId, String idempotencyKey) {

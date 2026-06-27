@@ -62,11 +62,16 @@ public class ReservationService {
         if (request.getSeatIds().size() != new HashSet<>(request.getSeatIds()).size()) {
             throw new BusinessException("VALIDATION_ERROR", "seatIds contains duplicates");
         }
+        for (Long seatId : request.getSeatIds()) {
+            if (seatId == null || seatId <= 0) {
+                throw new BusinessException("VALIDATION_ERROR", "seatId must be positive");
+            }
+        }
 
         Long userId = currentUserProvider.getCurrentUserId();
 
         // 1. Idempotency Check
-        if (idempotencyService.hasKey(userId, idempotencyKey)) {
+        if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
             List<ReservationResponse> previousResponse = idempotencyService.getResponse(userId, idempotencyKey, request);
             if (previousResponse != null) {
                 logger.info("Idempotency replay for key {}", idempotencyKey);

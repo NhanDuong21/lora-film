@@ -90,7 +90,7 @@ class ReservationServiceTest {
     @Test
     void createReservation_IdempotencyReplay_ReturnsPreviousResponse() {
         CreateReservationRequest request = new CreateReservationRequest(10L, Arrays.asList(101L));
-        when(idempotencyService.hasKey(15L, "idemp-key")).thenReturn(true);
+        when(idempotencyService.tryAcquire(15L, "idemp-key")).thenReturn(false);
         
         List<ReservationResponse> prevResponses = Arrays.asList(new ReservationResponse());
         when(idempotencyService.getResponse(eq(15L), eq("idemp-key"), eq(request))).thenReturn(prevResponses);
@@ -102,7 +102,7 @@ class ReservationServiceTest {
     @Test
     void createReservation_IdempotencyConflict_ThrowsException() {
         CreateReservationRequest request = new CreateReservationRequest(10L, Arrays.asList(101L));
-        when(idempotencyService.hasKey(15L, "idemp-key")).thenReturn(true);
+        when(idempotencyService.tryAcquire(15L, "idemp-key")).thenReturn(false);
         when(idempotencyService.getResponse(eq(15L), eq("idemp-key"), eq(request))).thenReturn(null);
 
         BusinessException ex = assertThrows(BusinessException.class, 
@@ -123,7 +123,7 @@ class ReservationServiceTest {
     @Test
     void createReservation_Success() {
         CreateReservationRequest request = new CreateReservationRequest(10L, Arrays.asList(101L));
-        when(idempotencyService.hasKey(15L, "idemp-key")).thenReturn(false);
+        when(idempotencyService.tryAcquire(15L, "idemp-key")).thenReturn(true);
         when(movieServiceClient.getShowtime(10L)).thenReturn(new ShowtimeInfo(10L, 1L, true));
         when(movieServiceClient.getSeats(request.getSeatIds())).thenReturn(Arrays.asList(new SeatInfo(101L, 1L, true)));
         when(movieServiceClient.isSeatBooked(10L, 101L)).thenReturn(false);
