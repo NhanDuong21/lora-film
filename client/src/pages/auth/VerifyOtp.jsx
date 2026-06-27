@@ -1,25 +1,32 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { verifyOtp, resendOtp } from "../../services/authService";
-import { getPendingAccountId, clearPendingAccountId } from "../../utils/authStorage";
 
 function VerifyOtp() {
     const navigate = useNavigate();
+    const location = useLocation();
+    
+    const [email, setEmail] = useState(() => {
+        return location.state?.email || sessionStorage.getItem("pending_otp_email") || "";
+    });
+    const [purpose, setPurpose] = useState(() => {
+        return location.state?.purpose || sessionStorage.getItem("pending_otp_purpose") || "REGISTRATION";
+    });
+    
+    const [inputEmail, setInputEmail] = useState("");
     const [otpCode, setOtpCode] = useState("");
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [countdown, setCountdown] = useState(30);
+    const [countdown, setCountdown] = useState(60);
     const [isResending, setIsResending] = useState(false);
     const [isVerified, setIsVerified] = useState(false);
-    const pendingAccountId = getPendingAccountId();
+
+    const activeEmail = email || inputEmail;
 
     useEffect(() => {
         document.title = "Xác Thực OTP - LoraFilm";
-        if (!pendingAccountId && !isVerified) {
-            navigate("/register");
-        }
-    }, [pendingAccountId, navigate, isVerified]);
+    }, []);
 
     useEffect(() => {
         if (countdown <= 0) return;
@@ -29,25 +36,48 @@ function VerifyOtp() {
         return () => clearInterval(timer);
     }, [countdown]);
 
-    if (!pendingAccountId && !isVerified) {
-        return null;
-    }
-
     const handleResend = async () => {
         setError("");
         setSuccess("");
+
+        if (!activeEmail.trim()) {
+            setError("Vui lòng nhập địa chỉ email để nhận OTP.");
+            return;
+        }
+
         setIsResending(true);
         try {
-            const res = await resendOtp(pendingAccountId);
+            const res = await resendOtp(activeEmail, purpose);
             setIsResending(false);
             if (res.success) {
-                setSuccess("Mã OTP mới đã được gửi thành công.");
-                setCountdown(30);
+                setSuccess("Mã OTP mới đã được gửi thành công. Vui lòng kiểm tra hộp thư.");
+                setOtpCode(""); // Reset OTP input on successful resend
+                
+                // Set cooldown from backend response if available, default to 60s
+                const resendCooldown = res.data?.resendAvailableIn || 60;
+                setCountdown(resendCooldown);
             } else {
                 setError(res.message || "Gửi lại mã thất bại. Vui lòng thử lại.");
             }
         } catch (err) {
             setIsResending(false);
+            const errorCode = err?.errorCode || err?.code || err?.error;
+            
+            if (errorCode === "AUTH_ACCOUNT_ALREADY_VERIFIED") {
+                setSuccess("Tài khoản này đã được xác thực trước đó. Đang chuyển hướng sang Đăng nhập...");
+                setTimeout(() => {
+                    navigate("/login", { state: { email: activeEmail } });
+                }, 2000);
+                return;
+            }
+
+            if (errorCode === "OTP_RATE_LIMIT") {
+                const retryAfter = err?.data?.retryAfter || err?.retryAfter || 60;
+                setError(`Gửi OTP quá nhanh. Vui lòng thử lại sau ${retryAfter} giây.`);
+                setCountdown(retryAfter);
+                return;
+            }
+
             setError(err?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
         }
     };
@@ -56,6 +86,11 @@ function VerifyOtp() {
         e.preventDefault();
         setError("");
         setSuccess("");
+
+        if (!activeEmail.trim()) {
+            setError("Vui lòng cung cấp email xác thực.");
+            return;
+        }
 
         if (!otpCode.trim()) {
             setError("Vui lòng nhập mã xác thực OTP.");
@@ -69,12 +104,25 @@ function VerifyOtp() {
 
         setIsSubmitting(true);
         try {
-            const res = await verifyOtp(pendingAccountId, otpCode);
+            const res = await verifyOtp(activeEmail, otpCode, purpose);
             setIsSubmitting(false);
             if (res.success) {
                 setIsVerified(true);
-                clearPendingAccountId();
-                navigate("/login");
+                
+                // Clear pending session storage keys
+                sessionStorage.removeItem("pending_otp_email");
+                sessionStorage.removeItem("pending_otp_purpose");
+
+                setSuccess("Xác thực tài khoản thành công! Đang chuyển hướng sang Đăng nhập...");
+                setTimeout(() => {
+                    navigate("/login", {
+                        replace: true,
+                        state: {
+                            email: activeEmail,
+                            verified: true
+                        }
+                    });
+                }, 1500);
             } else {
                 setError(res.message || "Xác thực thất bại. Vui lòng thử lại.");
             }
@@ -82,12 +130,12 @@ function VerifyOtp() {
             setIsSubmitting(false);
             const errorCode = err?.errorCode || err?.code || err?.error;
             const errorMap = {
-                AUTH_INVALID_OTP: "OTP không chính xác.",
-                AUTH_VERIFICATION_EXPIRED: "Mã OTP đã hết hạn.",
+                AUTH_INVALID_OTP: "Mã OTP không chính xác. Vui lòng kiểm tra lại.",
+                AUTH_VERIFICATION_EXPIRED: "Mã OTP đã hết hạn. Vui lòng bấm gửi lại mã.",
                 AUTH_ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản tương ứng.",
                 INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
             };
-            setError(errorMap[errorCode] || err?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
+            setError(errorMap[errorCode] || err?.message || "Lỗi xác thực. Vui lòng thử lại.");
         }
     };
 
@@ -124,7 +172,7 @@ function VerifyOtp() {
                 </header>
 
                 {success && (
-                    <div className="mb-6 bg-emerald-950/50 border border-emerald-800/80 rounded-xl p-3.5 flex items-center gap-2.5 text-emerald-200 text-xs leading-relaxed">
+                    <div className="mb-6 bg-emerald-950/50 border border-emerald-800/80 rounded-xl p-3.5 flex items-center gap-2.5 text-emerald-200 text-xs leading-relaxed animate-fadeIn">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             width="16"
@@ -144,7 +192,7 @@ function VerifyOtp() {
                 )}
 
                 {error && (
-                    <div className="mb-6 bg-red-950/50 border border-red-800/80 rounded-xl p-4 flex items-start gap-3 text-red-200 text-xs leading-relaxed">
+                    <div className="mb-6 bg-red-950/50 border border-red-800/80 rounded-xl p-4 flex items-start gap-3 text-red-200 text-xs leading-relaxed animate-fadeIn">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             width="16"
@@ -166,7 +214,30 @@ function VerifyOtp() {
                 )}
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-                    <div className="flex flex-col items-start gap-1.5 w-full relative">
+                    {email ? (
+                        <div className="flex flex-col items-start gap-1 w-full text-xs">
+                            <span className="text-zinc-500 font-bold uppercase tracking-wider">Email xác thực:</span>
+                            <span className="text-zinc-300 font-black tracking-wide bg-zinc-950/60 border border-zinc-900 px-4 py-3 rounded-xl w-full select-all">{email}</span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-start gap-1.5 w-full relative">
+                            <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="inputEmail">
+                                Địa chỉ Email
+                            </label>
+                            <input
+                                id="inputEmail"
+                                name="inputEmail"
+                                type="email"
+                                placeholder="example@gmail.com"
+                                value={inputEmail}
+                                onChange={(e) => setInputEmail(e.target.value)}
+                                className="w-full bg-zinc-950 border border-zinc-800 focus:bg-zinc-900/40 rounded-xl px-4 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none focus:border-[#ff7a1a]"
+                                disabled={isSubmitting}
+                            />
+                        </div>
+                    )}
+
+                    <div className="flex flex-col items-start gap-1.5 w-full relative mt-2">
                         <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="otp">
                             Mã xác thực
                         </label>
@@ -198,7 +269,7 @@ function VerifyOtp() {
                             <button
                                 type="button"
                                 disabled
-                                className="text-zinc-500 font-bold text-xs uppercase tracking-widest bg-transparent border-none cursor-not-allowed select-none"
+                                className="text-zinc-500 font-bold text-xs uppercase tracking-widest bg-transparent border-none cursor-not-allowed select-none animate-pulse"
                             >
                                 Gửi lại mã sau ({countdown}s)
                             </button>

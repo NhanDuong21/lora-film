@@ -14,7 +14,7 @@ import {
 export default function CustomerProfileView({ onBackHome, initialTab = 'info' }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, updateUser, isAuthenticated } = useAuth();
+  const { user, updateUser, isAuthenticated, refreshProfile } = useAuth();
 
   // Get active session identifiers
   const accountId = getUserAccountId();
@@ -310,8 +310,26 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
             </button>
           </div>
 
-        {/* Asymmetric Split Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {user?.profilePending ? (
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl text-center space-y-4 max-w-xl mx-auto my-12 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex justify-center text-amber-500">
+              <AlertCircle className="w-12 h-12" />
+            </div>
+            <h3 className="text-lg font-black text-white uppercase tracking-wider">Đang khởi tạo hồ sơ</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">Hồ sơ thành viên của bạn đang được hệ thống thiết lập và đồng bộ. Vui lòng nhấn nút tải lại bên dưới sau vài giây.</p>
+            <button
+              type="button"
+              onClick={async () => {
+                triggerToast("Đang tải lại hồ sơ...", "success");
+                await refreshProfile();
+              }}
+              className="bg-[#ff7a1a] hover:bg-opacity-95 text-zinc-950 font-black py-3.5 px-8 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/10 cursor-pointer"
+            >
+              Tải lại hồ sơ
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* LEFT PANEL: Member Card & Loyalty Stars Widget */}
           <div className="space-y-6">
@@ -809,7 +827,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
           </div>
 
         </div>
-
+        )}
       </div>
 
       {/* Change Password Modal */}
