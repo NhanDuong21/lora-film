@@ -61,74 +61,92 @@ public class ReservationService {
         if (request.getSeatIds().size() != new HashSet<>(request.getSeatIds()).size()) {
             throw new BusinessException("VALIDATION_ERROR", "seatIds contains duplicates");
         }
+        
+        // Canonicalize seatIds for idempotent hashing
+        request.setSeatIds(request.getSeatIds().stream().sorted().collect(Collectors.toList()));
 
         Long userId = currentUserProvider.getCurrentUserId();
 
-        // 1. Idempotency Check
-        if (idempotencyService.hasKey(userId, idempotencyKey)) {
+        // 1. Idempotency Check (Atomic)
+        boolean acquired = idempotencyService.acquireIdempotency(userId, idempotencyKey, request);
+        if (!acquired) {
             ReservationGroupResponse previousResponse = idempotencyService.getResponse(userId, idempotencyKey, request);
             if (previousResponse != null) {
                 logger.info("Idempotency replay for key {}", idempotencyKey);
                 return previousResponse;
             } else {
                 logger.warn("Idempotency conflict for key {}", idempotencyKey);
-                throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT");
+                throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Concurrent request detected or payload mismatch.");
             }
-        }
-
-        Long showtimeId = request.getShowtimeId();
-
-        // 2. Validate Showtime
-        ShowtimeInfo showtime = movieServiceClient.getShowtime(showtimeId);
-        if (showtime == null) {
-            throw new BusinessException("BOOKING_SHOWTIME_NOT_FOUND");
-        }
-        if (!showtime.isAvailable()) {
-            throw new BusinessException("BOOKING_SHOWTIME_NOT_AVAILABLE");
-        }
-
-        // 3. Validate Seats
-        List<SeatInfo> seats = movieServiceClient.getSeats(request.getSeatIds());
-        if (seats.size() != request.getSeatIds().size()) {
-            throw new BusinessException("BOOKING_SEAT_NOT_FOUND");
-        }
-
-        for (SeatInfo seat : seats) {
-            if (!seat.isActive()) {
-                throw new BusinessException("BOOKING_SEAT_NOT_ACTIVE");
-            }
-            if (!seat.getRoomId().equals(showtime.getRoomId())) {
-                throw new BusinessException("BOOKING_SEAT_ROOM_MISMATCH");
-            }
-            if (movieServiceClient.isSeatBooked(showtimeId, seat.getId())) {
-                throw new BusinessException("BOOKING_SEAT_ALREADY_BOOKED");
-            }
-        }
-
-        // 4. Check DB for existing HELD reservations
-        List<SeatReservation> existingReservations = seatReservationRepository.findActiveReservations(
-                showtimeId, request.getSeatIds());
-        if (!existingReservations.isEmpty()) {
-            throw new BusinessException("BOOKING_SEAT_ALREADY_HELD");
-        }
-
-        // 5. Acquire Redis Locks atomically
-        boolean locksAcquired = seatLockManager.acquireLocks(showtimeId, request.getSeatIds(), idempotencyKey);
-        if (!locksAcquired) {
-            logger.warn("Failed to acquire Redis locks for showtimeId: {}, seatIds: {}", showtimeId,
-                    request.getSeatIds());
-            throw new BusinessException("BOOKING_SEAT_ALREADY_HELD");
         }
 
         try {
-            // 6. Create reservations
+            Long showtimeId = request.getShowtimeId();
+
+            // 2. Validate Showtime
+            ShowtimeInfo showtime = movieServiceClient.getShowtime(showtimeId);
+            if (showtime == null) {
+                throw new BusinessException("BOOKING_SHOWTIME_NOT_FOUND", "Showtime not found.");
+            }
+            if (!showtime.isAvailable()) {
+                throw new BusinessException("BOOKING_SHOWTIME_NOT_AVAILABLE", "Showtime is not available for booking.");
+            }
+
+            // 3. Validate Seats
+            List<SeatInfo> seats = movieServiceClient.getSeats(request.getSeatIds());
+            if (seats.size() != request.getSeatIds().size()) {
+                throw new BusinessException("BOOKING_SEAT_NOT_FOUND", "One or more seats were not found.");
+            }
+
+            for (SeatInfo seat : seats) {
+                if (!seat.isActive()) {
+                    throw new BusinessException("BOOKING_SEAT_NOT_ACTIVE", "One or more seats are not active.");
+                }
+                if (!seat.getRoomId().equals(showtime.getRoomId())) {
+                    throw new BusinessException("BOOKING_SEAT_ROOM_MISMATCH", "Seat does not belong to the showtime room.");
+                }
+                if (movieServiceClient.isSeatBooked(showtimeId, seat.getId())) {
+                    throw new BusinessException("BOOKING_SEAT_ALREADY_BOOKED", "Seat is already booked.");
+                }
+            }
+
+            // 4. Check DB for existing HELD reservations
+            List<SeatReservation> existingReservations = seatReservationRepository.findActiveReservations(
+                    showtimeId, request.getSeatIds());
+            if (!existingReservations.isEmpty()) {
+                throw new BusinessException("BOOKING_SEAT_ALREADY_HELD", "Seat is currently held by another reservation.");
+            }
+
+            // 5. Acquire Redis Locks atomically
+            String lockOwner = String.valueOf(userId);
+            boolean locksAcquired = seatLockManager.acquireLocks(showtimeId, request.getSeatIds(), lockOwner);
+            if (!locksAcquired) {
+                logger.warn("Failed to acquire Redis locks for showtimeId: {}, seatIds: {}", showtimeId,
+                        request.getSeatIds());
+                throw new BusinessException("BOOKING_SEAT_ALREADY_HELD", "Seat is currently held by another reservation.");
+            }
+
+            // 6. Register transaction synchronization to clean up on rollback
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (status == STATUS_ROLLED_BACK) {
+                            seatLockManager.releaseLocks(showtimeId, request.getSeatIds(), lockOwner);
+                            idempotencyService.removeIdempotencyKey(userId, idempotencyKey);
+                            logger.info("Rolled back locks and idempotency key for user {} on showtime {}", userId, showtimeId);
+                        }
+                    }
+                }
+            );
+
+            // 7. Create reservations
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime expiresAt = now.plusMinutes(bookingProperties.getReservation().getTtlSeconds() / 60);
 
             List<SeatReservation> newReservations = new ArrayList<>();
             for (Long seatId : request.getSeatIds()) {
                 SeatReservation reservation = new SeatReservation(showtimeId, seatId, userId, expiresAt);
-                // JPA will set created_at and version
                 newReservations.add(reservation);
             }
 
@@ -146,15 +164,14 @@ public class ReservationService {
                     seatResponses
             );
 
-            // 7. Save idempotency result
+            // 8. Save idempotency result
             idempotencyService.saveResponse(userId, idempotencyKey, request, groupResponse);
             logger.info("Reservation created successfully for idempotencyKey: {}", idempotencyKey);
             return groupResponse;
+
         } catch (Exception e) {
-            // Rollback locks on failure
-            seatLockManager.releaseLocks(showtimeId, request.getSeatIds(), idempotencyKey);
-            logger.error("Error creating reservation, releasing locks for showtimeId: {}, seatIds: {}", showtimeId,
-                    request.getSeatIds(), e);
+            // Remove the idempotency placeholder if an exception is thrown before commit
+            idempotencyService.removeIdempotencyKey(userId, idempotencyKey);
             throw e;
         }
     }
@@ -176,11 +193,11 @@ public class ReservationService {
     @Transactional
     public void releaseReservation(Long reservationId) {
         SeatReservation reservation = seatReservationRepository.findById(reservationId)
-                .orElseThrow(() -> new BusinessException("SEAT_RESERVATION_NOT_FOUND"));
+                .orElseThrow(() -> new BusinessException("SEAT_RESERVATION_NOT_FOUND", "Reservation not found."));
 
         Long currentUserId = currentUserProvider.getCurrentUserId();
         if (!reservation.getUserId().equals(currentUserId)) {
-            throw new BusinessException("FORBIDDEN");
+            throw new BusinessException("FORBIDDEN", "You are not allowed to release this reservation.");
         }
 
         if (reservation.getStatus() == ReservationStatus.RELEASED) {
@@ -188,17 +205,18 @@ public class ReservationService {
         }
 
         if (reservation.getStatus() == ReservationStatus.CONVERTED) {
-            throw new BusinessException("SEAT_RESERVATION_ALREADY_CONVERTED");
+            throw new BusinessException("SEAT_RESERVATION_ALREADY_CONVERTED", "Reservation has already been converted to a ticket.");
         }
 
         if (LocalDateTime.now().isAfter(reservation.getExpiresAt())) {
-            throw new BusinessException("SEAT_RESERVATION_EXPIRED");
+            throw new BusinessException("SEAT_RESERVATION_EXPIRED", "Reservation has expired.");
         }
 
-        // Release lock
-        seatLockManager.forceReleaseLocks(reservation.getShowtimeId(), List.of(reservation.getSeatId()));
-        logger.info("Released redis lock for showtime {}, seat {}", reservation.getShowtimeId(),
-                reservation.getSeatId());
+        // Release lock using Lua script with ownership check
+        String lockOwner = String.valueOf(currentUserId);
+        seatLockManager.releaseLocks(reservation.getShowtimeId(), List.of(reservation.getSeatId()), lockOwner);
+        logger.info("Released redis lock for showtime {}, seat {} by owner {}", reservation.getShowtimeId(),
+                reservation.getSeatId(), lockOwner);
 
         reservation.setStatus(ReservationStatus.RELEASED);
         seatReservationRepository.save(reservation);

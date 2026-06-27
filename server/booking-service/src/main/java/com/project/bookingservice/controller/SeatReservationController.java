@@ -26,6 +26,7 @@ public class SeatReservationController {
 
     @PostMapping
     @Operation(summary = "Create a new seat reservation", description = "Reserves one or more seats for a showtime atomically. Requires Idempotency-Key header.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Seats reserved successfully")
     public ResponseEntity<ApiResponse<ReservationGroupResponse>> createReservation(
             @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
             @Valid @RequestBody CreateReservationRequest request) {
@@ -36,6 +37,7 @@ public class SeatReservationController {
 
     @GetMapping("/{reservationId}")
     @Operation(summary = "Get a seat reservation", description = "Retrieve details of a specific seat reservation by ID. User must own the reservation.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Seat reservation retrieved successfully")
     public ResponseEntity<ApiResponse<ReservationResponse>> getReservation(@PathVariable Long reservationId) {
         ReservationResponse response = reservationService.getReservation(reservationId);
         return ResponseEntity.ok(ApiResponse.success("Seat reservation retrieved successfully", response));
@@ -43,6 +45,7 @@ public class SeatReservationController {
 
     @DeleteMapping("/{reservationId}")
     @Operation(summary = "Release a seat reservation", description = "Release a held seat reservation. Idempotent operation. User must own the reservation.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Seat reservation released successfully")
     public ResponseEntity<ApiResponse<Map<String, Object>>> releaseReservation(@PathVariable Long reservationId) {
         reservationService.releaseReservation(reservationId);
         Map<String, Object> data = new HashMap<>();

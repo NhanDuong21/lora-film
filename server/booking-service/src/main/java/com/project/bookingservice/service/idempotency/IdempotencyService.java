@@ -27,6 +27,18 @@ public class IdempotencyService {
         this.objectMapper = objectMapper;
     }
 
+    public boolean acquireIdempotency(Long userId, String idempotencyKey, Object requestPayload) {
+        try {
+            String key = getKey(userId, idempotencyKey);
+            IdempotencyRecord placeholder = new IdempotencyRecord(objectMapper.writeValueAsString(requestPayload), null);
+            long ttlHours = bookingProperties.getIdempotency().getTtlHours();
+            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(key, placeholder, ttlHours, TimeUnit.HOURS);
+            return Boolean.TRUE.equals(acquired);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize request payload", e);
+        }
+    }
+
     public void saveResponse(Long userId, String idempotencyKey, Object requestPayload,
             ReservationGroupResponse response) {
         try {
@@ -35,10 +47,16 @@ public class IdempotencyService {
                     objectMapper.writeValueAsString(requestPayload),
                     response);
             long ttlHours = bookingProperties.getIdempotency().getTtlHours();
+            // We use set here to overwrite the placeholder with the actual response
             redisTemplate.opsForValue().set(key, record, ttlHours, TimeUnit.HOURS);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize idempotency record", e);
         }
+    }
+
+    public void removeIdempotencyKey(Long userId, String idempotencyKey) {
+        String key = getKey(userId, idempotencyKey);
+        redisTemplate.delete(key);
     }
 
     public ReservationGroupResponse getResponse(Long userId, String idempotencyKey, Object requestPayload) {
@@ -49,19 +67,15 @@ public class IdempotencyService {
             try {
                 String currentRequestHash = objectMapper.writeValueAsString(requestPayload);
                 if (record.getRequestHash().equals(currentRequestHash)) {
-                    return record.getResponse();
+                    return record.getResponse(); // Could be null if still in progress
                 } else {
-                    return null; // Signals a conflict
+                    return null; // Signals a conflict (different payload)
                 }
             } catch (JsonProcessingException e) {
                 throw new RuntimeException("Failed to serialize request payload for comparison", e);
             }
         }
         return null;
-    }
-
-    public boolean hasKey(Long userId, String idempotencyKey) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(getKey(userId, idempotencyKey)));
     }
 
     private String getKey(Long userId, String idempotencyKey) {

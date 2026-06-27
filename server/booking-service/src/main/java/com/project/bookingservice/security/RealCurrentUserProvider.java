@@ -7,7 +7,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("!local & !test")
 public class RealCurrentUserProvider implements CurrentUserProvider {
 
     @Override
