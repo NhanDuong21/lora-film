@@ -12,18 +12,15 @@ public class DiscountConstraintValidator implements ConstraintValidator<Discount
         if (obj == null) return true;
 
         DiscountType discountType = null;
-        BigDecimal discountValue = null;
         BigDecimal maxDiscountAmount = null;
 
         if (obj instanceof CreatePromotionRequest) {
             CreatePromotionRequest req = (CreatePromotionRequest) obj;
             discountType = req.getDiscountType();
-            discountValue = req.getDiscountValue();
             maxDiscountAmount = req.getMaxDiscountAmount();
         } else if (obj instanceof UpdatePromotionRequest) {
             UpdatePromotionRequest req = (UpdatePromotionRequest) obj;
             discountType = req.getDiscountType();
-            discountValue = req.getDiscountValue();
             maxDiscountAmount = req.getMaxDiscountAmount();
         }
 
