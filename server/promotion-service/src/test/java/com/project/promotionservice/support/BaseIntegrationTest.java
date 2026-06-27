@@ -42,7 +42,8 @@ public abstract class BaseIntegrationTest {
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         if (USE_LOCAL_MYSQL) {
-            registry.add("spring.datasource.url", () -> "jdbc:mysql://localhost:3307/promotion_db?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true");
+            String port = System.getenv("DB_PORT") != null ? System.getenv("DB_PORT") : (System.getenv("MYSQL_PORT") != null ? System.getenv("MYSQL_PORT") : "3306");
+            registry.add("spring.datasource.url", () -> "jdbc:mysql://localhost:" + port + "/promotion_db?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true");
             registry.add("spring.datasource.username", () -> "root");
             registry.add("spring.datasource.password", () -> "THGaming809");
         } else {
@@ -51,6 +52,7 @@ public abstract class BaseIntegrationTest {
             registry.add("spring.datasource.password", mysql::getPassword);
         }
         registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
         registry.add("spring.jpa.show-sql", () -> "true");
     }
