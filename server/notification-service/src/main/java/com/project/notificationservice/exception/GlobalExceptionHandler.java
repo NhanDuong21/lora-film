@@ -76,7 +76,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException ex) {
         log.warn("Access denied: {}", ex.getMessage());
-        ApiResponse<Object> response = ApiResponse.error(ex.getMessage(), "FORBIDDEN");
+        ApiResponse<Object> response = ApiResponse.error("Forbidden", "FORBIDDEN");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
@@ -92,6 +92,13 @@ public class GlobalExceptionHandler {
         log.warn("Database integrity violation: {}", ex.getMessage());
         ApiResponse<Object> response = ApiResponse.error("Notification template code already exists", "NOTIFICATION_TEMPLATE_CODE_ALREADY_EXISTS");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleNoResourceFoundException(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        log.warn("Resource not found: {}", ex.getMessage());
+        ApiResponse<Object> response = ApiResponse.error("Resource not found", "NOT_FOUND");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
     @ExceptionHandler(Exception.class)
