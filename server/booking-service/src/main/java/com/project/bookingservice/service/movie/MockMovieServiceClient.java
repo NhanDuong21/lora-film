@@ -3,11 +3,13 @@ package com.project.bookingservice.service.movie;
 import com.project.bookingservice.dto.movie.SeatInfo;
 import com.project.bookingservice.dto.movie.ShowtimeInfo;
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Profile;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Profile({"local", "test"})
 public class MockMovieServiceClient implements MovieServiceClient {
 
     @Override

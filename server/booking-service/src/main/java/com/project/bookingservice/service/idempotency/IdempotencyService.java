@@ -7,8 +7,10 @@ import com.project.bookingservice.dto.reservation.ReservationResponse;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import com.project.bookingservice.dto.reservation.CreateReservationRequest;
 
 @Service
 public class IdempotencyService {
@@ -31,7 +33,7 @@ public class IdempotencyService {
         try {
             String key = getKey(userId, idempotencyKey);
             IdempotencyRecord record = new IdempotencyRecord(
-                    objectMapper.writeValueAsString(requestPayload),
+                    serializeCanonicalPayload(requestPayload),
                     response
             );
             long ttlHours = bookingProperties.getIdempotency().getTtlHours();
@@ -47,7 +49,7 @@ public class IdempotencyService {
 
         if (value instanceof IdempotencyRecord record) {
             try {
-                String currentRequestHash = objectMapper.writeValueAsString(requestPayload);
+                String currentRequestHash = serializeCanonicalPayload(requestPayload);
                 if (record.getRequestHash().equals(currentRequestHash)) {
                     return record.getResponse();
                 } else {
@@ -66,6 +68,13 @@ public class IdempotencyService {
 
     private String getKey(Long userId, String idempotencyKey) {
         return IDEMPOTENCY_PREFIX + userId + ":" + idempotencyKey;
+    }
+
+    private String serializeCanonicalPayload(Object requestPayload) throws JsonProcessingException {
+        if (requestPayload instanceof CreateReservationRequest req && req.getSeatIds() != null) {
+            Collections.sort(req.getSeatIds());
+        }
+        return objectMapper.writeValueAsString(requestPayload);
     }
 
     public static class IdempotencyRecord {

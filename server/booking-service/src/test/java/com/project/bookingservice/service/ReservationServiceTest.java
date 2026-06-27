@@ -127,9 +127,10 @@ class ReservationServiceTest {
         when(movieServiceClient.getShowtime(10L)).thenReturn(new ShowtimeInfo(10L, 1L, true));
         when(movieServiceClient.getSeats(request.getSeatIds())).thenReturn(Arrays.asList(new SeatInfo(101L, 1L, true)));
         when(movieServiceClient.isSeatBooked(10L, 101L)).thenReturn(false);
-        when(seatReservationRepository.findByShowtimeIdAndSeatIdInAndStatus(10L, request.getSeatIds(), ReservationStatus.HELD))
+        when(seatReservationRepository.findActiveReservations(10L, request.getSeatIds()))
                 .thenReturn(new ArrayList<>());
-        when(seatLockManager.acquireLocks(10L, request.getSeatIds(), "idemp-key")).thenReturn(true);
+        when(seatLockManager.acquireLocks(10L, request.getSeatIds(), "15")).thenReturn(true);
+        when(seatReservationRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<ReservationResponse> responses = reservationService.createReservation(request, "idemp-key");
         

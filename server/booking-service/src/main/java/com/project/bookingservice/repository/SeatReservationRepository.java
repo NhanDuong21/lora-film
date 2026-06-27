@@ -7,10 +7,21 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 @Repository
 public interface SeatReservationRepository extends JpaRepository<SeatReservation, Long> {
     
-    List<SeatReservation> findByShowtimeIdAndSeatIdInAndStatus(Long showtimeId, List<Long> seatIds, ReservationStatus status);
-
-    boolean existsByShowtimeIdAndSeatIdAndStatus(Long showtimeId, Long seatId, ReservationStatus status);
+    @Query("SELECT sr FROM SeatReservation sr " +
+           "WHERE sr.showtimeId = :showtimeId AND sr.seatId IN :seatIds " +
+           "AND (" +
+           "  (sr.status = 'HELD' AND sr.expiresAt > CURRENT_TIMESTAMP) OR " +
+           "  (sr.status = 'CONVERTED' AND EXISTS (" +
+           "      SELECT b FROM Booking b WHERE b.id = sr.bookingId AND b.status IN ('PENDING_PAYMENT', 'CONFIRMED')" +
+           "  ))" +
+           ")")
+    List<SeatReservation> findActiveReservations(
+            @Param("showtimeId") Long showtimeId, 
+            @Param("seatIds") List<Long> seatIds);
 }

@@ -3,9 +3,13 @@ package com.project.bookingservice.dto.reservation;
 import com.project.bookingservice.enumtype.ReservationStatus;
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class ReservationResponse {
 
+    @JsonProperty("reservationId")
     private Long id;
+    private Long userId;
     private Long showtimeId;
     private Long seatId;
     private ReservationStatus status;
@@ -15,13 +19,22 @@ public class ReservationResponse {
     public ReservationResponse() {
     }
 
-    public ReservationResponse(Long id, Long showtimeId, Long seatId, ReservationStatus status, LocalDateTime expiresAt, LocalDateTime createdAt) {
+    public ReservationResponse(Long id, Long userId, Long showtimeId, Long seatId, ReservationStatus status, LocalDateTime expiresAt, LocalDateTime createdAt) {
         this.id = id;
+        this.userId = userId;
         this.showtimeId = showtimeId;
         this.seatId = seatId;
         this.status = status;
         this.expiresAt = expiresAt;
         this.createdAt = createdAt;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public Long getId() {
