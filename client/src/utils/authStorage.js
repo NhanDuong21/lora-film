@@ -22,8 +22,14 @@ export const setAuthData = (data) => {
     localStorage.setItem("tokenType", data.tokenType || "Bearer");
     localStorage.setItem("userEmail", data.email || "");
     localStorage.setItem("userRole", data.role || "");
+    
+    if (data.expiresIn) {
+        localStorage.setItem("expiresIn", data.expiresIn.toString());
+    }
 
-    if (token) {
+    if (data.accountId) {
+        localStorage.setItem("userAccountId", data.accountId.toString());
+    } else if (token) {
         try {
             const decoded = jwtDecode(token);
             if (decoded && decoded.userId) {
@@ -62,8 +68,41 @@ export const clearAuthData = () => {
     localStorage.removeItem("userEmail");
     localStorage.removeItem("userRole");
     localStorage.removeItem("userAccountId");
+    localStorage.removeItem("expiresIn");
 };
 
 export const isAuthenticated = () => {
     return !!localStorage.getItem("authToken");
+};
+
+// Consolidated Storage APIs required by the integration prompt
+export const getAuthSession = () => {
+    return {
+        accessToken: getAuthToken(),
+        refreshToken: getRefreshToken(),
+        tokenType: localStorage.getItem("tokenType") || "Bearer",
+        accountId: getUserAccountId(),
+        email: getUserEmail(),
+        role: getUserRole(),
+        expiresIn: localStorage.getItem("expiresIn")
+    };
+};
+
+export const saveAuthSession = (data) => {
+    setAuthData(data);
+};
+
+export const updateAuthTokens = (accessToken, refreshToken) => {
+    localStorage.setItem("authToken", accessToken);
+    if (refreshToken) {
+        localStorage.setItem("refreshToken", refreshToken);
+    }
+};
+
+export const clearAuthSession = () => {
+    clearAuthData();
+};
+
+export const getAccessToken = () => {
+    return getAuthToken();
 };

@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+
 import Home from "../pages/public/Home";
 import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
@@ -30,6 +32,58 @@ import AdminSettingsView from "../pages/admin/AdminSettingsPage";
 import AdminShowtimeView from "../pages/admin/AdminShowtimePage";
 import AdminStaffView from "../pages/admin/AdminStaffPage";
 
+// Simple Loading Spinner for route guards
+function PageLoader() {
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-[#050506] text-white">
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-[#ff7a1a] border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm font-semibold tracking-wider text-zinc-400">Đang tải...</p>
+            </div>
+        </div>
+    );
+}
+
+// Protected Route Guard for authenticated users
+function ProtectedRoute({ children }) {
+    const { isAuthenticated, isInitializing } = useAuth();
+    const location = useLocation();
+
+    if (isInitializing) {
+        return <PageLoader />;
+    }
+
+    if (!isAuthenticated) {
+        return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    return children;
+}
+
+// Role-based Route Guard
+function RoleRoute({ children, allowedRoles }) {
+    const { isAuthenticated, userRole, isInitializing } = useAuth();
+    const location = useLocation();
+
+    if (isInitializing) {
+        return <PageLoader />;
+    }
+
+    if (!isAuthenticated) {
+        return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    // Normalize comparison by stripping potential "ROLE_" prefixes
+    const normalizedRole = userRole ? userRole.replace(/^ROLE_/, "") : "";
+    const normalizedAllowedRoles = allowedRoles.map(role => role.replace(/^ROLE_/, ""));
+
+    if (!normalizedAllowedRoles.includes(normalizedRole)) {
+        return <Navigate to="/" replace />;
+    }
+
+    return children;
+}
+
 function AppRoutes() {
     return (
         <BrowserRouter>
@@ -39,32 +93,96 @@ function AppRoutes() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/verify-otp" element={<VerifyOtp />} />
-                <Route path="/profile" element={<CustomerProfilePage />} />
+                
+                {/* Protected Customer Profile */}
+                <Route path="/profile" element={
+                    <ProtectedRoute>
+                        <CustomerProfilePage />
+                    </ProtectedRoute>
+                } />
 
                 {/* Customer Routes */}
                 <Route path="/movies" element={<MovieDiscoveryView />} />
                 <Route path="/movie/:id" element={<MovieDetailPage />} />
                 <Route path="/cinema/:id" element={<CinemaDetailPage />} />
+                
+                {/* Booking & Seats Protected optionally or open */}
                 <Route path="/booking" element={<MasterBookingFunnelPage />} />
                 <Route path="/seat-selection" element={<SeatSelectionPage />} />
 
                 {/* Employee Routes */}
-                <Route path="/employee" element={<EmployeeDashboardView />} />
-                <Route path="/employee/checkin" element={<EmployeeCheckInView />} />
-                <Route path="/employee/pos" element={<EmployeePOSView />} />
-                <Route path="/employee/schedules" element={<EmployeeScheduleView />} />
+                <Route path="/employee" element={
+                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
+                        <EmployeeDashboardView />
+                    </RoleRoute>
+                } />
+                <Route path="/employee/checkin" element={
+                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
+                        <EmployeeCheckInView />
+                    </RoleRoute>
+                } />
+                <Route path="/employee/pos" element={
+                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
+                        <EmployeePOSView />
+                    </RoleRoute>
+                } />
+                <Route path="/employee/schedules" element={
+                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
+                        <EmployeeScheduleView />
+                    </RoleRoute>
+                } />
 
                 {/* Admin Routes */}
-                <Route path="/admin" element={<AdminDashboardView />} />
-                <Route path="/admin/movies" element={<AdminMovieView />} />
-                <Route path="/admin/cinemas" element={<AdminCinemaView />} />
-                <Route path="/admin/concessions" element={<AdminConcessionInventory />} />
-                <Route path="/admin/events" element={<AdminEventView />} />
-                <Route path="/admin/finance" element={<AdminFinanceView />} />
-                <Route path="/admin/members" element={<AdminMembersView />} />
-                <Route path="/admin/settings" element={<AdminSettingsView />} />
-                <Route path="/admin/showtimes" element={<AdminShowtimeView />} />
-                <Route path="/admin/staff" element={<AdminStaffView />} />
+                <Route path="/admin" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminDashboardView />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/movies" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminMovieView />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/cinemas" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminCinemaView />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/concessions" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminConcessionInventory />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/events" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminEventView />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/finance" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminFinanceView />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/members" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminMembersView />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/settings" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminSettingsView />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/showtimes" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminShowtimeView />
+                    </RoleRoute>
+                } />
+                <Route path="/admin/staff" element={
+                    <RoleRoute allowedRoles={["ADMIN"]}>
+                        <AdminStaffView />
+                    </RoleRoute>
+                } />
             </Routes>
         </BrowserRouter>
     );

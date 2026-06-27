@@ -1,53 +1,55 @@
-import axios from "axios";
+import apiClient from "./apiClient";
 import { setAuthData, clearAuthData } from "../utils/authStorage";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export const register = async (userData) => {
     try {
-        const response = await axios.post(`${API_BASE_URL}/api/auth/register`, userData);
+        const response = await apiClient.post(`/api/auth/register`, userData);
         return response.data;
     } catch (error) {
-        if (error.response && error.response.data) {
-            throw error.response.data;
-        }
-        throw new Error("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.", { cause: error });
+        throw error;
     }
 };
 
-export const verifyOtp = async (accountId, otpCode) => {
+export const verifyOtp = async (email, otpCode, purpose = "REGISTRATION") => {
     try {
-        const response = await axios.post(`${API_BASE_URL}/api/auth/verify`, {
-            accountId: Number(accountId),
-            otp: otpCode
+        const response = await apiClient.post(`/api/auth/verify`, {
+            email,
+            otp: otpCode,
+            purpose
         });
         return response.data;
     } catch (error) {
-        if (error.response && error.response.data) {
-            throw error.response.data;
-        }
-        throw new Error("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.", { cause: error });
+        throw error;
     }
 };
 
 export const login = async (email, password) => {
     try {
-        const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
+        const response = await apiClient.post(`/api/auth/login`, {
             email,
             password
         });
         return response.data;
     } catch (error) {
-        if (error.response && error.response.data) {
-            throw error.response.data;
-        }
-        throw new Error("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.", { cause: error });
+        throw error;
+    }
+};
+
+export const resendOtp = async (email, purpose = "REGISTRATION") => {
+    try {
+        const response = await apiClient.post(`/api/auth/resend-otp`, {
+            email,
+            purpose
+        });
+        return response.data;
+    } catch (error) {
+        throw error;
     }
 };
 
 export const refreshToken = async (tokenValue) => {
     try {
-        const response = await axios.post(`${API_BASE_URL}/api/auth/refresh-token`, {
+        const response = await apiClient.post(`/api/auth/refresh-token`, {
             refreshToken: tokenValue
         });
         const resData = response.data;
@@ -58,28 +60,6 @@ export const refreshToken = async (tokenValue) => {
     } catch (error) {
         clearAuthData();
         window.location.href = "/login";
-        if (error.response && error.response.data) {
-            throw error.response.data;
-        }
-        throw new Error("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.", { cause: error });
-    }
-};
-
-export const resendOtp = async (accountId) => {
-    try {
-        const response = await axios.post(`${API_BASE_URL}/api/auth/resend-otp`, {
-            accountId: Number(accountId)
-        }, {
-            headers: {
-                "Content-Type": "application/json",
-                "accountId": Number(accountId)
-            }
-        });
-        return response.data;
-    } catch (error) {
-        if (error.response && error.response.data) {
-            throw error.response.data;
-        }
-        throw new Error("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.", { cause: error });
+        throw error;
     }
 };

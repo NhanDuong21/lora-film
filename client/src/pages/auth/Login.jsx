@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { login } from "../../services/authService";
-import { setPendingAccountId } from "../../utils/authStorage";
 import { useAuth } from "../../contexts/AuthContext";
 
 function Login() {
     const { login: contextLogin } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -16,7 +17,17 @@ function Login() {
 
     useEffect(() => {
         document.title = "Đăng Nhập - LoraFilm Ticket Booking";
-    }, []);
+        
+        // Prefill email if provided in navigation state
+        if (location.state?.email) {
+            setEmail(location.state.email);
+        }
+        
+        // Display custom success message if navigated after successful verification
+        if (location.state?.verified) {
+            setSuccessMessage("Xác thực tài khoản thành công! Vui lòng đăng nhập.");
+        }
+    }, [location]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -34,9 +45,20 @@ function Login() {
             setIsSubmitting(false);
 
             if (data?.success && data?.data) {
-                contextLogin(data.data);
-                setSuccessMessage("Đăng nhập thành công.");
-                navigate("/");
+                await contextLogin(data.data);
+                setSuccessMessage("Đăng nhập thành công. Đang chuyển hướng...");
+
+                // Navigate based on role-specific paths
+                const role = data.data.role;
+                setTimeout(() => {
+                    if (role === "ADMIN" || role === "ROLE_ADMIN") {
+                        navigate("/admin");
+                    } else if (role === "EMPLOYEE" || role === "STAFF" || role === "ROLE_STAFF") {
+                        navigate("/employee");
+                    } else {
+                        navigate("/");
+                    }
+                }, 1000);
             } else {
                 setErrorMsg("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
             }
@@ -46,13 +68,18 @@ function Login() {
             const errorCode = error?.errorCode || error?.code || error?.error;
             
             if (errorCode === "AUTH_ACCOUNT_NOT_VERIFIED") {
-                const accId = error?.data?.accountId || error?.accountId || error?.data?.id;
-                if (accId) {
-                    setPendingAccountId(accId);
-                }
+                // Clear any stored/temporary auth state
+                sessionStorage.setItem("pending_otp_email", email);
+                sessionStorage.setItem("pending_otp_purpose", "REGISTRATION");
+
                 setErrorMsg("Tài khoản chưa được xác thực. Đang chuyển hướng sang trang xác thực OTP...");
                 setTimeout(() => {
-                    navigate("/verify-otp");
+                    navigate("/verify-otp", {
+                        state: {
+                            email: email,
+                            purpose: "REGISTRATION"
+                        }
+                    });
                 }, 1500);
                 return;
             }
