@@ -2,7 +2,6 @@ package com.project.movieservice.service;
 
 import com.project.movieservice.dto.*;
 import com.project.movieservice.entity.Genre;
-import com.project.movieservice.entity.Genre;
 import com.project.movieservice.entity.Movie;
 import com.project.movieservice.enumtype.MovieStatus;
 import com.project.movieservice.exception.BusinessException;

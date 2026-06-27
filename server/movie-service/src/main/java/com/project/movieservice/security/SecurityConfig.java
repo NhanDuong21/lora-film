@@ -35,6 +35,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/genres/**", "/api/movies/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/admin/movies/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MOVIE_READ", "ROLE_MOVIE_MANAGE")
+                .requestMatchers("/api/admin/movies/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MOVIE_MANAGE")
                 .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENRE_MANAGE")
                 .anyRequest().authenticated()
             )
