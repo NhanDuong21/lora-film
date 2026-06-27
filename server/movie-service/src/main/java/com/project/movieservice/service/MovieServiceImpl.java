@@ -58,6 +58,10 @@ public class MovieServiceImpl implements MovieService {
         int page = 0;
         int size = 10;
         
+        if (search != null && search.length() > 255) {
+            throw new BusinessException("Search query must not exceed 255 characters", "MOVIE_INVALID_QUERY", HttpStatus.BAD_REQUEST);
+        }
+
         if (pageStr != null) {
             try {
                 page = Integer.parseInt(pageStr);

@@ -16,6 +16,5 @@ public interface MovieRepository extends JpaRepository<Movie, Long>, JpaSpecific
     @EntityGraph(attributePaths = {"genres"})
     Optional<Movie> findById(Long id);
 
-    @EntityGraph(attributePaths = {"genres"})
     Page<Movie> findAll(org.springframework.data.jpa.domain.Specification<Movie> spec, Pageable pageable);
 }

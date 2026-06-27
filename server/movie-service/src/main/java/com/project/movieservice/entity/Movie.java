@@ -62,6 +62,7 @@ public class Movie {
         joinColumns = @JoinColumn(name = "movie_id"),
         inverseJoinColumns = @JoinColumn(name = "genre_id")
     )
+    @org.hibernate.annotations.BatchSize(size = 20)
     private Set<Genre> genres = new HashSet<>();
 
     public Movie() {
