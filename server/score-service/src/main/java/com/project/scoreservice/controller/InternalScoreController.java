@@ -1,0 +1,28 @@
+package com.project.scoreservice.controller;
+ 
+import com.project.scoreservice.common.ApiResponse;
+import com.project.scoreservice.dto.UserScoreResponse;
+import com.project.scoreservice.service.ScoreService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+ 
+@RestController
+@RequestMapping("/internal/scores")
+@Tag(name = "Score Internal Integration", description = "Internal service integration endpoints (used by Booking, Payment, and upstream systems)")
+public class InternalScoreController {
+ 
+    private final ScoreService scoreService;
+ 
+    public InternalScoreController(ScoreService scoreService) {
+        this.scoreService = scoreService;
+    }
+ 
+    @GetMapping("/users/{userId}")
+    @Operation(summary = "Get user score balance internally", description = "Internal endpoint to quickly fetch current score details and earning rate for a user")
+    public ResponseEntity<ApiResponse<UserScoreResponse>> getUserScore(@PathVariable Long userId) {
+        UserScoreResponse response = scoreService.getUserScore(userId);
+        return ResponseEntity.ok(ApiResponse.success("User score retrieved successfully", response));
+    }
+}
