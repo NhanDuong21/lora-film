@@ -48,6 +48,7 @@ public class CreatePromotionRequest {
     private LocalDateTime endDate;
 
     @NotNull(message = "campaignId is required")
+    @Min(value = 1, message = "campaignId must be greater than 0")
     private Long campaignId;
 
     @Builder.Default

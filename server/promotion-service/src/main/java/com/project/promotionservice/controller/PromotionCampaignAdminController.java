@@ -36,6 +36,12 @@ public class PromotionCampaignAdminController {
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime to,
             @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
         
+        if (pageable.getPageSize() < 1 || pageable.getPageSize() > 50 || pageable.getPageNumber() < 0) {
+            throw new com.project.promotionservice.exception.BusinessException(
+                    "Page size must be between 1 and 50, and page index must not be less than zero",
+                    "PROMOTION_INVALID_QUERY",
+                    HttpStatus.BAD_REQUEST);
+        }
         validateSort(pageable.getSort());
         CampaignPageResponse response = campaignService.getCampaigns(isActive, availabilityStatus, from, to, pageable);
         return ResponseEntity.ok(ApiResponse.success("Promotion campaigns retrieved successfully", response));

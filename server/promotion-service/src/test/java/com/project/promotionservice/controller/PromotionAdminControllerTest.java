@@ -230,6 +230,15 @@ class PromotionAdminControllerTest {
     }
 
     @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void getPromotions_ShouldReturn400_WhenPageSizeOutOfRange() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/promotions")
+                .param("size", "100"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("PROMOTION_INVALID_QUERY"));
+    }
+
+    @Test
     @WithMockUser(authorities = "PROMOTION_READ")
     void getPromotionById_ShouldReturn200_WhenFound() throws Exception {
         PromotionResponse response = PromotionResponse.builder()
@@ -371,5 +380,32 @@ class PromotionAdminControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("PROMOTION_NOT_FOUND"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void updatePromotion_ShouldReturn400_WhenUsageLimitLessThanUsedCount() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        LocalDateTime end = LocalDateTime.now().plusDays(10);
+        com.project.promotionservice.dto.UpdatePromotionRequest request = com.project.promotionservice.dto.UpdatePromotionRequest.builder()
+                .promotionCode("SUMMER50UP")
+                .discountType(DiscountType.FIXED_AMOUNT)
+                .discountValue(new BigDecimal("50000.00"))
+                .minOrderAmount(new BigDecimal("200000.00"))
+                .usageLimit(50)
+                .limitPerUser(1)
+                .startDate(start)
+                .endDate(end)
+                .campaignId(1L)
+                .build();
+
+        when(promotionService.updatePromotion(any(Long.class), any(com.project.promotionservice.dto.UpdatePromotionRequest.class)))
+                .thenThrow(new BusinessException("usageLimit cannot be smaller than current usedCount: 125", "PROMOTION_USAGE_LIMIT_INVALID", HttpStatus.BAD_REQUEST));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/promotions/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("PROMOTION_USAGE_LIMIT_INVALID"));
     }
 }

@@ -397,6 +397,11 @@ public class PromotionAdminServiceImpl implements PromotionAdminService {
                 maxDiscountAmount = null; // Ignore or null for fixed amount
             }
 
+            // Reject if usageLimit < usedCount
+            if (request.getUsageLimit() < promotion.getUsedCount()) {
+                throw new BusinessException("usageLimit cannot be smaller than current usedCount: " + promotion.getUsedCount(), "PROMOTION_USAGE_LIMIT_INVALID", HttpStatus.BAD_REQUEST);
+            }
+
             promotion.setPromotionCode(promotionCode);
             promotion.setDescription(request.getDescription());
             promotion.setDiscountType(request.getDiscountType());

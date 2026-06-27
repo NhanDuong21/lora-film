@@ -185,6 +185,15 @@ class PromotionCampaignAdminControllerTest {
     }
 
     @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void getCampaigns_ShouldReturn400_WhenPageSizeOutOfRange() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/promotion-campaigns")
+                .param("size", "100"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("PROMOTION_INVALID_QUERY"));
+    }
+
+    @Test
     @WithMockUser(authorities = "PROMOTION_READ")
     void getCampaignById_ShouldReturn200_WhenFound() throws Exception {
         CampaignResponse response = CampaignResponse.builder()
@@ -288,6 +297,27 @@ class PromotionCampaignAdminControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("CAMPAIGN_INVALID_DATE_RANGE"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void updateCampaign_ShouldReturn409_WhenDateConflictWithChildPromotions() throws Exception {
+        LocalDateTime start = LocalDateTime.now().plusDays(5);
+        LocalDateTime end = LocalDateTime.now().plusDays(10);
+        com.project.promotionservice.dto.UpdateCampaignRequest request = com.project.promotionservice.dto.UpdateCampaignRequest.builder()
+                .campaignName("Summer 2026 Updated")
+                .startDate(start)
+                .endDate(end)
+                .build();
+
+        when(campaignService.updateCampaign(any(Long.class), any(com.project.promotionservice.dto.UpdateCampaignRequest.class)))
+                .thenThrow(new BusinessException("New campaign date range conflicts with existing child promotions", "CAMPAIGN_UPDATE_CONFLICT", HttpStatus.CONFLICT));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/promotion-campaigns/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("CAMPAIGN_UPDATE_CONFLICT"));
     }
 
     @Test

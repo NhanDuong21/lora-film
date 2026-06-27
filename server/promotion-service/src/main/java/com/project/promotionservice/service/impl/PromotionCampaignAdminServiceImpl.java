@@ -254,6 +254,11 @@ public class PromotionCampaignAdminServiceImpl implements PromotionCampaignAdmin
                 throw new BusinessException("endDate must be after startDate", "CAMPAIGN_INVALID_DATE_RANGE", HttpStatus.BAD_REQUEST);
             }
 
+            // Check child promotions date conflicts
+            if (promotionRepository.existsByCampaignIdAndDateRangeOutside(id, request.getStartDate(), request.getEndDate())) {
+                throw new BusinessException("New campaign date range conflicts with existing child promotions", "CAMPAIGN_UPDATE_CONFLICT", HttpStatus.CONFLICT);
+            }
+
             // Update campaign properties
             String campaignName = request.getCampaignName() != null ? request.getCampaignName().trim() : null;
             if (campaignName == null || campaignName.isEmpty()) {

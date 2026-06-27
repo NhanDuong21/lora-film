@@ -22,6 +22,12 @@ public interface PromotionRepository extends JpaRepository<Promotion, Long>, Jpa
 
     long countByCampaignId(Long campaignId);
 
+    @Query("SELECT COUNT(p) > 0 FROM Promotion p WHERE p.campaign.id = :campaignId " +
+           "AND (p.startDate < :startDate OR p.endDate > :endDate)")
+    boolean existsByCampaignIdAndDateRangeOutside(@Param("campaignId") Long campaignId,
+                                                  @Param("startDate") java.time.LocalDateTime startDate,
+                                                  @Param("endDate") java.time.LocalDateTime endDate);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Promotion p SET p.usedCount = p.usedCount + 1, p.version = p.version + 1 " +
            "WHERE p.id = :promotionId AND p.usedCount < p.usageLimit")
