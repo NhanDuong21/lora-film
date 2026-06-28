@@ -103,7 +103,8 @@ function AppRoutes() {
 
                 {/* Customer Routes */}
                 <Route path="/movies" element={<MovieDiscoveryView />} />
-                <Route path="/movie/:id" element={<MovieDetailPage />} />
+                <Route path="/movies/:movieId" element={<MovieDetailPage />} />
+                <Route path="/movie/:movieId" element={<MovieDetailPage />} />
                 <Route path="/cinema/:id" element={<CinemaDetailPage />} />
                 
                 {/* Booking & Seats Protected optionally or open */}
