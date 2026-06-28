@@ -187,7 +187,6 @@ export default function MovieDetailPage() {
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Quay lại</span>
               </button>
-              <span className="text-[10px] text-zinc-600 font-mono">ID PHIM: {movie.id}</span>
             </div>
 
             {/* Hero / Movie Info Block */}
