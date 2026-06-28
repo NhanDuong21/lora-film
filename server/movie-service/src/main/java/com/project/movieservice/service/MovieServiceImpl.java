@@ -421,6 +421,23 @@ public class MovieServiceImpl implements MovieService {
         return mapToAdminDetailResponse(movie);
     }
 
+    private void validateStatusAndDateConsistency(MovieStatus status, java.time.LocalDate releaseDate, java.time.LocalDate endDate) {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        if (status == MovieStatus.UPCOMING) {
+            if (today.isAfter(releaseDate)) {
+                throw new BusinessException("UPCOMING movies cannot have a past release date", "MOVIE_INVALID_DATE_STATUS", HttpStatus.BAD_REQUEST);
+            }
+        } else if (status == MovieStatus.NOW_SHOWING) {
+            if (today.isBefore(releaseDate) || today.isAfter(endDate)) {
+                throw new BusinessException("NOW_SHOWING movies must be within their release period", "MOVIE_INVALID_DATE_STATUS", HttpStatus.BAD_REQUEST);
+            }
+        } else if (status == MovieStatus.ENDED) {
+            if (today.isBefore(releaseDate)) {
+                throw new BusinessException("ENDED movies cannot have a future release date", "MOVIE_INVALID_DATE_STATUS", HttpStatus.BAD_REQUEST);
+            }
+        }
+    }
+
     @Override
     @Transactional
     public MovieCreatedResponse createMovie(MovieCreateRequest request) {
@@ -428,13 +445,18 @@ public class MovieServiceImpl implements MovieService {
             throw new BusinessException("Movie end date cannot be before release date", "MOVIE_INVALID_DATE_RANGE", HttpStatus.BAD_REQUEST);
         }
 
-        Movie movie = new Movie();
-        mapRequestToMovie(request, movie);
+        MovieStatus newStatus;
         try {
-            movie.setStatus(MovieStatus.valueOf(request.getStatus()));
+            newStatus = MovieStatus.valueOf(request.getStatus());
         } catch (IllegalArgumentException e) {
             throw new BusinessException("Invalid movie status", "MOVIE_INVALID_STATUS", HttpStatus.BAD_REQUEST);
         }
+
+        validateStatusAndDateConsistency(newStatus, request.getReleaseDate(), request.getEndDate());
+
+        Movie movie = new Movie();
+        mapRequestToMovie(request, movie);
+        movie.setStatus(newStatus);
 
         List<Genre> genres = genreRepository.findAllById(request.getGenreIds());
         if (genres.size() != request.getGenreIds().size()) {
@@ -463,12 +485,17 @@ public class MovieServiceImpl implements MovieService {
             throw new BusinessException("Movie duration cannot be changed because future showtimes already exist", "MOVIE_HAS_FUTURE_SHOWTIMES", HttpStatus.CONFLICT);
         }
 
-        mapRequestToMovie(request, movie);
+        MovieStatus newStatus;
         try {
-            movie.setStatus(MovieStatus.valueOf(request.getStatus()));
+            newStatus = MovieStatus.valueOf(request.getStatus());
         } catch (IllegalArgumentException e) {
             throw new BusinessException("Invalid movie status", "MOVIE_INVALID_STATUS", HttpStatus.BAD_REQUEST);
         }
+
+        validateStatusAndDateConsistency(newStatus, request.getReleaseDate(), request.getEndDate());
+
+        mapRequestToMovie(request, movie);
+        movie.setStatus(newStatus);
 
         List<Genre> genres = genreRepository.findAllById(request.getGenreIds());
         if (genres.size() != request.getGenreIds().size()) {
