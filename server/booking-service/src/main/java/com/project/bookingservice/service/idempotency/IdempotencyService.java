@@ -39,6 +39,14 @@ public class IdempotencyService {
         }
     }
 
+    public String generateHash(Object requestPayload) {
+        try {
+            return objectMapper.writeValueAsString(requestPayload);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize request payload", e);
+        }
+    }
+
     public void saveResponse(Long userId, String idempotencyKey, Object requestPayload,
             ReservationGroupResponse response) {
         try {
@@ -57,6 +65,15 @@ public class IdempotencyService {
     public void removeIdempotencyKey(Long userId, String idempotencyKey) {
         String key = getKey(userId, idempotencyKey);
         redisTemplate.delete(key);
+    }
+
+    public IdempotencyRecord getIdempotencyRecord(Long userId, String idempotencyKey) {
+        String key = getKey(userId, idempotencyKey);
+        Object value = redisTemplate.opsForValue().get(key);
+        if (value instanceof IdempotencyRecord record) {
+            return record;
+        }
+        return null;
     }
 
     public ReservationGroupResponse getResponse(Long userId, String idempotencyKey, Object requestPayload) {

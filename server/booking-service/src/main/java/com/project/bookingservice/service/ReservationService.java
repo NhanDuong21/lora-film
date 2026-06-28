@@ -70,14 +70,38 @@ public class ReservationService {
         // 1. Idempotency Check (Atomic)
         boolean acquired = idempotencyService.acquireIdempotency(userId, idempotencyKey, request);
         if (!acquired) {
-            ReservationGroupResponse previousResponse = idempotencyService.getResponse(userId, idempotencyKey, request);
-            if (previousResponse != null) {
-                logger.info("Idempotency replay for key {}", idempotencyKey);
-                return previousResponse;
-            } else {
-                logger.warn("Idempotency conflict for key {}", idempotencyKey);
-                throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Concurrent request detected or payload mismatch.");
+            // Polling for idempotency resolution (Option B)
+            for (int i = 0; i < 20; i++) { // wait up to 2 seconds
+                try {
+                    IdempotencyService.IdempotencyRecord record = idempotencyService.getIdempotencyRecord(userId, idempotencyKey);
+                    if (record != null) {
+                        String currentHash = idempotencyService.generateHash(request);
+                        if (!record.getRequestHash().equals(currentHash)) {
+                            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
+                        }
+
+                        if (record.getResponse() != null) {
+                            logger.info("Idempotency replay for key {}", idempotencyKey);
+                            return record.getResponse();
+                        }
+                    } else {
+                        break; // Record vanished
+                    }
+                } catch (BusinessException be) {
+                    throw be;
+                } catch (Exception e) {
+                    logger.warn("Error during idempotency polling, treating as conflict", e);
+                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
+                }
+                
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Interrupted during idempotency wait");
+                }
             }
+            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
         }
 
         try {
@@ -86,27 +110,27 @@ public class ReservationService {
             // 2. Validate Showtime
             ShowtimeInfo showtime = movieServiceClient.getShowtime(showtimeId);
             if (showtime == null) {
-                throw new BusinessException("BOOKING_SHOWTIME_NOT_FOUND", "Showtime not found.");
+                throw new BusinessException("BOOKING_SHOWTIME_NOT_FOUND", "Showtime not found");
             }
             if (!showtime.isAvailable()) {
-                throw new BusinessException("BOOKING_SHOWTIME_NOT_AVAILABLE", "Showtime is not available for booking.");
+                throw new BusinessException("BOOKING_SHOWTIME_NOT_AVAILABLE", "Showtime is not available for booking");
             }
 
             // 3. Validate Seats
             List<SeatInfo> seats = movieServiceClient.getSeats(request.getSeatIds());
             if (seats.size() != request.getSeatIds().size()) {
-                throw new BusinessException("BOOKING_SEAT_NOT_FOUND", "One or more seats were not found.");
+                throw new BusinessException("BOOKING_SEAT_NOT_FOUND", "One or more seats were not found");
             }
 
             for (SeatInfo seat : seats) {
                 if (!seat.isActive()) {
-                    throw new BusinessException("BOOKING_SEAT_NOT_ACTIVE", "One or more seats are not active.");
+                    throw new BusinessException("BOOKING_SEAT_NOT_ACTIVE", "One or more seats are not active");
                 }
                 if (!seat.getRoomId().equals(showtime.getRoomId())) {
-                    throw new BusinessException("BOOKING_SEAT_ROOM_MISMATCH", "Seat does not belong to the showtime room.");
+                    throw new BusinessException("BOOKING_SEAT_ROOM_MISMATCH", "One or more seats do not belong to the showtime room");
                 }
                 if (movieServiceClient.isSeatBooked(showtimeId, seat.getId())) {
-                    throw new BusinessException("BOOKING_SEAT_ALREADY_BOOKED", "Seat is already booked.");
+                    throw new BusinessException("BOOKING_SEAT_ALREADY_BOOKED", "One or more seats have already been booked", java.util.Map.of("unavailableSeatIds", java.util.List.of(seat.getId())));
                 }
             }
 
@@ -114,7 +138,8 @@ public class ReservationService {
             List<SeatReservation> existingReservations = seatReservationRepository.findActiveReservations(
                     showtimeId, request.getSeatIds());
             if (!existingReservations.isEmpty()) {
-                throw new BusinessException("BOOKING_SEAT_ALREADY_HELD", "Seat is currently held by another reservation.");
+                List<Long> unavailableSeatIds = existingReservations.stream().map(SeatReservation::getSeatId).collect(Collectors.toList());
+                throw new BusinessException("BOOKING_SEAT_ALREADY_HELD", "One or more seats are no longer available", java.util.Map.of("unavailableSeatIds", unavailableSeatIds));
             }
 
             // 5. Acquire Redis Locks atomically
@@ -123,7 +148,7 @@ public class ReservationService {
             if (!locksAcquired) {
                 logger.warn("Failed to acquire Redis locks for showtimeId: {}, seatIds: {}", showtimeId,
                         request.getSeatIds());
-                throw new BusinessException("BOOKING_SEAT_ALREADY_HELD", "Seat is currently held by another reservation.");
+                throw new BusinessException("BOOKING_SEAT_ALREADY_HELD", "One or more seats are no longer available");
             }
 
             // 6. Register transaction synchronization to clean up on rollback
@@ -179,11 +204,11 @@ public class ReservationService {
     @Transactional(readOnly = true)
     public ReservationResponse getReservation(Long reservationId) {
         SeatReservation reservation = seatReservationRepository.findById(reservationId)
-                .orElseThrow(() -> new BusinessException("SEAT_RESERVATION_NOT_FOUND"));
+                .orElseThrow(() -> new BusinessException("SEAT_RESERVATION_NOT_FOUND", "Seat reservation not found"));
 
         Long currentUserId = currentUserProvider.getCurrentUserId();
         if (!reservation.getUserId().equals(currentUserId)) {
-            throw new BusinessException("FORBIDDEN");
+            throw new BusinessException("FORBIDDEN", "You cannot access this reservation");
         }
 
         return new ReservationResponse(reservation.getId(), reservation.getUserId(), reservation.getShowtimeId(), reservation.getSeatId(),
@@ -193,11 +218,11 @@ public class ReservationService {
     @Transactional
     public void releaseReservation(Long reservationId) {
         SeatReservation reservation = seatReservationRepository.findById(reservationId)
-                .orElseThrow(() -> new BusinessException("SEAT_RESERVATION_NOT_FOUND", "Reservation not found."));
+                .orElseThrow(() -> new BusinessException("SEAT_RESERVATION_NOT_FOUND", "Seat reservation not found"));
 
         Long currentUserId = currentUserProvider.getCurrentUserId();
         if (!reservation.getUserId().equals(currentUserId)) {
-            throw new BusinessException("FORBIDDEN", "You are not allowed to release this reservation.");
+            throw new BusinessException("FORBIDDEN", "You cannot access this reservation");
         }
 
         if (reservation.getStatus() == ReservationStatus.RELEASED) {
@@ -205,11 +230,11 @@ public class ReservationService {
         }
 
         if (reservation.getStatus() == ReservationStatus.CONVERTED) {
-            throw new BusinessException("SEAT_RESERVATION_ALREADY_CONVERTED", "Reservation has already been converted to a ticket.");
+            throw new BusinessException("SEAT_RESERVATION_ALREADY_CONVERTED", "Seat reservation has already been converted to a booking");
         }
 
         if (LocalDateTime.now().isAfter(reservation.getExpiresAt())) {
-            throw new BusinessException("SEAT_RESERVATION_EXPIRED", "Reservation has expired.");
+            throw new BusinessException("SEAT_RESERVATION_EXPIRED", "Seat reservation has already expired");
         }
 
         // Release lock using Lua script with ownership check

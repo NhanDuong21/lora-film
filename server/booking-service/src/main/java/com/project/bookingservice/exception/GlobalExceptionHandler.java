@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
+    public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
         logger.warn("Business exception occurred: {} - {}", ex.getErrorCode(), ex.getMessage());
         
         HttpStatus status = HttpStatus.BAD_REQUEST;
@@ -32,7 +32,8 @@ public class GlobalExceptionHandler {
             "BOOKING_SHOWTIME_NOT_AVAILABLE".equals(errorCode) ||
             "BOOKING_SEAT_ALREADY_BOOKED".equals(errorCode) ||
             "BOOKING_SEAT_ALREADY_HELD".equals(errorCode) ||
-            "SEAT_RESERVATION_ALREADY_CONVERTED".equals(errorCode)) {
+            "SEAT_RESERVATION_ALREADY_CONVERTED".equals(errorCode) ||
+            "SEAT_RESERVATION_EXPIRED".equals(errorCode)) {
             status = HttpStatus.CONFLICT;
         } else if ("FORBIDDEN".equals(errorCode) || "UNAUTHORIZED".equals(errorCode)) {
             status = "UNAUTHORIZED".equals(errorCode) ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
@@ -40,7 +41,8 @@ public class GlobalExceptionHandler {
             status = HttpStatus.NOT_FOUND;
         }
 
-        return new ResponseEntity<>(ApiResponse.error(ex.getMessage() != null ? ex.getMessage() : "Business logic error", errorCode), status);
+        ApiResponse<Object> response = new ApiResponse<>(false, ex.getMessage() != null ? ex.getMessage() : "Business logic error", errorCode, ex.getData(), null);
+        return new ResponseEntity<>(response, status);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -55,10 +57,17 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(ApiResponse.error("Concurrent update conflict", "BOOKING_OPTIMISTIC_LOCK_CONFLICT"), HttpStatus.CONFLICT);
     }
 
-    @ExceptionHandler({RedisConnectionFailureException.class, org.springframework.data.redis.RedisSystemException.class})
+    @ExceptionHandler({
+        RedisConnectionFailureException.class, 
+        org.springframework.data.redis.RedisSystemException.class,
+        io.lettuce.core.RedisCommandTimeoutException.class,
+        org.springframework.dao.QueryTimeoutException.class,
+        io.lettuce.core.RedisConnectionException.class,
+        java.util.concurrent.TimeoutException.class
+    })
     public ResponseEntity<ApiResponse<Void>> handleRedisException(Exception ex) {
         logger.error("Redis connection error: {}", ex.getMessage(), ex);
-        return new ResponseEntity<>(ApiResponse.error("Service unavailable", "SEAT_LOCK_SERVICE_UNAVAILABLE"), HttpStatus.SERVICE_UNAVAILABLE);
+        return new ResponseEntity<>(ApiResponse.error("Seat lock service is temporarily unavailable.", "SEAT_LOCK_SERVICE_UNAVAILABLE"), HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
@@ -77,6 +86,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         logger.error("Unexpected error occurred: {}", ex.getMessage(), ex);
+        
+        Throwable cause = ex;
+        while (cause != null) {
+            if (cause instanceof org.springframework.data.redis.RedisConnectionFailureException ||
+                cause instanceof io.lettuce.core.RedisConnectionException ||
+                cause instanceof java.net.ConnectException ||
+                (cause.getClass().getName().contains("RedisSystemException"))) {
+                return new ResponseEntity<>(ApiResponse.error("Seat lock service is temporarily unavailable.", "SEAT_LOCK_SERVICE_UNAVAILABLE"), HttpStatus.SERVICE_UNAVAILABLE);
+            }
+            cause = cause.getCause();
+        }
+
         return new ResponseEntity<>(ApiResponse.error("An unexpected error occurred", "INTERNAL_SERVER_ERROR"), HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

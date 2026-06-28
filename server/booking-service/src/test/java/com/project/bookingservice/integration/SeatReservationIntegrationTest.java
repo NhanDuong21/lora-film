@@ -82,6 +82,8 @@ public class SeatReservationIntegrationTest {
         SeatInfo seat2 = new SeatInfo(); seat2.setId(2L); seat2.setRoomId(10L); seat2.setActive(true);
         when(movieServiceClient.getSeats(Arrays.asList(1L, 2L))).thenReturn(Arrays.asList(seat1, seat2));
         when(movieServiceClient.getSeats(Arrays.asList(2L, 1L))).thenReturn(Arrays.asList(seat1, seat2));
+        when(movieServiceClient.getSeats(Arrays.asList(1L))).thenReturn(Arrays.asList(seat1));
+        when(movieServiceClient.getSeats(Arrays.asList(2L))).thenReturn(Arrays.asList(seat2));
         when(movieServiceClient.isSeatBooked(anyLong(), anyLong())).thenReturn(false);
     }
 
@@ -188,51 +190,48 @@ public class SeatReservationIntegrationTest {
     public void testConcurrentRequestsDifferentPayloads() throws Exception {
         int threads = 2;
         ExecutorService executor = Executors.newFixedThreadPool(threads);
-        CountDownLatch latch = new CountDownLatch(1);
-        CountDownLatch done = new CountDownLatch(threads);
-        
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger conflictCount = new AtomicInteger(0);
+        java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(threads);
         
         String token = generateToken(40L);
         
-        Runnable task1 = () -> {
-            try {
-                latch.await();
-                CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(1L));
-                int status = mockMvc.perform(post("/api/bookings/seat-reservations")
-                        .header("Authorization", "Bearer " + token)
-                        .header("Idempotency-Key", "key-concurrent")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(r)))
-                        .andReturn().getResponse().getStatus();
-                if (status == 201) successCount.incrementAndGet();
-                if (status == 409) conflictCount.incrementAndGet();
-            } catch (Exception e) {} finally { done.countDown(); }
+        java.util.concurrent.Callable<Integer> task1 = () -> {
+            barrier.await();
+            CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(1L));
+            return mockMvc.perform(post("/api/bookings/seat-reservations")
+                    .header("Authorization", "Bearer " + token)
+                    .header("Idempotency-Key", "key-concurrent")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(r)))
+                    .andReturn().getResponse().getStatus();
         };
         
-        Runnable task2 = () -> {
-            try {
-                latch.await();
-                CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(2L));
-                int status = mockMvc.perform(post("/api/bookings/seat-reservations")
-                        .header("Authorization", "Bearer " + token)
-                        .header("Idempotency-Key", "key-concurrent")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(r)))
-                        .andReturn().getResponse().getStatus();
-                if (status == 201) successCount.incrementAndGet();
-                if (status == 409) conflictCount.incrementAndGet();
-            } catch (Exception e) {} finally { done.countDown(); }
+        java.util.concurrent.Callable<Integer> task2 = () -> {
+            barrier.await();
+            CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(2L));
+            return mockMvc.perform(post("/api/bookings/seat-reservations")
+                    .header("Authorization", "Bearer " + token)
+                    .header("Idempotency-Key", "key-concurrent")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(r)))
+                    .andReturn().getResponse().getStatus();
         };
         
-        executor.submit(task1);
-        executor.submit(task2);
+        java.util.concurrent.Future<Integer> future1 = executor.submit(task1);
+        java.util.concurrent.Future<Integer> future2 = executor.submit(task2);
         
-        latch.countDown();
-        done.await();
+        int status1 = future1.get();
+        int status2 = future2.get();
         
-        assert successCount.get() == 1;
-        assert conflictCount.get() == 1;
+        int successCount = 0;
+        int conflictCount = 0;
+        
+        if (status1 == 201) successCount++;
+        else if (status1 == 409) conflictCount++;
+        
+        if (status2 == 201) successCount++;
+        else if (status2 == 409) conflictCount++;
+        
+        assert successCount == 1 : "Expected exactly one success, got " + successCount;
+        assert conflictCount == 1 : "Expected exactly one conflict, got " + conflictCount;
     }
 }
