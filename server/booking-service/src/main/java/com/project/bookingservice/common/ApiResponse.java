@@ -1,5 +1,8 @@
 package com.project.bookingservice.common;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+@JsonInclude(JsonInclude.Include.ALWAYS)
 public class ApiResponse<T> {
 
     private boolean success;

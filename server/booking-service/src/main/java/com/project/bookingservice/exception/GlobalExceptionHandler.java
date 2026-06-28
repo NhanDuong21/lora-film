@@ -47,10 +47,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors().forEach(error -> 
-            errors.put(error.getField(), error.getDefaultMessage()));
-        return new ResponseEntity<>(ApiResponse.error("Invalid request parameters", "VALIDATION_ERROR", errors), HttpStatus.BAD_REQUEST);
+        java.util.List<Map<String, String>> errors = new java.util.ArrayList<>();
+        ex.getBindingResult().getFieldErrors().forEach(error -> {
+            Map<String, String> fieldError = new HashMap<>();
+            fieldError.put("field", error.getField());
+            fieldError.put("message", error.getDefaultMessage());
+            errors.add(fieldError);
+        });
+        return new ResponseEntity<>(ApiResponse.error("Validation failed", "VALIDATION_ERROR", errors), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
@@ -69,7 +73,7 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiResponse<Void>> handleRedisException(Exception ex) {
         logger.error("Redis connection error: {}", ex.getMessage(), ex);
-        return new ResponseEntity<>(ApiResponse.error("Seat lock service is temporarily unavailable.", "SEAT_LOCK_SERVICE_UNAVAILABLE"), HttpStatus.SERVICE_UNAVAILABLE);
+        return new ResponseEntity<>(ApiResponse.error("Seat reservation service is temporarily unavailable", "SEAT_LOCK_SERVICE_UNAVAILABLE"), HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
@@ -127,7 +131,7 @@ public class GlobalExceptionHandler {
                 cause instanceof io.lettuce.core.RedisConnectionException ||
                 cause instanceof java.net.ConnectException ||
                 (cause.getClass().getName().contains("RedisSystemException"))) {
-                return new ResponseEntity<>(ApiResponse.error("Seat lock service is temporarily unavailable.", "SEAT_LOCK_SERVICE_UNAVAILABLE"), HttpStatus.SERVICE_UNAVAILABLE);
+                return new ResponseEntity<>(ApiResponse.error("Seat reservation service is temporarily unavailable", "SEAT_LOCK_SERVICE_UNAVAILABLE"), HttpStatus.SERVICE_UNAVAILABLE);
             }
             cause = cause.getCause();
         }

@@ -61,6 +61,9 @@ public class SeatReservationIntegrationTest {
     @MockBean
     private MovieServiceClient movieServiceClient;
 
+    @Autowired
+    private com.project.bookingservice.service.ReservationService reservationService;
+
     private static final String JWT_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
     
     @BeforeEach
@@ -310,5 +313,104 @@ public class SeatReservationIntegrationTest {
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("BOOKING_IDEMPOTENCY_KEY_REQUIRED"));
+    }
+
+    // TEST H — RESPONSE SHAPE VALIDATION
+    private void assertStandardErrorResponse(org.springframework.test.web.servlet.ResultActions result) throws Exception {
+        result.andExpect(jsonPath("$.success").exists())
+              .andExpect(jsonPath("$.message").exists())
+              .andExpect(jsonPath("$.errorCode").exists());
+        // Note: $.data and $.errors are tested for null/array in specific tests 
+        // since jsonPath().exists() fails when the actual JSON value is null.
+    }
+
+    // TEST F — REDIS UNAVAILABLE EXACT CONTRACT
+    @Test
+    public void testRedisUnavailableReturns503() throws Exception {
+        String token = generateToken(40L);
+        CreateReservationRequest request = new CreateReservationRequest(100L, Arrays.asList(1L, 2L));
+
+        com.project.bookingservice.service.idempotency.IdempotencyService realService = 
+            (com.project.bookingservice.service.idempotency.IdempotencyService) org.springframework.test.util.ReflectionTestUtils.getField(reservationService, "idempotencyService");
+            
+        com.project.bookingservice.service.idempotency.IdempotencyService badService = 
+            new com.project.bookingservice.service.idempotency.IdempotencyService(null, null, null) {
+                @Override
+                public boolean acquireIdempotency(Long userId, String idempotencyKey, Object requestPayload) {
+                    throw new org.springframework.data.redis.RedisConnectionFailureException("Connection refused");
+                }
+            };
+
+        org.springframework.test.util.ReflectionTestUtils.setField(reservationService, "idempotencyService", badService);
+
+        try {
+            org.springframework.test.web.servlet.ResultActions result = mockMvc.perform(post("/api/bookings/seat-reservations")
+                    .header("Authorization", "Bearer " + token)
+                    .header("Idempotency-Key", "key-redis-down")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isServiceUnavailable());
+
+            assertStandardErrorResponse(result);
+
+            result.andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message").value("Seat reservation service is temporarily unavailable"))
+                    .andExpect(jsonPath("$.errorCode").value("SEAT_LOCK_SERVICE_UNAVAILABLE"))
+                    .andExpect(jsonPath("$.data").value(nullValue()))
+                    .andExpect(jsonPath("$.errors").value(nullValue()));
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(reservationService, "idempotencyService", realService);
+        }
+    }
+
+    // TEST G — VALIDATION ERROR EXACT CONTRACT
+    @Test
+    public void testEmptySeatIdsReturnsValidationError() throws Exception {
+        String token = generateToken(40L);
+        CreateReservationRequest request = new CreateReservationRequest(100L, Collections.emptyList());
+
+        org.springframework.test.web.servlet.ResultActions result = mockMvc.perform(post("/api/bookings/seat-reservations")
+                .header("Authorization", "Bearer " + token)
+                .header("Idempotency-Key", "key-empty-seats")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        assertStandardErrorResponse(result);
+
+        result.andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.data").value(nullValue()))
+                .andExpect(jsonPath("$.errors").isArray())
+                .andExpect(jsonPath("$.errors[0].field").value("seatIds"))
+                .andExpect(jsonPath("$.errors[0].message").value("seatIds cannot be empty"));
+    }
+
+    // TEST A-E — OPENAPI SPECIFICATIONS
+    @Test
+    public void testOpenApiSpecification() throws Exception {
+        org.springframework.test.web.servlet.MvcResult mvcResult = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+                
+        String responseBody = mvcResult.getResponse().getContentAsString();
+        
+        // TEST A — EXAMPLES EXIST
+        boolean hasExamples = responseBody.contains("\"example\"") || responseBody.contains("\"examples\"");
+        org.assertj.core.api.Assertions.assertThat(hasExamples).isTrue();
+
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                // TEST B — POST ERROR SCHEMA
+                .andExpect(jsonPath("$.paths['/api/bookings/seat-reservations'].post.responses['400'].content['application/json'].schema.$ref",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("ApiResponseReservationGroupResponse"))))
+                // TEST C — GET ERROR SCHEMA
+                .andExpect(jsonPath("$.paths['/api/bookings/seat-reservations/{reservationId}'].get.responses['404'].content['application/json'].schema.$ref",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("ApiResponseReservationResponse"))))
+                // TEST D — DELETE 404 EXISTS
+                .andExpect(jsonPath("$.paths['/api/bookings/seat-reservations/{reservationId}'].delete.responses['404']").exists())
+                // TEST E — DELETE 404 HAS EXAMPLE
+                .andExpect(jsonPath("$.paths['/api/bookings/seat-reservations/{reservationId}'].delete.responses['404'].content['application/json']").exists());
     }
 }
