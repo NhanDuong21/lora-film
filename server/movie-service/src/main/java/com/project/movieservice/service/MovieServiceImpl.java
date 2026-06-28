@@ -441,6 +441,10 @@ public class MovieServiceImpl implements MovieService {
     @Override
     @Transactional
     public MovieCreatedResponse createMovie(MovieCreateRequest request) {
+        if (request.getDurationMinutes() != null && request.getDurationMinutes() <= 0) {
+            throw new BusinessException("Duration must be greater than 0", "MOVIE_INVALID_DURATION", HttpStatus.BAD_REQUEST);
+        }
+
         if (request.getEndDate().isBefore(request.getReleaseDate())) {
             throw new BusinessException("Movie end date cannot be before release date", "MOVIE_INVALID_DATE_RANGE", HttpStatus.BAD_REQUEST);
         }
@@ -475,14 +479,20 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieRepository.findById(movieId)
                 .orElseThrow(() -> new BusinessException("Movie not found", "MOVIE_NOT_FOUND", HttpStatus.NOT_FOUND));
 
+        if (request.getDurationMinutes() != null && request.getDurationMinutes() <= 0) {
+            throw new BusinessException("Duration must be greater than 0", "MOVIE_INVALID_DURATION", HttpStatus.BAD_REQUEST);
+        }
+
         if (request.getEndDate().isBefore(request.getReleaseDate())) {
             throw new BusinessException("Movie end date cannot be before release date", "MOVIE_INVALID_DATE_RANGE", HttpStatus.BAD_REQUEST);
         }
 
         if (!movie.getDurationMinutes().equals(request.getDurationMinutes())) {
             // TODO: Dependency on Showtime issue. 
-            // Currently blocking ALL duration changes because we cannot safely check for future showtimes.
-            throw new BusinessException("Movie duration cannot be changed because future showtimes already exist", "MOVIE_HAS_FUTURE_SHOWTIMES", HttpStatus.CONFLICT);
+            // Currently blocking duration changes for active movies because we cannot safely check for future showtimes.
+            if (movie.getStatus() != MovieStatus.UPCOMING) {
+                throw new BusinessException("Movie duration cannot be changed because future showtimes already exist", "MOVIE_HAS_FUTURE_SHOWTIMES", HttpStatus.CONFLICT);
+            }
         }
 
         MovieStatus newStatus;
@@ -546,18 +556,8 @@ public class MovieServiceImpl implements MovieService {
             throw new BusinessException("Invalid movie status transition", "MOVIE_INVALID_STATUS_TRANSITION", HttpStatus.CONFLICT);
         }
 
-        // Status and Date Consistency validation
-        java.time.LocalDate today = java.time.LocalDate.now();
-        if (newStatus == MovieStatus.NOW_SHOWING) {
-            if (today.isBefore(movie.getReleaseDate()) || today.isAfter(movie.getEndDate())) {
-                throw new BusinessException("Cannot change status to NOW_SHOWING outside of release period", "MOVIE_INVALID_STATUS_TRANSITION", HttpStatus.CONFLICT);
-            }
-        } else if (newStatus == MovieStatus.ENDED) {
-            // Reasonable business rule: Cannot manually end a movie before its release date
-            if (today.isBefore(movie.getReleaseDate())) {
-                throw new BusinessException("Cannot change status to ENDED before release date", "MOVIE_INVALID_STATUS_TRANSITION", HttpStatus.CONFLICT);
-            }
-        }
+        // Tái sử dụng method để đảm bảo logic và Error Code đồng nhất (MOVIE_INVALID_DATE_STATUS)
+        validateStatusAndDateConsistency(newStatus, movie.getReleaseDate(), movie.getEndDate());
 
         movie.setStatus(newStatus);
         movieRepository.save(movie);

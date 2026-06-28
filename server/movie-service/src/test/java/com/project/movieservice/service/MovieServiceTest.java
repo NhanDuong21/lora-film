@@ -198,4 +198,22 @@ public class MovieServiceTest {
         
         assertThrows(BusinessException.class, () -> movieService.updateMovieStatus("1", request));
     }
+
+    @Test
+    void updateMovie_DurationChangeBlocked() {
+        // Phim đang chiếu (khác UPCOMING)
+        movie.setStatus(MovieStatus.NOW_SHOWING);
+        when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
+        
+        MovieUpdateRequest request = new MovieUpdateRequest();
+        request.setTitle("Avengers");
+        request.setReleaseDate(LocalDate.now().minusDays(10));
+        request.setEndDate(LocalDate.now().plusDays(10));
+        request.setDurationMinutes(200); // Cố tình đổi thời lượng khác 180
+        request.setStatus("NOW_SHOWING");
+        request.setGenreIds(java.util.Set.of(1));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> movieService.updateMovie("1", request));
+        assertEquals("MOVIE_HAS_FUTURE_SHOWTIMES", exception.getErrorCode());
+    }
 }
