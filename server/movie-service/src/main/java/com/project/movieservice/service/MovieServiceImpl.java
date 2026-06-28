@@ -458,8 +458,9 @@ public class MovieServiceImpl implements MovieService {
         }
 
         if (!movie.getDurationMinutes().equals(request.getDurationMinutes())) {
-            // TODO: dependency on showtime issue
-            // throw new BusinessException("Movie duration cannot be changed because future showtimes already exist", "MOVIE_HAS_FUTURE_SHOWTIMES", HttpStatus.CONFLICT);
+            // TODO: Dependency on Showtime issue. 
+            // Currently blocking ALL duration changes because we cannot safely check for future showtimes.
+            throw new BusinessException("Movie duration cannot be changed because future showtimes already exist", "MOVIE_HAS_FUTURE_SHOWTIMES", HttpStatus.CONFLICT);
         }
 
         mapRequestToMovie(request, movie);
