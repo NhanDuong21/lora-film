@@ -214,27 +214,86 @@ function Register() {
                 const res = await register(payload);
                 setIsSubmitting(false);
 
-                if (res.success) {
-                    const accId = res?.data?.accountId || res?.accountId || res?.data?.id;
-                    setPendingAccountId(accId);
-                    setGlobalSuccess("Đăng ký thành công. Đang chuyển hướng sang trang xác thực OTP...");
+                if (res.success || res.message === "Registration initiated") {
+                    // Store email and purpose in sessionStorage for durability
+                    sessionStorage.setItem("pending_otp_email", formData.email);
+                    sessionStorage.setItem("pending_otp_purpose", "REGISTRATION");
+
+                    setGlobalSuccess("Đăng ký thành công! Đang chuyển hướng sang xác thực OTP...");
                     setTimeout(() => {
-                        navigate("/verify-otp");
+                        navigate("/verify-otp", {
+                            state: {
+                                email: formData.email,
+                                purpose: "REGISTRATION"
+                            }
+                        });
                     }, 1500);
                 } else {
-                    setGlobalError("Đăng ký không thành công. Vui lòng thử lại.");
+                    setGlobalError(res.message || "Đăng ký không thành công. Vui lòng thử lại.");
                 }
             } catch (error) {
                 setIsSubmitting(false);
-                const errorCode = error?.code || error?.error;
+                const errorCode = error?.errorCode || error?.code || error?.error;
+                
+                // Detailed field mappings
+                if (errorCode === "AUTH_EMAIL_ALREADY_EXISTS") {
+                    setErrors(prev => ({ ...prev, email: "Email này đã được sử dụng." }));
+                    return;
+                }
+                if (errorCode === "PHONE_NUMBER_ALREADY_EXISTS") {
+                    setErrors(prev => ({ ...prev, phoneNumber: "Số điện thoại này đã được sử dụng." }));
+                    return;
+                }
+                if (errorCode === "CCCD_ALREADY_EXISTS") {
+                    setErrors(prev => ({ ...prev, cccd: "Số CCCD này đã được sử dụng." }));
+                    return;
+                }
+                if (errorCode === "USER_CCCD_INVALID") {
+                    setErrors(prev => ({ ...prev, cccd: "Số CCCD không hợp lệ." }));
+                    return;
+                }
+                if (errorCode === "USER_BIRTHDAY_CCCD_MISMATCH") {
+                    setErrors(prev => ({ ...prev, birthday: "Ngày sinh không khớp với thông tin CCCD." }));
+                    return;
+                }
+
+                if (errorCode === "PHONE_NUMBER_RESERVED") {
+                    const retrySecs = error?.data?.retryAfterSeconds || error?.retryAfterSeconds || 60;
+                    setGlobalError(`Số điện thoại này thuộc một đăng ký đang chờ xử lý. Vui lòng thử lại sau ${retrySecs} giây.`);
+                    return;
+                }
+                if (errorCode === "CCCD_RESERVED") {
+                    const retrySecs = error?.data?.retryAfterSeconds || error?.retryAfterSeconds || 60;
+                    setGlobalError(`CCCD này thuộc một đăng ký đang chờ xử lý. Vui lòng thử lại sau ${retrySecs} giây.`);
+                    return;
+                }
+
+                if (errorCode === "REGISTRATION_ALREADY_PENDING") {
+                    setGlobalError("Tài khoản này đang chờ xác thực OTP. Đang chuyển hướng sang trang OTP...");
+                    sessionStorage.setItem("pending_otp_email", formData.email);
+                    sessionStorage.setItem("pending_otp_purpose", "REGISTRATION");
+                    setTimeout(() => {
+                        navigate("/verify-otp", {
+                            state: {
+                                email: formData.email,
+                                purpose: "REGISTRATION"
+                            }
+                        });
+                    }, 1500);
+                    return;
+                }
+
+                if (errorCode === "VALIDATION_ERROR" && error.errors) {
+                    const fieldErrors = {};
+                    error.errors.forEach(err => {
+                        fieldErrors[err.field] = err.message;
+                    });
+                    setErrors(fieldErrors);
+                    setGlobalError("Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại các trường.");
+                    return;
+                }
+
                 const errorMap = {
-                    AUTH_EMAIL_ALREADY_EXISTS: "Email này đã được sử dụng.",
-                    USER_PHONE_ALREADY_EXISTS: "Số điện thoại này đã được sử dụng.",
-                    USER_CCCD_ALREADY_EXISTS: "Số CCCD này đã được sử dụng.",
-                    USER_CCCD_INVALID: "Số CCCD không hợp lệ.",
-                    USER_BIRTHDAY_CCCD_MISMATCH: "Ngày sinh và số CCCD không khớp.",
-                    VALIDATION_ERROR: "Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại.",
-                    USER_PROFILE_CREATE_FAILED: "Không thể tạo hồ sơ người dùng.",
                     INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
                 };
                 const errorMessage = errorMap[errorCode] || error?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.";

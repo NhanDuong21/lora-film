@@ -43,6 +43,11 @@ public class PromotionCampaign {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private Integer version = 0;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
