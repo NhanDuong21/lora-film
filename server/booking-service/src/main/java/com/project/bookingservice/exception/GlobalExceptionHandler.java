@@ -47,8 +47,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
-        logger.warn("Validation error: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error("Invalid request parameters", "VALIDATION_ERROR"), HttpStatus.BAD_REQUEST);
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(error -> 
+            errors.put(error.getField(), error.getDefaultMessage()));
+        return new ResponseEntity<>(ApiResponse.error("Invalid request parameters", "VALIDATION_ERROR", errors), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
@@ -79,12 +81,44 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatchException(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
-        logger.warn("Type mismatch error: {} = {}", ex.getName(), ex.getValue());
-        return new ResponseEntity<>(ApiResponse.error("Invalid path variable or parameter format: " + ex.getName(), "INVALID_PARAM_FORMAT"), HttpStatus.BAD_REQUEST);
+        String msg = String.format("Invalid value for parameter '%s'. Expected type: %s", ex.getName(), ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown");
+        if (ex.getName().toLowerCase().contains("id")) {
+            msg = "Cannot enter letters into ID parameter: " + ex.getName();
+        }
+        return new ResponseEntity<>(ApiResponse.error(msg, "INVALID_PARAM_FORMAT"), HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        String msg = "Malformed JSON request";
+        Throwable cause = ex.getCause();
+        if (cause instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException) {
+            com.fasterxml.jackson.databind.exc.InvalidFormatException ife = (com.fasterxml.jackson.databind.exc.InvalidFormatException) cause;
+            if (!ife.getPath().isEmpty()) {
+                String fieldName = ife.getPath().get(0).getFieldName();
+                if (fieldName.toLowerCase().contains("id")) {
+                    msg = "Cannot enter letters into ID field: " + fieldName;
+                } else {
+                    msg = "Invalid value format for field: " + fieldName;
+                }
+            }
+        } else if (cause instanceof com.fasterxml.jackson.core.JsonParseException) {
+            String causeMsg = cause.getMessage();
+            if (causeMsg != null && causeMsg.contains("Unexpected character")) {
+                msg = "Cannot enter letters or invalid characters into numeric fields (e.g., 100L is invalid)";
+            }
+        }
+        return new ResponseEntity<>(ApiResponse.error(msg, "BAD_REQUEST"), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpRequestMethodNotSupportedException(org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+        logger.warn("Method not supported: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error("Method not supported", "METHOD_NOT_ALLOWED"), HttpStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @ExceptionHandler(Throwable.class)
+    public ResponseEntity<ApiResponse<Void>> handleGenericException(Throwable ex) {
         logger.error("Unexpected error occurred: {}", ex.getMessage(), ex);
         
         Throwable cause = ex;
