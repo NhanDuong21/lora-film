@@ -299,7 +299,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
       </div>
 
       {/* Global Catalog Redirection trigger button */}
-      {!loading && !error && activeMovies.length > 0 && (
+      {!loading && !error && activeMovies.length > 0 && totalPages > 1 && (
         <div className="flex justify-center mt-12">
           <button
             onClick={handleSeeMoreClick}

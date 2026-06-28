@@ -31,7 +31,8 @@ Trang chủ hiển thị danh sách các phim dưới 2 tab chính: **PHIM ĐANG
 ### 2.2. Phân trang hoạt động (Pagination Strategy)
 * **Phân trang độc lập:** Mỗi tab có trạng thái phân trang độc lập (`page` bắt đầu từ `0`). Việc chuyển đổi tab giữ nguyên trang của mỗi tab và không ảnh hưởng hay làm sai lệch dữ liệu của tab kia.
 * **Hiển thị giao diện:** Số trang hiển thị trên UI bắt đầu từ `1` (Backend trang `0` tương ứng UI trang `1`).
-* **Trạng thái nút phân trang:** Nút **Trang trước (Previous)** bị vô hiệu hóa khi `first === true`. Nút **Trang sau (Next)** bị vô hiệu hóa khi `last === true`.
+* **Trạng thái nút phân trang:** Nút **Trang trước (Previous)** bị vô hiệu hóa khi `first === true` hoặc dữ liệu đang được làm mới (`isRefreshing`). Nút **Trang sau (Next)** bị vô hiệu hóa khi `last === true` hoặc `isRefreshing`.
+* **Hiển thị nút "Xem thêm":** Nút này chỉ hiển thị khi tổng số trang phim từ backend của tab hiện tại lớn hơn 1 (tức là `totalPages > 1`). Nếu tổng số phim nhỏ hơn hoặc bằng 8 (chỉ có 1 trang duy nhất), nút "Xem thêm" sẽ tự động ẩn đi để giao diện trông gọn gàng.
 * **Trải nghiệm người dùng:** Khi chuyển đổi trang, màn hình sẽ cuộn mượt (smooth scroll) trực tiếp đến khu vực danh sách phim (`#phim`).
 
 ---
