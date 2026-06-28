@@ -3,7 +3,7 @@ import { MapPin, Phone, Clock, AlertCircle } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
 
-export default function CinemaDetailView({ cinemaId }) {
+export default function CinemaDetailView() {
   return (
     <div className="flex flex-col min-h-screen bg-zinc-950 text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans font-medium">
       <Header />
