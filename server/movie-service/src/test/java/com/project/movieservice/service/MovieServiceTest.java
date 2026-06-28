@@ -149,10 +149,10 @@ public class MovieServiceTest {
         request.setEndDate(LocalDate.now().plusDays(10));
         request.setDurationMinutes(120);
         request.setStatus("UPCOMING");
-        request.setGenreIds(java.util.List.of(1));
+        request.setGenreIds(java.util.Set.of(1));
 
         Genre genre = new Genre(1, "Action");
-        when(genreRepository.findAllById(any())).thenReturn(java.util.List.of(genre));
+        when(genreRepository.findAllById(any())).thenReturn(java.util.Set.of(genre));
         when(movieRepository.save(any(Movie.class))).thenAnswer(i -> {
             Movie m = i.getArgument(0);
             m.setId(2L);
@@ -173,7 +173,7 @@ public class MovieServiceTest {
         request.setEndDate(LocalDate.now());
         request.setDurationMinutes(120);
         request.setStatus("UPCOMING");
-        request.setGenreIds(java.util.List.of(1));
+        request.setGenreIds(java.util.Set.of(1));
 
         assertThrows(BusinessException.class, () -> movieService.createMovie(request));
     }

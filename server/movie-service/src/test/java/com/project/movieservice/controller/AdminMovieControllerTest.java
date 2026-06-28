@@ -64,7 +64,7 @@ public class AdminMovieControllerTest {
         request.setEndDate(LocalDate.now().plusDays(10));
         request.setDurationMinutes(120);
         request.setStatus("UPCOMING");
-        request.setGenreIds(java.util.List.of(1));
+        request.setGenreIds(java.util.Set.of(1));
 
         MovieCreatedResponse response = new MovieCreatedResponse(1L, "New Movie", "UPCOMING");
         when(movieService.createMovie(any(MovieCreateRequest.class))).thenReturn(response);

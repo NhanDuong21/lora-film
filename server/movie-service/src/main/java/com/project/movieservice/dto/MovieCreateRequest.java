@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
+import org.hibernate.validator.constraints.URL;
 
 public class MovieCreateRequest {
     @NotBlank(message = "Title is required")
@@ -32,9 +34,11 @@ public class MovieCreateRequest {
     private LocalDate endDate;
 
     @Size(max = 255, message = "Poster URL must not exceed 255 characters")
+    @URL(message = "Poster URL must be a valid URL")
     private String posterUrl;
 
     @Size(max = 255, message = "Trailer URL must not exceed 255 characters")
+    @URL(message = "Trailer URL must be a valid URL")
     private String trailerUrl;
 
     private String ageRating;
@@ -44,7 +48,7 @@ public class MovieCreateRequest {
 
     @NotNull(message = "Genres are required")
     @Size(min = 1, message = "At least one genre is required")
-    private List<Integer> genreIds;
+    private Set<Integer> genreIds;
 
     public String getTitle() {
         return title;
@@ -134,11 +138,11 @@ public class MovieCreateRequest {
         this.status = status;
     }
 
-    public List<Integer> getGenreIds() {
+    public Set<Integer> getGenreIds() {
         return genreIds;
     }
 
-    public void setGenreIds(List<Integer> genreIds) {
+    public void setGenreIds(Set<Integer> genreIds) {
         this.genreIds = genreIds;
     }
 }
