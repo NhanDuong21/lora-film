@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Play, X, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 import { useData } from '../../contexts/DataContext';
@@ -25,15 +25,17 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
 
   const [activeTrailerUrl, setActiveTrailerUrl] = useState(null);
 
+  // Memoize onDataLoaded callback to prevent it from being recreated on every render
+  const handleDataLoaded = useCallback((data) => {
+    setMovies(data);
+  }, [setMovies]);
+
   // Setup queries for both tabs independently
   const nowShowingQuery = useMoviesQuery({
     status: 'NOW_SHOWING',
     sort: 'releaseDate,desc',
     size: 8,
-    onDataLoaded: (data) => {
-      // Connect Chọn Phim option in HeroSection to real NOW_SHOWING movie data
-      setMovies(data);
-    }
+    onDataLoaded: handleDataLoaded
   });
 
   const upcomingQuery = useMoviesQuery({
@@ -47,6 +49,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
   const {
     movies: activeMovies,
     loading,
+    isRefreshing,
     error,
     page,
     setPage,
@@ -139,7 +142,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
         ) : (
           /* Movie Grid View */
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 px-6 md:px-12 py-10">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 px-6 md:px-12 py-10 transition-opacity duration-300 ${isRefreshing ? 'opacity-40 pointer-events-none' : ''}`}>
               {activeMovies.map((movie) => {
                 const ratingMeta = getAgeRatingLabel(movie.ageRating);
                 return (
@@ -257,7 +260,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
               <div className="flex justify-center items-center gap-2 mt-8">
                 <button
                   onClick={() => handlePageChange(page - 1)}
-                  disabled={first}
+                  disabled={first || isRefreshing}
                   className="p-2 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
                   aria-label="Trang trước"
                 >
@@ -268,12 +271,13 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                   {Array.from({ length: totalPages }).map((_, idx) => (
                     <button
                       key={idx}
+                      disabled={isRefreshing}
                       onClick={() => handlePageChange(idx)}
                       className={`w-8 h-8 rounded-full text-xs font-bold transition-all duration-300 ${
                         page === idx
                           ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
                           : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700"
-                      }`}
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       {idx + 1}
                     </button>
@@ -282,7 +286,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                 
                 <button
                   onClick={() => handlePageChange(page + 1)}
-                  disabled={last}
+                  disabled={last || isRefreshing}
                   className="p-2 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
                   aria-label="Trang sau"
                 >

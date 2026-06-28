@@ -53,16 +53,27 @@ Khi người dùng nhấn vào bất kỳ thẻ phim nào ở Trang chủ, ứng
 
 ## 4. Xử lý trạng thái Loading / Empty / Error
 
-### 4.1. Trạng thái Loading (Tải dữ liệu)
-* Sử dụng bộ khung xương **Skeleton Grid** (gồm 8 thẻ khung xương dạng xung hoạt họa nhấp nháy aspect aspect-[2/3]) hiển thị thay thế lưới phim trong quá trình tải dữ liệu.
-* Không hiển thị các dữ liệu giả (mock data) cũ trong lúc API đang tải.
+### 4.1. Mô hình Trạng thái Loading mới (Loading State Model)
+Để ngăn ngừa tình trạng chớp nháy (UI flickering) màn hình khi đổi trang hoặc chuyển tab, hệ thống áp dụng mô hình hai trạng thái tải dữ liệu:
+* **Tải lần đầu (`isInitialLoading`):** Kích hoạt khi danh sách phim hiện tại trống (`movies.length === 0`). Grid phim sẽ hiển thị 8 thẻ khung xương Shimmer (`MovieSectionSkeleton`).
+* **Làm mới/Tải trang tiếp theo (`isRefreshing`):** Kích hoạt khi người dùng chuyển trang hoặc đổi tab mà trước đó đã có dữ liệu phim. Giao diện sẽ **giữ nguyên** lưới phim cũ nhưng làm mờ đi (`opacity-40`) và tắt tương tác (`pointer-events-none`) để báo hiệu đang tải. Khi dữ liệu mới tải xong, danh sách phim cũ mới bị thay thế bởi phim mới một lần duy nhất.
 
-### 4.2. Trạng thái Trống (Empty State)
+### 4.2. Cơ chế chống Vòng lặp Render/Request (Loop & Race Prevention)
+Để ngăn chặn vòng lặp gọi API vô tận trong React do các phụ thuộc không ổn định (unstable dependencies) trong `useEffect` và `useCallback`:
+* **Sử dụng React Refs:** Hàm gọi API (`fetchMovies`) sử dụng `useRef` để theo dõi các giá trị động thường thay đổi như hàm phản hồi (`onDataLoaded`) và mảng dữ liệu phim (`movies`). Việc này giúp `fetchMovies` chỉ phụ thuộc vào các tham số nguyên thủy cố định (`status`, `sort`, `size`).
+* **Tránh hàm inline làm Dependency:** Hàm callback `onDataLoaded` truyền từ Trang chủ vào hook được bọc lại trong một `useCallback` ổn định, tránh việc tạo mới con trỏ hàm sau mỗi lần render gây lặp vô hạn.
+* **Chống Race Condition:** Sử dụng biến tham chiếu yêu cầu cuối (`lastRequestRef`) để loại bỏ hoàn toàn các phản hồi API cũ trả về chậm hơn các yêu cầu mới.
+
+### 4.3. Hoạt ảnh Khung xương Shimmer & Chống giật khung hình
+* Thay thế hoạt ảnh nhấp nháy toàn bộ thẻ (`animate-pulse`) bằng hiệu ứng dải sáng trượt qua mặt phẳng ngang mượt mà (`.movie-skeleton`) dựa trên CSS keyframes. Hoạt ảnh tự động tắt nếu thiết bị người dùng bật chế độ giảm chuyển động (`prefers-reduced-motion: reduce`).
+* Khung xương Shimmer sử dụng tỷ lệ kích thước (`aspect-[2/3]`), cấu trúc lưới cột, khoảng cách cột và các placeholder chữ y hệt như thẻ phim thật, giúp loại bỏ hoàn toàn hiện tượng sụt lún bố cục (Layout Shift) khi dữ liệu xuất hiện.
+
+### 4.4. Trạng thái Trống (Empty State)
 * Khi danh sách trả về rỗng (`content: []`), giao diện hiển thị thông báo thích hợp:
   * Tab Đang Chiếu: *"Hiện chưa có phim đang chiếu."*
   * Tab Sắp Chiếu: *"Hiện chưa có phim sắp chiếu."*
 
-### 4.3. Trạng thái Lỗi (Error State)
+### 4.5. Trạng thái Lỗi (Error State)
 * Khi xảy ra lỗi kết nối hoặc lỗi từ máy chủ (ví dụ: `MOVIE_INVALID_QUERY`, `INTERNAL_SERVER_ERROR`), giao diện sẽ hiển thị thông điệp thân thiện với người dùng: *"Không thể tải danh sách phim."*
 * Cung cấp nút **Thử lại (Retry)** để chỉ yêu cầu lại dữ liệu bị lỗi của riêng tab hiện tại.
 * Dành cho chi tiết phim, nếu gặp lỗi `MOVIE_NOT_FOUND` hoặc mã phim không hợp lệ, màn hình hiển thị thông báo *"Không tìm thấy phim hoặc phim không còn khả dụng."* kèm hai nút hành động: **Quay lại** và **Về trang chủ**.

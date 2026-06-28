@@ -8,7 +8,8 @@ import { getMovies } from "../services/movieService";
  */
 export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
   const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -16,14 +17,34 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
   const [first, setFirst] = useState(true);
   const [last, setLast] = useState(true);
 
+  // Store onDataLoaded in a Ref to avoid unstable callback dependencies
+  const onDataLoadedRef = useRef(onDataLoaded);
+  useEffect(() => {
+    onDataLoadedRef.current = onDataLoaded;
+  }, [onDataLoaded]);
+
+  // Store movies in a Ref to avoid referencing it directly in fetchMovies' dependencies
+  const moviesRef = useRef(movies);
+  useEffect(() => {
+    moviesRef.current = movies;
+  }, [movies]);
+
   // Use a ref to prevent race conditions from multiple asynchronous responses
   const lastRequestRef = useRef(null);
 
   const fetchMovies = useCallback(async (pageToFetch) => {
     // Defer state updates to microtask to prevent react-hooks/set-state-in-effect
     await Promise.resolve();
-    setLoading(true);
+
+    // Determine loading state type (initial vs refreshing)
+    const hasExistingMovies = moviesRef.current.length > 0;
+    if (hasExistingMovies) {
+      setIsRefreshing(true);
+    } else {
+      setIsInitialLoading(true);
+    }
     setError(null);
+
     const requestId = `${status}-${pageToFetch}`;
     lastRequestRef.current = requestId;
 
@@ -50,8 +71,8 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
         setLast(data.last !== undefined ? data.last : true);
 
         // Call optional callback (useful for updating global state)
-        if (onDataLoaded) {
-          onDataLoaded(content);
+        if (onDataLoadedRef.current) {
+          onDataLoadedRef.current(content);
         }
       }
     } catch (err) {
@@ -60,10 +81,11 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
       }
     } finally {
       if (lastRequestRef.current === requestId) {
-        setLoading(false);
+        setIsInitialLoading(false);
+        setIsRefreshing(false);
       }
     }
-  }, [status, sort, size, onDataLoaded]);
+  }, [status, sort, size]);
 
   useEffect(() => {
     let active = true;
@@ -92,7 +114,9 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
 
   return {
     movies,
-    loading,
+    loading: isInitialLoading, // Map loading to isInitialLoading for backward compatibility
+    isInitialLoading,
+    isRefreshing,
     error,
     page,
     setPage,
