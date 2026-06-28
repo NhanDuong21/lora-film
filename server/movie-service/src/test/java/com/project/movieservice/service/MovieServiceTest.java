@@ -152,7 +152,7 @@ public class MovieServiceTest {
         request.setGenreIds(java.util.Set.of(1));
 
         Genre genre = new Genre(1, "Action");
-        when(genreRepository.findAllById(any())).thenReturn(java.util.Set.of(genre));
+        when(genreRepository.findAllById(any())).thenReturn(java.util.List.of(genre));
         when(movieRepository.save(any(Movie.class))).thenAnswer(i -> {
             Movie m = i.getArgument(0);
             m.setId(2L);
