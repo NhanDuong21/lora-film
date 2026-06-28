@@ -188,50 +188,127 @@ public class SeatReservationIntegrationTest {
 
     @Test
     public void testConcurrentRequestsDifferentPayloads() throws Exception {
-        int threads = 2;
+        int threads = 5;
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(threads);
         
         String token = generateToken(40L);
+        List<java.util.concurrent.Future<Integer>> futures = new ArrayList<>();
         
-        java.util.concurrent.Callable<Integer> task1 = () -> {
-            barrier.await();
-            CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(1L));
-            return mockMvc.perform(post("/api/bookings/seat-reservations")
-                    .header("Authorization", "Bearer " + token)
-                    .header("Idempotency-Key", "key-concurrent")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(r)))
-                    .andReturn().getResponse().getStatus();
-        };
-        
-        java.util.concurrent.Callable<Integer> task2 = () -> {
-            barrier.await();
-            CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(2L));
-            return mockMvc.perform(post("/api/bookings/seat-reservations")
-                    .header("Authorization", "Bearer " + token)
-                    .header("Idempotency-Key", "key-concurrent")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(r)))
-                    .andReturn().getResponse().getStatus();
-        };
-        
-        java.util.concurrent.Future<Integer> future1 = executor.submit(task1);
-        java.util.concurrent.Future<Integer> future2 = executor.submit(task2);
-        
-        int status1 = future1.get();
-        int status2 = future2.get();
+        for (int i = 0; i < threads; i++) {
+            final Long seatId = (long) (i + 1); // 1, 2, 3, 4, 5
+            
+            // Mock movie service for these seats
+            SeatInfo s = new SeatInfo(); s.setId(seatId); s.setRoomId(10L); s.setActive(true);
+            when(movieServiceClient.getSeats(Arrays.asList(seatId))).thenReturn(Arrays.asList(s));
+            
+            futures.add(executor.submit(() -> {
+                barrier.await();
+                CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(seatId));
+                return mockMvc.perform(post("/api/bookings/seat-reservations")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", "key-concurrent-diff")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(r)))
+                        .andReturn().getResponse().getStatus();
+            }));
+        }
         
         int successCount = 0;
         int conflictCount = 0;
         
-        if (status1 == 201) successCount++;
-        else if (status1 == 409) conflictCount++;
-        
-        if (status2 == 201) successCount++;
-        else if (status2 == 409) conflictCount++;
+        for (java.util.concurrent.Future<Integer> f : futures) {
+            int status = f.get();
+            if (status == 201) successCount++;
+            else if (status == 409) conflictCount++;
+        }
         
         assert successCount == 1 : "Expected exactly one success, got " + successCount;
-        assert conflictCount == 1 : "Expected exactly one conflict, got " + conflictCount;
+        assert conflictCount == 4 : "Expected exactly 4 conflicts, got " + conflictCount;
+    }
+
+    @Test
+    public void testConcurrentRequestsSamePayload() throws Exception {
+        int threads = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(threads);
+        
+        String token = generateToken(40L);
+        List<java.util.concurrent.Future<Integer>> futures = new ArrayList<>();
+        
+        for (int i = 0; i < threads; i++) {
+            futures.add(executor.submit(() -> {
+                barrier.await();
+                CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(1L, 2L));
+                return mockMvc.perform(post("/api/bookings/seat-reservations")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", "key-concurrent-same")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(r)))
+                        .andReturn().getResponse().getStatus();
+            }));
+        }
+        
+        int successCount = 0;
+        for (java.util.concurrent.Future<Integer> f : futures) {
+            int status = f.get();
+            if (status == 201) successCount++;
+        }
+        
+        assert successCount == 5 : "Expected exactly 5 successes due to idempotency replay, got " + successCount;
+    }
+
+    @Test
+    public void testGetReservationContract() throws Exception {
+        SeatReservation reservation = new SeatReservation(100L, 1L, 40L, LocalDateTime.now().plusMinutes(10));
+        reservation.setStatus(ReservationStatus.HELD);
+        reservation = seatReservationRepository.save(reservation);
+        
+        String token = generateToken(40L);
+        
+        mockMvc.perform(get("/api/bookings/seat-reservations/" + reservation.getId())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Seat reservation retrieved successfully"))
+                .andExpect(jsonPath("$.data.reservationId").value(reservation.getId()))
+                .andExpect(jsonPath("$.data.userId").value(40))
+                .andExpect(jsonPath("$.data.showtimeId").value(100))
+                .andExpect(jsonPath("$.data.seatId").value(1))
+                .andExpect(jsonPath("$.data.status").value("HELD"))
+                .andExpect(jsonPath("$.data.expiresAt").exists());
+    }
+
+    @Test
+    public void testDeleteReservationContract() throws Exception {
+        SeatReservation reservation = new SeatReservation(100L, 1L, 40L, LocalDateTime.now().plusMinutes(10));
+        reservation.setStatus(ReservationStatus.HELD);
+        reservation = seatReservationRepository.save(reservation);
+        
+        String token = generateToken(40L);
+        
+        mockMvc.perform(delete("/api/bookings/seat-reservations/" + reservation.getId())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Seat reservation released successfully"))
+                .andExpect(jsonPath("$.data.reservationId").value(reservation.getId()))
+                .andExpect(jsonPath("$.data.status").value("RELEASED"));
+                
+        SeatReservation updated = seatReservationRepository.findById(reservation.getId()).orElseThrow();
+        assert updated.getStatus() == ReservationStatus.RELEASED;
+    }
+
+    @Test
+    public void testMissingIdempotencyKeyReturns400() throws Exception {
+        String token = generateToken(40L);
+        CreateReservationRequest request = new CreateReservationRequest(100L, Arrays.asList(1L, 2L));
+
+        mockMvc.perform(post("/api/bookings/seat-reservations")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("BOOKING_IDEMPOTENCY_KEY_REQUIRED"));
     }
 }
