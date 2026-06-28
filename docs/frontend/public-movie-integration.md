@@ -47,6 +47,7 @@ Khi người dùng nhấn vào bất kỳ thẻ phim nào ở Trang chủ, ứng
   GET /api/movies/{movieId}
   ```
 * **Hỗ trợ truy cập trực tiếp:** Người dùng có thể truy cập trực tiếp bằng liên kết URL hoặc thực hiện tải lại trang (browser refresh) mà không bị mất dữ liệu.
+* **Khôi phục vị trí cuộn (Scroll Restoration):** Tích hợp component `<ScrollToTop />` trong Context định tuyến giúp đưa màn hình ngay lập tức về đỉnh trang (`top: 0, left: 0`) khi chuyển hướng giữa các trang khác nhau (ví dụ: Trang chủ sang Trang Chi tiết, hoặc giữa hai Trang Chi tiết khác nhau), loại bỏ hiện tượng giữ nguyên vị trí cuộn cũ.
 * **Xử lý Trailer:** Nếu phim có liên kết trailer (`trailerUrl`), hiển thị nút **XEM TRAILER** để mở một cửa sổ trình phát video Youtube dạng popup/modal. Nếu không có trailer, nút này sẽ tự động ẩn đi một cách mượt mà.
 * **Lịch chiếu & Đặt vé:** Khu vực này hiển thị thông báo trung lập *"Lịch chiếu đang được cập nhật."* để phục vụ cho các tích hợp tiếp theo.
 
