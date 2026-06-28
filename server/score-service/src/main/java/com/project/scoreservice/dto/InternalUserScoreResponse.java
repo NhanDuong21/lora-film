@@ -1,23 +1,23 @@
 package com.project.scoreservice.dto;
  
-import java.time.LocalDateTime;
+import java.math.BigDecimal;
  
-public class UserScoreResponse {
+public class InternalUserScoreResponse {
     private Long userId;
     private Integer currentPoints;
     private Integer accumulatedPoints;
-    private MembershipTierResponse currentTier;
-    private NextTierResponse nextTier;
+    private String tierName;
+    private BigDecimal earningRate;
  
-    public UserScoreResponse() {
+    public InternalUserScoreResponse() {
     }
  
-    public UserScoreResponse(Long userId, Integer currentPoints, Integer accumulatedPoints, MembershipTierResponse currentTier, NextTierResponse nextTier) {
+    public InternalUserScoreResponse(Long userId, Integer currentPoints, Integer accumulatedPoints, String tierName, BigDecimal earningRate) {
         this.userId = userId;
         this.currentPoints = currentPoints;
         this.accumulatedPoints = accumulatedPoints;
-        this.currentTier = currentTier;
-        this.nextTier = nextTier;
+        this.tierName = tierName;
+        this.earningRate = earningRate;
     }
  
     public Long getUserId() {
@@ -44,19 +44,19 @@ public class UserScoreResponse {
         this.accumulatedPoints = accumulatedPoints;
     }
  
-    public MembershipTierResponse getCurrentTier() {
-        return currentTier;
+    public String getTierName() {
+        return tierName;
     }
  
-    public void setCurrentTier(MembershipTierResponse currentTier) {
-        this.currentTier = currentTier;
+    public void setTierName(String tierName) {
+        this.tierName = tierName;
     }
  
-    public NextTierResponse getNextTier() {
-        return nextTier;
+    public BigDecimal getEarningRate() {
+        return earningRate;
     }
  
-    public void setNextTier(NextTierResponse nextTier) {
-        this.nextTier = nextTier;
+    public void setEarningRate(BigDecimal earningRate) {
+        this.earningRate = earningRate;
     }
 }

@@ -15,12 +15,11 @@ public class ScoreHistoryResponse {
     private Integer accumulatedAfter;
     private Long referenceHistoryId;
     private String description;
-    private LocalDateTime createdAt;
  
     public ScoreHistoryResponse() {
     }
  
-    public ScoreHistoryResponse(Long historyId, String eventId, Long bookingId, Integer pointChange, ScoreTransactionType transactionType, Integer balanceBefore, Integer balanceAfter, Integer accumulatedBefore, Integer accumulatedAfter, Long referenceHistoryId, String description, LocalDateTime createdAt) {
+    public ScoreHistoryResponse(Long historyId, String eventId, Long bookingId, Integer pointChange, ScoreTransactionType transactionType, Integer balanceBefore, Integer balanceAfter, Integer accumulatedBefore, Integer accumulatedAfter, Long referenceHistoryId, String description) {
         this.historyId = historyId;
         this.eventId = eventId;
         this.bookingId = bookingId;
@@ -32,7 +31,6 @@ public class ScoreHistoryResponse {
         this.accumulatedAfter = accumulatedAfter;
         this.referenceHistoryId = referenceHistoryId;
         this.description = description;
-        this.createdAt = createdAt;
     }
  
     public Long getHistoryId() {
@@ -121,13 +119,5 @@ public class ScoreHistoryResponse {
  
     public void setDescription(String description) {
         this.description = description;
-    }
- 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
- 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
     }
 }

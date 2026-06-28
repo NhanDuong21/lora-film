@@ -1,6 +1,7 @@
 package com.project.scoreservice.controller;
  
 import com.project.scoreservice.common.ApiResponse;
+import com.project.scoreservice.dto.InternalUserScoreResponse;
 import com.project.scoreservice.dto.UserScoreResponse;
 import com.project.scoreservice.service.ScoreService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,8 +22,8 @@ public class InternalScoreController {
  
     @GetMapping("/users/{userId}")
     @Operation(summary = "Get user score balance internally", description = "Internal endpoint to quickly fetch current score details and earning rate for a user")
-    public ResponseEntity<ApiResponse<UserScoreResponse>> getUserScore(@PathVariable Long userId) {
-        UserScoreResponse response = scoreService.getUserScore(userId);
+    public ResponseEntity<ApiResponse<InternalUserScoreResponse>> getUserScore(@PathVariable Long userId) {
+        InternalUserScoreResponse response = scoreService.getInternalUserScore(userId);
         return ResponseEntity.ok(ApiResponse.success("User score retrieved successfully", response));
     }
 }

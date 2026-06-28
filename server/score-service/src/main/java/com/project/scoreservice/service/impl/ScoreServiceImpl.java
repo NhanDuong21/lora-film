@@ -25,6 +25,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
+import jakarta.validation.ConstraintViolationException;
  
 import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
@@ -84,7 +86,7 @@ public class ScoreServiceImpl implements ScoreService {
         
         try {
             return selfProxy.createDefaultUserScore(userId, defaultTier);
-        } catch (Exception e) {
+        } catch (DataIntegrityViolationException | ConstraintViolationException e) {
             // Already created concurrently by another thread, fetch it
             return userScoreRepository.findByUserId(userId)
                     .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
@@ -103,7 +105,7 @@ public class ScoreServiceImpl implements ScoreService {
     public UserTierResponse getUserTier(Long userId) {
         UserScore userScore = getOrCreateUserScoreEntity(userId);
         
-        MembershipTier currentTier = userScore.getCurrentTier();
+        MembershipTier currentTier = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
         Optional<MembershipTier> nextTierOpt = membershipTierRepository.findFirstByMinPointsGreaterThanOrderByMinPointsAsc(userScore.getAccumulatedPoints());
         
         NextTierResponse nextTier = null;
@@ -210,8 +212,23 @@ public class ScoreServiceImpl implements ScoreService {
         return springPage.map(this::mapToHistoryResponse);
     }
  
+    @Override
+    @Transactional(readOnly = true)
+    public InternalUserScoreResponse getInternalUserScore(Long userId) {
+        UserScore userScore = getOrCreateUserScoreEntity(userId);
+        MembershipTier ct = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
+        
+        return new InternalUserScoreResponse(
+                userScore.getUserId(),
+                userScore.getCurrentPoints(),
+                userScore.getAccumulatedPoints(),
+                ct.getTierName(),
+                ct.getEarningRate()
+        );
+    }
+ 
     private UserScoreResponse mapToUserScoreResponse(UserScore userScore) {
-        MembershipTier ct = userScore.getCurrentTier();
+        MembershipTier ct = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
         MembershipTierResponse currentTier = new MembershipTierResponse(ct.getId(), ct.getTierName(), ct.getMinPoints(), ct.getEarningRate());
         
         Optional<MembershipTier> nextTierOpt = membershipTierRepository.findFirstByMinPointsGreaterThanOrderByMinPointsAsc(userScore.getAccumulatedPoints());
@@ -227,8 +244,7 @@ public class ScoreServiceImpl implements ScoreService {
                 userScore.getCurrentPoints(),
                 userScore.getAccumulatedPoints(),
                 currentTier,
-                nextTier,
-                userScore.getUpdatedAt()
+                nextTier
         );
     }
  
@@ -244,8 +260,7 @@ public class ScoreServiceImpl implements ScoreService {
                 history.getAccumulatedBefore(),
                 history.getAccumulatedAfter(),
                 history.getReferenceHistory() != null ? history.getReferenceHistory().getId() : null,
-                history.getDescription(),
-                history.getCreatedAt()
+                history.getDescription()
         );
     }
 }
