@@ -518,6 +518,19 @@ public class MovieServiceImpl implements MovieService {
             throw new BusinessException("Invalid movie status transition", "MOVIE_INVALID_STATUS_TRANSITION", HttpStatus.CONFLICT);
         }
 
+        // Status and Date Consistency validation
+        java.time.LocalDate today = java.time.LocalDate.now();
+        if (newStatus == MovieStatus.NOW_SHOWING) {
+            if (today.isBefore(movie.getReleaseDate()) || today.isAfter(movie.getEndDate())) {
+                throw new BusinessException("Cannot change status to NOW_SHOWING outside of release period", "MOVIE_INVALID_STATUS_TRANSITION", HttpStatus.CONFLICT);
+            }
+        } else if (newStatus == MovieStatus.ENDED) {
+            // Reasonable business rule: Cannot manually end a movie before its release date
+            if (today.isBefore(movie.getReleaseDate())) {
+                throw new BusinessException("Cannot change status to ENDED before release date", "MOVIE_INVALID_STATUS_TRANSITION", HttpStatus.CONFLICT);
+            }
+        }
+
         movie.setStatus(newStatus);
         movieRepository.save(movie);
         return new MovieStatusResponse(movie.getId(), movie.getStatus().name());
