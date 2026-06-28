@@ -115,16 +115,29 @@ public class AuthServiceImpl implements AuthService {
 			String email = request.getEmail().trim().toLowerCase();
 			log.info("Register request received for email={}", email);
 
-			if (accountRepository.existsByEmail(email)) {
-				log.warn("Email already registered: {}", email);
-				throw new EmailAlreadyExistsException();
+			Account existingAccount = accountRepository.findByEmail(email).orElse(null);
+			if (existingAccount != null) {
+				if (existingAccount.getRegistrationCompleted() == 1) {
+					log.warn("Email already registered and verified: {}", email);
+					throw new EmailAlreadyExistsException();
+				} else {
+					String pendingKeyCheck = "pending_registration:" + email;
+					if (Boolean.TRUE.equals(redisTemplate.hasKey(pendingKeyCheck))) {
+						log.warn("Registration already pending for email: {}", email);
+						throw new RegistrationAlreadyPendingException("Registration is already pending verification. Please verify the OTP or request a new OTP.");
+					} else {
+						// Registration expired, allow overriding
+						log.info("Registration expired for email: {}. Overriding previous unverified account.", email);
+					}
+				}
+			} else {
+				// Also check pending key just in case account hasn't been created yet but is in flow
+				String pendingKeyCheck = "pending_registration:" + email;
+				if (Boolean.TRUE.equals(redisTemplate.hasKey(pendingKeyCheck))) {
+					log.warn("Registration already pending for email: {}", email);
+					throw new RegistrationAlreadyPendingException("Registration is already pending verification. Please verify the OTP or request a new OTP.");
+				}
 			}
-
-            String pendingKeyCheck = "pending_registration:" + email;
-            if (Boolean.TRUE.equals(redisTemplate.hasKey(pendingKeyCheck))) {
-                log.warn("Registration already pending for email: {}", email);
-                throw new RegistrationAlreadyPendingException("Registration is already pending verification. Please verify the OTP or request a new OTP.");
-            }
 
 			// Perform CCCD Check and info derivation
 			CccdCheckClient.CccdInfo cccdInfo = cccdCheckClient.checkCccd(request.getCccd());
@@ -180,6 +193,17 @@ public class AuthServiceImpl implements AuthService {
 				
 				ValidationResult result = future.get(10, TimeUnit.SECONDS);
 				if ("SUCCESS".equalsIgnoreCase(result.getStatus())) {
+					Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
+							.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
+
+					Account account = existingAccount != null ? existingAccount : new Account();
+					account.setEmail(email);
+					account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+					account.setRole(role);
+					account.setIsActive(0);
+					account.setRegistrationCompleted(0);
+					accountRepository.save(account);
+
 					String pendingKey = "pending_registration:" + email;
 					redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
 					verificationService.sendOtp(new SendOtpRequest(email, "REGISTRATION"));
@@ -255,19 +279,13 @@ public class AuthServiceImpl implements AuthService {
 		RegisterRequest registerRequest = data.getRequest();
 		CccdCheckClient.CccdInfo cccdInfo = data.getCccdInfo();
 
-		Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
-				.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
+		Account savedAccount = accountRepository.findByEmail(email)
+				.orElseThrow(() -> new ResourceNotFoundException("Account not found for email: " + email));
 
-		Account account = new Account();
-		account.setEmail(email);
-		account.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
-		account.setRole(role);
-		account.setIsActive(1);
-		account.setRegistrationCompleted(1);
+		savedAccount.setRegistrationCompleted(1);
+		accountRepository.save(savedAccount);
 
-		Account savedAccount = accountRepository.save(account);
-
-		log.info("Account successfully created upon verification for email={} with accountId={}", email, savedAccount.getId());
+		log.info("Account verified successfully for email={} with accountId={}", email, savedAccount.getId());
 		auditLogService.log(savedAccount.getId(), "REGISTER_SUCCESS", servletRequest);
 
 		try {
@@ -277,7 +295,7 @@ public class AuthServiceImpl implements AuthService {
 					savedAccount.getId(), email, kafkaEx.getMessage(), kafkaEx);
 		}
 
-		redisTemplate.delete(pendingKey);
+		// DO NOT delete pendingKey here. It will be deleted by UserProfileCreatedConsumer after User Profile is created.
 	}
 
 	/**

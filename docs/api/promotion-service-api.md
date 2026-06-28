@@ -10,9 +10,9 @@
 | Contract Owner | Dương Thiện Nhân                                                          |
 | Backend Owner  | Trần Lương Thiện Hoàng                                                    |
 | Reviewer       | Trần Lương Thiện Hoàng                                                    |
-| Trạng thái     | Updated after Owner Review / Ready for Re-review                          |
+| Trạng thái     | Approved / Ready for Implementation                                      |
 | Milestone      | Sprint 2 - Core Service API Foundation                                    |
-| Ngày cập nhật  | 22/06/2026                                                                |
+| Ngày cập nhật  | 24/06/2026                                                                |
 
 ---
 
@@ -539,7 +539,38 @@ REVERTED
 | APPLIED  | Booking/payment đã thành công, lượt dùng được xác nhận |
 | REVERTED | Booking thất bại/hủy và lượt dùng đã được hoàn lại     |
 
-Status này là bắt buộc và cần schema alignment trước implementation.
+Status này là bắt buộc và đã được schema alignment trước implementation.
+
+### 10.4. Promotion Usage Timestamp Semantics
+
+API response sử dụng các field lifecycle sau:
+
+```txt
+reservedAt
+confirmedAt
+revertedAt
+revertReason
+```
+
+Quy ước:
+
+| Field | Ý nghĩa |
+|---|---|
+| `reservedAt` | Thời điểm tạo usage ở trạng thái `RESERVED`; luôn có giá trị |
+| `confirmedAt` | Thời điểm chuyển `RESERVED → APPLIED`; null nếu chưa confirm |
+| `revertedAt` | Thời điểm chuyển `RESERVED → REVERTED`; null nếu chưa revert |
+| `revertReason` | Lý do nghiệp vụ khi revert; null nếu usage chưa `REVERTED` |
+
+Không sử dụng field `appliedAt` vì tên này gây nhầm lẫn giữa thời điểm reserve và thời điểm confirm.
+
+Mapping schema:
+
+```txt
+reservedAt  ↔ promotion_usages.reserved_at
+confirmedAt ↔ promotion_usages.confirmed_at
+revertedAt  ↔ promotion_usages.reverted_at
+revertReason ↔ promotion_usages.revert_reason
+```
 
 ---
 
@@ -1179,7 +1210,10 @@ Status: `201 Created`
     "finalAmount": 216000,
     "usageStatus": "RESERVED",
     "expiresAt": "2026-06-21T20:30:00",
-    "appliedAt": "2026-06-21T20:15:00"
+    "reservedAt": "2026-06-21T20:15:00",
+    "confirmedAt": null,
+    "revertedAt": null,
+    "revertReason": null
   }
 }
 ```
@@ -1187,6 +1221,12 @@ Status: `201 Created`
 `usageStatus` được lưu trực tiếp trong `promotion_usages.status`.
 
 `expiresAt` được copy từ `booking.expires_at` tại thời điểm apply.
+
+`reservedAt` là thời điểm tạo usage ở trạng thái `RESERVED`.
+
+`confirmedAt` chỉ có giá trị khi usage chuyển `RESERVED → APPLIED`.
+
+`revertedAt` và `revertReason` chỉ có giá trị khi usage chuyển `RESERVED → REVERTED`.
 
 ---
 
@@ -1277,7 +1317,11 @@ RESERVED → APPLIED
   "data": {
     "usageId": 5001,
     "bookingId": 1001,
-    "status": "APPLIED"
+    "status": "APPLIED",
+    "reservedAt": "2026-06-21T20:15:00",
+    "confirmedAt": "2026-06-21T20:20:00",
+    "revertedAt": null,
+    "revertReason": null
   }
 }
 ```
@@ -1329,7 +1373,11 @@ Booking creation rollback
   "data": {
     "usageId": 5001,
     "bookingId": 1001,
-    "status": "REVERTED"
+    "status": "REVERTED",
+    "reservedAt": "2026-06-21T20:15:00",
+    "confirmedAt": null,
+    "revertedAt": "2026-06-21T20:25:00",
+    "revertReason": "Booking expired before payment"
   }
 }
 ```
@@ -1381,7 +1429,10 @@ GET /internal/promotions/bookings/{bookingId}
     "bookingId": 1001,
     "userId": 15,
     "status": "APPLIED",
-    "appliedAt": "2026-06-21T20:15:00"
+    "reservedAt": "2026-06-21T20:15:00",
+    "confirmedAt": "2026-06-21T20:20:00",
+    "revertedAt": null,
+    "revertReason": null
   }
 }
 ```
@@ -1435,7 +1486,10 @@ GET /api/promotions/me/usages
         "promotionCode": "LORAFILM2026",
         "bookingId": 1001,
         "status": "APPLIED",
-        "appliedAt": "2026-06-21T20:15:00"
+        "reservedAt": "2026-06-21T20:15:00",
+        "confirmedAt": "2026-06-21T20:20:00",
+        "revertedAt": null,
+        "revertReason": null
       }
     ],
     "page": 0,
@@ -1842,7 +1896,10 @@ Response:
         "userId": 15,
         "bookingId": 1001,
         "status": "APPLIED",
-        "appliedAt": "2026-06-21T20:15:00"
+        "reservedAt": "2026-06-21T20:15:00",
+        "confirmedAt": "2026-06-21T20:20:00",
+        "revertedAt": null,
+        "revertReason": null
       }
     ],
     "page": 0,
@@ -2225,7 +2282,29 @@ Promotion Service lưu snapshot này để audit.
 
 Booking Service lưu `finalAmount` chính thức của booking.
 
-## 34.3. Revert Tracking
+## 34.3. Usage Lifecycle Timestamps
+
+Schema chính thức sử dụng:
+
+```txt
+reserved_at
+confirmed_at
+reverted_at
+revert_reason
+```
+
+API Contract tương ứng sử dụng:
+
+```txt
+reservedAt
+confirmedAt
+revertedAt
+revertReason
+```
+
+Không dùng `applied_at` hoặc `appliedAt` trong schema/API chính thức.
+
+## 34.4. Revert Tracking
 
 Bắt buộc bổ sung:
 
@@ -2237,7 +2316,7 @@ updated_at
 
 Không xóa usage record khi revert.
 
-## 34.4. Usage Expiration
+## 34.5. Usage Expiration
 
 Bắt buộc bổ sung:
 
@@ -2247,7 +2326,7 @@ expires_at
 
 Giá trị được copy từ `booking.expires_at` khi apply.
 
-## 34.5. User Usage Index
+## 34.6. User Usage Index
 
 Bắt buộc bổ sung:
 
@@ -2257,7 +2336,7 @@ Bắt buộc bổ sung:
 
 để tối ưu kiểm tra per-user limit trên usage `RESERVED` và `APPLIED`.
 
-## 34.6. Expiration Index
+## 34.7. Expiration Index
 
 Bắt buộc bổ sung:
 
@@ -2267,7 +2346,7 @@ Bắt buộc bổ sung:
 
 để hỗ trợ reconciliation worker.
 
-## 34.7. Usage Uniqueness
+## 34.8. Usage Uniqueness
 
 Tiếp tục giữ:
 
@@ -2277,7 +2356,7 @@ booking_id UNIQUE
 
 Sprint 2 không hỗ trợ promotion stacking.
 
-## 34.8. Optimistic Locking
+## 34.9. Optimistic Locking
 
 Bắt buộc bổ sung:
 
@@ -2288,13 +2367,13 @@ promotion_usages.version
 
 Entity sử dụng `@Version`.
 
-## 34.9. Cascade Delete
+## 34.10. Cascade Delete
 
 Rà soát và loại bỏ `ON DELETE CASCADE` có thể làm mất usage history.
 
 Dùng `ON DELETE RESTRICT` hoặc disable bằng `is_active = false`.
 
-## 34.10. Used Count Consistency
+## 34.11. Used Count Consistency
 
 Apply phải atomic:
 
@@ -2314,7 +2393,7 @@ Decrement used_count đúng một lần
 
 Có thể bổ sung reconciliation job để phát hiện lệch dữ liệu.
 
-## 34.11. Related Schema Issue
+## 34.12. Related Schema Issue
 
 ```txt
 [Database] Align Promotion Schema with Promotion API Contract
@@ -2384,35 +2463,36 @@ Mọi thay đổi endpoint, request, response hoặc business rule phải cập 
 
 # 37. Acceptance Criteria
 
-* [ ] Có schema Sprint 0 baseline.
-* [ ] Có campaign APIs.
-* [ ] Có promotion management APIs.
-* [ ] Có public/protected/internal/admin classification.
-* [ ] Có validate API.
-* [ ] Có discount preview API.
-* [ ] Có apply API.
-* [ ] Có confirm/revert usage direction.
-* [ ] Có discount calculation rules.
-* [ ] Có global usage limit.
-* [ ] Có per-user usage limit.
-* [ ] Có minimum booking amount rule.
-* [ ] Có max percentage discount rule.
-* [ ] Có fixed discount cap rule.
-* [ ] Có concurrency rules.
-* [ ] Có atomic used_count update.
-* [ ] Có idempotency theo booking.
-* [ ] Có logical reference notes.
-* [ ] Có Booking/Payment integration direction.
-* [ ] Có security notes.
-* [ ] Có status/error code.
-* [ ] Có schema alignment requirements.
-* [ ] Có discount snapshot source-of-truth decision.
-* [ ] Có usage expiry và reconciliation direction.
-* [ ] Có optimistic locking direction.
-* [ ] Có soft-delete/restrict delete policy.
-* [ ] Hoàng review feasibility.
-* [ ] Contract sẵn sàng cho implementation.
-* [ ] MR target `develop`.
+* [x] Có schema Sprint 0 baseline.
+* [x] Có campaign APIs.
+* [x] Có promotion management APIs.
+* [x] Có public/protected/internal/admin classification.
+* [x] Có validate API.
+* [x] Có discount preview API.
+* [x] Có apply API.
+* [x] Có confirm/revert usage direction.
+* [x] Có lifecycle timestamp contract: reservedAt, confirmedAt, revertedAt, revertReason.
+* [x] Có discount calculation rules.
+* [x] Có global usage limit.
+* [x] Có per-user usage limit.
+* [x] Có minimum booking amount rule.
+* [x] Có max percentage discount rule.
+* [x] Có fixed discount cap rule.
+* [x] Có concurrency rules.
+* [x] Có atomic used_count update.
+* [x] Có idempotency theo booking.
+* [x] Có logical reference notes.
+* [x] Có Booking/Payment integration direction.
+* [x] Có security notes.
+* [x] Có status/error code.
+* [x] Có schema alignment requirements.
+* [x] Có discount snapshot source-of-truth decision.
+* [x] Có usage expiry và reconciliation direction.
+* [x] Có optimistic locking direction.
+* [x] Có soft-delete/restrict delete policy.
+* [x] Hoàng review feasibility.
+* [x] Contract sẵn sàng cho implementation.
+* [x] MR target `develop`.
 
 ---
 
@@ -2500,7 +2580,24 @@ Promotion Service Owner đã review và xác nhận:
 
 18. Phải rà soát và loại bỏ `ON DELETE CASCADE` có thể làm mất usage history.
 
-19. Schema alignment phải hoàn thành trước Backend implementation.
+19. Schema alignment đã hoàn thành và khớp với API Contract trước Backend implementation.
+
+20. Usage lifecycle timestamp chính thức:
+
+    ```txt
+    reservedAt  ↔ reserved_at
+    confirmedAt ↔ confirmed_at
+    revertedAt  ↔ reverted_at
+    revertReason ↔ revert_reason
+    ```
+
+21. Không sử dụng `appliedAt` trong response chính thức vì field này không phân biệt được reserve và confirm.
+
+22. Contract được chốt ở trạng thái:
+
+    ```txt
+    Approved / Ready for Implementation
+    ```
 
 # 39. Lịch Sử Chỉnh Sửa
 
@@ -2510,3 +2607,6 @@ Promotion Service Owner đã review và xác nhận:
 | 22/06/2026 | Cập nhật theo review của Promotion Service Owner: usage lifecycle, discount snapshot, revert audit, expiry, optimistic locking, indexes và delete policy | Dương Thiện Nhân |
 
 Các thay đổi schema chỉ được ghi nhận tại đây sau khi schema MR tương ứng đã được merge.
+
+
+| 24/06/2026 | Đồng bộ lifecycle timestamps với schema và approve implementation | Dương Thiện Nhân |

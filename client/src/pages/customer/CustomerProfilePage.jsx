@@ -4,49 +4,38 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
-import { getUserProfile } from '../../services/userService';
-import { getAuthToken, getUserAccountId } from '../../utils/authStorage';
 import { 
   User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight, 
   PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle 
 } from 'lucide-react';
 
+const normalizeDateForInput = (value) => {
+  if (!value) return '';
+  return String(value).substring(0, 10);
+};
+
 export default function CustomerProfileView({ onBackHome, initialTab = 'info' }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, updateUser, isAuthenticated } = useAuth();
-
-  // Get active session identifiers
-  const accountId = getUserAccountId();
-  const token = getAuthToken();
+  const {
+    user,
+    profile,
+    email: sessionEmail,
+    accountId,
+    updateUser,
+    isAuthenticated,
+    profileLoading,
+    profilePending,
+    profileError,
+    refreshProfile
+  } = useAuth();
 
   useEffect(() => {
     document.title = "Tài Khoản Thành Viên - LoraFilm";
-    if (!isAuthenticated || !accountId || !token) {
+    if (!isAuthenticated || !accountId) {
       navigate('/login');
     }
-  }, [isAuthenticated, accountId, token, navigate]);
-
-  useEffect(() => {
-    if (!accountId || !token) {
-      return;
-    }
-
-    let isMounted = true;
-    const fetchUserData = async () => {
-      try {
-        const data = await getUserProfile(accountId);
-        if (isMounted && data) {
-          updateUser(data.data || data);
-        }
-      } catch (err) {
-        console.error("Failed to load user profile:", err);
-      }
-    };
-
-    fetchUserData();
-    return () => { isMounted = false; };
-  }, [accountId, token, updateUser]);
+  }, [isAuthenticated, accountId, navigate]);
 
   const handleBackHome = () => {
     if (onBackHome) {
@@ -74,22 +63,13 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   }, [location]);
 
   // Load user data fields (Name, Birthday, Gender are strictly read-only disabled)
-  const fullName = user?.fullName || '';
-  const birthday = user?.birthday || '';
-  const gender = user?.gender || '';
-  
-  // Normalize gender display
-  const displayGender = useMemo(() => {
-    if (!gender) return '';
-    const g = gender.toString().trim().toLowerCase();
-    if (g === 'nam' || g === 'male') return 'Nam';
-    if (g === 'nữ' || g === 'nu' || g === 'female') return 'Nữ';
-    return 'Khác';
-  }, [gender]);
+  const fullName = profile?.fullName ?? '';
+  const birthday = normalizeDateForInput(profile?.birthday);
+  const gender = profile?.gender ?? '';
   
   // Editable fields
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phoneNumber || user?.phone || '');
+  const [email, setEmail] = useState(sessionEmail || '');
+  const [phone, setPhone] = useState(profile?.phoneNumber ?? '');
   
   // Avatar URL state
   const [avatarUrl, setAvatarUrl] = useState(
@@ -120,17 +100,17 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   const [tempAvatarUrl, setTempAvatarUrl] = useState(avatarUrl);
 
   useEffect(() => {
-    if (user) {
+    if (profile || sessionEmail) {
       const timer = setTimeout(() => {
-        setEmail(user.email || '');
-        setPhone(user.phoneNumber || user.phone || '');
-        setAvatarUrl(user.avatarUrl || '');
-        setTempAvatarUrl(user.avatarUrl || '');
-        setNewEmail(user.email || '');
+        setEmail(sessionEmail || '');
+        setPhone(profile?.phoneNumber ?? '');
+        setAvatarUrl(profile?.avatarUrl || '');
+        setTempAvatarUrl(profile?.avatarUrl || '');
+        setNewEmail(sessionEmail || '');
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [user]);
+  }, [profile, sessionEmail]);
 
   // Load Transaction History
   const transactions = useMemo(() => {
@@ -180,7 +160,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
     updateUser({
       email,
-      phone,
+      phoneNumber: phone,
       avatarUrl,
       totalSpending,
       points
@@ -254,7 +234,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
     triggerToast('Cập nhật ảnh đại diện thành công!');
   };
 
-  if (!accountId || !token) {
+  if (!accountId) {
     return (
       <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans font-medium">
         <Header />
@@ -310,8 +290,46 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
             </button>
           </div>
 
-        {/* Asymmetric Split Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {profileLoading ? (
+          <div className="flex min-h-80 items-center justify-center" role="status" aria-live="polite">
+            <div className="flex flex-col items-center gap-4 text-zinc-400">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#ff7a1a] border-t-transparent" />
+              <p className="text-xs font-bold uppercase tracking-wider">Đang tải hồ sơ...</p>
+            </div>
+          </div>
+        ) : profilePending ? (
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl text-center space-y-4 max-w-xl mx-auto my-12 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex justify-center text-amber-500">
+              <AlertCircle className="w-12 h-12" />
+            </div>
+            <h3 className="text-lg font-black text-white uppercase tracking-wider">Đang khởi tạo hồ sơ</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">Hồ sơ thành viên của bạn đang được hệ thống thiết lập và đồng bộ. Vui lòng nhấn nút tải lại bên dưới sau vài giây.</p>
+            <button
+              type="button"
+              onClick={async () => {
+                triggerToast("Đang tải lại hồ sơ...", "success");
+                await refreshProfile();
+              }}
+              className="bg-[#ff7a1a] hover:bg-opacity-95 text-zinc-950 font-black py-3.5 px-8 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/10 cursor-pointer"
+            >
+              Tải lại hồ sơ
+            </button>
+          </div>
+        ) : profileError ? (
+          <div className="mx-auto my-12 max-w-xl space-y-4 rounded-3xl border border-red-500/30 bg-zinc-900 p-8 text-center shadow-2xl">
+            <AlertCircle className="mx-auto h-12 w-12 text-red-400" />
+            <h3 className="text-lg font-black uppercase tracking-wider text-white">Không thể tải hồ sơ</h3>
+            <p className="text-xs leading-relaxed text-zinc-400">{profileError}</p>
+            <button
+              type="button"
+              onClick={refreshProfile}
+              className="rounded-xl bg-[#ff7a1a] px-8 py-3.5 text-xs font-black uppercase tracking-wider text-zinc-950"
+            >
+              Thử lại
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* LEFT PANEL: Member Card & Loyalty Stars Widget */}
           <div className="space-y-6">
@@ -607,7 +625,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="button"
                           disabled
                           className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
-                            displayGender === 'Nam' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                            gender === 'MALE' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
                           }`}
                         >
                           Nam
@@ -616,7 +634,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="button"
                           disabled
                           className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
-                            displayGender === 'Nữ' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                            gender === 'FEMALE' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
                           }`}
                         >
                           Nữ
@@ -625,7 +643,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="button"
                           disabled
                           className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
-                            displayGender === 'Khác' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                            gender === 'OTHER' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
                           }`}
                         >
                           Khác
@@ -666,7 +684,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                         <input
                           type="text"
                           disabled
-                          value={user?.cccdMasked || "092******749"}
+                          value={profile?.cccdMasked ?? ''}
                           className="w-full bg-zinc-950/40 border border-zinc-900 text-zinc-500 rounded-xl py-3 pl-11 pr-4 text-xs font-semibold select-none cursor-not-allowed font-mono tracking-widest"
                         />
                       </div>
@@ -809,7 +827,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
           </div>
 
         </div>
-
+        )}
       </div>
 
       {/* Change Password Modal */}

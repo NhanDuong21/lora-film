@@ -8,23 +8,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.project.authservice.client.CccdCheckClient;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.entity.Account;
-import com.project.authservice.event.dto.AccountCreatedEventData;
+import com.project.authservice.event.dto.AccountVerifiedEventData;
 
 
 @Service
 public class AuthAccountEventPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(AuthAccountEventPublisher.class);
-
-    private static final String EVENT_TYPE    = "ACCOUNT_CREATED";
-    private static final String EVENT_VERSION = "1.0";
-    private static final String EVENT_SOURCE  = "auth-service";
 
     @Value("${app.kafka.topic.registration-validation-requested}")
     private String registrationValidationRequestedTopic;
@@ -78,7 +74,8 @@ public class AuthAccountEventPublisher {
 
         LocalDate birthday = LocalDate.parse(request.getBirthday().trim());
 
-        AccountCreatedEventData data = AccountCreatedEventData.builder()
+        AccountVerifiedEventData data = AccountVerifiedEventData.builder()
+                .requestId(UUID.randomUUID().toString())
                 .accountId(accountId)
                 .email(email)
                 .role(savedAccount.getRole().getRoleName())

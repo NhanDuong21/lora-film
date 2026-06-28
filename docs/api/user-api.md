@@ -8,7 +8,7 @@
 | Feature            | User Profile Management                |
 | API liên quan      | Create Profile, Get Profile            |
 | Người phụ trách BE | Phan Tuấn Thành                    |
-| Người phụ trách FE | Dương Hoàng Nhân                   |
+| Người phụ trách FE | Dương Thiện Nhân                   |
 | Trạng thái         | Updated (Event-Driven Architecture)    |
 | Ngày cập nhật      | 23/06/2026                             |
 

@@ -2,7 +2,6 @@ package com.project.authservice.service.impl;
 
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.time.LocalDateTime;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,14 +126,33 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         if ("REGISTRATION".equals(purpose)) {
             String pendingKey = "pending_registration:" + email;
-            if (Boolean.FALSE.equals(redisTemplate.hasKey(pendingKey))) {
+            String json = redisTemplate.opsForValue().get(pendingKey);
+            if (json == null) {
                 if (accountRepository.existsByEmail(email)) {
                     throw new AccountAlreadyVerifiedException();
                 }
                 throw new AccountNotFoundException();
             }
+
+            // Extend TTLs for Registration state
+            redisTemplate.expire(pendingKey, Duration.ofMinutes(15));
+            try {
+                com.project.authservice.entity.PendingRegistrationData data = objectMapper.readValue(json, com.project.authservice.entity.PendingRegistrationData.class);
+                if (data != null && data.getRequest() != null) {
+                    String phone = data.getRequest().getPhoneNumber();
+                    String cccd = data.getRequest().getCccd();
+                    if (phone != null) {
+                        redisTemplate.expire("reserved_phone:" + phone, Duration.ofMinutes(15));
+                    }
+                    if (cccd != null) {
+                        redisTemplate.expire("reserved_cccd:" + cccd, Duration.ofMinutes(15));
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse PendingRegistrationData while extending TTL in resendOtp", e);
+            }
         } else {
-            Account account = accountRepository.findByEmail(email).orElseThrow(AccountNotFoundException::new);
+            accountRepository.findByEmail(email).orElseThrow(AccountNotFoundException::new);
         }
 
         return sendOtp(new SendOtpRequest(email, purpose));

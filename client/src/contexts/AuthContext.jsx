@@ -1,11 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
-/* eslint-disable react-hooks/set-state-in-effect */
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   isAuthenticated as checkAuthenticated,
   getUserEmail,
   getUserRole,
   getUserAccountId,
+  getAuthToken,
+  getRefreshToken,
   clearAuthData,
   setAuthData as saveAuthData
 } from '../utils/authStorage';
@@ -16,119 +17,190 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => checkAuthenticated());
   const [userRole, setUserRole] = useState(() => getUserRole());
-  const [user, setUser] = useState(() => {
-    const authed = checkAuthenticated();
-    if (authed) {
-      const email = getUserEmail();
-      const accountId = getUserAccountId();
-      const role = getUserRole();
-      return {
-        id: accountId,
-        email: email,
-        role: role,
-        fullName: email ? email.split('@')[0] : 'User',
-        permissions: role === 'ADMIN' ? ['PERM_ROOT_ACCESS'] : []
-      };
-    }
-    return null;
-  });
-  const [loading, setLoading] = useState(true);
+  const [accountId, setAccountId] = useState(() => getUserAccountId());
+  const [email, setEmail] = useState(() => getUserEmail());
+  const [accessToken, setAccessToken] = useState(() => getAuthToken());
+  const [refreshToken, setRefreshToken] = useState(() => getRefreshToken());
+  
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profilePending, setProfilePending] = useState(false);
+  const [profileError, setProfileError] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
-  const fetchProfile = async () => {
-    const authed = checkAuthenticated();
-    if (authed) {
-      const accountId = getUserAccountId();
-      const role = getUserRole();
-      if (accountId) {
-        try {
-          const profileRes = await getUserProfile(accountId);
-          if (profileRes && profileRes.success && profileRes.data) {
-            setUser(prevUser => ({
-              ...prevUser,
-              ...profileRes.data,
-              role: role,
-              permissions: role === 'ADMIN' ? ['PERM_ROOT_ACCESS'] : []
-            }));
-          }
-        } catch (error) {
-          console.error("Failed to load user profile in AuthProvider:", error);
+  // loadProfile with bounded retry strategy for eventual consistency
+  const loadProfile = useCallback(async function loadProfile(targetAccountId, retryCount = 0) {
+    const accId = targetAccountId || getUserAccountId();
+    if (!accId) {
+      setProfileLoading(false);
+      return null;
+    }
+
+    setProfileLoading(true);
+    setProfilePending(false);
+    setProfileError(null);
+
+    try {
+      const profileData = await getUserProfile(accId);
+      if (profileData) {
+        setProfile(profileData);
+        setProfilePending(false);
+        setProfileLoading(false);
+        return profileData;
+      }
+      throw new Error('Profile response did not contain data');
+    } catch (error) {
+      const errorCode = error?.errorCode || error?.code || error?.error;
+      const status = error?.status || error?.response?.status;
+      const isUserNotFound = errorCode === "USER_NOT_FOUND" || status === 404;
+
+      if (isUserNotFound && retryCount < 3) {
+        // Wait 1000ms and retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return loadProfile(accId, retryCount + 1);
+      } else {
+        setProfileLoading(false);
+        if (isUserNotFound) {
+          setProfilePending(true);
+        } else {
+          setProfileError('Không thể tải hồ sơ. Vui lòng thử lại.');
         }
+        setProfile(null);
       }
     }
-    setLoading(false);
-  };
+    return null;
+  }, []);
+
+  const initializeAuth = useCallback(async () => {
+    const authed = checkAuthenticated();
+    setIsAuthenticated(authed);
+    if (authed) {
+      const storedAccountId = getUserAccountId();
+      const storedRole = getUserRole();
+      const storedEmail = getUserEmail();
+      const storedToken = getAuthToken();
+      const storedRefresh = getRefreshToken();
+
+      setAccountId(storedAccountId);
+      setUserRole(storedRole);
+      setEmail(storedEmail);
+      setAccessToken(storedToken);
+      setRefreshToken(storedRefresh);
+
+      if (storedAccountId) {
+        await loadProfile(storedAccountId);
+      }
+    }
+    setIsInitializing(false);
+  }, [loadProfile]);
 
   useEffect(() => {
-    fetchProfile();
+    initializeAuth();
     
     const handleStorageChange = () => {
       const authed = checkAuthenticated();
       setIsAuthenticated(authed);
-      const role = getUserRole();
-      setUserRole(role);
       if (authed) {
-        const email = getUserEmail();
-        const accountId = getUserAccountId();
-        setUser({
-          id: accountId,
-          email: email,
-          role: role,
-          fullName: email ? email.split('@')[0] : 'User',
-          permissions: role === 'ADMIN' ? ['PERM_ROOT_ACCESS'] : []
-        });
-        fetchProfile();
+        setAccountId(getUserAccountId());
+        setUserRole(getUserRole());
+        setEmail(getUserEmail());
+        setAccessToken(getAuthToken());
+        setRefreshToken(getRefreshToken());
+        loadProfile(getUserAccountId());
       } else {
-        setUser(null);
-        setLoading(false);
+        setAccountId(null);
+        setUserRole(null);
+        setEmail(null);
+        setAccessToken(null);
+        setRefreshToken(null);
+        setProfile(null);
+        setProfilePending(false);
+        setProfileError(null);
       }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [initializeAuth, loadProfile]);
 
-  const login = (data) => {
-    saveAuthData(data);
+  const login = async (authSessionData) => {
+    saveAuthData(authSessionData);
+    
     setIsAuthenticated(true);
-    setUserRole(data.role || "");
-    const email = data.email || "";
-    const role = data.role || "";
-    setUser({
-      id: data.accessToken ? getUserAccountId() : null,
-      email: email,
-      role: role,
-      fullName: email ? email.split('@')[0] : 'User',
-      permissions: role === 'ADMIN' ? ['PERM_ROOT_ACCESS'] : []
-    });
-    fetchProfile();
+    const storedAccountId = authSessionData.accountId || getUserAccountId();
+    const storedRole = authSessionData.role || getUserRole();
+    const storedEmail = authSessionData.email || getUserEmail();
+    const storedToken = authSessionData.accessToken || getAuthToken();
+    const storedRefresh = authSessionData.refreshToken || getRefreshToken();
+
+    setAccountId(storedAccountId);
+    setUserRole(storedRole);
+    setEmail(storedEmail);
+    setAccessToken(storedToken);
+    setRefreshToken(storedRefresh);
+
+    if (storedAccountId) {
+      await loadProfile(storedAccountId);
+    }
   };
 
   const logout = () => {
     clearAuthData();
     setIsAuthenticated(false);
+    setAccountId(null);
     setUserRole(null);
-    setUser(null);
+    setEmail(null);
+    setAccessToken(null);
+    setRefreshToken(null);
+    setProfile(null);
+    setProfilePending(false);
+    setProfileError(null);
   };
 
   const updateUser = (updatedFields) => {
-    setUser(prevUser => {
-      if (!prevUser) return null;
+    setProfile(prev => {
+      if (!prev) return updatedFields;
       return {
-        ...prevUser,
+        ...prev,
         ...updatedFields
       };
     });
   };
 
+  // Backwards compatible combined user object
+  const user = useMemo(() => {
+    if (!isAuthenticated) return null;
+    return {
+      id: accountId,
+      email: email,
+      role: userRole,
+      fullName: profile?.fullName || email?.split('@')[0] || 'User',
+      permissions: userRole === 'ADMIN' ? ['PERM_ROOT_ACCESS'] : [],
+      profilePending: profilePending,
+      profileLoading: profileLoading,
+      ...profile
+    };
+  }, [isAuthenticated, accountId, email, userRole, profile, profilePending, profileLoading]);
+
   return (
     <AuthContext.Provider value={{ 
       user, 
       userRole, 
-      isAuthenticated, 
+      isAuthenticated,
+      accessToken,
+      refreshToken,
+      accountId,
+      email,
+      profile,
+      profileLoading,
+      profilePending,
+      profileError,
+      isInitializing,
+      loading: isInitializing, // legacy support for 'loading'
       login, 
       logout,
       updateUser,
-      loading,
-      refreshProfile: fetchProfile 
+      loadProfile,
+      refreshProfile: () => loadProfile(accountId)
     }}>
       {children}
     </AuthContext.Provider>

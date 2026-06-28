@@ -6,7 +6,7 @@ public class AccountVerifiedEvent {
     private String eventVersion;
     private String source;
     private String occurredAt;
-    private AccountCreatedPayload data;
+    private AccountVerifiedPayload data;
 
     public String getEventId() { return eventId; }
     public void setEventId(String eventId) { this.eventId = eventId; }
@@ -18,6 +18,6 @@ public class AccountVerifiedEvent {
     public void setSource(String source) { this.source = source; }
     public String getOccurredAt() { return occurredAt; }
     public void setOccurredAt(String occurredAt) { this.occurredAt = occurredAt; }
-    public AccountCreatedPayload getData() { return data; }
-    public void setData(AccountCreatedPayload data) { this.data = data; }
+    public AccountVerifiedPayload getData() { return data; }
+    public void setData(AccountVerifiedPayload data) { this.data = data; }
 }
