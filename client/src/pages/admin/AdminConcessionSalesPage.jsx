@@ -1,6 +1,6 @@
 ﻿import SystemUpdating from '../../components/common/SystemUpdating';
 
-const AdminFinancePage = () => {
+const AdminConcessionSalesPage = () => {
   return (
     <div className="p-6">
       <SystemUpdating/>
@@ -8,5 +8,5 @@ const AdminFinancePage = () => {
   );
 };
 
-export default AdminFinancePage;
+export default AdminConcessionSalesPage;
 

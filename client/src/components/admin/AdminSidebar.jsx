@@ -178,7 +178,7 @@ export default function AdminSidebar({
               {!collapsedSections.coSo && (
                 <div className="space-y-1">
                   <button
-                    onClick={() => handleTabClick('clusters', '#/admin/clusters')}
+                    onClick={() => handleTabClick('clusters', '#/admin/cinemas')}
                     className={getSubLinkClass('clusters')}
                   >
                     <Database className="w-4 h-4 shrink-0" />
@@ -214,7 +214,7 @@ export default function AdminSidebar({
             {!collapsedSections.vanHanh && (
               <div className="space-y-1">
                 <button
-                  onClick={() => handleTabClick('tickets', '#/admin/tickets')}
+                  onClick={() => handleTabClick('tickets', '#/admin/finance')}
                   className={getSubLinkClass('tickets')}
                 >
                   <Ticket className="w-4 h-4 shrink-0" />
@@ -260,7 +260,7 @@ export default function AdminSidebar({
                 {!isAccountantOnly && (
                   <>
                     <button
-                      onClick={() => handleTabClick('customers', '#/admin/customers')}
+                      onClick={() => handleTabClick('customers', '#/admin/members')}
                       className={getSubLinkClass('customers')}
                     >
                       <Users className="w-4 h-4 shrink-0" />
