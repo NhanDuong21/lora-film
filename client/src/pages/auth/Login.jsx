@@ -51,7 +51,7 @@ function Login() {
                     } else {
                         navigate("/");
                     }
-                }, 1000);
+                }, 400);
             } else {
                 setErrorMsg("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
             }

@@ -88,7 +88,8 @@ export function AuthProvider({ children }) {
       setRefreshToken(storedRefresh);
 
       if (storedAccountId) {
-        await loadProfile(storedAccountId);
+        // Fire and forget: don't block app initialization on profile fetch
+        loadProfile(storedAccountId).catch(console.error);
       }
     }
     setIsInitializing(false);
@@ -139,7 +140,8 @@ export function AuthProvider({ children }) {
     setRefreshToken(storedRefresh);
 
     if (storedAccountId) {
-      await loadProfile(storedAccountId);
+      // Fire and forget: don't block login transition on profile fetch
+      loadProfile(storedAccountId).catch(console.error);
     }
   };
 
