@@ -47,8 +47,7 @@ public class IdempotencyService {
         }
     }
 
-    public void saveResponse(Long userId, String idempotencyKey, Object requestPayload,
-            ReservationGroupResponse response) {
+    public void saveResponse(Long userId, String idempotencyKey, Object requestPayload, Object response) {
         try {
             String key = getKey(userId, idempotencyKey);
             IdempotencyRecord record = new IdempotencyRecord(
@@ -76,7 +75,7 @@ public class IdempotencyService {
         return null;
     }
 
-    public ReservationGroupResponse getResponse(Long userId, String idempotencyKey, Object requestPayload) {
+    public Object getResponse(Long userId, String idempotencyKey, Object requestPayload) {
         String key = getKey(userId, idempotencyKey);
         Object value = redisTemplate.opsForValue().get(key);
 
@@ -101,12 +100,12 @@ public class IdempotencyService {
 
     public static class IdempotencyRecord {
         private String requestHash;
-        private ReservationGroupResponse response;
+        private Object response;
 
         public IdempotencyRecord() {
         }
 
-        public IdempotencyRecord(String requestHash, ReservationGroupResponse response) {
+        public IdempotencyRecord(String requestHash, Object response) {
             this.requestHash = requestHash;
             this.response = response;
         }
@@ -119,11 +118,11 @@ public class IdempotencyService {
             this.requestHash = requestHash;
         }
 
-        public ReservationGroupResponse getResponse() {
+        public Object getResponse() {
             return response;
         }
 
-        public void setResponse(ReservationGroupResponse response) {
+        public void setResponse(Object response) {
             this.response = response;
         }
     }

@@ -24,4 +24,6 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
     List<SeatReservation> findActiveReservations(
             @Param("showtimeId") Long showtimeId, 
             @Param("seatIds") List<Long> seatIds);
+
+    List<SeatReservation> findByBookingId(Long bookingId);
 }

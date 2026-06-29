@@ -82,7 +82,14 @@ public class ReservationService {
 
                         if (record.getResponse() != null) {
                             logger.info("Idempotency replay for key {}", idempotencyKey);
-                            return record.getResponse();
+                            if (record.getResponse() instanceof ReservationGroupResponse) {
+                                return (ReservationGroupResponse) record.getResponse();
+                            } else {
+                                // In case it's a LinkedHashMap
+                                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                                mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+                                return mapper.convertValue(record.getResponse(), ReservationGroupResponse.class);
+                            }
                         }
                     } else {
                         break; // Record vanished
