@@ -2,49 +2,33 @@ import apiClient from "./apiClient";
 import { setAuthData, clearAuthData } from "../utils/authStorage";
 
 export const register = async (userData) => {
-    try {
-        const response = await apiClient.post(`/api/auth/register`, userData);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await apiClient.post(`/api/auth/register`, userData);
+    return response.data;
 };
 
 export const verifyOtp = async (email, otpCode, purpose = "REGISTRATION") => {
-    try {
-        const response = await apiClient.post(`/api/auth/verify`, {
-            email,
-            otp: otpCode,
-            purpose
-        });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await apiClient.post(`/api/auth/verify`, {
+        email,
+        otp: otpCode,
+        purpose
+    });
+    return response.data;
 };
 
 export const login = async (email, password) => {
-    try {
-        const response = await apiClient.post(`/api/auth/login`, {
-            email,
-            password
-        });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await apiClient.post(`/api/auth/login`, {
+        email,
+        password
+    });
+    return response.data;
 };
 
 export const resendOtp = async (email, purpose = "REGISTRATION") => {
-    try {
-        const response = await apiClient.post(`/api/auth/resend-otp`, {
-            email,
-            purpose
-        });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await apiClient.post(`/api/auth/resend-otp`, {
+        email,
+        purpose
+    });
+    return response.data;
 };
 
 export const refreshToken = async (tokenValue) => {

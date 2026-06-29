@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import ScrollToTop from "../components/common/ScrollToTop";
 
 import Home from "../pages/public/Home";
 import Login from "../pages/auth/Login";
@@ -87,6 +88,7 @@ function RoleRoute({ children, allowedRoles }) {
 function AppRoutes() {
     return (
         <BrowserRouter>
+            <ScrollToTop />
             <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/home" element={<Home />} />
@@ -103,7 +105,8 @@ function AppRoutes() {
 
                 {/* Customer Routes */}
                 <Route path="/movies" element={<MovieDiscoveryView />} />
-                <Route path="/movie/:id" element={<MovieDetailPage />} />
+                <Route path="/movies/:movieId" element={<MovieDetailPage />} />
+                <Route path="/movie/:movieId" element={<MovieDetailPage />} />
                 <Route path="/cinema/:id" element={<CinemaDetailPage />} />
                 
                 {/* Booking & Seats Protected optionally or open */}

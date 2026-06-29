@@ -8,26 +8,18 @@ function Login() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const [email, setEmail] = useState("");
+    const [email, setEmail] = useState(() => location.state?.email || "");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
-    const [successMessage, setSuccessMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState(() => 
+        location.state?.verified ? "Xác thực tài khoản thành công! Vui lòng đăng nhập." : ""
+    );
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         document.title = "Đăng Nhập - LoraFilm Ticket Booking";
-        
-        // Prefill email if provided in navigation state
-        if (location.state?.email) {
-            setEmail(location.state.email);
-        }
-        
-        // Display custom success message if navigated after successful verification
-        if (location.state?.verified) {
-            setSuccessMessage("Xác thực tài khoản thành công! Vui lòng đăng nhập.");
-        }
-    }, [location]);
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

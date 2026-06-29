@@ -6,12 +6,8 @@ function VerifyOtp() {
     const navigate = useNavigate();
     const location = useLocation();
     
-    const [email, setEmail] = useState(() => {
-        return location.state?.email || sessionStorage.getItem("pending_otp_email") || "";
-    });
-    const [purpose, setPurpose] = useState(() => {
-        return location.state?.purpose || sessionStorage.getItem("pending_otp_purpose") || "REGISTRATION";
-    });
+    const email = location.state?.email || sessionStorage.getItem("pending_otp_email") || "";
+    const purpose = location.state?.purpose || sessionStorage.getItem("pending_otp_purpose") || "REGISTRATION";
     
     const [inputEmail, setInputEmail] = useState("");
     const [otpCode, setOtpCode] = useState("");
@@ -20,7 +16,6 @@ function VerifyOtp() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [countdown, setCountdown] = useState(60);
     const [isResending, setIsResending] = useState(false);
-    const [isVerified, setIsVerified] = useState(false);
 
     const activeEmail = email || inputEmail;
 
@@ -107,8 +102,6 @@ function VerifyOtp() {
             const res = await verifyOtp(activeEmail, otpCode, purpose);
             setIsSubmitting(false);
             if (res.success) {
-                setIsVerified(true);
-                
                 // Clear pending session storage keys
                 sessionStorage.removeItem("pending_otp_email");
                 sessionStorage.removeItem("pending_otp_purpose");
