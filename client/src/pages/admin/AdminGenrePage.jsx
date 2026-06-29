@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, Edit3, Trash2, X, Plus, Check, LayoutList } from 'lucide-react';
+import { Search, Pencil, Trash2, X, Plus, Check, LayoutList } from 'lucide-react';
 import adminGenreService from '../../services/adminGenreService';
 import SkeletonTable from '../../components/common/SkeletonTable';
 
@@ -185,12 +185,12 @@ export default function AdminGenrePage({ triggerToast }) {
       {isLoading ? (
         <SkeletonTable rows={6} columns={3} />
       ) : (
-        <div className="bg-brand-gray/40 border border-zinc-800/40 rounded-2xl overflow-hidden w-full shadow-xl">
+        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden w-full shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap" data-testid="genre-table">
               <thead>
-                <tr className="bg-brand-dark/80 border-b border-zinc-800 text-[10px] font-black text-zinc-500 uppercase tracking-wider">
-                  <th className="py-4 px-6 w-24 text-center">ID</th>
+                <tr className="bg-neutral-900/50 border-b border-neutral-800 text-[10px] font-black text-neutral-400 uppercase tracking-wider">
+                  <th className="py-4 px-6 w-24 text-center">STT</th>
                   <th className="py-4 px-6">TÊN THỂ LOẠI</th>
                   <th className="py-4 px-6 w-32 text-right">THAO TÁC</th>
                 </tr>
@@ -198,41 +198,41 @@ export default function AdminGenrePage({ triggerToast }) {
               <tbody>
                 {filteredGenres.length === 0 ? (
                   <tr>
-                    <td colSpan="3" className="py-12 text-center text-zinc-500 text-sm font-semibold">
+                    <td colSpan="3" className="py-12 text-center text-neutral-500 text-sm font-semibold">
                       <div className="flex flex-col items-center justify-center gap-2">
-                        <LayoutList className="w-8 h-8 text-zinc-700" />
+                        <LayoutList className="w-8 h-8 text-neutral-700" />
                         <span>Không tìm thấy thể loại nào.</span>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  filteredGenres.map((genre) => (
-                    <tr key={genre.id} className="border-b border-zinc-800/40 hover:bg-zinc-800/20 transition-colors group">
+                  filteredGenres.map((genre, index) => (
+                    <tr key={genre.id} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors group">
                       <td className="py-4 px-6 text-center">
-                        <span className="text-xs font-mono text-zinc-500">#{genre.id}</span>
+                        <span className="text-xs font-black text-neutral-400">{(index + 1).toString().padStart(2, '0')}</span>
                       </td>
                       <td className="py-4 px-6">
-                        <span className="text-sm font-bold text-zinc-200 group-hover:text-brand-coral transition-colors" data-testid={`genre-name-${genre.id}`}>
+                        <span className="text-sm font-bold text-zinc-200 group-hover:text-amber-400 transition-colors" data-testid={`genre-name-${genre.id}`}>
                           {genre.genreName}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-2 transition-opacity">
                           <button
                             onClick={() => handleOpenEdit(genre)}
-                            className="p-2 text-zinc-400 hover:text-white bg-brand-dark hover:bg-zinc-800 border border-zinc-800/80 rounded-lg transition-colors cursor-pointer"
+                            className="p-2 text-neutral-400 hover:text-amber-500 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 rounded-lg transition-all cursor-pointer"
                             title="Sửa thể loại"
                             data-testid={`edit-genre-${genre.id}`}
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(genre.id)}
-                            className="p-2 text-brand-coral hover:text-brand-coral bg-brand-coral/10 hover:bg-brand-coral/20 border border-brand-coral/20 rounded-lg transition-colors cursor-pointer"
+                            className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-lg transition-all cursor-pointer"
                             title="Xóa thể loại"
                             data-testid={`delete-genre-${genre.id}`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
