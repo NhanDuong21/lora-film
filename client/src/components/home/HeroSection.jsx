@@ -70,19 +70,20 @@ export default function Hero({ onBookTicket, onNavigate }) {
       <section className="relative min-h-[85vh] md:min-h-[90vh] flex flex-col justify-between pt-24 pb-16 px-6 md:px-12 overflow-hidden bg-brand-dark">
         
         {/* Background Video Implementation */}
-        <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
+        <div className="absolute inset-0 w-full h-full z-0 overflow-hidden will-change-transform transform-gpu">
           <video
             autoPlay
             loop
             muted
             playsInline
+            preload="auto"
             className="w-full h-full object-cover scale-105 opacity-75 transition-all duration-700" 
             src={videoSource}
           />
         </div>
 
         {/* Backdrop overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/20 to-brand-dark/40 z-10 backdrop-blur-[1px]"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/20 to-brand-dark/40 z-10"></div>
 
         {/* Main Left Content Area */}
         <div className="relative z-20 max-w-4xl mt-auto mb-4 animate-in fade-in slide-in-from-bottom duration-1000">
