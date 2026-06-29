@@ -1,6 +1,6 @@
 import apiClient from './apiClient';
 
-const API_URL = '/movie-service/api/admin/genres';
+const API_URL = '/api/admin/genres';
 
 const adminGenreService = {
   getAllGenres: async () => {

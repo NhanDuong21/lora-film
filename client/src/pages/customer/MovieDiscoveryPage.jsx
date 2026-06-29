@@ -3,21 +3,10 @@ import {
   Play, RefreshCw, AlertCircle 
 } from 'lucide-react';
 import TrailerModal from '../../components/common/TrailerModal';
-import { getMovies } from '../../services/movieService';
+import { getMovies, getGenres } from '../../services/movieService';
 import { getYoutubeEmbedUrl } from '../../utils/formatters';
 
-const GENRES_LIST = [
-  { label: 'Tất cả thể loại', value: 'ALL' },
-  { label: 'Hành Động', value: 'Hành động' },
-  { label: 'Lãng Mạn', value: 'Lãng mạn' },
-  { label: 'Hài Hước', value: 'Hài' },
-  { label: 'Kịch Tính', value: 'Kịch tính' },
-  { label: 'Viễn Tưởng', value: 'Viễn tưởng' },
-  { label: 'Hoạt Hình', value: 'Hoạt hình' },
-  { label: 'Kinh Dị', value: 'Kinh dị' },
-  { label: 'Trinh Thám', value: 'Trinh thám' },
-  { label: 'Gia Đình', value: 'Gia đình' }
-];
+
 
 const STATUS_LIST = [
   { label: 'Tất cả trạng thái', value: 'ALL' },
@@ -33,6 +22,7 @@ const SORT_LIST = [
 
 export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
   const [movies, setMovies] = useState([]);
+  const [genres, setGenres] = useState([{ label: 'Tất cả thể loại', value: 'ALL' }]);
   const [loading, setLoading] = useState(true);
 
   const [selectedGenre, setSelectedGenre] = useState('ALL');
@@ -45,12 +35,22 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
     const fetchMovies = async () => {
       setLoading(true);
       try {
-        const data = await getMovies({ size: 100 }); // Fetch a large batch for client-side filter
-        if (data && data.content) {
-          setMovies(data.content);
+        const [moviesData, genresData] = await Promise.all([
+          getMovies({ size: 100 }), // Fetch a large batch for client-side filter
+          getGenres()
+        ]);
+        if (moviesData && moviesData.content) {
+          setMovies(moviesData.content);
+        }
+        if (genresData && Array.isArray(genresData)) {
+          const formattedGenres = genresData.map(g => ({
+            label: g.genreName,
+            value: g.genreName
+          }));
+          setGenres([{ label: 'Tất cả thể loại', value: 'ALL' }, ...formattedGenres]);
         }
       } catch (error) {
-        console.error("Failed to fetch movies:", error);
+        console.error("Failed to fetch data:", error);
       } finally {
         setLoading(false);
       }
@@ -63,7 +63,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
 
     if (selectedGenre !== 'ALL') {
       result = result.filter(m => 
-        m.genres && m.genres.some(g => g.name.toLowerCase().includes(selectedGenre.toLowerCase()))
+        m.genres && m.genres.some(g => (g.genreName || '').toLowerCase().includes(selectedGenre.toLowerCase()))
       );
     }
 
@@ -132,7 +132,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                 onChange={(e) => setSelectedGenre(e.target.value)}
                 className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-coral focus:outline-none transition-colors"
               >
-                {GENRES_LIST.map(g => (
+                {genres.map(g => (
                   <option key={g.value} value={g.value}>{g.label}</option>
                 ))}
               </select>
