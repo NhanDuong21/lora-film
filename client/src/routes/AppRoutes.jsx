@@ -16,7 +16,7 @@ import MasterBookingFunnelPage from "../pages/customer/MasterBookingFunnelPage";
 import SeatSelectionPage from "../pages/customer/SeatSelectionPage";
 
 // Employee Views
-import EmployeeDashboardView from "../pages/employee/EmployeeDashboardPage";
+import EmployeeLayout from "../components/employee/EmployeeLayout";
 import EmployeeCheckInView from "../pages/employee/EmployeeCheckInPage";
 import EmployeePOSView from "../pages/employee/EmployeePOSPage";
 import EmployeeScheduleView from "../pages/employee/EmployeeSchedulePage";
@@ -34,6 +34,9 @@ import AdminMembersView from "../pages/admin/AdminMembersPage";
 import AdminSettingsView from "../pages/admin/AdminSettingsPage";
 import AdminShowtimeView from "../pages/admin/AdminShowtimePage";
 import AdminStaffView from "../pages/admin/AdminStaffPage";
+
+// Main Layout
+import MainLayout from "../components/layout/MainLayout";
 
 // Simple Loading Spinner for route guards
 function PageLoader() {
@@ -92,50 +95,43 @@ function AppRoutes() {
         <BrowserRouter>
             <ScrollToTop />
             <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/home" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/verify-otp" element={<VerifyOtp />} />
-                
-                {/* Protected Customer Profile */}
-                <Route path="/profile" element={
-                    <ProtectedRoute>
-                        <CustomerProfilePage />
-                    </ProtectedRoute>
-                } />
+                {/* Public & Customer Routes wrapped in MainLayout */}
+                <Route element={<MainLayout />}>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/home" element={<Home />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/verify-otp" element={<VerifyOtp />} />
+                    
+                    {/* Protected Customer Profile */}
+                    <Route path="/profile" element={
+                        <ProtectedRoute>
+                            <CustomerProfilePage />
+                        </ProtectedRoute>
+                    } />
 
-                {/* Customer Routes */}
-                <Route path="/movies" element={<MovieDiscoveryView />} />
-                <Route path="/movies/:movieId" element={<MovieDetailPage />} />
-                <Route path="/movie/:movieId" element={<MovieDetailPage />} />
-                <Route path="/cinema/:id" element={<CinemaDetailPage />} />
-                
-                {/* Booking & Seats Protected optionally or open */}
-                <Route path="/booking" element={<MasterBookingFunnelPage />} />
-                <Route path="/seat-selection" element={<SeatSelectionPage />} />
+                    {/* Customer Routes */}
+                    <Route path="/movies" element={<MovieDiscoveryView />} />
+                    <Route path="/movies/:movieId" element={<MovieDetailPage />} />
+                    <Route path="/movie/:movieId" element={<MovieDetailPage />} />
+                    <Route path="/cinema/:id" element={<CinemaDetailPage />} />
+                    
+                    {/* Booking & Seats Protected optionally or open */}
+                    <Route path="/booking" element={<MasterBookingFunnelPage />} />
+                    <Route path="/seat-selection" element={<SeatSelectionPage />} />
+                </Route>
 
                 {/* Employee Routes */}
                 <Route path="/employee" element={
                     <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
-                        <EmployeeDashboardView />
+                        <EmployeeLayout />
                     </RoleRoute>
-                } />
-                <Route path="/employee/checkin" element={
-                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
-                        <EmployeeCheckInView />
-                    </RoleRoute>
-                } />
-                <Route path="/employee/pos" element={
-                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
-                        <EmployeePOSView />
-                    </RoleRoute>
-                } />
-                <Route path="/employee/schedules" element={
-                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
-                        <EmployeeScheduleView />
-                    </RoleRoute>
-                } />
+                }>
+                    <Route index element={<EmployeePOSView />} />
+                    <Route path="pos" element={<EmployeePOSView />} />
+                    <Route path="checkin" element={<EmployeeCheckInView />} />
+                    <Route path="schedules" element={<EmployeeScheduleView />} />
+                </Route>
 
                 {/* Admin Routes */}
                 <Route path="/admin" element={
