@@ -129,7 +129,7 @@ public class MovieServiceImpl implements MovieService {
             throw new BusinessException("releaseFrom cannot be after releaseTo", "MOVIE_INVALID_QUERY", HttpStatus.BAD_REQUEST);
         }
 
-        Sort sort = Sort.unsorted();
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
         if (sortStr != null && !sortStr.trim().isEmpty()) {
             String[] parts = sortStr.split(",");
             if (parts.length != 2) {
@@ -339,7 +339,7 @@ public class MovieServiceImpl implements MovieService {
             throw new BusinessException("releaseFrom cannot be after releaseTo", "MOVIE_INVALID_QUERY", HttpStatus.BAD_REQUEST);
         }
 
-        Sort sort = Sort.unsorted();
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
         if (sortStr != null && !sortStr.trim().isEmpty()) {
             String[] parts = sortStr.split(",");
             if (parts.length != 2) {
