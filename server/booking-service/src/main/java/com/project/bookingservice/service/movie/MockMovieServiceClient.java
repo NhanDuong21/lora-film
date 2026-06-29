@@ -18,9 +18,9 @@ public class MockMovieServiceClient implements MovieServiceClient {
             return null; // missing showtime
         }
         if (showtimeId == 888L) {
-            return new ShowtimeInfo(888L, 1L, false); // inactive showtime
+            return new ShowtimeInfo(888L, 1L, false, new java.math.BigDecimal("12.50")); // inactive showtime
         }
-        return new ShowtimeInfo(showtimeId, 1L, true); // valid showtime in room 1
+        return new ShowtimeInfo(showtimeId, 1L, true, new java.math.BigDecimal("12.50")); // valid showtime in room 1
     }
 
     @Override
