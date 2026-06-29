@@ -34,7 +34,6 @@ import AdminMembersView from "../pages/admin/AdminMembersPage";
 import AdminSettingsView from "../pages/admin/AdminSettingsPage";
 import AdminShowtimeView from "../pages/admin/AdminShowtimePage";
 import AdminStaffView from "../pages/admin/AdminStaffPage";
-import AdminActorPage from "../pages/admin/AdminActorPage";
 import AdminConcessionSalesPage from "../pages/admin/AdminConcessionSalesPage";
 import AdminPayrollPage from "../pages/admin/AdminPayrollPage";
 
@@ -153,7 +152,6 @@ function AppRoutes() {
                     <Route path="settings" element={<AdminSettingsView />} />
                     <Route path="showtimes" element={<AdminShowtimeView />} />
                     <Route path="staff" element={<AdminStaffView />} />
-                    <Route path="actors" element={<AdminActorPage />} />
                     <Route path="concession-sales" element={<AdminConcessionSalesPage />} />
                     <Route path="payroll" element={<AdminPayrollPage />} />
                 </Route>

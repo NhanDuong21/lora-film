@@ -154,7 +154,10 @@ export default function AdminGenrePage({ triggerToast }) {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in" data-testid="admin-genre-page">
+    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in" data-testid="admin-genre-page">
+      <div className="flex flex-col border-b border-zinc-800 pb-4">
+        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">DANH MỤC THỂ LOẠI</h1>
+      </div>
       <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-brand-gray/60 border border-zinc-800/50 p-4 rounded-2xl backdrop-blur-md">
         <div className="relative w-full sm:w-80">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-500">

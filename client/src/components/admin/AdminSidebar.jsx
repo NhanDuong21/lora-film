@@ -141,13 +141,6 @@ export default function AdminSidebar({
                     <span>Quản lý thể loại</span>
                   </button>
                   <button
-                    onClick={() => handleTabClick('actors', '#/admin/actors')}
-                    className={getSubLinkClass('actors')}
-                  >
-                    <Users className="w-4 h-4 shrink-0" />
-                    <span>Diễn viên</span>
-                  </button>
-                  <button
                     onClick={() => handleTabClick('events-promo', '#/admin/events')}
                     className={getSubLinkClass('events-promo')}
                   >
