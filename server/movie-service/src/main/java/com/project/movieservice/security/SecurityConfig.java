@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/genres/**", "/api/movies/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/admin/movies/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MOVIE_READ", "ROLE_MOVIE_MANAGE")
                 .requestMatchers("/api/admin/movies/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_MOVIE_MANAGE")
+                .requestMatchers("/api/admin/rooms/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_ROOM_MANAGE")
                 .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_GENRE_MANAGE")
                 .anyRequest().authenticated()
             )
