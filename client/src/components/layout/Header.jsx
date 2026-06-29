@@ -78,15 +78,15 @@ export default function Header() {
         <div className="hidden sm:flex items-center shrink-0">
           <button
             onClick={handleQuickTicketClick}
-            className="bg-orange-500 hover:bg-orange-600 transition-colors text-white text-[11px] font-black uppercase tracking-wider pl-4 pr-3 py-2 rounded-l-lg flex items-center gap-1.5 shadow-lg shadow-orange-500/20 h-9"
+            className="bg-brand-orange hover:bg-orange-600 transition-colors text-white text-[11px] font-black uppercase tracking-wider pl-4 pr-3 py-2 rounded-l-lg flex items-center gap-1.5 shadow-lg shadow-brand-orange/20 h-9"
           >
             <Star className="w-3.5 h-3.5 fill-white text-white" />
             <span>Mua Vé</span>
           </button>
-          <div className="h-9 w-[1px] border-r border-dashed border-white/40 bg-orange-500"></div>
+          <div className="h-9 w-[1px] border-r border-dashed border-white/40 bg-brand-orange"></div>
           <button
             onClick={handleQuickTicketClick}
-            className="bg-orange-500 hover:bg-orange-600 transition-colors text-white w-7 h-9 rounded-r-lg relative flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0"
+            className="bg-brand-orange hover:bg-orange-600 transition-colors text-white w-7 h-9 rounded-r-lg relative flex items-center justify-center shadow-lg shadow-brand-orange/20 shrink-0"
           >
             <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-zinc-950 rounded-full border border-zinc-800/80"></div>
             <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-zinc-950 rounded-full border border-zinc-800/80"></div>
@@ -104,10 +104,10 @@ export default function Header() {
         >
           <button 
             type="button"
-            className="text-zinc-300 hover:text-orange-500 flex items-center gap-1 transition-colors duration-250 focus:outline-none"
+            className="text-zinc-300 hover:text-brand-orange flex items-center gap-1 transition-colors duration-250 focus:outline-none"
           >
             <span>Phim</span>
-            <ChevronDown className="w-3 h-3 shrink-0 text-zinc-500 group-hover:text-orange-500" />
+            <ChevronDown className="w-3 h-3 shrink-0 text-zinc-500 group-hover:text-brand-orange" />
           </button>
           {activeDropdown === 'phim' && (
             <div className="absolute left-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl z-50 py-2">
@@ -134,7 +134,7 @@ export default function Header() {
         >
           <button 
             type="button"
-            className="text-zinc-300 hover:text-orange-500 flex items-center gap-1 transition-colors duration-250 focus:outline-none"
+            className="text-zinc-300 hover:text-brand-orange flex items-center gap-1 transition-colors duration-250 focus:outline-none"
           >
             <span>Góc Điện Ảnh</span>
             <ChevronDown className="w-3 h-3 shrink-0 text-zinc-500" />
@@ -165,7 +165,7 @@ export default function Header() {
 
         <button
           onClick={() => handleInfoOptionClick('Khuyến mãi và Sự kiện')}
-          className="text-zinc-300 hover:text-orange-500 py-2 transition-colors duration-250 focus:outline-none"
+          className="text-zinc-300 hover:text-brand-orange py-2 transition-colors duration-250 focus:outline-none"
         >
           Sự Kiện
         </button>
@@ -177,7 +177,7 @@ export default function Header() {
         >
           <button 
             type="button"
-            className="text-zinc-300 hover:text-orange-500 flex items-center gap-1 transition-colors duration-250 focus:outline-none"
+            className="text-zinc-300 hover:text-brand-orange flex items-center gap-1 transition-colors duration-250 focus:outline-none"
           >
             <span>Rạp/Giá Vé</span>
             <ChevronDown className="w-3 h-3 shrink-0 text-zinc-500" />
@@ -217,7 +217,7 @@ export default function Header() {
 
         <button
           onClick={() => handleInfoOptionClick('Trải nghiệm Rạp Đặc Biệt')}
-          className="text-zinc-300 hover:text-orange-500 py-2 transition-colors duration-250 focus:outline-none"
+          className="text-zinc-300 hover:text-brand-orange py-2 transition-colors duration-250 focus:outline-none"
         >
           Rạp Đặc Biệt
         </button>
@@ -227,7 +227,7 @@ export default function Header() {
       {/* RIGHT SECTION: Live Auth Session Status Dropdown */}
       <div className="flex items-center gap-4">
         <div className="relative">
-          <div className="relative w-64 md:w-72 bg-zinc-900/90 border border-zinc-800 focus-within:border-brand-coral/60 rounded-full px-4 h-10 flex items-center text-xs text-zinc-100 transition-colors duration-200 outline-none">
+          <div className="relative w-64 md:w-72 bg-zinc-900/90 border border-zinc-800 focus-within:border-brand-orange/60 rounded-full px-4 h-10 flex items-center text-xs text-zinc-100 transition-colors duration-200 outline-none">
             <input
               type="text"
               value={searchQuery}
@@ -248,14 +248,14 @@ export default function Header() {
                 className="relative p-2 rounded-xl bg-zinc-900 border border-zinc-800/80 hover:bg-zinc-800 text-zinc-450 hover:text-white transition-all focus:outline-none"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
+                <span className="absolute top-1 right-1 w-2 h-2 bg-brand-orange rounded-full"></span>
               </button>
             )}
 
             <div className="relative">
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="w-9 h-9 rounded-full bg-orange-500/10 border border-orange-500/40 flex items-center justify-center text-orange-500 hover:bg-orange-500/20 transition-all font-black text-sm uppercase focus:outline-none"
+                className="w-9 h-9 rounded-full bg-brand-orange/10 border border-brand-orange/40 flex items-center justify-center text-brand-orange hover:bg-brand-orange/20 transition-all font-black text-sm uppercase focus:outline-none"
               >
                 {user?.fullName ? user.fullName.charAt(0) : 'U'}
               </button>
@@ -265,7 +265,7 @@ export default function Header() {
                   <div className="px-4 py-2 border-b border-zinc-800 mb-1">
                     <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Tài khoản</p>
                     <p className="text-sm font-bold text-white truncate">{user?.fullName}</p>
-                    <p className="text-[10px] text-orange-500 font-semibold uppercase">{userRole}</p>
+                    <p className="text-[10px] text-brand-orange font-semibold uppercase">{userRole}</p>
                   </div>
 
                   {userRole === 'CUSTOMER' ? (
@@ -288,7 +288,7 @@ export default function Header() {
                         if (userRole === 'ADMIN' || userRole === 'ROLE_ADMIN' || userRole === 'ROLE_ACCOUNTANT') navigate('/admin');
                         if (userRole === 'EMPLOYEE' || userRole === 'ROLE_STAFF') navigate('/employee');
                       }}
-                      className="w-full text-left px-4 py-2.5 text-xs text-orange-500 hover:bg-zinc-800 font-bold flex items-center gap-2"
+                      className="w-full text-left px-4 py-2.5 text-xs text-brand-orange hover:bg-zinc-800 font-bold flex items-center gap-2"
                     >
                       <span>Vào trang quản lý</span>
                     </button>
@@ -308,7 +308,7 @@ export default function Header() {
         ) : (
           <button
             onClick={() => navigate('/login')}
-            className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black py-2.5 px-5 rounded-full transition-all duration-300 shadow-lg shadow-orange-500/10 uppercase tracking-wider focus:outline-none"
+            className="bg-brand-orange hover:bg-orange-600 text-white text-xs font-black py-2.5 px-5 rounded-full transition-all duration-300 shadow-lg shadow-brand-orange/10 uppercase tracking-wider focus:outline-none"
           >
             Đăng Nhập
           </button>
@@ -331,7 +331,7 @@ export default function Header() {
               setMobileMenuOpen(false);
               handleQuickTicketClick();
             }}
-            className="w-full bg-orange-500 text-white py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2"
+            className="w-full bg-brand-orange text-white py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2"
           >
             <Star className="w-4 h-4 fill-white text-white" />
             <span>Mua Vé Nhanh</span>
@@ -341,7 +341,7 @@ export default function Header() {
             <span className="text-[10px] text-zinc-500 font-black tracking-wider uppercase block">Phim</span>
             <button
               onClick={() => handlePhimOptionClick('NOW_SHOWING')}
-              className="w-full text-left text-zinc-200 hover:text-orange-500 py-1.5 text-xs font-bold uppercase"
+              className="w-full text-left text-zinc-200 hover:text-brand-orange py-1.5 text-xs font-bold uppercase"
             >
               Phim đang chiếu
             </button>
@@ -368,7 +368,7 @@ export default function Header() {
               <button
                 type="button"
                 onClick={() => setInfoModalContent(null)}
-                className="bg-orange-500 hover:bg-orange-600 text-white font-black py-2.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-colors"
+                className="bg-brand-orange hover:bg-orange-600 text-white font-black py-2.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-colors"
               >
                 Đóng
               </button>

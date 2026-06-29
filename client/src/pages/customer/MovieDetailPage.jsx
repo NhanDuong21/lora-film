@@ -121,7 +121,7 @@ export default function MovieDetailPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-brand-dark text-zinc-100 selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans font-medium">
+    <div className="flex flex-col min-h-screen bg-brand-dark text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
       <Header />
       
       <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-7xl mx-auto w-full flex flex-col justify-center">
@@ -135,7 +135,7 @@ export default function MovieDetailPage() {
             <div className="pb-6 border-b border-zinc-900 mb-8">
               <button
                 onClick={handleBack}
-                className="flex items-center gap-2 bg-black/40 hover:bg-brand-coral/25 text-white border border-white/10 hover:border-brand-coral font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
+                className="flex items-center gap-2 bg-black/40 hover:bg-brand-orange/25 text-white border border-white/10 hover:border-brand-orange font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Quay lại</span>
@@ -161,7 +161,7 @@ export default function MovieDetailPage() {
                 {error !== "MOVIE_NOT_FOUND" && (
                   <button
                     onClick={fetchMovieDetail}
-                    className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-5 py-2 rounded-full text-xs transition-all duration-300 cursor-pointer"
+                    className="bg-brand-orange hover:bg-orange-600 text-white font-bold px-5 py-2 rounded-full text-xs transition-all duration-300 cursor-pointer"
                   >
                     Thử lại
                   </button>
@@ -182,7 +182,7 @@ export default function MovieDetailPage() {
             <div className="pb-6 border-b border-zinc-900 mb-8 flex justify-between items-center">
               <button
                 onClick={handleBack}
-                className="flex items-center gap-2 bg-black/40 hover:bg-brand-coral/25 text-white border border-white/10 hover:border-brand-coral font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
+                className="flex items-center gap-2 bg-black/40 hover:bg-brand-orange/25 text-white border border-white/10 hover:border-brand-orange font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Quay lại</span>
@@ -208,7 +208,7 @@ export default function MovieDetailPage() {
                       onClick={() => setActiveTrailerUrl(getYoutubeEmbedUrl(movie.trailerUrl))}
                       className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                     >
-                      <div className="w-14 h-14 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30 scale-90 group-hover:scale-100 transition-transform duration-300">
+                      <div className="w-14 h-14 rounded-full bg-brand-orange flex items-center justify-center text-white shadow-lg shadow-brand-orange/30 scale-90 group-hover:scale-100 transition-transform duration-300">
                         <Play className="w-6 h-6 fill-current ml-1" />
                       </div>
                     </button>
@@ -245,11 +245,11 @@ export default function MovieDetailPage() {
                 {/* Meta details list */}
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-400 font-semibold mb-6">
                   <div className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-orange-500" />
+                    <Clock className="w-4 h-4 text-brand-orange" />
                     <span>{formatDuration(movie.durationMinutes)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-orange-500" />
+                    <Calendar className="w-4 h-4 text-brand-orange" />
                     <span>Khởi chiếu: {formatDate(movie.releaseDate)}</span>
                   </div>
                 </div>
@@ -279,9 +279,9 @@ export default function MovieDetailPage() {
                   {movie.trailerUrl && (
                     <button
                       onClick={() => setActiveTrailerUrl(getYoutubeEmbedUrl(movie.trailerUrl))}
-                      className="group flex items-center gap-2 bg-transparent border border-white hover:border-brand-coral hover:text-brand-coral text-white font-bold px-6 py-3.5 rounded-full transition-all duration-300 cursor-pointer text-xs uppercase tracking-wider"
+                      className="group flex items-center gap-2 bg-transparent border border-white hover:border-brand-orange hover:text-brand-orange text-white font-bold px-6 py-3.5 rounded-full transition-all duration-300 cursor-pointer text-xs uppercase tracking-wider"
                     >
-                      <Play className="w-4 h-4 fill-current group-hover:text-brand-coral" />
+                      <Play className="w-4 h-4 fill-current group-hover:text-brand-orange" />
                       Xem Trailer
                     </button>
                   )}

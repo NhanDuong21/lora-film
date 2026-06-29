@@ -123,7 +123,7 @@ export default function AdminGenrePage({ triggerToast }) {
                 value={formData.genreName}
                 onChange={(e) => setFormData({ genreName: e.target.value })}
                 placeholder="Ví dụ: Hành động, Viễn tưởng..."
-                className="w-full bg-brand-dark border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-coral/40 focus:ring-0 transition-colors"
+                className="w-full bg-brand-dark border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/40 focus:ring-0 transition-colors"
                 required
                 data-testid="genre-name-input"
               />
@@ -141,7 +141,7 @@ export default function AdminGenrePage({ triggerToast }) {
 
             <button
               type="submit"
-              className="bg-brand-coral hover:bg-opacity-90 text-zinc-950 font-black px-8 py-3.5 rounded-2xl text-xs transition-all shadow-xl tracking-wider uppercase flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer"
+              className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-8 py-3.5 rounded-2xl text-xs transition-all shadow-xl tracking-wider uppercase flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer"
               data-testid="genre-submit-btn"
             >
               <Check className="w-4 h-4" />
@@ -168,13 +168,13 @@ export default function AdminGenrePage({ triggerToast }) {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Tìm kiếm thể loại..."
-            className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-brand-coral/40 focus:ring-0 rounded-xl py-2.5 pl-9 pr-4 text-xs transition-colors"
+            className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-brand-orange/40 focus:ring-0 rounded-xl py-2.5 pl-9 pr-4 text-xs transition-colors"
           />
         </div>
 
         <button
           onClick={handleOpenAdd}
-          className="bg-brand-coral hover:bg-opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-coral/10 flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
+          className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
           data-testid="create-genre-btn"
         >
           <Plus className="w-4 h-4" />

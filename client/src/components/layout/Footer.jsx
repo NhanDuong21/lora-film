@@ -9,11 +9,11 @@ export default function Footer() {
         {/* Column 1: Brand Overview & Social Connect */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 select-none">
-            <div className="bg-brand-coral/10 p-1.5 rounded-lg">
-              <Film className="w-5 h-5 text-brand-coral" />
+            <div className="bg-brand-orange/10 p-1.5 rounded-lg">
+              <Film className="w-5 h-5 text-brand-orange" />
             </div>
             <span className="text-lg font-black tracking-tight">
-              <span className="text-brand-coral">Lora</span>
+              <span className="text-brand-orange">Lora</span>
               <span className="text-white">Film</span>
             </span>
           </div>
@@ -21,16 +21,16 @@ export default function Footer() {
             Hệ thống rạp chiếu phim hiện đại mang đến trải nghiệm điện ảnh vượt chuẩn vượt giới hạn với công nghệ đỉnh cao.
           </p>
           <div className="flex items-center gap-3 mt-4">
-            <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-brand-coral hover:bg-brand-coral/10 transition-all duration-300">
+            <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-brand-orange hover:bg-brand-orange/10 transition-all duration-300">
               <Facebook className="w-4 h-4" />
             </a>
-            <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-brand-coral hover:bg-brand-coral/10 transition-all duration-300">
+            <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-brand-orange hover:bg-brand-orange/10 transition-all duration-300">
               <Instagram className="w-4 h-4" />
             </a>
-            <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-brand-coral hover:bg-brand-coral/10 transition-all duration-300">
+            <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-brand-orange hover:bg-brand-orange/10 transition-all duration-300">
               <Youtube className="w-4 h-4" />
             </a>
-            <a href="https://lorafilm.vn" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-brand-coral hover:bg-brand-coral/10 transition-all duration-300">
+            <a href="https://lorafilm.vn" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-brand-orange hover:bg-brand-orange/10 transition-all duration-300">
               <Video className="w-4 h-4" />
             </a>
           </div>

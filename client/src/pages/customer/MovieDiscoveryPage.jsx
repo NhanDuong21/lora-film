@@ -131,7 +131,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               <select
                 value={selectedGenre}
                 onChange={(e) => setSelectedGenre(e.target.value)}
-                className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-coral focus:outline-none transition-colors"
+                className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-orange focus:outline-none transition-colors"
               >
                 {genres.map(g => (
                   <option key={g.value} value={g.value}>{g.label}</option>
@@ -145,7 +145,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-coral focus:outline-none transition-colors"
+                className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-orange focus:outline-none transition-colors"
               >
                 {STATUS_LIST.map(s => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -159,7 +159,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               <select
                 value={selectedSort}
                 onChange={(e) => setSelectedSort(e.target.value)}
-                className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-coral focus:outline-none transition-colors"
+                className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-orange focus:outline-none transition-colors"
               >
                 {SORT_LIST.map(s => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -196,7 +196,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                 </p>
                 <button
                   onClick={handleResetFilters}
-                  className="bg-brand-coral hover:bg-opacity-95 text-white font-bold py-2.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-colors inline-block mt-2 focus:outline-none"
+                  className="bg-brand-orange hover:bg-opacity-95 text-white font-bold py-2.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-colors inline-block mt-2 focus:outline-none"
                 >
                   Đặt lại bộ lọc
                 </button>
@@ -237,14 +237,14 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                           
                           {/* Title + Like Pill Header */}
                           <div className="flex items-start justify-between gap-4">
-                            <h3 className="font-black text-sm md:text-base text-white leading-snug group-hover:text-brand-coral transition-colors">
+                            <h3 className="font-black text-sm md:text-base text-white leading-snug group-hover:text-brand-orange transition-colors">
                               {movie.title}
                             </h3>
                           </div>
 
                           {/* Meta Tags */}
                           <div className="flex flex-wrap gap-2 items-center">
-                            <span className="text-[9px] font-black uppercase tracking-wider bg-brand-coral/10 text-brand-coral border border-brand-coral/20 px-2 py-0.5 rounded">
+                            <span className="text-[9px] font-black uppercase tracking-wider bg-brand-orange/10 text-brand-orange border border-brand-orange/20 px-2 py-0.5 rounded">
                               {movie.ageRating || 'P'}
                             </span>
                             <span className="text-[10px] text-zinc-400 font-bold">
@@ -304,7 +304,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                     </div>
 
                     <div className="space-y-1.5 flex flex-col justify-center">
-                      <h4 className="text-xs font-extrabold text-zinc-200 group-hover:text-brand-coral transition-colors line-clamp-1">
+                      <h4 className="text-xs font-extrabold text-zinc-200 group-hover:text-brand-orange transition-colors line-clamp-1">
                         {movie.title}
                       </h4>
                       <div className="flex items-center gap-2">

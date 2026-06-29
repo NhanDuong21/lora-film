@@ -38,10 +38,10 @@ export default function BookingSteps() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto mt-12 relative px-4 perspective-1500 transform-style-3d">
         
         {/* Vector Flow Connector 1 (Desktop only progress line connecting Step 1 to 2) */}
-        <div className="absolute top-[4.5rem] left-[25%] w-[16%] h-[2px] bg-gradient-to-r from-amber-500/50 to-orange-500/50 hidden md:block z-0" />
+        <div className="absolute top-[4.5rem] left-[25%] w-[16%] h-[2px] bg-gradient-to-r from-amber-500/50 to-brand-orange/50 hidden md:block z-0" />
         
         {/* Vector Flow Connector 2 (Desktop only progress line connecting Step 2 to 3) */}
-        <div className="absolute top-[4.5rem] left-[59%] w-[16%] h-[2px] bg-gradient-to-r from-amber-500/50 to-orange-500/50 hidden md:block z-0" />
+        <div className="absolute top-[4.5rem] left-[59%] w-[16%] h-[2px] bg-gradient-to-r from-amber-500/50 to-brand-orange/50 hidden md:block z-0" />
 
         {steps.map((step) => {
           const Icon = step.icon;

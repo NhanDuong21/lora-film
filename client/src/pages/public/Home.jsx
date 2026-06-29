@@ -11,7 +11,7 @@ export default function Home() {
     }, []);
 
     return (
-        <div className="flex flex-col min-h-screen bg-brand-dark text-white selection:bg-brand-coral selection:text-white">
+        <div className="flex flex-col min-h-screen bg-brand-dark text-white selection:bg-brand-orange selection:text-white">
             <HeroSection />
             <MovieSection />
             <EventSection />

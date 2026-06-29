@@ -87,7 +87,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
             onClick={() => setActiveTab('NOW_SHOWING')}
             className={`text-lg md:text-xl font-black tracking-wider uppercase pb-2 transition-all duration-300 relative ${
               activeTab === 'NOW_SHOWING'
-                ? 'text-brand-coral border-b-2 border-brand-coral drop-shadow-[0_0_10px_rgba(216,129,116,0.4)]'
+                ? 'text-brand-orange border-b-2 border-brand-orange drop-shadow-[0_0_10px_rgba(216,129,116,0.4)]'
                 : 'text-zinc-500 hover:text-zinc-300'
             }`}
           >
@@ -97,7 +97,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
             onClick={() => setActiveTab('UPCOMING')}
             className={`text-lg md:text-xl font-black tracking-wider uppercase pb-2 transition-all duration-300 relative ${
               activeTab === 'UPCOMING'
-                ? 'text-brand-coral border-b-2 border-brand-coral drop-shadow-[0_0_10px_rgba(216,129,116,0.4)]'
+                ? 'text-brand-orange border-b-2 border-brand-orange drop-shadow-[0_0_10px_rgba(216,129,116,0.4)]'
                 : 'text-zinc-500 hover:text-zinc-300'
             }`}
           >
@@ -123,7 +123,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
             </p>
             <button
               onClick={retry}
-              className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-6 rounded-full transition-all text-xs cursor-pointer shadow-md shadow-orange-500/10"
+              className="flex items-center gap-2 bg-brand-orange hover:bg-orange-600 text-white font-medium py-2 px-6 rounded-full transition-all text-xs cursor-pointer shadow-md shadow-brand-orange/10"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Thử lại
@@ -227,7 +227,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                                 navigate('/booking', { state: { bookingPayload: defaultBooking } });
                               }
                             }}
-                            className="w-full max-w-[160px] bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-full flex items-center justify-center gap-2 transition-all text-sm shadow-md shadow-orange-500/10 cursor-pointer"
+                            className="w-full max-w-[160px] bg-brand-orange hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-full flex items-center justify-center gap-2 transition-all text-sm shadow-md shadow-brand-orange/10 cursor-pointer"
                           >
                             <Ticket className="w-4 h-4" />
                             Mua Vé
@@ -275,7 +275,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                       onClick={() => handlePageChange(idx)}
                       className={`w-8 h-8 rounded-full text-xs font-bold transition-all duration-300 ${
                         page === idx
-                          ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
+                          ? "bg-brand-orange text-white shadow-md shadow-brand-orange/20"
                           : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700"
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >

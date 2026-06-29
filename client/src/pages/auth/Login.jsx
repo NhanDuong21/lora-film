@@ -92,14 +92,14 @@ function Login() {
     return (
         <main className="bg-zinc-950 text-white min-h-screen flex items-center justify-center py-16 px-6 relative overflow-hidden select-none">
             {/* Background ambient decorative shapes */}
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-coral/5 rounded-full filter blur-3xl pointer-events-none"></div>
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-orange/5 rounded-full filter blur-3xl pointer-events-none"></div>
             <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-brand-yellow/5 rounded-full filter blur-3xl pointer-events-none"></div>
 
             <article className="bg-zinc-900/80 border border-zinc-800 p-8 rounded-2xl w-full max-w-md shadow-2xl shadow-black/50 relative z-10 animate-fade-in">
                 {/* Back to Home Button */}
                 <button
                     onClick={() => navigate("/")}
-                    className="flex items-center gap-2 text-zinc-400 hover:text-brand-coral transition-colors mb-6 text-sm font-semibold focus:outline-none"
+                    className="flex items-center gap-2 text-zinc-400 hover:text-brand-orange transition-colors mb-6 text-sm font-semibold focus:outline-none"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     <span>Quay lại trang chủ</span>
@@ -196,7 +196,7 @@ function Login() {
                     <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full bg-gradient-to-r from-orange-400 to-amber-500 hover:opacity-95 text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest mt-6 block text-center cursor-pointer"
+                        className="w-full bg-brand-orange hover:opacity-95 text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest mt-6 block text-center cursor-pointer"
                     >
                         {isSubmitting ? (
                             <div className="flex items-center justify-center gap-2">

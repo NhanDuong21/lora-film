@@ -107,7 +107,7 @@ export default function AdminMoviePage() {
             value={searchTerm}
             onChange={handleSearchChange}
             placeholder="Tìm kiếm tên phim..."
-            className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-brand-coral/40 focus:ring-0 rounded-xl py-2.5 pl-9 pr-4 text-xs transition-colors"
+            className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-brand-orange/40 focus:ring-0 rounded-xl py-2.5 pl-9 pr-4 text-xs transition-colors"
           />
         </div>
 
@@ -118,7 +118,7 @@ export default function AdminMoviePage() {
             <select
               value={statusFilter}
               onChange={handleStatusChange}
-              className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 focus:border-brand-coral/40 focus:ring-0 rounded-xl py-2.5 px-4 text-xs transition-colors cursor-pointer outline-none"
+              className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 focus:border-brand-orange/40 focus:ring-0 rounded-xl py-2.5 px-4 text-xs transition-colors cursor-pointer outline-none"
             >
               <option value="">Tất cả trạng thái</option>
               <option value="NOW_SHOWING">Đang Chiếu</option>
@@ -133,7 +133,7 @@ export default function AdminMoviePage() {
             <select
               value={pageSize}
               onChange={handlePageSizeChange}
-              className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 focus:border-brand-coral/40 focus:ring-0 rounded-xl py-2.5 px-4 text-xs transition-colors cursor-pointer outline-none"
+              className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 focus:border-brand-orange/40 focus:ring-0 rounded-xl py-2.5 px-4 text-xs transition-colors cursor-pointer outline-none"
             >
               <option value={5}>5/trang</option>
               <option value={10}>10/trang</option>
@@ -145,7 +145,7 @@ export default function AdminMoviePage() {
           <button
             type="button"
             onClick={handleOpenAdd}
-            className="bg-brand-coral hover:bg-opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-coral/10 flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
+            className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
           >
             <Plus className="w-4 h-4" />
             <span>THÊM PHIM</span>

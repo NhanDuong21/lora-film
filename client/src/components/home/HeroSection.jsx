@@ -102,7 +102,7 @@ export default function Hero({ onBookTicket, onNavigate }) {
           </h1>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-6">
-            <span className="text-2xl md:text-3xl font-black text-brand-coral tracking-widest uppercase">
+            <span className="text-2xl md:text-3xl font-black text-brand-orange tracking-widest uppercase">
               LORA FILM
             </span>
             <span className="hidden sm:inline text-gray-500">|</span>
@@ -117,7 +117,7 @@ export default function Hero({ onBookTicket, onNavigate }) {
                 const element = document.getElementById('phim');
                 element?.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="group flex items-center gap-2 bg-brand-coral text-white font-bold px-8 py-4 rounded-full hover:bg-opacity-95 hover:shadow-brand-coral/25 shadow-lg transition-all transform hover:scale-105 duration-300"
+              className="group flex items-center gap-2 bg-brand-orange text-white font-bold px-8 py-4 rounded-full hover:bg-opacity-95 hover:shadow-brand-orange/25 shadow-lg transition-all transform hover:scale-105 duration-300"
             >
               <Play className="w-5 h-5 fill-current text-white" />
               ĐẶT VÉ NGAY
@@ -235,7 +235,7 @@ export default function Hero({ onBookTicket, onNavigate }) {
           <button
             onClick={handleQuickBooking}
             disabled={!isBookingFormValid}
-            className={`bg-orange-500 hover:bg-orange-600 text-white font-medium px-6 h-10 rounded-full transition-all duration-200 shadow-md shadow-orange-500/10 cursor-pointer text-sm uppercase tracking-wider select-none shrink-0 ${
+            className={`bg-brand-orange hover:bg-orange-600 text-white font-medium px-6 h-10 rounded-full transition-all duration-200 shadow-md shadow-brand-orange/10 cursor-pointer text-sm uppercase tracking-wider select-none shrink-0 ${
               !isBookingFormValid ? 'opacity-40 pointer-events-none' : ''
             }`}
           >

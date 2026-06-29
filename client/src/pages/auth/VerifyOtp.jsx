@@ -134,13 +134,13 @@ function VerifyOtp() {
 
     return (
         <main className="bg-[#050506] text-white min-h-screen w-full flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden select-none">
-            <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] bg-brand-coral/10 rounded-full filter blur-[80px] pointer-events-none z-0" />
-            <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-brand-coral/5 rounded-full filter blur-[80px] pointer-events-none z-0" />
+            <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] bg-brand-orange/10 rounded-full filter blur-[80px] pointer-events-none z-0" />
+            <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-brand-orange/5 rounded-full filter blur-[80px] pointer-events-none z-0" />
 
-            <article className="bg-[#121218]/85 border border-brand-coral/15 rounded-2xl w-full max-w-[450px] px-5 py-8 sm:px-8 sm:py-10 shadow-[0_15px_35px_rgba(0,0,0,0.6),0_0_25px_rgba(255,122,26,0.05)] backdrop-blur-md relative z-10 hover:border-brand-coral/35 hover:shadow-[0_20px_40px_rgba(0,0,0,0.7),0_0_35px_rgba(255,122,26,0.12)] transition-all duration-300">
+            <article className="bg-[#121218]/85 border border-brand-orange/15 rounded-2xl w-full max-w-[450px] px-5 py-8 sm:px-8 sm:py-10 shadow-[0_15px_35px_rgba(0,0,0,0.6),0_0_25px_rgba(255,122,26,0.05)] backdrop-blur-md relative z-10 hover:border-brand-orange/35 hover:shadow-[0_20px_40px_rgba(0,0,0,0.7),0_0_35px_rgba(255,122,26,0.12)] transition-all duration-300">
                 <header className="text-center mb-6 sm:mb-8">
                     <div className="flex items-center justify-center gap-3 mb-2">
-                        <div className="flex items-center justify-center text-[#ff7a1a] drop-shadow-[0_0_8px_rgba(255,122,26,0.7)]">
+                        <div className="flex items-center justify-center text-brand-orange drop-shadow-[0_0_8px_rgba(255,122,26,0.7)]">
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 width="32"
@@ -156,7 +156,7 @@ function VerifyOtp() {
                             </svg>
                         </div>
                         <h2 className="text-2xl font-black uppercase tracking-wider text-white">
-                            Xác thực <span className="text-[#ff7a1a]">OTP</span>
+                            Xác thực <span className="text-brand-orange">OTP</span>
                         </h2>
                     </div>
                     <p className="text-zinc-500 text-xs sm:text-sm leading-relaxed mt-1 max-w-sm mx-auto">
@@ -251,7 +251,7 @@ function VerifyOtp() {
 
                     <button
                         type="submit"
-                        className="w-full bg-[#ff7a1a] hover:bg-orange-500 disabled:opacity-40 disabled:hover:bg-[#ff7a1a] text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer mt-4"
+                        className="w-full bg-brand-orange hover:bg-orange-600 disabled:opacity-40 disabled:hover:bg-brand-orange text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer mt-4"
                         disabled={isSubmitting}
                     >
                         <span>{isSubmitting ? "Đang xác thực..." : "Xác nhận mã"}</span>
@@ -271,7 +271,7 @@ function VerifyOtp() {
                                 type="button"
                                 onClick={handleResend}
                                 disabled={isResending}
-                                className="text-[#ff7a1a] hover:text-orange-400 font-black text-xs uppercase tracking-widest bg-transparent border-none cursor-pointer transition-colors focus:outline-none"
+                                className="text-brand-orange hover:text-orange-400 font-black text-xs uppercase tracking-widest bg-transparent border-none cursor-pointer transition-colors focus:outline-none"
                             >
                                 {isResending ? "Đang gửi..." : "Gửi lại mã"}
                             </button>
