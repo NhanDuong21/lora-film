@@ -15,7 +15,8 @@ import {
   Building,
   Coins,
   Shield,
-  Sliders
+  Sliders,
+  Tags
 } from 'lucide-react';
 
 export default function AdminSidebar({ 
@@ -128,6 +129,13 @@ export default function AdminSidebar({
                   >
                     <Film className="w-4 h-4 shrink-0" />
                     <span>Quản lý phim</span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('genres', '#/admin/genres')}
+                    className={getSubLinkClass('genres')}
+                  >
+                    <Tags className="w-4 h-4 shrink-0" />
+                    <span>Quản lý thể loại</span>
                   </button>
                   <button
                     onClick={() => handleTabClick('actors', '#/admin/actors')}

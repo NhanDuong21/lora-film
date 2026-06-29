@@ -8,30 +8,16 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
 import AdminSidebar from './AdminSidebar';
+import AdminGenrePage from '../../pages/admin/AdminGenrePage';
+import SkeletonTable from '../common/SkeletonTable';
 import AdminMovieView from '../../pages/admin/AdminMoviePage';
-import AdminActorView from '../../pages/admin/AdminActorPage';
-import AdminShowtimeView from '../../pages/admin/AdminShowtimePage';
-import AdminEventView from '../../pages/admin/AdminEventPage';
-import AdminCinemaView from '../../pages/admin/AdminCinemaPage';
-import AdminFinanceView from '../../pages/admin/AdminFinancePage';
 import AdminDashboardView from '../../pages/admin/AdminDashboardPage';
-import AdminSettingsView from '../../pages/admin/AdminSettingsPage';
-import AdminMembersView from '../../pages/admin/AdminMembersPage';
-import AdminStaffView from '../../pages/admin/AdminStaffPage';
-import AdminConcessionInventory from '../../pages/admin/AdminConcessionInventoryPage';
+// Other views are not fully integrated with API yet, will display SkeletonTable
 
 export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
   const { user, logout } = useAuth();
   const { 
-    movies, setMovies,
-    actors, setActors,
-    theaters, setTheaters,
-    showtimes, setShowtimes,
-    tickets,
-    concessions, setConcessions,
-    customers, setCustomers,
-    employees, setEmployees,
-    events, setEvents
+    movies, setMovies
   } = useData();
 
   const [activeTab, setActiveTab] = useState(() => {
@@ -42,6 +28,7 @@ export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
 
     if (hash === '#/admin') return defaultTab;
     if (hash === '#/admin/movies') return 'movies';
+    if (hash === '#/admin/genres') return 'genres';
     if (hash === '#/admin/actors') return 'actors';
     if (hash === '#/admin/showtimes') return 'showtimes';
     if (hash === '#/admin/events') return 'events-promo';
@@ -70,6 +57,7 @@ export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
 
       if (hash === '#/admin') setActiveTab(defaultTab);
       else if (hash === '#/admin/movies') setActiveTab('movies');
+      else if (hash === '#/admin/genres') setActiveTab('genres');
       else if (hash === '#/admin/actors') setActiveTab('actors');
       else if (hash === '#/admin/showtimes') setActiveTab('showtimes');
       else if (hash === '#/admin/events') setActiveTab('events-promo');
@@ -163,6 +151,7 @@ export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
                 {activeTab === 'dashboard' ? 'TỔNG QUAN HỆ THỐNG' : (
                   <>
                     {activeTab === 'movies' && 'DANH SÁCH BỘ PHIM'}
+                    {activeTab === 'genres' && 'DANH MỤC THỂ LOẠI'}
                     {activeTab === 'actors' && 'DANH MỤC DIỄN VIÊN'}
                     {activeTab === 'showtimes' && 'DANH SÁCH SUẤT CHIẾU'}
                     {activeTab === 'events-promo' && 'CHƯƠNG TRÌNH ƯU ĐÃI'}
@@ -264,93 +253,21 @@ export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
             />
           )}
 
-          {/* TAB: ACTORS */}
-          {activeTab === 'actors' && (
-            <AdminActorView 
-              actors={actors} 
-              updateActorsState={setActors} 
-              triggerToast={triggerToast} 
-            />
+          {/* TAB: GENRES */}
+          {activeTab === 'genres' && (
+            <AdminGenrePage triggerToast={triggerToast} />
           )}
 
-          {/* TAB: SHOWTIMES */}
-          {activeTab === 'showtimes' && (
-            <AdminShowtimeView 
-              showtimes={showtimes} 
-              movies={movies} 
-              theaters={theaters} 
-              updateShowtimesState={setShowtimes} 
-              triggerToast={triggerToast} 
-            />
+          {/* UNINTEGRATED TABS SHOW SKELETON */}
+          {['actors', 'showtimes', 'events-promo', 'clusters', 'customers', 'staff', 'concessions', 'tickets', 'concession-sales', 'payroll', 'settings'].includes(activeTab) && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex justify-between items-center bg-brand-gray/40 border border-zinc-800/50 p-4 rounded-2xl backdrop-blur-md">
+                <div className="h-10 bg-zinc-800/60 rounded-xl w-64 animate-pulse"></div>
+                <div className="h-10 bg-zinc-800/60 rounded-xl w-32 animate-pulse"></div>
+              </div>
+              <SkeletonTable rows={8} columns={5} />
+            </div>
           )}
-
-          {/* TAB: EVENTS & PROMOS */}
-          {activeTab === 'events-promo' && (
-            <AdminEventView 
-              events={events} 
-              updateEventsState={setEvents} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* TAB: CLUSTERS & HALLS */}
-          {activeTab === 'clusters' && (
-            <AdminCinemaView 
-              theaters={theaters} 
-              updateTheatersState={setTheaters} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* TAB: MEMBERS */}
-          {activeTab === 'customers' && (
-            <AdminMembersView 
-              customers={customers} 
-              updateCustomersState={setCustomers} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* TAB: STAFF */}
-          {activeTab === 'staff' && (
-            <AdminStaffView 
-              employees={employees} 
-              updateEmployeesState={setEmployees} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* TAB: CONCESSION INVENTORY */}
-          {activeTab === 'concessions' && (
-            <AdminConcessionInventory 
-              concessions={concessions} 
-              updateConcessionsState={setConcessions} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* TAB: OPERATIONS / FINANCE VIEW MODULES */}
-          {['tickets', 'concession-sales', 'payroll'].includes(activeTab) && (
-            <AdminFinanceView 
-              activeTab={activeTab === 'concession-sales' ? 'concessions' : activeTab} 
-              tickets={tickets} 
-              concessions={concessions} 
-              customers={customers} 
-              employees={employees} 
-              updateCustomersState={setCustomers} 
-              updateEmployeesState={setEmployees} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* TAB: SYSTEM SETTINGS */}
-          {activeTab === 'settings' && (
-            <AdminSettingsView 
-              activeTab={activeTab}
-              triggerToast={triggerToast} 
-            />
-          )}
-
         </main>
       </div>
 
