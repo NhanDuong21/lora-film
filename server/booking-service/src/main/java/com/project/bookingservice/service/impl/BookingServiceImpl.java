@@ -299,7 +299,12 @@ public class BookingServiceImpl implements BookingService {
 
             // 6. Release Redis locks if lock still exists
             // To do this, we need the seatIds. 
-            // We don't have them easily unless we query them. I will update SeatReservationRepository.
+            List<SeatReservation> reservations = seatReservationRepository.findByBookingId(bookingId);
+            if (!reservations.isEmpty()) {
+                Long showtimeId = reservations.get(0).getShowtimeId();
+                List<Long> seatIds = reservations.stream().map(SeatReservation::getSeatId).collect(java.util.stream.Collectors.toList());
+                seatLockManager.releaseLocks(showtimeId, seatIds, userId.toString());
+            }
 
             // 7. Reservations remain CONVERTED. Do not revert to HELD.
             // 8. Do not create ticket.
