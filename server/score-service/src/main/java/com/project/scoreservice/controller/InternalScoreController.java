@@ -2,10 +2,13 @@ package com.project.scoreservice.controller;
  
 import com.project.scoreservice.common.ApiResponse;
 import com.project.scoreservice.dto.InternalUserScoreResponse;
+import com.project.scoreservice.dto.ScoreEarnRequest;
+import com.project.scoreservice.dto.ScoreEarnResponse;
 import com.project.scoreservice.dto.UserScoreResponse;
 import com.project.scoreservice.service.ScoreService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
  
@@ -25,5 +28,12 @@ public class InternalScoreController {
     public ResponseEntity<ApiResponse<InternalUserScoreResponse>> getUserScore(@PathVariable Long userId) {
         InternalUserScoreResponse response = scoreService.getInternalUserScore(userId);
         return ResponseEntity.ok(ApiResponse.success("User score retrieved successfully", response));
+    }
+
+    @PostMapping("/earn")
+    @Operation(summary = "Earn score internally", description = "Internal endpoint to award score points to a user based on booking payment")
+    public ResponseEntity<ApiResponse<ScoreEarnResponse>> earnScore(@Valid @RequestBody ScoreEarnRequest request) {
+        ScoreEarnResponse response = scoreService.earnScore(request);
+        return ResponseEntity.ok(ApiResponse.success("Score earned successfully", response));
     }
 }

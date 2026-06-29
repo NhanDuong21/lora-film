@@ -24,7 +24,10 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         
         String path = request.getServletPath();
-        if (path.startsWith("/internal")) {
+        if (path == null || path.isEmpty()) {
+            path = request.getRequestURI();
+        }
+        if (path != null && path.startsWith("/internal")) {
             String tokenHeader = request.getHeader("X-Internal-Token");
             if (tokenHeader == null || !tokenHeader.equals(internalToken)) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
