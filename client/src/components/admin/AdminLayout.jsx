@@ -1,91 +1,51 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   Menu,
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
+import { Outlet, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { useData } from '../../contexts/DataContext';
 import AdminSidebar from './AdminSidebar';
-import AdminGenrePage from '../../pages/admin/AdminGenrePage';
-import SkeletonTable from '../common/SkeletonTable';
-import AdminMovieView from '../../pages/admin/AdminMoviePage';
-import AdminDashboardView from '../../pages/admin/AdminDashboardPage';
-// Other views are not fully integrated with API yet, will display SkeletonTable
 
-export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
+export default function AdminLayout({ onBackHome }) {
   const { user, logout } = useAuth();
-  const { 
-    movies, setMovies
-  } = useData();
+  const location = useLocation();
 
-  const [activeTab, setActiveTab] = useState(() => {
-    const hash = window.location.hash;
-    const permissions = user?.permissions || [];
-    const isAccountantOnly = permissions.includes('PERM_VIEW_FINANCE') && !permissions.includes('PERM_ROOT_ACCESS');
-    const defaultTab = isAccountantOnly ? 'tickets' : 'dashboard';
+  // Derive activeTab from pathname
+  const activeTab = (() => {
+    const path = location.pathname;
+    if (path.endsWith('/movies')) return 'movies';
+    if (path.endsWith('/genres')) return 'genres';
+    if (path.endsWith('/actors')) return 'actors';
+    if (path.endsWith('/showtimes')) return 'showtimes';
+    if (path.endsWith('/events')) return 'events-promo';
+    if (path.endsWith('/cinemas')) return 'clusters';
+    if (path.endsWith('/tickets')) return 'tickets';
+    if (path.endsWith('/concessions')) return 'concessions';
+    if (path.endsWith('/concession-sales')) return 'concession-sales';
+    if (path.endsWith('/customers')) return 'customers';
+    if (path.endsWith('/staff')) return 'staff';
+    if (path.endsWith('/payroll')) return 'payroll';
+    if (path.endsWith('/settings')) return 'settings';
+    return 'dashboard';
+  })();
 
-    if (hash === '#/admin') return defaultTab;
-    if (hash === '#/admin/movies') return 'movies';
-    if (hash === '#/admin/genres') return 'genres';
-    if (hash === '#/admin/actors') return 'actors';
-    if (hash === '#/admin/showtimes') return 'showtimes';
-    if (hash === '#/admin/events') return 'events-promo';
-    if (hash === '#/admin/clusters') return 'clusters';
-    if (hash === '#/admin/tickets') return 'tickets';
-    if (hash === '#/admin/concessions') return 'concessions';
-    if (hash === '#/admin/concession-sales') return 'concession-sales';
-    if (hash === '#/admin/customers') return 'customers';
-    if (hash === '#/admin/staff') return 'staff';
-    if (hash === '#/admin/payroll') return 'payroll';
-    if (hash === '#/admin/delays') return 'delays';
-    if (hash === '#/admin/pricing') return 'pricing';
-    if (hash === '#/admin/settings') return 'settings';
-    return initialTab;
-  });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [timeFilter, setTimeFilter] = useState('today');
-
-  // Sync hash routing
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash;
-      const permissions = user?.permissions || [];
-      const isAccountantOnly = permissions.includes('PERM_VIEW_FINANCE') && !permissions.includes('PERM_ROOT_ACCESS');
-      const defaultTab = isAccountantOnly ? 'tickets' : 'dashboard';
-
-      if (hash === '#/admin') setActiveTab(defaultTab);
-      else if (hash === '#/admin/movies') setActiveTab('movies');
-      else if (hash === '#/admin/genres') setActiveTab('genres');
-      else if (hash === '#/admin/actors') setActiveTab('actors');
-      else if (hash === '#/admin/showtimes') setActiveTab('showtimes');
-      else if (hash === '#/admin/events') setActiveTab('events-promo');
-      else if (hash === '#/admin/clusters') setActiveTab('clusters');
-      else if (hash === '#/admin/tickets') setActiveTab('tickets');
-      else if (hash === '#/admin/concessions') setActiveTab('concessions');
-      else if (hash === '#/admin/concession-sales') setActiveTab('concession-sales');
-      else if (hash === '#/admin/customers') setActiveTab('customers');
-      else if (hash === '#/admin/staff') setActiveTab('staff');
-      else if (hash === '#/admin/payroll') setActiveTab('payroll');
-      else if (hash === '#/admin/delays') setActiveTab('delays');
-      else if (hash === '#/admin/pricing') setActiveTab('pricing');
-      else if (hash === '#/admin/settings') setActiveTab('settings');
-    };
-
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [user]);
 
   const handleLogout = () => {
     logout();
     localStorage.removeItem('lora_session');
     sessionStorage.clear();
     window.location.hash = '#/';
-    onBackHome();
+    if (onBackHome) onBackHome();
   };
 
-  // Toast System
+  // Toast System (can be passed down via context if needed, but currently passed via Outlet context or props?)
+  // Actually, wait. React Router Outlet doesn't pass props directly like `<AdminGenrePage triggerToast={triggerToast} />`. 
+  // It passes context via `<Outlet context={{ triggerToast }} />`.
   const [toast, setToast] = useState({ message: '', type: 'success', visible: false });
   const triggerToast = (message, type = 'success') => {
     setToast({ message, type, visible: true });
@@ -93,7 +53,6 @@ export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
       setToast(prev => ({ ...prev, visible: false }));
     }, 3000);
   };
-
 
   return (
     <div className="w-full h-screen overflow-hidden bg-zinc-950 flex font-sans relative">
@@ -110,14 +69,13 @@ export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
         </div>
       )}
 
-      {/* Fixed Sidebar Column (Locked layout width w-64, stationary) */}
+      {/* Fixed Sidebar Column */}
       <div className={`shrink-0 h-full fixed lg:static z-30 transition-transform duration-300 ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}>
         <AdminSidebar 
           activeTab={activeTab} 
-          setActiveTab={(tab) => {
-            setActiveTab(tab);
+          setActiveTab={() => {
             setSidebarOpen(false); // Close on mobile navigation
           }} 
           user={user} 
@@ -234,40 +192,9 @@ export default function AdminLayout({ initialTab = 'dashboard', onBackHome }) {
           )}
         </header>
 
-        {/* Dynamic View Body Content (ONLY scrollable container region) */}
+        {/* Dynamic View Body Content */}
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
-          
-          {/* TAB: DASHBOARD OVERVIEW */}
-          {activeTab === 'dashboard' && (
-            <AdminDashboardView 
-              timeFilter={timeFilter}
-            />
-          )}
-
-          {/* TAB: MOVIES */}
-          {activeTab === 'movies' && (
-            <AdminMovieView 
-              movies={movies} 
-              updateMoviesState={setMovies} 
-              triggerToast={triggerToast} 
-            />
-          )}
-
-          {/* TAB: GENRES */}
-          {activeTab === 'genres' && (
-            <AdminGenrePage triggerToast={triggerToast} />
-          )}
-
-          {/* UNINTEGRATED TABS SHOW SKELETON */}
-          {['actors', 'showtimes', 'events-promo', 'clusters', 'customers', 'staff', 'concessions', 'tickets', 'concession-sales', 'payroll', 'settings'].includes(activeTab) && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="flex justify-between items-center bg-brand-gray/40 border border-zinc-800/50 p-4 rounded-2xl backdrop-blur-md">
-                <div className="h-10 bg-zinc-800/60 rounded-xl w-64 animate-pulse"></div>
-                <div className="h-10 bg-zinc-800/60 rounded-xl w-32 animate-pulse"></div>
-              </div>
-              <SkeletonTable rows={8} columns={5} />
-            </div>
-          )}
+          <Outlet context={{ triggerToast, timeFilter }} />
         </main>
       </div>
 

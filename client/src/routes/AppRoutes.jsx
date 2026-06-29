@@ -22,6 +22,8 @@ import EmployeePOSView from "../pages/employee/EmployeePOSPage";
 import EmployeeScheduleView from "../pages/employee/EmployeeSchedulePage";
 
 // Admin Views
+import AdminLayout from "../components/admin/AdminLayout";
+import AdminGenrePage from "../pages/admin/AdminGenrePage";
 import AdminDashboardView from "../pages/admin/AdminDashboardPage";
 import AdminMovieView from "../pages/admin/AdminMoviePage";
 import AdminCinemaView from "../pages/admin/AdminCinemaPage";
@@ -138,54 +140,21 @@ function AppRoutes() {
                 {/* Admin Routes */}
                 <Route path="/admin" element={
                     <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminDashboardView />
+                        <AdminLayout />
                     </RoleRoute>
-                } />
-                <Route path="/admin/movies" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminMovieView />
-                    </RoleRoute>
-                } />
-                <Route path="/admin/cinemas" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminCinemaView />
-                    </RoleRoute>
-                } />
-                <Route path="/admin/concessions" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminConcessionInventory />
-                    </RoleRoute>
-                } />
-                <Route path="/admin/events" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminEventView />
-                    </RoleRoute>
-                } />
-                <Route path="/admin/finance" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminFinanceView />
-                    </RoleRoute>
-                } />
-                <Route path="/admin/members" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminMembersView />
-                    </RoleRoute>
-                } />
-                <Route path="/admin/settings" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminSettingsView />
-                    </RoleRoute>
-                } />
-                <Route path="/admin/showtimes" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminShowtimeView />
-                    </RoleRoute>
-                } />
-                <Route path="/admin/staff" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
-                        <AdminStaffView />
-                    </RoleRoute>
-                } />
+                }>
+                    <Route index element={<AdminDashboardView />} />
+                    <Route path="movies" element={<AdminMovieView />} />
+                    <Route path="genres" element={<AdminGenrePage triggerToast={(msg) => console.log('Toast:', msg)} />} />
+                    <Route path="cinemas" element={<AdminCinemaView />} />
+                    <Route path="concessions" element={<AdminConcessionInventory />} />
+                    <Route path="events" element={<AdminEventView />} />
+                    <Route path="finance" element={<AdminFinanceView />} />
+                    <Route path="members" element={<AdminMembersView />} />
+                    <Route path="settings" element={<AdminSettingsView />} />
+                    <Route path="showtimes" element={<AdminShowtimeView />} />
+                    <Route path="staff" element={<AdminStaffView />} />
+                </Route>
             </Routes>
         </BrowserRouter>
     );

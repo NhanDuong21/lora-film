@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Film, 
@@ -26,6 +27,7 @@ export default function AdminSidebar({
   onBackHome, 
   handleLogout 
 }) {
+  const navigate = useNavigate();
   const permissions = user?.permissions || [];
   const isAccountantOnly = permissions.includes('PERM_VIEW_FINANCE') && !permissions.includes('PERM_ROOT_ACCESS');
 
@@ -45,9 +47,10 @@ export default function AdminSidebar({
     }));
   };
 
-  const handleTabClick = (tabKey, hash) => {
-    setActiveTab(tabKey);
-    window.location.hash = hash;
+  const handleTabClick = (tabKey, hashPath) => {
+    if (setActiveTab) setActiveTab(tabKey);
+    const path = hashPath.replace('#', '');
+    navigate(path);
   };
 
   // Helper function to return styling for nested child sub-links (strictly left-aligned and single-line)

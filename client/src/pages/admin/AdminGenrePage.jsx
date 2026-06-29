@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, Edit3, Trash2, X, Plus, Check, LayoutList } from 'lucide-react';
 import adminGenreService from '../../services/adminGenreService';
-import SkeletonTable from '../common/SkeletonTable';
+import SkeletonTable from '../../components/common/SkeletonTable';
 
 export default function AdminGenrePage({ triggerToast }) {
   const [genres, setGenres] = useState([]);
