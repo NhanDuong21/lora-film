@@ -16,7 +16,17 @@ export default function AdminGenrePage({ triggerToast }) {
     setIsLoading(true);
     try {
       const data = await adminGenreService.getAllGenres();
-      setGenres(data?.data || data || []);
+      let genreList = [];
+      if (Array.isArray(data?.data)) {
+        genreList = data.data;
+      } else if (data?.data?.content && Array.isArray(data.data.content)) {
+        genreList = data.data.content;
+      } else if (Array.isArray(data)) {
+        genreList = data;
+      } else if (data?.content && Array.isArray(data.content)) {
+        genreList = data.content;
+      }
+      setGenres(genreList);
     } catch (error) {
       if (triggerToast) triggerToast(error.response?.data?.message || 'Lỗi khi tải danh sách thể loại', 'error');
     } finally {

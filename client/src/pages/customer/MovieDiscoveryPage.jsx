@@ -39,13 +39,14 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
           getMovies({ size: 100 }), // Fetch a large batch for client-side filter
           getGenres()
         ]);
-        if (moviesData && moviesData.content) {
-          setMovies(moviesData.content);
+        if (moviesData) {
+          const movieList = Array.isArray(moviesData) ? moviesData : (moviesData.content || []);
+          setMovies(movieList);
         }
         if (genresData && Array.isArray(genresData)) {
           const formattedGenres = genresData.map(g => ({
             label: g.genreName,
-            value: g.genreName
+            value: g.id
           }));
           setGenres([{ label: 'Tất cả thể loại', value: 'ALL' }, ...formattedGenres]);
         }
@@ -63,7 +64,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
 
     if (selectedGenre !== 'ALL') {
       result = result.filter(m => 
-        m.genres && m.genres.some(g => (g.genreName || '').toLowerCase().includes(selectedGenre.toLowerCase()))
+        m.genres && m.genres.some(g => g.id && g.id.toString() === selectedGenre.toString())
       );
     }
 
