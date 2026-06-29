@@ -39,11 +39,15 @@ export default function AdminMoviePage() {
     );
   }, [movies, searchTerm]);
 
-  const handleOpenAdd = useCallback(() => {
+  const handleOpenAdd = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (triggerToast) triggerToast('Chức năng thêm phim mới đang được nâng cấp cùng backend API', 'error');
   }, [triggerToast]);
 
-  const handleAction = useCallback(() => {
+  const handleAction = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (triggerToast) triggerToast('Chức năng chỉnh sửa đang được nâng cấp', 'error');
   }, [triggerToast]);
 
@@ -75,6 +79,7 @@ export default function AdminMoviePage() {
         </div>
 
         <button
+          type="button"
           onClick={handleOpenAdd}
           className="bg-brand-coral hover:bg-opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-coral/10 flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
         >
@@ -174,6 +179,7 @@ export default function AdminMoviePage() {
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-2 transition-opacity">
                           <button
+                            type="button"
                             onClick={handleAction}
                             className="p-2 text-neutral-400 hover:text-amber-500 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 rounded-lg transition-all cursor-pointer"
                             title="Sửa phim (Đang nâng cấp)"
@@ -181,6 +187,7 @@ export default function AdminMoviePage() {
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={handleAction}
                             className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-lg transition-all cursor-pointer"
                             title="Xóa phim (Đang nâng cấp)"

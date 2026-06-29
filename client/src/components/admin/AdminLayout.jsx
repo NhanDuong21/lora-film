@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { 
   Menu,
   CheckCircle,
@@ -45,12 +45,14 @@ export default function AdminLayout({ onBackHome }) {
   // Actually, wait. React Router Outlet doesn't pass props directly like `<AdminGenrePage triggerToast={triggerToast} />`. 
   // It passes context via `<Outlet context={{ triggerToast }} />`.
   const [toast, setToast] = useState({ message: '', type: 'success', visible: false });
-  const triggerToast = (message, type = 'success') => {
+  const triggerToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true });
     setTimeout(() => {
       setToast(prev => ({ ...prev, visible: false }));
     }, 3000);
-  };
+  }, []);
+
+  const outletContext = useMemo(() => ({ triggerToast }), [triggerToast]);
 
   return (
     <div className="w-full h-screen overflow-hidden bg-zinc-950 flex font-sans relative">
@@ -110,7 +112,7 @@ export default function AdminLayout({ onBackHome }) {
 
         {/* Dynamic View Body Content */}
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
-          <Outlet context={{ triggerToast }} />
+          <Outlet context={outletContext} />
         </main>
       </div>
 
