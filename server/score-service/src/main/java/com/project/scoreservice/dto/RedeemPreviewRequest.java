@@ -1,6 +1,5 @@
 package com.project.scoreservice.dto;
  
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
  
 public class RedeemPreviewRequest {
@@ -8,7 +7,6 @@ public class RedeemPreviewRequest {
     private Long bookingId;
  
     @NotNull(message = "Requested points must be specified")
-    @Min(value = 1, message = "Requested points must be greater than zero")
     private Integer requestedPoints;
  
     public RedeemPreviewRequest() {
