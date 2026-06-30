@@ -39,6 +39,8 @@ import java.util.Optional;
 @Service
 public class ScoreServiceImpl implements ScoreService {
  
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ScoreServiceImpl.class);
+ 
     private final UserScoreRepository userScoreRepository;
     private final ScoreHistoryRepository scoreHistoryRepository;
     private final MembershipTierRepository membershipTierRepository;
@@ -261,6 +263,154 @@ public class ScoreServiceImpl implements ScoreService {
                 history.getAccumulatedAfter(),
                 history.getReferenceHistory() != null ? history.getReferenceHistory().getId() : null,
                 history.getDescription()
+        );
+    }
+
+    @Override
+    public ScoreEarnResponse earnScore(ScoreEarnRequest request) {
+        long startTime = System.currentTimeMillis();
+
+        Optional<ScoreHistory> historyByEvent = scoreHistoryRepository.findByEventId(request.getEventId());
+        Optional<ScoreHistory> historyByIdem = scoreHistoryRepository.findByIdempotencyKey(request.getIdempotencyKey());
+
+        if (historyByEvent.isPresent() || historyByIdem.isPresent()) {
+            ScoreHistory existing = historyByEvent.orElseGet(historyByIdem::get);
+
+            if (!existing.getUserScore().getUserId().equals(request.getUserId())
+                    || !existing.getBookingId().equals(request.getBookingId())) {
+                throw new BusinessException("Idempotency conflict: event or key is already used for another request context", 
+                        "SCORE_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT);
+            }
+
+            MembershipTier prevTier = membershipTierService.findTierForPoints(existing.getAccumulatedBefore());
+            MembershipTier currTier = membershipTierService.findTierForPoints(existing.getAccumulatedAfter());
+
+            log.info("Idempotent earn request processed: eventId={}, userId={}, bookingId={}", 
+                    request.getEventId(), request.getUserId(), request.getBookingId());
+
+            return new ScoreEarnResponse(
+                    existing.getPointChange(),
+                    existing.getBalanceBefore(),
+                    existing.getBalanceAfter(),
+                    existing.getAccumulatedBefore(),
+                    existing.getAccumulatedAfter(),
+                    prevTier.getTierName(),
+                    currTier.getTierName(),
+                    !prevTier.getTierName().equals(currTier.getTierName()),
+                    true
+            );
+        }
+
+        try {
+            ScoreEarnResponse response = selfProxy.executeEarnScore(request);
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Earn score result: userId={}, bookingId={}, eventId={}, earnedPoints={}, historyId={}, previousTier={}, currentTier={}, tierChanged={}, idempotent={}, duration={}ms",
+                    request.getUserId(), request.getBookingId(), request.getEventId(), response.getPointChange(),
+                    response.getPointChange() > 0 ? "generated" : "none", response.getPreviousTier(), response.getCurrentTier(),
+                    response.getTierChanged(), false, duration);
+            return response;
+        } catch (org.springframework.dao.DataIntegrityViolationException | jakarta.persistence.PersistenceException e) {
+            Optional<ScoreHistory> retryByEvent = scoreHistoryRepository.findByEventId(request.getEventId());
+            Optional<ScoreHistory> retryByIdem = scoreHistoryRepository.findByIdempotencyKey(request.getIdempotencyKey());
+            if (retryByEvent.isPresent() || retryByIdem.isPresent()) {
+                ScoreHistory existing = retryByEvent.orElseGet(retryByIdem::get);
+                if (existing.getUserScore().getUserId().equals(request.getUserId())
+                        && existing.getBookingId().equals(request.getBookingId())) {
+                    MembershipTier prevTier = membershipTierService.findTierForPoints(existing.getAccumulatedBefore());
+                    MembershipTier currTier = membershipTierService.findTierForPoints(existing.getAccumulatedAfter());
+                    
+                    log.info("Handled concurrent unique constraint race for idempotency: eventId={}, userId={}, bookingId={}", 
+                            request.getEventId(), request.getUserId(), request.getBookingId());
+                            
+                    return new ScoreEarnResponse(
+                            existing.getPointChange(),
+                            existing.getBalanceBefore(),
+                            existing.getBalanceAfter(),
+                            existing.getAccumulatedBefore(),
+                            existing.getAccumulatedAfter(),
+                            prevTier.getTierName(),
+                            currTier.getTierName(),
+                            !prevTier.getTierName().equals(currTier.getTierName()),
+                            true
+                    );
+                }
+            }
+            throw e;
+        }
+    }
+
+    @Transactional
+    public ScoreEarnResponse executeEarnScore(ScoreEarnRequest request) {
+        UserScore userScore = getOrCreateUserScoreEntity(request.getUserId());
+
+        userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
+                .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
+
+        MembershipTier previousTier = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
+
+        BigDecimal eligibleAmount = request.getEligibleAmount();
+        BigDecimal earningRate = previousTier.getEarningRate();
+        BigDecimal divisor = new BigDecimal("1000");
+
+        BigDecimal result = eligibleAmount.multiply(earningRate).divide(divisor, 0, RoundingMode.FLOOR);
+        
+        long earnedLong = result.longValue();
+        if (earnedLong < 0 || earnedLong > Integer.MAX_VALUE) {
+            throw new BusinessException("Point value exceeds limit", "SCORE_POINT_OVERFLOW", HttpStatus.BAD_REQUEST);
+        }
+        int earnedPoints = (int) earnedLong;
+
+        int balanceBefore = userScore.getCurrentPoints();
+        int accumulatedBefore = userScore.getAccumulatedPoints();
+
+        long newCurrent = (long) balanceBefore + earnedPoints;
+        long newAccumulated = (long) accumulatedBefore + earnedPoints;
+
+        if (newCurrent > Integer.MAX_VALUE || newAccumulated > Integer.MAX_VALUE) {
+            throw new BusinessException("Point value exceeds limit", "SCORE_POINT_OVERFLOW", HttpStatus.BAD_REQUEST);
+        }
+
+        int balanceAfter = (int) newCurrent;
+        int accumulatedAfter = (int) newAccumulated;
+
+        userScore.setCurrentPoints(balanceAfter);
+        userScore.setAccumulatedPoints(accumulatedAfter);
+
+        MembershipTier currentTier = membershipTierService.findTierForPoints(accumulatedAfter);
+        userScore.setCurrentTier(currentTier);
+        userScoreRepository.saveAndFlush(userScore);
+
+        ScoreHistory history = ScoreHistory.builder()
+                .userScore(userScore)
+                .bookingId(request.getBookingId())
+                .eventId(request.getEventId())
+                .pointChange(earnedPoints)
+                .transactionType(ScoreTransactionType.EARN_BY_BOOKING)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceAfter)
+                .accumulatedBefore(accumulatedBefore)
+                .accumulatedAfter(accumulatedAfter)
+                .idempotencyKey(request.getIdempotencyKey())
+                .description("Earned " + earnedPoints + " points from booking " + request.getBookingId())
+                .reconciliationStatus(ReconciliationStatus.NONE)
+                .outstandingPoints(0)
+                .requestId(java.util.UUID.randomUUID().toString())
+                .build();
+
+        scoreHistoryRepository.saveAndFlush(history);
+
+        boolean tierChanged = !previousTier.getTierName().equals(currentTier.getTierName());
+
+        return new ScoreEarnResponse(
+                earnedPoints,
+                balanceBefore,
+                balanceAfter,
+                accumulatedBefore,
+                accumulatedAfter,
+                previousTier.getTierName(),
+                currentTier.getTierName(),
+                tierChanged,
+                false
         );
     }
 }
