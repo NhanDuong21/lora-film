@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,6 +24,9 @@ public class PaymentRepositoryIntegrationTest {
 
     @Autowired
     private PaymentRepository paymentRepository;
+
+    @Autowired
+    private org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager entityManager;
 
     @Test
     public void testPaymentPersistenceSuccess() {
@@ -116,8 +120,10 @@ public class PaymentRepositoryIntegrationTest {
         
         payment = paymentRepository.saveAndFlush(payment);
 
-        // Fetch two separate instances
+        // Fetch two separate instances by clearing context
+        entityManager.clear();
         Payment tx1 = paymentRepository.findById(payment.getId()).get();
+        entityManager.clear();
         Payment tx2 = paymentRepository.findById(payment.getId()).get();
 
         // Transaction 1 updates
@@ -153,12 +159,12 @@ public class PaymentRepositoryIntegrationTest {
         expired.setExpiresAt(now.minusMinutes(10)); // Past expiration
         paymentRepository.saveAndFlush(expired);
 
-        Optional<Payment> foundActive = paymentRepository.findFirstByBookingIdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
-                Arrays.asList(PaymentStatus.PENDING), now);
-        assertTrue(foundActive.isPresent());
-        assertEquals("PAY-ACT", foundActive.get().getPaymentTransactionCode());
+        List<Payment> foundActive = paymentRepository.findActiveAttempts(
+                500L, Arrays.asList(PaymentStatus.PENDING), now);
+        assertFalse(foundActive.isEmpty());
+        assertEquals("PAY-ACT", foundActive.get(0).getPaymentTransactionCode());
 
-        Page<Payment> foundExpired = paymentRepository.findByStatusInAndExpiresAtBefore(
+        Page<Payment> foundExpired = paymentRepository.findExpiredActivePayments(
                 Arrays.asList(PaymentStatus.PENDING), now, PageRequest.of(0, 10));
         assertEquals(1, foundExpired.getTotalElements());
         assertEquals("PAY-EXP", foundExpired.getContent().get(0).getPaymentTransactionCode());
