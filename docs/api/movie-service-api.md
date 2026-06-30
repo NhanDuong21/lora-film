@@ -1109,6 +1109,10 @@ Content-Type: application/json
 * Tất cả genre phải tồn tại.
 * `durationMinutes > 0`.
 * `endDate >= releaseDate`.
+* **Status and Date Consistency:**
+  * `UPCOMING`: Không được có `releaseDate` ở trong quá khứ (so với ngày hiện tại).
+  * `NOW_SHOWING`: Thời điểm hiện tại (today) phải nằm trong khoảng từ `releaseDate` đến `endDate`.
+  * `ENDED`: Không được có `releaseDate` ở trong tương lai (phim chưa chiếu thì không thể kết thúc).
 
 ### Response Success
 
@@ -1203,6 +1207,10 @@ PUT được xem là full update. Các field bắt buộc phải được gửi 
 * Không tự động thay đổi `endTime` của showtime cũ nếu chưa có rule rõ ràng.
 * Không cho xóa toàn bộ genre.
 * Không cho date range không hợp lệ.
+* **Status and Date Consistency:**
+  * `UPCOMING`: Không được có `releaseDate` ở trong quá khứ (so với ngày hiện tại).
+  * `NOW_SHOWING`: Thời điểm hiện tại (today) phải nằm trong khoảng từ `releaseDate` đến `endDate`.
+  * `ENDED`: Không được có `releaseDate` ở trong tương lai (phim chưa chiếu thì không thể kết thúc).
 
 ### Response Success
 

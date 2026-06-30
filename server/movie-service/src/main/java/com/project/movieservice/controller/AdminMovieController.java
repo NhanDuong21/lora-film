@@ -1,0 +1,66 @@
+package com.project.movieservice.controller;
+
+import com.project.movieservice.common.ApiResponse;
+import com.project.movieservice.dto.*;
+import com.project.movieservice.service.MovieService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/admin/movies")
+@PreAuthorize("hasRole('ADMIN')")
+public class AdminMovieController {
+
+    private final MovieService movieService;
+
+    public AdminMovieController(MovieService movieService) {
+        this.movieService = movieService;
+    }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<MoviePageResponse<AdminMovieListItemResponse>>> getAdminMovies(
+            @RequestParam(required = false) String page,
+            @RequestParam(required = false) String size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String genreId,
+            @RequestParam(required = false) String releaseFrom,
+            @RequestParam(required = false) String releaseTo,
+            @RequestParam(required = false) String sort) {
+
+        MoviePageResponse<AdminMovieListItemResponse> response = movieService.getAdminMovies(
+                page, size, search, status, genreId, releaseFrom, releaseTo, sort);
+        return ResponseEntity.ok(ApiResponse.success("Movies retrieved successfully", response));
+    }
+
+    @GetMapping("/{movieId}")
+    public ResponseEntity<ApiResponse<AdminMovieDetailResponse>> getAdminMovieDetail(@PathVariable String movieId) {
+        AdminMovieDetailResponse response = movieService.getAdminMovieDetail(movieId);
+        return ResponseEntity.ok(ApiResponse.success("Movie retrieved successfully", response));
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<MovieCreatedResponse>> createMovie(@Valid @RequestBody MovieCreateRequest request) {
+        MovieCreatedResponse response = movieService.createMovie(request);
+        return new ResponseEntity<>(ApiResponse.success("Movie created successfully", response), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{movieId}")
+    public ResponseEntity<ApiResponse<MovieUpdatedResponse>> updateMovie(
+            @PathVariable String movieId,
+            @Valid @RequestBody MovieUpdateRequest request) {
+        MovieUpdatedResponse response = movieService.updateMovie(movieId, request);
+        return ResponseEntity.ok(ApiResponse.success("Movie updated successfully", response));
+    }
+
+    @PatchMapping("/{movieId}/status")
+    public ResponseEntity<ApiResponse<MovieStatusResponse>> updateMovieStatus(
+            @PathVariable String movieId,
+            @Valid @RequestBody MovieStatusUpdateRequest request) {
+        MovieStatusResponse response = movieService.updateMovieStatus(movieId, request);
+        return ResponseEntity.ok(ApiResponse.success("Movie status updated successfully", response));
+    }
+}
