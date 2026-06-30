@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "../../services/authService";
-import { checkCCCD } from "../../services/cccdService";
 
 function Register() {
     const navigate = useNavigate();
@@ -23,39 +22,9 @@ function Register() {
     const [globalError, setGlobalError] = useState("");
     const [globalSuccess, setGlobalSuccess] = useState("");
 
-    // CCCD validation states
-    const [cccdData, setCccdData] = useState(null);
-    const [isCheckingCccd, setIsCheckingCccd] = useState(false);
-    const [cccdError, setCccdError] = useState("");
-
     useEffect(() => {
         document.title = "Đăng Ký Tài Khoản - LoraFilm";
     }, []);
-
-    const handleCccdCheck = async (cccdValue) => {
-        const val = cccdValue || formData.cccd;
-        if (!/^\d{12}$/.test(val)) {
-            setCccdError("Số CCCD phải gồm đúng 12 chữ số.");
-            setCccdData(null);
-            return;
-        }
-        setIsCheckingCccd(true);
-        setCccdError("");
-        try {
-            const result = await checkCCCD(val);
-            setIsCheckingCccd(false);
-            if (result && result.valid) {
-                setCccdData(result);
-            } else {
-                setCccdError("Số CCCD không hợp lệ.");
-                setCccdData(null);
-            }
-        } catch {
-            setIsCheckingCccd(false);
-            setCccdError("Số CCCD không hợp lệ hoặc lỗi kết nối hệ thống.");
-            setCccdData(null);
-        }
-    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -64,19 +33,6 @@ function Register() {
             ...prev,
             [name]: value
         }));
-
-        if (name === "cccd") {
-            if (value.length === 12 && /^\d{12}$/.test(value)) {
-                handleCccdCheck(value);
-            } else {
-                setCccdData(null);
-                if (value.length > 0 && !/^\d+$/.test(value)) {
-                    setCccdError("Số CCCD chỉ được phép chứa số.");
-                } else {
-                    setCccdError("");
-                }
-            }
-        }
 
         if (touched[name]) {
             const fieldError = validateField(name, value);
@@ -156,15 +112,6 @@ function Register() {
         }
     };
 
-    const getBirthdayYear = () => {
-        if (!formData.birthday) return null;
-        const parts = formData.birthday.split("-");
-        return parts[0] ? parseInt(parts[0], 10) : null;
-    };
-
-    const birthdayYear = getBirthdayYear();
-    const isYearMismatch = cccdData && birthdayYear && birthdayYear !== cccdData.birthYear;
-
     const validateForm = () => {
         const newErrors = {};
         let isValid = true;
@@ -179,12 +126,7 @@ function Register() {
 
         setErrors(newErrors);
 
-        if (!cccdData) {
-            setCccdError("Vui lòng thực hiện kiểm tra CCCD trước khi đăng ký.");
-            return false;
-        }
-
-        return isValid && !isYearMismatch;
+        return isValid;
     };
 
     const handleSubmit = async (e) => {
@@ -301,18 +243,18 @@ function Register() {
         }
     };
 
-    const isSubmitDisabled = isSubmitting || isYearMismatch || !cccdData;
+    const isSubmitDisabled = isSubmitting;
 
     return (
         <main className="bg-[#050506] text-white min-h-screen w-full flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden select-none">
             {/* Decorative ambient background lights */}
-            <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] bg-brand-coral/10 rounded-full filter blur-[80px] pointer-events-none z-0" />
-            <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-brand-coral/5 rounded-full filter blur-[80px] pointer-events-none z-0" />
+            <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] bg-brand-orange/10 rounded-full filter blur-[80px] pointer-events-none z-0" />
+            <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-brand-orange/5 rounded-full filter blur-[80px] pointer-events-none z-0" />
 
-            <article className="bg-[#121218]/85 border border-brand-coral/15 rounded-2xl w-full max-w-[600px] px-5 py-8 sm:px-8 sm:py-10 shadow-[0_15px_35px_rgba(0,0,0,0.6),0_0_25px_rgba(255,122,26,0.05)] backdrop-blur-md relative z-10 hover:border-brand-coral/35 hover:shadow-[0_20px_40px_rgba(0,0,0,0.7),0_0_35px_rgba(255,122,26,0.12)] transition-all duration-300">
+            <article className="bg-[#121218]/85 border border-brand-orange/15 rounded-2xl w-full max-w-[600px] px-5 py-8 sm:px-8 sm:py-10 shadow-[0_15px_35px_rgba(0,0,0,0.6),0_0_25px_rgba(255,122,26,0.05)] backdrop-blur-md relative z-10 hover:border-brand-orange/35 hover:shadow-[0_20px_40px_rgba(0,0,0,0.7),0_0_35px_rgba(255,122,26,0.12)] transition-all duration-300">
                 <header className="text-center mb-6 sm:mb-8">
                     <div className="flex items-center justify-center gap-3 mb-2">
-                        <div className="flex items-center justify-center text-brand-coral drop-shadow-[0_0_8px_rgba(255,122,26,0.7)]">
+                        <div className="flex items-center justify-center text-brand-orange drop-shadow-[0_0_8px_rgba(255,122,26,0.7)]">
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 width="32"
@@ -331,7 +273,7 @@ function Register() {
                             </svg>
                         </div>
                         <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white">
-                            Lora<span className="text-brand-coral">film</span>
+                            Lora<span className="text-brand-orange">film</span>
                         </h2>
                     </div>
                     <p className="text-zinc-500 text-xs sm:text-sm leading-relaxed mt-1 max-w-sm mx-auto">
@@ -396,10 +338,10 @@ function Register() {
                                 value={formData.fullName}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.fullName && touched.fullName ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.fullName && touched.fullName ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
                                 disabled={isSubmitting}
                             />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
+                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                             </div>
                         </div>
@@ -425,10 +367,10 @@ function Register() {
                                 value={formData.email}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.email && touched.email ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.email && touched.email ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
                                 disabled={isSubmitting}
                             />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
+                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
                             </div>
                         </div>
@@ -454,10 +396,10 @@ function Register() {
                                 value={formData.phoneNumber}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.phoneNumber && touched.phoneNumber ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.phoneNumber && touched.phoneNumber ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
                                 disabled={isSubmitting}
                             />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
+                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
                             </div>
                         </div>
@@ -485,41 +427,19 @@ function Register() {
                                     onChange={handleChange}
                                     onBlur={handleBlur}
                                     maxLength={12}
-                                    className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-4 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.cccd && touched.cccd ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                    className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-4 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.cccd && touched.cccd ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
                                     disabled={isSubmitting}
                                 />
-                                <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
+                                <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="12" x="3" y="6" rx="2" /><path d="M3 10h18" /><path d="M7 15h.01" /><path d="M11 15h.01" /></svg>
                                 </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => handleCccdCheck()}
-                                disabled={isCheckingCccd || formData.cccd.length !== 12}
-                                className="bg-[#ff7a1a] hover:bg-orange-500 disabled:opacity-40 disabled:hover:bg-[#ff7a1a] text-zinc-950 text-xs font-black px-4 rounded-xl transition-all cursor-pointer select-none shrink-0"
-                            >
-                                {isCheckingCccd ? "Check..." : "Kiểm tra"}
-                            </button>
                         </div>
-                        {cccdError && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {cccdError}
-                            </span>
-                        )}
-                        {errors.cccd && touched.cccd && !cccdError && (
+                        {errors.cccd && touched.cccd && (
                             <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
                                 {errors.cccd}
                             </span>
-                        )}
-                        {cccdData && cccdData.valid && (
-                            <div className="mt-2 p-3 bg-zinc-950 border border-zinc-800/80 rounded-xl text-xs space-y-1 text-zinc-400 w-full animate-fadeIn sm:col-span-2">
-                                <p><strong className="text-zinc-300">Mã CCCD:</strong> {cccdData.cccdMasked}</p>
-                                <p><strong className="text-zinc-300">Tỉnh thành:</strong> {cccdData.provinceName}</p>
-                                <p><strong className="text-zinc-300">Giới tính:</strong> {cccdData.genderLabel}</p>
-                                <p><strong className="text-zinc-300">Năm sinh:</strong> {cccdData.birthYear}</p>
-                            </div>
                         )}
                     </div>
 
@@ -536,17 +456,11 @@ function Register() {
                                 value={formData.birthday}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl px-4 py-3 text-sm text-zinc-100 transition-all outline-none appearance-none ${errors.birthday && touched.birthday ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl px-4 py-3 text-sm text-zinc-100 transition-all outline-none appearance-none ${errors.birthday && touched.birthday ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
                                 disabled={isSubmitting}
                             />
                         </div>
-                        {isYearMismatch && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                Năm sinh không trùng khớp với thông tin trên căn cước công dân
-                            </span>
-                        )}
-                        {errors.birthday && touched.birthday && !isYearMismatch && (
+                        {errors.birthday && touched.birthday && (
                             <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
                                 {errors.birthday}
@@ -568,10 +482,10 @@ function Register() {
                                 value={formData.password}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.password && touched.password ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.password && touched.password ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
                                 disabled={isSubmitting}
                             />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
+                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
                             </div>
                             <button
@@ -609,10 +523,10 @@ function Register() {
                                 value={formData.confirmPassword}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.confirmPassword && touched.confirmPassword ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-coral"}`}
+                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.confirmPassword && touched.confirmPassword ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
                                 disabled={isSubmitting}
                             />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-coral">
+                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
                             </div>
                             <button
@@ -639,7 +553,7 @@ function Register() {
                     <div className="sm:col-span-2 flex flex-col gap-4 mt-4">
                         <button 
                             type="submit" 
-                            className="w-full bg-[#ff7a1a] hover:bg-orange-500 disabled:opacity-40 disabled:hover:bg-[#ff7a1a] text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer" 
+                            className="w-full bg-brand-orange hover:bg-orange-600 disabled:opacity-40 disabled:hover:bg-brand-orange text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer" 
                             disabled={isSubmitDisabled}
                         >
                             <span>{isSubmitting ? "Đang đăng ký..." : "Đăng ký tài khoản"}</span>

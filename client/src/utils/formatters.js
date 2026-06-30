@@ -86,7 +86,7 @@ export const getAgeRatingLabel = (rating) => {
     T16: {
       label: "T16",
       description: "Trên 16 tuổi",
-      bgClass: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+      bgClass: "bg-brand-orange/10 text-brand-orange border-brand-orange/20",
     },
     T18: {
       label: "T18",

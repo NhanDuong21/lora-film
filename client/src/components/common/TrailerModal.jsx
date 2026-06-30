@@ -19,7 +19,7 @@ export default function TrailerModal({ isOpen, onClose, trailerId }) {
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/60 text-white hover:bg-brand-coral hover:text-white transition-all duration-300"
+          className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/60 text-white hover:bg-orange-600 hover:text-white transition-all duration-300"
           aria-label="Close trailer"
         >
           <X className="w-5 h-5" />

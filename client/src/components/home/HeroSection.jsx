@@ -70,19 +70,20 @@ export default function Hero({ onBookTicket, onNavigate }) {
       <section className="relative min-h-[85vh] md:min-h-[90vh] flex flex-col justify-between pt-24 pb-16 px-6 md:px-12 overflow-hidden bg-brand-dark">
         
         {/* Background Video Implementation */}
-        <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
+        <div className="absolute inset-0 w-full h-full z-0 overflow-hidden will-change-transform transform-gpu">
           <video
             autoPlay
             loop
             muted
             playsInline
+            preload="auto"
             className="w-full h-full object-cover scale-105 opacity-75 transition-all duration-700" 
             src={videoSource}
           />
         </div>
 
         {/* Backdrop overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/20 to-brand-dark/40 z-10 backdrop-blur-[1px]"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/20 to-brand-dark/40 z-10"></div>
 
         {/* Main Left Content Area */}
         <div className="relative z-20 max-w-4xl mt-auto mb-4 animate-in fade-in slide-in-from-bottom duration-1000">
@@ -102,7 +103,7 @@ export default function Hero({ onBookTicket, onNavigate }) {
           </h1>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-6">
-            <span className="text-2xl md:text-3xl font-black text-brand-coral tracking-widest uppercase">
+            <span className="text-2xl md:text-3xl font-black text-brand-orange tracking-widest uppercase">
               LORA FILM
             </span>
             <span className="hidden sm:inline text-gray-500">|</span>
@@ -117,7 +118,7 @@ export default function Hero({ onBookTicket, onNavigate }) {
                 const element = document.getElementById('phim');
                 element?.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="group flex items-center gap-2 bg-brand-coral text-white font-bold px-8 py-4 rounded-full hover:bg-opacity-95 hover:shadow-brand-coral/25 shadow-lg transition-all transform hover:scale-105 duration-300"
+              className="group flex items-center gap-2 bg-brand-orange text-white font-bold px-8 py-4 rounded-full hover:bg-opacity-95 hover:shadow-brand-orange/25 shadow-lg transition-all transform hover:scale-105 duration-300"
             >
               <Play className="w-5 h-5 fill-current text-white" />
               ĐẶT VÉ NGAY
@@ -235,7 +236,7 @@ export default function Hero({ onBookTicket, onNavigate }) {
           <button
             onClick={handleQuickBooking}
             disabled={!isBookingFormValid}
-            className={`bg-orange-500 hover:bg-orange-600 text-white font-medium px-6 h-10 rounded-full transition-all duration-200 shadow-md shadow-orange-500/10 cursor-pointer text-sm uppercase tracking-wider select-none shrink-0 ${
+            className={`bg-brand-orange hover:bg-orange-600 text-white font-medium px-6 h-10 rounded-full transition-all duration-200 shadow-md shadow-brand-orange/10 cursor-pointer text-sm uppercase tracking-wider select-none shrink-0 ${
               !isBookingFormValid ? 'opacity-40 pointer-events-none' : ''
             }`}
           >

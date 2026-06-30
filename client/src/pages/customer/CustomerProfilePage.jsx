@@ -2,12 +2,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import Header from '../../components/layout/Header';
-import Footer from '../../components/layout/Footer';
 import { 
   User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight, 
   PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle 
 } from 'lucide-react';
+import SystemUpdating from '../../components/common/SystemUpdating';
 
 const normalizeDateForInput = (value) => {
   if (!value) return '';
@@ -112,21 +111,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
     }
   }, [profile, sessionEmail]);
 
-  // Load Transaction History
-  const transactions = useMemo(() => {
-    const localTicketsStr = localStorage.getItem('lora_tickets');
-    let list = [];
-    if (localTicketsStr) {
-      try {
-        const parsed = JSON.parse(localTicketsStr);
-        list = parsed.filter(t => t.customerEmail === user?.email);
-      } catch (e) {
-        console.error(e);
-      }
-    }
 
-    return list;
-  }, [user]);
 
   // Calculate membership progress milestones
   // Milestones: 0 (Standard), 2.000.000 (Silver), 4.000.000 (Gold)
@@ -196,30 +181,8 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
       return;
     }
 
-    // Retrieve full user record from localStorage to verify password
-    const savedUsersStr = localStorage.getItem('lora_users');
-    if (savedUsersStr) {
-      try {
-        const users = JSON.parse(savedUsersStr);
-        const index = users.findIndex(u => u.email.toLowerCase() === user?.email.toLowerCase());
-        if (index !== -1) {
-          if (users[index].password !== currentPassword) {
-            triggerToast('Mật khẩu hiện tại không chính xác!', 'error');
-            return;
-          }
-          users[index].password = newPassword;
-          localStorage.setItem('lora_users', JSON.stringify(users));
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    setIsChangingPassword(false);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    triggerToast('Đổi mật khẩu thành công!');
+    // Password change is currently handled via a separate auth flow or not supported in this view yet
+    triggerToast('Tính năng đổi mật khẩu đang được nâng cấp!', 'error');
   };
 
   // Change Avatar Action
@@ -236,29 +199,25 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
   if (!accountId) {
     return (
-      <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans font-medium">
-        <Header />
+      <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
         <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full flex flex-col items-center justify-center text-center">
           <div className="bg-zinc-900/40 border border-zinc-800 p-8 rounded-2xl max-w-md w-full space-y-4">
             <h2 className="text-xl font-bold text-white uppercase tracking-wider">Vui lòng đăng nhập</h2>
             <p className="text-sm text-zinc-400">Vui lòng đăng nhập để xem thông tin hồ sơ.</p>
             <button
               onClick={() => navigate('/login')}
-              className="w-full bg-brand-coral hover:bg-opacity-95 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-colors"
+              className="w-full bg-brand-orange hover:bg-opacity-95 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-colors"
             >
               Đăng nhập ngay
             </button>
           </div>
         </main>
-        <Footer />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-[#ff7a1a] selection:text-zinc-950 font-sans">
-      <Header />
-
+    <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-brand-orange selection:text-zinc-950 font-sans">
       <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full">
         {/* Toast alert popup */}
         {showToast && (
@@ -284,7 +243,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
             <h1 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">TÀI KHOẢN THÀNH VIÊN</h1>
             <button 
               onClick={handleBackHome}
-              className="text-xs font-bold text-zinc-500 hover:text-brand-coral transition-colors flex items-center gap-1"
+              className="text-xs font-bold text-zinc-500 hover:text-brand-orange transition-colors flex items-center gap-1"
             >
               Quay lại trang chủ
             </button>
@@ -310,7 +269,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 triggerToast("Đang tải lại hồ sơ...", "success");
                 await refreshProfile();
               }}
-              className="bg-[#ff7a1a] hover:bg-opacity-95 text-zinc-950 font-black py-3.5 px-8 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/10 cursor-pointer"
+              className="bg-brand-orange hover:bg-opacity-95 text-zinc-950 font-black py-3.5 px-8 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/10 cursor-pointer"
             >
               Tải lại hồ sơ
             </button>
@@ -323,7 +282,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
             <button
               type="button"
               onClick={refreshProfile}
-              className="rounded-xl bg-[#ff7a1a] px-8 py-3.5 text-xs font-black uppercase tracking-wider text-zinc-950"
+              className="rounded-xl bg-brand-orange px-8 py-3.5 text-xs font-black uppercase tracking-wider text-zinc-950"
             >
               Thử lại
             </button>
@@ -337,11 +296,11 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
             {/* Card Widget */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 relative overflow-hidden shadow-2xl">
               {/* Premium Card Glow background */}
-              <div className="absolute -top-24 -right-24 w-48 h-48 bg-brand-coral/10 rounded-full filter blur-3xl pointer-events-none"></div>
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-brand-orange/10 rounded-full filter blur-3xl pointer-events-none"></div>
 
               {/* User Avatar + Metadata Header */}
               <div className="flex items-center gap-4 pb-6 border-b border-zinc-800/80">
-                <div className="relative w-16 h-16 shrink-0 rounded-full border-2 border-brand-coral overflow-hidden bg-zinc-950 group">
+                <div className="relative w-16 h-16 shrink-0 rounded-full border-2 border-brand-orange overflow-hidden bg-zinc-950 group">
                   <img 
                     src={avatarUrl} 
                     alt={fullName} 
@@ -366,7 +325,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 <div>
                   <h3 className="font-black text-white text-base leading-snug">{fullName}</h3>
                   <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <span className="text-[9px] font-black uppercase tracking-wider bg-brand-coral/15 text-brand-coral border border-brand-coral/20 px-2 py-0.5 rounded">
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-brand-orange/15 text-brand-orange border border-brand-orange/20 px-2 py-0.5 rounded">
                       {currentRank}
                     </span>
                     <span className="text-[10px] text-zinc-400 font-bold">
@@ -386,7 +345,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 {/* Progress bar container */}
                 <div className="relative w-full h-2.5 bg-zinc-950 rounded-full border border-zinc-800/80 overflow-hidden">
                   <div 
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-brand-coral to-brand-yellow rounded-full transition-all duration-500"
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-brand-orange to-brand-yellow rounded-full transition-all duration-500"
                     style={{ width: `${membershipProgress}%` }}
                   ></div>
                 </div>
@@ -398,7 +357,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     <span>Standard</span>
                   </div>
                   <div className="text-center">
-                    <span className={`block ${totalSpending >= 2000000 ? 'text-brand-coral' : ''}`}>2.000.000đ</span>
+                    <span className={`block ${totalSpending >= 2000000 ? 'text-brand-orange' : ''}`}>2.000.000đ</span>
                     <span>Bạc (Silver)</span>
                   </div>
                   <div className="text-right">
@@ -415,7 +374,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               
               <a 
                 href="tel:19001000"
-                className="flex items-center justify-between text-xs text-zinc-300 hover:text-brand-coral transition-colors py-1 focus:outline-none"
+                className="flex items-center justify-between text-xs text-zinc-300 hover:text-brand-orange transition-colors py-1 focus:outline-none"
               >
                 <div className="flex items-center gap-2.5">
                   <PhoneCall className="w-4 h-4 text-zinc-500 shrink-0" />
@@ -426,7 +385,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
               <a 
                 href="mailto:support@lorafilm.com"
-                className="flex items-center justify-between text-xs text-zinc-300 hover:text-brand-coral transition-colors py-1 focus:outline-none"
+                className="flex items-center justify-between text-xs text-zinc-300 hover:text-brand-orange transition-colors py-1 focus:outline-none"
               >
                 <div className="flex items-center gap-2.5">
                   <Mail className="w-4 h-4 text-zinc-500 shrink-0" />
@@ -438,7 +397,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               <button 
                 type="button"
                 onClick={() => setActiveTab('policy')}
-                className="w-full flex items-center justify-between text-xs text-zinc-300 hover:text-brand-coral transition-colors py-1 text-left focus:outline-none"
+                className="w-full flex items-center justify-between text-xs text-zinc-300 hover:text-brand-orange transition-colors py-1 text-left focus:outline-none"
               >
                 <div className="flex items-center gap-2.5">
                   <HelpCircle className="w-4 h-4 text-zinc-500 shrink-0" />
@@ -460,7 +419,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 onClick={() => setActiveTab('info')}
                 className={`flex-grow sm:flex-grow-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
                   activeTab === 'info'
-                    ? 'bg-brand-coral text-white shadow-md'
+                    ? 'bg-brand-orange text-white shadow-md'
                     : 'text-zinc-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -473,7 +432,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 onClick={() => setActiveTab('history')}
                 className={`flex-grow sm:flex-grow-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
                   activeTab === 'history'
-                    ? 'bg-brand-coral text-white shadow-md'
+                    ? 'bg-brand-orange text-white shadow-md'
                     : 'text-zinc-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -486,7 +445,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 onClick={() => setActiveTab('notifications')}
                 className={`flex-grow sm:flex-grow-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
                   activeTab === 'notifications'
-                    ? 'bg-brand-coral text-white shadow-md'
+                    ? 'bg-brand-orange text-white shadow-md'
                     : 'text-zinc-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -499,7 +458,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 onClick={() => setActiveTab('gifts')}
                 className={`flex-grow sm:flex-grow-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
                   activeTab === 'gifts'
-                    ? 'bg-brand-coral text-white shadow-md'
+                    ? 'bg-brand-orange text-white shadow-md'
                     : 'text-zinc-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -512,7 +471,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 onClick={() => setActiveTab('policy')}
                 className={`flex-grow sm:flex-grow-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
                   activeTab === 'policy'
-                    ? 'bg-brand-coral text-white shadow-md'
+                    ? 'bg-brand-orange text-white shadow-md'
                     : 'text-zinc-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -566,7 +525,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                             setNewEmail(email);
                             setIsChangingEmail(!isChangingEmail);
                           }}
-                          className="text-brand-coral hover:underline focus:outline-none"
+                          className="text-brand-orange hover:underline focus:outline-none"
                         >
                           {isChangingEmail ? 'Hủy' : 'Thay đổi'}
                         </button>
@@ -579,13 +538,13 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                               type="email"
                               value={newEmail}
                               onChange={(e) => setNewEmail(e.target.value)}
-                              className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-coral rounded-xl py-3 pl-11 pr-4 text-xs font-semibold text-white focus:outline-none transition-colors"
+                              className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl py-3 pl-11 pr-4 text-xs font-semibold text-white focus:outline-none transition-colors"
                             />
                           </div>
                           <button
                             type="button"
                             onClick={handleSaveEmail}
-                            className="bg-brand-coral hover:bg-opacity-95 text-white font-bold px-4 rounded-xl text-xs transition-colors"
+                            className="bg-brand-orange hover:bg-opacity-95 text-white font-bold px-4 rounded-xl text-xs transition-colors"
                           >
                             Lưu
                           </button>
@@ -612,7 +571,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="text"
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
-                          className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-coral rounded-xl py-3 pl-11 pr-4 text-xs font-semibold text-white focus:outline-none transition-colors"
+                          className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl py-3 pl-11 pr-4 text-xs font-semibold text-white focus:outline-none transition-colors"
                         />
                       </div>
                     </div>
@@ -625,7 +584,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="button"
                           disabled
                           className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
-                            gender === 'MALE' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                            gender === 'MALE' ? 'opacity-100 border-brand-orange/40 text-brand-orange' : 'opacity-40'
                           }`}
                         >
                           Nam
@@ -634,7 +593,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="button"
                           disabled
                           className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
-                            gender === 'FEMALE' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                            gender === 'FEMALE' ? 'opacity-100 border-brand-orange/40 text-brand-orange' : 'opacity-40'
                           }`}
                         >
                           Nữ
@@ -643,7 +602,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                           type="button"
                           disabled
                           className={`flex-grow py-3 rounded-xl border text-xs font-bold transition-all duration-300 bg-zinc-900/50 text-zinc-500 border-zinc-800 cursor-not-allowed ${
-                            gender === 'OTHER' ? 'opacity-100 border-brand-coral/40 text-brand-coral' : 'opacity-40'
+                            gender === 'OTHER' ? 'opacity-100 border-brand-orange/40 text-brand-orange' : 'opacity-40'
                           }`}
                         >
                           Khác
@@ -658,7 +617,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                         <button
                           type="button"
                           onClick={() => setIsChangingPassword(!isChangingPassword)}
-                          className="text-brand-coral hover:underline focus:outline-none"
+                          className="text-brand-orange hover:underline focus:outline-none"
                         >
                           {isChangingPassword ? 'Hủy' : 'Thay đổi'}
                         </button>
@@ -696,7 +655,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                   <div className="pt-4 flex justify-center">
                     <button
                       type="submit"
-                      className="bg-brand-coral hover:bg-opacity-95 text-white font-black py-4 px-12 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-brand-coral/20 transition-all transform hover:scale-[1.02]"
+                      className="bg-brand-orange hover:bg-opacity-95 text-white font-black py-4 px-12 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-brand-orange/20 transition-all transform hover:scale-[1.02]"
                     >
                       Cập nhật
                     </button>
@@ -712,56 +671,8 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     <p className="text-zinc-500 text-[10px]">Danh sách các vé và dịch vụ đã mua trực tuyến hoặc tại quầy</p>
                   </div>
 
-                  <div className="overflow-x-auto border border-zinc-800 rounded-2xl bg-zinc-950/50">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-zinc-800 bg-zinc-900/60 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
-                          <th className="p-4">Mã Vé</th>
-                          <th className="p-4">Phim</th>
-                          <th className="p-4">Suất chiếu</th>
-                          <th className="p-4">Ghế</th>
-                          <th className="p-4">Tổng Tiền</th>
-                          <th className="p-4">Trạng thái</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-900 text-zinc-300 font-medium">
-                        {transactions.length > 0 ? (
-                          transactions.map((t, idx) => (
-                          <tr key={idx} className="hover:bg-white/5 transition-colors">
-                            <td className="p-4 font-bold text-white font-mono">{t.id}</td>
-                            <td className="p-4 max-w-[180px] truncate font-black text-zinc-200">{t.movieTitle}</td>
-                            <td className="p-4">
-                              <span className="block text-white font-semibold">{t.time}</span>
-                              <span className="text-[10px] text-zinc-500">{t.date}</span>
-                            </td>
-                            <td className="p-4">
-                              <span className="bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold text-zinc-200">
-                                {t.seats ? t.seats.join(', ') : 'J3'}
-                              </span>
-                            </td>
-                            <td className="p-4 font-bold text-brand-yellow">
-                              {t.totalAmount ? t.totalAmount.toLocaleString('vi-VN') : '0'}đ
-                            </td>
-                            <td className="p-4">
-                              <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                                t.status === 'DA_XEM' 
-                                  ? 'bg-zinc-900 border-zinc-800 text-zinc-500' 
-                                  : 'bg-emerald-950/80 border-emerald-500/20 text-emerald-400'
-                              }`}>
-                                {t.status === 'DA_XEM' ? 'Đã xem' : 'Chưa check-in'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                        ) : (
-                          <tr>
-                            <td colSpan={6} className="p-8 text-center text-zinc-500 font-bold">
-                              Hiện tại chưa có dữ liệu.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                  <div className="min-h-[400px]">
+                    <SystemUpdating message="Lịch sử giao dịch sẽ được đồng bộ từ Booking Service sau khi ra mắt." />
                   </div>
                 </div>
               )}
@@ -804,14 +715,14 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
                   <div className="space-y-4 text-xs text-zinc-400 leading-relaxed">
                     <div className="bg-zinc-950/40 border border-zinc-850 rounded-2xl p-4 space-y-2.5">
-                      <h4 className="font-extrabold text-zinc-200 uppercase text-[11px] border-l-2 border-brand-coral pl-2">Quy định tích điểm</h4>
+                      <h4 className="font-extrabold text-zinc-200 uppercase text-[11px] border-l-2 border-brand-orange pl-2">Quy định tích điểm</h4>
                       <p>
                         Với mỗi giao dịch đặt vé xem phim hoặc bắp nước tại hệ thống LoraFilm, thành viên sẽ nhận được điểm tích lũy tương đương 10% giá trị hóa đơn thực tế thanh toán (10.000đ = 1 điểm).
                       </p>
                     </div>
 
                     <div className="bg-zinc-950/40 border border-zinc-850 rounded-2xl p-4 space-y-2.5">
-                      <h4 className="font-extrabold text-zinc-200 uppercase text-[11px] border-l-2 border-brand-coral pl-2">Cấp bậc thành viên Lora</h4>
+                      <h4 className="font-extrabold text-zinc-200 uppercase text-[11px] border-l-2 border-brand-orange pl-2">Cấp bậc thành viên Lora</h4>
                       <ul className="list-disc pl-4 space-y-1.5">
                         <li><strong>Standard Member</strong>: Doanh số chi tiêu lũy kế dưới 2.000.000đ trong năm.</li>
                         <li><strong>Silver VIP Member</strong>: Chi tiêu từ 2.000.000đ đến dưới 4.000.000đ. Nhận ưu đãi giảm giá 5% tại quầy bắp nước.</li>
@@ -848,7 +759,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     type={showPasswordRaw ? 'text' : 'password'}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-coral rounded-xl py-3 pl-11 pr-12 text-xs font-semibold text-white focus:outline-none transition-colors"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl py-3 pl-11 pr-12 text-xs font-semibold text-white focus:outline-none transition-colors"
                   />
                   <button
                     type="button"
@@ -868,7 +779,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-coral rounded-xl py-3 pl-11 pr-4 text-xs font-semibold text-white focus:outline-none transition-colors"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl py-3 pl-11 pr-4 text-xs font-semibold text-white focus:outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -881,7 +792,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-coral rounded-xl py-3 pl-11 pr-4 text-xs font-semibold text-white focus:outline-none transition-colors"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl py-3 pl-11 pr-4 text-xs font-semibold text-white focus:outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -898,7 +809,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               <button
                 type="button"
                 onClick={handleSavePassword}
-                className="flex-grow bg-brand-coral hover:bg-opacity-95 text-white font-black py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors"
+                className="flex-grow bg-brand-orange hover:bg-opacity-95 text-white font-black py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors"
               >
                 Xác nhận
               </button>
@@ -939,7 +850,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                   value={tempAvatarUrl}
                   onChange={(e) => setTempAvatarUrl(e.target.value)}
                   placeholder="https://example.com/image.jpg"
-                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-coral rounded-xl py-3 px-4 text-xs font-semibold text-white focus:outline-none transition-colors"
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl py-3 px-4 text-xs font-semibold text-white focus:outline-none transition-colors"
                 />
               </div>
 
@@ -957,7 +868,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                       key={i}
                       type="button"
                       onClick={() => setTempAvatarUrl(url)}
-                      className="w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 hover:border-brand-coral transition-colors shrink-0"
+                      className="w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 hover:border-brand-orange transition-colors shrink-0"
                     >
                       <img src={url} alt={`Preset ${i}`} className="w-full h-full object-cover" />
                     </button>
@@ -977,7 +888,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               <button
                 type="button"
                 onClick={handleSaveAvatar}
-                className="flex-grow bg-brand-coral hover:bg-opacity-95 text-white font-black py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors"
+                className="flex-grow bg-brand-orange hover:bg-opacity-95 text-white font-black py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors"
               >
                 Xác nhận
               </button>
@@ -987,8 +898,6 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
       )}
 
       </main>
-
-      <Footer />
     </div>
   );
 }

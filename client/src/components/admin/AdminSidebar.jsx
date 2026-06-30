@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Film, 
@@ -15,7 +16,8 @@ import {
   Building,
   Coins,
   Shield,
-  Sliders
+  Sliders,
+  Tags
 } from 'lucide-react';
 
 export default function AdminSidebar({ 
@@ -25,6 +27,7 @@ export default function AdminSidebar({
   onBackHome, 
   handleLogout 
 }) {
+  const navigate = useNavigate();
   const permissions = user?.permissions || [];
   const isAccountantOnly = permissions.includes('PERM_VIEW_FINANCE') && !permissions.includes('PERM_ROOT_ACCESS');
 
@@ -44,9 +47,10 @@ export default function AdminSidebar({
     }));
   };
 
-  const handleTabClick = (tabKey, hash) => {
-    setActiveTab(tabKey);
-    window.location.hash = hash;
+  const handleTabClick = (tabKey, hashPath) => {
+    if (setActiveTab) setActiveTab(tabKey);
+    const path = hashPath.replace('#', '');
+    navigate(path);
   };
 
   // Helper function to return styling for nested child sub-links (strictly left-aligned and single-line)
@@ -130,11 +134,11 @@ export default function AdminSidebar({
                     <span>Quản lý phim</span>
                   </button>
                   <button
-                    onClick={() => handleTabClick('actors', '#/admin/actors')}
-                    className={getSubLinkClass('actors')}
+                    onClick={() => handleTabClick('genres', '#/admin/genres')}
+                    className={getSubLinkClass('genres')}
                   >
-                    <Users className="w-4 h-4 shrink-0" />
-                    <span>Diễn viên</span>
+                    <Tags className="w-4 h-4 shrink-0" />
+                    <span>Quản lý thể loại</span>
                   </button>
                   <button
                     onClick={() => handleTabClick('events-promo', '#/admin/events')}
@@ -167,7 +171,7 @@ export default function AdminSidebar({
               {!collapsedSections.coSo && (
                 <div className="space-y-1">
                   <button
-                    onClick={() => handleTabClick('clusters', '#/admin/clusters')}
+                    onClick={() => handleTabClick('clusters', '#/admin/cinemas')}
                     className={getSubLinkClass('clusters')}
                   >
                     <Database className="w-4 h-4 shrink-0" />
@@ -203,7 +207,7 @@ export default function AdminSidebar({
             {!collapsedSections.vanHanh && (
               <div className="space-y-1">
                 <button
-                  onClick={() => handleTabClick('tickets', '#/admin/tickets')}
+                  onClick={() => handleTabClick('tickets', '#/admin/finance')}
                   className={getSubLinkClass('tickets')}
                 >
                   <Ticket className="w-4 h-4 shrink-0" />
@@ -249,7 +253,7 @@ export default function AdminSidebar({
                 {!isAccountantOnly && (
                   <>
                     <button
-                      onClick={() => handleTabClick('customers', '#/admin/customers')}
+                      onClick={() => handleTabClick('customers', '#/admin/members')}
                       className={getSubLinkClass('customers')}
                     >
                       <Users className="w-4 h-4 shrink-0" />

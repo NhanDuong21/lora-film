@@ -7,17 +7,25 @@ import {
   Home,
   User
 } from 'lucide-react';
-import EmployeePOSView from '../../pages/employee/EmployeePOSPage';
-import EmployeeCheckInView from '../../pages/employee/EmployeeCheckInPage';
-import EmployeeScheduleView from '../../pages/employee/EmployeeSchedulePage';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
-export default function EmployeeLayout({ initialTab = 'pos', onBackHome, onNavigate }) {
+export default function EmployeeLayout() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
-    onBackHome();
+    navigate('/');
   };
+
+  const activeTab = (() => {
+    const path = location.pathname;
+    if (path.endsWith('/pos')) return 'pos';
+    if (path.endsWith('/checkin')) return 'checkin';
+    if (path.endsWith('/schedules')) return 'schedules';
+    return 'pos';
+  })();
 
   return (
     <div className="w-full h-screen overflow-hidden bg-zinc-950 flex select-none">
@@ -42,9 +50,9 @@ export default function EmployeeLayout({ initialTab = 'pos', onBackHome, onNavig
           {/* Navigation Links List */}
           <nav className="p-4 space-y-1">
             <button
-              onClick={() => onNavigate('employee-pos')}
+              onClick={() => navigate('/employee/pos')}
               className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
-                initialTab === 'pos'
+                activeTab === 'pos'
                   ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
                   : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
               }`}
@@ -54,9 +62,9 @@ export default function EmployeeLayout({ initialTab = 'pos', onBackHome, onNavig
             </button>
 
             <button
-              onClick={() => onNavigate('employee-checkin')}
+              onClick={() => navigate('/employee/checkin')}
               className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
-                initialTab === 'checkin'
+                activeTab === 'checkin'
                   ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
                   : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
               }`}
@@ -66,9 +74,9 @@ export default function EmployeeLayout({ initialTab = 'pos', onBackHome, onNavig
             </button>
 
             <button
-              onClick={() => onNavigate('employee-schedules')}
+              onClick={() => navigate('/employee/schedules')}
               className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
-                initialTab === 'schedules'
+                activeTab === 'schedules'
                   ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
                   : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
               }`}
@@ -98,7 +106,7 @@ export default function EmployeeLayout({ initialTab = 'pos', onBackHome, onNavig
           </div>
 
           <button
-            onClick={onBackHome}
+            onClick={() => navigate('/')}
             className="w-full text-left justify-start items-center flex pl-9 py-2.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all rounded-xl"
           >
             <Home className="w-4 h-4 mr-3" />
@@ -117,9 +125,7 @@ export default function EmployeeLayout({ initialTab = 'pos', onBackHome, onNavig
 
       {/* ➋ Scrollable Workspace Panels */}
       <main className="flex-grow h-full overflow-y-auto bg-zinc-950 p-6 md:p-10 flex flex-col space-y-6">
-        {initialTab === 'pos' && <EmployeePOSView />}
-        {initialTab === 'checkin' && <EmployeeCheckInView />}
-        {initialTab === 'schedules' && <EmployeeScheduleView />}
+        <Outlet />
       </main>
     </div>
   );

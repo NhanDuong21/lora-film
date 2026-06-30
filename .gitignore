@@ -43,3 +43,5 @@ mysql_data
 redis_data
 kafka_data
 logs
+
+.ui-prototype/

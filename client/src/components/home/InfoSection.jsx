@@ -8,7 +8,7 @@ export default function InfoSection() {
         <section className="w-full bg-zinc-950 text-zinc-400 py-10 border-t border-zinc-900">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-sm leading-relaxed">
                 {/* Section Header */}
-                <div className="flex items-center gap-3 mb-6 border-l-4 border-brand-coral pl-3 select-none">
+                <div className="flex items-center gap-3 mb-6 border-l-4 border-brand-orange pl-3 select-none">
                     <h2 className="text-base md:text-lg font-bold uppercase tracking-widest text-zinc-100">
                         Thông Tin
                     </h2>
@@ -22,11 +22,11 @@ export default function InfoSection() {
                 >
                     <div className="space-y-4">
                         <p>
-                            Thành lập từ năm 2003, <span className="text-zinc-100 font-bold">LoraFilm</span> đã và đang khẳng định thương hiệu rạp chiếu phim hàng đầu Việt Nam. Hệ thống LoraFilm nổi tiếng bởi chất lượng phòng chiếu hiện đại, dịch vụ thân thiện và nhiều trải nghiệm vượt chuẩn hơn-cả-rạp-chiếu-phim. Ngoài các công nghệ trình chiếu hàng đầu như <span className="text-brand-coral font-bold">IMAX Laser</span> và <span className="text-brand-coral font-bold">Onyx x Dolby Atmos</span>, LoraFilm còn sở hữu những phòng chiếu đặc biệt đẳng cấp như <span className="text-zinc-100 italic">Lagom</span>, <span className="text-zinc-100 italic">Romántico</span>, <span className="text-zinc-100 italic">Laurus</span>, <span className="text-zinc-100 italic">Aqualis</span>... mang lại không gian điện ảnh đỉnh cao cho mọi tín đồ điện ảnh.
+                            Thành lập từ năm 2003, <span className="text-zinc-100 font-bold">LoraFilm</span> đã và đang khẳng định thương hiệu rạp chiếu phim hàng đầu Việt Nam. Hệ thống LoraFilm nổi tiếng bởi chất lượng phòng chiếu hiện đại, dịch vụ thân thiện và nhiều trải nghiệm vượt chuẩn hơn-cả-rạp-chiếu-phim. Ngoài các công nghệ trình chiếu hàng đầu như <span className="text-brand-orange font-bold">IMAX Laser</span> và <span className="text-brand-orange font-bold">Onyx x Dolby Atmos</span>, LoraFilm còn sở hữu những phòng chiếu đặc biệt đẳng cấp như <span className="text-zinc-100 italic">Lagom</span>, <span className="text-zinc-100 italic">Romántico</span>, <span className="text-zinc-100 italic">Laurus</span>, <span className="text-zinc-100 italic">Aqualis</span>... mang lại không gian điện ảnh đỉnh cao cho mọi tín đồ điện ảnh.
                         </p>
 
                         <p>
-                            Đến với LoraFilm, quý khách có thể trải nghiệm phòng chờ thượng lưu <span className="text-brand-coral font-bold">Boulevard Lounge</span>, khu ẩm thực phong phú <span className="text-brand-coral font-bold">CineMunch Eatery</span>, hệ thống công nghệ tương tác DIDIM Playground cùng khu vui chơi phức hợp dành riêng cho trẻ em. Tất cả tạo nên một tổ hợp giải trí All-in-one khép kín hoàn hảo ngay trong lòng cụm rạp.
+                            Đến với LoraFilm, quý khách có thể trải nghiệm phòng chờ thượng lưu <span className="text-brand-orange font-bold">Boulevard Lounge</span>, khu ẩm thực phong phú <span className="text-brand-orange font-bold">CineMunch Eatery</span>, hệ thống công nghệ tương tác DIDIM Playground cùng khu vui chơi phức hợp dành riêng cho trẻ em. Tất cả tạo nên một tổ hợp giải trí All-in-one khép kín hoàn hảo ngay trong lòng cụm rạp.
                         </p>
 
                         <p>
@@ -34,7 +34,7 @@ export default function InfoSection() {
                         </p>
 
                         <p>
-                            Đặt vé tại LoraFilm trở nên dễ dàng hơn bao giờ hết nhờ thanh <span className="text-zinc-100 font-bold">Mua Vé Nhanh dạng Capsule tối giản</span> được tích hợp ngay trên Banner Hero trang chủ. Chỉ với 4 bước bấm tuần tự: <span className="text-brand-coral italic font-semibold">Chọn Phim {"->"} Chọn Rạp {"->"} Chọn Ngày {"->"} Chọn Suất Chiếu</span>, hệ thống sẽ mở khóa và đưa thẳng quý khách vào sơ đồ chọn ghế trực quan, kết hợp menu bắp nước tiện lợi và cổng thanh toán bảo mật cao. Sau khi hoàn tất, mã QR đặt vé thành công sẽ được gửi thẳng vào Email/SMS của bạn, giúp bạn một bước quét mã tiến thẳng vào phòng chiếu mà không cần xếp hàng chờ đợi.
+                            Đặt vé tại LoraFilm trở nên dễ dàng hơn bao giờ hết nhờ thanh <span className="text-zinc-100 font-bold">Mua Vé Nhanh dạng Capsule tối giản</span> được tích hợp ngay trên Banner Hero trang chủ. Chỉ với 4 bước bấm tuần tự: <span className="text-brand-orange italic font-semibold">Chọn Phim {"->"} Chọn Rạp {"->"} Chọn Ngày {"->"} Chọn Suất Chiếu</span>, hệ thống sẽ mở khóa và đưa thẳng quý khách vào sơ đồ chọn ghế trực quan, kết hợp menu bắp nước tiện lợi và cổng thanh toán bảo mật cao. Sau khi hoàn tất, mã QR đặt vé thành công sẽ được gửi thẳng vào Email/SMS của bạn, giúp bạn một bước quét mã tiến thẳng vào phòng chiếu mà không cần xếp hàng chờ đợi.
                         </p>
 
                         <p>
@@ -52,7 +52,7 @@ export default function InfoSection() {
                 <div className="mt-6 flex justify-center">
                     <button
                         onClick={() => setIsExpanded(!isExpanded)}
-                        className="flex items-center gap-1.5 text-zinc-100 hover:text-brand-coral font-bold text-xs uppercase tracking-wider transition-colors duration-300 py-1.5 px-4 bg-zinc-900 border border-zinc-800 rounded-full hover:border-brand-coral/50 shadow-md focus:outline-none"
+                        className="flex items-center gap-1.5 text-zinc-100 hover:text-brand-orange font-bold text-xs uppercase tracking-wider transition-colors duration-300 py-1.5 px-4 bg-zinc-900 border border-zinc-800 rounded-full hover:border-brand-orange/50 shadow-md focus:outline-none"
                     >
                         <span>{isExpanded ? "Thu gọn" : "Xem thêm"}</span>
                         {isExpanded ? (

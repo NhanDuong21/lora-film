@@ -38,3 +38,12 @@ export const getMovieById = async (movieId) => {
   const response = await apiClient.get(`/api/movies/${movieId}`);
   return response.data.data;
 };
+
+/**
+ * Fetch genre list from the public API
+ * @returns {Promise<Array>} The genres array
+ */
+export const getGenres = async () => {
+  const response = await apiClient.get("/api/genres");
+  return response.data.data;
+};
