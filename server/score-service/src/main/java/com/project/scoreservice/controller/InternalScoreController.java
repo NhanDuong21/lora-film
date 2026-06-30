@@ -34,6 +34,9 @@ public class InternalScoreController {
     @Operation(summary = "Earn score internally", description = "Internal endpoint to award score points to a user based on booking payment")
     public ResponseEntity<ApiResponse<ScoreEarnResponse>> earnScore(@Valid @RequestBody ScoreEarnRequest request) {
         ScoreEarnResponse response = scoreService.earnScore(request);
-        return ResponseEntity.ok(ApiResponse.success("Score earned successfully", response));
+        String message = Boolean.TRUE.equals(response.getIdempotent())
+                ? "Transaction already processed successfully"
+                : "Score earned successfully";
+        return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 }
