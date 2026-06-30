@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "../../services/authService";
-import { checkCCCD } from "../../services/cccdService";
 
 function Register() {
     const navigate = useNavigate();
@@ -23,39 +22,9 @@ function Register() {
     const [globalError, setGlobalError] = useState("");
     const [globalSuccess, setGlobalSuccess] = useState("");
 
-    // CCCD validation states
-    const [cccdData, setCccdData] = useState(null);
-    const [isCheckingCccd, setIsCheckingCccd] = useState(false);
-    const [cccdError, setCccdError] = useState("");
-
     useEffect(() => {
         document.title = "Đăng Ký Tài Khoản - LoraFilm";
     }, []);
-
-    const handleCccdCheck = async (cccdValue) => {
-        const val = cccdValue || formData.cccd;
-        if (!/^\d{12}$/.test(val)) {
-            setCccdError("Số CCCD phải gồm đúng 12 chữ số.");
-            setCccdData(null);
-            return;
-        }
-        setIsCheckingCccd(true);
-        setCccdError("");
-        try {
-            const result = await checkCCCD(val);
-            setIsCheckingCccd(false);
-            if (result && result.valid) {
-                setCccdData(result);
-            } else {
-                setCccdError("Số CCCD không hợp lệ.");
-                setCccdData(null);
-            }
-        } catch {
-            setIsCheckingCccd(false);
-            setCccdError("Số CCCD không hợp lệ hoặc lỗi kết nối hệ thống.");
-            setCccdData(null);
-        }
-    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -64,19 +33,6 @@ function Register() {
             ...prev,
             [name]: value
         }));
-
-        if (name === "cccd") {
-            if (value.length === 12 && /^\d{12}$/.test(value)) {
-                handleCccdCheck(value);
-            } else {
-                setCccdData(null);
-                if (value.length > 0 && !/^\d+$/.test(value)) {
-                    setCccdError("Số CCCD chỉ được phép chứa số.");
-                } else {
-                    setCccdError("");
-                }
-            }
-        }
 
         if (touched[name]) {
             const fieldError = validateField(name, value);
@@ -156,15 +112,6 @@ function Register() {
         }
     };
 
-    const getBirthdayYear = () => {
-        if (!formData.birthday) return null;
-        const parts = formData.birthday.split("-");
-        return parts[0] ? parseInt(parts[0], 10) : null;
-    };
-
-    const birthdayYear = getBirthdayYear();
-    const isYearMismatch = cccdData && birthdayYear && birthdayYear !== cccdData.birthYear;
-
     const validateForm = () => {
         const newErrors = {};
         let isValid = true;
@@ -179,12 +126,7 @@ function Register() {
 
         setErrors(newErrors);
 
-        if (!cccdData) {
-            setCccdError("Vui lòng thực hiện kiểm tra CCCD trước khi đăng ký.");
-            return false;
-        }
-
-        return isValid && !isYearMismatch;
+        return isValid;
     };
 
     const handleSubmit = async (e) => {
@@ -301,7 +243,7 @@ function Register() {
         }
     };
 
-    const isSubmitDisabled = isSubmitting || isYearMismatch || !cccdData;
+    const isSubmitDisabled = isSubmitting;
 
     return (
         <main className="bg-[#050506] text-white min-h-screen w-full flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden select-none">
@@ -492,34 +434,12 @@ function Register() {
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="12" x="3" y="6" rx="2" /><path d="M3 10h18" /><path d="M7 15h.01" /><path d="M11 15h.01" /></svg>
                                 </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => handleCccdCheck()}
-                                disabled={isCheckingCccd || formData.cccd.length !== 12}
-                                className="bg-brand-orange hover:bg-orange-600 disabled:opacity-40 disabled:hover:bg-brand-orange text-zinc-950 text-xs font-black px-4 rounded-xl transition-all cursor-pointer select-none shrink-0"
-                            >
-                                {isCheckingCccd ? "Check..." : "Kiểm tra"}
-                            </button>
                         </div>
-                        {cccdError && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {cccdError}
-                            </span>
-                        )}
-                        {errors.cccd && touched.cccd && !cccdError && (
+                        {errors.cccd && touched.cccd && (
                             <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
                                 {errors.cccd}
                             </span>
-                        )}
-                        {cccdData && cccdData.valid && (
-                            <div className="mt-2 p-3 bg-zinc-950 border border-zinc-800/80 rounded-xl text-xs space-y-1 text-zinc-400 w-full animate-fadeIn sm:col-span-2">
-                                <p><strong className="text-zinc-300">Mã CCCD:</strong> {cccdData.cccdMasked}</p>
-                                <p><strong className="text-zinc-300">Tỉnh thành:</strong> {cccdData.provinceName}</p>
-                                <p><strong className="text-zinc-300">Giới tính:</strong> {cccdData.genderLabel}</p>
-                                <p><strong className="text-zinc-300">Năm sinh:</strong> {cccdData.birthYear}</p>
-                            </div>
                         )}
                     </div>
 
@@ -540,13 +460,7 @@ function Register() {
                                 disabled={isSubmitting}
                             />
                         </div>
-                        {isYearMismatch && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                Năm sinh không trùng khớp với thông tin trên căn cước công dân
-                            </span>
-                        )}
-                        {errors.birthday && touched.birthday && !isYearMismatch && (
+                        {errors.birthday && touched.birthday && (
                             <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
                                 {errors.birthday}
