@@ -120,20 +120,21 @@ public class PaymentRepositoryIntegrationTest {
         
         payment = paymentRepository.saveAndFlush(payment);
 
-        // Fetch two separate instances by clearing context
-        entityManager.clear();
+        // Fetch tx1 and immediately detach it to simulate a concurrent transaction
         Payment tx1 = paymentRepository.findById(payment.getId()).get();
-        entityManager.clear();
+        entityManager.detach(tx1);
+
+        // Fetch tx2 (this one remains managed)
         Payment tx2 = paymentRepository.findById(payment.getId()).get();
 
-        // Transaction 1 updates
-        tx1.setStatus(PaymentStatus.PROCESSING);
-        paymentRepository.saveAndFlush(tx1);
+        // tx2 updates the entity and flushes, incrementing the version in DB
+        tx2.setStatus(PaymentStatus.PROCESSING);
+        paymentRepository.saveAndFlush(tx2);
 
-        // Transaction 2 tries to update
-        tx2.setStatus(PaymentStatus.FAILED);
+        // tx1 (detached, holding the old version) tries to update
+        tx1.setStatus(PaymentStatus.FAILED);
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> {
-            paymentRepository.saveAndFlush(tx2);
+            paymentRepository.saveAndFlush(tx1);
         });
     }
 
