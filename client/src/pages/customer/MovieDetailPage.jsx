@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, X, AlertCircle, Calendar, Clock, Film } from 'lucide-react';
-import Header from '../../components/layout/Header';
-import Footer from '../../components/layout/Footer';
 import { getMovieById } from '../../services/movieService';
 import {
   formatGenres,
@@ -122,8 +120,6 @@ export default function MovieDetailPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-brand-dark text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
-      <Header />
-      
       <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-7xl mx-auto w-full flex flex-col justify-center">
         
         {loading ? (
@@ -308,8 +304,6 @@ export default function MovieDetailPage() {
           </div>
         ) : null}
       </main>
-
-      <Footer />
 
       {/* Cinematic Trailer Popup component */}
       {activeTrailerUrl && (

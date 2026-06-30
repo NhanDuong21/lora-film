@@ -2,8 +2,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import Header from '../../components/layout/Header';
-import Footer from '../../components/layout/Footer';
 import { 
   User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight, 
   PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle 
@@ -202,7 +200,6 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   if (!accountId) {
     return (
       <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
-        <Header />
         <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full flex flex-col items-center justify-center text-center">
           <div className="bg-zinc-900/40 border border-zinc-800 p-8 rounded-2xl max-w-md w-full space-y-4">
             <h2 className="text-xl font-bold text-white uppercase tracking-wider">Vui lòng đăng nhập</h2>
@@ -215,15 +212,12 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
             </button>
           </div>
         </main>
-        <Footer />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-brand-orange selection:text-zinc-950 font-sans">
-      <Header />
-
       <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full">
         {/* Toast alert popup */}
         {showToast && (
@@ -904,8 +898,6 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
       )}
 
       </main>
-
-      <Footer />
     </div>
   );
 }
