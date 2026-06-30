@@ -92,4 +92,39 @@ public class AdminMovieControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("NOW_SHOWING"));
     }
+
+    @Test
+    void getAdminMovies_Success() throws Exception {
+        MoviePageResponse<AdminMovieListItemResponse> response = new MoviePageResponse<>();
+        when(movieService.getAdminMovies(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(response);
+
+        mockMvc.perform(get("/api/admin/movies")
+                .param("page", "0")
+                .param("size", "10")
+                .param("status", "INACTIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void updateMovie_Success() throws Exception {
+        MovieUpdateRequest request = new MovieUpdateRequest();
+        request.setTitle("Updated Movie");
+        request.setReleaseDate(LocalDate.now());
+        request.setEndDate(LocalDate.now().plusDays(10));
+        request.setDurationMinutes(150);
+        request.setStatus("NOW_SHOWING");
+        request.setGenreIds(java.util.Set.of(1, 2));
+
+        MovieUpdatedResponse response = new MovieUpdatedResponse(1L, "Updated Movie", "NOW_SHOWING");
+        when(movieService.updateMovie(eq("1"), any(MovieUpdateRequest.class))).thenReturn(response);
+
+        mockMvc.perform(put("/api/admin/movies/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(1))
+                .andExpect(jsonPath("$.data.title").value("Updated Movie"));
+    }
 }
