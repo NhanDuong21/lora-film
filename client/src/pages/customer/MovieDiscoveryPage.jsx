@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { 
-  Play, RefreshCw, AlertCircle 
+  Play, RefreshCw, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import TrailerModal from '../../components/common/TrailerModal';
 import { getMovies, getGenres } from '../../services/movieService';
@@ -11,7 +11,7 @@ import { getYoutubeEmbedUrl } from '../../utils/formatters';
 const STATUS_LIST = [
   { label: 'Tất cả trạng thái', value: 'ALL' },
   { label: 'Phim Đang Chiếu', value: 'NOW_SHOWING' },
-  { label: 'Phim Sắp Chiếu', value: 'COMING_SOON' }
+  { label: 'Phim Sắp Chiếu', value: 'UPCOMING' }
 ];
 
 const SORT_LIST = [
@@ -29,20 +29,15 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
   const [selectedStatus, setSelectedStatus] = useState(initialTab);
   const [selectedSort, setSelectedSort] = useState('releaseDate,desc');
   
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
   const [activeTrailerUrl, setActiveTrailerUrl] = useState(null);
 
   useEffect(() => {
-    const fetchMovies = async () => {
-      setLoading(true);
+    const fetchGenres = async () => {
       try {
-        const [moviesData, genresData] = await Promise.all([
-          getMovies({ size: 100 }), // Fetch a large batch for client-side filter
-          getGenres()
-        ]);
-        if (moviesData) {
-          const movieList = Array.isArray(moviesData) ? moviesData : (moviesData.content || []);
-          setMovies(movieList);
-        }
+        const genresData = await getGenres();
         if (genresData && Array.isArray(genresData)) {
           const formattedGenres = genresData.map(g => ({
             label: g.genreName,
@@ -51,57 +46,62 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
           setGenres([{ label: 'Tất cả thể loại', value: 'ALL' }, ...formattedGenres]);
         }
       } catch (error) {
-        console.error("Failed to fetch data:", error);
+        console.error("Failed to fetch genres:", error);
+      }
+    };
+    fetchGenres();
+  }, []);
+
+  useEffect(() => {
+    const fetchMoviesData = async () => {
+      setLoading(true);
+      try {
+        const queryParams = {
+          page: currentPage,
+          size: 8,
+          sort: selectedSort
+        };
+        if (selectedGenre !== 'ALL') {
+          queryParams.genreId = selectedGenre;
+        }
+        if (selectedStatus !== 'ALL') {
+          queryParams.status = selectedStatus;
+        }
+
+        const moviesData = await getMovies(queryParams);
+        if (moviesData) {
+          setMovies(moviesData.content || []);
+          setTotalPages(moviesData.totalPages || 0);
+        }
+      } catch (error) {
+        console.error("Failed to fetch movies:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchMovies();
-  }, []);
-
-  const filteredAndSortedMovies = useMemo(() => {
-    let result = [...movies];
-
-    if (selectedGenre !== 'ALL') {
-      result = result.filter(m => 
-        m.genres && m.genres.some(g => g.id && g.id.toString() === selectedGenre.toString())
-      );
-    }
-
-    if (selectedStatus !== 'ALL') {
-      result = result.filter(m => {
-        if (selectedStatus === 'NOW_SHOWING') {
-          return m.status === 'NOW_SHOWING' || m.status === 'SHOWING';
-        }
-        if (selectedStatus === 'COMING_SOON') {
-          return m.status === 'COMING_SOON' || m.status === 'UPCOMING';
-        }
-        return m.status === selectedStatus;
-      });
-    }
-
-    if (selectedSort) {
-      const [field, direction] = selectedSort.split(',');
-      result.sort((a, b) => {
-        if (field === 'releaseDate') {
-          const dateA = new Date(a.releaseDate).getTime();
-          const dateB = new Date(b.releaseDate).getTime();
-          return direction === 'asc' ? dateA - dateB : dateB - dateA;
-        }
-        if (field === 'title') {
-          return direction === 'asc' ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title);
-        }
-        return 0;
-      });
-    }
-
-    return result;
-  }, [movies, selectedGenre, selectedStatus, selectedSort]);
+    fetchMoviesData();
+  }, [currentPage, selectedGenre, selectedStatus, selectedSort]);
 
   const handleResetFilters = () => {
     setSelectedGenre('ALL');
     setSelectedStatus('ALL');
     setSelectedSort('releaseDate,desc');
+    setCurrentPage(0);
+  };
+
+  const handleGenreChange = (e) => {
+    setSelectedGenre(e.target.value);
+    setCurrentPage(0);
+  };
+
+  const handleStatusChange = (e) => {
+    setSelectedStatus(e.target.value);
+    setCurrentPage(0);
+  };
+
+  const handleSortChange = (e) => {
+    setSelectedSort(e.target.value);
+    setCurrentPage(0);
   };
 
   const handleTrailerOpen = (e, trailerUrl) => {
@@ -130,7 +130,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               <label className="text-[9px] text-zinc-500 font-black uppercase tracking-wider pl-1">Thể Loại</label>
               <select
                 value={selectedGenre}
-                onChange={(e) => setSelectedGenre(e.target.value)}
+                onChange={handleGenreChange}
                 className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-orange focus:outline-none transition-colors"
               >
                 {genres.map(g => (
@@ -144,7 +144,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               <label className="text-[9px] text-zinc-500 font-black uppercase tracking-wider pl-1">Trạng Thái</label>
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={handleStatusChange}
                 className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-orange focus:outline-none transition-colors"
               >
                 {STATUS_LIST.map(s => (
@@ -158,7 +158,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               <label className="text-[9px] text-zinc-500 font-black uppercase tracking-wider pl-1">Sắp Xếp Theo</label>
               <select
                 value={selectedSort}
-                onChange={(e) => setSelectedSort(e.target.value)}
+                onChange={handleSortChange}
                 className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-orange focus:outline-none transition-colors"
               >
                 {SORT_LIST.map(s => (
@@ -187,7 +187,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
             
             {loading ? (
                 <div className="text-center py-10 text-zinc-500">Đang tải dữ liệu phim...</div>
-            ) : filteredAndSortedMovies.length === 0 ? (
+            ) : movies.length === 0 ? (
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-12 text-center space-y-3">
                 <AlertCircle className="w-12 h-12 text-zinc-650 mx-auto" />
                 <h3 className="text-sm font-black uppercase tracking-wider text-white">Không Tìm Thấy Phim Phù Hợp</h3>
@@ -203,7 +203,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredAndSortedMovies.map((movie) => {
+                {movies.map((movie) => {
                   return (
                     <div 
                       key={movie.id}
@@ -279,6 +279,55 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                     </div>
                   );
                 })}
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center items-center gap-2 mt-8 py-4">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                      disabled={currentPage === 0 || loading}
+                      className="p-2 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
+                      aria-label="Trang trước"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    
+                    <div className="flex items-center gap-1.5 overflow-x-auto px-2">
+                      {Array.from({ length: totalPages }).map((_, idx) => {
+                        // Display fewer page numbers for simplicity if needed, but a simple map is fine for now
+                        // Only show adjacent pages to avoid crowding
+                        if (totalPages > 7 && Math.abs(idx - currentPage) > 2 && idx !== 0 && idx !== totalPages - 1) {
+                          if (idx === 1 || idx === totalPages - 2) return <span key={idx} className="text-zinc-500 text-xs tracking-widest">...</span>;
+                          return null;
+                        }
+                        
+                        return (
+                          <button
+                            key={idx}
+                            disabled={loading}
+                            onClick={() => setCurrentPage(idx)}
+                            className={`w-8 h-8 rounded-full text-xs font-bold transition-all duration-300 shrink-0 ${
+                              currentPage === idx
+                                ? "bg-brand-orange text-white shadow-md shadow-brand-orange/20"
+                                : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700"
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            {idx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                      disabled={currentPage >= totalPages - 1 || loading}
+                      className="p-2 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
+                      aria-label="Trang sau"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
