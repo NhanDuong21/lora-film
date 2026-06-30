@@ -1,11 +1,14 @@
-# Hướng dẫn Kiểm thử và Mô tả Kết quả Triển khai - Issue #134 (Score Persistence Foundation)
+# Hướng dẫn kiểm thử issue #134
 
-## 1. Hướng dẫn chạy Test tự động (Persistence Test)
+## Chạy toàn bộ test
 
-Chạy toàn bộ test:
 ```bash
 mvn test
-# hoặc
+```
+
+Hoặc:
+
+```bash
 ./mvnw test
 ```
 
@@ -14,43 +17,58 @@ Chạy riêng test của Issue #134:
 mvn -Dtest=ScorePersistenceIntegrationTest test
 ```
 
-Hoặc chạy trực tiếp class `ScorePersistenceIntegrationTest` trong IntelliJ IDEA hoặc Eclipse.
+Hoặc chạy trực tiếp class:
+
+```
+ScorePersistenceIntegrationTest
+```
+
+trong IntelliJ IDEA hoặc Eclipse.
 
 ---
 
-## 2. Kết quả mong đợi
+# Kết quả mong đợi
 
-Toàn bộ test phải **PASS**. Các nội dung được kiểm tra bao gồm:
+Toàn bộ test phải **PASS**.
+
+Các nội dung được kiểm tra bao gồm:
 
 | Hạng mục | Input | Output mong đợi |
-| :--- | :--- | :--- |
-| **Entity Mapping** | Khởi tạo Entity và load từ Database | Mapping đúng table, column, enum và foreign key |
-| **Repository CRUD** | Thêm, tìm, cập nhật dữ liệu | Dữ liệu được lưu và truy xuất chính xác |
-| **Tier Query** | accumulatedPoints = 0 | Trả về `SILVER` |
-| **Tier Query** | accumulatedPoints = 450 | Trả về `GOLD` |
-| **Tier Query** | accumulatedPoints = 1000 | Trả về `DIAMOND` |
-| **Next Tier Query** | accumulatedPoints = 450 | Trả về `DIAMOND` là tier tiếp theo |
-| **Lowest Tier Query** | Không có input | Trả về `SILVER` |
-| **Enum Mapping** | Lưu `ScoreTransactionType` hoặc `ReconciliationStatus` | Database lưu đúng dạng String và đọc lại đúng Enum |
-| **Foreign Key Mapping** | `UserScore` liên kết `MembershipTier` | Quan hệ được map đúng, không lỗi JPA |
-| **Nullable UNIQUE** | Chèn nhiều bản ghi có `event_id = NULL` hoặc `request_id = NULL` | Thành công |
-| **UNIQUE Constraint** | Chèn 2 bản ghi có cùng `event_id` hoặc `request_id` khác NULL | Lần chèn thứ hai thất bại |
-| **Idempotency** | Chèn 2 bản ghi có cùng `idempotencyKey` | Lần chèn thứ hai thất bại |
-| **Atomic Deduction** | `currentPoints = 100`, đồng thời 2 request cùng trừ 80 điểm | Chỉ 1 request thành công, số dư cuối cùng = 20, không âm |
-| **Atomic Addition** | `currentPoints = 100`, cộng thêm 50 điểm | `currentPoints = 150` |
-| **Pessimistic Lock** | Hai transaction cùng cập nhật một `UserScore` | Transaction thứ hai phải chờ transaction đầu tiên hoàn thành |
-| **Transaction Rollback** | Cập nhật `UserScore` thành công nhưng insert `ScoreHistory` thất bại | Toàn bộ transaction rollback, dữ liệu không bị thay đổi |
-| **Delete Restrict (MembershipTier)** | Xóa Tier đang được `UserScore` sử dụng | Bị từ chối do Foreign Key |
-| **Delete Restrict (ScoreHistory)** | Xóa `ScoreHistory` đang được bản ghi khác tham chiếu | Bị từ chối do Foreign Key |
+|----------|-------|-----------------|
+| Entity Mapping | Khởi tạo Entity và load từ Database | Mapping đúng table, column, enum và foreign key |
+| Repository CRUD | Thêm, tìm, cập nhật dữ liệu | Dữ liệu được lưu và truy xuất chính xác |
+| Tier Query | `accumulatedPoints = 0` | Trả về **SILVER** |
+| Tier Query | `accumulatedPoints = 450` | Trả về **GOLD** |
+| Tier Query | `accumulatedPoints = 1000` | Trả về **DIAMOND** |
+| Next Tier Query | `accumulatedPoints = 450` | Trả về **DIAMOND** là tier tiếp theo |
+| Lowest Tier Query | Không có input | Trả về **SILVER** |
+| Enum Mapping | Lưu `ScoreTransactionType` hoặc `ReconciliationStatus` | Database lưu đúng dạng `String` và đọc lại đúng Enum |
+| Foreign Key Mapping | `UserScore` liên kết `MembershipTier` | Quan hệ được map đúng, không lỗi JPA |
+| Nullable UNIQUE | Chèn nhiều bản ghi có `event_id = NULL` hoặc `request_id = NULL` | Thành công |
+| UNIQUE Constraint | Chèn 2 bản ghi có cùng `event_id` hoặc `request_id` khác `NULL` | Lần chèn thứ hai thất bại |
+| Idempotency | Chèn 2 bản ghi có cùng `idempotencyKey` | Lần chèn thứ hai thất bại |
+| Atomic Deduction | `currentPoints = 100`, đồng thời 2 request cùng trừ 80 điểm | Chỉ 1 request thành công, số dư cuối cùng = **20**, không âm |
+| Atomic Addition | `currentPoints = 100`, cộng thêm 50 điểm | `currentPoints = 150` |
+| Pessimistic Lock | Hai transaction cùng cập nhật một `UserScore` | Transaction thứ hai phải chờ transaction đầu tiên hoàn thành |
+| Transaction Rollback | Cập nhật `UserScore` thành công nhưng insert `ScoreHistory` thất bại | Toàn bộ transaction rollback, dữ liệu không bị thay đổi |
+| Delete Restrict (`MembershipTier`) | Xóa Tier đang được `UserScore` sử dụng | Bị từ chối do Foreign Key |
+| Delete Restrict (`ScoreHistory`) | Xóa `ScoreHistory` đang được bản ghi khác tham chiếu | Bị từ chối do Foreign Key |
 
 ---
 
-## 3. Ghi chú
-* Issue này chỉ xây dựng tầng Persistence Foundation.
-* Các Issue tiếp theo như Earn Score, Redeem Score, Refund/Revoke hoặc Balance API sẽ sử dụng trực tiếp các Entity và Repository đã được triển khai trong Issue này.
+# Ghi chú
 
+Issue này chỉ xây dựng tầng **Persistence Foundation**.
+
+Các Issue tiếp theo như:
+
+- Earn Score
+- Redeem Score
+- Refund / Revoke
+- Balance API
+
+sẽ sử dụng trực tiếp các **Entity** và **Repository** đã được triển khai trong Issue này.
 ---
-
 # Hướng dẫn Kiểm thử và Mô tả Kết quả Triển khai - Issue #135 (Score Query Foundation)
 
 ## 1. Các Nội Dung Đã Kiểm Thử (What Was Tested)
@@ -190,3 +208,370 @@ Thực hiện gửi request body JSON theo từng kịch bản sau để kiểm 
 - **Case 6.7: Vé quá hạn thanh toán**
   - Request Body: `{ "bookingId": 1004, "requestedPoints": 10 }`
   - **Kết quả:** HTTP **409 Conflict**, `errorCode = "SCORE_BOOKING_NOT_ELIGIBLE"`.
+
+---
+## Issue #136: Hướng dẫn chạy Test tự động (Terminal Test)##
+
+Trong thư mục `server/score-service`, vui lòng đảm bảo **dừng mọi tiến trình ứng dụng đang chạy** trước, sau đó thực thi lệnh:
+
+```bash
+# Di chuyển vào service và chạy test
+cd server/score-service
+mvn clean verify
+```
+
+## Kết quả mong đợi
+
+- **Kết quả build:** `BUILD SUCCESS`
+- **Tổng số test:** `28 tests run, 0 failures, 0 errors, 0 skipped`
+  - Bao gồm:
+    - **15** bài test JPA/Persistence
+    - **13** bài test tích hợp (Integration Test)
+
+---
+
+# 3. Hướng dẫn Test tay chi tiết bằng Swagger (Manual Testing)
+
+## Bước A: Chuẩn bị Header `X-Internal-Token`
+
+1. Mở Swagger của **score-service**
+
+```
+http://localhost:8088/swagger-ui.html
+```
+
+2. Nhấn nút **Authorize** ở góc trên bên phải.
+
+3. Chọn mục **internalAuth (apiKey)**.
+
+4. Nhập token:
+
+```text
+secret-internal-token
+```
+
+5. Nhấn **Authorize** để hoàn tất cấu hình.
+
+---
+
+## Bước B: Thiết lập User ID và chuẩn bị dữ liệu
+
+### 1. Tìm User ID
+
+Gọi API:
+
+```
+GET /api/scores/me
+```
+
+Ví dụ response:
+
+```json
+{
+  "userId": 4
+}
+```
+
+Ghi nhớ giá trị `userId`.
+
+---
+
+### 2. Cập nhật User ID trong code
+
+Mở file:
+
+```
+BookingInternalClientImpl.java
+```
+
+(Tại dòng 24)
+
+Đổi:
+
+```java
+context.setUserId(4L); // Thay bằng User ID thực tế
+```
+
+Ví dụ nếu tài khoản của bạn có ID = 8:
+
+```java
+context.setUserId(8L);
+```
+
+Sau đó:
+
+- Lưu file
+- Khởi động lại `score-service`
+
+---
+
+### 3. Reset dữ liệu điểm (khuyến nghị)
+
+Để việc kiểm thử nâng hạng được chính xác, hãy xóa dữ liệu điểm cũ.
+
+Mở MySQL Workbench và chạy:
+
+```sql
+DELETE FROM movie_db.user_scores
+WHERE user_id = 4;
+
+DELETE FROM movie_db.score_history
+WHERE user_id = 4;
+```
+
+> Thay `4` bằng User ID thực tế của bạn.
+
+---
+
+# Bước C: Kiểm thử từng API
+
+## API
+
+```
+POST /internal/scores/earn
+```
+
+> **Yêu cầu Header**
+
+```
+X-Internal-Token: secret-internal-token
+```
+
+---
+
+## Case 1.1 - Người dùng mới (Lazy Initialization)
+
+### Request
+
+```json
+{
+  "userId": 4,
+  "bookingId": 2001,
+  "eligibleAmount": 100000,
+  "eventId": "evt-earn-001",
+  "idempotencyKey": "idem-earn-001"
+}
+```
+
+### Kết quả mong đợi
+
+- HTTP `200 OK`
+- Tự động tạo tài khoản điểm cho User 4
+- Tier mặc định: **SILVER**
+- Earning Rate: **0.05**
+- Điểm nhận được:
+
+```
+100000 × 0.05 / 1000 = 5 điểm
+```
+
+Response:
+
+- `pointChange = 5`
+- `balanceAfter = 5`
+- `previousTier = SILVER`
+- `currentTier = SILVER`
+- `idempotent = false`
+
+---
+
+## Case 1.2 - Nâng hạng lên GOLD
+
+### Request
+
+```json
+{
+  "userId": 4,
+  "bookingId": 2002,
+  "eligibleAmount": 8000000,
+  "eventId": "evt-earn-002",
+  "idempotencyKey": "idem-earn-002"
+}
+```
+
+### Kết quả mong đợi
+
+HTTP `200 OK`
+
+Điểm cộng:
+
+```
+8,000,000 × 0.05 / 1000 = 400 điểm
+```
+
+Tổng điểm:
+
+```
+5 + 400 = 405
+```
+
+Do vượt ngưỡng **400 điểm**, người dùng được nâng lên **GOLD**.
+
+Response:
+
+- `pointChange = 400`
+- `balanceAfter = 405`
+- `previousTier = SILVER`
+- `currentTier = GOLD`
+- `tierChanged = true`
+
+---
+
+## Case 1.3 - Tích điểm khi đã là GOLD
+
+### Request
+
+```json
+{
+  "userId": 4,
+  "bookingId": 2003,
+  "eligibleAmount": 100000,
+  "eventId": "evt-earn-003",
+  "idempotencyKey": "idem-earn-003"
+}
+```
+
+### Kết quả mong đợi
+
+HTTP `200 OK`
+
+Áp dụng Earning Rate mới:
+
+```
+100000 × 0.07 / 1000 = 7 điểm
+```
+
+Response:
+
+- `pointChange = 7`
+- `balanceAfter = 412`
+- `previousTier = GOLD`
+- `currentTier = GOLD`
+- `tierChanged = false`
+
+---
+
+## Case 1.4 - Kiểm tra Idempotency
+
+### Request
+
+Gửi lại **chính xác** request của **Case 1.3**.
+
+### Kết quả mong đợi
+
+HTTP `200 OK`
+
+- Không ghi thêm lịch sử
+- Không cộng thêm điểm
+
+Response giống hệt Case 1.3 và có thêm:
+
+```json
+"idempotent": true
+```
+
+---
+
+## Case 1.5 - Idempotency Conflict
+
+### Request
+
+```json
+{
+  "userId": 9999,
+  "bookingId": 9999,
+  "eligibleAmount": 100000,
+  "eventId": "evt-earn-003",
+  "idempotencyKey": "idem-earn-003"
+}
+```
+
+### Kết quả mong đợi
+
+```
+HTTP 409 Conflict
+```
+
+```text
+errorCode = SCORE_IDEMPOTENCY_CONFLICT
+```
+
+---
+
+## Case 1.6 - Floor Rounding
+
+### Request
+
+```json
+{
+  "userId": 4,
+  "bookingId": 2004,
+  "eligibleAmount": 15000,
+  "eventId": "evt-earn-004",
+  "idempotencyKey": "idem-earn-004"
+}
+```
+
+### Kết quả mong đợi
+
+Do đang ở GOLD:
+
+```
+15000 × 0.07 = 1050
+
+1050 / 1000 = 1.05
+
+Làm tròn xuống = 1 điểm
+```
+
+Response:
+
+- `pointChange = 1`
+- `balanceAfter = 413`
+
+---
+
+## Case 1.7 - Validation Error
+
+### Request
+
+```json
+{
+  "userId": -4,
+  "bookingId": 2005,
+  "eligibleAmount": -15000,
+  "eventId": "",
+  "idempotencyKey": "idem-earn-005"
+}
+```
+
+### Kết quả mong đợi
+
+```
+HTTP 400 Bad Request
+```
+
+```text
+errorCode = VALIDATION_ERROR
+```
+
+---
+
+## Case 1.8 - Security Filter
+
+Không truyền hoặc truyền sai:
+
+```
+X-Internal-Token
+```
+
+### Kết quả mong đợi
+
+```
+HTTP 401 Unauthorized
+```
+
+```text
+errorCode = UNAUTHORIZED
+message = Invalid internal token
+```
