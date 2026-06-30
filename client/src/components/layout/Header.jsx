@@ -86,7 +86,7 @@ export default function Header({ onNavigate }) {
       movies: matchedMovies,
       stars: Array.from(matchedStarsMap.values())
     };
-  }, [searchQuery]);
+  }, [searchQuery, movies]);
 
   const handleLogoClick = (e) => {
     e.preventDefault();
@@ -504,18 +504,12 @@ export default function Header({ onNavigate }) {
 
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center">
             <button
               onClick={() => handleNavigate('login', { voluntary: true })}
               className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black py-2.5 px-4 rounded-full transition-all duration-300 shadow-lg shadow-orange-500/10 uppercase tracking-wider focus:outline-none cursor-pointer"
             >
               Đăng Nhập
-            </button>
-            <button
-              onClick={() => handleNavigate('register', null)}
-              className="bg-transparent hover:bg-zinc-800 text-zinc-300 border border-zinc-700 hover:text-white text-xs font-black py-2.5 px-4 rounded-full transition-all duration-300 uppercase tracking-wider focus:outline-none cursor-pointer"
-            >
-              Đăng Ký
             </button>
           </div>
         )}
