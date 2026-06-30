@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -172,7 +173,7 @@ public class BookingServiceImpl implements BookingService {
             booking.setStatus(BookingStatus.PENDING_PAYMENT);
 
             // 13. Set expires_at = created_at + 15 minutes
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
             booking.setExpiresAt(now.plusMinutes(15));
             booking.setVersion(0);
 
