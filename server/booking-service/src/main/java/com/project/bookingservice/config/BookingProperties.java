@@ -10,6 +10,10 @@ public class BookingProperties {
     private Reservation reservation = new Reservation();
     private Redis redis = new Redis();
     private Idempotency idempotency = new Idempotency();
+    private ExpirationWorker expirationWorker = new ExpirationWorker();
+    
+    private long seatReservationTtlMinutes = 5;
+    private long paymentTimeoutMinutes = 15;
 
     public Reservation getReservation() {
         return reservation;
@@ -33,6 +37,30 @@ public class BookingProperties {
 
     public void setIdempotency(Idempotency idempotency) {
         this.idempotency = idempotency;
+    }
+
+    public ExpirationWorker getExpirationWorker() {
+        return expirationWorker;
+    }
+
+    public void setExpirationWorker(ExpirationWorker expirationWorker) {
+        this.expirationWorker = expirationWorker;
+    }
+
+    public long getSeatReservationTtlMinutes() {
+        return seatReservationTtlMinutes;
+    }
+
+    public void setSeatReservationTtlMinutes(long seatReservationTtlMinutes) {
+        this.seatReservationTtlMinutes = seatReservationTtlMinutes;
+    }
+
+    public long getPaymentTimeoutMinutes() {
+        return paymentTimeoutMinutes;
+    }
+
+    public void setPaymentTimeoutMinutes(long paymentTimeoutMinutes) {
+        this.paymentTimeoutMinutes = paymentTimeoutMinutes;
     }
 
     public static class Reservation {
@@ -80,6 +108,36 @@ public class BookingProperties {
 
         public void setTtlHours(long ttlHours) {
             this.ttlHours = ttlHours;
+        }
+    }
+
+    public static class ExpirationWorker {
+        private boolean enabled = true;
+        private long fixedDelayMs = 30000;
+        private int batchSize = 100;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public long getFixedDelayMs() {
+            return fixedDelayMs;
+        }
+
+        public void setFixedDelayMs(long fixedDelayMs) {
+            this.fixedDelayMs = fixedDelayMs;
+        }
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public void setBatchSize(int batchSize) {
+            this.batchSize = batchSize;
         }
     }
 }

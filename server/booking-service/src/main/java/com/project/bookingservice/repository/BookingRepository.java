@@ -27,4 +27,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             @Param("to") LocalDateTime to,
             Pageable pageable
     );
+
+    @Query("SELECT b FROM Booking b WHERE b.status = :status AND b.expiresAt < :now ORDER BY b.createdAt ASC")
+    Page<Booking> findExpiredBookings(
+            @Param("status") BookingStatus status, 
+            @Param("now") LocalDateTime now, 
+            Pageable pageable);
 }
