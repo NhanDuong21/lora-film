@@ -13,7 +13,6 @@ import com.project.bookingservice.repository.BookingRepository;
 import com.project.bookingservice.repository.SeatReservationRepository;
 import com.project.bookingservice.security.CurrentUserProvider;
 import com.project.bookingservice.service.BookingService;
-import com.project.bookingservice.service.idempotency.IdempotencyService;
 import com.project.bookingservice.service.lock.SeatLockManager;
 import com.project.bookingservice.service.movie.MovieServiceClient;
 import org.slf4j.Logger;
@@ -40,20 +39,17 @@ public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final SeatReservationRepository seatReservationRepository;
-    private final IdempotencyService idempotencyService;
     private final CurrentUserProvider currentUserProvider;
     private final MovieServiceClient movieServiceClient;
     private final SeatLockManager seatLockManager;
 
     public BookingServiceImpl(BookingRepository bookingRepository,
                               SeatReservationRepository seatReservationRepository,
-                              IdempotencyService idempotencyService,
                               CurrentUserProvider currentUserProvider,
                               MovieServiceClient movieServiceClient,
                               SeatLockManager seatLockManager) {
         this.bookingRepository = bookingRepository;
         this.seatReservationRepository = seatReservationRepository;
-        this.idempotencyService = idempotencyService;
         this.currentUserProvider = currentUserProvider;
         this.movieServiceClient = movieServiceClient;
         this.seatLockManager = seatLockManager;
@@ -63,38 +59,6 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request, String idempotencyKey) {
         Long userId = currentUserProvider.getCurrentUserId();
-
-        // 1. Validate idempotency
-        boolean acquired = idempotencyService.acquireIdempotency(userId, idempotencyKey, request);
-        if (!acquired) {
-            for (int i = 0; i < 20; i++) {
-                try {
-                    IdempotencyService.IdempotencyRecord record = idempotencyService.getIdempotencyRecord(userId, idempotencyKey);
-                    if (record != null) {
-                        String currentHash = idempotencyService.generateHash(request);
-                        if (!record.getRequestHash().equals(currentHash)) {
-                            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                        }
-                        if (record.getResponse() != null) {
-                            return convertResponse(record.getResponse());
-                        }
-                    } else {
-                        break;
-                    }
-                } catch (BusinessException be) {
-                    throw be;
-                } catch (Exception e) {
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Interrupted during idempotency wait");
-                }
-            }
-            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-        }
 
         try {
             // 2. Load reservations from database
@@ -188,15 +152,9 @@ public class BookingServiceImpl implements BookingService {
             seatReservationRepository.saveAll(reservations);
 
             // Create response
-            BookingResponse response = mapToResponse(savedBooking, reservations);
-
-            // 16. Save idempotency result
-            idempotencyService.saveResponse(userId, idempotencyKey, request, response);
-
-            return response;
+            return mapToResponse(savedBooking, reservations);
 
         } catch (Exception e) {
-            idempotencyService.removeIdempotencyKey(userId, idempotencyKey);
             throw e;
         }
     }
@@ -236,40 +194,6 @@ public class BookingServiceImpl implements BookingService {
     public void cancelBooking(Long bookingId, String idempotencyKey) {
         Long userId = currentUserProvider.getCurrentUserId();
         
-        Object cancelRequestPayload = "CANCEL_BOOKING_" + bookingId;
-
-        // 1. Validate idempotency
-        boolean acquired = idempotencyService.acquireIdempotency(userId, idempotencyKey, cancelRequestPayload);
-        if (!acquired) {
-            for (int i = 0; i < 20; i++) {
-                try {
-                    IdempotencyService.IdempotencyRecord record = idempotencyService.getIdempotencyRecord(userId, idempotencyKey);
-                    if (record != null) {
-                        String currentHash = idempotencyService.generateHash(cancelRequestPayload);
-                        if (!record.getRequestHash().equals(currentHash)) {
-                            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                        }
-                        if (record.getResponse() != null) {
-                            return; // Already successful
-                        }
-                    } else {
-                        break;
-                    }
-                } catch (BusinessException be) {
-                    throw be;
-                } catch (Exception e) {
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Interrupted during idempotency wait");
-                }
-            }
-            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-        }
-
         try {
             // 2. Load booking
             Booking booking = bookingRepository.findById(bookingId)
@@ -311,9 +235,7 @@ public class BookingServiceImpl implements BookingService {
             // 8. Do not create ticket.
             // 9. Commit transaction.
 
-            idempotencyService.saveResponse(userId, idempotencyKey, cancelRequestPayload, "SUCCESS");
         } catch (Exception e) {
-            idempotencyService.removeIdempotencyKey(userId, idempotencyKey);
             throw e;
         }
     }

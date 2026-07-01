@@ -29,6 +29,8 @@ public class GlobalExceptionHandler {
         String errorCode = ex.getErrorCode();
 
         if ("BOOKING_IDEMPOTENCY_CONFLICT".equals(errorCode) ||
+            "BOOKING_PAYMENT_AMOUNT_MISMATCH".equals(errorCode) ||
+            "BOOKING_PAYMENT_EXPIRED".equals(errorCode) ||
             "BOOKING_SHOWTIME_NOT_AVAILABLE".equals(errorCode) ||
             "BOOKING_SEAT_ALREADY_BOOKED".equals(errorCode) ||
             "BOOKING_SEAT_ALREADY_HELD".equals(errorCode) ||
