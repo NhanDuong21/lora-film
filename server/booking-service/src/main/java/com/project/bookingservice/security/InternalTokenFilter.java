@@ -28,7 +28,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             }
 
             if (token == null || !token.equals(expectedToken)) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid internal token");
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid internal token");
                 return;
             }
         }
