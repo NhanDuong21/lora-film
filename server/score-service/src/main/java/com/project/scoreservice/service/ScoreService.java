@@ -13,4 +13,6 @@ public interface ScoreService {
     RedeemPreviewResponse previewRedeem(Long userId, RedeemPreviewRequest request);
     Page<ScoreHistoryResponse> getUserHistory(Long userId, int page, int size, ScoreTransactionType transactionType, Long bookingId, LocalDateTime from, LocalDateTime to, String sort);
     ScoreEarnResponse earnScore(ScoreEarnRequest request);
+    ScoreRedeemResponse redeemScore(ScoreRedeemRequest request);
+    ScoreRefundResponse refundRedeem(ScoreRefundRequest request);
 }

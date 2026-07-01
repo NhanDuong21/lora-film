@@ -341,10 +341,12 @@ public class ScoreServiceImpl implements ScoreService {
 
     @Transactional
     public ScoreEarnResponse executeEarnScore(ScoreEarnRequest request) {
-        UserScore userScore = getOrCreateUserScoreEntity(request.getUserId());
-
-        userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
-                .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
+        UserScore userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
+                .orElseGet(() -> {
+                    getOrCreateUserScoreEntity(request.getUserId());
+                    return userScoreRepository.findWithLockByUserId(request.getUserId())
+                            .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
+                });
 
         MembershipTier previousTier = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
 
@@ -410,6 +412,267 @@ public class ScoreServiceImpl implements ScoreService {
                 previousTier.getTierName(),
                 currentTier.getTierName(),
                 tierChanged,
+                false
+        );
+    }
+
+    @Override
+    public ScoreRedeemResponse redeemScore(ScoreRedeemRequest request) {
+        long startTime = System.currentTimeMillis();
+
+        Optional<ScoreHistory> historyByEvent = scoreHistoryRepository.findByEventId(request.getEventId());
+        Optional<ScoreHistory> historyByIdem = scoreHistoryRepository.findByIdempotencyKey(request.getIdempotencyKey());
+
+        if (historyByEvent.isPresent() || historyByIdem.isPresent()) {
+            ScoreHistory existing = historyByEvent.orElseGet(historyByIdem::get);
+
+            if (!existing.getUserScore().getUserId().equals(request.getUserId())
+                    || !existing.getBookingId().equals(request.getBookingId())) {
+                throw new BusinessException("Idempotency conflict: event or key is already used for another request context", 
+                        "SCORE_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT);
+            }
+
+            int redeemedPoints = -existing.getPointChange();
+            log.info("Idempotent redeem request processed: eventId={}, userId={}, bookingId={}", 
+                    request.getEventId(), request.getUserId(), request.getBookingId());
+
+            return new ScoreRedeemResponse(
+                    existing.getUserScore().getUserId(),
+                    existing.getBookingId(),
+                    redeemedPoints,
+                    redeemedPoints * valuePerPoint,
+                    existing.getBalanceAfter(),
+                    existing.getAccumulatedAfter(),
+                    existing.getId(),
+                    true
+            );
+        }
+
+        try {
+            ScoreRedeemResponse response = selfProxy.executeRedeemScore(request);
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Redeem score result: userId={}, bookingId={}, eventId={}, redeemedPoints={}, historyId={}, idempotent={}, duration={}ms",
+                    request.getUserId(), request.getBookingId(), request.getEventId(), response.getRedeemedPoints(),
+                    response.getHistoryId(), false, duration);
+            return response;
+        } catch (org.springframework.dao.DataIntegrityViolationException | jakarta.persistence.PersistenceException e) {
+            Optional<ScoreHistory> retryByEvent = scoreHistoryRepository.findByEventId(request.getEventId());
+            Optional<ScoreHistory> retryByIdem = scoreHistoryRepository.findByIdempotencyKey(request.getIdempotencyKey());
+            if (retryByEvent.isPresent() || retryByIdem.isPresent()) {
+                ScoreHistory existing = retryByEvent.orElseGet(retryByIdem::get);
+                if (existing.getUserScore().getUserId().equals(request.getUserId())
+                        && existing.getBookingId().equals(request.getBookingId())) {
+                    int redeemedPoints = -existing.getPointChange();
+                    log.info("Handled concurrent unique constraint race for redeem idempotency: eventId={}, userId={}, bookingId={}", 
+                            request.getEventId(), request.getUserId(), request.getBookingId());
+                    return new ScoreRedeemResponse(
+                            existing.getUserScore().getUserId(),
+                            existing.getBookingId(),
+                            redeemedPoints,
+                            redeemedPoints * valuePerPoint,
+                            existing.getBalanceAfter(),
+                            existing.getAccumulatedAfter(),
+                            existing.getId(),
+                            true
+                    );
+                }
+            }
+            throw e;
+        }
+    }
+
+    @Transactional
+    public ScoreRedeemResponse executeRedeemScore(ScoreRedeemRequest request) {
+        UserScore userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
+                .orElseGet(() -> {
+                    getOrCreateUserScoreEntity(request.getUserId());
+                    return userScoreRepository.findWithLockByUserId(request.getUserId())
+                            .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
+                });
+
+        int balanceBefore = userScore.getCurrentPoints();
+        int requestedPoints = request.getPoints();
+
+        if (balanceBefore < requestedPoints) {
+            java.util.Map<String, Object> data = java.util.Map.of(
+                    "availablePoints", balanceBefore,
+                    "requestedPoints", requestedPoints
+            );
+            throw new BusinessException("Insufficient score balance", "SCORE_INSUFFICIENT_BALANCE", HttpStatus.CONFLICT, data);
+        }
+
+        int balanceAfter = balanceBefore - requestedPoints;
+        int accumulatedPoints = userScore.getAccumulatedPoints();
+
+        userScore.setCurrentPoints(balanceAfter);
+        userScoreRepository.saveAndFlush(userScore);
+
+        ScoreHistory history = ScoreHistory.builder()
+                .userScore(userScore)
+                .bookingId(request.getBookingId())
+                .eventId(request.getEventId())
+                .pointChange(-requestedPoints)
+                .transactionType(ScoreTransactionType.REDEEM_FOR_BOOKING)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceAfter)
+                .accumulatedBefore(accumulatedPoints)
+                .accumulatedAfter(accumulatedPoints)
+                .idempotencyKey(request.getIdempotencyKey())
+                .description("Redeemed " + requestedPoints + " points for booking " + request.getBookingId())
+                .reconciliationStatus(ReconciliationStatus.NONE)
+                .outstandingPoints(0)
+                .requestId(java.util.UUID.randomUUID().toString())
+                .build();
+
+        scoreHistoryRepository.saveAndFlush(history);
+
+        int redeemValue = requestedPoints * valuePerPoint;
+
+        return new ScoreRedeemResponse(
+                request.getUserId(),
+                request.getBookingId(),
+                requestedPoints,
+                redeemValue,
+                balanceAfter,
+                accumulatedPoints,
+                history.getId(),
+                false
+        );
+    }
+
+    @Override
+    public ScoreRefundResponse refundRedeem(ScoreRefundRequest request) {
+        long startTime = System.currentTimeMillis();
+
+        Optional<ScoreHistory> historyByEvent = scoreHistoryRepository.findByEventId(request.getEventId());
+        Optional<ScoreHistory> historyByIdem = scoreHistoryRepository.findByIdempotencyKey(request.getIdempotencyKey());
+
+        if (historyByEvent.isPresent() || historyByIdem.isPresent()) {
+            ScoreHistory existing = historyByEvent.orElseGet(historyByIdem::get);
+
+            if (!existing.getUserScore().getUserId().equals(request.getUserId())
+                    || !existing.getBookingId().equals(request.getBookingId())) {
+                throw new BusinessException("Idempotency conflict: event or key is already used for another request context", 
+                        "SCORE_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT);
+            }
+
+            log.info("Idempotent refund request processed: eventId={}, userId={}, bookingId={}", 
+                    request.getEventId(), request.getUserId(), request.getBookingId());
+
+            return new ScoreRefundResponse(
+                    existing.getUserScore().getUserId(),
+                    existing.getBookingId(),
+                    existing.getPointChange(),
+                    existing.getBalanceAfter(),
+                    existing.getAccumulatedAfter(),
+                    existing.getReferenceHistory() != null ? existing.getReferenceHistory().getId() : null,
+                    existing.getId(),
+                    true
+            );
+        }
+
+        try {
+            ScoreRefundResponse response = selfProxy.executeRefundRedeem(request);
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Refund score result: userId={}, bookingId={}, eventId={}, refundedPoints={}, historyId={}, idempotent={}, duration={}ms",
+                    request.getUserId(), request.getBookingId(), request.getEventId(), response.getRefundedPoints(),
+                    response.getHistoryId(), false, duration);
+            return response;
+        } catch (org.springframework.dao.DataIntegrityViolationException | jakarta.persistence.PersistenceException e) {
+            Optional<ScoreHistory> retryByEvent = scoreHistoryRepository.findByEventId(request.getEventId());
+            Optional<ScoreHistory> retryByIdem = scoreHistoryRepository.findByIdempotencyKey(request.getIdempotencyKey());
+            if (retryByEvent.isPresent() || retryByIdem.isPresent()) {
+                ScoreHistory existing = retryByEvent.orElseGet(retryByIdem::get);
+                if (existing.getUserScore().getUserId().equals(request.getUserId())
+                        && existing.getBookingId().equals(request.getBookingId())) {
+                    log.info("Handled concurrent unique constraint race for refund idempotency: eventId={}, userId={}, bookingId={}", 
+                            request.getEventId(), request.getUserId(), request.getBookingId());
+                    return new ScoreRefundResponse(
+                            existing.getUserScore().getUserId(),
+                            existing.getBookingId(),
+                            existing.getPointChange(),
+                            existing.getBalanceAfter(),
+                            existing.getAccumulatedAfter(),
+                            existing.getReferenceHistory() != null ? existing.getReferenceHistory().getId() : null,
+                            existing.getId(),
+                            true
+                    );
+                }
+            }
+            throw e;
+        }
+    }
+
+    @Transactional
+    public ScoreRefundResponse executeRefundRedeem(ScoreRefundRequest request) {
+        UserScore userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
+                .orElseGet(() -> {
+                    getOrCreateUserScoreEntity(request.getUserId());
+                    return userScoreRepository.findWithLockByUserId(request.getUserId())
+                            .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
+                });
+
+        // Locate original redeem transaction
+        ScoreHistory originalRedeem = scoreHistoryRepository.findByEventId(request.getOriginalRedeemEventId())
+                .orElseThrow(() -> new BusinessException("Original redeem transaction not found", "SCORE_ORIGINAL_TRANSACTION_NOT_FOUND", HttpStatus.NOT_FOUND));
+
+        if (originalRedeem.getTransactionType() != ScoreTransactionType.REDEEM_FOR_BOOKING) {
+            throw new BusinessException("Original transaction is not a redeem transaction", "SCORE_INVALID_TRANSACTION_TYPE", HttpStatus.BAD_REQUEST);
+        }
+
+        if (!originalRedeem.getUserScore().getUserId().equals(request.getUserId())
+                || !originalRedeem.getBookingId().equals(request.getBookingId())) {
+            throw new BusinessException("Original transaction user or booking mismatch", "SCORE_TRANSACTION_MISMATCH", HttpStatus.BAD_REQUEST);
+        }
+
+        int originalRedeemedPoints = -originalRedeem.getPointChange();
+        if (request.getPoints() > originalRedeemedPoints) {
+            throw new BusinessException("Refund points exceeds originally redeemed points", "SCORE_INVALID_REFUND_AMOUNT", HttpStatus.BAD_REQUEST);
+        }
+
+        // Prevent double refund
+        boolean alreadyRefunded = scoreHistoryRepository.existsByReferenceHistoryAndTransactionType(originalRedeem, ScoreTransactionType.REFUND_REDEEM);
+        if (alreadyRefunded) {
+            throw new BusinessException("Redeem transaction has already been refunded", "SCORE_ALREADY_REFUNDED", HttpStatus.CONFLICT);
+        }
+
+        int balanceBefore = userScore.getCurrentPoints();
+        int refundPoints = request.getPoints();
+        int balanceAfter = balanceBefore + refundPoints;
+        int accumulatedPoints = userScore.getAccumulatedPoints();
+
+        userScore.setCurrentPoints(balanceAfter);
+        userScoreRepository.saveAndFlush(userScore);
+
+        ScoreHistory history = ScoreHistory.builder()
+                .userScore(userScore)
+                .bookingId(request.getBookingId())
+                .eventId(request.getEventId())
+                .pointChange(refundPoints)
+                .transactionType(ScoreTransactionType.REFUND_REDEEM)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceAfter)
+                .accumulatedBefore(accumulatedPoints)
+                .accumulatedAfter(accumulatedPoints)
+                .idempotencyKey(request.getIdempotencyKey())
+                .referenceHistory(originalRedeem)
+                .reason(request.getReason())
+                .description("Refunded " + refundPoints + " points from cancelled booking " + request.getBookingId())
+                .reconciliationStatus(ReconciliationStatus.NONE)
+                .outstandingPoints(0)
+                .requestId(java.util.UUID.randomUUID().toString())
+                .build();
+
+        scoreHistoryRepository.saveAndFlush(history);
+
+        return new ScoreRefundResponse(
+                request.getUserId(),
+                request.getBookingId(),
+                refundPoints,
+                balanceAfter,
+                accumulatedPoints,
+                originalRedeem.getId(),
+                history.getId(),
                 false
         );
     }
