@@ -24,10 +24,7 @@ public class UserController {
     @GetMapping("/{accountId}")
     public ResponseEntity<ApiResponse<UserProfileResponse>> getUserProfile(@PathVariable Long accountId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
-            throw new ForbiddenException("Not authenticated");
-        }
-        
+
         Long tokenAccountId = (Long) authentication.getPrincipal();
         boolean isAdminOrStaff = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_STAFF"));
