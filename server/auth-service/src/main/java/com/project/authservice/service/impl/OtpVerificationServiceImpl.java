@@ -16,6 +16,14 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.project.authservice.dto.request.ResendOtpRequest;
 import com.project.authservice.dto.request.SendOtpRequest;
 import com.project.authservice.dto.request.VerifyRequest;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import java.util.Map;
+
+import com.project.authservice.entity.PendingRegistrationData;
 import com.project.authservice.entity.Account;
 import com.project.authservice.entity.RedisOtpData;
 import com.project.authservice.exception.AccountAlreadyVerifiedException;
@@ -34,11 +42,22 @@ public class OtpVerificationServiceImpl implements VerificationService {
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final RestTemplate restTemplate;
 
-    public OtpVerificationServiceImpl(AccountRepository accountRepository, StringRedisTemplate redisTemplate, PasswordEncoder passwordEncoder) {
+    @Value("${app.internal-token}")
+    private String internalToken;
+
+    @Value("${app.notification-service.url}")
+    private String notificationServiceUrl;
+
+    public OtpVerificationServiceImpl(AccountRepository accountRepository, 
+                                      StringRedisTemplate redisTemplate, 
+                                      PasswordEncoder passwordEncoder,
+                                      RestTemplate restTemplate) {
         this.accountRepository = accountRepository;
         this.redisTemplate = redisTemplate;
         this.passwordEncoder = passwordEncoder;
+        this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     }
 
@@ -81,6 +100,10 @@ public class OtpVerificationServiceImpl implements VerificationService {
             Account account = accountRepository.findByEmail(email)
                     .orElseThrow(AccountNotFoundException::new);
             accountId = account.getId();
+        } else {
+            accountId = accountRepository.findByEmail(email)
+                    .map(Account::getId)
+                    .orElse(1L);
         }
         
         String key = getRedisKey(purpose, email);
@@ -115,6 +138,50 @@ public class OtpVerificationServiceImpl implements VerificationService {
         System.out.println("==================================\n");
 
         log.info("OTP generated for email={} purpose={}", email, purpose);
+
+        if ("REGISTRATION".equals(purpose)) {
+            String name = "Khách hàng";
+            String pendingKey = "pending_registration:" + email;
+            String pendingJson = redisTemplate.opsForValue().get(pendingKey);
+            if (pendingJson != null) {
+                try {
+                    com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(pendingJson);
+                    com.fasterxml.jackson.databind.JsonNode requestNode = rootNode.path("request");
+                    if (!requestNode.isMissingNode() && requestNode.has("fullName")) {
+                        name = requestNode.path("fullName").asText();
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse PendingRegistrationData for email {}: {}", email, e.getMessage());
+                }
+            }
+
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.set("X-Internal-Token", internalToken);
+
+                Map<String, Object> body = Map.of(
+                    "eventId", "AUTH-OTP-REGISTRATION-" + email + "-" + System.currentTimeMillis(),
+                    "requestSource", "auth-service",
+                    "templateCode", "OTP_REGISTRATION",
+                    "userId", accountId,
+                    "recipient", email,
+                    "channelType", "EMAIL",
+                    "variables", Map.of(
+                        "name", name,
+                        "otp", otp
+                    )
+                );
+
+                HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(body, headers);
+                String url = notificationServiceUrl + "/internal/notifications/send";
+                log.info("Sending OTP registration email request to notification-service: url={}", url);
+                restTemplate.postForEntity(url, httpEntity, Map.class);
+                log.info("OTP registration email request sent successfully for email={}", email);
+            } catch (Exception e) {
+                log.warn("Failed to send OTP email via notification-service: {}", e.getMessage(), e);
+            }
+        }
         
         return new com.project.authservice.dto.response.ResendOtpResponse(accountId, 300L, 60L);
     }
