@@ -18,6 +18,8 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.project.movieservice.security.JwtProvider;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -32,6 +34,9 @@ public class AdminRoomControllerTest {
 
     @MockBean
     private RoomService roomService;
+
+    @MockBean
+    private JwtProvider jwtProvider;
 
     @Autowired
     private ObjectMapper objectMapper;
