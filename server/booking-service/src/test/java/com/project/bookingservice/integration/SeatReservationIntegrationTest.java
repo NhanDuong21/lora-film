@@ -64,6 +64,9 @@ public class SeatReservationIntegrationTest {
     @Autowired
     private com.project.bookingservice.service.ReservationService reservationService;
 
+    @Autowired
+    private com.project.bookingservice.config.IdempotencyFilter idempotencyFilter;
+
     private static final String JWT_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
     
     @BeforeEach
@@ -71,7 +74,7 @@ public class SeatReservationIntegrationTest {
         seatReservationRepository.deleteAll();
         Set<String> keys1 = stringRedisTemplate.keys("booking:seat-lock:*");
         if (keys1 != null && !keys1.isEmpty()) stringRedisTemplate.delete(keys1);
-        Set<String> keys2 = redisTemplate.keys("booking:idempotency:*");
+        Set<String> keys2 = redisTemplate.keys("idempotency:*");
         if (keys2 != null && !keys2.isEmpty()) redisTemplate.delete(keys2);
 
         // Setup mock movie service
@@ -107,7 +110,7 @@ public class SeatReservationIntegrationTest {
     @Test
     public void testNoTokenReturns401() throws Exception {
         mockMvc.perform(post("/api/bookings/seat-reservations")
-                .header("Idempotency-Key", "test-key")
+                .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174000")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
                 .andExpect(status().isUnauthorized())
@@ -119,7 +122,7 @@ public class SeatReservationIntegrationTest {
     public void testInvalidTokenReturns401() throws Exception {
         mockMvc.perform(post("/api/bookings/seat-reservations")
                 .header("Authorization", "Bearer invalid-token")
-                .header("Idempotency-Key", "test-key")
+                .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174000")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
                 .andExpect(status().isUnauthorized())
@@ -132,7 +135,7 @@ public class SeatReservationIntegrationTest {
         
         mockMvc.perform(post("/api/bookings/seat-reservations")
                 .header("Authorization", "Bearer " + generateToken(40L))
-                .header("Idempotency-Key", "key-1")
+                .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174001")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -152,14 +155,14 @@ public class SeatReservationIntegrationTest {
         
         mockMvc.perform(post("/api/bookings/seat-reservations")
                 .header("Authorization", "Bearer " + token)
-                .header("Idempotency-Key", "key-replay")
+                .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174002")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request1)))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/bookings/seat-reservations")
                 .header("Authorization", "Bearer " + token)
-                .header("Idempotency-Key", "key-replay")
+                .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174002")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request2)))
                 .andExpect(status().isCreated());
@@ -210,7 +213,7 @@ public class SeatReservationIntegrationTest {
                 CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(seatId));
                 return mockMvc.perform(post("/api/bookings/seat-reservations")
                         .header("Authorization", "Bearer " + token)
-                        .header("Idempotency-Key", "key-concurrent-diff")
+                        .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174003")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(r)))
                         .andReturn().getResponse().getStatus();
@@ -245,7 +248,7 @@ public class SeatReservationIntegrationTest {
                 CreateReservationRequest r = new CreateReservationRequest(100L, Arrays.asList(1L, 2L));
                 return mockMvc.perform(post("/api/bookings/seat-reservations")
                         .header("Authorization", "Bearer " + token)
-                        .header("Idempotency-Key", "key-concurrent-same")
+                        .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174004")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(r)))
                         .andReturn().getResponse().getStatus();
@@ -330,23 +333,27 @@ public class SeatReservationIntegrationTest {
         String token = generateToken(40L);
         CreateReservationRequest request = new CreateReservationRequest(100L, Arrays.asList(1L, 2L));
 
-        com.project.bookingservice.service.idempotency.IdempotencyService realService = 
-            (com.project.bookingservice.service.idempotency.IdempotencyService) org.springframework.test.util.ReflectionTestUtils.getField(reservationService, "idempotencyService");
+        com.project.bookingservice.service.IdempotencyService realService = 
+            (com.project.bookingservice.service.IdempotencyService) org.springframework.test.util.ReflectionTestUtils.getField(idempotencyFilter, "idempotencyService");
             
-        com.project.bookingservice.service.idempotency.IdempotencyService badService = 
-            new com.project.bookingservice.service.idempotency.IdempotencyService(null, null, null) {
+        com.project.bookingservice.service.IdempotencyService badService = 
+            new com.project.bookingservice.service.IdempotencyService(null, null) {
                 @Override
-                public boolean acquireIdempotency(Long userId, String idempotencyKey, Object requestPayload) {
+                public IdempotencyRecord get(String idempotencyKey) {
+                    throw new org.springframework.data.redis.RedisConnectionFailureException("Connection refused");
+                }
+                @Override
+                public boolean acquire(String idempotencyKey) {
                     throw new org.springframework.data.redis.RedisConnectionFailureException("Connection refused");
                 }
             };
 
-        org.springframework.test.util.ReflectionTestUtils.setField(reservationService, "idempotencyService", badService);
+        org.springframework.test.util.ReflectionTestUtils.setField(idempotencyFilter, "idempotencyService", badService);
 
         try {
             org.springframework.test.web.servlet.ResultActions result = mockMvc.perform(post("/api/bookings/seat-reservations")
                     .header("Authorization", "Bearer " + token)
-                    .header("Idempotency-Key", "key-redis-down")
+                    .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174005")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isServiceUnavailable());
@@ -359,7 +366,7 @@ public class SeatReservationIntegrationTest {
                     .andExpect(jsonPath("$.data").value(nullValue()))
                     .andExpect(jsonPath("$.errors").value(nullValue()));
         } finally {
-            org.springframework.test.util.ReflectionTestUtils.setField(reservationService, "idempotencyService", realService);
+            org.springframework.test.util.ReflectionTestUtils.setField(idempotencyFilter, "idempotencyService", realService);
         }
     }
 
@@ -371,7 +378,7 @@ public class SeatReservationIntegrationTest {
 
         org.springframework.test.web.servlet.ResultActions result = mockMvc.perform(post("/api/bookings/seat-reservations")
                 .header("Authorization", "Bearer " + token)
-                .header("Idempotency-Key", "key-empty-seats")
+                .header("Idempotency-Key", "123e4567-e89b-12d3-a456-426614174006")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
