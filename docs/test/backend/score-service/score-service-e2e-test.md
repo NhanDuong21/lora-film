@@ -112,7 +112,7 @@ mvn clean verify
 
 ---
 
-### Bước B: Thiết lập khớp ID người dùng và nạp điểm Test
+### Bước B: Thiết lập User ID và nạp điểm Test
 
 #### 1. Tìm User ID của bạn:
 
@@ -124,7 +124,7 @@ mvn clean verify
 - Đổi giá trị `setUserId(...)` khớp với ID tài khoản hiện tại của bạn:
 
 ```java
-context.setUserId(4L); // Thay bằng ID thực tế của tài khoảng bạn đang login (ví dụ 4L)
+context.setUserId(4L); // Thay bằng ID thực tế của tài khoản bạn đang login (ví dụ 4L)
 ```
 - Lưu file và **khởi động lại `score-service`**.
 
@@ -133,7 +133,7 @@ context.setUserId(4L); // Thay bằng ID thực tế của tài khoảng bạn �
 - Mở MySQL Workbench và chạy câu lệnh SQL nạp điểm cho tài khoản của bạn (ví dụ ID = 4):
 
 ```sql
-UPDATE movie_db.user_scores 
+UPDATE score_db.user_scores 
 SET current_points = 500, accumulated_points = 1000 
 WHERE user_id = 4;
 ```
@@ -210,7 +210,9 @@ Thực hiện gửi request body JSON theo từng kịch bản sau để kiểm 
   - **Kết quả:** HTTP **409 Conflict**, `errorCode = "SCORE_BOOKING_NOT_ELIGIBLE"`.
 
 ---
-## Issue #136: Hướng dẫn chạy Test tự động (Terminal Test)##
+# Hướng dẫn Kiểm thử và Mô tả Kết quả Triển khai - Issue #136 (Earn Score Flow)
+
+## 1. Hướng dẫn chạy Test tự động (Terminal Test)
 
 Trong thư mục `server/score-service`, vui lòng đảm bảo **dừng mọi tiến trình ứng dụng đang chạy** trước, sau đó thực thi lệnh:
 
@@ -230,348 +232,475 @@ mvn clean verify
 
 ---
 
-# 3. Hướng dẫn Test tay chi tiết bằng Swagger (Manual Testing)
+## 2. Hướng dẫn Test tay chi tiết bằng Swagger (Manual Testing)
 
-## Bước A: Chuẩn bị Header `X-Internal-Token`
+### Bước A: Chuẩn bị Header `X-Internal-Token`
 
-1. Mở Swagger của **score-service**
-
-```
-http://localhost:8088/swagger-ui.html
-```
-
+1. Mở Swagger của **score-service** (`http://localhost:8088/swagger-ui.html`).
 2. Nhấn nút **Authorize** ở góc trên bên phải.
-
 3. Chọn mục **internalAuth (apiKey)**.
-
 4. Nhập token:
-
-```text
-secret-internal-token
-```
-
+   ```text
+   secret-internal-token
+   ```
 5. Nhấn **Authorize** để hoàn tất cấu hình.
 
 ---
 
-## Bước B: Thiết lập User ID và chuẩn bị dữ liệu
+### Bước B: Thiết lập User ID và chuẩn bị dữ liệu
 
-### 1. Tìm User ID
+#### 1. Tìm User ID
+Gọi API `GET /api/scores/me` trên Swagger (đã authorize JWT) để xem `userId` trả về (ví dụ là `4`).
 
-Gọi API:
-
-```
-GET /api/scores/me
-```
-
-Ví dụ response:
-
-```json
-{
-  "userId": 4
-}
-```
-
-Ghi nhớ giá trị `userId`.
-
----
-
-### 2. Cập nhật User ID trong code
-
-Mở file:
-
-```
-BookingInternalClientImpl.java
-```
-
-(Tại dòng 24)
-
-Đổi:
-
+#### 2. Cập nhật User ID trong code
+Mở file `BookingInternalClientImpl.java` (Tại dòng 24), đổi:
 ```java
-context.setUserId(4L); // Thay bằng User ID thực tế
+context.setUserId(4L); // Thay bằng User ID thực tế của bạn
 ```
+Sau đó lưu file và khởi động lại `score-service`.
 
-Ví dụ nếu tài khoản của bạn có ID = 8:
-
-```java
-context.setUserId(8L);
-```
-
-Sau đó:
-
-- Lưu file
-- Khởi động lại `score-service`
-
----
-
-### 3. Reset dữ liệu điểm (khuyến nghị)
-
-Để việc kiểm thử nâng hạng được chính xác, hãy xóa dữ liệu điểm cũ.
-
+#### 3. Reset dữ liệu điểm (khuyến nghị)
 Mở MySQL Workbench và chạy:
-
 ```sql
-DELETE FROM movie_db.user_scores
-WHERE user_id = 4;
-
-DELETE FROM movie_db.score_history
-WHERE user_id = 4;
+DELETE FROM score_db.user_scores WHERE user_id = 4;
+DELETE FROM score_db.score_history WHERE user_id = 4;
 ```
-
-> Thay `4` bằng User ID thực tế của bạn.
+*(Thay 4 bằng User ID thực tế của bạn)*
 
 ---
 
-# Bước C: Kiểm thử từng API
+### Bước C: Kiểm thử từng API tích điểm
 
-## API
-
-```
-POST /internal/scores/earn
-```
+#### API: `POST /internal/scores/earn`
 
 > **Yêu cầu Header**
+> `X-Internal-Token: secret-internal-token`
 
+#### Case 1.1 - Người dùng mới (Lazy Initialization)
+* **Request**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 2001,
+    "eligibleAmount": 100000,
+    "eventId": "evt-earn-001",
+    "idempotencyKey": "idem-earn-001"
+  }
+  ```
+* **Kết quả mong đợi**:
+  - HTTP `200 OK`
+  - Tự động tạo tài khoản điểm cho User 4 với hạng **SILVER** (Earning Rate 0.05).
+  - Điểm nhận được: `100000 * 0.05 / 1000 = 5` điểm.
+  - Phản hồi chứa: `pointChange = 5`, `balanceAfter = 5`, `currentTier = SILVER`, `idempotent = false`.
+
+#### Case 1.2 - Nâng hạng lên GOLD
+* **Request**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 2002,
+    "eligibleAmount": 8000000,
+    "eventId": "evt-earn-002",
+    "idempotencyKey": "idem-earn-002"
+  }
+  ```
+* **Kết quả mong đợi**:
+  - HTTP `200 OK`. Điểm cộng thêm: `8000000 * 0.05 / 1000 = 400` điểm.
+  - Tổng tích lũy sau giao dịch đạt `405` điểm (vượt ngưỡng 400) -> Nâng lên **GOLD**.
+  - Phản hồi chứa: `pointChange = 400`, `balanceAfter = 405`, `previousTier = SILVER`, `currentTier = GOLD`, `tierChanged = true`.
+
+#### Case 1.3 - Tích điểm khi đã là GOLD
+* **Request**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 2003,
+    "eligibleAmount": 100000,
+    "eventId": "evt-earn-003",
+    "idempotencyKey": "idem-earn-003"
+  }
+  ```
+* **Kết quả mong đợi**:
+  - HTTP `200 OK`. Áp dụng tỷ lệ tích hạng GOLD (7%): `100000 * 0.07 / 1000 = 7` điểm.
+  - Phản hồi chứa: `pointChange = 7`, `balanceAfter = 412`, `currentTier = GOLD`, `tierChanged = false`.
+
+#### Case 1.4 - Kiểm tra Idempotency (Lọc trùng)
+* Gửi lại chính xác request của **Case 1.3**.
+* **Kết quả mong đợi**: HTTP `200 OK`. Không cộng thêm điểm, không thêm lịch sử. Phản hồi giống hệt Case 1.3 kèm `"idempotent": true`.
+
+#### Case 1.5 - Idempotency Conflict
+* **Request** (cùng eventId/idempotencyKey nhưng khác user/booking):
+  ```json
+  {
+    "userId": 9999,
+    "bookingId": 9999,
+    "eligibleAmount": 100000,
+    "eventId": "evt-earn-003",
+    "idempotencyKey": "idem-earn-003"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `409 Conflict`, `errorCode = SCORE_IDEMPOTENCY_CONFLICT`.
+
+#### Case 1.6 - Floor Rounding
+* **Request**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 2004,
+    "eligibleAmount": 15000,
+    "eventId": "evt-earn-004",
+    "idempotencyKey": "idem-earn-004"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `200 OK`. GOLD rate 7%: 15000 * 0.07 = 1050; 1050 / 1000 = 1.05 -> Làm tròn xuống = 1 điểm.
+  - Phản hồi: `pointChange = 1`, `balanceAfter = 413`.
+
+#### Case 1.7 - Validation Error
+* **Request**:
+  ```json
+  {
+    "userId": -4,
+    "bookingId": 2005,
+    "eligibleAmount": -15000,
+    "eventId": "",
+    "idempotencyKey": "idem-earn-005"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `400 Bad Request`, `errorCode = VALIDATION_ERROR`.
+
+#### Case 1.8 - Security Filter
+* Không truyền hoặc truyền sai header `X-Internal-Token` khi gọi API.
+* **Kết quả mong đợi**: HTTP `401 Unauthorized`, `errorCode = UNAUTHORIZED`, `message = Invalid internal token`.
+
+---
+# Hướng Hướng Dẫn Kiểm Thử và Mô Tả Kết Quả Triển Khai - Issue #137 (Score Redeem & Refund)
+
+## 1. Hướng dẫn chạy Test tự động (Terminal Test)
+
+Trong thư mục `server/score-service`, thực thi lệnh:
+
+```bash
+cd server/score-service
+mvn clean test
 ```
-X-Internal-Token: secret-internal-token
-```
+
+## Kết quả mong đợi
+
+- **Kết quả build:** `BUILD SUCCESS`
+- **Tổng số test:** `44 tests run, 0 failures, 0 errors, 0 skipped`
+  - Bao gồm:
+    - **15** bài test JPA/Persistence
+    - **13** bài test tích hợp luồng tích điểm (Earn)
+    - **16** bài test tích hợp luồng tiêu điểm & hoàn điểm (Redeem & Refund) mới thêm.
 
 ---
 
-## Case 1.1 - Người dùng mới (Lazy Initialization)
+## 2. Hướng dẫn Test tay chi tiết bằng Swagger (Manual Testing)
 
-### Request
-
-```json
-{
-  "userId": 4,
-  "bookingId": 2001,
-  "eligibleAmount": 100000,
-  "eventId": "evt-earn-001",
-  "idempotencyKey": "idem-earn-001"
-}
-```
-
-### Kết quả mong đợi
-
-- HTTP `200 OK`
-- Tự động tạo tài khoản điểm cho User 4
-- Tier mặc định: **SILVER**
-- Earning Rate: **0.05**
-- Điểm nhận được:
-
-```
-100000 × 0.05 / 1000 = 5 điểm
-```
-
-Response:
-
-- `pointChange = 5`
-- `balanceAfter = 5`
-- `previousTier = SILVER`
-- `currentTier = SILVER`
-- `idempotent = false`
+### Bước A: Chuẩn bị cấu hình Swagger và nạp điểm test
+1. Mở Swagger của `score-service` (`http://localhost:8088/swagger-ui.html`).
+2. Chọn **Authorize** ở góc trên bên phải, nhập `Bearer <accessToken>` của khách hàng (lấy từ auth-service) và token nội bộ `secret-internal-token` ở mục `internalAuth (apiKey)`.
+3. Chuẩn bị dữ liệu: Nạp sẵn điểm vào database cho User ID = 4 là `100` điểm:
+   ```sql
+   UPDATE score_db.user_scores SET current_points = 100 WHERE user_id = 4;
+   ```
 
 ---
 
-## Case 1.2 - Nâng hạng lên GOLD
+### Bước B: Kiểm thử luồng Tiêu Điểm (POST `/internal/scores/redeem`)
 
-### Request
+> **Yêu cầu Header**: `X-Internal-Token: secret-internal-token`
 
-```json
-{
-  "userId": 4,
-  "bookingId": 2002,
-  "eligibleAmount": 8000000,
-  "eventId": "evt-earn-002",
-  "idempotencyKey": "idem-earn-002"
-}
-```
+#### Case 1.1 - Đổi điểm thành công (Happy Case)
+* **Request (Body JSON)**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3001,
+    "points": 40,
+    "eventId": "SCORE-REDEEM-BOOKING-3001",
+    "idempotencyKey": "REDEEM:BOOKING:3001"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `200 OK`
+  ```json
+  {
+    "success": true,
+    "message": "Score redeemed successfully",
+    "data": {
+      "userId": 4,
+      "bookingId": 3001,
+      "redeemedPoints": 40,
+      "redeemValue": 40000,
+      "currentPoints": 60,
+      "accumulatedPoints": 100,
+      "historyId": 7004,
+      "idempotent": false
+    }
+  }
+  ```
+  *(Database: `current_points` của user 4 giảm xuống 60. `accumulated_points` giữ nguyên 100. Tạo dòng lịch sử `REDEEM_FOR_BOOKING` điểm `-40`)*.
 
-### Kết quả mong đợi
+#### Case 1.2 - Đổi điểm lặp lại (Idempotency - Retry)
+* Gửi lại chính xác request của **Case 1.1**.
+* **Kết quả mong đợi**: HTTP `200 OK`
+  ```json
+  {
+    "success": true,
+    "message": "Score redeem event was already processed",
+    "data": {
+      "userId": 4,
+      "bookingId": 3001,
+      "redeemedPoints": 40,
+      "currentPoints": 60,
+      "historyId": 7004,
+      "idempotent": true
+    }
+  }
+  ```
 
-HTTP `200 OK`
+#### Case 1.3 - Xung đột Idempotency (Idempotency Conflict)
+* Gửi request giữ nguyên `eventId` và `idempotencyKey` của Case 1.1 nhưng đổi `bookingId` sang `3002`.
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3002,
+    "points": 40,
+    "eventId": "SCORE-REDEEM-BOOKING-3001",
+    "idempotencyKey": "REDEEM:BOOKING:3001"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `409 Conflict`
+  ```json
+  {
+    "success": false,
+    "message": "Idempotency conflict: event or key is already used for another request context",
+    "errorCode": "SCORE_IDEMPOTENCY_CONFLICT",
+    "data": null,
+    "errors": null
+  }
+  ```
 
-Điểm cộng:
+#### Case 1.4 - Số dư điểm không đủ (Insufficient Balance)
+* **Request (Body JSON)**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3003,
+    "points": 200,
+    "eventId": "SCORE-REDEEM-BOOKING-3003",
+    "idempotencyKey": "REDEEM:BOOKING:3003"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `409 Conflict`
+  ```json
+  {
+    "success": false,
+    "message": "Insufficient score balance",
+    "errorCode": "SCORE_INSUFFICIENT_BALANCE",
+    "data": {
+      "availablePoints": 60,
+      "requestedPoints": 200
+    },
+    "errors": null
+  }
+  ```
 
-```
-8,000,000 × 0.05 / 1000 = 400 điểm
-```
-
-Tổng điểm:
-
-```
-5 + 400 = 405
-```
-
-Do vượt ngưỡng **400 điểm**, người dùng được nâng lên **GOLD**.
-
-Response:
-
-- `pointChange = 400`
-- `balanceAfter = 405`
-- `previousTier = SILVER`
-- `currentTier = GOLD`
-- `tierChanged = true`
-
----
-
-## Case 1.3 - Tích điểm khi đã là GOLD
-
-### Request
-
-```json
-{
-  "userId": 4,
-  "bookingId": 2003,
-  "eligibleAmount": 100000,
-  "eventId": "evt-earn-003",
-  "idempotencyKey": "idem-earn-003"
-}
-```
-
-### Kết quả mong đợi
-
-HTTP `200 OK`
-
-Áp dụng Earning Rate mới:
-
-```
-100000 × 0.07 / 1000 = 7 điểm
-```
-
-Response:
-
-- `pointChange = 7`
-- `balanceAfter = 412`
-- `previousTier = GOLD`
-- `currentTier = GOLD`
-- `tierChanged = false`
-
----
-
-## Case 1.4 - Kiểm tra Idempotency
-
-### Request
-
-Gửi lại **chính xác** request của **Case 1.3**.
-
-### Kết quả mong đợi
-
-HTTP `200 OK`
-
-- Không ghi thêm lịch sử
-- Không cộng thêm điểm
-
-Response giống hệt Case 1.3 và có thêm:
-
-```json
-"idempotent": true
-```
-
----
-
-## Case 1.5 - Idempotency Conflict
-
-### Request
-
-```json
-{
-  "userId": 9999,
-  "bookingId": 9999,
-  "eligibleAmount": 100000,
-  "eventId": "evt-earn-003",
-  "idempotencyKey": "idem-earn-003"
-}
-```
-
-### Kết quả mong đợi
-
-```
-HTTP 409 Conflict
-```
-
-```text
-errorCode = SCORE_IDEMPOTENCY_CONFLICT
-```
-
----
-
-## Case 1.6 - Floor Rounding
-
-### Request
-
-```json
-{
-  "userId": 4,
-  "bookingId": 2004,
-  "eligibleAmount": 15000,
-  "eventId": "evt-earn-004",
-  "idempotencyKey": "idem-earn-004"
-}
-```
-
-### Kết quả mong đợi
-
-Do đang ở GOLD:
-
-```
-15000 × 0.07 = 1050
-
-1050 / 1000 = 1.05
-
-Làm tròn xuống = 1 điểm
-```
-
-Response:
-
-- `pointChange = 1`
-- `balanceAfter = 413`
+#### Case 1.5 - Lỗi Dữ liệu đầu vào (Validation Error)
+* **Request (Body JSON)** (ví dụ điểm âm và thiếu eventId):
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3004,
+    "points": -10,
+    "eventId": "",
+    "idempotencyKey": "REDEEM:BOOKING:3004"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `400 Bad Request`
+  ```json
+  {
+    "success": false,
+    "message": "Validation failed",
+    "errorCode": "VALIDATION_ERROR",
+    "data": null,
+    "errors": [
+      {
+        "field": "points",
+        "message": "Points must be greater than zero"
+      },
+      {
+        "field": "eventId",
+        "message": "Event ID must be specified"
+      }
+    ]
+  }
+  ```
 
 ---
 
-## Case 1.7 - Validation Error
+### Bước C: Kiểm thử luồng Hoàn Điểm (POST `/internal/scores/refund-redeem`)
 
-### Request
+> **Yêu cầu Header**: `X-Internal-Token: secret-internal-token`
 
-```json
-{
-  "userId": -4,
-  "bookingId": 2005,
-  "eligibleAmount": -15000,
-  "eventId": "",
-  "idempotencyKey": "idem-earn-005"
-}
-```
+#### Case 2.1 - Hoàn điểm thành công (Happy Case)
+* **Request (Body JSON)**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3001,
+    "points": 40,
+    "originalRedeemEventId": "SCORE-REDEEM-BOOKING-3001",
+    "eventId": "SCORE-REFUND-BOOKING-3001",
+    "idempotencyKey": "REFUND_REDEEM:BOOKING:3001",
+    "reason": "Booking cancelled"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `200 OK`
+  ```json
+  {
+    "success": true,
+    "message": "Redeemed score refunded successfully",
+    "data": {
+      "userId": 4,
+      "bookingId": 3001,
+      "refundedPoints": 40,
+      "currentPoints": 100,
+      "accumulatedPoints": 100,
+      "originalHistoryId": 7004,
+      "historyId": 7005,
+      "idempotent": false
+    }
+  }
+  ```
+  *(Database: `current_points` của user 4 tăng từ 60 về lại 100. Tạo dòng lịch sử `REFUND_REDEEM` điểm `+40` liên kết đến ID giao dịch gốc `7004`)*.
 
-### Kết quả mong đợi
+#### Case 2.2 - Hoàn điểm lặp lại (Idempotency - Retry)
+* Gửi lại chính xác request của **Case 2.1**.
+* **Kết quả mong đợi**: HTTP `200 OK`
+  ```json
+  {
+    "success": true,
+    "message": "Redeemed score refund was already processed",
+    "data": {
+      "userId": 4,
+      "bookingId": 3001,
+      "refundedPoints": 40,
+      "currentPoints": 100,
+      "accumulatedPoints": 100,
+      "originalHistoryId": 7004,
+      "historyId": 7005,
+      "idempotent": true
+    }
+  }
+  ```
 
-```
-HTTP 400 Bad Request
-```
+#### Case 2.3 - Giao dịch gốc không tồn tại (Original Redeem Not Found)
+* **Request (Body JSON)**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3001,
+    "points": 40,
+    "originalRedeemEventId": "SCORE-REDEEM-NON-EXISTENT",
+    "eventId": "SCORE-REFUND-BOOKING-3002",
+    "idempotencyKey": "REFUND_REDEEM:BOOKING:3002",
+    "reason": "Cancel"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `404 Not Found`
+  ```json
+  {
+    "success": false,
+    "message": "Original redeem transaction not found",
+    "errorCode": "SCORE_ORIGINAL_TRANSACTION_NOT_FOUND",
+    "data": null,
+    "errors": null
+  }
+  ```
 
-```text
-errorCode = VALIDATION_ERROR
-```
+#### Case 2.4 - Sai lệch thông tin người dùng hoặc đơn vé (Mismatched context)
+* **Request (Body JSON)** (ví dụ sai bookingId):
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 9999,
+    "points": 40,
+    "originalRedeemEventId": "SCORE-REDEEM-BOOKING-3001",
+    "eventId": "SCORE-REFUND-BOOKING-3003",
+    "idempotencyKey": "REFUND_REDEEM:BOOKING:3003",
+    "reason": "Cancel"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `400 Bad Request`
+  ```json
+  {
+    "success": false,
+    "message": "Original transaction user or booking mismatch",
+    "errorCode": "SCORE_TRANSACTION_MISMATCH",
+    "data": null,
+    "errors": null
+  }
+  ```
 
----
+#### Case 2.5 - Số điểm hoàn vượt quá số điểm đã đổi (Refund Exceeds Redeemed)
+* **Request (Body JSON)** (yêu cầu hoàn 100 điểm khi gốc chỉ đổi 40):
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3001,
+    "points": 100,
+    "originalRedeemEventId": "SCORE-REDEEM-BOOKING-3001",
+    "eventId": "SCORE-REFUND-BOOKING-3004",
+    "idempotencyKey": "REFUND_REDEEM:BOOKING:3004",
+    "reason": "Cancel"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `400 Bad Request`
+  ```json
+  {
+    "success": false,
+    "message": "Refund points exceeds originally redeemed points",
+    "errorCode": "SCORE_INVALID_REFUND_AMOUNT",
+    "data": null,
+    "errors": null
+  }
+  ```
 
-## Case 1.8 - Security Filter
+#### Case 2.6 - Chặn hoàn điểm hai lần (Double Refund Prevention)
+* Gửi yêu cầu hoàn điểm mới (khác eventId và idempotencyKey) cho cùng đơn hàng đã hoàn ở Case 2.1.
+* **Request (Body JSON)**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3001,
+    "points": 40,
+    "originalRedeemEventId": "SCORE-REDEEM-BOOKING-3001",
+    "eventId": "SCORE-REFUND-BOOKING-3001-NEW",
+    "idempotencyKey": "REFUND_REDEEM:BOOKING:3001:NEW",
+    "reason": "Duplicate cancel call"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `409 Conflict`
+  ```json
+  {
+    "success": false,
+    "message": "Redeem transaction has already been refunded",
+    "errorCode": "SCORE_ALREADY_REFUNDED",
+    "data": null,
+    "errors": null
+  }
+  ```
 
-Không truyền hoặc truyền sai:
-
-```
-X-Internal-Token
-```
-
-### Kết quả mong đợi
-
-```
-HTTP 401 Unauthorized
-```
-
-```text
-errorCode = UNAUTHORIZED
-message = Invalid internal token
-```
+#### Case 2.7 - Lỗi Bảo mật API (Security Filter block)
+* Không truyền header `X-Internal-Token` khi gọi endpoint hoàn điểm.
+* **Kết quả mong đợi**: HTTP `401 Unauthorized`
+  ```json
+  {
+    "success": false,
+    "message": "Invalid internal token",
+    "errorCode": "UNAUTHORIZED",
+    "data": null,
+    "errors": null
+  }
+  ```
