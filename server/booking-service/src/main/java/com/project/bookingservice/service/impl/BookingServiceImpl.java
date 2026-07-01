@@ -64,7 +64,7 @@ public class BookingServiceImpl implements BookingService {
             // 2. Load reservations from database
             List<SeatReservation> reservations = seatReservationRepository.findAllById(request.getReservationIds());
             if (reservations.size() != request.getReservationIds().size()) {
-                throw new BusinessException("BOOKING_RESERVATION_NOT_FOUND", "One or more reservations not found");
+                throw new BusinessException("SEAT_RESERVATION_NOT_FOUND", "One or more reservations not found");
             }
 
             Long showtimeId = null;
@@ -72,29 +72,29 @@ public class BookingServiceImpl implements BookingService {
             for (SeatReservation res : reservations) {
                 // 3. Validate ownership
                 if (!res.getUserId().equals(userId)) {
-                    throw new BusinessException("BOOKING_RESERVATION_NOT_OWNED", "Reservation does not belong to the user");
+                    throw new BusinessException("SEAT_RESERVATION_OWNERSHIP_MISMATCH", "Reservation does not belong to the user");
                 }
                 
                 // 4. Validate reservation status
                 if (res.getStatus() != ReservationStatus.HELD) {
-                    throw new BusinessException("BOOKING_RESERVATION_INVALID_STATUS", "Reservation status must be HELD");
+                    throw new BusinessException("BOOKING_INVALID_STATUS", "Reservation status must be HELD");
                 }
 
                 // 5. Validate reservation expiration
                 if (LocalDateTime.now().isAfter(res.getExpiresAt())) {
-                    throw new BusinessException("BOOKING_RESERVATION_EXPIRED", "Reservation has expired");
+                    throw new BusinessException("SEAT_RESERVATION_EXPIRED", "Reservation has expired");
                 }
 
                 // 6. Validate all reservations same showtime
                 if (showtimeId == null) {
                     showtimeId = res.getShowtimeId();
                 } else if (!showtimeId.equals(res.getShowtimeId())) {
-                    throw new BusinessException("BOOKING_RESERVATION_SHOWTIME_MISMATCH", "Reservations must belong to the same showtime");
+                    throw new BusinessException("BOOKING_MULTIPLE_SHOWTIMES_NOT_ALLOWED", "Reservations must belong to the same showtime");
                 }
 
                 // 7. Validate reservation not attached to booking
                 if (res.getBookingId() != null) {
-                    throw new BusinessException("BOOKING_RESERVATION_INVALID_STATUS", "Reservation is already attached to a booking");
+                    throw new BusinessException("BOOKING_ALREADY_CREATED", "Reservation is already attached to a booking");
                 }
             }
 
@@ -112,16 +112,16 @@ public class BookingServiceImpl implements BookingService {
             try {
                 showtimeInfo = movieServiceClient.getShowtime(showtimeId);
                 if (showtimeInfo == null) {
-                     throw new BusinessException("BOOKING_PRICE_UNAVAILABLE", "Showtime not found");
+                     throw new BusinessException("BOOKING_SHOWTIME_NOT_FOUND", "Showtime not found");
                 }
             } catch (Exception e) {
-                throw new BusinessException("BOOKING_PRICE_UNAVAILABLE", "Movie service is unavailable");
+                throw new BusinessException("MOVIE_SERVICE_UNAVAILABLE", "Movie service is unavailable");
             }
 
             // 10. Calculate totalAmount
             BigDecimal ticketPrice = showtimeInfo.getPrice();
             if (ticketPrice == null) {
-                throw new BusinessException("BOOKING_PRICE_UNAVAILABLE", "Ticket price not available");
+                throw new BusinessException("BOOKING_SHOWTIME_NOT_AVAILABLE", "Ticket price not available");
             }
             BigDecimal totalAmount = ticketPrice.multiply(BigDecimal.valueOf(reservations.size()));
 
@@ -167,7 +167,7 @@ public class BookingServiceImpl implements BookingService {
 
         Long userId = currentUserProvider.getCurrentUserId();
         if (!booking.getUserId().equals(userId)) {
-            throw new BusinessException("BOOKING_NOT_OWNED", "Booking does not belong to the user");
+            throw new BusinessException("FORBIDDEN", "Booking does not belong to the user");
         }
 
         // Wait, wait... I don't have an easy way to get seats if we don't fetch them. 
@@ -201,21 +201,21 @@ public class BookingServiceImpl implements BookingService {
 
             // 3. Validate ownership
             if (!booking.getUserId().equals(userId)) {
-                throw new BusinessException("BOOKING_NOT_OWNED", "Booking does not belong to the user");
+                throw new BusinessException("FORBIDDEN", "Booking does not belong to the user");
             }
 
             // 4. Validate state transition
             if (booking.getStatus() == BookingStatus.CONFIRMED) {
-                throw new BusinessException("BOOKING_CANNOT_CANCEL_CONFIRMED", "Cannot cancel a confirmed booking");
+                throw new BusinessException("BOOKING_CANNOT_BE_CANCELLED", "Cannot cancel a confirmed booking");
             }
             if (booking.getStatus() == BookingStatus.EXPIRED) {
-                throw new BusinessException("BOOKING_ALREADY_EXPIRED", "Booking is already expired");
+                throw new BusinessException("BOOKING_CANNOT_BE_CANCELLED", "Booking is already expired");
             }
             if (booking.getStatus() == BookingStatus.CANCELLED) {
-                throw new BusinessException("BOOKING_ALREADY_CANCELLED", "Booking is already cancelled");
+                throw new BusinessException("BOOKING_CANNOT_BE_CANCELLED", "Booking is already cancelled");
             }
             if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
-                throw new BusinessException("BOOKING_INVALID_STATE", "Invalid booking state for cancellation");
+                throw new BusinessException("BOOKING_INVALID_STATUS_TRANSITION", "Invalid booking state for cancellation");
             }
 
             // 5. Change state

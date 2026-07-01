@@ -36,9 +36,12 @@ public class GlobalExceptionHandler {
             "BOOKING_SEAT_ALREADY_BOOKED".equals(errorCode) ||
             "BOOKING_SEAT_ALREADY_HELD".equals(errorCode) ||
             "SEAT_RESERVATION_ALREADY_CONVERTED".equals(errorCode) ||
-            "SEAT_RESERVATION_EXPIRED".equals(errorCode)) {
+            "SEAT_RESERVATION_EXPIRED".equals(errorCode) ||
+            "BOOKING_INVALID_STATUS_TRANSITION".equals(errorCode) ||
+            "BOOKING_CANNOT_BE_CANCELLED".equals(errorCode) ||
+            "BOOKING_ALREADY_CREATED".equals(errorCode)) {
             status = HttpStatus.CONFLICT;
-        } else if ("FORBIDDEN".equals(errorCode) || "UNAUTHORIZED".equals(errorCode)) {
+        } else if ("FORBIDDEN".equals(errorCode) || "UNAUTHORIZED".equals(errorCode) || "SEAT_RESERVATION_OWNERSHIP_MISMATCH".equals(errorCode)) {
             status = "UNAUTHORIZED".equals(errorCode) ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
         } else if (errorCode != null && errorCode.contains("NOT_FOUND")) {
             status = HttpStatus.NOT_FOUND;
@@ -92,7 +95,7 @@ public class GlobalExceptionHandler {
         if (ex.getName().toLowerCase().contains("id")) {
             msg = "Cannot enter letters into ID parameter: " + ex.getName();
         }
-        return new ResponseEntity<>(ApiResponse.error(msg, "INVALID_PARAM_FORMAT"), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(ApiResponse.error(msg, "BOOKING_INVALID_QUERY"), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)

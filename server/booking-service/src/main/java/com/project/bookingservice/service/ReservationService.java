@@ -163,7 +163,7 @@ public class ReservationService {
 
         Long currentUserId = currentUserProvider.getCurrentUserId();
         if (!reservation.getUserId().equals(currentUserId)) {
-            throw new BusinessException("FORBIDDEN", "You cannot access this reservation");
+            throw new BusinessException("SEAT_RESERVATION_OWNERSHIP_MISMATCH", "You cannot access this reservation");
         }
 
         return new ReservationResponse(reservation.getId(), reservation.getUserId(), reservation.getShowtimeId(), reservation.getSeatId(),
@@ -177,7 +177,7 @@ public class ReservationService {
 
         Long currentUserId = currentUserProvider.getCurrentUserId();
         if (!reservation.getUserId().equals(currentUserId)) {
-            throw new BusinessException("FORBIDDEN", "You cannot access this reservation");
+            throw new BusinessException("SEAT_RESERVATION_OWNERSHIP_MISMATCH", "You cannot access this reservation");
         }
 
         if (reservation.getStatus() == ReservationStatus.RELEASED) {
