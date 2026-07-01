@@ -21,4 +21,6 @@ public interface ScoreHistoryRepository extends JpaRepository<ScoreHistory, Long
     List<ScoreHistory> findByBookingId(Long bookingId);
 
     List<ScoreHistory> findByReconciliationStatusOrderByCreatedAtAsc(ReconciliationStatus reconciliationStatus);
+
+    boolean existsByReferenceHistoryAndTransactionType(ScoreHistory referenceHistory, com.project.scoreservice.enumtype.ScoreTransactionType transactionType);
 }

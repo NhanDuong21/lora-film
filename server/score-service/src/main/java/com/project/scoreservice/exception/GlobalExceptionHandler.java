@@ -17,8 +17,8 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
  
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
-        ApiResponse<Void> response = ApiResponse.error(ex.getMessage(), ex.getErrorCode());
+    public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
+        ApiResponse<Object> response = new ApiResponse<>(false, ex.getMessage(), ex.getErrorCode(), ex.getData(), null);
         return new ResponseEntity<>(response, ex.getStatus());
     }
  
