@@ -18,7 +18,6 @@ public class Room {
     @Column(name = "total_seats", nullable = false)
     private Integer totalSeats;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "screen_type", nullable = false, length = 20)
     private ScreenType screenType;
 
