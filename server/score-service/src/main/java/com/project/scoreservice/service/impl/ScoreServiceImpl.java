@@ -676,4 +676,171 @@ public class ScoreServiceImpl implements ScoreService {
                 false
         );
     }
+
+    @Override
+    public ScoreRevokeResponse revokeEarn(ScoreRevokeRequest request) {
+        long startTime = System.currentTimeMillis();
+
+        Optional<ScoreHistory> historyByEvent = scoreHistoryRepository.findByEventId(request.getEventId());
+        Optional<ScoreHistory> historyByIdem = scoreHistoryRepository.findByIdempotencyKey(request.getIdempotencyKey());
+
+        if (historyByEvent.isPresent() || historyByIdem.isPresent()) {
+            ScoreHistory existing = historyByEvent.orElseGet(historyByIdem::get);
+
+            if (!existing.getUserScore().getUserId().equals(request.getUserId())
+                    || !existing.getBookingId().equals(request.getBookingId())
+                    || !existing.getRequestedPointChange().equals(request.getPoints())
+                    || existing.getReferenceHistory() == null
+                    || !existing.getReferenceHistory().getEventId().equals(request.getOriginalEarnEventId())) {
+                throw new BusinessException("Idempotency conflict: event or key is already used for another request context", 
+                        "SCORE_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT);
+            }
+
+            log.info("Idempotent revoke request processed: eventId={}, userId={}, bookingId={}", 
+                    request.getEventId(), request.getUserId(), request.getBookingId());
+
+            return new ScoreRevokeResponse(
+                    existing.getUserScore().getUserId(),
+                    existing.getBookingId(),
+                    existing.getRequestedPointChange(),
+                    -existing.getPointChange(),
+                    existing.getOutstandingPoints(),
+                    existing.getBalanceAfter(),
+                    existing.getAccumulatedAfter(),
+                    existing.getId(),
+                    existing.getReconciliationStatus().name(),
+                    existing.getReconciliationStatus() == ReconciliationStatus.PENDING,
+                    true
+            );
+        }
+
+        try {
+            ScoreRevokeResponse response = selfProxy.executeRevokeEarn(request);
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("Revoke score result: userId={}, bookingId={}, eventId={}, deductedPoints={}, historyId={}, idempotent={}, duration={}ms",
+                    request.getUserId(), request.getBookingId(), request.getEventId(), response.getDeductedPoints(),
+                    response.getHistoryId(), false, duration);
+            return response;
+        } catch (org.springframework.dao.DataIntegrityViolationException | jakarta.persistence.PersistenceException e) {
+            Optional<ScoreHistory> retryByEvent = scoreHistoryRepository.findByEventId(request.getEventId());
+            Optional<ScoreHistory> retryByIdem = scoreHistoryRepository.findByIdempotencyKey(request.getIdempotencyKey());
+            if (retryByEvent.isPresent() || retryByIdem.isPresent()) {
+                ScoreHistory existing = retryByEvent.orElseGet(retryByIdem::get);
+                if (existing.getUserScore().getUserId().equals(request.getUserId())
+                        && existing.getBookingId().equals(request.getBookingId())
+                        && existing.getRequestedPointChange().equals(request.getPoints())
+                        && existing.getReferenceHistory() != null
+                        && existing.getReferenceHistory().getEventId().equals(request.getOriginalEarnEventId())) {
+                    log.info("Handled concurrent unique constraint race for revoke idempotency: eventId={}, userId={}, bookingId={}", 
+                            request.getEventId(), request.getUserId(), request.getBookingId());
+                    return new ScoreRevokeResponse(
+                            existing.getUserScore().getUserId(),
+                            existing.getBookingId(),
+                            existing.getRequestedPointChange(),
+                            -existing.getPointChange(),
+                            existing.getOutstandingPoints(),
+                            existing.getBalanceAfter(),
+                            existing.getAccumulatedAfter(),
+                            existing.getId(),
+                            existing.getReconciliationStatus().name(),
+                            existing.getReconciliationStatus() == ReconciliationStatus.PENDING,
+                            true
+                    );
+                }
+            }
+            throw e;
+        }
+    }
+
+    @Transactional
+    public ScoreRevokeResponse executeRevokeEarn(ScoreRevokeRequest request) {
+        UserScore userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
+                .orElseGet(() -> {
+                    getOrCreateUserScoreEntity(request.getUserId());
+                    return userScoreRepository.findWithLockByUserId(request.getUserId())
+                            .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
+                });
+
+        ScoreHistory originalEarn = scoreHistoryRepository.findByEventId(request.getOriginalEarnEventId())
+                .orElseThrow(() -> new BusinessException("Original earn transaction not found", "SCORE_ORIGINAL_TRANSACTION_NOT_FOUND", HttpStatus.NOT_FOUND));
+
+        if (originalEarn.getTransactionType() != ScoreTransactionType.EARN_BY_BOOKING) {
+            throw new BusinessException("Original transaction is not an earn transaction", "SCORE_INVALID_TRANSACTION_TYPE", HttpStatus.BAD_REQUEST);
+        }
+
+        if (!originalEarn.getUserScore().getUserId().equals(request.getUserId())
+                || !originalEarn.getBookingId().equals(request.getBookingId())) {
+            throw new BusinessException("Original transaction user or booking mismatch", "SCORE_TRANSACTION_MISMATCH", HttpStatus.BAD_REQUEST);
+        }
+
+        List<ScoreHistory> previousRevokes = scoreHistoryRepository.findByReferenceHistoryAndTransactionType(originalEarn, ScoreTransactionType.REVOKE_EARN_BY_REFUND);
+        int totalPreviousRevokesRequested = previousRevokes.stream().mapToInt(ScoreHistory::getRequestedPointChange).sum();
+        int originalEarnAmount = originalEarn.getPointChange();
+        int remainingRevokable = originalEarnAmount - totalPreviousRevokesRequested;
+
+        if (remainingRevokable <= 0) {
+            throw new BusinessException("Original transaction has already been fully revoked", "SCORE_ALREADY_REVOKED", HttpStatus.BAD_REQUEST);
+        }
+
+        if (request.getPoints() > remainingRevokable) {
+            throw new BusinessException("Revoke points exceeds originally earned points", "SCORE_INVALID_REVOKE_AMOUNT", HttpStatus.BAD_REQUEST);
+        }
+
+        int balanceBefore = userScore.getCurrentPoints();
+        int requestedPoints = request.getPoints();
+        int actualDeducted = Math.min(balanceBefore, requestedPoints);
+        int outstandingPoints = requestedPoints - actualDeducted;
+        ReconciliationStatus reconciliationStatus = outstandingPoints > 0 ? ReconciliationStatus.PENDING : ReconciliationStatus.NONE;
+
+        int balanceAfter = balanceBefore - actualDeducted;
+        int accumulatedBefore = userScore.getAccumulatedPoints();
+        if (accumulatedBefore - requestedPoints < 0) {
+            log.warn("User ID {} has abnormal accumulated points deduction. Current accumulated: {}, requested deduction: {}",
+                    request.getUserId(), accumulatedBefore, requestedPoints);
+        }
+        int accumulatedAfter = Math.max(0, accumulatedBefore - requestedPoints);
+
+        userScore.setCurrentPoints(balanceAfter);
+        userScore.setAccumulatedPoints(accumulatedAfter);
+
+        MembershipTier currentTier = membershipTierService.findTierForPoints(accumulatedAfter);
+        userScore.setCurrentTier(currentTier);
+        userScoreRepository.saveAndFlush(userScore);
+
+        ScoreHistory history = ScoreHistory.builder()
+                .userScore(userScore)
+                .bookingId(request.getBookingId())
+                .eventId(request.getEventId())
+                .pointChange(-actualDeducted)
+                .transactionType(ScoreTransactionType.REVOKE_EARN_BY_REFUND)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceAfter)
+                .accumulatedBefore(accumulatedBefore)
+                .accumulatedAfter(accumulatedAfter)
+                .idempotencyKey(request.getIdempotencyKey())
+                .referenceHistory(originalEarn)
+                .reason(request.getReason())
+                .description("Revoked " + actualDeducted + " points (requested: " + requestedPoints + ") for booking " + request.getBookingId())
+                .requestedPointChange(requestedPoints)
+                .outstandingPoints(outstandingPoints)
+                .reconciliationStatus(reconciliationStatus)
+                .requestId(java.util.UUID.randomUUID().toString())
+                .build();
+
+        scoreHistoryRepository.saveAndFlush(history);
+
+        return new ScoreRevokeResponse(
+                request.getUserId(),
+                request.getBookingId(),
+                requestedPoints,
+                actualDeducted,
+                outstandingPoints,
+                balanceAfter,
+                accumulatedAfter,
+                history.getId(),
+                reconciliationStatus.name(),
+                reconciliationStatus == ReconciliationStatus.PENDING,
+                false
+        );
+    }
 }

@@ -8,6 +8,8 @@ import com.project.scoreservice.dto.ScoreRedeemRequest;
 import com.project.scoreservice.dto.ScoreRedeemResponse;
 import com.project.scoreservice.dto.ScoreRefundRequest;
 import com.project.scoreservice.dto.ScoreRefundResponse;
+import com.project.scoreservice.dto.ScoreRevokeRequest;
+import com.project.scoreservice.dto.ScoreRevokeResponse;
 import com.project.scoreservice.dto.UserScoreResponse;
 import com.project.scoreservice.service.ScoreService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -61,6 +63,16 @@ public class InternalScoreController {
         String message = Boolean.TRUE.equals(response.getIdempotent())
                 ? "Redeemed score refund was already processed"
                 : "Redeemed score refunded successfully";
+        return ResponseEntity.ok(ApiResponse.success(message, response));
+    }
+
+    @PostMapping("/revoke-earn")
+    @Operation(summary = "Revoke earned score internally", description = "Internal endpoint to revoke earned score points for a refunded booking")
+    public ResponseEntity<ApiResponse<ScoreRevokeResponse>> revokeEarn(@Valid @RequestBody ScoreRevokeRequest request) {
+        ScoreRevokeResponse response = scoreService.revokeEarn(request);
+        String message = Boolean.TRUE.equals(response.getIdempotent())
+                ? "Earned score revoke was already processed"
+                : "Earned score revoked successfully";
         return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 }
