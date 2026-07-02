@@ -111,6 +111,35 @@ public class ApiResponse<T> {
 		}
 	}
 
+	public static class BusinessError {
+		private String errorCode;
+		private String message;
+
+		public BusinessError() {
+		}
+
+		public BusinessError(String errorCode, String message) {
+			this.errorCode = errorCode;
+			this.message = message;
+		}
+
+		public String getErrorCode() {
+			return errorCode;
+		}
+
+		public void setErrorCode(String errorCode) {
+			this.errorCode = errorCode;
+		}
+
+		public String getMessage() {
+			return message;
+		}
+
+		public void setMessage(String message) {
+			this.message = message;
+		}
+	}
+
 	public static class Serializer extends JsonSerializer<ApiResponse<?>> {
 		@Override
 		public void serialize(ApiResponse<?> value, JsonGenerator gen, SerializerProvider serializers)
