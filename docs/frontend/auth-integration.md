@@ -182,10 +182,9 @@ Chứa các function:
 
 ```js
 register(payload)
-verifyOtp(accountId, otpCode, purpose)
+verifyOtp(email, otpCode)
 login(email, password)
 refreshToken(refreshToken)
-resendOtp(accountId, purpose)
 ```
 
 Mapping API:
@@ -195,7 +194,6 @@ register     -> POST /api/auth/register
 verifyOtp    -> POST /api/auth/verify
 login        -> POST /api/auth/login
 refreshToken -> POST /api/auth/refresh-token
-resendOtp    -> POST /api/auth/resend-otp
 ```
 
 ---
@@ -530,9 +528,8 @@ Request body:
 
 ```json
 {
-  "accountId": 1,
-  "otp": "123456",
-  "purpose": "REGISTRATION"
+  "email": "user@example.com",
+  "otp": "123456"
 }
 ```
 
@@ -553,23 +550,22 @@ AUTH_VERIFICATION_EXPIRED     -> OTP đã hết hạn.
 AUTH_ACCOUNT_NOT_FOUND        -> Không tìm thấy tài khoản.
 ```
 
-### 12.1. Verify OTP Resend Flow
+### 12.1. Request New OTP Flow
 
 Để hỗ trợ người dùng nhận lại OTP nếu chưa nhận được hoặc OTP bị hết hạn:
 
 1. Bổ sung nút **Gửi lại OTP**.
-2. Gọi API `resendOtp(pendingAccountId)`.
-3. Nhận response chứa `expiresIn` (300 giây) và `resendAvailableIn` (60 giây).
-4. Update lại UI và khởi động lại countdown (60 giây cooldown).
+2. Gọi API `sendOtp(email)`.
+3. Nhận response chứa `expiresIn` (300 giây).
+4. Update lại UI và khởi động lại countdown.
 5. Disable nút **Gửi lại OTP** trong thời gian cooldown.
 
-Error mapping khi Resend OTP:
+Error mapping khi Request New OTP:
 
 ```txt
 AUTH_ACCOUNT_NOT_FOUND        -> Tài khoản không tồn tại.
-AUTH_ACCOUNT_ALREADY_VERIFIED -> Tài khoản đã xác thực rồi.
 OTP_RATE_LIMIT                -> Phản hồi trả kèm `data: { "retryAfter": X }`. Frontend dùng X để setup lại countdown chờ.
-VALIDATION_ERROR              -> Thiếu accountId.
+VALIDATION_ERROR              -> Thiếu email.
 ```
 
 ---

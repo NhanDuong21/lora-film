@@ -252,7 +252,7 @@ Dưới đây là các kịch bản kiểm thử tích hợp chi tiết được
 - **Mục đích**: Kiểm tra cơ chế rate limiting/cooldown (chống spam) cho API gửi OTP.
 - **Các bước thực hiện**:
   1. Gửi lại mã OTP thành công.
-  2. Ngay lập tức dùng API (Postman/Curl) gọi tiếp POST `/api/auth/resend-otp` khi chưa hết 60s cooldown.
+  2. Ngay lập tức dùng API (Postman/Curl) gọi tiếp POST `/api/auth/send-otp` khi chưa hết 60s cooldown.
 - **Kết quả mong đợi**:
   - Backend từ chối với lỗi 429 Too Many Requests, mã `AUTH_OTP_RESEND_TOO_SOON`, trả về biến `retryAfter`.
 - **Trạng thái**: ĐẠT

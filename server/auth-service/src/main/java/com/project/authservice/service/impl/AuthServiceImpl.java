@@ -117,7 +117,7 @@ public class AuthServiceImpl implements AuthService {
 
 			Account existingAccount = accountRepository.findByEmail(email).orElse(null);
 			if (existingAccount != null) {
-				if (existingAccount.getRegistrationCompleted() == 1) {
+				if (!"PENDING".equals(existingAccount.getAccountStatus())) {
 					log.warn("Email already registered and verified: {}", email);
 					throw new EmailAlreadyExistsException();
 				} else {
@@ -200,13 +200,12 @@ public class AuthServiceImpl implements AuthService {
 					account.setEmail(email);
 					account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 					account.setRole(role);
-					account.setIsActive(0);
-					account.setRegistrationCompleted(0);
+					account.setAccountStatus("PENDING");
 					accountRepository.save(account);
 
 					String pendingKey = "pending_registration:" + email;
 					redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
-					verificationService.sendOtp(new SendOtpRequest(email, "REGISTRATION"));
+					verificationService.sendOtp(new SendOtpRequest(email));
 					redisTemplate.delete("temp_request:" + requestId);
 					
 					return new RegistrationInitiatedResponse(requestId, "Registration successful, please check your email for OTP");
@@ -256,7 +255,7 @@ public class AuthServiceImpl implements AuthService {
 
 	@Override
 	@Transactional
-	public void verifyRegistration(VerifyRequest request) {
+	public void verify(VerifyRequest request) {
 		verificationService.verify(request);
 
 		String email = request.getEmail();
@@ -264,8 +263,7 @@ public class AuthServiceImpl implements AuthService {
 
 		String json = redisTemplate.opsForValue().get(pendingKey);
 		if (json == null) {
-			log.error("Pending registration data not found for verified email {}", email);
-			throw new ResourceNotFoundException("Pending registration data not found");
+			return; // Not a registration verification, just regular OTP verification
 		}
 
 		PendingRegistrationData data;
@@ -282,7 +280,7 @@ public class AuthServiceImpl implements AuthService {
 		Account savedAccount = accountRepository.findByEmail(email)
 				.orElseThrow(() -> new ResourceNotFoundException("Account not found for email: " + email));
 
-		savedAccount.setRegistrationCompleted(1);
+		savedAccount.setAccountStatus("ACTIVE");
 		accountRepository.save(savedAccount);
 
 		log.info("Account verified successfully for email={} with accountId={}", email, savedAccount.getId());
@@ -325,16 +323,16 @@ public class AuthServiceImpl implements AuthService {
 			throw new InvalidCredentialsException();
 		}
 
-		// 3. Check registrationCompleted == 1
-		if (account.getRegistrationCompleted() == null || account.getRegistrationCompleted() != 1) {
+		// 3. Check account status
+		if ("PENDING".equals(account.getAccountStatus())) {
 			log.warn("Login failed: account is not verified for email {}", email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_NOT_VERIFIED", servletRequest);
 			throw new AccountNotVerifiedException(account.getId());
 		}
 
-		// 4. Check isActive == 1 (account must be active to log in)
-		if (account.getIsActive() == null || account.getIsActive() != 1) {
-			log.warn("Login failed: account is inactive for email {}", email);
+		// 4. Check if account is active
+		if (!"ACTIVE".equals(account.getAccountStatus())) {
+			log.warn("Login failed: account is inactive (status={}) for email {}", account.getAccountStatus(), email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_INACTIVE_ACCOUNT", servletRequest);
 			throw new AccountInactiveException();
 		}
@@ -415,12 +413,12 @@ public class AuthServiceImpl implements AuthService {
 				throw new InvalidRefreshTokenException("Account not found");
 			}
 
-			if (account.getIsActive() == null || account.getIsActive() != 1) {
-				throw new AccountInactiveException();
+			if ("PENDING".equals(account.getAccountStatus())) {
+				throw new AccountNotVerifiedException(account.getId());
 			}
 
-			if (account.getRegistrationCompleted() == null || account.getRegistrationCompleted() != 1) {
-				throw new AccountNotVerifiedException(account.getId());
+			if (!"ACTIVE".equals(account.getAccountStatus())) {
+				throw new AccountInactiveException();
 			}
 
 			// Calculate remaining duration until expiryDate

@@ -1,12 +1,10 @@
 package com.project.authservice.service;
 
-import com.project.authservice.dto.request.ResendOtpRequest;
 import com.project.authservice.dto.request.SendOtpRequest;
 import com.project.authservice.dto.request.VerifyRequest;
-import com.project.authservice.dto.response.ResendOtpResponse;
+import com.project.authservice.dto.response.SendOtpResponse;
 
 public interface VerificationService {
-    ResendOtpResponse sendOtp(SendOtpRequest request);
-    ResendOtpResponse resendOtp(ResendOtpRequest request);
+    SendOtpResponse sendOtp(SendOtpRequest request);
     void verify(VerifyRequest request);
 }

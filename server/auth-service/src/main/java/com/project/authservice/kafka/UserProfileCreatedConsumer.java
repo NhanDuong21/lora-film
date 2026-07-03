@@ -49,17 +49,15 @@ public class UserProfileCreatedConsumer {
                 return;
             }
 
-            if (account.getRegistrationCompleted() != null && account.getRegistrationCompleted() == 1) {
-                if (account.getIsActive() != null && account.getIsActive() == 1) {
-                    log.info("Account {} is already active.", accountId);
-                } else {
-                    account.setIsActive(1);
-                    accountRepository.save(account);
-                    log.info("Account {} successfully activated.", accountId);
-                }
-            } else {
+            if ("ACTIVE".equals(account.getAccountStatus())) {
+                log.info("Account {} is already active.", accountId);
+            } else if ("PENDING".equals(account.getAccountStatus())) {
                 log.warn("Account {} registration is not completed yet. Throwing exception to trigger retry.", accountId);
                 throw new RuntimeException("Account " + accountId + " registration is not completed. Retrying...");
+            } else {
+                account.setAccountStatus("ACTIVE");
+                accountRepository.save(account);
+                log.info("Account {} successfully activated.", accountId);
             }
 
             String pendingKey = "pending_registration:" + account.getEmail();

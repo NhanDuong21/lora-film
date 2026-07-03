@@ -286,7 +286,7 @@ Status: `401 Unauthorized`
   - Send OTP via email
   - Return 202 Accepted { requestId, message }
       ↓
-[Client] POST /api/auth/verify { email, otp, purpose: "REGISTRATION" }
+[Client] POST /api/auth/verify { email, otp }
       ↓
 [Auth Service]
   - Verify OTP

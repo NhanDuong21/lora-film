@@ -16,7 +16,6 @@ Tài liệu này mô tả chi tiết kiến trúc, cơ chế lưu trữ phiên l
   - `userRole`: Quyền của tài khoản (`CUSTOMER`, `EMPLOYEE`, `ADMIN`).
 - **sessionStorage**: Dùng làm kho lưu trữ tạm thời, bền bỉ cho luồng đăng ký (giữa màn hình Register, Verify OTP, Login):
   - `pending_otp_email`: Email đang chờ xác thực OTP.
-  - `pending_otp_purpose`: Mục đích gửi OTP (mặc định là `REGISTRATION`).
 - **React Context (`AuthContext`)**: Đóng vai trò là trung tâm dữ liệu xác thực (Single Source of Truth) cho toàn bộ ứng dụng, đồng bộ trạng thái đăng nhập tức thì giữa các component (ví dụ: `Header`, `AppRoutes` và `CustomerProfilePage`).
 
 ---
@@ -72,7 +71,7 @@ sequenceDiagram
   - Gửi yêu cầu đăng ký (`POST /api/auth/register`).
   - **Khi đăng ký thành công**:
     - Không cấp token đăng nhập ngay tại bước này.
-    - Lưu email đăng ký và mục đích xác thực (`REGISTRATION`) vào `sessionStorage`.
+    - Lưu email đăng ký vào `sessionStorage`.
     - Chuyển hướng sang màn hình Xác thực OTP (`/verify-otp`) kèm theo dữ liệu email qua `location.state` để tự điền.
   - **Khi xảy ra lỗi (Error Mapping)**:
     - `AUTH_EMAIL_ALREADY_EXISTS` $\rightarrow$ Hiển thị lỗi ngay bên dưới ô nhập Email.
@@ -90,12 +89,12 @@ sequenceDiagram
   2. Nếu không có, lấy thông tin từ `sessionStorage.getItem("pending_otp_email")`.
   3. Nếu cả hai đều không có, ứng dụng sẽ cung cấp ô nhập liệu Email thủ công để người dùng tự điền.
 * **Thao tác xác thực**:
-  - Khi người dùng điền đủ 6 chữ số và nhấn nút xác thực, ứng dụng gọi API `POST /api/auth/verify` với payload: `{ email, otp, purpose }`.
+  - Khi người dùng điền đủ 6 chữ số và nhấn nút xác thực, ứng dụng gọi API `POST /api/auth/verify` với payload: `{ email, otp }`.
   - **Xác thực thành công**: Xoá kho lưu trữ tạm trong `sessionStorage`, chuyển hướng người dùng về trang Đăng nhập (`/login`) kèm theo thông báo kích hoạt tài khoản thành công và tự động điền sẵn Email của họ.
 * **Cơ chế gửi lại OTP & Tránh Rate Limit**:
   - Có đồng hồ đếm ngược chờ gửi lại OTP (mặc định là 60 giây).
   - Khi đếm ngược kết thúc, nút "Gửi lại mã" được mở khoá.
-  - Nhấp nút gửi lại gọi API `POST /api/auth/resend-otp`.
+  - Nhấp nút gửi lại gọi API `POST /api/auth/send-otp`.
   - Nếu gặp lỗi `OTP_RATE_LIMIT`, ứng dụng cập nhật đồng hồ đếm ngược theo thời gian chờ do API Backend phản hồi (`retryAfter`).
 
 ---

@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.project.authservice.dto.request.ResendOtpRequest;
 import com.project.authservice.dto.request.SendOtpRequest;
 import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.entity.Account;
@@ -42,8 +41,8 @@ public class OtpVerificationServiceImpl implements VerificationService {
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     }
 
-    private String getRedisKey(String purpose, String email) {
-        return "otp:" + purpose + ":" + email;
+    private String getRedisKey(String email) {
+        return "otp:" + email;
     }
 
     private RedisOtpData getRedisOtpData(String key) {
@@ -72,18 +71,14 @@ public class OtpVerificationServiceImpl implements VerificationService {
     }
 
     @Override
-    public com.project.authservice.dto.response.ResendOtpResponse sendOtp(SendOtpRequest request) {
+    public com.project.authservice.dto.response.SendOtpResponse sendOtp(SendOtpRequest request) {
         String email = request.getEmail();
-        String purpose = request.getPurpose();
         
-        Long accountId = null;
-        if (!"REGISTRATION".equals(purpose)) {
-            Account account = accountRepository.findByEmail(email)
-                    .orElseThrow(AccountNotFoundException::new);
-            accountId = account.getId();
-        }
+        Account account = accountRepository.findByEmail(email)
+                .orElseThrow(AccountNotFoundException::new);
+        Long accountId = account.getId();
         
-        String key = getRedisKey(purpose, email);
+        String key = getRedisKey(email);
 
         RedisOtpData existingData = getRedisOtpData(key);
         if (existingData != null) {
@@ -110,52 +105,12 @@ public class OtpVerificationServiceImpl implements VerificationService {
         System.out.println("\n==================================");
         System.out.println("OTP GENERATED (Do not use in production)");
         System.out.println("Email: " + email);
-        System.out.println("Purpose: " + purpose);
         System.out.println("OTP: " + otp);
         System.out.println("==================================\n");
 
-        log.info("OTP generated for email={} purpose={}", email, purpose);
+        log.info("OTP generated for email={}", email);
         
-        return new com.project.authservice.dto.response.ResendOtpResponse(accountId, 300L, 60L);
-    }
-
-    @Override
-    public com.project.authservice.dto.response.ResendOtpResponse resendOtp(ResendOtpRequest request) {
-        String email = request.getEmail();
-        String purpose = request.getPurpose();
-
-        if ("REGISTRATION".equals(purpose)) {
-            String pendingKey = "pending_registration:" + email;
-            String json = redisTemplate.opsForValue().get(pendingKey);
-            if (json == null) {
-                if (accountRepository.existsByEmail(email)) {
-                    throw new AccountAlreadyVerifiedException();
-                }
-                throw new AccountNotFoundException();
-            }
-
-            // Extend TTLs for Registration state
-            redisTemplate.expire(pendingKey, Duration.ofMinutes(15));
-            try {
-                com.project.authservice.entity.PendingRegistrationData data = objectMapper.readValue(json, com.project.authservice.entity.PendingRegistrationData.class);
-                if (data != null && data.getRequest() != null) {
-                    String phone = data.getRequest().getPhoneNumber();
-                    String cccd = data.getRequest().getCccd();
-                    if (phone != null) {
-                        redisTemplate.expire("reserved_phone:" + phone, Duration.ofMinutes(15));
-                    }
-                    if (cccd != null) {
-                        redisTemplate.expire("reserved_cccd:" + cccd, Duration.ofMinutes(15));
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Failed to parse PendingRegistrationData while extending TTL in resendOtp", e);
-            }
-        } else {
-            accountRepository.findByEmail(email).orElseThrow(AccountNotFoundException::new);
-        }
-
-        return sendOtp(new SendOtpRequest(email, purpose));
+        return new com.project.authservice.dto.response.SendOtpResponse(accountId, 300L);
     }
 
     @Override
@@ -163,19 +118,16 @@ public class OtpVerificationServiceImpl implements VerificationService {
     public void verify(VerifyRequest request) {
         String email = request.getEmail();
         String otp = request.getOtp();
-        String purpose = request.getPurpose();
         
-        if (!"REGISTRATION".equals(purpose)) {
-            if (email != null) {
-                if (!accountRepository.existsByEmail(email)) {
-                    throw new AccountNotFoundException();
-                }
-            } else {
+        if (email != null) {
+            if (!accountRepository.existsByEmail(email)) {
                 throw new AccountNotFoundException();
             }
+        } else {
+            throw new AccountNotFoundException();
         }
         
-        String key = getRedisKey(purpose, email);
+        String key = getRedisKey(email);
 
         RedisOtpData existingData = getRedisOtpData(key);
         if (existingData == null) {
@@ -186,7 +138,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
             int attempts = existingData.getFailedAttempts() + 1;
             if (attempts >= 5) {
                 redisTemplate.delete(key);
-                log.warn("OTP max failed attempts reached for email={} purpose={}. Key deleted.", email, purpose);
+                log.warn("OTP max failed attempts reached for email={}. Key deleted.", email);
             } else {
                 existingData.setFailedAttempts(attempts);
                 // Preserve remaining TTL when updating attempts
@@ -205,17 +157,14 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         // Success
         redisTemplate.delete(key);
-        log.info("OTP verified successfully for email={} purpose={}", email, purpose);
+        log.info("OTP verified successfully for email={}", email);
 
-        if (!"REGISTRATION".equals(purpose)) {
-            if (email != null) {
-                Account account = accountRepository.findByEmail(email).orElse(null);
-                if (account != null) {
-                    account.setRegistrationCompleted(1);
-                    account.setIsActive(1);
-                    accountRepository.save(account);
-                    log.info("Account {} activated successfully.", email);
-                }
+        if (email != null) {
+            Account account = accountRepository.findByEmail(email).orElse(null);
+            if (account != null) {
+                account.setAccountStatus("ACTIVE");
+                accountRepository.save(account);
+                log.info("Account {} activated successfully.", email);
             }
         }
     }
