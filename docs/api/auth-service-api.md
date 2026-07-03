@@ -1066,7 +1066,9 @@ Status: **500 Internal Server Error**
 | 200 | OK | Đăng nhập thành công và trả về bộ Token đầy đủ |
 | 400 | Bad Request | Dữ liệu gửi lên không đúng định dạng kiểm tra |
 | 401 | Unauthorized | Nhập sai tài khoản email hoặc mật khẩu |
-| 403 | Forbidden | Tài khoản chưa kích hoạt OTP hoặc bị khóa (`account_status` không phải 'ACTIVE') |
+| 422 | Unprocessable Content | Dữ liệu gửi lên không đúng định dạng kiểm tra |
+| 403 | Forbidden | Tài khoản chưa kích hoạt OTP hoặc bị khóa (`account_status` không phải 'ACTIVE')   |
+
 | 500 | Internal Server Error | Gặp lỗi không xác định tại hệ thống máy chủ |
 
 ---
