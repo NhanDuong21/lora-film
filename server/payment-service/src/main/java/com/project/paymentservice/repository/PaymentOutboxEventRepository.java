@@ -19,12 +19,15 @@ public interface PaymentOutboxEventRepository extends JpaRepository<PaymentOutbo
     Page<PaymentOutboxEvent> findByStatus(OutboxStatus status, Pageable pageable);
 
     @Query("SELECT o FROM PaymentOutboxEvent o WHERE o.status = :status AND (o.nextRetryAt IS NULL OR o.nextRetryAt <= :now)")
-    Page<PaymentOutboxEvent> findRetryableRecords(@Param("status") OutboxStatus status, @Param("now") LocalDateTime now, Pageable pageable);
+    Page<PaymentOutboxEvent> findRetryableRecords(@Param("status") OutboxStatus status, @Param("now") LocalDateTime now,
+            Pageable pageable);
 
-    Page<PaymentOutboxEvent> findByAggregateTypeAndAggregateId(String aggregateType, String aggregateId, Pageable pageable);
+    Page<PaymentOutboxEvent> findByAggregateTypeAndAggregateId(String aggregateType, String aggregateId,
+            Pageable pageable);
 
     Page<PaymentOutboxEvent> findByStatusIn(List<OutboxStatus> statuses, Pageable pageable);
 
     @Query(value = "SELECT * FROM payment_outbox_events WHERE status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= :now) ORDER BY created_at LIMIT :batchSize FOR UPDATE SKIP LOCKED", nativeQuery = true)
-    List<PaymentOutboxEvent> findAndClaimPendingEvents(@Param("now") LocalDateTime now, @Param("batchSize") int batchSize);
+    List<PaymentOutboxEvent> findAndClaimPendingEvents(@Param("now") LocalDateTime now,
+            @Param("batchSize") int batchSize);
 }

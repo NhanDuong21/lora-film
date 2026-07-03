@@ -21,7 +21,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByBookingIdAndAttemptNumber(Long bookingId, Integer attemptNumber);
 
-    Optional<Payment> findByPaymentMethodAndExternalTransactionId(PaymentMethod paymentMethod, String externalTransactionId);
+    Optional<Payment> findByPaymentMethodAndExternalTransactionId(PaymentMethod paymentMethod,
+            String externalTransactionId);
 
     Page<Payment> findByReconciliationStatus(ReconciliationStatus reconciliationStatus, Pageable pageable);
 
