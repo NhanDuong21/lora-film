@@ -36,9 +36,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
-        List<ApiResponse.ValidationError> validationErrors = ex.getBindingResult().getFieldErrors().stream()
+    @ExceptionHandler({MethodArgumentNotValidException.class, org.springframework.validation.BindException.class})
+    public ResponseEntity<ApiResponse<Object>> handleValidationExceptions(Exception ex) {
+        org.springframework.validation.BindingResult bindingResult;
+        if (ex instanceof MethodArgumentNotValidException) {
+            bindingResult = ((MethodArgumentNotValidException) ex).getBindingResult();
+        } else {
+            bindingResult = ((org.springframework.validation.BindException) ex).getBindingResult();
+        }
+
+        boolean hasInvalidChannelError = bindingResult.getFieldErrors().stream()
+                .anyMatch(fieldError -> {
+                    if (!"channelType".equals(fieldError.getField())) {
+                        return false;
+                    }
+                    if ("typeMismatch".equals(fieldError.getCode())) {
+                        return true;
+                    }
+                    String defaultMsg = fieldError.getDefaultMessage();
+                    return defaultMsg != null && (
+                            defaultMsg.contains("NotificationChannel") ||
+                            defaultMsg.contains("Failed to convert") ||
+                            defaultMsg.contains("typeMismatch")
+                    );
+                });
+
+        if (hasInvalidChannelError) {
+            log.warn("Invalid notification channel type provided in validation");
+            ApiResponse<Object> response = ApiResponse.error("Invalid notification channel type provided", "NOTIFICATION_INVALID_CHANNEL");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        List<ApiResponse.ValidationError> validationErrors = bindingResult.getFieldErrors().stream()
                 .map(fieldError -> new ApiResponse.ValidationError(fieldError.getField(), fieldError.getDefaultMessage()))
                 .collect(Collectors.toList());
 

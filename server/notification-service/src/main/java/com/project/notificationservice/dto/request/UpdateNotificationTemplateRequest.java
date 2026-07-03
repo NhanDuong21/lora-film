@@ -8,22 +8,15 @@ import jakarta.validation.constraints.Size;
 
 public class UpdateNotificationTemplateRequest {
 
-    @NotBlank(message = "Template code is required")
-    @Size(max = 100, message = "Template code must not exceed 100 characters")
-    @Pattern(regexp = "^\\s*[A-Za-z0-9_]+\\s*$", message = "Template code must only contain alphanumeric characters and underscores")
     private String templateCode;
 
-    @NotBlank(message = "Title is required")
     @Size(max = 255, message = "Title must not exceed 255 characters")
     private String title;
 
-    @NotBlank(message = "Content is required")
-    private String content;
+    private org.springframework.web.multipart.MultipartFile htmlFile;
 
-    @NotNull(message = "Channel type is required")
     private NotificationChannel channelType;
 
-    @NotNull(message = "Active status is required")
     private Boolean isActive;
 
     @NotNull(message = "Version is required")
@@ -48,12 +41,12 @@ public class UpdateNotificationTemplateRequest {
         this.title = title;
     }
 
-    public String getContent() {
-        return content;
+    public org.springframework.web.multipart.MultipartFile getHtmlFile() {
+        return htmlFile;
     }
 
-    public void setContent(String content) {
-        this.content = content;
+    public void setHtmlFile(org.springframework.web.multipart.MultipartFile htmlFile) {
+        this.htmlFile = htmlFile;
     }
 
     public NotificationChannel getChannelType() {
