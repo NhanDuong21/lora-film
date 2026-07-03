@@ -1,9 +1,9 @@
 package com.project.paymentservice.entity;
 
+import com.project.paymentservice.enumtype.ActorType;
+import com.project.paymentservice.enumtype.PaymentLogEventType;
 import com.project.paymentservice.enumtype.PaymentStatus;
 import jakarta.persistence.*;
-import org.hibernate.annotations.CreationTimestamp;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -14,9 +14,22 @@ public class PaymentLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "payment_id", nullable = false)
-    private Payment payment;
+    @Column(name = "payment_id", nullable = false)
+    private Long paymentId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "event_type", nullable = false, length = 50)
+    private PaymentLogEventType eventType;
+
+    @Column(name = "source", nullable = false, length = 50)
+    private String source;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actor_type", nullable = false, length = 30)
+    private ActorType actorType;
+
+    @Column(name = "actor_account_id")
+    private Long actorAccountId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "previous_status", length = 30)
@@ -26,14 +39,20 @@ public class PaymentLog {
     @Column(name = "current_status", nullable = false, length = 30)
     private PaymentStatus currentStatus;
 
-    @Column(name = "log_message", columnDefinition = "TEXT")
-    private String logMessage;
+    @Column(name = "message_sanitized", columnDefinition = "TEXT")
+    private String messageSanitized;
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "metadata_sanitized", columnDefinition = "TEXT")
+    private String metadataSanitized;
+
+    @Column(name = "correlation_id", length = 100)
+    private String correlationId;
+
+    @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    public PaymentLog() {}
+    public PaymentLog() {
+    }
 
     public Long getId() {
         return id;
@@ -43,12 +62,44 @@ public class PaymentLog {
         this.id = id;
     }
 
-    public Payment getPayment() {
-        return payment;
+    public Long getPaymentId() {
+        return paymentId;
     }
 
-    public void setPayment(Payment payment) {
-        this.payment = payment;
+    public void setPaymentId(Long paymentId) {
+        this.paymentId = paymentId;
+    }
+
+    public PaymentLogEventType getEventType() {
+        return eventType;
+    }
+
+    public void setEventType(PaymentLogEventType eventType) {
+        this.eventType = eventType;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
+    }
+
+    public ActorType getActorType() {
+        return actorType;
+    }
+
+    public void setActorType(ActorType actorType) {
+        this.actorType = actorType;
+    }
+
+    public Long getActorAccountId() {
+        return actorAccountId;
+    }
+
+    public void setActorAccountId(Long actorAccountId) {
+        this.actorAccountId = actorAccountId;
     }
 
     public PaymentStatus getPreviousStatus() {
@@ -67,12 +118,28 @@ public class PaymentLog {
         this.currentStatus = currentStatus;
     }
 
-    public String getLogMessage() {
-        return logMessage;
+    public String getMessageSanitized() {
+        return messageSanitized;
     }
 
-    public void setLogMessage(String logMessage) {
-        this.logMessage = logMessage;
+    public void setMessageSanitized(String messageSanitized) {
+        this.messageSanitized = messageSanitized;
+    }
+
+    public String getMetadataSanitized() {
+        return metadataSanitized;
+    }
+
+    public void setMetadataSanitized(String metadataSanitized) {
+        this.metadataSanitized = metadataSanitized;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
     }
 
     public LocalDateTime getCreatedAt() {
