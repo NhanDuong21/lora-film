@@ -290,7 +290,7 @@ Status: `401 Unauthorized`
       ↓
 [Auth Service]
   - Verify OTP
-  - Activate Account (registration_completed=1)
+  - Activate Account (account_status='ACTIVE')
   - Publish ACCOUNT_VERIFIED
       ↓ Kafka
 [User Service]

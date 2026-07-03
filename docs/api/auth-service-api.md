@@ -95,12 +95,12 @@ React Register Form
 ← User Service publishes REGISTRATION_VALIDATION_RESULT to Kafka
 → Auth Service resumes:
    ↳ If FAILED → return 409 Conflict
-   ↳ If SUCCESS → create account in DB (is_active=0, registration_completed=0)
+   ↳ If SUCCESS → create account in DB (account_status='PENDING')
    ↳ Send OTP to email
    ↳ Return 202 Accepted with requestId
 → React OTP Verify Form
 → API Gateway :8080 → Auth Service :8081 (verify OTP)
-   ↳ Activate account (registration_completed=1)
+   ↳ Activate account (account_status='ACTIVE')
    ↳ Publish ACCOUNT_VERIFIED to Kafka
 ← User Service consumes ACCOUNT_VERIFIED → creates User Profile in DB
 → Redirect to Login
@@ -291,7 +291,7 @@ Frontend gửi thông tin đăng ký lên Backend thông qua API Gateway. Backen
 3. Lưu dữ liệu đăng ký tạm thời vào Redis.
 4. Publish sự kiện `REGISTRATION_VALIDATION_REQUESTED` lên Kafka để User Service kiểm tra phone/CCCD.
 5. Chờ kết quả validation (tối đa 10 giây).
-6. Nếu validation thành công: tạo tài khoản trong DB (`is_active=0`, `registration_completed=0`) và gửi OTP qua email.
+6. Nếu validation thành công: tạo tài khoản trong DB (`account_status='PENDING'`) và gửi OTP qua email.
 7. Trả về `requestId` cho Frontend.
 
 Sau khi OTP được xác thực thành công (qua `/api/auth/verify`), Auth Service mới publish sự kiện `ACCOUNT_VERIFIED` lên Kafka để User Service tạo User Profile.
@@ -381,7 +381,7 @@ Các field sau không nhất thiết để người dùng nhập tay. Hệ thố
 | Birthday age limit      | Người dùng đăng ký phải từ 13 tuổi trở lên |
 | Default role            | User mới mặc định có role `CUSTOMER` |
 | Hash password           | Mật khẩu phải được hash trước khi lưu |
-| Account status          | Tài khoản mới tạo mặc định `is_active = 0` và `registration_completed = 0` |
+| Account status          | Tài khoản mới tạo mặc định `account_status = 'PENDING'` |
 | OTP Generation          | Sinh mã xác thực OTP ngẫu nhiên 6 chữ số có hiệu lực trong 5 phút và lưu tạm thời |
 | Kafka Validation Timeout| Nếu User Service không phản hồi trong 10 giây → trả 500 Internal Server Error |
 
@@ -396,7 +396,7 @@ Receive register request
 → Wait up to 10 seconds for `REGISTRATION_VALIDATION_RESULT` from User Service
    ↳ If FAILED (phone/CCCD duplicate) → return 409 Conflict
    ↳ If TIMEOUT → return 500 Internal Server Error
-→ Create account in Auth Service DB (`is_active = 0`, `registration_completed = 0`)
+→ Create account in Auth Service DB (`account_status = 'PENDING'`)
 → Assign default role `CUSTOMER`
 → Hash password
 → Send OTP via email
@@ -605,7 +605,7 @@ Status: **500 Internal Server Error**
 
 ### 7.1. Mục Tiêu API
 
-API này dùng để xác thực mã định danh OTP sau khi đăng ký thành công. Khi Frontend gửi đúng mã số OTP, hệ thống sẽ chuyển đổi trạng thái `registration_completed` của tài khoản lên `1`, chính thức mở quyền đăng nhập hệ thống.
+API này dùng để xác thực mã định danh OTP sau khi đăng ký thành công. Khi Frontend gửi đúng mã số OTP, hệ thống sẽ chuyển đổi trạng thái `account_status` của tài khoản lên `'ACTIVE'`, chính thức mở quyền đăng nhập hệ thống.
 
 ### 7.2. Thông Tin Endpoint
 
@@ -823,7 +823,7 @@ Status: **429 Too Many Requests**
 ### 7.6.5. Ghi Chú Bảo Mật & Business Rules
 
 * Account gọi API bắt buộc phải tồn tại.
-* Nếu `purpose` là `REGISTRATION` thì tài khoản phải chưa được kích hoạt thành công (`registration_completed` = 0). Các mục đích khác không bị giới hạn.
+* Nếu `purpose` là `REGISTRATION` thì tài khoản phải đang trong trạng thái chờ kích hoạt (`account_status` = 'PENDING'). Các mục đích khác không bị giới hạn.
 * Mỗi lần gọi `Resend OTP`, mã OTP cũ chưa sử dụng sẽ bị thay thế (ghi đè trên Redis) và tự động hết hiệu lực.
 * Không trả mã OTP mới sinh dưới dạng chuỗi rõ ràng (plaintext) qua phản hồi HTTP.
 * Nếu Notification Service chưa sẵn sàng (như trong môi trường DEV/TEST), hệ thống tạm thời chỉ log mã OTP ra Console.
@@ -1066,7 +1066,7 @@ Status: **500 Internal Server Error**
 | 200 | OK | Đăng nhập thành công và trả về bộ Token đầy đủ |
 | 400 | Bad Request | Dữ liệu gửi lên không đúng định dạng kiểm tra |
 | 401 | Unauthorized | Nhập sai tài khoản email hoặc mật khẩu |
-| 403 | Forbidden | Tài khoản chưa kích hoạt OTP (`registrationCompleted != 1`) hoặc bị khóa (`is_active = 0`) |
+| 403 | Forbidden | Tài khoản chưa kích hoạt OTP hoặc bị khóa (`account_status` không phải 'ACTIVE') |
 | 500 | Internal Server Error | Gặp lỗi không xác định tại hệ thống máy chủ |
 
 ---
@@ -1290,22 +1290,32 @@ CREATE TABLE `accounts` (
   `email` varchar(100) UNIQUE NOT NULL COMMENT 'Dùng làm tên đăng nhập chính',
   `password_hash` varchar(255) NOT NULL,
   `role_id` int NOT NULL,
-  `is_active` int DEFAULT 0 COMMENT '1: Hoạt động, 0: Bị khóa',
-  `registration_completed` int DEFAULT 0 COMMENT '1: Đã xác thực OTP, 0: Tài khoản mới chờ xác thực',
-  `created_at` timestamp DEFAULT (now()),
-  `updated_at` timestamp DEFAULT (now())
+  `account_status` varchar(20) DEFAULT 'PENDING' COMMENT 'PENDING, ACTIVE, SUSPENDED, BLOCKED',
+  `version` int DEFAULT 0 COMMENT 'For optimistic locking',
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
 CREATE TABLE `roles` (
   `id` int PRIMARY KEY AUTO_INCREMENT,
   `role_name` varchar(50) UNIQUE NOT NULL COMMENT 'CUSTOMER, STAFF, ADMIN',
-  `description` varchar(255)
+  `description` varchar(255),
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
 CREATE TABLE `permissions` (
   `id` int PRIMARY KEY AUTO_INCREMENT,
   `permission_code` varchar(100) UNIQUE NOT NULL,
-  `description` varchar(255)
+  `description` varchar(255),
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
 CREATE TABLE `roles_permissions` (
@@ -1317,10 +1327,13 @@ CREATE TABLE `roles_permissions` (
 CREATE TABLE `refresh_tokens` (
   `id` bigint PRIMARY KEY AUTO_INCREMENT,
   `account_id` bigint NOT NULL,
-  `token` varchar(255) UNIQUE NOT NULL,
+  `token_hash` varchar(255) UNIQUE NOT NULL,
   `expiry_date` timestamp NOT NULL,
-  `is_revoked` boolean DEFAULT false COMMENT 'Đã thu hồi hay chưa',
-  `created_at` timestamp DEFAULT (now())
+  `is_revoked` boolean DEFAULT false,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
 CREATE TABLE `audit_logs` (
@@ -1329,13 +1342,36 @@ CREATE TABLE `audit_logs` (
   `action` varchar(100) NOT NULL,
   `ip_address` varchar(45),
   `user_agent` varchar(255),
-  `created_at` timestamp DEFAULT (now())
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
-ALTER TABLE `accounts` ADD FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
-ALTER TABLE `roles_permissions` ADD FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
-ALTER TABLE `roles_permissions` ADD FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE;
-ALTER TABLE `refresh_tokens` ADD FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
+CREATE TABLE `account_providers` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `account_id` bigint NOT NULL,
+  `provider_name` varchar(50) NOT NULL COMMENT 'google, facebook, apple, github',
+  `provider_account_id` varchar(255) NOT NULL COMMENT 'Provider specific user ID (e.g. sub in JWT)',
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint,
+  UNIQUE KEY `uk_provider_account` (`provider_name`, `provider_account_id`)
+);
+
+ALTER TABLE `accounts` ADD CONSTRAINT `fk_accounts_roles` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE RESTRICT;
+ALTER TABLE `roles_permissions` ADD CONSTRAINT `fk_roles_permissions_roles` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
+ALTER TABLE `roles_permissions` ADD CONSTRAINT `fk_roles_permissions_permissions` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE;
+ALTER TABLE `refresh_tokens` ADD CONSTRAINT `fk_refresh_tokens_accounts` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
+ALTER TABLE `account_providers` ADD CONSTRAINT `fk_account_providers_accounts` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
+
+CREATE INDEX `idx_accounts_email` ON `accounts` (`email`);
+CREATE INDEX `idx_accounts_role_id` ON `accounts` (`role_id`);
+CREATE INDEX `idx_refresh_tokens_account_id` ON `refresh_tokens` (`account_id`);
+CREATE INDEX `idx_audit_logs_account_id` ON `audit_logs` (`account_id`);
+CREATE INDEX `idx_audit_logs_action` ON `audit_logs` (`action`);
+CREATE INDEX `idx_account_providers_account_id` ON `account_providers` (`account_id`);
 ```
 
 ### 11.3. User Service Schema Đề Xuất Bổ Sung
