@@ -95,12 +95,12 @@ React Register Form
 ← User Service publishes REGISTRATION_VALIDATION_RESULT to Kafka
 → Auth Service resumes:
    ↳ If FAILED → return 409 Conflict
-   ↳ If SUCCESS → create account in DB (is_active=0, registration_completed=0)
+   ↳ If SUCCESS → create account in DB (account_status='PENDING')
    ↳ Send OTP to email
    ↳ Return 202 Accepted with requestId
 → React OTP Verify Form
 → API Gateway :8080 → Auth Service :8081 (verify OTP)
-   ↳ Activate account (registration_completed=1)
+   ↳ Activate account (account_status='ACTIVE')
    ↳ Publish ACCOUNT_VERIFIED to Kafka
 ← User Service consumes ACCOUNT_VERIFIED → creates User Profile in DB
 → Redirect to Login
@@ -291,7 +291,7 @@ Frontend gửi thông tin đăng ký lên Backend thông qua API Gateway. Backen
 3. Lưu dữ liệu đăng ký tạm thời vào Redis.
 4. Publish sự kiện `REGISTRATION_VALIDATION_REQUESTED` lên Kafka để User Service kiểm tra phone/CCCD.
 5. Chờ kết quả validation (tối đa 10 giây).
-6. Nếu validation thành công: tạo tài khoản trong DB (`is_active=0`, `registration_completed=0`) và gửi OTP qua email.
+6. Nếu validation thành công: tạo tài khoản trong DB (`account_status='PENDING'`) và gửi OTP qua email.
 7. Trả về `requestId` cho Frontend.
 
 Sau khi OTP được xác thực thành công (qua `/api/auth/verify`), Auth Service mới publish sự kiện `ACCOUNT_VERIFIED` lên Kafka để User Service tạo User Profile.
@@ -381,11 +381,24 @@ Các field sau không nhất thiết để người dùng nhập tay. Hệ thố
 | Birthday age limit      | Người dùng đăng ký phải từ 13 tuổi trở lên |
 | Default role            | User mới mặc định có role `CUSTOMER` |
 | Hash password           | Mật khẩu phải được hash trước khi lưu |
-| Account status          | Tài khoản mới tạo mặc định `is_active = 0` và `registration_completed = 0` |
+| Account status          | Tài khoản mới tạo mặc định `account_status = 'PENDING'` |
 | OTP Generation          | Sinh mã xác thực OTP ngẫu nhiên 6 chữ số có hiệu lực trong 5 phút và lưu tạm thời |
 | Kafka Validation Timeout| Nếu User Service không phản hồi trong 10 giây → trả 500 Internal Server Error |
 
-### 6.9. Backend Processing Flow
+### 6.9. Validation Priority
+
+Hệ thống tuân thủ nguyên tắc ưu tiên khi validate dữ liệu. Mỗi field chỉ trả về **MỘT** lỗi đầu tiên gặp phải theo thứ tự ưu tiên sau:
+
+1. **Required** (e.g., Không được để trống)
+2. **Format** (e.g., Sai định dạng email, sai định dạng CCCD)
+3. **Length** (e.g., Độ dài không hợp lệ)
+4. **Business Rule** (e.g., Ngày sinh không khớp CCCD)
+
+Lưu ý:
+- Nếu nhiều field cùng bị lỗi, hệ thống sẽ trả về danh sách lỗi của tất cả các field đó (mỗi field một lỗi).
+- **Malformed JSON** (gửi lên không phải JSON hợp lệ) sẽ luôn trả về `400 Bad Request` và KHÔNG BAO GIỜ bị chuyển thành `422 Unprocessable Content`.
+
+### 6.10. Backend Processing Flow
 
 Receive register request
 → Validate request body
@@ -396,19 +409,19 @@ Receive register request
 → Wait up to 10 seconds for `REGISTRATION_VALIDATION_RESULT` from User Service
    ↳ If FAILED (phone/CCCD duplicate) → return 409 Conflict
    ↳ If TIMEOUT → return 500 Internal Server Error
-→ Create account in Auth Service DB (`is_active = 0`, `registration_completed = 0`)
+→ Create account in Auth Service DB (`account_status = 'PENDING'`)
 → Assign default role `CUSTOMER`
 → Hash password
 → Send OTP via email
-→ Return 202 Accepted with requestId and message
+→ Return 200 OK with requestId and message
 
-### 6.10. Thông Tin Tạo User Profile
+### 6.11. Thông Tin Tạo User Profile
 
 User Profile **không được tạo ngay** khi Register. Nó chỉ được tạo sau khi OTP xác thực thành công (Verify OTP), thông qua sự kiện Kafka `ACCOUNT_VERIFIED`. Dữ liệu profile sẽ được lấy từ bản ghi tạm thời trong Redis.
 
-### 6.11. Response Success
+### 6.12. Response Success
 
-Status: **202 Accepted**
+Status: **200 OK**
 
 ```json
 {
@@ -421,7 +434,7 @@ Status: **202 Accepted**
 }
 ```
 
-### 6.12. Giải Thích Field Response
+### 6.13. Giải Thích Field Response
 
 | Field | Type | Mô tả |
 | :--- | :--- | :--- |
@@ -430,7 +443,7 @@ Status: **202 Accepted**
 | data.requestId | string | UUID request (dùng để tracking, không cần gửi lại) |
 | data.message | string | Thông báo hướng dẫn người dùng kiểm tra email OTP |
 
-### 6.13. Response Error
+### 6.14. Response Error
 
 **Case 1: Email đã tồn tại**
 Status: **409 Conflict**
@@ -507,8 +520,8 @@ Status: **409 Conflict**
 }
 ```
 
-**Case 5: CCCD không hợp lệ**
-Status: **400 Bad Request**
+**Case 5: CCCD không hợp lệ (Business Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -519,8 +532,8 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 6: Ngày sinh không khớp với CCCD**
-Status: **400 Bad Request**
+**Case 6: Ngày sinh không khớp với CCCD (Business Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -531,8 +544,8 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 7: Ngày sinh ở tương lai**
-Status: **400 Bad Request**
+**Case 7: Ngày sinh ở tương lai (Business Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -542,8 +555,8 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 6: Chưa đủ 13 tuổi**
-Status: **400 Bad Request**
+**Case 8: Chưa đủ 13 tuổi (Business Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -553,51 +566,57 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 7: Dữ liệu gửi lên không hợp lệ**
-Status: **400 Bad Request**
+**Case 9: Dữ liệu gửi lên không hợp lệ (Bean Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
   "success": false,
   "message": "Validation failed",
   "errorCode": "VALIDATION_ERROR",
+  "data": null,
   "errors": [
     {
       "field": "email",
+      "code": "Email",
       "message": "Email is invalid"
     },
     {
       "field": "password",
+      "code": "Size",
       "message": "password length must be between 8 and 50"
     },
     {
       "field": "cccd",
+      "code": "Pattern",
       "message": "CCCD must contain 12 digits"
     }
   ]
 }
 ```
 
-**Case 8: Kafka validation timeout (User Service không phản hồi trong 10s)**
-Status: **500 Internal Server Error**
+**Case 10: Kafka validation timeout (User Service không phản hồi trong 10s) hoặc Dependency Unavailable**
+Status: **504 Gateway Timeout** hoặc **503 Service Unavailable**
 
 ```json
 {
   "success": false,
-  "message": "Internal server error",
-  "errorCode": "INTERNAL_SERVER_ERROR",
+  "message": "Gateway timeout. Please try again later.",
+  "errorCode": "GATEWAY_TIMEOUT",
   "data": null
 }
 ```
 
-### 6.14. Danh Sách Status Code
+### 6.15. Danh Sách Status Code
 
 | Status Code | Ý nghĩa | Khi nào xảy ra |
 | :--- | :--- | :--- |
-| 202 | Accepted | Đăng ký thành công, OTP đã gửi qua email |
-| 400 | Bad Request | Dữ liệu gửi lên không đúng định dạng kiểm tra |
-| 409 | Conflict | Email, phone hoặc CCCD đã tồn tại |
-| 500 | Internal Server Error | Gặp lỗi không xác định hoặc Kafka timeout |
+| 200 | OK | Đăng ký thành công, OTP đã gửi qua email |
+| 400 | Bad Request | Lỗi Malformed JSON (dữ liệu gửi lên không phải JSON hợp lệ) |
+| 409 | Conflict | Lỗi Duplicate Data: Email, phone hoặc CCCD đã tồn tại |
+| 422 | Unprocessable Content | Lỗi Bean Validation (format) hoặc Business Validation (logic) |
+| 503 | Service Unavailable | Không thể kết nối tới Redis (Dependency unavailable) |
+| 504 | Gateway Timeout | Lỗi Timeout khi gọi Kafka tới User Service |
 
 ---
 
@@ -605,7 +624,7 @@ Status: **500 Internal Server Error**
 
 ### 7.1. Mục Tiêu API
 
-API này dùng để xác thực mã định danh OTP sau khi đăng ký thành công. Khi Frontend gửi đúng mã số OTP, hệ thống sẽ chuyển đổi trạng thái `registration_completed` của tài khoản lên `1`, chính thức mở quyền đăng nhập hệ thống.
+API này dùng để xác thực mã định danh OTP sau khi đăng ký thành công. Khi Frontend gửi đúng mã số OTP, hệ thống sẽ chuyển đổi trạng thái `account_status` của tài khoản lên `'ACTIVE'`, chính thức mở quyền đăng nhập hệ thống.
 
 ### 7.2. Thông Tin Endpoint
 
@@ -645,7 +664,7 @@ Status: **200 OK**
 ### 7.5. Response Error
 
 **Case 1: Mã OTP không chính xác**
-Status: **400 Bad Request**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -657,7 +676,7 @@ Status: **400 Bad Request**
 ```
 
 **Case 2: Mã OTP đã hết hiệu lực (quá 5 phút)**
-Status: **400 Bad Request**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -823,7 +842,7 @@ Status: **429 Too Many Requests**
 ### 7.6.5. Ghi Chú Bảo Mật & Business Rules
 
 * Account gọi API bắt buộc phải tồn tại.
-* Nếu `purpose` là `REGISTRATION` thì tài khoản phải chưa được kích hoạt thành công (`registration_completed` = 0). Các mục đích khác không bị giới hạn.
+* Nếu `purpose` là `REGISTRATION` thì tài khoản phải đang trong trạng thái chờ kích hoạt (`account_status` = 'PENDING'). Các mục đích khác không bị giới hạn.
 * Mỗi lần gọi `Resend OTP`, mã OTP cũ chưa sử dụng sẽ bị thay thế (ghi đè trên Redis) và tự động hết hiệu lực.
 * Không trả mã OTP mới sinh dưới dạng chuỗi rõ ràng (plaintext) qua phản hồi HTTP.
 * Nếu Notification Service chưa sẵn sàng (như trong môi trường DEV/TEST), hệ thống tạm thời chỉ log mã OTP ra Console.
@@ -868,16 +887,18 @@ Status: **409 Conflict**
 ```
 
 **Case 4: Validation error**
-Status: **400 Bad Request**
+Status: **422 Unprocessable Content**
 
 ```json
 {
   "success": false,
   "message": "Validation failed",
   "errorCode": "VALIDATION_ERROR",
+  "data": null,
   "errors": [
     {
       "field": "accountId",
+      "code": "NotBlank",
       "message": "Account ID is required"
     }
   ]
@@ -1027,20 +1048,23 @@ Status: **403 Forbidden**
 ```
 
 **Case 4: Dữ liệu gửi lên không hợp lệ**
-Status: **400 Bad Request**
+Status: **422 Unprocessable Content**
 
 ```json
 {
   "success": false,
   "message": "Validation failed",
   "errorCode": "VALIDATION_ERROR",
+  "data": null,
   "errors": [
     {
       "field": "email",
+      "code": "Email",
       "message": "email is invalid"
     },
     {
       "field": "password",
+      "code": "NotBlank",
       "message": "password is required"
     }
   ]
@@ -1064,9 +1088,10 @@ Status: **500 Internal Server Error**
 | Status Code | Ý nghĩa | Khi nào xảy ra |
 | :--- | :--- | :--- |
 | 200 | OK | Đăng nhập thành công và trả về bộ Token đầy đủ |
-| 400 | Bad Request | Dữ liệu gửi lên không đúng định dạng kiểm tra |
 | 401 | Unauthorized | Nhập sai tài khoản email hoặc mật khẩu |
-| 403 | Forbidden | Tài khoản chưa kích hoạt OTP (`registrationCompleted != 1`) hoặc bị khóa (`is_active = 0`) |
+| 422 | Unprocessable Content | Dữ liệu gửi lên không đúng định dạng kiểm tra |
+| 403 | Forbidden | Tài khoản chưa kích hoạt OTP hoặc bị khóa (`account_status` không phải 'ACTIVE')   |
+
 | 500 | Internal Server Error | Gặp lỗi không xác định tại hệ thống máy chủ |
 
 ---
@@ -1290,22 +1315,32 @@ CREATE TABLE `accounts` (
   `email` varchar(100) UNIQUE NOT NULL COMMENT 'Dùng làm tên đăng nhập chính',
   `password_hash` varchar(255) NOT NULL,
   `role_id` int NOT NULL,
-  `is_active` int DEFAULT 0 COMMENT '1: Hoạt động, 0: Bị khóa',
-  `registration_completed` int DEFAULT 0 COMMENT '1: Đã xác thực OTP, 0: Tài khoản mới chờ xác thực',
-  `created_at` timestamp DEFAULT (now()),
-  `updated_at` timestamp DEFAULT (now())
+  `account_status` varchar(20) DEFAULT 'PENDING' COMMENT 'PENDING, ACTIVE, SUSPENDED, BLOCKED',
+  `version` int DEFAULT 0 COMMENT 'For optimistic locking',
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
 CREATE TABLE `roles` (
   `id` int PRIMARY KEY AUTO_INCREMENT,
   `role_name` varchar(50) UNIQUE NOT NULL COMMENT 'CUSTOMER, STAFF, ADMIN',
-  `description` varchar(255)
+  `description` varchar(255),
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
 CREATE TABLE `permissions` (
   `id` int PRIMARY KEY AUTO_INCREMENT,
   `permission_code` varchar(100) UNIQUE NOT NULL,
-  `description` varchar(255)
+  `description` varchar(255),
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
 CREATE TABLE `roles_permissions` (
@@ -1317,10 +1352,13 @@ CREATE TABLE `roles_permissions` (
 CREATE TABLE `refresh_tokens` (
   `id` bigint PRIMARY KEY AUTO_INCREMENT,
   `account_id` bigint NOT NULL,
-  `token` varchar(255) UNIQUE NOT NULL,
+  `token_hash` varchar(255) UNIQUE NOT NULL,
   `expiry_date` timestamp NOT NULL,
-  `is_revoked` boolean DEFAULT false COMMENT 'Đã thu hồi hay chưa',
-  `created_at` timestamp DEFAULT (now())
+  `is_revoked` boolean DEFAULT false,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
 CREATE TABLE `audit_logs` (
@@ -1329,13 +1367,36 @@ CREATE TABLE `audit_logs` (
   `action` varchar(100) NOT NULL,
   `ip_address` varchar(45),
   `user_agent` varchar(255),
-  `created_at` timestamp DEFAULT (now())
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint
 );
 
-ALTER TABLE `accounts` ADD FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
-ALTER TABLE `roles_permissions` ADD FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
-ALTER TABLE `roles_permissions` ADD FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE;
-ALTER TABLE `refresh_tokens` ADD FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
+CREATE TABLE `account_providers` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `account_id` bigint NOT NULL,
+  `provider_name` varchar(50) NOT NULL COMMENT 'google, facebook, apple, github',
+  `provider_account_id` varchar(255) NOT NULL COMMENT 'Provider specific user ID (e.g. sub in JWT)',
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_by` bigint,
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` bigint,
+  UNIQUE KEY `uk_provider_account` (`provider_name`, `provider_account_id`)
+);
+
+ALTER TABLE `accounts` ADD CONSTRAINT `fk_accounts_roles` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE RESTRICT;
+ALTER TABLE `roles_permissions` ADD CONSTRAINT `fk_roles_permissions_roles` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
+ALTER TABLE `roles_permissions` ADD CONSTRAINT `fk_roles_permissions_permissions` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE;
+ALTER TABLE `refresh_tokens` ADD CONSTRAINT `fk_refresh_tokens_accounts` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
+ALTER TABLE `account_providers` ADD CONSTRAINT `fk_account_providers_accounts` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
+
+CREATE INDEX `idx_accounts_email` ON `accounts` (`email`);
+CREATE INDEX `idx_accounts_role_id` ON `accounts` (`role_id`);
+CREATE INDEX `idx_refresh_tokens_account_id` ON `refresh_tokens` (`account_id`);
+CREATE INDEX `idx_audit_logs_account_id` ON `audit_logs` (`account_id`);
+CREATE INDEX `idx_audit_logs_action` ON `audit_logs` (`action`);
+CREATE INDEX `idx_account_providers_account_id` ON `account_providers` (`account_id`);
 ```
 
 ### 11.3. User Service Schema Đề Xuất Bổ Sung
@@ -1441,3 +1502,38 @@ Backend sẽ dựa vào API Specification để đảm bảo:
 * Error code rõ ràng
 
 Nếu Backend thay đổi request/response, tài liệu API Specification phải được cập nhật trong cùng MR hoặc issue liên quan.
+
+---
+
+## 15. Global Error Schema
+
+Tất cả các lỗi trả về từ API đều tuân theo chuẩn cấu trúc JSON sau:
+
+```json
+{
+  "success": false,
+  "message": "...",
+  "errorCode": "...",
+  "data": null,
+  "errors": [
+    {
+      "field": "...",
+      "code": "...",
+      "message": "..."
+    }
+  ]
+}
+```
+
+### 15.1. Giải thích các trường trong Error Schema
+
+| Field | Type | Mô tả |
+| :--- | :--- | :--- |
+| success | boolean | Luôn luôn là `false` khi có lỗi. |
+| message | string | Thông báo lỗi chung dành cho người dùng (có thể hiển thị trực tiếp lên UI) hoặc mô tả chung về nhóm lỗi. |
+| errorCode | string | Mã lỗi nghiệp vụ để Frontend có thể xử lý logic (VD: `VALIDATION_ERROR`, `GATEWAY_TIMEOUT`, `USER_CCCD_INVALID`). |
+| data | object \| null | Chứa các dữ liệu bổ sung liên quan đến lỗi, ví dụ `retryAfterSeconds` khi bị rate limit. Thông thường là `null`. |
+| errors | array \| null | Danh sách các lỗi chi tiết theo từng field (chỉ xuất hiện khi `errorCode` là `VALIDATION_ERROR`, nếu không thì field này không tồn tại hoặc `null`). |
+| errors[].field | string | Tên của trường dữ liệu bị lỗi (VD: `email`, `password`). |
+| errors[].code | string | Mã loại validate bị vi phạm (VD: `NotBlank`, `Pattern`, `Size`). Frontend có thể dùng để map icon hoặc translate. |
+| errors[].message | string | Câu thông báo lỗi chi tiết cho field đó. |

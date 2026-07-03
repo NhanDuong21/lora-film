@@ -1,0 +1,12 @@
+package com.project.paymentservice.enumtype;
+
+public enum PaymentLogEventType {
+    PAYMENT_INITIATED,
+    PROVIDER_CALLBACK_RECEIVED,
+    PAYMENT_SUCCEEDED,
+    PAYMENT_FAILED,
+    PAYMENT_CANCELLED,
+    PAYMENT_EXPIRED,
+    RECONCILIATION_REQUIRED,
+    RECONCILIATION_RESOLVED
+}

@@ -81,7 +81,7 @@ Dưới đây là các kịch bản kiểm thử tích hợp chi tiết được
   ```
 - **Kết quả mong đợi**:
   - Máy chủ trả về phản hồi mã trạng thái HTTP 201 Created (hoặc 200 OK kèm mã thành công trong dữ liệu trả về).
-  - Tài khoản mới được ghi nhận vào cơ sở dữ liệu của auth-service với trạng thái is_active = 0 và registration_completed = 0.
+  - Tài khoản mới được ghi nhận vào cơ sở dữ liệu của auth-service với trạng thái account_status = 'PENDING'.
   - Một sự kiện ACCOUNT_CREATED được phát xuất lên hàng đợi Kafka trên topic auth.account.created.v1.
   - Dịch vụ user-service tiêu thụ sự kiện này thành công và tự động tạo bản ghi hồ sơ tương ứng trong cơ sở dữ liệu của mình.
   - Một mã xác thực OTP gồm 6 chữ số được hệ thống tạo ra và ghi nhận trong nhật ký giao diện điều khiển (console log) của máy chủ xác thực.
