@@ -88,28 +88,42 @@ Lưu ý: Direct internal call chỉ dành cho backend/internal flow. Frontend v�
 
 ## 4. Danh Sách Port Local
 
-| Thành phần   | Port | Base URL                | Ghi chú                                              |
-| ------------ | ---- | ----------------------- | ---------------------------------------------------- |
-| Frontend     | 5173 | `http://localhost:5173` | React/Vite local dev server                          |
-| Frontend     | 5174 | `http://localhost:5174` | React/Vite local dev server nếu đổi port             |
-| API Gateway  | 8080 | `http://localhost:8080` | Frontend gọi API qua Gateway                         |
-| Auth Service | 8081 | `http://localhost:8081` | Xử lý register, login, JWT/authentication            |
-| User Service | 8086 | `http://localhost:8086` | Xử lý user profile và user management                |
-| MySQL        | 3307 | `localhost:3307`        | Docker host port map tới MySQL container port `3306` |
-| Kafka        | 9092 | `localhost:9092`        | Event broker cho backend internal flow               |
-| Redis        | 6379 | `localhost:6379`        | Cache/session/token nếu service sử dụng              |
+| Thành phần           | Port | Base URL / Discovery     | Ghi chú                                              |
+| -------------------- | ---- | ------------------------ | ---------------------------------------------------- |
+| Eureka Server        | 8761 | `http://localhost:8761`  | Netflix Eureka Service Discovery Dashboard           |
+| API Gateway          | 8080 | `http://localhost:8080`  | Frontend gọi API qua Gateway                         |
+| Auth Service         | 8081 | `lb://auth-service`      | Xử lý register, login, JWT/authentication            |
+| Movie Service        | 8082 | `lb://movie-service`     | Quản lý phim, lịch chiếu, phòng chiếu                |
+| Booking Service      | 8083 | `lb://booking-service`   | Quản lý đặt vé, giữ ghế                              |
+| Payment Service      | 8084 | `lb://payment-service`   | Xử lý thanh toán                                     |
+| Notification Service | 8085 | `lb://notification-service` | Gửi email, thông báo                             |
+| User Service         | 8086 | `lb://user-service`      | Xử lý user profile và user management                |
+| Promotion Service    | 8087 | `lb://promotion-service` | Quản lý khuyến mãi, voucher                          |
+| Score Service        | 8088 | `lb://score-service`     | Quản lý điểm thưởng, thành viên                      |
+| Analytics Service    | 8089 | `lb://analytics-service` | Thống kê, báo cáo doanh thu                          |
+| Frontend             | 5173 | `http://localhost:5173`  | React/Vite local dev server                          |
+| MySQL                | 3307 | `localhost:3307`         | Docker host port map tới MySQL container port `3306` |
+| Kafka                | 9092 | `localhost:9092`         | Event broker cho backend internal flow               |
+| Redis                | 6379 | `localhost:6379`         | Cache/session/token nếu service sử dụng              |
 
-Lưu ý: Trong Docker, MySQL container dùng port `3306`, nhưng máy host truy cập qua port `3307` nếu docker compose đang map `3307:3306`.
+Lưu ý: Trong Docker, MySQL container dùng port `3306`, nhưng máy host truy cập qua port `3307` nếu docker compose đang map `3307:3306`. Gateway định tuyến động qua Eureka bằng giao thức `lb://<service-name>`.
 
 ---
 
 ## 5. Route Classification
 
-| Route                | Target Service | Type                            | Exposed via Gateway | Authentication        | Expected                                         |
-| -------------------- | -------------- | ------------------------------- | ------------------- | --------------------- | ------------------------------------------------ |
-| `/api/auth/**`       | `auth-service` | Public / Protected tùy endpoint | Yes                 | Tùy endpoint          | Register/Login hoạt động qua Gateway             |
-| `/api/users/**`      | `user-service` | Protected API                   | Yes                 | Bearer JWT            | User/Profile API hoạt động qua Gateway           |
-| `/internal/users/**` | `user-service` | Internal API                    | No                  | Internal backend only | Gateway trả `404 Not Found` hoặc `403 Forbidden` |
+| Route                  | Target Service (Eureka ID) | Type                            | Exposed via Gateway | Authentication        | Expected                                         |
+| ---------------------- | -------------------------- | ------------------------------- | ------------------- | --------------------- | ------------------------------------------------ |
+| `/api/auth/**`         | `auth-service`             | Public / Protected tùy endpoint | Yes                 | Tùy endpoint          | Register/Login hoạt động qua Gateway             |
+| `/api/users/**`        | `user-service`             | Protected API                   | Yes                 | Bearer JWT            | User/Profile API hoạt động qua Gateway           |
+| `/api/movies/**`       | `movie-service`            | Public / Protected tùy endpoint | Yes                 | Tùy endpoint          | Quản lý và tra cứu phim qua Gateway              |
+| `/api/promotions/**`   | `promotion-service`        | Public / Protected tùy endpoint | Yes                 | Tùy endpoint          | Khuyến mãi / Voucher hoạt động qua Gateway       |
+| `/api/scores/**`       | `score-service`            | Protected API                   | Yes                 | Bearer JWT            | Tra cứu & tích điểm hoạt động qua Gateway        |
+| `/api/bookings/**`     | `booking-service`          | Protected API                   | Yes                 | Bearer JWT            | Đặt vé xem phim hoạt động qua Gateway            |
+| `/api/payments/**`     | `payment-service`          | Protected API                   | Yes                 | Bearer JWT            | Thanh toán hoạt động qua Gateway                 |
+| `/api/notifications/**`| `notification-service`     | Protected / Internal API        | Yes                 | Bearer JWT            | Quản lý thông báo qua Gateway                    |
+| `/api/analytics/**`    | `analytics-service`        | Protected API (Admin)           | Yes                 | Bearer JWT (Admin)    | Báo cáo thống kê hoạt động qua Gateway           |
+| `/internal/**`         | All Services               | Internal API                    | No                  | Internal backend only | Gateway trả `404 Not Found` hoặc `403 Forbidden` |
 
 ---
 
@@ -364,32 +378,68 @@ File:
 api-gateway/src/main/resources/application.properties
 ```
 
-Cấu hình route đề xuất:
+Cấu hình route và Eureka Discovery:
 
 ```properties
 server.port=8080
-
 spring.application.name=api-gateway
 
-# =========================================================
-# Route: auth-service
-# Public / Protected APIs depending on endpoint
-# =========================================================
-spring.cloud.gateway.routes[0].id=auth-service
-spring.cloud.gateway.routes[0].uri=http://localhost:8081
-spring.cloud.gateway.routes[0].predicates[0]=Path=/api/auth/**
+# ===== Eureka Discovery Client =====
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+eureka.client.register-with-eureka=true
+eureka.client.fetch-registry=true
 
 # =========================================================
-# Route: user-service
-# Protected API for frontend user/profile operations
+# Dynamic Routes using Eureka Load Balancer (lb://)
 # =========================================================
+
+# Route: auth-service (Port 8081)
+spring.cloud.gateway.routes[0].id=auth-service
+spring.cloud.gateway.routes[0].uri=lb://auth-service
+spring.cloud.gateway.routes[0].predicates[0]=Path=/api/auth/**
+
+# Route: user-service (Port 8086)
 spring.cloud.gateway.routes[1].id=user-service
-spring.cloud.gateway.routes[1].uri=http://localhost:8086
+spring.cloud.gateway.routes[1].uri=lb://user-service
 spring.cloud.gateway.routes[1].predicates[0]=Path=/api/users/**
+
+# Route: movie-service (Port 8082)
+spring.cloud.gateway.routes[2].id=movie-service
+spring.cloud.gateway.routes[2].uri=lb://movie-service
+spring.cloud.gateway.routes[2].predicates[0]=Path=/api/movies/**
+
+# Route: promotion-service (Port 8087)
+spring.cloud.gateway.routes[3].id=promotion-service
+spring.cloud.gateway.routes[3].uri=lb://promotion-service
+spring.cloud.gateway.routes[3].predicates[0]=Path=/api/promotions/**
+
+# Route: score-service (Port 8088)
+spring.cloud.gateway.routes[4].id=score-service
+spring.cloud.gateway.routes[4].uri=lb://score-service
+spring.cloud.gateway.routes[4].predicates[0]=Path=/api/scores/**
+
+# Route: booking-service (Port 8083)
+spring.cloud.gateway.routes[5].id=booking-service
+spring.cloud.gateway.routes[5].uri=lb://booking-service
+spring.cloud.gateway.routes[5].predicates[0]=Path=/api/bookings/**
+
+# Route: payment-service (Port 8084)
+spring.cloud.gateway.routes[6].id=payment-service
+spring.cloud.gateway.routes[6].uri=lb://payment-service
+spring.cloud.gateway.routes[6].predicates[0]=Path=/api/payments/**
+
+# Route: notification-service (Port 8085)
+spring.cloud.gateway.routes[7].id=notification-service
+spring.cloud.gateway.routes[7].uri=lb://notification-service
+spring.cloud.gateway.routes[7].predicates[0]=Path=/api/notifications/**
+
+# Route: analytics-service (Port 8089)
+spring.cloud.gateway.routes[8].id=analytics-service
+spring.cloud.gateway.routes[8].uri=lb://analytics-service
+spring.cloud.gateway.routes[8].predicates[0]=Path=/api/analytics/**
 
 # =========================================================
 # CORS Configuration
-# Frontend local development origins
 # =========================================================
 spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedOrigins=http://localhost:5173,http://localhost:5174
 spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedMethods=GET,POST,PUT,DELETE,OPTIONS
@@ -399,21 +449,13 @@ spring.cloud.gateway.globalcors.cors-configurations.[/**].allowCredentials=true
 spring.cloud.gateway.default-filters[0].name=DedupeResponseHeader
 spring.cloud.gateway.default-filters[0].args.name=Access-Control-Allow-Origin Access-Control-Allow-Credentials
 spring.cloud.gateway.default-filters[0].args.strategy=RETAIN_UNIQUE
-
-# =========================================================
-# Internal Routes Policy
-# Do NOT expose /internal/** routes through API Gateway.
-#
-# Removed:
-# - /internal/users/**
-# =========================================================
 ```
 
 Không được cấu hình route sau:
 
 ```properties
 spring.cloud.gateway.routes[x].id=internal-user-service
-spring.cloud.gateway.routes[x].uri=http://localhost:8086
+spring.cloud.gateway.routes[x].uri=lb://user-service
 spring.cloud.gateway.routes[x].predicates[0]=Path=/internal/users/**
 ```
 
@@ -433,14 +475,49 @@ spring:
     gateway:
       routes:
         - id: auth-service
-          uri: http://localhost:8081
+          uri: lb://auth-service
           predicates:
             - Path=/api/auth/**
 
         - id: user-service
-          uri: http://localhost:8086
+          uri: lb://user-service
           predicates:
             - Path=/api/users/**
+
+        - id: movie-service
+          uri: lb://movie-service
+          predicates:
+            - Path=/api/movies/**
+
+        - id: promotion-service
+          uri: lb://promotion-service
+          predicates:
+            - Path=/api/promotions/**
+
+        - id: score-service
+          uri: lb://score-service
+          predicates:
+            - Path=/api/scores/**
+
+        - id: booking-service
+          uri: lb://booking-service
+          predicates:
+            - Path=/api/bookings/**
+
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/payments/**
+
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+
+        - id: analytics-service
+          uri: lb://analytics-service
+          predicates:
+            - Path=/api/analytics/**
 
       globalcors:
         corsConfigurations:
