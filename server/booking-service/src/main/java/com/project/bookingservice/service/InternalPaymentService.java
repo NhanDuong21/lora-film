@@ -14,7 +14,7 @@ import com.project.bookingservice.repository.SeatReservationRepository;
 import com.project.bookingservice.repository.TicketRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.RedisTemplate;
+import com.project.bookingservice.service.lock.SeatLockManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,21 +28,19 @@ import java.util.List;
 public class InternalPaymentService {
 
     private static final Logger logger = LoggerFactory.getLogger(InternalPaymentService.class);
-    private static final String SEAT_LOCK_PREFIX = "booking:seat-lock:";
-
     private final BookingRepository bookingRepository;
     private final SeatReservationRepository seatReservationRepository;
     private final TicketRepository ticketRepository;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final SeatLockManager seatLockManager;
 
     public InternalPaymentService(BookingRepository bookingRepository,
                                   SeatReservationRepository seatReservationRepository,
                                   TicketRepository ticketRepository,
-                                  RedisTemplate<String, Object> redisTemplate) {
+                                  SeatLockManager seatLockManager) {
         this.bookingRepository = bookingRepository;
         this.seatReservationRepository = seatReservationRepository;
         this.ticketRepository = ticketRepository;
-        this.redisTemplate = redisTemplate;
+        this.seatLockManager = seatLockManager;
     }
 
     @Transactional
@@ -88,8 +86,7 @@ public class InternalPaymentService {
                 generatedTickets.add(ticket);
 
                 // Clear Redis Seat Lock if still exists
-                String lockKey = SEAT_LOCK_PREFIX + res.getShowtimeId() + ":" + res.getSeatId();
-                redisTemplate.delete(lockKey);
+                seatLockManager.evictLocks(res.getShowtimeId(), List.of(res.getSeatId()));
             }
 
             generatedTickets = ticketRepository.saveAll(generatedTickets);
