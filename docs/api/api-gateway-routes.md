@@ -406,27 +406,27 @@ spring.cloud.gateway.routes[1].predicates[0]=Path=/api/users/**
 # Route: movie-service (Port 8082)
 spring.cloud.gateway.routes[2].id=movie-service
 spring.cloud.gateway.routes[2].uri=lb://movie-service
-spring.cloud.gateway.routes[2].predicates[0]=Path=/api/movies/**
+spring.cloud.gateway.routes[2].predicates[0]=Path=/api/movies/**, /api/genres/**, /api/admin/movies/**, /api/admin/genres/**, /api/admin/rooms/**, /api/admin/seats/**, /api/admin/showtimes/**, /api/showtimes/**, /api/rooms/**, /api/seats/**
 
 # Route: promotion-service (Port 8087)
 spring.cloud.gateway.routes[3].id=promotion-service
 spring.cloud.gateway.routes[3].uri=lb://promotion-service
-spring.cloud.gateway.routes[3].predicates[0]=Path=/api/promotions/**
+spring.cloud.gateway.routes[3].predicates[0]=Path=/api/promotions/**, /api/admin/promotions/**, /api/admin/promotion-campaigns/**
 
 # Route: score-service (Port 8088)
 spring.cloud.gateway.routes[4].id=score-service
 spring.cloud.gateway.routes[4].uri=lb://score-service
-spring.cloud.gateway.routes[4].predicates[0]=Path=/api/scores/**
+spring.cloud.gateway.routes[4].predicates[0]=Path=/api/scores/**, /api/admin/scores/**
 
 # Route: booking-service (Port 8083)
 spring.cloud.gateway.routes[5].id=booking-service
 spring.cloud.gateway.routes[5].uri=lb://booking-service
-spring.cloud.gateway.routes[5].predicates[0]=Path=/api/bookings/**
+spring.cloud.gateway.routes[5].predicates[0]=Path=/api/bookings/**, /api/tickets/**
 
 # Route: payment-service (Port 8084)
 spring.cloud.gateway.routes[6].id=payment-service
 spring.cloud.gateway.routes[6].uri=lb://payment-service
-spring.cloud.gateway.routes[6].predicates[0]=Path=/api/payments/**
+spring.cloud.gateway.routes[6].predicates[0]=Path=/api/payments/**, /api/vnpay/**
 
 # Route: notification-service (Port 8085)
 spring.cloud.gateway.routes[7].id=notification-service
@@ -436,13 +436,13 @@ spring.cloud.gateway.routes[7].predicates[0]=Path=/api/notifications/**
 # Route: analytics-service (Port 8089)
 spring.cloud.gateway.routes[8].id=analytics-service
 spring.cloud.gateway.routes[8].uri=lb://analytics-service
-spring.cloud.gateway.routes[8].predicates[0]=Path=/api/analytics/**
+spring.cloud.gateway.routes[8].predicates[0]=Path=/api/analytics/**, /api/admin/reports/**
 
 # =========================================================
 # CORS Configuration
 # =========================================================
 spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedOrigins=http://localhost:5173,http://localhost:5174
-spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedMethods=GET,POST,PUT,DELETE,OPTIONS
+spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedMethods=GET,POST,PUT,PATCH,DELETE,OPTIONS
 spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedHeaders=*
 spring.cloud.gateway.globalcors.cors-configurations.[/**].allowCredentials=true
 
@@ -487,27 +487,27 @@ spring:
         - id: movie-service
           uri: lb://movie-service
           predicates:
-            - Path=/api/movies/**
+            - Path=/api/movies/**, /api/genres/**, /api/admin/movies/**, /api/admin/genres/**, /api/admin/rooms/**, /api/admin/seats/**, /api/admin/showtimes/**, /api/showtimes/**, /api/rooms/**, /api/seats/**
 
         - id: promotion-service
           uri: lb://promotion-service
           predicates:
-            - Path=/api/promotions/**
+            - Path=/api/promotions/**, /api/admin/promotions/**, /api/admin/promotion-campaigns/**
 
         - id: score-service
           uri: lb://score-service
           predicates:
-            - Path=/api/scores/**
+            - Path=/api/scores/**, /api/admin/scores/**
 
         - id: booking-service
           uri: lb://booking-service
           predicates:
-            - Path=/api/bookings/**
+            - Path=/api/bookings/**, /api/tickets/**
 
         - id: payment-service
           uri: lb://payment-service
           predicates:
-            - Path=/api/payments/**
+            - Path=/api/payments/**, /api/vnpay/**
 
         - id: notification-service
           uri: lb://notification-service
@@ -517,7 +517,7 @@ spring:
         - id: analytics-service
           uri: lb://analytics-service
           predicates:
-            - Path=/api/analytics/**
+            - Path=/api/analytics/**, /api/admin/reports/**
 
       globalcors:
         corsConfigurations:
@@ -529,6 +529,7 @@ spring:
               - GET
               - POST
               - PUT
+              - PATCH
               - DELETE
               - OPTIONS
             allowedHeaders:
@@ -584,7 +585,7 @@ Tuy nhiên production config không nên dùng wildcard nếu không cần thi�
 ### 12.4. Methods Được Cho Phép
 
 ```txt
-GET, POST, PUT, DELETE, OPTIONS
+GET, POST, PUT, PATCH, DELETE, OPTIONS
 ```
 
 Nếu sau này API cần `PATCH`, có thể bổ sung `PATCH` vào allowed methods.
