@@ -41,8 +41,7 @@ public class AuthController {
 	public ResponseEntity<ApiResponse<RegistrationInitiatedResponse>> register(@Valid @RequestBody RegisterRequest request) {
 		log.info("Register endpoint called for email={}", request.getEmail());
 		RegistrationInitiatedResponse response = authService.register(request);
-		return ResponseEntity.status(HttpStatus.ACCEPTED)
-				.body(ApiResponse.success("Registration initiated", response));
+		return ResponseEntity.ok(ApiResponse.success("Registration initiated", response));
 	}
 
 	/**
