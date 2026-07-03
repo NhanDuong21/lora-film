@@ -84,13 +84,15 @@ public class ApiResponse<T> {
 
 	public static class ValidationError {
 		private String field;
+		private String code;
 		private String message;
 
 		public ValidationError() {
 		}
 
-		public ValidationError(String field, String message) {
+		public ValidationError(String field, String code, String message) {
 			this.field = field;
+			this.code = code;
 			this.message = message;
 		}
 
@@ -100,6 +102,43 @@ public class ApiResponse<T> {
 
 		public void setField(String field) {
 			this.field = field;
+		}
+
+		public String getCode() {
+			return code;
+		}
+
+		public void setCode(String code) {
+			this.code = code;
+		}
+
+		public String getMessage() {
+			return message;
+		}
+
+		public void setMessage(String message) {
+			this.message = message;
+		}
+	}
+
+	public static class BusinessError {
+		private String errorCode;
+		private String message;
+
+		public BusinessError() {
+		}
+
+		public BusinessError(String errorCode, String message) {
+			this.errorCode = errorCode;
+			this.message = message;
+		}
+
+		public String getErrorCode() {
+			return errorCode;
+		}
+
+		public void setErrorCode(String errorCode) {
+			this.errorCode = errorCode;
 		}
 
 		public String getMessage() {
