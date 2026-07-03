@@ -68,7 +68,7 @@ class GenreServiceImplTest {
     void createGenre_ShouldReturnGenre_WhenValidAndNotExists() {
         GenreCreateRequest request = new GenreCreateRequest(" Action ");
         when(genreRepository.existsByGenreNameIgnoreCase("Action")).thenReturn(false);
-        when(genreRepository.save(any(Genre.class))).thenAnswer(i -> {
+        when(genreRepository.save(any())).thenAnswer(i -> {
             Genre g = i.getArgument(0);
             g.setId(2);
             return g;
@@ -94,7 +94,7 @@ class GenreServiceImplTest {
         GenreUpdateRequest request = new GenreUpdateRequest(" Sci-Fi ");
         when(genreRepository.findById(1)).thenReturn(Optional.of(genre));
         when(genreRepository.existsByGenreNameIgnoreCaseAndIdNot("Sci-Fi", 1)).thenReturn(false);
-        when(genreRepository.save(any(Genre.class))).thenReturn(genre);
+        when(genreRepository.save(any())).thenReturn(genre);
 
         GenreResponse response = genreService.updateGenre(1, request);
         assertThat(response.getGenreName()).isEqualTo("Sci-Fi");
