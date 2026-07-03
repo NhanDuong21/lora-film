@@ -126,7 +126,7 @@ public class GlobalExceptionHandler {
 					FieldError highestPriorityError = entry.getValue().stream()
 							.min(Comparator.comparingInt(this::getPriorityForFieldError))
 							.orElse(entry.getValue().get(0));
-					return new ApiResponse.ValidationError(entry.getKey(), highestPriorityError.getDefaultMessage());
+					return new ApiResponse.ValidationError(entry.getKey(), highestPriorityError.getCode(), highestPriorityError.getDefaultMessage());
 				})
 				.collect(Collectors.toList());
 
@@ -150,7 +150,8 @@ public class GlobalExceptionHandler {
 					ConstraintViolation<?> highestPriorityViolation = entry.getValue().stream()
 							.min(Comparator.comparingInt(this::getPriorityForViolation))
 							.orElse(entry.getValue().get(0));
-					return new ApiResponse.ValidationError(entry.getKey(), highestPriorityViolation.getMessage());
+					String code = highestPriorityViolation.getConstraintDescriptor().getAnnotation().annotationType().getSimpleName();
+					return new ApiResponse.ValidationError(entry.getKey(), code, highestPriorityViolation.getMessage());
 				})
 				.collect(Collectors.toList());
 

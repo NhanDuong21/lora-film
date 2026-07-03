@@ -385,7 +385,20 @@ Các field sau không nhất thiết để người dùng nhập tay. Hệ thố
 | OTP Generation          | Sinh mã xác thực OTP ngẫu nhiên 6 chữ số có hiệu lực trong 5 phút và lưu tạm thời |
 | Kafka Validation Timeout| Nếu User Service không phản hồi trong 10 giây → trả 500 Internal Server Error |
 
-### 6.9. Backend Processing Flow
+### 6.9. Validation Priority
+
+Hệ thống tuân thủ nguyên tắc ưu tiên khi validate dữ liệu. Mỗi field chỉ trả về **MỘT** lỗi đầu tiên gặp phải theo thứ tự ưu tiên sau:
+
+1. **Required** (e.g., Không được để trống)
+2. **Format** (e.g., Sai định dạng email, sai định dạng CCCD)
+3. **Length** (e.g., Độ dài không hợp lệ)
+4. **Business Rule** (e.g., Ngày sinh không khớp CCCD)
+
+Lưu ý:
+- Nếu nhiều field cùng bị lỗi, hệ thống sẽ trả về danh sách lỗi của tất cả các field đó (mỗi field một lỗi).
+- **Malformed JSON** (gửi lên không phải JSON hợp lệ) sẽ luôn trả về `400 Bad Request` và KHÔNG BAO GIỜ bị chuyển thành `422 Unprocessable Content`.
+
+### 6.10. Backend Processing Flow
 
 Receive register request
 → Validate request body
@@ -400,15 +413,15 @@ Receive register request
 → Assign default role `CUSTOMER`
 → Hash password
 → Send OTP via email
-→ Return 202 Accepted with requestId and message
+→ Return 200 OK with requestId and message
 
-### 6.10. Thông Tin Tạo User Profile
+### 6.11. Thông Tin Tạo User Profile
 
 User Profile **không được tạo ngay** khi Register. Nó chỉ được tạo sau khi OTP xác thực thành công (Verify OTP), thông qua sự kiện Kafka `ACCOUNT_VERIFIED`. Dữ liệu profile sẽ được lấy từ bản ghi tạm thời trong Redis.
 
-### 6.11. Response Success
+### 6.12. Response Success
 
-Status: **202 Accepted**
+Status: **200 OK**
 
 ```json
 {
@@ -421,7 +434,7 @@ Status: **202 Accepted**
 }
 ```
 
-### 6.12. Giải Thích Field Response
+### 6.13. Giải Thích Field Response
 
 | Field | Type | Mô tả |
 | :--- | :--- | :--- |
@@ -430,7 +443,7 @@ Status: **202 Accepted**
 | data.requestId | string | UUID request (dùng để tracking, không cần gửi lại) |
 | data.message | string | Thông báo hướng dẫn người dùng kiểm tra email OTP |
 
-### 6.13. Response Error
+### 6.14. Response Error
 
 **Case 1: Email đã tồn tại**
 Status: **409 Conflict**
@@ -507,8 +520,8 @@ Status: **409 Conflict**
 }
 ```
 
-**Case 5: CCCD không hợp lệ**
-Status: **400 Bad Request**
+**Case 5: CCCD không hợp lệ (Business Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -519,8 +532,8 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 6: Ngày sinh không khớp với CCCD**
-Status: **400 Bad Request**
+**Case 6: Ngày sinh không khớp với CCCD (Business Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -531,8 +544,8 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 7: Ngày sinh ở tương lai**
-Status: **400 Bad Request**
+**Case 7: Ngày sinh ở tương lai (Business Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -542,8 +555,8 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 6: Chưa đủ 13 tuổi**
-Status: **400 Bad Request**
+**Case 8: Chưa đủ 13 tuổi (Business Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -553,51 +566,57 @@ Status: **400 Bad Request**
 }
 ```
 
-**Case 7: Dữ liệu gửi lên không hợp lệ**
-Status: **400 Bad Request**
+**Case 9: Dữ liệu gửi lên không hợp lệ (Bean Validation)**
+Status: **422 Unprocessable Content**
 
 ```json
 {
   "success": false,
   "message": "Validation failed",
   "errorCode": "VALIDATION_ERROR",
+  "data": null,
   "errors": [
     {
       "field": "email",
+      "code": "Email",
       "message": "Email is invalid"
     },
     {
       "field": "password",
+      "code": "Size",
       "message": "password length must be between 8 and 50"
     },
     {
       "field": "cccd",
+      "code": "Pattern",
       "message": "CCCD must contain 12 digits"
     }
   ]
 }
 ```
 
-**Case 8: Kafka validation timeout (User Service không phản hồi trong 10s)**
-Status: **500 Internal Server Error**
+**Case 10: Kafka validation timeout (User Service không phản hồi trong 10s) hoặc Dependency Unavailable**
+Status: **504 Gateway Timeout** hoặc **503 Service Unavailable**
 
 ```json
 {
   "success": false,
-  "message": "Internal server error",
-  "errorCode": "INTERNAL_SERVER_ERROR",
+  "message": "Gateway timeout. Please try again later.",
+  "errorCode": "GATEWAY_TIMEOUT",
   "data": null
 }
 ```
 
-### 6.14. Danh Sách Status Code
+### 6.15. Danh Sách Status Code
 
 | Status Code | Ý nghĩa | Khi nào xảy ra |
 | :--- | :--- | :--- |
-| 202 | Accepted | Đăng ký thành công, OTP đã gửi qua email |
-| 400 | Bad Request | Dữ liệu gửi lên không đúng định dạng kiểm tra |
-| 409 | Conflict | Email, phone hoặc CCCD đã tồn tại |
-| 500 | Internal Server Error | Gặp lỗi không xác định hoặc Kafka timeout |
+| 200 | OK | Đăng ký thành công, OTP đã gửi qua email |
+| 400 | Bad Request | Lỗi Malformed JSON (dữ liệu gửi lên không phải JSON hợp lệ) |
+| 409 | Conflict | Lỗi Duplicate Data: Email, phone hoặc CCCD đã tồn tại |
+| 422 | Unprocessable Content | Lỗi Bean Validation (format) hoặc Business Validation (logic) |
+| 503 | Service Unavailable | Không thể kết nối tới Redis (Dependency unavailable) |
+| 504 | Gateway Timeout | Lỗi Timeout khi gọi Kafka tới User Service |
 
 ---
 
@@ -645,7 +664,7 @@ Status: **200 OK**
 ### 7.5. Response Error
 
 **Case 1: Mã OTP không chính xác**
-Status: **400 Bad Request**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -657,7 +676,7 @@ Status: **400 Bad Request**
 ```
 
 **Case 2: Mã OTP đã hết hiệu lực (quá 5 phút)**
-Status: **400 Bad Request**
+Status: **422 Unprocessable Content**
 
 ```json
 {
@@ -868,16 +887,18 @@ Status: **409 Conflict**
 ```
 
 **Case 4: Validation error**
-Status: **400 Bad Request**
+Status: **422 Unprocessable Content**
 
 ```json
 {
   "success": false,
   "message": "Validation failed",
   "errorCode": "VALIDATION_ERROR",
+  "data": null,
   "errors": [
     {
       "field": "accountId",
+      "code": "NotBlank",
       "message": "Account ID is required"
     }
   ]
@@ -1027,20 +1048,23 @@ Status: **403 Forbidden**
 ```
 
 **Case 4: Dữ liệu gửi lên không hợp lệ**
-Status: **400 Bad Request**
+Status: **422 Unprocessable Content**
 
 ```json
 {
   "success": false,
   "message": "Validation failed",
   "errorCode": "VALIDATION_ERROR",
+  "data": null,
   "errors": [
     {
       "field": "email",
+      "code": "Email",
       "message": "email is invalid"
     },
     {
       "field": "password",
+      "code": "NotBlank",
       "message": "password is required"
     }
   ]
@@ -1064,8 +1088,8 @@ Status: **500 Internal Server Error**
 | Status Code | Ý nghĩa | Khi nào xảy ra |
 | :--- | :--- | :--- |
 | 200 | OK | Đăng nhập thành công và trả về bộ Token đầy đủ |
-| 400 | Bad Request | Dữ liệu gửi lên không đúng định dạng kiểm tra |
 | 401 | Unauthorized | Nhập sai tài khoản email hoặc mật khẩu |
+| 422 | Unprocessable Content | Dữ liệu gửi lên không đúng định dạng kiểm tra |
 | 403 | Forbidden | Tài khoản chưa kích hoạt OTP (`registrationCompleted != 1`) hoặc bị khóa (`is_active = 0`) |
 | 500 | Internal Server Error | Gặp lỗi không xác định tại hệ thống máy chủ |
 
@@ -1441,3 +1465,38 @@ Backend sẽ dựa vào API Specification để đảm bảo:
 * Error code rõ ràng
 
 Nếu Backend thay đổi request/response, tài liệu API Specification phải được cập nhật trong cùng MR hoặc issue liên quan.
+
+---
+
+## 15. Global Error Schema
+
+Tất cả các lỗi trả về từ API đều tuân theo chuẩn cấu trúc JSON sau:
+
+```json
+{
+  "success": false,
+  "message": "...",
+  "errorCode": "...",
+  "data": null,
+  "errors": [
+    {
+      "field": "...",
+      "code": "...",
+      "message": "..."
+    }
+  ]
+}
+```
+
+### 15.1. Giải thích các trường trong Error Schema
+
+| Field | Type | Mô tả |
+| :--- | :--- | :--- |
+| success | boolean | Luôn luôn là `false` khi có lỗi. |
+| message | string | Thông báo lỗi chung dành cho người dùng (có thể hiển thị trực tiếp lên UI) hoặc mô tả chung về nhóm lỗi. |
+| errorCode | string | Mã lỗi nghiệp vụ để Frontend có thể xử lý logic (VD: `VALIDATION_ERROR`, `GATEWAY_TIMEOUT`, `USER_CCCD_INVALID`). |
+| data | object \| null | Chứa các dữ liệu bổ sung liên quan đến lỗi, ví dụ `retryAfterSeconds` khi bị rate limit. Thông thường là `null`. |
+| errors | array \| null | Danh sách các lỗi chi tiết theo từng field (chỉ xuất hiện khi `errorCode` là `VALIDATION_ERROR`, nếu không thì field này không tồn tại hoặc `null`). |
+| errors[].field | string | Tên của trường dữ liệu bị lỗi (VD: `email`, `password`). |
+| errors[].code | string | Mã loại validate bị vi phạm (VD: `NotBlank`, `Pattern`, `Size`). Frontend có thể dùng để map icon hoặc translate. |
+| errors[].message | string | Câu thông báo lỗi chi tiết cho field đó. |
