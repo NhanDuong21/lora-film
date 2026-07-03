@@ -159,13 +159,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
         redisTemplate.delete(key);
         log.info("OTP verified successfully for email={}", email);
 
-        if (email != null) {
-            Account account = accountRepository.findByEmail(email).orElse(null);
-            if (account != null) {
-                account.setAccountStatus("ACTIVE");
-                accountRepository.save(account);
-                log.info("Account {} activated successfully.", email);
-            }
-        }
+        // Account status activation should be handled by the caller or Saga pattern, not here.
     }
 }
+

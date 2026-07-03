@@ -49,15 +49,24 @@ public class UserProfileCreatedConsumer {
                 return;
             }
 
-            if ("ACTIVE".equals(account.getAccountStatus())) {
-                log.info("Account {} is already active.", accountId);
-            } else if ("PENDING".equals(account.getAccountStatus())) {
-                log.warn("Account {} registration is not completed yet. Throwing exception to trigger retry.", accountId);
-                throw new RuntimeException("Account " + accountId + " registration is not completed. Retrying...");
-            } else {
-                account.setAccountStatus("ACTIVE");
+            if ("FAILED".equalsIgnoreCase(event.getData().getStatus())) {
+                log.warn("Profile creation failed for account {}. Setting status to INACTIVE.", accountId);
+                account.setAccountStatus(com.project.authservice.enums.AccountStatus.INACTIVE);
+                accountRepository.save(account);
+                
+                String pendingKey = "pending_registration:" + account.getEmail();
+                redisTemplate.delete(pendingKey);
+                return;
+            }
+
+            if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.VERIFIED || account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
+                account.setAccountStatus(com.project.authservice.enums.AccountStatus.ACTIVE);
                 accountRepository.save(account);
                 log.info("Account {} successfully activated.", accountId);
+            } else if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.ACTIVE) {
+                log.info("Account {} is already active.", accountId);
+            } else {
+                log.warn("Account {} has invalid status for activation: {}", accountId, account.getAccountStatus());
             }
 
             String pendingKey = "pending_registration:" + account.getEmail();
@@ -69,3 +78,4 @@ public class UserProfileCreatedConsumer {
         }
     }
 }
+

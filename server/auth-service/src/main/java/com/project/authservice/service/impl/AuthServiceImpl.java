@@ -117,7 +117,7 @@ public class AuthServiceImpl implements AuthService {
 
 			Account existingAccount = accountRepository.findByEmail(email).orElse(null);
 			if (existingAccount != null) {
-				if (!"PENDING".equals(existingAccount.getAccountStatus())) {
+				if (existingAccount.getAccountStatus() != com.project.authservice.enums.AccountStatus.PENDING) {
 					log.warn("Email already registered and verified: {}", email);
 					throw new EmailAlreadyExistsException();
 				} else {
@@ -200,7 +200,7 @@ public class AuthServiceImpl implements AuthService {
 					account.setEmail(email);
 					account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 					account.setRole(role);
-					account.setAccountStatus("PENDING");
+					account.setAccountStatus(com.project.authservice.enums.AccountStatus.PENDING);
 					accountRepository.save(account);
 
 					String pendingKey = "pending_registration:" + email;
@@ -233,14 +233,14 @@ public class AuthServiceImpl implements AuthService {
 				}
 			} catch (TimeoutException e) {
 				redisTemplate.delete("temp_request:" + requestId);
-				throw new RuntimeException("Request timeout waiting for validation", e);
+				throw new RuntimeException("System overload. Failed to validate registration. Please try again later.", e);
 			} catch (RegistrationConflictException | RegistrationAlreadyPendingException e) {
 				throw e;
 			} catch (DuplicateResourceException e) {
 				throw e;
 			} catch (Exception e) {
 				redisTemplate.delete("temp_request:" + requestId);
-				throw new RuntimeException("Internal error processing registration", e);
+				throw new RuntimeException("System overload. Failed to validate registration. Please try again later.", e);
 			} finally {
 				pendingRequests.remove(requestId);
 			}
@@ -280,7 +280,8 @@ public class AuthServiceImpl implements AuthService {
 		Account savedAccount = accountRepository.findByEmail(email)
 				.orElseThrow(() -> new ResourceNotFoundException("Account not found for email: " + email));
 
-		savedAccount.setAccountStatus("ACTIVE");
+		// Update status to VERIFIED (OTP is correct, waiting for User Profile creation)
+		savedAccount.setAccountStatus(com.project.authservice.enums.AccountStatus.VERIFIED);
 		accountRepository.save(savedAccount);
 
 		log.info("Account verified successfully for email={} with accountId={}", email, savedAccount.getId());
@@ -291,6 +292,7 @@ public class AuthServiceImpl implements AuthService {
 		} catch (Exception kafkaEx) {
 			log.error("ACCOUNT_VERIFIED Kafka event failed for accountId={} email={}: {}",
 					savedAccount.getId(), email, kafkaEx.getMessage(), kafkaEx);
+			throw new RuntimeException("System overload. Failed to send profile creation request. Please try again later.", kafkaEx);
 		}
 
 		// DO NOT delete pendingKey here. It will be deleted by UserProfileCreatedConsumer after User Profile is created.
@@ -324,14 +326,14 @@ public class AuthServiceImpl implements AuthService {
 		}
 
 		// 3. Check account status
-		if ("PENDING".equals(account.getAccountStatus())) {
+		if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
 			log.warn("Login failed: account is not verified for email {}", email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_NOT_VERIFIED", servletRequest);
 			throw new AccountNotVerifiedException(account.getId());
 		}
 
 		// 4. Check if account is active
-		if (!"ACTIVE".equals(account.getAccountStatus())) {
+		if (account.getAccountStatus() != com.project.authservice.enums.AccountStatus.ACTIVE) {
 			log.warn("Login failed: account is inactive (status={}) for email {}", account.getAccountStatus(), email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_INACTIVE_ACCOUNT", servletRequest);
 			throw new AccountInactiveException();
@@ -413,11 +415,11 @@ public class AuthServiceImpl implements AuthService {
 				throw new InvalidRefreshTokenException("Account not found");
 			}
 
-			if ("PENDING".equals(account.getAccountStatus())) {
+			if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
 				throw new AccountNotVerifiedException(account.getId());
 			}
 
-			if (!"ACTIVE".equals(account.getAccountStatus())) {
+			if (account.getAccountStatus() != com.project.authservice.enums.AccountStatus.ACTIVE) {
 				throw new AccountInactiveException();
 			}
 

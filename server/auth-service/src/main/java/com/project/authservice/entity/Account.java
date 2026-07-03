@@ -12,6 +12,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import com.project.authservice.enums.AccountStatus;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,9 +44,10 @@ public class Account {
 	@JoinColumn(name = "role_id", nullable = false)
 	private Role role;
 
+	@Enumerated(EnumType.STRING)
 	@Builder.Default
 	@Column(name = "account_status", length = 20)
-	private String accountStatus = "PENDING";
+	private AccountStatus accountStatus = AccountStatus.PENDING;
 
 	@Version
 	@Builder.Default
@@ -70,7 +74,7 @@ public class Account {
 		}
 		updatedAt = now;
 		if (accountStatus == null) {
-			accountStatus = "PENDING";
+			accountStatus = AccountStatus.PENDING;
 		}
 		if (version == null) {
 			version = 0;
