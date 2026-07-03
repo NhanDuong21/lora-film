@@ -157,7 +157,7 @@ public class BookingServiceImplTest {
         when(seatReservationRepository.findAllById(request.getReservationIds())).thenReturn(Arrays.asList(res));
         
         BusinessException e = assertThrows(BusinessException.class, () -> bookingService.createBooking(request, idempotencyKey));
-        assertEquals("BOOKING_RESERVATION_NOT_OWNED", e.getErrorCode());
+        assertEquals("SEAT_RESERVATION_OWNERSHIP_MISMATCH", e.getErrorCode());
     }
 
     // TEST 4: Reject mixed showtime reservations
@@ -171,7 +171,7 @@ public class BookingServiceImplTest {
         when(seatReservationRepository.findAllById(request.getReservationIds())).thenReturn(Arrays.asList(res1, res2));
         
         BusinessException e = assertThrows(BusinessException.class, () -> bookingService.createBooking(request, idempotencyKey));
-        assertEquals("BOOKING_RESERVATION_SHOWTIME_MISMATCH", e.getErrorCode());
+        assertEquals("BOOKING_MULTIPLE_SHOWTIMES_NOT_ALLOWED", e.getErrorCode());
     }
 
     // TEST 5: Reject expired reservation
@@ -183,7 +183,7 @@ public class BookingServiceImplTest {
         when(seatReservationRepository.findAllById(request.getReservationIds())).thenReturn(Arrays.asList(res));
         
         BusinessException e = assertThrows(BusinessException.class, () -> bookingService.createBooking(request, idempotencyKey));
-        assertEquals("BOOKING_RESERVATION_EXPIRED", e.getErrorCode());
+        assertEquals("SEAT_RESERVATION_EXPIRED", e.getErrorCode());
     }
 
     // TEST 6: Reject invalid reservation status
@@ -195,7 +195,7 @@ public class BookingServiceImplTest {
         when(seatReservationRepository.findAllById(request.getReservationIds())).thenReturn(Arrays.asList(res));
         
         BusinessException e = assertThrows(BusinessException.class, () -> bookingService.createBooking(request, idempotencyKey));
-        assertEquals("BOOKING_RESERVATION_INVALID_STATUS", e.getErrorCode());
+        assertEquals("BOOKING_INVALID_STATUS", e.getErrorCode());
     }
 
     // TEST 7: Verify reservation status HELD -> CONVERTED (done in Test 1)
@@ -252,7 +252,7 @@ public class BookingServiceImplTest {
         when(bookingRepository.findById(500L)).thenReturn(Optional.of(booking));
         
         BusinessException e = assertThrows(BusinessException.class, () -> bookingService.cancelBooking(500L, idempotencyKey));
-        assertEquals("BOOKING_CANNOT_CANCEL_CONFIRMED", e.getErrorCode());
+        assertEquals("BOOKING_CANNOT_BE_CANCELLED", e.getErrorCode());
     }
 
     // TEST 14: Optimistic lock conflict
@@ -269,7 +269,7 @@ public class BookingServiceImplTest {
         when(movieServiceClient.getShowtime(showtimeId)).thenThrow(new RuntimeException("Service down"));
         
         BusinessException e = assertThrows(BusinessException.class, () -> bookingService.createBooking(request, idempotencyKey));
-        assertEquals("BOOKING_PRICE_UNAVAILABLE", e.getErrorCode());
+        assertEquals("MOVIE_SERVICE_UNAVAILABLE", e.getErrorCode());
     }
 
     // TEST 16: Booking code uniqueness collision handling

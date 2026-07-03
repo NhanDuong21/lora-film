@@ -183,13 +183,13 @@ public class SeatReservationIntegrationTest {
         mockMvc.perform(get("/api/bookings/seat-reservations/" + reservation.getId())
                 .header("Authorization", "Bearer " + userBToken))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.errorCode").value("SEAT_RESERVATION_OWNERSHIP_MISMATCH"));
 
         // DELETE
         mockMvc.perform(delete("/api/bookings/seat-reservations/" + reservation.getId())
                 .header("Authorization", "Bearer " + userBToken))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.errorCode").value("SEAT_RESERVATION_OWNERSHIP_MISMATCH"));
     }
 
     @Test

@@ -67,22 +67,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 
         String idempotencyKey = request.getHeader("Idempotency-Key");
         if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
-            // Endpoints that require it will fail at controller level, or we can just let it pass
-            // but the requirement says "Extract the mandatory header Idempotency-Key"
-            // We will only enforce it if the controller requires it. Since some POSTs might not require it.
-            // Actually, wait, let's check if the path is one of the impacted endpoints.
-            String path = request.getRequestURI();
-            boolean isImpacted = path.startsWith("/api/bookings") || path.startsWith("/internal/bookings");
-            if (isImpacted) {
-                // If the header is missing but the endpoint is impacted, let the controller handle the @RequestHeader validation.
-                // We'll just pass it through if no key is provided, or return 400.
-                // For safety, let's just let it pass if missing, controller will throw MissingRequestHeaderException.
-                filterChain.doFilter(request, response);
-                return;
-            } else {
-                filterChain.doFilter(request, response);
-                return;
-            }
+            filterChain.doFilter(request, response);
+            return;
         }
 
         try {
@@ -169,7 +155,12 @@ public class IdempotencyFilter extends OncePerRequestFilter {
                     wrappedResponse.getContentType()
             );
 
-            idempotencyService.save(idempotencyKey, newRecord);
+            int status = wrappedResponse.getStatus();
+            if (status >= 200 && status < 400) {
+                idempotencyService.save(idempotencyKey, newRecord);
+            } else {
+                idempotencyService.remove(idempotencyKey);
+            }
 
             wrappedResponse.copyBodyToResponse();
         } catch (Exception e) {
