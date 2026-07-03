@@ -459,7 +459,28 @@ Status: **409 Conflict**
 **Case 2: Lỗi trùng lặp dữ liệu (Đã tồn tại)**
 Status: **409 Conflict**
 
-Trùng Số Điện Thoại:
+Trùng Cả Số Điện Thoại và CCCD (Báo lỗi nhiều field cùng lúc):
+```json
+{
+  "success": false,
+  "message": "Registration information (Phone number or CCCD) already exists.",
+  "errorCode": "VALIDATION_ERROR",
+  "errors": [
+    {
+      "field": "phoneNumber",
+      "code": "Duplicate",
+      "message": "Phone number already exists or is reserved."
+    },
+    {
+      "field": "cccd",
+      "code": "Duplicate",
+      "message": "CCCD already exists or is reserved."
+    }
+  ]
+}
+```
+
+Trùng Số Điện Thoại (chỉ 1 field):
 ```json
 {
   "success": false,
@@ -469,7 +490,7 @@ Trùng Số Điện Thoại:
 }
 ```
 
-Trùng CCCD:
+Trùng CCCD (chỉ 1 field):
 ```json
 {
   "success": false,

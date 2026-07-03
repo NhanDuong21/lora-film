@@ -213,22 +213,33 @@ public class AuthServiceImpl implements AuthService {
 					redisTemplate.delete("temp_request:" + requestId);
                     
                     String message = "Registration information (Phone number or CCCD) already exists.";
-                    if ("PHONE_NUMBER_RESERVED".equals(result.getErrorCode())) {
+                    if ("PHONE_NUMBER_AND_CCCD_RESERVED".equals(result.getErrorCode())) {
+                        message = "Phone number and CCCD are currently reserved by another pending registration. Please try again later.";
+                    } else if ("PHONE_NUMBER_RESERVED".equals(result.getErrorCode())) {
                         message = "Phone number is currently reserved by another pending registration. Please try again later.";
                     } else if ("CCCD_RESERVED".equals(result.getErrorCode())) {
                         message = "CCCD is currently reserved by another pending registration. Please try again later.";
+                    } else if ("PHONE_NUMBER_AND_CCCD_ALREADY_EXIST".equals(result.getErrorCode())) {
+                        message = "Phone number and CCCD already exist.";
                     } else if ("PHONE_NUMBER_ALREADY_EXISTS".equals(result.getErrorCode())) {
                         message = "Phone number already exists.";
                     } else if ("CCCD_ALREADY_EXISTS".equals(result.getErrorCode())) {
                         message = "CCCD already exists.";
                     }
                     
+                    java.util.List<com.project.authservice.common.ApiResponse.ValidationError> validationErrors = null;
+                    if ("PHONE_NUMBER_AND_CCCD_ALREADY_EXIST".equals(result.getErrorCode()) || "PHONE_NUMBER_AND_CCCD_RESERVED".equals(result.getErrorCode())) {
+                        validationErrors = java.util.Arrays.asList(
+                            new com.project.authservice.common.ApiResponse.ValidationError("phoneNumber", "Duplicate", "Phone number already exists or is reserved."),
+                            new com.project.authservice.common.ApiResponse.ValidationError("cccd", "Duplicate", "CCCD already exists or is reserved.")
+                        );
+                        // Also change the errorCode to VALIDATION_ERROR so the frontend handles it like standard validation errors
+                        throw new RegistrationConflictException(message, "VALIDATION_ERROR", result.getRetryAfterSeconds(), validationErrors);
+                    }
+
                     if (result.getRetryAfterSeconds() != null) {
                         throw new RegistrationConflictException(message, result.getErrorCode(), result.getRetryAfterSeconds());
                     }
-                    // For already exists, use DuplicateResourceException mapped to BUSINESS_ERROR previously, 
-                    // but since the requirement says "Replace the generic error code with the following specific error codes",
-                    // we will throw RegistrationConflictException for all to carry the correct errorCode.
 					throw new RegistrationConflictException(message, result.getErrorCode() != null ? result.getErrorCode() : "BUSINESS_ERROR", null);
 				}
 			} catch (TimeoutException e) {

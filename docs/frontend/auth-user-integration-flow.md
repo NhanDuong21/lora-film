@@ -75,6 +75,7 @@ sequenceDiagram
     - Chuyển hướng sang màn hình Xác thực OTP (`/verify-otp`) kèm theo dữ liệu email qua `location.state` để tự điền.
   - **Khi xảy ra lỗi (Error Mapping)**:
     - `AUTH_EMAIL_ALREADY_EXISTS` $\rightarrow$ Hiển thị lỗi ngay bên dưới ô nhập Email.
+    - `VALIDATION_ERROR` (Kèm mảng `errors`) $\rightarrow$ Bóc tách từng đối tượng lỗi trong mảng (như `phoneNumber`, `cccd`, `email`, v.v.) để hiển thị cảnh báo đỏ bên dưới **nhiều ô nhập liệu cùng lúc**. (Áp dụng khi hệ thống phát hiện trùng cả SĐT và CCCD, bị khóa trong Redis, hoặc khi bị lỗi định dạng dữ liệu).
     - `PHONE_NUMBER_ALREADY_EXISTS` $\rightarrow$ Hiển thị lỗi bên dưới ô nhập Số điện thoại.
     - `CCCD_ALREADY_EXISTS` $\rightarrow$ Hiển thị lỗi bên dưới ô nhập CCCD.
     - `REGISTRATION_ALREADY_PENDING` $\rightarrow$ Lưu thông tin email vào `sessionStorage` và tự động chuyển hướng người dùng sang trang `/verify-otp`.

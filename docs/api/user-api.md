@@ -90,10 +90,9 @@ User Service lắng nghe sự kiện này từ Auth Service khi có yêu cầu �
 ```
 
 ### Logic Xử Lý
-1. Kiểm tra `phoneNumber` trong DB → nếu tồn tại: publish FAILED với reason `PHONE_NUMBER_ALREADY_EXISTS`
-2. Kiểm tra `cccd` trong DB → nếu tồn tại: publish FAILED với reason `CCCD_ALREADY_EXISTS`
-3. Thử reserve `phoneNumber` và `cccd` trong Redis (TTL 15 phút) → nếu đang được reserve: publish FAILED với reason `REGISTRATION_CONFLICT`
-4. Nếu tất cả OK → publish SUCCESS
+1. Kiểm tra `phoneNumber` và `cccd` trong DB → nếu cả hai tồn tại: publish FAILED với reason `PHONE_NUMBER_AND_CCCD_ALREADY_EXIST`. Nếu chỉ 1 cái tồn tại: publish FAILED với reason `PHONE_NUMBER_ALREADY_EXISTS` hoặc `CCCD_ALREADY_EXISTS` tương ứng.
+2. Kiểm tra reserve của `phoneNumber` và `cccd` trong Redis (TTL 15 phút) → nếu cả hai đang được reserve: publish FAILED với reason `PHONE_NUMBER_AND_CCCD_RESERVED`. Nếu chỉ 1 cái đang reserve: publish FAILED với reason `PHONE_NUMBER_RESERVED` hoặc `CCCD_RESERVED` tương ứng kèm theo TTL còn lại.
+3. Nếu tất cả OK → tiến hành lưu thông tin reserve vào Redis (TTL 15 phút) và publish SUCCESS.
 
 ### Sự Kiện Publish Lại (REGISTRATION_VALIDATION_RESULT)
 

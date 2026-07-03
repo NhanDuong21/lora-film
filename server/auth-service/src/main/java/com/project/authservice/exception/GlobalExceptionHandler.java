@@ -194,7 +194,7 @@ public class GlobalExceptionHandler {
 			data.put("retryAfterSeconds", exception.getRetryAfterSeconds());
 		}
 		
-		ApiResponse<Object> response = new ApiResponse<>(false, exception.getMessage(), exception.getErrorCode(), data, null);
+		ApiResponse<Object> response = new ApiResponse<>(false, exception.getMessage(), exception.getErrorCode(), data, exception.getErrors());
 		
 		ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.CONFLICT);
 		if (exception.getRetryAfterSeconds() != null) {
