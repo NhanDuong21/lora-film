@@ -172,9 +172,9 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("SCORE_INVALID_TRANSACTION_TYPE")));
+                .andExpect(jsonPath("$.errorCode", is("SCORE_ORIGINAL_TRANSACTION_INVALID")));
     }
 
     @Test
@@ -206,9 +206,9 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("SCORE_TRANSACTION_MISMATCH")));
+                .andExpect(jsonPath("$.errorCode", is("SCORE_ORIGINAL_TRANSACTION_MISMATCH")));
     }
 
     @Test
@@ -240,9 +240,9 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("SCORE_TRANSACTION_MISMATCH")));
+                .andExpect(jsonPath("$.errorCode", is("SCORE_ORIGINAL_TRANSACTION_MISMATCH")));
     }
 
     @Test
@@ -274,9 +274,9 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("SCORE_INVALID_REVOKE_AMOUNT")));
+                .andExpect(jsonPath("$.errorCode", is("SCORE_REVOKE_AMOUNT_EXCEEDS_ORIGINAL")));
     }
 
     @Test
@@ -315,7 +315,7 @@ public class ScoreRevokeControllerIntegrationTest {
                 .accumulatedAfter(50)
                 .idempotencyKey("idem-revoke-prev-6")
                 .referenceHistory(original)
-                .requestedPointChange(50)
+                .requestedPointChange(-50)
                 .reconciliationStatus(ReconciliationStatus.NONE)
                 .outstandingPoints(0)
                 .requestId(UUID.randomUUID().toString())
@@ -328,9 +328,9 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("SCORE_ALREADY_REVOKED")));
+                .andExpect(jsonPath("$.errorCode", is("SCORE_REVOKE_ALREADY_PROCESSED")));
     }
 
     @Test
@@ -361,7 +361,7 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.userId", is(userId.intValue())))
                 .andExpect(jsonPath("$.data.requestedPoints", is(30)))
@@ -369,6 +369,9 @@ public class ScoreRevokeControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.outstandingPoints", is(0)))
                 .andExpect(jsonPath("$.data.currentPoints", is(70)))
                 .andExpect(jsonPath("$.data.accumulatedPoints", is(70)))
+                .andExpect(jsonPath("$.data.previousTier", is("SILVER")))
+                .andExpect(jsonPath("$.data.currentTier", is("SILVER")))
+                .andExpect(jsonPath("$.data.tierChanged", is(false)))
                 .andExpect(jsonPath("$.data.reconciliationStatus", is("NONE")))
                 .andExpect(jsonPath("$.data.requiresManualReconciliation", is(false)))
                 .andExpect(jsonPath("$.data.idempotent", is(false)));
@@ -408,13 +411,16 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.requestedPoints", is(40)))
                 .andExpect(jsonPath("$.data.deductedPoints", is(10)))
                 .andExpect(jsonPath("$.data.outstandingPoints", is(30)))
                 .andExpect(jsonPath("$.data.currentPoints", is(0)))
                 .andExpect(jsonPath("$.data.accumulatedPoints", is(60))) // Deducted by requested revoke points (100 - 40)
+                .andExpect(jsonPath("$.data.previousTier", is("SILVER")))
+                .andExpect(jsonPath("$.data.currentTier", is("SILVER")))
+                .andExpect(jsonPath("$.data.tierChanged", is(false)))
                 .andExpect(jsonPath("$.data.reconciliationStatus", is("PENDING")))
                 .andExpect(jsonPath("$.data.requiresManualReconciliation", is(true)));
 
@@ -453,13 +459,16 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.requestedPoints", is(40)))
                 .andExpect(jsonPath("$.data.deductedPoints", is(0)))
                 .andExpect(jsonPath("$.data.outstandingPoints", is(40)))
                 .andExpect(jsonPath("$.data.currentPoints", is(0)))
                 .andExpect(jsonPath("$.data.accumulatedPoints", is(60)))
+                .andExpect(jsonPath("$.data.previousTier", is("SILVER")))
+                .andExpect(jsonPath("$.data.currentTier", is("SILVER")))
+                .andExpect(jsonPath("$.data.tierChanged", is(false)))
                 .andExpect(jsonPath("$.data.reconciliationStatus", is("PENDING")))
                 .andExpect(jsonPath("$.data.requiresManualReconciliation", is(true)));
     }
@@ -494,7 +503,10 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.previousTier", is("GOLD")))
+                .andExpect(jsonPath("$.data.currentTier", is("SILVER")))
+                .andExpect(jsonPath("$.data.tierChanged", is(true)));
 
         // Verify Database
         UserScore updated = userScoreRepository.findByUserId(userId).orElseThrow();
@@ -533,7 +545,7 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.idempotent", is(false)));
 
         // 2nd retry
@@ -573,7 +585,7 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request1)))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         // Same idempotencyKey/eventId but different points
         ScoreRevokeRequest request2 = new ScoreRevokeRequest(userId, 1012L, 40, "evt-earn-orig-12", "evt-revoke-12", "idem-revoke-12", "Refund");
@@ -629,7 +641,7 @@ public class ScoreRevokeControllerIntegrationTest {
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
                             .andReturn().getResponse().getStatus();
-                    if (status == 200) {
+                    if (status == 200 || status == 201) {
                         successCount.incrementAndGet();
                     } else {
                         failureCount.incrementAndGet();
@@ -756,7 +768,7 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict());
 
         // Verify balance remains 100
         UserScore updated = userScoreRepository.findByUserId(userId).orElseThrow();

@@ -8,6 +8,9 @@ public class ScoreRevokeResponse {
     private Integer outstandingPoints;
     private Integer currentPoints;
     private Integer accumulatedPoints;
+    private String previousTier;
+    private String currentTier;
+    private Boolean tierChanged;
     private Long historyId;
     private String reconciliationStatus;
     private Boolean requiresManualReconciliation;
@@ -16,7 +19,7 @@ public class ScoreRevokeResponse {
     public ScoreRevokeResponse() {
     }
 
-    public ScoreRevokeResponse(Long userId, Long bookingId, Integer requestedPoints, Integer deductedPoints, Integer outstandingPoints, Integer currentPoints, Integer accumulatedPoints, Long historyId, String reconciliationStatus, Boolean requiresManualReconciliation, Boolean idempotent) {
+    public ScoreRevokeResponse(Long userId, Long bookingId, Integer requestedPoints, Integer deductedPoints, Integer outstandingPoints, Integer currentPoints, Integer accumulatedPoints, String previousTier, String currentTier, Boolean tierChanged, Long historyId, String reconciliationStatus, Boolean requiresManualReconciliation, Boolean idempotent) {
         this.userId = userId;
         this.bookingId = bookingId;
         this.requestedPoints = requestedPoints;
@@ -24,6 +27,9 @@ public class ScoreRevokeResponse {
         this.outstandingPoints = outstandingPoints;
         this.currentPoints = currentPoints;
         this.accumulatedPoints = accumulatedPoints;
+        this.previousTier = previousTier;
+        this.currentTier = currentTier;
+        this.tierChanged = tierChanged;
         this.historyId = historyId;
         this.reconciliationStatus = reconciliationStatus;
         this.requiresManualReconciliation = requiresManualReconciliation;
@@ -84,6 +90,30 @@ public class ScoreRevokeResponse {
 
     public void setAccumulatedPoints(Integer accumulatedPoints) {
         this.accumulatedPoints = accumulatedPoints;
+    }
+
+    public String getPreviousTier() {
+        return previousTier;
+    }
+
+    public void setPreviousTier(String previousTier) {
+        this.previousTier = previousTier;
+    }
+
+    public String getCurrentTier() {
+        return currentTier;
+    }
+
+    public void setCurrentTier(String currentTier) {
+        this.currentTier = currentTier;
+    }
+
+    public Boolean getTierChanged() {
+        return tierChanged;
+    }
+
+    public void setTierChanged(Boolean tierChanged) {
+        this.tierChanged = tierChanged;
     }
 
     public Long getHistoryId() {

@@ -1664,7 +1664,7 @@ Trong đó:
 reconciliation_status = NONE | PENDING | RESOLVED
 ```
 
-### Response
+### Response (HTTP 201 Created cho lần đầu, HTTP 200 OK khi idempotent)
 
 ```json
 {
@@ -1678,9 +1678,13 @@ reconciliation_status = NONE | PENDING | RESOLVED
     "outstandingPoints": 80,
     "currentPoints": 0,
     "accumulatedPoints": 250,
+    "previousTier": "GOLD",
+    "currentTier": "SILVER",
+    "tierChanged": true,
     "historyId": 7006,
     "reconciliationStatus": "PENDING",
-    "requiresManualReconciliation": true
+    "requiresManualReconciliation": true,
+    "idempotent": false
   }
 }
 ```
@@ -2282,9 +2286,12 @@ Quy tắc:
 | `SCORE_EVENT_ALREADY_PROCESSED`        | 409 hoặc 200 | Event đã xử lý                 |
 | `SCORE_ORIGINAL_TRANSACTION_NOT_FOUND` |          404 | Không tìm thấy transaction gốc |
 | `SCORE_ORIGINAL_TRANSACTION_INVALID`   |          409 | Giao dịch gốc không hợp lệ     |
+| `SCORE_ORIGINAL_TRANSACTION_MISMATCH`  |          409 | Giao dịch gốc không khớp user/booking |
 | `SCORE_REFUND_AMOUNT_EXCEEDS_ORIGINAL` |          409 | Số điểm refund vượt quá gốc    |
+| `SCORE_REVOKE_AMOUNT_EXCEEDS_ORIGINAL` |          409 | Số điểm thu hồi vượt quá gốc   |
 | `SCORE_REFUND_ALREADY_PROCESSED`       |          409 | Hoàn điểm rồi                  |
 | `SCORE_REVOKE_ALREADY_PROCESSED`       |          409 | Thu hồi rồi                    |
+| `SCORE_IDEMPOTENCY_CONFLICT`           |          409 | Xung đột idempotency key/event |
 | `SCORE_REDEEM_NOT_ALLOWED`             |          409 | Không được redeem              |
 | `SCORE_RECONCILIATION_REQUIRED`        |          409 | Còn outstanding revoke cần reconciliation |
 | `SCORE_TIER_NOT_FOUND`                 |          404 | Không tìm thấy tier            |
