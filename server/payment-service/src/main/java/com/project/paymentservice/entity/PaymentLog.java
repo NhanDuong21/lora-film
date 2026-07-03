@@ -1,22 +1,41 @@
 package com.project.paymentservice.entity;
 
+import com.project.paymentservice.enumtype.ActorType;
+import com.project.paymentservice.enumtype.PaymentLogEventType;
 import com.project.paymentservice.enumtype.PaymentStatus;
 import jakarta.persistence.*;
-import org.hibernate.annotations.CreationTimestamp;
-
+import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "payment_logs")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class PaymentLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "payment_id", nullable = false)
-    private Payment payment;
+    @Column(name = "payment_id", nullable = false)
+    private Long paymentId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "event_type", nullable = false, length = 50)
+    private PaymentLogEventType eventType;
+
+    @Column(name = "source", nullable = false, length = 50)
+    private String source;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actor_type", nullable = false, length = 30)
+    private ActorType actorType;
+
+    @Column(name = "actor_account_id")
+    private Long actorAccountId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "previous_status", length = 30)
@@ -26,60 +45,15 @@ public class PaymentLog {
     @Column(name = "current_status", nullable = false, length = 30)
     private PaymentStatus currentStatus;
 
-    @Column(name = "log_message", columnDefinition = "TEXT")
-    private String logMessage;
+    @Column(name = "message_sanitized", columnDefinition = "TEXT")
+    private String messageSanitized;
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "metadata_sanitized", columnDefinition = "TEXT")
+    private String metadataSanitized;
+
+    @Column(name = "correlation_id", length = 100)
+    private String correlationId;
+
+    @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    public PaymentLog() {}
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Payment getPayment() {
-        return payment;
-    }
-
-    public void setPayment(Payment payment) {
-        this.payment = payment;
-    }
-
-    public PaymentStatus getPreviousStatus() {
-        return previousStatus;
-    }
-
-    public void setPreviousStatus(PaymentStatus previousStatus) {
-        this.previousStatus = previousStatus;
-    }
-
-    public PaymentStatus getCurrentStatus() {
-        return currentStatus;
-    }
-
-    public void setCurrentStatus(PaymentStatus currentStatus) {
-        this.currentStatus = currentStatus;
-    }
-
-    public String getLogMessage() {
-        return logMessage;
-    }
-
-    public void setLogMessage(String logMessage) {
-        this.logMessage = logMessage;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
 }

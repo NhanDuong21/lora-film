@@ -2,21 +2,19 @@ package com.project.paymentservice.entity;
 
 import com.project.paymentservice.enumtype.PaymentMethod;
 import com.project.paymentservice.enumtype.PaymentStatus;
+import com.project.paymentservice.enumtype.ReconciliationStatus;
 import jakarta.persistence.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
+import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-    name = "payments",
-    indexes = {
-        @Index(name = "idx_payments_booking_id", columnList = "booking_id"),
-        @Index(name = "idx_payments_status_expires_at", columnList = "status, expires_at")
-    }
-)
+@Table(name = "payments")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Payment {
 
     @Id
@@ -29,155 +27,85 @@ public class Payment {
     @Column(name = "booking_id", nullable = false)
     private Long bookingId;
 
-    @Column(name = "amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "account_id", nullable = false)
+    private Long accountId;
+
+    @Column(name = "attempt_number", nullable = false)
+    private Integer attemptNumber;
+
+    @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
+
+    @Column(name = "currency", nullable = false, length = 10)
+    @Builder.Default
+    private String currency = "VND";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", nullable = false, length = 30)
     private PaymentMethod paymentMethod;
 
-    @Column(name = "external_transaction_id", unique = true, length = 100)
-    private String externalTransactionId;
+    @Column(name = "provider_order_id", length = 150)
+    private String providerOrderId;
 
     @Column(name = "provider_session_id", length = 150)
     private String providerSessionId;
 
-    @Column(name = "payment_url", columnDefinition = "TEXT")
-    private String paymentUrl;
+    @Column(name = "external_transaction_id", length = 150)
+    private String externalTransactionId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
+    @Builder.Default
     private PaymentStatus status = PaymentStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reconciliation_status", nullable = false, length = 30)
+    @Builder.Default
+    private ReconciliationStatus reconciliationStatus = ReconciliationStatus.NONE;
+
+    @Column(name = "reconciliation_reason", length = 255)
+    private String reconciliationReason;
+
+    @Column(name = "reconciliation_resolved_at")
+    private LocalDateTime reconciliationResolvedAt;
+
+    @Column(name = "settlement_hold_until")
+    private LocalDateTime settlementHoldUntil;
 
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
-    @Column(name = "raw_response_payload", columnDefinition = "TEXT")
-    private String rawResponsePayload;
+    @Column(name = "failure_code", length = 100)
+    private String failureCode;
+
+    @Column(name = "failure_message_sanitized", columnDefinition = "TEXT")
+    private String failureMessageSanitized;
+
+    @Column(name = "provider_response_code", length = 100)
+    private String providerResponseCode;
+
+    @Column(name = "succeeded_at")
+    private LocalDateTime succeededAt;
+
+    @Column(name = "failed_at")
+    private LocalDateTime failedAt;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "expired_at")
+    private LocalDateTime expiredAt;
+
+    @Column(name = "latest_provider_summary_sanitized", columnDefinition = "TEXT")
+    private String latestProviderSummarySanitized;
 
     @Version
     @Column(name = "version", nullable = false)
-    private Integer version = 0;
+    private Integer version;
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
-
-    public Payment() {}
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getPaymentTransactionCode() {
-        return paymentTransactionCode;
-    }
-
-    public void setPaymentTransactionCode(String paymentTransactionCode) {
-        this.paymentTransactionCode = paymentTransactionCode;
-    }
-
-    public Long getBookingId() {
-        return bookingId;
-    }
-
-    public void setBookingId(Long bookingId) {
-        this.bookingId = bookingId;
-    }
-
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
-    public PaymentMethod getPaymentMethod() {
-        return paymentMethod;
-    }
-
-    public void setPaymentMethod(PaymentMethod paymentMethod) {
-        this.paymentMethod = paymentMethod;
-    }
-
-    public String getExternalTransactionId() {
-        return externalTransactionId;
-    }
-
-    public void setExternalTransactionId(String externalTransactionId) {
-        this.externalTransactionId = externalTransactionId;
-    }
-
-    public String getProviderSessionId() {
-        return providerSessionId;
-    }
-
-    public void setProviderSessionId(String providerSessionId) {
-        this.providerSessionId = providerSessionId;
-    }
-
-    public String getPaymentUrl() {
-        return paymentUrl;
-    }
-
-    public void setPaymentUrl(String paymentUrl) {
-        this.paymentUrl = paymentUrl;
-    }
-
-    public PaymentStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(PaymentStatus status) {
-        this.status = status;
-    }
-
-    public LocalDateTime getExpiresAt() {
-        return expiresAt;
-    }
-
-    public void setExpiresAt(LocalDateTime expiresAt) {
-        this.expiresAt = expiresAt;
-    }
-
-    public String getRawResponsePayload() {
-        return rawResponsePayload;
-    }
-
-    public void setRawResponsePayload(String rawResponsePayload) {
-        this.rawResponsePayload = rawResponsePayload;
-    }
-
-    public Integer getVersion() {
-        return version;
-    }
-
-    public void setVersion(Integer version) {
-        this.version = version;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
 }

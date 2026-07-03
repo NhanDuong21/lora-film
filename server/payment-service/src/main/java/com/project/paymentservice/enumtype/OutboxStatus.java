@@ -1,10 +1,9 @@
 package com.project.paymentservice.enumtype;
 
-public enum PaymentStatus {
+public enum OutboxStatus {
     PENDING,
     PROCESSING,
-    SUCCESS,
+    PUBLISHED,
     FAILED,
-    CANCELLED,
-    EXPIRED
+    DEAD_LETTER
 }

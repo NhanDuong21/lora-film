@@ -1,5 +1,8 @@
 package com.project.paymentservice.enumtype;
 
 public enum PaymentMethod {
-    MOCK, CASH, VNPAY, MOMO
+    MOCK,
+    CASH,
+    VNPAY,
+    MOMO
 }
