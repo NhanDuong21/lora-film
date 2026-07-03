@@ -84,7 +84,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 
 ## 8. Authentication
 - Xác thực User thông qua JWT Token lấy `userId`.
-- Xác thực Internal Backend qua Header: `X-Internal-Token: <SECRET>`.
+- Xác thực Internal Backend qua Header: `X-Internal-Token: <internal-token>`.
 
 ## 9. Idempotency
 - Áp dụng trên toàn bộ lệnh POST thay đổi trạng thái.
@@ -94,7 +94,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 - **Quy trình xử lý lỗi tại Idempotency Phase**:
   - *Booking business rejection (Ví dụ hết hạn)*: Cập nhật Idempotency Record thành `FAILED` và lưu trữ cố định cấu trúc báo lỗi (deterministic error response).
   - *Temporary Booking/infrastructure failure (Lỗi hạ tầng tạm thời)*: Cập nhật thành `FAILED` kèm phân loại lỗi Retryable (deterministic stale recovery).
-  - *Provider session creation failure*: Tuyệt đối KHÔNG xóa Idempotency Record. Đánh dấu Idempotency Record là lỗi. Đánh dấu Payment `FAILED`, xóa cờ `active_payment_id` tại Guard nếu nó trỏ đúng vào ID lỗi này. Lưu response báo lỗi cố định, ghi `PaymentLog`.
+  - *Provider session creation failure*: Không được xóa Idempotency Record. Đánh dấu Idempotency Record là lỗi. Đánh dấu Payment `FAILED`, xóa cờ `active_payment_id` tại Guard nếu nó trỏ đúng vào ID lỗi này. Lưu response báo lỗi cố định, ghi `PaymentLog`.
 
 ## 10. Error conventions
 - **400 Bad Request**: Lỗi JSON, tham số sai/thiếu, sai UUID.
@@ -464,8 +464,17 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 | Idempotency | Webhook Inbox |
 | State Transition | PROCESSING -> SUCCESS / FAILED |
 
-**Validation**: Disabled in production.
-**Processing flow**: Nhận payload mô phỏng, chạy tương đương luồng Webhook.
+**Validation**: Endpoint chỉ được đăng ký trên profile local/dev/test và không được định tuyến trong production.
+
+**Processing flow**:
+1. Xác thực profile hiện tại cho phép MOCK.
+2. Validate `paymentId` và `simulatedStatus`.
+3. Tạo `deduplication_key` ổn định cho lần mô phỏng.
+4. Insert bản ghi `payment_webhook_events`.
+5. Lock Payment row và kiểm tra trạng thái hiện tại.
+6. Thực hiện transition hợp lệ sang `SUCCESS` hoặc `FAILED`.
+7. Ghi `PaymentLog`, cập nhật `booking_payment_guards` và insert các Outbox event cần thiết trong cùng local transaction.
+8. Trả `ApiResponse` dành cho môi trường phát triển/kiểm thử.
 
 ---
 ## 14. Booking Internal Contract
@@ -474,45 +483,91 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 | Item | Specification |
 |---|---|
 | Requirement ID | INT-101 |
-| Purpose | Payment lấy thông tin giỏ hàng trước khởi tạo |
+| Purpose | Payment Service lấy thông tin Booking có thẩm quyền trước khi tạo Payment attempt |
 | Status | PROPOSED |
-| Owner | Booking Service Owner |
+| Implementation Owner | Booking Service Owner |
+| Contract Requester/Reviewer | Dương Thiện Nhân — Payment Service Owner |
 | Issue | #158 |
 | Method | GET |
 | Path | `/internal/bookings/{bookingId}/payment-context` |
-| Access | INTERNAL (Không routed public) |
-| Headers | `X-Internal-Token: <SECRET>` |
+| Access | INTERNAL — không được định tuyến công khai |
+| Headers | `X-Internal-Token: <internal-token>` |
 | Path parameters | `bookingId` |
 | Query parameters | None |
 | Request body | None |
 | Idempotency | N/A |
 | State Transition | N/A |
 
-**Validation**: Token hợp lệ.
-**Database effects**: Read-only (Bên Booking).
-**Integration**: Booking.
-**Success response**: `200 OK` (Trả amount, accountId, payable, analyticsSnapshot).
-**Error responses**: `403 FORBIDDEN` (Lỗi Token).
-**Security**: `X-Internal-Token` bắt buộc.
+**Validation**:
+- `X-Internal-Token` hợp lệ.
+- `bookingId` đúng định dạng và Booking tồn tại.
+- Booking Service xác định trạng thái `payable`, chủ sở hữu, số tiền, đơn vị tiền tệ và thời hạn.
+
+**Processing flow**:
+1. Xác thực internal token.
+2. Tra cứu Booking theo `bookingId`.
+3. Tổng hợp dữ liệu thanh toán có thẩm quyền.
+4. Trả `analyticsSnapshot` bất biến phục vụ Payment Service lưu snapshot.
+
+**Database effects**: Read-only tại Booking Service.
+
+**Integration**: Booking Service là chủ sở hữu và triển khai endpoint; Payment Service là consumer.
+
+**Success response — 200 OK**:
+```json
+{
+  "success": true,
+  "message": "Booking payment context retrieved successfully",
+  "errorCode": null,
+  "data": {
+    "bookingId": 1001,
+    "accountId": 15,
+    "bookingStatus": "PENDING_PAYMENT",
+    "payable": true,
+    "amount": 250000.00,
+    "currency": "VND",
+    "expiresAt": "2026-07-03T10:15:00Z",
+    "analyticsSnapshot": {
+      "movieId": 99,
+      "movieTitle": "Avengers",
+      "ticketCount": 2
+    }
+  },
+  "errors": null
+}
+```
+
+**Error responses**:
+- `401 INTERNAL_TOKEN_INVALID`: Thiếu hoặc sai `X-Internal-Token`.
+- `404 BOOKING_NOT_FOUND`: Booking không tồn tại.
+- `409 BOOKING_NOT_PAYABLE`: Booking không còn đủ điều kiện thanh toán.
+
+**Security**:
+- `X-Internal-Token` bắt buộc.
+- Target Gateway Exposure: không định tuyến công khai.
+- Runtime Gateway Enforcement: `REQUIRES VERIFICATION`.
 
 ### 14.2. POST Payment Results
 | Item | Specification |
 |---|---|
 | Requirement ID | INT-102 |
-| Purpose | Payment gửi Outbox chốt vé sang Booking |
+| Purpose | Payment Outbox Worker gửi kết quả thanh toán sang Booking Service |
 | Status | PROPOSED |
-| Owner | Booking Service Owner |
+| Implementation Owner | Booking Service Owner |
+| Contract Requester/Reviewer | Dương Thiện Nhân — Payment Service Owner |
 | Issue | #158 |
 | Method | POST |
 | Path | `/internal/bookings/{bookingId}/payment-results` |
-| Access | INTERNAL (Không routed public) |
-| Headers | `X-Internal-Token: <SECRET>` |
+| Access | INTERNAL — không được định tuyến công khai |
+| Headers | `X-Internal-Token: <internal-token>` |
 | Path parameters | `bookingId` |
 | Query parameters | None |
 | Request body | JSON |
-| Idempotency | Event Deduplication |
-| State Transition | PENDING_PAYMENT → CONFIRMED khi result = SUCCESS và Booking chấp nhận áp dụng. |
-| FAILED / CANCELLED / EXPIRED | Không tự động thay đổi Booking status hoặc giải phóng ghế. Booking expiration thuộc Booking Service. |
+| Idempotency | Deduplicate theo `eventId` |
+| State Transition | `PENDING_PAYMENT → CONFIRMED` khi `result = SUCCESS` và Booking chấp nhận áp dụng |
+
+> `FAILED`, `CANCELLED` và `EXPIRED` là kết quả ở cấp Payment attempt. Các kết quả này không tự động thay đổi Booking status hoặc giải phóng ghế. Chính sách hết hạn Booking và giải phóng ghế thuộc Booking Service.
+
 **Request body payload**:
 ```json
 {
@@ -530,13 +585,88 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 }
 ```
 
-**Booking Result Responses (Sử dụng ApiResponse chuẩn)**:
-1. Trùng Event (Đã xử lý): 
-   `{"success": true, "message": "Result processed", "errorCode": null, "data": { "applied": false, "duplicate": true, "result": "ALREADY_PROCESSED" }}`
-2. Event Mới nhưng vé đã bị chốt bởi attempt khác (Late Success):
-   `{"success": true, "message": "Result processed", "errorCode": null, "data": { "applied": false, "duplicate": false, "result": "ALREADY_CONFIRMED_BY_ANOTHER_PAYMENT" }}`
-3. Chốt vé thành công:
-   `{"success": true, "message": "Result processed", "errorCode": null, "data": { "applied": true, "duplicate": false, "result": "BOOKING_CONFIRMED" }}`
+**Validation**:
+- `X-Internal-Token` hợp lệ.
+- `eventId`, `schemaVersion`, `paymentId`, `paymentTransactionCode`, `paymentMethod`, `result`, `amount`, `currency` và `occurredAt` hợp lệ.
+- `bookingId` trên path khớp Booking được áp dụng.
+- `externalTransactionId` có thể null với `CASH` hoặc `MOCK`.
+
+**Processing flow**:
+1. Xác thực internal token.
+2. Kiểm tra `eventId` đã được xử lý hay chưa.
+3. Nếu trùng `eventId`, trả kết quả idempotent `ALREADY_PROCESSED`.
+4. Nếu Booking đã được xác nhận bởi Payment khác, ghi nhận event nhưng không tạo vé lần hai; trả `ALREADY_CONFIRMED_BY_ANOTHER_PAYMENT`.
+5. Nếu Booking còn hợp lệ và `result = SUCCESS`, chuyển Booking sang trạng thái xác nhận và tạo các hiệu ứng nghiệp vụ đúng một lần.
+6. Lưu `eventId` trong cùng local transaction với thay đổi Booking.
+
+**Database effects**: Thực hiện tại Booking Service; deduplication record và thay đổi Booking phải cùng local transaction.
+
+**Concurrency**: Booking Service phải lock hoặc dùng optimistic concurrency để ngăn hai Payment result cùng xác nhận Booking.
+
+**Booking Result Responses — HTTP 200**:
+
+1. **Event đã xử lý**:
+```json
+{
+  "success": true,
+  "message": "Payment result already processed",
+  "errorCode": null,
+  "data": {
+    "eventId": "123e4567-e89b-12d3-a456-426614174000",
+    "applied": false,
+    "duplicate": true,
+    "result": "ALREADY_PROCESSED"
+  },
+  "errors": null
+}
+```
+
+2. **Booking đã được xác nhận bởi Payment khác**:
+```json
+{
+  "success": true,
+  "message": "Payment result acknowledged but not applied",
+  "errorCode": null,
+  "data": {
+    "eventId": "123e4567-e89b-12d3-a456-426614174000",
+    "applied": false,
+    "duplicate": false,
+    "result": "ALREADY_CONFIRMED_BY_ANOTHER_PAYMENT"
+  },
+  "errors": null
+}
+```
+
+3. **Booking được xác nhận thành công**:
+```json
+{
+  "success": true,
+  "message": "Payment result applied successfully",
+  "errorCode": null,
+  "data": {
+    "eventId": "123e4567-e89b-12d3-a456-426614174000",
+    "applied": true,
+    "duplicate": false,
+    "result": "BOOKING_CONFIRMED"
+  },
+  "errors": null
+}
+```
+
+**Error responses**:
+- `400 VALIDATION_ERROR`: Payload không hợp lệ.
+- `401 INTERNAL_TOKEN_INVALID`: Thiếu hoặc sai `X-Internal-Token`.
+- `404 BOOKING_NOT_FOUND`: Booking không tồn tại.
+
+**Delivery semantics**:
+- Ba response HTTP 200 phía trên đều là acknowledgement thành công ở góc độ Outbox delivery.
+- Với `ALREADY_CONFIRMED_BY_ANOTHER_PAYMENT`, Payment Outbox được đánh dấu `PUBLISHED`; Payment vẫn `SUCCESS` và giữ `reconciliation_status = REQUIRED`.
+- Không retry vô hạn khi Booking đã xác nhận bởi Payment khác.
+
+**Security**:
+- `X-Internal-Token` bắt buộc.
+- Target Gateway Exposure: không định tuyến công khai.
+- Runtime Gateway Enforcement: `REQUIRES VERIFICATION`.
 
 ---
 ## 15. Operations Contract
@@ -596,7 +726,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 **Integration**: None.
 **Success response**: `200 OK`.
 **Error responses**: `404 PAYMENT_NOT_FOUND`.
-**Security**: Tuyệt đối không xuất (must not expose) unsanitized raw provider payload, provider secret, internal token, card data, JWT.
+**Security**: Không được trả về unsanitized raw provider payload, provider secret, internal token, card data, JWT.
 **Audit**: N/A.
 **Observability**: N/A.
 
@@ -623,7 +753,27 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 **Database effects**: Read-only.
 **Concurrency**: None.
 **Integration**: None.
-**Success response**: `200 OK` (Tương đương Admin Detail).
+**Success response — 200 OK**:
+```json
+{
+  "success": true,
+  "message": "Payment retrieved successfully",
+  "errorCode": null,
+  "data": {
+    "paymentId": 123,
+    "paymentTransactionCode": "PAY-1001-XYZ",
+    "bookingId": 1001,
+    "accountId": 15,
+    "status": "SUCCESS",
+    "paymentMethod": "VNPAY",
+    "amount": 250000.00,
+    "currency": "VND",
+    "reconciliationStatus": "NONE",
+    "createdAt": "2026-07-03T10:00:00Z"
+  },
+  "errors": null
+}
+```
 **Error responses**: `400 VALIDATION_ERROR`, `404 PAYMENT_NOT_FOUND`.
 **Security**: Sanitized metadata only.
 **Audit**: N/A.
@@ -633,7 +783,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 | Item | Specification |
 |---|---|
 | Requirement ID | OPS-004 |
-| Purpose | Tra cứu danh sách Webhook kẹt lỗi |
+| Purpose | Tra cứu danh sách Webhook xử lý lỗi lỗi |
 | Status | PROPOSED |
 | Owner | Dương Thiện Nhân |
 | Issue | #169 |
@@ -654,7 +804,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 **Integration**: None.
 **Success response**: `200 OK` (Sanitized payload metadata only, do not return full raw provider payload by default).
 **Error responses**: `403 FORBIDDEN`.
-**Security**: Chặn RAW data.
+**Security**: Chỉ trả sanitized metadata.
 **Audit**: N/A.
 **Observability**: N/A.
 
@@ -662,7 +812,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 | Item | Specification |
 |---|---|
 | Requirement ID | OPS-005 |
-| Purpose | Tra cứu danh sách Outbox không thể phân phối |
+| Purpose | Tra cứu danh sách Outbox chưa phân phối thành công |
 | Status | PROPOSED |
 | Owner | Dương Thiện Nhân |
 | Issue | #169 |
@@ -720,7 +870,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 | Item | Specification |
 |---|---|
 | Requirement ID | OPS-007 |
-| Purpose | Admin yêu cầu hệ thống xử lý lại một Webhook kẹt |
+| Purpose | Admin yêu cầu hệ thống xử lý lại một Webhook xử lý lỗi |
 | Status | PROPOSED |
 | Owner | Dương Thiện Nhân |
 | Issue | #169 |
@@ -744,7 +894,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 **Concurrency**: Lock Webhook Row.
 **Integration**: Gọi nội bộ hàm xử lý Provider.
 **Success response**: `200 OK`.
-**Error responses**: `400 WEBHOOK_REPLAY_NOT_ALLOWED`, `404 WEBHOOK_EVENT_NOT_FOUND`, `409 IDEMPOTENCY_KEY_REUSED`.
+**Error responses**: `409 WEBHOOK_REPLAY_NOT_ALLOWED`, `404 WEBHOOK_EVENT_NOT_FOUND`, `409 IDEMPOTENCY_KEY_REUSED`.
 **Security**: Yêu cầu quyền vận hành cấp cao.
 **Audit**: Audit log ghi nhận danh tính Admin (Id) đã thực hiện thao tác Replay.
 **Observability**: MDC Trace ID tái lập.
@@ -753,7 +903,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 | Item | Specification |
 |---|---|
 | Requirement ID | OPS-008 |
-| Purpose | Admin ép hệ thống gửi lại Outbox Event |
+| Purpose | Admin yêu cầu hệ thống phát hành lại Outbox Event |
 | Status | PROPOSED |
 | Owner | Dương Thiện Nhân |
 | Issue | #169 |
@@ -776,7 +926,7 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 **Concurrency**: Lock Outbox Row.
 **Integration**: Worker sẽ pick up sau khi status chuyển PENDING.
 **Success response**: `200 OK`.
-**Error responses**: `400 OUTBOX_REPLAY_NOT_ALLOWED`, `404 OUTBOX_EVENT_NOT_FOUND`.
+**Error responses**: `409 OUTBOX_REPLAY_NOT_ALLOWED`, `404 OUTBOX_EVENT_NOT_FOUND`.
 **Security**: Quyền Admin.
 **Audit**: Ghi log người thao tác.
 **Observability**: Giữ nguyên Correlation ID/Trace ID của Outbox gốc.
@@ -823,7 +973,8 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
     "reconciliationStatus": "RESOLVED",
     "resolvedAt": "2026-07-03T11:00:00Z",
     "resolvedByAccountId": 45
-  }
+  },
+  "errors": null
 }
 ```
 **Error responses**: `409 RECONCILIATION_ALREADY_RESOLVED`, `409 IDEMPOTENCY_KEY_REUSED`.
@@ -833,35 +984,69 @@ Chuẩn `ApiResponse` của LoraFilm dành cho REST API thông thường:
 
 ---
 ## 16. Error Catalog
-| HTTP Code | Thuộc tính / Phân loại | Thông báo (Error Code) | Ý nghĩa nghiệp vụ / Nội bộ |
+
+### 16.1. Customer, Employee, Admin and Internal REST Errors
+
+| HTTP Code | Classification | Error Code | Ý nghĩa |
 |---|---|---|---|
-| 400 | REST Error | `VALIDATION_ERROR` | Lỗi JSON, tham số, sai UUID. |
-| 401 | REST Error | `UNAUTHORIZED` | Token user hết hạn / rỗng. |
-| 401 | REST Error | `INTERNAL_TOKEN_INVALID` | Lỗi X-Internal-Token. |
-| 403 | Webhook Internal | `PROVIDER_SIGNATURE_INVALID`| (Không phải REST Customer Error). Dành cho xử lý Webhook nội bộ hãng. |
-| 403 | REST Error | `FORBIDDEN` | Sai Role / Lỗi truy cập / Vi phạm Security. |
-| 404 | REST Error | `PAYMENT_NOT_FOUND` | Không có attempt Payment được nhắc đến. |
-| 409 | REST Error | `PAYMENT_ACTIVE_ATTEMPT_EXISTS`| Guard báo đang có 1 luồng bận PENDING/PROCESSING. |
-| 409 | REST Error | `PAYMENT_RETRY_TEMPORARILY_BLOCKED` | Bị chặn do Settlement Hold. |
-| 409 | REST Error | `IDEMPOTENCY_KEY_REUSED` | Trùng UUID, nhưng lệch SHA-256 Payload Hash. |
-| 409 | Internal | `PAYMENT_LATE_SUCCESS_RECONCILIATION_REQUIRED` | Internal Operation status. |
-| 502 | REST Error | `PAYMENT_SESSION_CREATION_FAILED`| Giao tiếp Provider Init tạo Session thất bại. |
-| 502 | Internal | `WEBHOOK_PROCESSING_MODE_UNVERIFIED`| Internal Operation status. |
-| 503 | REST Error | `BOOKING_SERVICE_UNAVAILABLE` | Service interruption cục bộ. |
+| 400 | REST Error | `VALIDATION_ERROR` | JSON, path/query parameter hoặc field không hợp lệ. |
+| 400 | REST Error | `IDEMPOTENCY_KEY_REQUIRED` | Thiếu hoặc sai định dạng `Idempotency-Key`. |
+| 401 | REST Error | `UNAUTHORIZED` | JWT thiếu, hết hạn hoặc không hợp lệ. |
+| 401 | Internal REST Error | `INTERNAL_TOKEN_INVALID` | Thiếu hoặc sai `X-Internal-Token`. |
+| 403 | REST Error | `FORBIDDEN` | Identity hợp lệ nhưng không có role hoặc phạm vi truy cập phù hợp. |
+| 404 | REST Error | `PAYMENT_NOT_FOUND` | Payment không tồn tại. |
+| 404 | Internal REST Error | `BOOKING_NOT_FOUND` | Booking không tồn tại. |
+| 404 | Operations Error | `WEBHOOK_EVENT_NOT_FOUND` | Webhook inbox record không tồn tại. |
+| 404 | Operations Error | `OUTBOX_EVENT_NOT_FOUND` | Outbox record không tồn tại. |
+| 409 | Business Conflict | `BOOKING_NOT_PAYABLE` | Booking không còn đủ điều kiện thanh toán. |
+| 409 | Business Conflict | `PAYMENT_ACTIVE_ATTEMPT_EXISTS` | Booking đang có Payment attempt ở trạng thái active. |
+| 409 | Business Conflict | `PAYMENT_RETRY_TEMPORARILY_BLOCKED` | Settlement Hold đang chặn tạo attempt mới. |
+| 409 | Business Conflict | `PAYMENT_CANNOT_BE_CANCELLED` | Payment không ở trạng thái hoặc phương thức cho phép hủy. |
+| 409 | Business Conflict | `CASH_AMOUNT_INSUFFICIENT` | Số tiền khách đưa nhỏ hơn số tiền cần thanh toán. |
+| 409 | Business Conflict | `CASH_ALREADY_COLLECTED` | CASH Payment đã được thu thành công. |
+| 409 | Idempotency Conflict | `IDEMPOTENCY_KEY_REUSED` | Cùng key nhưng request hash khác. |
+| 409 | Idempotency Conflict | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | Request cùng key đang được xử lý. |
+| 409 | Operations Conflict | `WEBHOOK_REPLAY_NOT_ALLOWED` | Webhook không ở trạng thái cho phép replay. |
+| 409 | Operations Conflict | `OUTBOX_REPLAY_NOT_ALLOWED` | Outbox không ở trạng thái cho phép replay. |
+| 409 | Operations Conflict | `RECONCILIATION_ALREADY_RESOLVED` | Payment đã được hoàn tất đối soát. |
+| 502 | Upstream Error | `PAYMENT_SESSION_CREATION_FAILED` | Provider không tạo được checkout/session hợp lệ. |
+| 503 | Integration Error | `BOOKING_SERVICE_UNAVAILABLE` | Booking Service tạm thời không khả dụng. |
+
+### 16.2. Internal Processing Results
+
+Các giá trị dưới đây là kết quả nội bộ hoặc business acknowledgement, không phải lỗi REST dành cho Customer:
+
+| Code | Ý nghĩa |
+|---|---|
+| `PAYMENT_LATE_SUCCESS_RECONCILIATION_REQUIRED` | Late success đã được ghi nhận và cần đối soát. |
+| `ALREADY_PROCESSED` | Booking đã xử lý cùng `eventId`. |
+| `ALREADY_CONFIRMED_BY_ANOTHER_PAYMENT` | Booking đã được xác nhận bởi Payment khác. |
+| `BOOKING_CONFIRMED` | Booking đã áp dụng Payment result thành công. |
+
+### 16.3. Provider Callback Errors
+
+- `PROVIDER_SIGNATURE_INVALID` là kết quả xử lý webhook nội bộ, không có HTTP status chung cố định trong tài liệu này.
+- HTTP status và acknowledgement trả cho VNPay/MoMo phải tuân theo tài liệu chính thức của từng Provider:
+  `REQUIRES OFFICIAL PROVIDER DOCUMENT VERIFICATION`.
+- Provider callback không sử dụng LoraFilm `ApiResponse`.
 
 ---
 ## 17. Security Matrix
+
 | Requirement ID | Endpoint/Category | Target Gateway Exposure | Runtime Gateway Verification | Role | Ownership/Scope | Internal Token | Provider Signature | Profile Restriction | Idempotency | Sensitive Data Rules |
 |---|---|---|---|---|---|---|---|---|---|---|
-| SEC-101 | Customer Create | PUBLIC | REQUIRES VERIF. | CUSTOMER | Chủ tài khoản | Không | Không | Disabled in Prod (MOCK)| Canonical SHA256 | Chặn RAW Data |
-| SEC-102 | Cust. Detail/Status| PUBLIC | REQUIRES VERIF. | CUSTOMER | Chủ tài khoản | Không | Không | Không | Không | Chỉ Sanitized Metadata |
-| SEC-104 | Cust. History | PUBLIC | REQUIRES VERIF. | CUSTOMER | Chủ tài khoản | Không | Không | Không | Không | Mảng an toàn |
-| SEC-105 | Cust. Cancel | PUBLIC | REQUIRES VERIF. | CUSTOMER | Chủ tài khoản | Không | Không | Không | Canonical SHA256 | N/A |
-| SEC-201 | Emp. CASH Create | PUBLIC | REQUIRES VERIF. | EMPLOYEE, ADMIN | System-wide | Không | Không | Không | Canonical SHA256 | N/A |
-| SEC-202 | Emp. CASH Collect | PUBLIC | REQUIRES VERIF. | EMPLOYEE, ADMIN | System-wide | Không | Không | Không | Canonical SHA256 | Audit Log Thu Ngân |
-| SEC-301 | Admin Endpoints | PUBLIC | REQUIRES VERIF. | ADMIN | System-wide operational access | Không | Không | Không | Canonical SHA256 (cho thao tác Replay/Resolve) | Sanitized metadata (Cấm RAW Payload) |
-| SEC-401 | Webhook Callback | PUBLIC | REQUIRES VERIF. | N/A | Provider | Không | REQUIRES VERIF. | Disabled in Prod (MOCK) | Inbox Dedup | Sanitize RAW Data |
-| SEC-501 | Booking Internal API | Không Routed Public | REQUIRES VERIF. | N/A | Server to Server | Mandatory | Không | Không | Event Dedup | N/A |
+| SEC-101 | Customer Create | PUBLIC | REQUIRES VERIFICATION | CUSTOMER | Payment/Booking thuộc `userId` | Không | Không | `MOCK` chỉ non-production | Canonical SHA-256 | Không nhận amount từ Frontend; không trả provider payload |
+| SEC-102 | Customer Detail/Status | PUBLIC | REQUIRES VERIFICATION | CUSTOMER | `Payment.account_id == JWT.userId` | Không | Không | Không | Không | Chỉ trả sanitized metadata |
+| SEC-103 | Customer History | PUBLIC | REQUIRES VERIFICATION | CUSTOMER | Booking/attempt thuộc `userId` | Không | Không | Không | Không | Không lộ dữ liệu tài khoản khác |
+| SEC-104 | Customer Cancel | PUBLIC | REQUIRES VERIFICATION | CUSTOMER | Payment thuộc `userId` | Không | Không | Không | Canonical SHA-256 | Không expose provider internals |
+| SEC-201 | Employee CASH Create | PUBLIC | REQUIRES VERIFICATION | EMPLOYEE, ADMIN | Phạm vi nghiệp vụ quầy theo policy | Không | Không | Không | Canonical SHA-256 | Amount lấy từ Booking |
+| SEC-202 | Employee CASH Collect/Cancel | PUBLIC | REQUIRES VERIFICATION | EMPLOYEE, ADMIN | Phạm vi nghiệp vụ quầy theo policy | Không | Không | Không | Canonical SHA-256 | Cashier lấy từ JWT; audit bắt buộc |
+| SEC-301 | Admin Operations | PUBLIC | REQUIRES VERIFICATION | ADMIN | System-wide operational access | Không | Không | Không | Canonical SHA-256 cho replay/resolve | Chỉ sanitized metadata; không expose raw payload/secret/token/card data |
+| SEC-401 | VNPay Callback | PUBLIC | REQUIRES VERIFICATION | N/A | Provider callback | Không | REQUIRES OFFICIAL PROVIDER DOCUMENT VERIFICATION | Không | Webhook Inbox Deduplication | Sanitize trước khi persist; không dùng `ApiResponse` |
+| SEC-402 | MoMo Callback | PUBLIC | REQUIRES VERIFICATION | N/A | Provider callback | Không | REQUIRES OFFICIAL PROVIDER DOCUMENT VERIFICATION | Không | Webhook Inbox Deduplication | Sanitize trước khi persist; không dùng `ApiResponse` |
+| SEC-403 | MOCK Callback | Disabled và không routed trong production | REQUIRES VERIFICATION | N/A | Dev/Test only | Không | Không | Local/Dev/Test only | Webhook Inbox Deduplication | Không publish MOCK revenue vào production topic |
+| SEC-501 | Booking Payment Context | Không định tuyến công khai | REQUIRES VERIFICATION | N/A | Service-to-service | Bắt buộc | Không | Không | Không | Chỉ trả dữ liệu contract cần thiết |
+| SEC-502 | Booking Payment Results | Không định tuyến công khai | REQUIRES VERIFICATION | N/A | Service-to-service | Bắt buộc | Không | Không | Deduplicate theo `eventId` | Không chứa secret hoặc raw provider payload |
 
 ---
 ## 18. Requirement Traceability
