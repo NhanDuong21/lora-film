@@ -39,8 +39,7 @@ public class PersistenceAndConstraintTest {
 
     @Test
     @Transactional
-    void testPaymentPersistenceAndConstraints() {
-        // Test same Booking allows multiple attempts
+    void testSameBookingAllowsMultipleAttempts() {
         Payment p1 = Payment.builder()
                 .paymentTransactionCode("TXN-1")
                 .bookingId(1L)
@@ -62,11 +61,25 @@ public class PersistenceAndConstraintTest {
                 .expiresAt(LocalDateTime.now().plusMinutes(15))
                 .build();
         paymentRepository.saveAndFlush(p2);
+    }
+    
+    @Test
+    @Transactional
+    void testDuplicateBookingAttemptFails() {
+        Payment p1 = Payment.builder()
+                .paymentTransactionCode("TXN-DUP-1")
+                .bookingId(99L)
+                .accountId(10L)
+                .attemptNumber(1)
+                .amount(new BigDecimal("100000"))
+                .paymentMethod(PaymentMethod.VNPAY)
+                .expiresAt(LocalDateTime.now().plusMinutes(15))
+                .build();
+        paymentRepository.saveAndFlush(p1);
         
-        // Duplicate (booking_id, attempt_number) fails
         Payment p3 = Payment.builder()
-                .paymentTransactionCode("TXN-3")
-                .bookingId(1L)
+                .paymentTransactionCode("TXN-DUP-2")
+                .bookingId(99L)
                 .accountId(10L)
                 .attemptNumber(1)
                 .amount(new BigDecimal("100000"))
@@ -74,8 +87,11 @@ public class PersistenceAndConstraintTest {
                 .expiresAt(LocalDateTime.now().plusMinutes(15))
                 .build();
         assertThrows(Exception.class, () -> paymentRepository.saveAndFlush(p3));
-        
-        // Multiple NULL external_transaction_id allowed
+    }
+    
+    @Test
+    @Transactional
+    void testMultipleNullExternalTransactionIdAllowed() {
         Payment p4 = Payment.builder()
                 .paymentTransactionCode("TXN-4")
                 .bookingId(2L)

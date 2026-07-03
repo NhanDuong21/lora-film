@@ -29,49 +29,56 @@ public class ConcurrencyTest {
     @Test
     void testPessimisticGuardLocking() throws InterruptedException {
         // Prepare guard
-        guardRepository.insertIfAbsent(999L);
+        transactionTemplate.execute(status -> {
+            guardRepository.insertIfAbsent(999L);
+            return null;
+        });
         
         CountDownLatch tx1Ready = new CountDownLatch(1);
         CountDownLatch tx1Done = new CountDownLatch(1);
-        AtomicBoolean tx2AcquiredLockBeforeTx1Done = new AtomicBoolean(false);
+        long[] times = new long[2]; // times[0] = tx1 end sleep, times[1] = tx2 acquire lock
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
-        
-        executor.submit(() -> {
-            transactionTemplate.execute(status -> {
-                BookingPaymentGuard guard = guardRepository.findByBookingIdForUpdate(999L).orElseThrow();
-                tx1Ready.countDown();
-                try {
-                    // Hold lock for a while
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                return null;
-            });
-            tx1Done.countDown();
-        });
-        
+
         executor.submit(() -> {
             try {
-                tx1Ready.await(); // wait until tx1 has lock
                 transactionTemplate.execute(status -> {
-                    // This should block until tx1 finishes
                     guardRepository.findByBookingIdForUpdate(999L).orElseThrow();
-                    if (tx1Done.getCount() > 0) {
-                        // We acquired lock but tx1 is not done, this means lock failed!
-                        tx2AcquiredLockBeforeTx1Done.set(true);
+                    tx1Ready.countDown();
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                     }
+                    times[0] = System.currentTimeMillis();
                     return null;
                 });
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                tx1Done.countDown();
             }
         });
-        
+
+        executor.submit(() -> {
+            try {
+                tx1Ready.await();
+                transactionTemplate.execute(status -> {
+                    guardRepository.findByBookingIdForUpdate(999L).orElseThrow();
+                    times[1] = System.currentTimeMillis();
+                    return null;
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
         tx1Done.await();
         executor.shutdown();
-        
-        assertTrue(!tx2AcquiredLockBeforeTx1Done.get(), "Transaction 2 should not acquire lock before Transaction 1 completes");
+
+        // Wait a bit for Tx2 to finish if it hasn't already
+        Thread.sleep(500);
+
+        assertTrue(times[1] >= times[0], "Transaction 2 should acquire lock only after Transaction 1 finishes sleeping and releases it");
     }
 }
