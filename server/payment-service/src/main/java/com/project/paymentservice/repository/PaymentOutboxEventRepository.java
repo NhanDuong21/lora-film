@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface PaymentOutboxEventRepository extends JpaRepository<PaymentOutboxEvent, Long> {
+public interface PaymentOutboxEventRepository extends JpaRepository<PaymentOutboxEvent, Long>, PaymentOutboxEventRepositoryCustom {
 
     Optional<PaymentOutboxEvent> findByEventId(String eventId);
 
@@ -26,8 +26,4 @@ public interface PaymentOutboxEventRepository extends JpaRepository<PaymentOutbo
             Pageable pageable);
 
     Page<PaymentOutboxEvent> findByStatusIn(List<OutboxStatus> statuses, Pageable pageable);
-
-    @Query(value = "SELECT * FROM payment_outbox_events WHERE status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= :now) ORDER BY created_at LIMIT :batchSize FOR UPDATE SKIP LOCKED", nativeQuery = true)
-    List<PaymentOutboxEvent> findAndClaimPendingEvents(@Param("now") LocalDateTime now,
-            @Param("batchSize") int batchSize);
 }

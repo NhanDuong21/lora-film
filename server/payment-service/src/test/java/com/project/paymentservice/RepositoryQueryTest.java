@@ -34,15 +34,14 @@ public class RepositoryQueryTest {
     @Test
     @Transactional
     void testQueries() {
-        Payment p = Payment.builder()
-                .paymentTransactionCode("TXN-QUERY-1")
-                .bookingId(5L)
-                .accountId(20L)
-                .attemptNumber(1)
-                .amount(new BigDecimal("200000"))
-                .paymentMethod(PaymentMethod.VNPAY)
-                .expiresAt(LocalDateTime.now().plusMinutes(15))
-                .build();
+        Payment p = new Payment();
+        p.setPaymentTransactionCode("TXN-QUERY-1");
+        p.setBookingId(5L);
+        p.setAccountId(20L);
+        p.setAttemptNumber(1);
+        p.setAmount(new BigDecimal("200000"));
+        p.setPaymentMethod(PaymentMethod.VNPAY);
+        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
         paymentRepository.saveAndFlush(p);
         
         assertTrue(paymentRepository.findByPaymentTransactionCode("TXN-QUERY-1").isPresent());
@@ -52,16 +51,15 @@ public class RepositoryQueryTest {
     @Test
     @Transactional
     void testOutboxSkipLocked() {
-        PaymentOutboxEvent event = PaymentOutboxEvent.builder()
-                .eventId("EVT-1")
-                .aggregateType("PAYMENT")
-                .aggregateId("1")
-                .eventType("PAYMENT_SUCCESS")
-                .schemaVersion("1.0")
-                .destination(OutboxDestination.BOOKING_SERVICE_REST)
-                .payload("{}")
-                .status(OutboxStatus.PENDING)
-                .build();
+        PaymentOutboxEvent event = new PaymentOutboxEvent();
+        event.setEventId("EVT-1");
+        event.setAggregateType("PAYMENT");
+        event.setAggregateId("1");
+        event.setEventType("PAYMENT_SUCCESS");
+        event.setSchemaVersion("1.0");
+        event.setDestination(OutboxDestination.BOOKING_SERVICE_REST);
+        event.setPayload("{}");
+        event.setStatus(OutboxStatus.PENDING);
         outboxEventRepository.saveAndFlush(event);
         
         List<PaymentOutboxEvent> claimed = outboxEventRepository.findAndClaimPendingEvents(LocalDateTime.now(), 10);

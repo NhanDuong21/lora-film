@@ -4,17 +4,11 @@ import com.project.paymentservice.enumtype.PaymentMethod;
 import com.project.paymentservice.enumtype.PaymentStatus;
 import com.project.paymentservice.enumtype.ReconciliationStatus;
 import jakarta.persistence.*;
-import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "payments")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class Payment {
 
     @Id
@@ -37,8 +31,7 @@ public class Payment {
     private BigDecimal amount;
 
     @Column(name = "currency", nullable = false, length = 10)
-    @Builder.Default
-    private String currency = "VND";
+        private String currency = "VND";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", nullable = false, length = 30)
@@ -55,13 +48,11 @@ public class Payment {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
-    @Builder.Default
-    private PaymentStatus status = PaymentStatus.PENDING;
+        private PaymentStatus status = PaymentStatus.PENDING;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "reconciliation_status", nullable = false, length = 30)
-    @Builder.Default
-    private ReconciliationStatus reconciliationStatus = ReconciliationStatus.NONE;
+        private ReconciliationStatus reconciliationStatus = ReconciliationStatus.NONE;
 
     @Column(name = "reconciliation_reason", length = 255)
     private String reconciliationReason;
@@ -108,4 +99,231 @@ public class Payment {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
+
+    public Payment() {
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getPaymentTransactionCode() {
+        return paymentTransactionCode;
+    }
+
+    public void setPaymentTransactionCode(String paymentTransactionCode) {
+        this.paymentTransactionCode = paymentTransactionCode;
+    }
+
+    public Long getBookingId() {
+        return bookingId;
+    }
+
+    public void setBookingId(Long bookingId) {
+        this.bookingId = bookingId;
+    }
+
+    public Long getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(Long accountId) {
+        this.accountId = accountId;
+    }
+
+    public Integer getAttemptNumber() {
+        return attemptNumber;
+    }
+
+    public void setAttemptNumber(Integer attemptNumber) {
+        this.attemptNumber = attemptNumber;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+
+    public PaymentMethod getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(PaymentMethod paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    public String getProviderOrderId() {
+        return providerOrderId;
+    }
+
+    public void setProviderOrderId(String providerOrderId) {
+        this.providerOrderId = providerOrderId;
+    }
+
+    public String getProviderSessionId() {
+        return providerSessionId;
+    }
+
+    public void setProviderSessionId(String providerSessionId) {
+        this.providerSessionId = providerSessionId;
+    }
+
+    public String getExternalTransactionId() {
+        return externalTransactionId;
+    }
+
+    public void setExternalTransactionId(String externalTransactionId) {
+        this.externalTransactionId = externalTransactionId;
+    }
+
+    public PaymentStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(PaymentStatus status) {
+        this.status = status;
+    }
+
+    public ReconciliationStatus getReconciliationStatus() {
+        return reconciliationStatus;
+    }
+
+    public void setReconciliationStatus(ReconciliationStatus reconciliationStatus) {
+        this.reconciliationStatus = reconciliationStatus;
+    }
+
+    public String getReconciliationReason() {
+        return reconciliationReason;
+    }
+
+    public void setReconciliationReason(String reconciliationReason) {
+        this.reconciliationReason = reconciliationReason;
+    }
+
+    public LocalDateTime getReconciliationResolvedAt() {
+        return reconciliationResolvedAt;
+    }
+
+    public void setReconciliationResolvedAt(LocalDateTime reconciliationResolvedAt) {
+        this.reconciliationResolvedAt = reconciliationResolvedAt;
+    }
+
+    public LocalDateTime getSettlementHoldUntil() {
+        return settlementHoldUntil;
+    }
+
+    public void setSettlementHoldUntil(LocalDateTime settlementHoldUntil) {
+        this.settlementHoldUntil = settlementHoldUntil;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
+    public String getFailureCode() {
+        return failureCode;
+    }
+
+    public void setFailureCode(String failureCode) {
+        this.failureCode = failureCode;
+    }
+
+    public String getFailureMessageSanitized() {
+        return failureMessageSanitized;
+    }
+
+    public void setFailureMessageSanitized(String failureMessageSanitized) {
+        this.failureMessageSanitized = failureMessageSanitized;
+    }
+
+    public String getProviderResponseCode() {
+        return providerResponseCode;
+    }
+
+    public void setProviderResponseCode(String providerResponseCode) {
+        this.providerResponseCode = providerResponseCode;
+    }
+
+    public LocalDateTime getSucceededAt() {
+        return succeededAt;
+    }
+
+    public void setSucceededAt(LocalDateTime succeededAt) {
+        this.succeededAt = succeededAt;
+    }
+
+    public LocalDateTime getFailedAt() {
+        return failedAt;
+    }
+
+    public void setFailedAt(LocalDateTime failedAt) {
+        this.failedAt = failedAt;
+    }
+
+    public LocalDateTime getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public void setCancelledAt(LocalDateTime cancelledAt) {
+        this.cancelledAt = cancelledAt;
+    }
+
+    public LocalDateTime getExpiredAt() {
+        return expiredAt;
+    }
+
+    public void setExpiredAt(LocalDateTime expiredAt) {
+        this.expiredAt = expiredAt;
+    }
+
+    public String getLatestProviderSummarySanitized() {
+        return latestProviderSummarySanitized;
+    }
+
+    public void setLatestProviderSummarySanitized(String latestProviderSummarySanitized) {
+        this.latestProviderSummarySanitized = latestProviderSummarySanitized;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 }

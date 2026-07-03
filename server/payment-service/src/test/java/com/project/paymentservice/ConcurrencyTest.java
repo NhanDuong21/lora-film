@@ -98,15 +98,14 @@ public class ConcurrencyTest {
     void optimisticLockOnPaymentShouldRejectStaleUpdate() {
         long uniqueBookingId = System.currentTimeMillis() + 3000;
         Payment p = transactionTemplate.execute(status -> {
-            Payment newP = Payment.builder()
-                .paymentTransactionCode("TXN-OPT-" + System.currentTimeMillis())
-                .bookingId(uniqueBookingId)
-                .accountId(1L)
-                .attemptNumber(1)
-                .amount(new BigDecimal("1000"))
-                .paymentMethod(PaymentMethod.VNPAY)
-                .expiresAt(LocalDateTime.now().plusMinutes(15))
-                .build();
+            Payment newP = new Payment();
+            newP.setPaymentTransactionCode("TXN-OPT-" + System.currentTimeMillis());
+            newP.setBookingId(uniqueBookingId);
+            newP.setAccountId(1L);
+            newP.setAttemptNumber(1);
+            newP.setAmount(new BigDecimal("1000"));
+            newP.setPaymentMethod(PaymentMethod.VNPAY);
+            newP.setExpiresAt(LocalDateTime.now().plusMinutes(15));
             return paymentRepository.saveAndFlush(newP);
         });
 
@@ -127,9 +126,8 @@ public class ConcurrencyTest {
     void optimisticLockOnBookingGuardShouldRejectStaleUpdate() {
         long uniqueId = System.currentTimeMillis();
         BookingPaymentGuard guard = transactionTemplate.execute(status -> {
-            BookingPaymentGuard newG = BookingPaymentGuard.builder()
-                .bookingId(uniqueId)
-                .build();
+            BookingPaymentGuard newG = new BookingPaymentGuard();
+            newG.setBookingId(uniqueId);
             return guardRepository.saveAndFlush(newG);
         });
 
@@ -180,15 +178,14 @@ public class ConcurrencyTest {
     void outboxClaimShouldSkipRowsLockedByAnotherWorker() throws InterruptedException {
         transactionTemplate.execute(status -> {
             for (int i=1; i<=5; i++) {
-                PaymentOutboxEvent event = PaymentOutboxEvent.builder()
-                    .eventId("EVT-" + System.currentTimeMillis() + "-" + i)
-                    .aggregateType("PAYMENT")
-                    .aggregateId("AG-" + i)
-                    .eventType("CREATED")
-                    .schemaVersion("1.0")
-                    .destination(com.project.paymentservice.enumtype.OutboxDestination.ANALYTICS_KAFKA)
-                    .payload("{}")
-                    .build();
+                PaymentOutboxEvent event = new PaymentOutboxEvent();
+                event.setEventId("EVT-" + System.currentTimeMillis() + "-" + i);
+                event.setAggregateType("PAYMENT");
+                event.setAggregateId("AG-" + i);
+                event.setEventType("CREATED");
+                event.setSchemaVersion("1.0");
+                event.setDestination(com.project.paymentservice.enumtype.OutboxDestination.ANALYTICS_KAFKA);
+                event.setPayload("{}");
                 outboxRepository.save(event);
             }
             return null;
