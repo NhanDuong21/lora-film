@@ -1,20 +1,27 @@
 package com.project.paymentservice;
 
 import com.project.paymentservice.entity.BookingPaymentGuard;
+import com.project.paymentservice.entity.Payment;
+import com.project.paymentservice.entity.PaymentOutboxEvent;
+import com.project.paymentservice.enumtype.PaymentMethod;
+import com.project.paymentservice.enumtype.PaymentStatus;
 import com.project.paymentservice.repository.BookingPaymentGuardRepository;
 import com.project.paymentservice.repository.PaymentOutboxEventRepository;
+import com.project.paymentservice.repository.PaymentRepository;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -24,13 +31,19 @@ public class ConcurrencyTest {
     private BookingPaymentGuardRepository guardRepository;
 
     @Autowired
+    private PaymentRepository paymentRepository;
+
+    @Autowired
+    private PaymentOutboxEventRepository outboxRepository;
+
+    @Autowired
     private TransactionTemplate transactionTemplate;
-    
+
     @Test
-    void testPessimisticGuardLocking() throws InterruptedException {
-        // Prepare guard
+    void pessimisticGuardLockShouldBlockSecondTransaction() throws InterruptedException {
+        long uniqueId = System.currentTimeMillis() + 2000;
         transactionTemplate.execute(status -> {
-            guardRepository.insertIfAbsent(999L);
+            guardRepository.insertIfAbsent(uniqueId);
             return null;
         });
         
@@ -43,7 +56,7 @@ public class ConcurrencyTest {
         executor.submit(() -> {
             try {
                 transactionTemplate.execute(status -> {
-                    guardRepository.findByBookingIdForUpdate(999L).orElseThrow();
+                    guardRepository.findByBookingIdForUpdate(uniqueId).orElseThrow();
                     tx1Ready.countDown();
                     try {
                         Thread.sleep(1000);
@@ -64,7 +77,7 @@ public class ConcurrencyTest {
             try {
                 tx1Ready.await();
                 transactionTemplate.execute(status -> {
-                    guardRepository.findByBookingIdForUpdate(999L).orElseThrow();
+                    guardRepository.findByBookingIdForUpdate(uniqueId).orElseThrow();
                     times[1] = System.currentTimeMillis();
                     return null;
                 });
@@ -76,9 +89,151 @@ public class ConcurrencyTest {
         tx1Done.await();
         executor.shutdown();
 
-        // Wait a bit for Tx2 to finish if it hasn't already
         Thread.sleep(500);
 
-        assertTrue(times[1] >= times[0], "Transaction 2 should acquire lock only after Transaction 1 finishes sleeping and releases it");
+        Assertions.assertTrue(times[1] >= times[0], "Transaction 2 should acquire lock only after Transaction 1 finishes sleeping and releases it");
+    }
+
+    @Test
+    void optimisticLockOnPaymentShouldRejectStaleUpdate() {
+        long uniqueBookingId = System.currentTimeMillis() + 3000;
+        Payment p = transactionTemplate.execute(status -> {
+            Payment newP = Payment.builder()
+                .paymentTransactionCode("TXN-OPT-" + System.currentTimeMillis())
+                .bookingId(uniqueBookingId)
+                .accountId(1L)
+                .attemptNumber(1)
+                .amount(new BigDecimal("1000"))
+                .paymentMethod(PaymentMethod.VNPAY)
+                .expiresAt(LocalDateTime.now().plusMinutes(15))
+                .build();
+            return paymentRepository.saveAndFlush(newP);
+        });
+
+        Payment pTx1 = paymentRepository.findById(p.getId()).orElseThrow();
+        Payment pTx2 = paymentRepository.findById(p.getId()).orElseThrow();
+
+        pTx1.setStatus(PaymentStatus.SUCCESS);
+        paymentRepository.saveAndFlush(pTx1);
+
+        pTx2.setStatus(PaymentStatus.FAILED);
+        Assertions.assertThrows(
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            () -> paymentRepository.saveAndFlush(pTx2)
+        );
+    }
+
+    @Test
+    void optimisticLockOnBookingGuardShouldRejectStaleUpdate() {
+        long uniqueId = System.currentTimeMillis();
+        BookingPaymentGuard guard = transactionTemplate.execute(status -> {
+            BookingPaymentGuard newG = BookingPaymentGuard.builder()
+                .bookingId(uniqueId)
+                .build();
+            return guardRepository.saveAndFlush(newG);
+        });
+
+        BookingPaymentGuard g1 = guardRepository.findById(guard.getBookingId()).orElseThrow();
+        BookingPaymentGuard g2 = guardRepository.findById(guard.getBookingId()).orElseThrow();
+
+        g1.setNextAttemptNumber(2);
+        guardRepository.saveAndFlush(g1);
+
+        g2.setNextAttemptNumber(3);
+        Assertions.assertThrows(
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            () -> guardRepository.saveAndFlush(g2)
+        );
+    }
+
+    @Test
+    void concurrentInsertIfAbsentShouldCreateExactlyOneGuard() throws InterruptedException {
+        long uniqueId = System.currentTimeMillis() + 1000;
+        int threads = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threads);
+        
+        for (int i = 0; i < threads; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    transactionTemplate.execute(status -> {
+                        guardRepository.insertIfAbsent(uniqueId);
+                        return null;
+                    });
+                } catch (Exception e) {} finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+        
+        startLatch.countDown();
+        doneLatch.await();
+        executor.shutdown();
+        
+        long count = guardRepository.findAll().stream().filter(g -> g.getBookingId().equals(uniqueId)).count();
+        Assertions.assertEquals(1L, count);
+    }
+
+    @Test
+    void outboxClaimShouldSkipRowsLockedByAnotherWorker() throws InterruptedException {
+        transactionTemplate.execute(status -> {
+            for (int i=1; i<=5; i++) {
+                PaymentOutboxEvent event = PaymentOutboxEvent.builder()
+                    .eventId("EVT-" + System.currentTimeMillis() + "-" + i)
+                    .aggregateType("PAYMENT")
+                    .aggregateId("AG-" + i)
+                    .eventType("CREATED")
+                    .schemaVersion("1.0")
+                    .destination(com.project.paymentservice.enumtype.OutboxDestination.ANALYTICS_KAFKA)
+                    .payload("{}")
+                    .build();
+                outboxRepository.save(event);
+            }
+            return null;
+        });
+
+        CountDownLatch tx1Ready = new CountDownLatch(1);
+        CountDownLatch tx1Done = new CountDownLatch(1);
+        List<PaymentOutboxEvent> list1 = new ArrayList<>();
+        List<PaymentOutboxEvent> list2 = new ArrayList<>();
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        executor.submit(() -> {
+            try {
+                transactionTemplate.execute(status -> {
+                    list1.addAll(outboxRepository.findAndClaimPendingEvents(LocalDateTime.now(), 3));
+                    tx1Ready.countDown();
+                    try { Thread.sleep(1000); } catch (InterruptedException e) {}
+                    return null;
+                });
+            } catch (Exception e) {} finally {
+                tx1Done.countDown();
+            }
+        });
+
+        executor.submit(() -> {
+            try {
+                tx1Ready.await();
+                transactionTemplate.execute(status -> {
+                    list2.addAll(outboxRepository.findAndClaimPendingEvents(LocalDateTime.now(), 3));
+                    return null;
+                });
+            } catch (Exception e) {}
+        });
+
+        tx1Done.await();
+        executor.shutdown();
+        Thread.sleep(500);
+
+        Assertions.assertTrue(list1.size() > 0);
+        
+        for (PaymentOutboxEvent e1 : list1) {
+            for (PaymentOutboxEvent e2 : list2) {
+                Assertions.assertNotEquals(e1.getId(), e2.getId());
+            }
+        }
     }
 }
