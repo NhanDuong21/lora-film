@@ -31,6 +31,7 @@ CREATE TABLE `seat_reservations` (
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
+
 CREATE INDEX `idx_booking_expiration` ON `bookings` (`status`, `expires_at`);
 
 CREATE INDEX `idx_seat_reservation_lookup` ON `seat_reservations` (`showtime_id`, `seat_id`, `status`);
@@ -38,3 +39,26 @@ CREATE INDEX `idx_seat_reservation_expiration` ON `seat_reservations` (`status`,
 
 ALTER TABLE `tickets` ADD FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`id`) ON DELETE CASCADE;
 ALTER TABLE `seat_reservations` ADD FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`id`) ON DELETE SET NULL;
+
+CREATE TABLE `booking_payment_result_events` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `event_id` varchar(36) UNIQUE NOT NULL,
+  `booking_id` bigint NOT NULL,
+  `payment_id` bigint NOT NULL,
+  `payment_transaction_code` varchar(50) NOT NULL,
+  `payment_method` varchar(20) NOT NULL,
+  `payment_result` varchar(30) NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `currency` varchar(10) NOT NULL,
+  `external_transaction_id` varchar(100),
+  `reconciliation_status` varchar(30) NOT NULL,
+  `applied` boolean NOT NULL DEFAULT false,
+  `acknowledgement_result` varchar(50) NOT NULL,
+  `occurred_at` timestamp NOT NULL,
+  `processed_at` timestamp NOT NULL,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX `idx_booking_payment_result_events_booking_id` ON `booking_payment_result_events` (`booking_id`);
+CREATE INDEX `idx_booking_payment_result_events_payment_id` ON `booking_payment_result_events` (`payment_id`);
+CREATE INDEX `idx_booking_payment_result_events_tx_code` ON `booking_payment_result_events` (`payment_transaction_code`);
