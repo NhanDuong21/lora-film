@@ -704,3 +704,98 @@ mvn clean test
     "errors": null
   }
   ```
+
+---
+
+### Bước D: Kiểm thử luồng Thu Hồi Điểm Earn (POST `/internal/scores/revoke-earn` - Issue #138)
+
+> **Yêu cầu Header**: `X-Internal-Token: secret-internal-token`
+
+#### Case 3.1 - Thu hồi đủ điểm thành công (Full Revoke - Happy Case)
+* **Tình huống**: User đã earn 50 điểm từ booking `3005`. Hiện tại `currentPoints >= 50`.
+* **Request (Body JSON)**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3005,
+    "points": 50,
+    "originalEarnEventId": "SCORE-EARN-BOOKING-3005",
+    "eventId": "SCORE-REVOKE-BOOKING-3005",
+    "idempotencyKey": "REVOKE_EARN:BOOKING:3005",
+    "reason": "Payment refunded"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `201 Created`
+  ```json
+  {
+    "success": true,
+    "message": "Earned score revoked successfully",
+    "data": {
+      "userId": 4,
+      "bookingId": 3005,
+      "requestedPoints": 50,
+      "deductedPoints": 50,
+      "outstandingPoints": 0,
+      "currentPoints": 50,
+      "accumulatedPoints": 50,
+      "previousTier": "SILVER",
+      "currentTier": "SILVER",
+      "tierChanged": false,
+      "historyId": 7006,
+      "reconciliationStatus": "NONE",
+      "requiresManualReconciliation": false,
+      "idempotent": false
+    }
+  }
+  ```
+
+#### Case 3.2 - Thu hồi một phần do không đủ điểm khả dụng (Partial Revoke - Pending Reconciliation)
+* **Tình huống**: User earn 100 điểm, nhưng đã dùng hết 80 điểm (chỉ còn `currentPoints = 20`). Thu hồi 100 điểm.
+* **Request (Body JSON)**:
+  ```json
+  {
+    "userId": 4,
+    "bookingId": 3006,
+    "points": 100,
+    "originalEarnEventId": "SCORE-EARN-BOOKING-3006",
+    "eventId": "SCORE-REVOKE-BOOKING-3006",
+    "idempotencyKey": "REVOKE_EARN:BOOKING:3006",
+    "reason": "Payment refunded"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `201 Created`
+  ```json
+  {
+    "success": true,
+    "message": "Earned score revoked successfully",
+    "data": {
+      "userId": 4,
+      "bookingId": 3006,
+      "requestedPoints": 100,
+      "deductedPoints": 20,
+      "outstandingPoints": 80,
+      "currentPoints": 0,
+      "accumulatedPoints": 0,
+      "previousTier": "SILVER",
+      "currentTier": "SILVER",
+      "tierChanged": false,
+      "historyId": 7007,
+      "reconciliationStatus": "PENDING",
+      "requiresManualReconciliation": true,
+      "idempotent": false
+    }
+  }
+  ```
+  *(Database: `current_points` về `0` (không bao giờ âm). `outstanding_points` = 80, `reconciliation_status` = `PENDING`)*.
+
+#### Case 3.3 - Thu hồi làm giảm hạng thành viên (Tier Downgrade)
+* **Tình huống**: User có `accumulatedPoints = 500` (đang ở hạng `GOLD`). Thu hồi 150 điểm khiến `accumulatedPoints` giảm xuống 350 (< 400).
+* **Kết quả mong đợi**: HTTP `201 Created`, trường `previousTier` là `"GOLD"`, `currentTier` là `"SILVER"`, và `tierChanged` là `true`.
+
+#### Case 3.4 - Thu hồi lặp lại (Idempotency - Retry)
+* Gửi lại request của Case 3.1 hoặc 3.2.
+* **Kết quả mong đợi**: HTTP `200 OK`, `idempotent = true`, không trừ thêm điểm hay tạo thêm history.
+
+#### Case 3.5 - Xung đột Idempotency (Idempotency Conflict)
+* Gửi request với cùng `idempotencyKey` hoặc `eventId` nhưng số điểm `points` khác.
+* **Kết quả mong đợi**: HTTP `409 Conflict`, mã lỗi `SCORE_IDEMPOTENCY_CONFLICT`.
