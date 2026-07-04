@@ -77,22 +77,23 @@ public class ScoreServiceImpl implements ScoreService {
     }
  
     @Transactional
+    public void ensureUserScoreExists(Long userId) {
+        if (!userScoreRepository.existsById(userId)) {
+            MembershipTier defaultTier = membershipTierRepository.findFirstByOrderByMinPointsAsc()
+                    .orElseThrow(() -> new BusinessException("Membership tier configuration is invalid", "SCORE_TIER_CONFIGURATION_INVALID", HttpStatus.INTERNAL_SERVER_ERROR));
+            try {
+                selfProxy.createDefaultUserScore(userId, defaultTier);
+            } catch (DataIntegrityViolationException | ConstraintViolationException e) {
+                // Already created concurrently by another thread, ignore
+            }
+        }
+    }
+
+    @Transactional
     public UserScore getOrCreateUserScoreEntity(Long userId) {
-        Optional<UserScore> existing = userScoreRepository.findByUserId(userId);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        
-        MembershipTier defaultTier = membershipTierRepository.findFirstByOrderByMinPointsAsc()
-                .orElseThrow(() -> new BusinessException("Membership tier configuration is invalid", "SCORE_TIER_CONFIGURATION_INVALID", HttpStatus.INTERNAL_SERVER_ERROR));
-        
-        try {
-            return selfProxy.createDefaultUserScore(userId, defaultTier);
-        } catch (DataIntegrityViolationException | ConstraintViolationException e) {
-            // Already created concurrently by another thread, fetch it
-            return userScoreRepository.findByUserId(userId)
-                    .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
-        }
+        ensureUserScoreExists(userId);
+        return userScoreRepository.findByUserId(userId)
+                .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
     }
  
     @Override
@@ -341,12 +342,9 @@ public class ScoreServiceImpl implements ScoreService {
 
     @Transactional
     public ScoreEarnResponse executeEarnScore(ScoreEarnRequest request) {
+        ensureUserScoreExists(request.getUserId());
         UserScore userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
-                .orElseGet(() -> {
-                    getOrCreateUserScoreEntity(request.getUserId());
-                    return userScoreRepository.findWithLockByUserId(request.getUserId())
-                            .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
-                });
+                .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
 
         MembershipTier previousTier = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
 
@@ -483,12 +481,9 @@ public class ScoreServiceImpl implements ScoreService {
 
     @Transactional
     public ScoreRedeemResponse executeRedeemScore(ScoreRedeemRequest request) {
+        ensureUserScoreExists(request.getUserId());
         UserScore userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
-                .orElseGet(() -> {
-                    getOrCreateUserScoreEntity(request.getUserId());
-                    return userScoreRepository.findWithLockByUserId(request.getUserId())
-                            .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
-                });
+                .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
 
         int balanceBefore = userScore.getCurrentPoints();
         int requestedPoints = request.getPoints();
@@ -605,12 +600,9 @@ public class ScoreServiceImpl implements ScoreService {
 
     @Transactional
     public ScoreRefundResponse executeRefundRedeem(ScoreRefundRequest request) {
+        ensureUserScoreExists(request.getUserId());
         UserScore userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
-                .orElseGet(() -> {
-                    getOrCreateUserScoreEntity(request.getUserId());
-                    return userScoreRepository.findWithLockByUserId(request.getUserId())
-                            .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
-                });
+                .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
 
         // Locate original redeem transaction
         ScoreHistory originalRedeem = scoreHistoryRepository.findByEventId(request.getOriginalRedeemEventId())
@@ -766,15 +758,12 @@ public class ScoreServiceImpl implements ScoreService {
 
     @Transactional
     public ScoreRevokeResponse executeRevokeEarn(ScoreRevokeRequest request) {
+        ensureUserScoreExists(request.getUserId());
         UserScore userScore = userScoreRepository.findWithLockByUserId(request.getUserId())
-                .orElseGet(() -> {
-                    getOrCreateUserScoreEntity(request.getUserId());
-                    return userScoreRepository.findWithLockByUserId(request.getUserId())
-                            .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
-                });
+                .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
 
         ScoreHistory originalEarn = scoreHistoryRepository.findByEventId(request.getOriginalEarnEventId())
-                .orElseThrow(() -> new BusinessException("Original earn transaction not found", "SCORE_ORIGINAL_TRANSACTION_NOT_FOUND", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new BusinessException("Original earn transaction not found or invalid", "SCORE_ORIGINAL_TRANSACTION_INVALID", HttpStatus.CONFLICT));
 
         if (originalEarn.getTransactionType() != ScoreTransactionType.EARN_BY_BOOKING) {
             throw new BusinessException("Original transaction is not an earn transaction", "SCORE_ORIGINAL_TRANSACTION_INVALID", HttpStatus.CONFLICT);

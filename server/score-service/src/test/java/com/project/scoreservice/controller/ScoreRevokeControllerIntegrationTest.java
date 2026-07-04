@@ -94,15 +94,15 @@ public class ScoreRevokeControllerIntegrationTest {
     }
 
     @Test
-    public void testRevokeEarn_SecurityInvalidToken_ReturnsUnauthorized() throws Exception {
+    public void testRevokeEarn_SecurityInvalidToken_ReturnsForbidden() throws Exception {
         ScoreRevokeRequest request = new ScoreRevokeRequest(1L, 1001L, 10, "evt-earn-1", "evt-revoke-1", "idem-revoke-1", "Refund");
         mockMvc.perform(post("/internal/scores/revoke-earn")
                         .header(INTERNAL_TOKEN_HEADER, "invalid-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("UNAUTHORIZED")));
+                .andExpect(jsonPath("$.errorCode", is("FORBIDDEN")));
     }
 
     @Test
@@ -128,7 +128,7 @@ public class ScoreRevokeControllerIntegrationTest {
     }
 
     @Test
-    public void testRevokeEarn_OriginalNotFound_ReturnsNotFound() throws Exception {
+    public void testRevokeEarn_OriginalNotFound_ReturnsConflict() throws Exception {
         Long userId = 101L;
         UserScore userScore = new UserScore(userId, 100, 100, silverTier, null, null);
         userScoreRepository.saveAndFlush(userScore);
@@ -138,9 +138,9 @@ public class ScoreRevokeControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, VALID_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("SCORE_ORIGINAL_TRANSACTION_NOT_FOUND")));
+                .andExpect(jsonPath("$.errorCode", is("SCORE_ORIGINAL_TRANSACTION_INVALID")));
     }
 
     @Test

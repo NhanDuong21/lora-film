@@ -77,7 +77,7 @@ public class ScoreEarnControllerIntegrationTest {
     }
 
     @Test
-    public void testEarnScore_SecurityInvalidToken_ReturnsUnauthorized() throws Exception {
+    public void testEarnScore_SecurityInvalidToken_ReturnsForbidden() throws Exception {
         ScoreEarnRequest request = new ScoreEarnRequest(
                 100L, 200L, new BigDecimal("100000"), "evt-001", "idem-001"
         );
@@ -86,9 +86,9 @@ public class ScoreEarnControllerIntegrationTest {
                         .header(INTERNAL_TOKEN_HEADER, "wrong-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("UNAUTHORIZED")));
+                .andExpect(jsonPath("$.errorCode", is("FORBIDDEN")));
     }
 
     @Test
