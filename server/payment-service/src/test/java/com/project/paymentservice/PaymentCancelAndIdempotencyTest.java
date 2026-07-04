@@ -164,4 +164,113 @@ public class PaymentCancelAndIdempotencyTest {
         Payment afterP2 = paymentRepository.findById(savedP2.getId()).orElseThrow();
         assertEquals(PaymentStatus.PENDING, afterP2.getStatus());
     }
+
+    @Test
+    void idempotencyKeyReuseConflictShouldNotMutateExistingRecord() {
+        com.project.paymentservice.entity.PaymentIdempotencyRecord record = new com.project.paymentservice.entity.PaymentIdempotencyRecord();
+        record.setAccountId(15L);
+        record.setOperation("CREATE_PAYMENT");
+        record.setIdempotencyKey("conflict-key");
+        record.setRequestHash("hash-A");
+        record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.PROCESSING);
+        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        idempotencyRepository.saveAndFlush(record);
+
+        com.project.paymentservice.dto.request.CreatePaymentRequest req = new com.project.paymentservice.dto.request.CreatePaymentRequest(9999L, "MOCK");
+
+        com.project.paymentservice.exception.BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                com.project.paymentservice.exception.BusinessException.class,
+                () -> paymentService.createPayment(15L, "conflict-key", req)
+        );
+
+        assertEquals("IDEMPOTENCY_KEY_REUSED", ex.getErrorCode());
+        
+        var after = idempotencyRepository.findById(record.getId()).orElseThrow();
+        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.PROCESSING, after.getProcessingStatus());
+        assertEquals("hash-A", after.getRequestHash());
+    }
+
+    @Test
+    void completedReplayShouldNotBeMarkedFailed() {
+        com.project.paymentservice.entity.PaymentIdempotencyRecord record = new com.project.paymentservice.entity.PaymentIdempotencyRecord();
+        record.setAccountId(15L);
+        record.setOperation("CREATE_PAYMENT");
+        record.setIdempotencyKey("replay-completed-key");
+        String hash = com.project.paymentservice.service.CanonicalHashUtil.hashCreatePayment(15L, 8888L, "MOCK");
+        record.setRequestHash(hash);
+        record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED);
+        record.setResponseStatus(200);
+        record.setResponseBodySanitized("{\"success\":true}");
+        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        idempotencyRepository.saveAndFlush(record);
+
+        com.project.paymentservice.dto.request.CreatePaymentRequest req = new com.project.paymentservice.dto.request.CreatePaymentRequest(8888L, "MOCK");
+        
+        // This should return replay response without error
+        paymentService.createPayment(15L, "replay-completed-key", req);
+
+        var after = idempotencyRepository.findById(record.getId()).orElseThrow();
+        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED, after.getProcessingStatus());
+        assertEquals(0, paymentRepository.count());
+    }
+
+    @Test
+    void failedReplayShouldNotBeMarkedFailedAgain() {
+        com.project.paymentservice.entity.PaymentIdempotencyRecord record = new com.project.paymentservice.entity.PaymentIdempotencyRecord();
+        record.setAccountId(15L);
+        record.setOperation("CREATE_PAYMENT");
+        record.setIdempotencyKey("replay-failed-key");
+        String hash = com.project.paymentservice.service.CanonicalHashUtil.hashCreatePayment(15L, 7777L, "MOCK");
+        record.setRequestHash(hash);
+        record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.FAILED);
+        record.setErrorCode("SOME_ERROR");
+        record.setLastError("Some error msg");
+        record.setResponseStatus(400);
+        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        idempotencyRepository.saveAndFlush(record);
+
+        com.project.paymentservice.dto.request.CreatePaymentRequest req = new com.project.paymentservice.dto.request.CreatePaymentRequest(7777L, "MOCK");
+        
+        com.project.paymentservice.exception.BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                com.project.paymentservice.exception.BusinessException.class,
+                () -> paymentService.createPayment(15L, "replay-failed-key", req)
+        );
+
+        assertEquals("SOME_ERROR", ex.getErrorCode());
+        
+        var after = idempotencyRepository.findById(record.getId()).orElseThrow();
+        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.FAILED, after.getProcessingStatus());
+        assertEquals(0, paymentRepository.count());
+    }
+
+    @Test
+    void staleFailureFinalizationShouldNotOverwriteCompletedRecord() {
+        com.project.paymentservice.entity.PaymentIdempotencyRecord record = new com.project.paymentservice.entity.PaymentIdempotencyRecord();
+        record.setAccountId(15L);
+        record.setOperation("CREATE_PAYMENT");
+        record.setIdempotencyKey("stale-fail-key");
+        record.setRequestHash("hash-stale");
+        record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED);
+        record.setResponseStatus(200);
+        record.setResponseBodySanitized("{\"success\":true}");
+        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        idempotencyRepository.saveAndFlush(record);
+
+        // A stale failure finalizer attempts to mark it FAILED because its thread was delayed.
+        // It should use the public method or we can invoke it via reflection since it's private.
+        // Actually, we can test it directly by invoking the private method `markIdempotencyFailed` via reflection.
+        try {
+            java.lang.reflect.Method m = com.project.paymentservice.service.impl.PaymentServiceImpl.class
+                    .getDeclaredMethod("markIdempotencyFailed", Long.class, String.class, String.class, String.class, String.class);
+            m.setAccessible(true);
+            m.invoke(paymentService, 15L, "CREATE_PAYMENT", "stale-fail-key", "STALE_ERR", "Stale error");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        var after = idempotencyRepository.findById(record.getId()).orElseThrow();
+        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED, after.getProcessingStatus());
+        assertEquals(200, after.getResponseStatus());
+        org.junit.jupiter.api.Assertions.assertNull(after.getErrorCode());
+    }
 }

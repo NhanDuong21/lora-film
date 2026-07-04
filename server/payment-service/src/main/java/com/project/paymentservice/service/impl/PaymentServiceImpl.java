@@ -49,6 +49,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentLogService paymentLogService;
     private final PaymentStateTransitionService stateTransitionService;
     private final TransactionTemplate transactionTemplate;
+    private final TransactionTemplate requiresNewTransactionTemplate;
     private final ObjectMapper objectMapper;
 
     public PaymentServiceImpl(
@@ -73,6 +74,8 @@ public class PaymentServiceImpl implements PaymentService {
         this.paymentLogService = paymentLogService;
         this.stateTransitionService = stateTransitionService;
         this.transactionTemplate = transactionTemplate;
+        this.requiresNewTransactionTemplate = new TransactionTemplate(transactionTemplate.getTransactionManager());
+        this.requiresNewTransactionTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.objectMapper = objectMapper;
     }
 
@@ -101,12 +104,28 @@ public class PaymentServiceImpl implements PaymentService {
         String requestHash = CanonicalHashUtil.hashCreatePayment(accountId, request.getBookingId(), method.name());
 
         // Phase A — Reserve idempotency (short transaction)
-        IdempotencyResult idempResult = transactionTemplate.execute(status -> {
-            return reserveIdempotency(accountId, "CREATE_PAYMENT", idempotencyKey, requestHash);
-        });
+        IdempotencyReservationResult idempResult;
+        try {
+            idempResult = transactionTemplate.execute(status -> {
+                return reserveIdempotency(accountId, "CREATE_PAYMENT", idempotencyKey, requestHash);
+            });
+        } catch (org.springframework.dao.DataAccessException | org.springframework.transaction.TransactionException e) {
+            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
+                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+        }
 
-        if (idempResult != null && idempResult.isReplay()) {
+        if (idempResult != null && idempResult.replay) {
             return deserializeReplay(idempResult.record, CreatePaymentResponse.class);
+        }
+
+        if (idempResult != null && idempResult.decision == ReservationDecision.IN_PROGRESS_NON_OWNER) {
+            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
+                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+        }
+
+        if (idempResult != null && idempResult.decision == ReservationDecision.KEY_REUSED) {
+            throw new BusinessException("IDEMPOTENCY_KEY_REUSED",
+                    "Idempotency key reused with different request", HttpStatus.CONFLICT);
         }
 
 
@@ -169,10 +188,15 @@ public class PaymentServiceImpl implements PaymentService {
 
             return response;
         } catch (BusinessException e) {
-            markIdempotencyFailed(accountId, "CREATE_PAYMENT", idempotencyKey, e.getErrorCode(), e.getMessage());
+            if (idempResult != null && idempResult.owner) {
+                markIdempotencyFailed(accountId, "CREATE_PAYMENT", idempotencyKey, e.getErrorCode(), e.getMessage());
+            }
             throw e;
         } catch (Exception e) {
-            markIdempotencyFailed(accountId, "CREATE_PAYMENT", idempotencyKey, "INTERNAL_SERVER_ERROR", e.getMessage());
+            logger.error("Unexpected error in createPayment for accountId={}, idempotencyKey={}", accountId, idempotencyKey, e);
+            if (idempResult != null && idempResult.owner) {
+                markIdempotencyFailed(accountId, "CREATE_PAYMENT", idempotencyKey, "INTERNAL_SERVER_ERROR", e.getMessage());
+            }
             throw new BusinessException("INTERNAL_SERVER_ERROR", "An unexpected error occurred during payment creation", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -215,12 +239,28 @@ public class PaymentServiceImpl implements PaymentService {
         String requestHash = CanonicalHashUtil.hashCancelPayment(accountId, paymentId);
 
         // Phase A — Reserve idempotency
-        IdempotencyResult idempResult = transactionTemplate.execute(status -> {
-            return reserveIdempotency(accountId, "CANCEL_PAYMENT", idempotencyKey, requestHash);
-        });
+        IdempotencyReservationResult idempResult;
+        try {
+            idempResult = transactionTemplate.execute(status -> {
+                return reserveIdempotency(accountId, "CANCEL_PAYMENT", idempotencyKey, requestHash);
+            });
+        } catch (org.springframework.dao.DataAccessException | org.springframework.transaction.TransactionException e) {
+            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
+                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+        }
 
-        if (idempResult != null && idempResult.isReplay()) {
+        if (idempResult != null && idempResult.replay) {
             return deserializeReplay(idempResult.record, CancelPaymentResponse.class);
+        }
+
+        if (idempResult != null && idempResult.decision == ReservationDecision.IN_PROGRESS_NON_OWNER) {
+            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
+                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+        }
+
+        if (idempResult != null && idempResult.decision == ReservationDecision.KEY_REUSED) {
+            throw new BusinessException("IDEMPOTENCY_KEY_REUSED",
+                    "Idempotency key reused with different request", HttpStatus.CONFLICT);
         }
 
         try {
@@ -266,10 +306,14 @@ public class PaymentServiceImpl implements PaymentService {
 
             return response;
         } catch (BusinessException e) {
-            markIdempotencyFailed(accountId, "CANCEL_PAYMENT", idempotencyKey, e.getErrorCode(), e.getMessage());
+            if (idempResult != null && idempResult.owner) {
+                markIdempotencyFailed(accountId, "CANCEL_PAYMENT", idempotencyKey, e.getErrorCode(), e.getMessage());
+            }
             throw e;
         } catch (Exception e) {
-            markIdempotencyFailed(accountId, "CANCEL_PAYMENT", idempotencyKey, "INTERNAL_SERVER_ERROR", e.getMessage());
+            if (idempResult != null && idempResult.owner) {
+                markIdempotencyFailed(accountId, "CANCEL_PAYMENT", idempotencyKey, "INTERNAL_SERVER_ERROR", e.getMessage());
+            }
             throw new BusinessException("INTERNAL_SERVER_ERROR", "An unexpected error occurred during payment cancellation", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -374,8 +418,8 @@ public class PaymentServiceImpl implements PaymentService {
 
     // ========== Private helpers ==========
 
-    private IdempotencyResult reserveIdempotency(Long accountId, String operation,
-                                                  String idempotencyKey, String requestHash) {
+    private IdempotencyReservationResult reserveIdempotency(Long accountId, String operation,
+                                                          String idempotencyKey, String requestHash) {
         var existing = idempotencyRepository
                 .findAndLockByAccountIdAndOperationAndIdempotencyKey(accountId, operation, idempotencyKey);
 
@@ -384,29 +428,25 @@ public class PaymentServiceImpl implements PaymentService {
 
             if (record.getProcessingStatus() == IdempotencyProcessingStatus.COMPLETED) {
                 if (record.getRequestHash().equals(requestHash)) {
-                    return new IdempotencyResult(record, true);
+                    return new IdempotencyReservationResult(false, true, record, ReservationDecision.REPLAY_COMPLETED);
                 } else {
-                    throw new BusinessException("IDEMPOTENCY_KEY_REUSED",
-                            "Idempotency key reused with different request", HttpStatus.CONFLICT);
+                    return new IdempotencyReservationResult(false, false, record, ReservationDecision.KEY_REUSED);
                 }
             }
 
             if (record.getProcessingStatus() == IdempotencyProcessingStatus.FAILED) {
                 if (record.getRequestHash().equals(requestHash)) {
-                    return new IdempotencyResult(record, true);
+                    return new IdempotencyReservationResult(false, true, record, ReservationDecision.REPLAY_FAILED);
                 } else {
-                    throw new BusinessException("IDEMPOTENCY_KEY_REUSED",
-                            "Idempotency key reused with different request", HttpStatus.CONFLICT);
+                    return new IdempotencyReservationResult(false, false, record, ReservationDecision.KEY_REUSED);
                 }
             }
 
             if (record.getProcessingStatus() == IdempotencyProcessingStatus.PROCESSING) {
                 if (!record.getRequestHash().equals(requestHash)) {
-                    throw new BusinessException("IDEMPOTENCY_KEY_REUSED",
-                            "Idempotency key reused with different request", HttpStatus.CONFLICT);
+                    return new IdempotencyReservationResult(false, false, record, ReservationDecision.KEY_REUSED);
                 }
-                throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
-                        "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+                return new IdempotencyReservationResult(false, false, record, ReservationDecision.IN_PROGRESS_NON_OWNER);
             }
         }
 
@@ -424,11 +464,10 @@ public class PaymentServiceImpl implements PaymentService {
             idempotencyRepository.saveAndFlush(newRecord);
         } catch (org.springframework.dao.DataIntegrityViolationException | org.springframework.dao.CannotAcquireLockException e) {
             // Race condition or MySQL gap lock deadlock: another thread just inserted or is inserting
-            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
-                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+            return new IdempotencyReservationResult(false, false, null, ReservationDecision.IN_PROGRESS_NON_OWNER);
         }
 
-        return new IdempotencyResult(newRecord, false);
+        return new IdempotencyReservationResult(true, false, newRecord, ReservationDecision.OWNER);
     }
 
     private Payment reservePaymentAttempt(Long accountId, Long bookingId,
@@ -549,12 +588,12 @@ public class PaymentServiceImpl implements PaymentService {
     private void markIdempotencyFailed(Long accountId, String operation, String idempotencyKey,
                                        String errorCode, String errorMessage) {
         try {
-            transactionTemplate.execute(status -> {
+            requiresNewTransactionTemplate.execute(status -> {
                 var record = idempotencyRepository
                         .findAndLockByAccountIdAndOperationAndIdempotencyKey(accountId, operation, idempotencyKey);
                 if (record.isPresent()) {
                     PaymentIdempotencyRecord r = record.get();
-                    if (r.getProcessingStatus() == IdempotencyProcessingStatus.COMPLETED) {
+                    if (r.getProcessingStatus() != IdempotencyProcessingStatus.PROCESSING) {
                         return null;
                     }
                     r.setProcessingStatus(IdempotencyProcessingStatus.FAILED);
@@ -582,6 +621,9 @@ public class PaymentServiceImpl implements PaymentService {
                 .findAndLockByAccountIdAndOperationAndIdempotencyKey(accountId, operation, idempotencyKey);
         if (record.isPresent()) {
             PaymentIdempotencyRecord r = record.get();
+            if (r.getProcessingStatus() != IdempotencyProcessingStatus.PROCESSING) {
+                return;
+            }
             r.setProcessingStatus(IdempotencyProcessingStatus.COMPLETED);
             r.setPaymentId(paymentId);
             r.setResponseStatus(httpStatus);
@@ -631,17 +673,25 @@ public class PaymentServiceImpl implements PaymentService {
         };
     }
 
-    private static class IdempotencyResult {
-        final PaymentIdempotencyRecord record;
+    public enum ReservationDecision {
+        OWNER,
+        REPLAY_COMPLETED,
+        REPLAY_FAILED,
+        IN_PROGRESS_NON_OWNER,
+        KEY_REUSED
+    }
+
+    private static class IdempotencyReservationResult {
+        final boolean owner;
         final boolean replay;
+        final PaymentIdempotencyRecord record;
+        final ReservationDecision decision;
 
-        IdempotencyResult(PaymentIdempotencyRecord record, boolean replay) {
-            this.record = record;
+        IdempotencyReservationResult(boolean owner, boolean replay, PaymentIdempotencyRecord record, ReservationDecision decision) {
+            this.owner = owner;
             this.replay = replay;
-        }
-
-        boolean isReplay() {
-            return replay;
+            this.record = record;
+            this.decision = decision;
         }
     }
 }

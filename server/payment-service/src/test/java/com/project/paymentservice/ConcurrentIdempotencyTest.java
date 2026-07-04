@@ -112,6 +112,8 @@ public class ConcurrentIdempotencyTest {
                 } catch (BusinessException e) {
                     if ("IDEMPOTENCY_REQUEST_IN_PROGRESS".equals(e.getErrorCode())) {
                         conflictCount.incrementAndGet();
+                    } else {
+                        e.printStackTrace();
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -221,5 +223,75 @@ public class ConcurrentIdempotencyTest {
         org.junit.jupiter.api.Assertions.assertNull(afterGuard.getActivePaymentId());
 
         executor.shutdown();
+    }
+
+    @Test
+    void concurrentLoserShouldNotMarkWinnerIdempotencyRecordAsFailed() throws InterruptedException {
+        String key = "concurrent-loser-test";
+        com.project.paymentservice.dto.request.CreatePaymentRequest req = new com.project.paymentservice.dto.request.CreatePaymentRequest(1011L, "MOCK");
+
+        java.util.concurrent.CountDownLatch winnerInBusinessLogic = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch loserDone = new java.util.concurrent.CountDownLatch(1);
+
+        org.mockito.Mockito.when(bookingClient.getPaymentContext(1011L)).thenAnswer(inv -> {
+            winnerInBusinessLogic.countDown();
+            try {
+                loserDone.await(); // Winner waits for loser to finish before proceeding
+            } catch (InterruptedException e) {}
+            var ctx = new com.project.paymentservice.client.booking.BookingPaymentContext();
+            ctx.setAccountId(15L);
+            ctx.setBookingId(1011L);
+            ctx.setAmount(new java.math.BigDecimal("150000.0"));
+            ctx.setCurrency("VND");
+            ctx.setBookingStatus("MOCK");
+            ctx.setExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+            var snap = new com.project.paymentservice.client.booking.BookingPaymentContext.AnalyticsSnapshotData();
+            snap.setMovieId(1L);
+            snap.setMovieTitle("Mock Movie");
+            snap.setTicketCount(2);
+            ctx.setAnalyticsSnapshot(snap);
+            return ctx;
+        });
+
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+
+        // Winner thread
+        executor.submit(() -> {
+            try {
+                paymentService.createPayment(15L, key, req);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        // Wait until winner reaches business logic (meaning PROCESSING record is created)
+        winnerInBusinessLogic.await();
+
+        // Loser thread
+        executor.submit(() -> {
+            try {
+                paymentService.createPayment(15L, key, req);
+            } catch (Exception e) {
+                e.printStackTrace();
+                // Expected to throw IDEMPOTENCY_REQUEST_IN_PROGRESS
+            } finally {
+                loserDone.countDown();
+            }
+        });
+
+        loserDone.await();
+        // At this point, loser has finished. Winner is still paused or just about to resume.
+        // Let's check that the record is still PROCESSING
+        var record = idempotencyRepository.findAll().get(0);
+        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.PROCESSING, record.getProcessingStatus());
+
+        executor.shutdown();
+        executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        // Now winner has completed
+        record = idempotencyRepository.findAll().get(0);
+        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED, record.getProcessingStatus());
+        assertEquals(1, paymentRepository.count(), "Exactly one payment should be created");
+        assertEquals(2, logRepository.count());
     }
 }
