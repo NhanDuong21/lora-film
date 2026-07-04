@@ -37,11 +37,7 @@ public class JwtFilter extends OncePerRequestFilter {
                 Number userIdNumber = claims.get("userId", Number.class);
                 Long userId = userIdNumber != null ? userIdNumber.longValue() : null;
 
-                if (userId == null && claims.getSubject() != null) {
-                    try {
-                        userId = Long.parseLong(claims.getSubject());
-                    } catch (NumberFormatException ignored) {}
-                }
+
 
                 if (userId != null) {
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(

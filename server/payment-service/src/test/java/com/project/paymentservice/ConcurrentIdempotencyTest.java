@@ -129,7 +129,34 @@ public class ConcurrentIdempotencyTest {
         assertEquals(1, idempotencyRepository.count(), "Exactly one idempotency record should exist");
         assertEquals(1, successCount.get(), "Exactly one request should succeed or replay");
         assertEquals(1, conflictCount.get(), "The loser request should return IDEMPOTENCY_REQUEST_IN_PROGRESS");
-        
+
         executor.shutdown();
+    }
+
+    @Test
+    void existingProcessingIdempotencyRecordShouldReturnInProgress() {
+        // Setup existing processing record
+        com.project.paymentservice.entity.PaymentIdempotencyRecord record = new com.project.paymentservice.entity.PaymentIdempotencyRecord();
+        record.setAccountId(15L);
+        record.setOperation("CREATE_PAYMENT");
+        record.setIdempotencyKey("existing-processing-key");
+        record.setRequestHash(com.project.paymentservice.service.CanonicalHashUtil.hashCreatePayment(15L, 1009L, "MOCK"));
+        record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.PROCESSING);
+        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        idempotencyRepository.saveAndFlush(record);
+
+        CreatePaymentRequest req = new CreatePaymentRequest(1009L, "MOCK");
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+            BusinessException.class,
+            () -> paymentService.createPayment(15L, "existing-processing-key", req)
+        );
+
+        assertEquals("IDEMPOTENCY_REQUEST_IN_PROGRESS", exception.getErrorCode());
+        assertEquals(0, paymentRepository.count(), "No Payment created");
+        assertEquals(0, guardRepository.count(), "No Guard created or changed");
+        assertEquals(0, snapshotRepository.count(), "No analytics snapshot created");
+        assertEquals(0, logRepository.count(), "No Payment log created");
+        org.mockito.Mockito.verifyNoInteractions(bookingClient);
     }
 }
