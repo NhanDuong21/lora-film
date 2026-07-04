@@ -125,18 +125,24 @@ Idempotency-Key: f8c72b64-b2d8-4e4d-9bad-b7f62f248b55
   - Lần 2: Trả về kết quả lấy từ Cache (giống hệt response Lần 1), API không văng lỗi và **tuyệt đối không tạo thêm dữ liệu thừa** trong DB.
 
 ### Flow 7: Xác nhận thanh toán (Confirm Payment - Internal)
-- **API**: `POST /internal/bookings/{bookingId}/confirm-payment`
-- **Ngữ cảnh**: Hệ thống thanh toán (payment-service) gọi Booking Service chốt đơn, sinh vé.
+- **API**: `POST /internal/bookings/{bookingId}/payment-results`
+- **Method**: `POST`
 - **Headers**:
-  - `X-Internal-Token`: Secret Token (VD: `default-internal-secret`)
-  - `Idempotency-Key`: UUID v4 mới.
-- **Request Body (Happy Case)**:
+  - `Content-Type: application/json`
+  - `X-Internal-Token: secret-internal-token`
+- **Payload**:
   ```json
   {
-    "paymentId": 3003,
-    "paymentTransactionCode": "PAY-NEW-9999",
-    "paidAmount": 240000,
-    "paidAt": "2026-06-21T20:30:00"
+    "eventId": "123e4567-e89b-12d3-a456-426614174000",
+    "schemaVersion": "1.0",
+    "paymentId": 3001,
+    "paymentTransactionCode": "PAY-20260621-0001",
+    "paymentMethod": "VNPAY",
+    "result": "SUCCESS",
+    "amount": 240000,
+    "currency": "VND",
+    "occurredAt": "2026-06-21T20:10:00Z",
+    "reconciliationStatus": "NONE"
   }
   ```
   *(Thay `{bookingId}` trên URL. Đảm bảo `paidAmount` bằng đúng `totalAmount` đã tạo ở Flow 3).*
@@ -150,16 +156,24 @@ Idempotency-Key: f8c72b64-b2d8-4e4d-9bad-b7f62f248b55
   - **Negative Case 3 (Lỗi quá hạn thanh toán)**: Gọi trên booking đã chuyển sang `EXPIRED` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_CANNOT_BE_CANCELLED` hoặc `BOOKING_INVALID_STATUS_TRANSITION`).
 
 ### Flow 8: Ghi nhận thanh toán thất bại (Fail Payment - Internal)
-- **API**: `POST /internal/bookings/{bookingId}/fail-payment`
-- **Ngữ cảnh**: Thanh toán xịt, hoặc User bấm hủy thanh toán bên MoMo/VNPay.
+- **API**: `POST /internal/bookings/{bookingId}/payment-results`
+- **Method**: `POST`
 - **Headers**:
-  - `X-Internal-Token`: Secret Token
-  - `Idempotency-Key`: UUID v4 mới.
-- **Request Body (Happy Case)**:
+  - `Content-Type: application/json`
+  - `X-Internal-Token: secret-internal-token`
+- **Payload**:
   ```json
   {
-    "paymentId": 3003,
-    "reason": "USER_CANCELLED"
+    "eventId": "123e4567-e89b-12d3-a456-426614174000",
+    "schemaVersion": "1.0",
+    "paymentId": 3002,
+    "paymentTransactionCode": "PAY-20260621-0002",
+    "paymentMethod": "VNPAY",
+    "result": "FAILED",
+    "amount": 240000,
+    "currency": "VND",
+    "occurredAt": "2026-06-21T20:15:00Z",
+    "reconciliationStatus": "NONE"
   }
   ```
 - **Kết quả mong đợi**:

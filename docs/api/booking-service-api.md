@@ -327,8 +327,6 @@ Các endpoint bắt buộc sử dụng `Idempotency-Key`:
 POST /api/bookings/seat-reservations
 POST /api/bookings
 POST /api/bookings/{bookingId}/cancel
-POST /internal/bookings/{bookingId}/confirm-payment
-POST /internal/bookings/{bookingId}/fail-payment
 ```
 
 Internal API:
@@ -698,8 +696,8 @@ PATCH /api/admin/bookings/{bookingId}/status
 ### 13.3. Internal APIs
 
 ```txt
-POST /internal/bookings/{bookingId}/confirm-payment
-POST /internal/bookings/{bookingId}/fail-payment
+GET /internal/bookings/{bookingId}/payment-context
+POST /internal/bookings/{bookingId}/payment-results
 ```
 
 Internal API không được expose công khai qua API Gateway.
@@ -722,9 +720,8 @@ Internal API không được expose công khai qua API Gateway.
 | GET    | `/api/admin/bookings`                     | Admin/Employee | Danh sách booking                 |
 | GET    | `/api/admin/bookings/{id}`                | Admin/Employee | Chi tiết booking                  |
 | PATCH  | `/api/admin/bookings/{id}/status`         | Admin/Employee | Điều chỉnh status                 |
-| POST   | `/internal/bookings/{id}/confirm-payment` | Internal       | Xác nhận payment thành công       |
-| POST   | `/internal/bookings/{id}/fail-payment`    | Internal       | Ghi nhận payment thất bại         |
-
+| GET    | `/internal/bookings/{bookingId}/payment-context` | Internal       | Lấy snapshot booking để thanh toán |
+| POST   | `/internal/bookings/{bookingId}/payment-results` | Internal       | Xử lý kết quả thanh toán           |
 ---
 
 # 15. Seat Reservation APIs
@@ -1138,7 +1135,7 @@ seat_reservations.status = CONVERTED
 Ticket chỉ được tạo sau khi payment thành công tại:
 
 ```txt
-POST /internal/bookings/{bookingId}/confirm-payment
+POST /internal/bookings/{bookingId}/payment-results (khi nhận SUCCESS)
 ```
 
 ### Seat Availability While Waiting for Payment
@@ -1811,110 +1808,18 @@ Status: `409 Conflict`
 
 # 19. Internal Payment Integration APIs
 
-## 19.1. Confirm Payment
+## 19.1. Get Payment Context
 
 ### Endpoint
 
 ```http
-POST /internal/bookings/{bookingId}/confirm-payment
+GET /internal/bookings/{bookingId}/payment-context
 ```
 
 ### Request Headers
 
 ```http
-Content-Type: application/json
 X-Internal-Token: <internal-token>
-Idempotency-Key: <UUID>
-```
-
-### Request
-
-```json
-{
-  "paymentId": 3001,
-  "paymentTransactionCode": "PAY-20260621-0001",
-  "paidAmount": 240000,
-  "paidAt": "2026-06-21T20:10:00"
-}
-```
-
-`paymentId` không được lưu trực tiếp trong bảng `bookings`.
-
-Payment Service là service sở hữu liên kết:
-
-```txt
-payment.bookingId
-```
-
-### Security Flow
-
-Provider bên thứ ba không gọi trực tiếp endpoint này.
-
-Flow:
-
-```txt
-VNPay / MoMo callback
-→ Payment Service xác minh chữ ký provider
-→ Payment Service xác nhận payment result
-→ Payment Service gọi Booking Internal API
-```
-
-Sprint 2 dùng:
-
-```txt
-X-Internal-Token
-```
-
-Các sprint sau cần nâng cấp request Payment Service → Booking Service sang HMAC signature.
-
-### Business Rules
-
-- Booking phải tồn tại.
-- Booking phải thuộc trạng thái `PENDING_PAYMENT`.
-- `bookings.expires_at` phải lớn hơn thời điểm xử lý.
-- `paidAmount` phải bằng `booking.totalAmount`.
-- Internal token phải hợp lệ.
-- `Idempotency-Key` là bắt buộc.
-- Payment callback phải idempotent.
-- Ticket chỉ được tạo trong operation này.
-
-### Processing Flow
-
-```txt
-Validate X-Internal-Token
-→ Validate Idempotency-Key
-→ Check idempotency result
-→ Load và lock/version-check booking
-→ Ensure booking status = PENDING_PAYMENT
-→ Ensure booking has not expired
-→ Validate paidAmount
-→ Load reservations CONVERTED của booking
-→ Change booking status to CONFIRMED
-→ Create one ticket for each converted reservation
-→ Store ticket price snapshot
-→ Store idempotency result
-→ Commit transaction
-→ Return confirmed booking and tickets
-```
-
-### Transaction Rule
-
-Các bước sau phải nằm trong cùng transaction:
-
-```txt
-Confirm booking
-+
-Create tickets
-+
-Store idempotency result
-```
-
-Nếu tạo một ticket thất bại:
-
-```txt
-Rollback booking status
-Rollback toàn bộ tickets
-Không trả booking CONFIRMED
 ```
 
 ### Response Success
@@ -1922,80 +1827,34 @@ Không trả booking CONFIRMED
 ```json
 {
   "success": true,
-  "message": "Booking confirmed successfully",
+  "message": "Booking payment context retrieved successfully",
+  "errorCode": null,
   "data": {
     "bookingId": 1001,
-    "bookingCode": "LORA-20260621-0001",
-    "status": "CONFIRMED",
-    "tickets": [
-      {
-        "ticketId": 2001,
-        "seatId": 101,
-        "price": 120000
-      },
-      {
-        "ticketId": 2002,
-        "seatId": 102,
-        "price": 120000
-      }
-    ],
-    "confirmedAt": "2026-06-21T20:10:00"
-  }
-}
-```
-
-### Idempotency
-
-Nếu booking đã được `CONFIRMED` bởi cùng callback:
-
-```txt
-Trả 200 OK
-Không tạo thêm ticket
-Không publish duplicate event
-```
-
-Nếu booking đã `CONFIRMED` bởi payment transaction khác:
-
-```txt
-Trả 409 BOOKING_PAYMENT_CONFIRMATION_CONFLICT
-```
-
-### Error: Amount Mismatch
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Paid amount does not match booking total",
-  "errorCode": "BOOKING_PAYMENT_AMOUNT_MISMATCH",
-  "data": null,
-  "errors": null
-}
-```
-
-### Error: Booking Expired
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Booking payment period has expired",
-  "errorCode": "BOOKING_PAYMENT_EXPIRED",
-  "data": null,
+    "accountId": 15,
+    "bookingStatus": "PENDING_PAYMENT",
+    "payable": true,
+    "amount": 250000.00,
+    "currency": "VND",
+    "expiresAt": "2026-07-03T10:15:00Z",
+    "analyticsSnapshot": {
+      "movieId": 99,
+      "movieTitle": "Avengers",
+      "ticketCount": 2
+    }
+  },
   "errors": null
 }
 ```
 
 ---
 
-## 19.2. Payment Failed
+## 19.2. Process Payment Result
 
 ### Endpoint
 
 ```http
-POST /internal/bookings/{bookingId}/fail-payment
+POST /internal/bookings/{bookingId}/payment-results
 ```
 
 ### Request Headers
@@ -2003,32 +1862,66 @@ POST /internal/bookings/{bookingId}/fail-payment
 ```http
 Content-Type: application/json
 X-Internal-Token: <internal-token>
-Idempotency-Key: <UUID>
 ```
 
 ### Request
 
 ```json
 {
-  "paymentId": 3001,
-  "reason": "Payment gateway rejected transaction"
+  "eventId": "123e4567-e89b-12d3-a456-426614174000",
+  "schemaVersion": "1.0",
+  "paymentId": 123,
+  "paymentTransactionCode": "PAY-1001-XYZ",
+  "paymentMethod": "VNPAY",
+  "result": "SUCCESS",
+  "amount": 250000.00,
+  "currency": "VND",
+  "occurredAt": "2026-07-03T10:05:00Z",
+  "externalTransactionId": "EXT-999",
+  "reconciliationStatus": "NONE"
 }
 ```
 
-### Rule
+### Deterministic Acknowledgement Responses
 
-Payment failed request phải idempotent.
-
-Payment failed không tự động hủy booking nếu:
-
-```txt
-booking.status = PENDING_PAYMENT
-AND booking.expiresAt > now
+**Duplicate Event (200 OK)**
+```json
+{
+  "success": true,
+  "data": {
+    "eventId": "123e4567-e89b-12d3-a456-426614174000",
+    "applied": false,
+    "duplicate": true,
+    "result": "ALREADY_PROCESSED"
+  }
+}
 ```
 
-User vẫn được thực hiện payment attempt khác.
+**Already Confirmed (200 OK)**
+```json
+{
+  "success": true,
+  "data": {
+    "eventId": "123e4567-e89b-12d3-a456-426614174000",
+    "applied": false,
+    "duplicate": false,
+    "result": "ALREADY_CONFIRMED_BY_ANOTHER_PAYMENT"
+  }
+}
+```
 
-Khi hết timeout, booking chuyển `EXPIRED`.
+**Confirmed Successfully (200 OK)**
+```json
+{
+  "success": true,
+  "data": {
+    "eventId": "123e4567-e89b-12d3-a456-426614174000",
+    "applied": true,
+    "duplicate": false,
+    "result": "BOOKING_CONFIRMED"
+  }
+}
+```
 
 ---
 
