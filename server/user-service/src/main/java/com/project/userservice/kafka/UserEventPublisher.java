@@ -47,10 +47,10 @@ public class UserEventPublisher {
         }
     }
 
-    public void publishUserProfileCreated(Long accountId, String requestId, String createdAt) {
-        log.info("Building USER_PROFILE_CREATED event for accountId={}", accountId);
+    public void publishUserProfileCreated(Long accountId, String email, String requestId, String createdAt, String status) {
+        log.info("Building USER_PROFILE_CREATED event for accountId={} with status={}", accountId, status);
 
-        com.project.userservice.dto.UserProfileCreatedEventPayload payload = new com.project.userservice.dto.UserProfileCreatedEventPayload(accountId, requestId, createdAt);
+        com.project.userservice.dto.UserProfileCreatedEventPayload payload = new com.project.userservice.dto.UserProfileCreatedEventPayload(accountId, email, requestId, createdAt, status);
         com.project.userservice.dto.UserProfileCreatedEvent event = new com.project.userservice.dto.UserProfileCreatedEvent(
                 UUID.randomUUID().toString(),
                 Instant.now().toString(),

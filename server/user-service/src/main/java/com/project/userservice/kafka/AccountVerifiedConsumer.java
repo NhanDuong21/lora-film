@@ -108,13 +108,21 @@ public class AccountVerifiedConsumer {
 
             String requestId = event.getData().getRequestId();
             String createdAt = java.time.Instant.now().toString();
-            userEventPublisher.publishUserProfileCreated(accountId, requestId, createdAt);
+            userEventPublisher.publishUserProfileCreated(accountId, event.getData().getEmail(), requestId, createdAt, "SUCCESS");
 
             log.info("Successfully created user profile for accountId: {}. Masked CCCD: {}", accountId, event.getData().getCccdMasked());
             
-        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (Exception e) {
             log.error("Error processing event message: {}", message, e);
-            throw new RuntimeException(e); // Rethrow to trigger retry and DLQ
+            try {
+                com.project.userservice.dto.AccountVerifiedEvent event = objectMapper.readValue(message, com.project.userservice.dto.AccountVerifiedEvent.class);
+                Long accountId = event.getData().getAccountId();
+                String email = event.getData().getEmail();
+                userEventPublisher.publishUserProfileCreated(accountId, email, null, java.time.Instant.now().toString(), "FAILED");
+                log.info("Published FAILED profile creation event for accountId: {}", accountId);
+            } catch (Exception pubEx) {
+                log.error("Could not publish FAILED event", pubEx);
+            }
         }
     }
 }
