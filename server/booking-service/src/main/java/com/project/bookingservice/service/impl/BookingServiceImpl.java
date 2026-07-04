@@ -13,7 +13,6 @@ import com.project.bookingservice.repository.BookingRepository;
 import com.project.bookingservice.repository.SeatReservationRepository;
 import com.project.bookingservice.security.CurrentUserProvider;
 import com.project.bookingservice.service.BookingService;
-import com.project.bookingservice.service.idempotency.IdempotencyService;
 import com.project.bookingservice.service.lock.SeatLockManager;
 import com.project.bookingservice.service.movie.MovieServiceClient;
 import org.slf4j.Logger;
@@ -40,20 +39,17 @@ public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final SeatReservationRepository seatReservationRepository;
-    private final IdempotencyService idempotencyService;
     private final CurrentUserProvider currentUserProvider;
     private final MovieServiceClient movieServiceClient;
     private final SeatLockManager seatLockManager;
 
     public BookingServiceImpl(BookingRepository bookingRepository,
                               SeatReservationRepository seatReservationRepository,
-                              IdempotencyService idempotencyService,
                               CurrentUserProvider currentUserProvider,
                               MovieServiceClient movieServiceClient,
                               SeatLockManager seatLockManager) {
         this.bookingRepository = bookingRepository;
         this.seatReservationRepository = seatReservationRepository;
-        this.idempotencyService = idempotencyService;
         this.currentUserProvider = currentUserProvider;
         this.movieServiceClient = movieServiceClient;
         this.seatLockManager = seatLockManager;
@@ -64,43 +60,11 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponse createBooking(CreateBookingRequest request, String idempotencyKey) {
         Long userId = currentUserProvider.getCurrentUserId();
 
-        // 1. Validate idempotency
-        boolean acquired = idempotencyService.acquireIdempotency(userId, idempotencyKey, request);
-        if (!acquired) {
-            for (int i = 0; i < 20; i++) {
-                try {
-                    IdempotencyService.IdempotencyRecord record = idempotencyService.getIdempotencyRecord(userId, idempotencyKey);
-                    if (record != null) {
-                        String currentHash = idempotencyService.generateHash(request);
-                        if (!record.getRequestHash().equals(currentHash)) {
-                            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                        }
-                        if (record.getResponse() != null) {
-                            return convertResponse(record.getResponse());
-                        }
-                    } else {
-                        break;
-                    }
-                } catch (BusinessException be) {
-                    throw be;
-                } catch (Exception e) {
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Interrupted during idempotency wait");
-                }
-            }
-            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-        }
-
         try {
             // 2. Load reservations from database
             List<SeatReservation> reservations = seatReservationRepository.findAllById(request.getReservationIds());
             if (reservations.size() != request.getReservationIds().size()) {
-                throw new BusinessException("BOOKING_RESERVATION_NOT_FOUND", "One or more reservations not found");
+                throw new BusinessException("SEAT_RESERVATION_NOT_FOUND", "One or more reservations not found");
             }
 
             Long showtimeId = null;
@@ -108,29 +72,29 @@ public class BookingServiceImpl implements BookingService {
             for (SeatReservation res : reservations) {
                 // 3. Validate ownership
                 if (!res.getUserId().equals(userId)) {
-                    throw new BusinessException("BOOKING_RESERVATION_NOT_OWNED", "Reservation does not belong to the user");
+                    throw new BusinessException("SEAT_RESERVATION_OWNERSHIP_MISMATCH", "Reservation does not belong to the user");
                 }
                 
                 // 4. Validate reservation status
                 if (res.getStatus() != ReservationStatus.HELD) {
-                    throw new BusinessException("BOOKING_RESERVATION_INVALID_STATUS", "Reservation status must be HELD");
+                    throw new BusinessException("BOOKING_INVALID_STATUS", "Reservation status must be HELD");
                 }
 
                 // 5. Validate reservation expiration
                 if (LocalDateTime.now().isAfter(res.getExpiresAt())) {
-                    throw new BusinessException("BOOKING_RESERVATION_EXPIRED", "Reservation has expired");
+                    throw new BusinessException("SEAT_RESERVATION_EXPIRED", "Reservation has expired");
                 }
 
                 // 6. Validate all reservations same showtime
                 if (showtimeId == null) {
                     showtimeId = res.getShowtimeId();
                 } else if (!showtimeId.equals(res.getShowtimeId())) {
-                    throw new BusinessException("BOOKING_RESERVATION_SHOWTIME_MISMATCH", "Reservations must belong to the same showtime");
+                    throw new BusinessException("BOOKING_MULTIPLE_SHOWTIMES_NOT_ALLOWED", "Reservations must belong to the same showtime");
                 }
 
                 // 7. Validate reservation not attached to booking
                 if (res.getBookingId() != null) {
-                    throw new BusinessException("BOOKING_RESERVATION_INVALID_STATUS", "Reservation is already attached to a booking");
+                    throw new BusinessException("BOOKING_ALREADY_CREATED", "Reservation is already attached to a booking");
                 }
             }
 
@@ -148,16 +112,16 @@ public class BookingServiceImpl implements BookingService {
             try {
                 showtimeInfo = movieServiceClient.getShowtime(showtimeId);
                 if (showtimeInfo == null) {
-                     throw new BusinessException("BOOKING_PRICE_UNAVAILABLE", "Showtime not found");
+                     throw new BusinessException("BOOKING_SHOWTIME_NOT_FOUND", "Showtime not found");
                 }
             } catch (Exception e) {
-                throw new BusinessException("BOOKING_PRICE_UNAVAILABLE", "Movie service is unavailable");
+                throw new BusinessException("MOVIE_SERVICE_UNAVAILABLE", "Movie service is unavailable");
             }
 
             // 10. Calculate totalAmount
             BigDecimal ticketPrice = showtimeInfo.getPrice();
             if (ticketPrice == null) {
-                throw new BusinessException("BOOKING_PRICE_UNAVAILABLE", "Ticket price not available");
+                throw new BusinessException("BOOKING_SHOWTIME_NOT_AVAILABLE", "Ticket price not available");
             }
             BigDecimal totalAmount = ticketPrice.multiply(BigDecimal.valueOf(reservations.size()));
 
@@ -188,15 +152,9 @@ public class BookingServiceImpl implements BookingService {
             seatReservationRepository.saveAll(reservations);
 
             // Create response
-            BookingResponse response = mapToResponse(savedBooking, reservations);
-
-            // 16. Save idempotency result
-            idempotencyService.saveResponse(userId, idempotencyKey, request, response);
-
-            return response;
+            return mapToResponse(savedBooking, reservations);
 
         } catch (Exception e) {
-            idempotencyService.removeIdempotencyKey(userId, idempotencyKey);
             throw e;
         }
     }
@@ -209,7 +167,7 @@ public class BookingServiceImpl implements BookingService {
 
         Long userId = currentUserProvider.getCurrentUserId();
         if (!booking.getUserId().equals(userId)) {
-            throw new BusinessException("BOOKING_NOT_OWNED", "Booking does not belong to the user");
+            throw new BusinessException("FORBIDDEN", "Booking does not belong to the user");
         }
 
         // Wait, wait... I don't have an easy way to get seats if we don't fetch them. 
@@ -236,40 +194,6 @@ public class BookingServiceImpl implements BookingService {
     public void cancelBooking(Long bookingId, String idempotencyKey) {
         Long userId = currentUserProvider.getCurrentUserId();
         
-        Object cancelRequestPayload = "CANCEL_BOOKING_" + bookingId;
-
-        // 1. Validate idempotency
-        boolean acquired = idempotencyService.acquireIdempotency(userId, idempotencyKey, cancelRequestPayload);
-        if (!acquired) {
-            for (int i = 0; i < 20; i++) {
-                try {
-                    IdempotencyService.IdempotencyRecord record = idempotencyService.getIdempotencyRecord(userId, idempotencyKey);
-                    if (record != null) {
-                        String currentHash = idempotencyService.generateHash(cancelRequestPayload);
-                        if (!record.getRequestHash().equals(currentHash)) {
-                            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                        }
-                        if (record.getResponse() != null) {
-                            return; // Already successful
-                        }
-                    } else {
-                        break;
-                    }
-                } catch (BusinessException be) {
-                    throw be;
-                } catch (Exception e) {
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Interrupted during idempotency wait");
-                }
-            }
-            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-        }
-
         try {
             // 2. Load booking
             Booking booking = bookingRepository.findById(bookingId)
@@ -277,21 +201,21 @@ public class BookingServiceImpl implements BookingService {
 
             // 3. Validate ownership
             if (!booking.getUserId().equals(userId)) {
-                throw new BusinessException("BOOKING_NOT_OWNED", "Booking does not belong to the user");
+                throw new BusinessException("FORBIDDEN", "Booking does not belong to the user");
             }
 
             // 4. Validate state transition
             if (booking.getStatus() == BookingStatus.CONFIRMED) {
-                throw new BusinessException("BOOKING_CANNOT_CANCEL_CONFIRMED", "Cannot cancel a confirmed booking");
+                throw new BusinessException("BOOKING_CANNOT_BE_CANCELLED", "Cannot cancel a confirmed booking");
             }
             if (booking.getStatus() == BookingStatus.EXPIRED) {
-                throw new BusinessException("BOOKING_ALREADY_EXPIRED", "Booking is already expired");
+                throw new BusinessException("BOOKING_CANNOT_BE_CANCELLED", "Booking is already expired");
             }
             if (booking.getStatus() == BookingStatus.CANCELLED) {
-                throw new BusinessException("BOOKING_ALREADY_CANCELLED", "Booking is already cancelled");
+                throw new BusinessException("BOOKING_CANNOT_BE_CANCELLED", "Booking is already cancelled");
             }
             if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
-                throw new BusinessException("BOOKING_INVALID_STATE", "Invalid booking state for cancellation");
+                throw new BusinessException("BOOKING_INVALID_STATUS_TRANSITION", "Invalid booking state for cancellation");
             }
 
             // 5. Change state
@@ -311,9 +235,7 @@ public class BookingServiceImpl implements BookingService {
             // 8. Do not create ticket.
             // 9. Commit transaction.
 
-            idempotencyService.saveResponse(userId, idempotencyKey, cancelRequestPayload, "SUCCESS");
         } catch (Exception e) {
-            idempotencyService.removeIdempotencyKey(userId, idempotencyKey);
             throw e;
         }
     }

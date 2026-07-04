@@ -27,6 +27,8 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
 
     List<SeatReservation> findByBookingId(Long bookingId);
 
+    List<SeatReservation> findByBookingIdAndStatus(Long bookingId, ReservationStatus status);
+
     @Query("SELECT sr FROM SeatReservation sr WHERE sr.status = :status AND sr.expiresAt < :now ORDER BY sr.createdAt ASC")
     org.springframework.data.domain.Page<SeatReservation> findExpiredReservations(
             @Param("status") ReservationStatus status, 
