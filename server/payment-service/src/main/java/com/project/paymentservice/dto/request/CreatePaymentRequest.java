@@ -3,12 +3,16 @@ package com.project.paymentservice.dto.request;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public class CreatePaymentRequest {
 
+    @Schema(description = "ID of the booking to pay for", example = "1001")
     @NotNull(message = "bookingId is required")
     @Positive(message = "bookingId must be positive")
     private Long bookingId;
 
+    @Schema(description = "Payment method provider", example = "MOCK", allowableValues = {"MOCK", "VNPAY", "MOMO"})
     @NotNull(message = "paymentMethod is required")
     private String paymentMethod;
 
