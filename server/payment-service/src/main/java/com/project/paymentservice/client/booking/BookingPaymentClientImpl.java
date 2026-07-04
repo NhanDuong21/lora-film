@@ -39,6 +39,10 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeout))
                 .build();
+        
+        if (this.internalToken == null || this.internalToken.isBlank()) {
+            throw new IllegalStateException("booking.service.internal-token must be configured when Booking Service integration is enabled.");
+        }
     }
 
     @Override
