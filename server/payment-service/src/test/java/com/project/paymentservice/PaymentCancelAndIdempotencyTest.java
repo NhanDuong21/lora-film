@@ -88,4 +88,80 @@ public class PaymentCancelAndIdempotencyTest {
         assertEquals(resp1.getStatus(), resp2.getStatus());
         assertEquals(PaymentStatus.CANCELLED.name(), resp2.getStatus());
     }
+
+    @Test
+    void retryAfterFailedCancelShouldNotRemainInProgressForever() {
+        Payment p = new Payment();
+        p.setAccountId(15L);
+        p.setBookingId(1001L);
+        p.setPaymentTransactionCode("CAN-RETRY");
+        p.setAmount(new BigDecimal("100"));
+        p.setPaymentMethod(PaymentMethod.MOCK);
+        p.setAttemptNumber(1);
+        p.setStatus(PaymentStatus.PENDING);
+        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        final Payment savedP = paymentRepository.save(p);
+
+        com.project.paymentservice.entity.PaymentIdempotencyRecord record = new com.project.paymentservice.entity.PaymentIdempotencyRecord();
+        record.setAccountId(15L);
+        record.setOperation("CANCEL_PAYMENT");
+        record.setIdempotencyKey("failed-cancel-key");
+        record.setRequestHash(com.project.paymentservice.service.CanonicalHashUtil.hashCancelPayment(15L, savedP.getId()));
+        record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.FAILED);
+        record.setErrorCode("INTERNAL_SERVER_ERROR");
+        record.setLastError("Simulated failure");
+        record.setResponseStatus(500);
+        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        idempotencyRepository.saveAndFlush(record);
+
+        com.project.paymentservice.exception.BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                com.project.paymentservice.exception.BusinessException.class,
+                () -> paymentService.cancelPayment(15L, "failed-cancel-key", savedP.getId())
+        );
+
+        assertEquals("INTERNAL_SERVER_ERROR", ex.getErrorCode());
+        assertEquals("Simulated failure", ex.getMessage());
+
+        Payment after = paymentRepository.findById(savedP.getId()).orElseThrow();
+        assertEquals(PaymentStatus.PENDING, after.getStatus());
+        assertEquals(0, logRepository.count());
+    }
+
+    @Test
+    void cancelPaymentWithSameKeyDifferentHashShouldConflict() {
+        Payment p1 = new Payment();
+        p1.setAccountId(15L);
+        p1.setBookingId(1001L);
+        p1.setPaymentTransactionCode("CAN-DIFF-1");
+        p1.setAmount(new BigDecimal("100"));
+        p1.setPaymentMethod(PaymentMethod.MOCK);
+        p1.setAttemptNumber(1);
+        p1.setStatus(PaymentStatus.PENDING);
+        p1.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        p1 = paymentRepository.save(p1);
+
+        Payment p2 = new Payment();
+        p2.setAccountId(15L);
+        p2.setBookingId(1002L);
+        p2.setPaymentTransactionCode("CAN-DIFF-2");
+        p2.setAmount(new BigDecimal("200"));
+        p2.setPaymentMethod(PaymentMethod.MOCK);
+        p2.setAttemptNumber(1);
+        p2.setStatus(PaymentStatus.PENDING);
+        p2.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        final Payment savedP2 = paymentRepository.save(p2);
+
+        // First cancel
+        paymentService.cancelPayment(15L, "shared-cancel-key", p1.getId());
+
+        // Second cancel for DIFFERENT payment but SAME key
+        com.project.paymentservice.exception.BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                com.project.paymentservice.exception.BusinessException.class,
+                () -> paymentService.cancelPayment(15L, "shared-cancel-key", savedP2.getId())
+        );
+
+        assertEquals("IDEMPOTENCY_KEY_REUSED", ex.getErrorCode());
+        Payment afterP2 = paymentRepository.findById(savedP2.getId()).orElseThrow();
+        assertEquals(PaymentStatus.PENDING, afterP2.getStatus());
+    }
 }

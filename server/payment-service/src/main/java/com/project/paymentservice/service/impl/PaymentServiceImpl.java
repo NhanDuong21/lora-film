@@ -109,76 +109,72 @@ public class PaymentServiceImpl implements PaymentService {
             return deserializeReplay(idempResult.record, CreatePaymentResponse.class);
         }
 
-        // Phase B — Fetch Booking Context (no DB transaction)
-        BookingPaymentContext context;
+
+
+        // Execute main business logic
         try {
-            context = bookingClient.getPaymentContext(request.getBookingId());
+            // Phase B — Fetch Booking Context (no DB transaction)
+            BookingPaymentContext context = bookingClient.getPaymentContext(request.getBookingId());
+
+            // Phase C — Validate ownership
+            if (!context.getAccountId().equals(accountId)) {
+                throw new BusinessException("FORBIDDEN", "You do not own this booking", HttpStatus.FORBIDDEN);
+            }
+
+            // Phase D — Reserve Payment attempt (short transaction)
+            Payment payment = transactionTemplate.execute(status -> {
+                return reservePaymentAttempt(accountId, request.getBookingId(), method, context);
+            });
+
+            // Phase E — Create provider session (no DB transaction)
+            PaymentSession session;
+            try {
+                PaymentSessionRequest sessionReq = new PaymentSessionRequest();
+                sessionReq.setPaymentId(payment.getId());
+                sessionReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
+                sessionReq.setBookingId(request.getBookingId());
+                sessionReq.setAmount(payment.getAmount());
+                sessionReq.setCurrency(payment.getCurrency());
+                session = provider.createSession(sessionReq);
+            } catch (Exception e) {
+                logger.error("Provider session creation failed for paymentId={}", payment.getId(), e);
+                // Mark Payment FAILED, clear Guard, complete idempotency as FAILED
+                handleSessionCreationFailure(payment, accountId, idempotencyKey);
+                throw new BusinessException("PAYMENT_SESSION_CREATION_FAILED",
+                        "Failed to create payment session", HttpStatus.BAD_GATEWAY);
+            }
+
+            // Phase F — Finalize session/idempotency (short transaction)
+            CreatePaymentResponse response = transactionTemplate.execute(status -> {
+                Payment p = paymentRepository.findById(payment.getId()).orElseThrow();
+
+                p.setProviderOrderId(session.getProviderOrderId());
+                p.setProviderSessionId(session.getProviderSessionId());
+
+                // For MOCK we keep PENDING (per contract: NULL -> PENDING, callback transitions to SUCCESS/FAILED)
+                p.setSettlementHoldUntil(LocalDateTime.now().plusMinutes(15));
+                paymentRepository.save(p);
+
+                paymentLogService.log(p.getId(), PaymentLogEventType.PROVIDER_SESSION_CREATED, SOURCE,
+                        ActorType.SYSTEM, null, PaymentStatus.PENDING, PaymentStatus.PENDING,
+                        "MOCK session created", "providerOrderId=" + session.getProviderOrderId());
+
+                CreatePaymentResponse resp = PaymentMapper.toCreateResponse(p, session.getPaymentUrl());
+
+                // Complete idempotency
+                completeIdempotency(accountId, "CREATE_PAYMENT", idempotencyKey, 201, resp, p.getId());
+
+                return resp;
+            });
+
+            return response;
         } catch (BusinessException e) {
-            // Mark idempotency as FAILED
             markIdempotencyFailed(accountId, "CREATE_PAYMENT", idempotencyKey, e.getErrorCode(), e.getMessage());
             throw e;
         } catch (Exception e) {
-            markIdempotencyFailed(accountId, "CREATE_PAYMENT", idempotencyKey, "BOOKING_SERVICE_UNAVAILABLE", e.getMessage());
-            throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
-                    "Failed to fetch booking context", HttpStatus.SERVICE_UNAVAILABLE);
+            markIdempotencyFailed(accountId, "CREATE_PAYMENT", idempotencyKey, "INTERNAL_SERVER_ERROR", e.getMessage());
+            throw new BusinessException("INTERNAL_SERVER_ERROR", "An unexpected error occurred during payment creation", HttpStatus.INTERNAL_SERVER_ERROR);
         }
-
-        // Phase C — Validate ownership
-        if (!context.getAccountId().equals(accountId)) {
-            markIdempotencyFailed(accountId, "CREATE_PAYMENT", idempotencyKey, "FORBIDDEN", "Ownership mismatch");
-            throw new BusinessException("FORBIDDEN", "You do not own this booking", HttpStatus.FORBIDDEN);
-        }
-
-        // Phase D — Reserve Payment attempt (short transaction)
-        Payment payment = transactionTemplate.execute(status -> {
-            return reservePaymentAttempt(accountId, request.getBookingId(), method, context);
-        });
-
-        // Phase E — Create provider session (no DB transaction)
-        PaymentSession session;
-        try {
-            PaymentSessionRequest sessionReq = new PaymentSessionRequest();
-            sessionReq.setPaymentId(payment.getId());
-            sessionReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
-            sessionReq.setBookingId(request.getBookingId());
-            sessionReq.setAmount(payment.getAmount());
-            sessionReq.setCurrency(payment.getCurrency());
-            session = provider.createSession(sessionReq);
-        } catch (Exception e) {
-            logger.error("Provider session creation failed for paymentId={}", payment.getId(), e);
-            // Mark Payment FAILED, clear Guard, complete idempotency as FAILED
-            handleSessionCreationFailure(payment, accountId, idempotencyKey);
-            throw new BusinessException("PAYMENT_SESSION_CREATION_FAILED",
-                    "Failed to create payment session", HttpStatus.BAD_GATEWAY);
-        }
-
-        // Phase F — Finalize session/idempotency (short transaction)
-        CreatePaymentResponse response = transactionTemplate.execute(status -> {
-            Payment p = paymentRepository.findById(payment.getId()).orElseThrow();
-
-            p.setProviderOrderId(session.getProviderOrderId());
-            p.setProviderSessionId(session.getProviderSessionId());
-
-            // For MOCK we keep PENDING (per contract: NULL -> PENDING, callback transitions to SUCCESS/FAILED)
-            // The contract shows MOCK callback does PROCESSING -> SUCCESS/FAILED
-            // But CREATE does PENDING (Phase C) -> potentially PROCESSING (Phase E for online)
-            // For MOCK: stay PENDING until callback
-            p.setSettlementHoldUntil(LocalDateTime.now().plusMinutes(15));
-            paymentRepository.save(p);
-
-            paymentLogService.log(p.getId(), PaymentLogEventType.PROVIDER_SESSION_CREATED, SOURCE,
-                    ActorType.SYSTEM, null, PaymentStatus.PENDING, PaymentStatus.PENDING,
-                    "MOCK session created", "providerOrderId=" + session.getProviderOrderId());
-
-            CreatePaymentResponse resp = PaymentMapper.toCreateResponse(p, session.getPaymentUrl());
-
-            // Complete idempotency
-            completeIdempotency(accountId, "CREATE_PAYMENT", idempotencyKey, 201, resp, p.getId());
-
-            return resp;
-        });
-
-        return response;
     }
 
     @Override
@@ -227,47 +223,55 @@ public class PaymentServiceImpl implements PaymentService {
             return deserializeReplay(idempResult.record, CancelPaymentResponse.class);
         }
 
-        // Execute cancel in short transaction
-        CancelPaymentResponse response = transactionTemplate.execute(status -> {
-            Payment payment = paymentRepository.findById(paymentId)
-                    .orElseThrow(() -> new BusinessException("PAYMENT_NOT_FOUND",
-                            "Payment not found", HttpStatus.NOT_FOUND));
+        try {
+            // Execute cancel in short transaction
+            CancelPaymentResponse response = transactionTemplate.execute(status -> {
+                Payment payment = paymentRepository.findById(paymentId)
+                        .orElseThrow(() -> new BusinessException("PAYMENT_NOT_FOUND",
+                                "Payment not found", HttpStatus.NOT_FOUND));
 
-            if (!payment.getAccountId().equals(accountId)) {
-                throw new BusinessException("FORBIDDEN", "You do not own this payment", HttpStatus.FORBIDDEN);
-            }
+                if (!payment.getAccountId().equals(accountId)) {
+                    throw new BusinessException("FORBIDDEN", "You do not own this payment", HttpStatus.FORBIDDEN);
+                }
 
-            if (payment.getStatus() != PaymentStatus.PENDING) {
-                throw new BusinessException("PAYMENT_CANNOT_BE_CANCELLED",
-                        "Payment can only be cancelled when PENDING", HttpStatus.CONFLICT);
-            }
+                if (payment.getStatus() != PaymentStatus.PENDING) {
+                    throw new BusinessException("PAYMENT_CANNOT_BE_CANCELLED",
+                            "Payment can only be cancelled when PENDING", HttpStatus.CONFLICT);
+                }
 
-            PaymentStatus previousStatus = payment.getStatus();
-            payment.setStatus(PaymentStatus.CANCELLED);
-            payment.setCancelledAt(LocalDateTime.now());
-            paymentRepository.save(payment);
+                PaymentStatus previousStatus = payment.getStatus();
+                payment.setStatus(PaymentStatus.CANCELLED);
+                payment.setCancelledAt(LocalDateTime.now());
+                paymentRepository.save(payment);
 
-            // Clear guard active pointer
-            BookingPaymentGuard guard = guardRepository.findByBookingIdForUpdate(payment.getBookingId())
-                    .orElse(null);
-            if (guard != null && payment.getId().equals(guard.getActivePaymentId())) {
-                guard.setActivePaymentId(null);
-                guardRepository.save(guard);
-            }
+                // Clear guard active pointer
+                BookingPaymentGuard guard = guardRepository.findByBookingIdForUpdate(payment.getBookingId())
+                        .orElse(null);
+                if (guard != null && payment.getId().equals(guard.getActivePaymentId())) {
+                    guard.setActivePaymentId(null);
+                    guardRepository.save(guard);
+                }
 
-            paymentLogService.log(payment.getId(), PaymentLogEventType.PAYMENT_CANCELLED, SOURCE,
-                    ActorType.CUSTOMER, accountId, previousStatus, PaymentStatus.CANCELLED,
-                    "Payment cancelled by customer", null);
+                paymentLogService.log(payment.getId(), PaymentLogEventType.PAYMENT_CANCELLED, SOURCE,
+                        ActorType.CUSTOMER, accountId, previousStatus, PaymentStatus.CANCELLED,
+                        "Payment cancelled by customer", null);
 
-            CancelPaymentResponse resp = new CancelPaymentResponse(
-                    payment.getId(), PaymentStatus.CANCELLED.name(), payment.getCancelledAt());
+                CancelPaymentResponse resp = new CancelPaymentResponse(
+                        payment.getId(), PaymentStatus.CANCELLED.name(), payment.getCancelledAt());
 
-            completeIdempotency(accountId, "CANCEL_PAYMENT", idempotencyKey, 200, resp, payment.getId());
+                completeIdempotency(accountId, "CANCEL_PAYMENT", idempotencyKey, 200, resp, payment.getId());
 
-            return resp;
-        });
+                return resp;
+            });
 
-        return response;
+            return response;
+        } catch (BusinessException e) {
+            markIdempotencyFailed(accountId, "CANCEL_PAYMENT", idempotencyKey, e.getErrorCode(), e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            markIdempotencyFailed(accountId, "CANCEL_PAYMENT", idempotencyKey, "INTERNAL_SERVER_ERROR", e.getMessage());
+            throw new BusinessException("INTERNAL_SERVER_ERROR", "An unexpected error occurred during payment cancellation", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @Override
@@ -550,6 +554,9 @@ public class PaymentServiceImpl implements PaymentService {
                         .findAndLockByAccountIdAndOperationAndIdempotencyKey(accountId, operation, idempotencyKey);
                 if (record.isPresent()) {
                     PaymentIdempotencyRecord r = record.get();
+                    if (r.getProcessingStatus() == IdempotencyProcessingStatus.COMPLETED) {
+                        return null;
+                    }
                     r.setProcessingStatus(IdempotencyProcessingStatus.FAILED);
                     r.setErrorCode(errorCode);
                     r.setLastError(errorMessage);

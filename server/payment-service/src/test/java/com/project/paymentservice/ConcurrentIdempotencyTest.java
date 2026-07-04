@@ -159,4 +159,67 @@ public class ConcurrentIdempotencyTest {
         assertEquals(0, logRepository.count(), "No Payment log created");
         org.mockito.Mockito.verifyNoInteractions(bookingClient);
     }
+
+    @Test
+    void concurrentCancelWithSameKeyShouldApplyExactlyOnce() throws InterruptedException {
+        com.project.paymentservice.entity.Payment p = new com.project.paymentservice.entity.Payment();
+        p.setAccountId(15L);
+        p.setBookingId(1001L);
+        p.setPaymentTransactionCode("CAN-CONCURRENT");
+        p.setAmount(new BigDecimal("100"));
+        p.setPaymentMethod(com.project.paymentservice.enumtype.PaymentMethod.MOCK);
+        p.setAttemptNumber(1);
+        p.setStatus(com.project.paymentservice.enumtype.PaymentStatus.PENDING);
+        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        p = paymentRepository.save(p);
+
+        com.project.paymentservice.entity.BookingPaymentGuard guard = new com.project.paymentservice.entity.BookingPaymentGuard();
+        guard.setBookingId(1001L);
+        guard.setActivePaymentId(p.getId());
+        guard.setNextAttemptNumber(1);
+        guardRepository.save(guard);
+
+        int numThreads = 2;
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(numThreads);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger conflictCount = new AtomicInteger(0);
+        final Long paymentId = p.getId();
+
+        for (int i = 0; i < numThreads; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    paymentService.cancelPayment(15L, "concurrent-cancel-key", paymentId);
+                    successCount.incrementAndGet();
+                } catch (BusinessException e) {
+                    if ("IDEMPOTENCY_REQUEST_IN_PROGRESS".equals(e.getErrorCode())) {
+                        conflictCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown(); // Start all threads at once
+        doneLatch.await(10, TimeUnit.SECONDS);
+
+        // Verify exactly one cancel applied
+        com.project.paymentservice.entity.Payment after = paymentRepository.findById(paymentId).orElseThrow();
+        assertEquals(com.project.paymentservice.enumtype.PaymentStatus.CANCELLED, after.getStatus());
+        assertEquals(1, idempotencyRepository.count(), "Exactly one idempotency record should exist");
+        assertEquals(1, successCount.get(), "Exactly one request should succeed or replay");
+        assertEquals(1, conflictCount.get(), "The loser request should return IDEMPOTENCY_REQUEST_IN_PROGRESS");
+        assertEquals(1, logRepository.count(), "Exactly one business cancellation log");
+
+        com.project.paymentservice.entity.BookingPaymentGuard afterGuard = guardRepository.findByBookingId(1001L).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertNull(afterGuard.getActivePaymentId());
+
+        executor.shutdown();
+    }
 }

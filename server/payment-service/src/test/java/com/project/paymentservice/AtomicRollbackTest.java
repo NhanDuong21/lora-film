@@ -23,6 +23,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
+import com.project.paymentservice.exception.BusinessException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -106,18 +107,23 @@ public class AtomicRollbackTest {
 
         CreatePaymentRequest req = new CreatePaymentRequest(2001L, "MOCK");
 
-        assertThrows(DataIntegrityViolationException.class, () -> {
+        BusinessException ex = assertThrows(BusinessException.class, () -> {
             paymentService.createPayment(15L, "idem-rollback-1", req);
         });
+        assertEquals("INTERNAL_SERVER_ERROR", ex.getErrorCode());
 
         assertEquals(0, paymentRepository.count(), "No Payment row committed");
         assertEquals(0, guardRepository.count(), "No Guard created or changed");
         assertEquals(0, snapshotRepository.count(), "No analytics snapshot committed");
         assertEquals(0, logRepository.count(), "No partial Payment Log");
+
+        assertEquals(1, idempotencyRepository.count(), "Create idempotency record exists");
+        PaymentIdempotencyRecord createIdemp = idempotencyRepository.findAll().get(0);
+        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.FAILED, createIdemp.getProcessingStatus(), "Create idempotency should be marked FAILED");
     }
 
     @Test
-    void stateTransitionShouldRollbackWhenGuardOrLogPersistenceFails() {
+    void cancelFailureShouldMarkIdempotencyRecordAsFailed() {
         // We will test transition failure by simulating log failure during transition.
         when(bookingClient.getPaymentContext(2002L)).thenAnswer(invocation -> {
             BookingPaymentContext ctx = new BookingPaymentContext();
@@ -151,16 +157,20 @@ public class AtomicRollbackTest {
         doThrow(new DataIntegrityViolationException("Simulated log failure during cancel"))
                 .when(logRepository).save(any());
 
-        assertThrows(DataIntegrityViolationException.class, () -> {
+        BusinessException ex = assertThrows(BusinessException.class, () -> {
             paymentService.cancelPayment(15L, "idem-cancel-1", payment.getId());
         });
+        assertEquals("INTERNAL_SERVER_ERROR", ex.getErrorCode());
 
         // The state should remain PROCESSING
         Payment afterRollback = paymentRepository.findById(payment.getId()).orElseThrow();
         assertEquals(com.project.paymentservice.enumtype.PaymentStatus.PENDING, afterRollback.getStatus(), "Original Payment status remains");
 
-        // The idempotency record for cancel should not be complete
-        assertEquals(2, idempotencyRepository.count(), "Idempotency for cancel remains in PROCESSING (2 total)");
+        assertEquals(2, idempotencyRepository.count(), "Idempotency for cancel exists (2 total)");
+        PaymentIdempotencyRecord cancelIdemp = idempotencyRepository.findAll().stream()
+                .filter(r -> "CANCEL_PAYMENT".equals(r.getOperation()))
+                .findFirst().orElseThrow();
+        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.FAILED, cancelIdemp.getProcessingStatus(), "Cancel idempotency should be marked FAILED");
 
         // The log count should be 2 (PAYMENT_CREATED and PROVIDER_SESSION_CREATED from the create flow)
         assertEquals(2, logRepository.count(), "No partial terminal log");
