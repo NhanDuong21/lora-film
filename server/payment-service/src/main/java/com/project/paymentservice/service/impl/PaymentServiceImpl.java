@@ -418,8 +418,8 @@ public class PaymentServiceImpl implements PaymentService {
 
         try {
             idempotencyRepository.saveAndFlush(newRecord);
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            // Race condition: another thread just inserted
+        } catch (org.springframework.dao.DataIntegrityViolationException | org.springframework.dao.CannotAcquireLockException e) {
+            // Race condition or MySQL gap lock deadlock: another thread just inserted or is inserting
             throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
                     "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
         }
