@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 public class OpenApiConfig {
 
     private static final String SECURITY_SCHEME_NAME = "bearerAuth";
+    private static final String INTERNAL_TOKEN_SCHEME_NAME = "internalToken";
 
     @Bean
     public OpenAPI bookingServiceOpenAPI() {
@@ -21,6 +22,7 @@ public class OpenApiConfig {
                         .version("v1")
                         .description("Booking, seat reservation and ticket management APIs"))
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
+                .addSecurityItem(new SecurityRequirement().addList(INTERNAL_TOKEN_SCHEME_NAME))
                 .components(
                         new Components()
                                 .addSecuritySchemes(
@@ -30,6 +32,13 @@ public class OpenApiConfig {
                                                 .type(SecurityScheme.Type.HTTP)
                                                 .scheme("bearer")
                                                 .bearerFormat("JWT")
+                                                .in(SecurityScheme.In.HEADER)
+                                )
+                                .addSecuritySchemes(
+                                        INTERNAL_TOKEN_SCHEME_NAME,
+                                        new SecurityScheme()
+                                                .name("X-Internal-Token")
+                                                .type(SecurityScheme.Type.APIKEY)
                                                 .in(SecurityScheme.In.HEADER)
                                 )
                 );
