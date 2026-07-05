@@ -32,14 +32,6 @@ public class CashPaymentDetail {
     @Column(name = "note_sanitized", length = 500)
     private String noteSanitized;
 
-    @Column(name = "cancelled_by_account_id")
-    private Long cancelledByAccountId;
-
-    @Column(name = "cancelled_at")
-    private LocalDateTime cancelledAt;
-
-    @Column(name = "cancellation_reason_sanitized", length = 500)
-    private String cancellationReasonSanitized;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -114,30 +106,6 @@ public class CashPaymentDetail {
 
     public void setNoteSanitized(String noteSanitized) {
         this.noteSanitized = noteSanitized;
-    }
-
-    public Long getCancelledByAccountId() {
-        return cancelledByAccountId;
-    }
-
-    public void setCancelledByAccountId(Long cancelledByAccountId) {
-        this.cancelledByAccountId = cancelledByAccountId;
-    }
-
-    public LocalDateTime getCancelledAt() {
-        return cancelledAt;
-    }
-
-    public void setCancelledAt(LocalDateTime cancelledAt) {
-        this.cancelledAt = cancelledAt;
-    }
-
-    public String getCancellationReasonSanitized() {
-        return cancellationReasonSanitized;
-    }
-
-    public void setCancellationReasonSanitized(String cancellationReasonSanitized) {
-        this.cancellationReasonSanitized = cancellationReasonSanitized;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -18,6 +18,8 @@ public interface PaymentOutboxEventRepository extends JpaRepository<PaymentOutbo
 
     Page<PaymentOutboxEvent> findByStatus(OutboxStatus status, Pageable pageable);
 
+    List<PaymentOutboxEvent> findByAggregateIdAndStatus(String aggregateId, OutboxStatus status);
+
     @Query("SELECT o FROM PaymentOutboxEvent o WHERE o.status = :status AND (o.nextRetryAt IS NULL OR o.nextRetryAt <= :now)")
     Page<PaymentOutboxEvent> findRetryableRecords(@Param("status") OutboxStatus status, @Param("now") LocalDateTime now,
             Pageable pageable);

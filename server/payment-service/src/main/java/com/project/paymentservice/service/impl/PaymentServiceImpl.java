@@ -52,6 +52,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final TransactionTemplate requiresNewTransactionTemplate;
     private final ObjectMapper objectMapper;
     private final CashPaymentDetailRepository cashPaymentDetailRepository;
+    private final PaymentOutboxEventRepository outboxEventRepository;
 
     public PaymentServiceImpl(
             PaymentRepository paymentRepository,
@@ -65,7 +66,8 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentStateTransitionService stateTransitionService,
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
-            CashPaymentDetailRepository cashPaymentDetailRepository) {
+            CashPaymentDetailRepository cashPaymentDetailRepository,
+            PaymentOutboxEventRepository outboxEventRepository) {
         this.paymentRepository = paymentRepository;
         this.guardRepository = guardRepository;
         this.idempotencyRepository = idempotencyRepository;
@@ -80,6 +82,7 @@ public class PaymentServiceImpl implements PaymentService {
         this.requiresNewTransactionTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.objectMapper = objectMapper;
         this.cashPaymentDetailRepository = cashPaymentDetailRepository;
+        this.outboxEventRepository = outboxEventRepository;
     }
 
     @Override
@@ -484,7 +487,6 @@ public class PaymentServiceImpl implements PaymentService {
                 paymentRepository.save(payment);
 
                 com.project.paymentservice.entity.CashPaymentDetail detail = new com.project.paymentservice.entity.CashPaymentDetail();
-                detail.setPaymentId(payment.getId());
                 detail.setPayment(payment);
                 detail.setReceivedAmount(request.getReceivedAmount());
                 detail.setChangeAmount(changeAmount);
@@ -513,6 +515,33 @@ public class PaymentServiceImpl implements PaymentService {
                         payment.getStatus().name(), payment.getAmount(), request.getReceivedAmount(), changeAmount,
                         accountId, detail.getCollectedAt());
 
+                com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
+                notifyReq.setEventId(java.util.UUID.randomUUID().toString());
+                notifyReq.setSchemaVersion("1.0");
+                notifyReq.setPaymentId(payment.getId());
+                notifyReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
+                notifyReq.setPaymentMethod(payment.getPaymentMethod().name());
+                notifyReq.setResult("SUCCESS");
+                notifyReq.setAmount(payment.getAmount());
+                notifyReq.setCurrency(payment.getCurrency());
+                notifyReq.setOccurredAt(payment.getSucceededAt());
+                notifyReq.setExternalTransactionId(payment.getExternalTransactionId());
+                notifyReq.setReconciliationStatus(payment.getReconciliationStatus().name());
+
+                com.project.paymentservice.entity.PaymentOutboxEvent outboxEvent = new com.project.paymentservice.entity.PaymentOutboxEvent();
+                outboxEvent.setEventId(notifyReq.getEventId());
+                outboxEvent.setAggregateType("PAYMENT");
+                outboxEvent.setAggregateId(payment.getId().toString());
+                outboxEvent.setEventType("PAYMENT_RESULT");
+                outboxEvent.setSchemaVersion("1.0");
+                outboxEvent.setDestination(OutboxDestination.BOOKING_SERVICE_REST);
+                try {
+                    outboxEvent.setPayload(objectMapper.writeValueAsString(notifyReq));
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to serialize outbox payload", e);
+                }
+                outboxEventRepository.save(outboxEvent);
+
                 completeIdempotency(accountId, "COLLECT_CASH_PAYMENT", idempotencyKey, 200, resp, payment.getId());
 
                 return resp;
@@ -520,23 +549,21 @@ public class PaymentServiceImpl implements PaymentService {
 
             try {
                 com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
-                notifyReq.setEventId(java.util.UUID.randomUUID().toString());
-                notifyReq.setSchemaVersion("1.0");
-                notifyReq.setPaymentId(response.getPaymentId());
                 Payment payment = paymentRepository.findById(response.getPaymentId()).orElse(null);
                 if (payment != null) {
-                    notifyReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
-                    notifyReq.setPaymentMethod(payment.getPaymentMethod().name());
-                    notifyReq.setResult("SUCCESS");
-                    notifyReq.setAmount(payment.getAmount());
-                    notifyReq.setCurrency(payment.getCurrency());
-                    notifyReq.setOccurredAt(payment.getSucceededAt());
-                    notifyReq.setExternalTransactionId(payment.getExternalTransactionId());
-                    notifyReq.setReconciliationStatus(payment.getReconciliationStatus().name());
-                    bookingClient.notifyPaymentResult(payment.getBookingId(), notifyReq);
+                    // Try to send it synchronously for immediate confirmation
+                    // Find the pending outbox event
+                    java.util.List<com.project.paymentservice.entity.PaymentOutboxEvent> events = outboxEventRepository.findByAggregateIdAndStatus(payment.getId().toString(), OutboxStatus.PENDING);
+                    if (!events.isEmpty()) {
+                        com.project.paymentservice.entity.PaymentOutboxEvent eventToDeliver = events.get(0);
+                        notifyReq = objectMapper.readValue(eventToDeliver.getPayload(), com.project.paymentservice.client.booking.BookingPaymentResultRequest.class);
+                        bookingClient.notifyPaymentResult(payment.getBookingId(), notifyReq);
+                        eventToDeliver.setStatus(OutboxStatus.PUBLISHED);
+                        outboxEventRepository.save(eventToDeliver);
+                    }
                 }
             } catch (Exception e) {
-                logger.error("Failed to notify Booking Service of successful CASH collection for paymentId={}", response.getPaymentId(), e);
+                logger.error("Failed to synchronously notify Booking Service of successful CASH collection for paymentId={}. Delivery will be retried later.", response.getPaymentId(), e);
             }
 
             return response;
@@ -616,6 +643,33 @@ public class PaymentServiceImpl implements PaymentService {
                 com.project.paymentservice.dto.response.CashCancelResponse resp = new com.project.paymentservice.dto.response.CashCancelResponse(
                         payment.getId(), PaymentStatus.CANCELLED.name(), accountId, payment.getCancelledAt());
 
+                com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
+                notifyReq.setEventId(java.util.UUID.randomUUID().toString());
+                notifyReq.setSchemaVersion("1.0");
+                notifyReq.setPaymentId(payment.getId());
+                notifyReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
+                notifyReq.setPaymentMethod(payment.getPaymentMethod().name());
+                notifyReq.setResult("CANCELLED");
+                notifyReq.setAmount(payment.getAmount());
+                notifyReq.setCurrency(payment.getCurrency());
+                notifyReq.setOccurredAt(payment.getCancelledAt());
+                notifyReq.setExternalTransactionId(payment.getExternalTransactionId());
+                notifyReq.setReconciliationStatus(payment.getReconciliationStatus().name());
+
+                com.project.paymentservice.entity.PaymentOutboxEvent outboxEvent = new com.project.paymentservice.entity.PaymentOutboxEvent();
+                outboxEvent.setEventId(notifyReq.getEventId());
+                outboxEvent.setAggregateType("PAYMENT");
+                outboxEvent.setAggregateId(payment.getId().toString());
+                outboxEvent.setEventType("PAYMENT_RESULT");
+                outboxEvent.setSchemaVersion("1.0");
+                outboxEvent.setDestination(OutboxDestination.BOOKING_SERVICE_REST);
+                try {
+                    outboxEvent.setPayload(objectMapper.writeValueAsString(notifyReq));
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to serialize outbox payload", e);
+                }
+                outboxEventRepository.save(outboxEvent);
+
                 completeIdempotency(accountId, "CANCEL_CASH_PAYMENT", idempotencyKey, 200, resp, payment.getId());
 
                 return resp;
@@ -625,21 +679,18 @@ public class PaymentServiceImpl implements PaymentService {
                 Payment payment = paymentRepository.findById(response.getPaymentId()).orElse(null);
                 if (payment != null) {
                     com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
-                    notifyReq.setEventId(java.util.UUID.randomUUID().toString());
-                    notifyReq.setSchemaVersion("1.0");
-                    notifyReq.setPaymentId(payment.getId());
-                    notifyReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
-                    notifyReq.setPaymentMethod(payment.getPaymentMethod().name());
-                    notifyReq.setResult("CANCELLED");
-                    notifyReq.setAmount(payment.getAmount());
-                    notifyReq.setCurrency(payment.getCurrency());
-                    notifyReq.setOccurredAt(payment.getCancelledAt());
-                    notifyReq.setExternalTransactionId(payment.getExternalTransactionId());
-                    notifyReq.setReconciliationStatus(payment.getReconciliationStatus().name());
-                    bookingClient.notifyPaymentResult(payment.getBookingId(), notifyReq);
+                    // Try to send it synchronously for immediate confirmation
+                    java.util.List<com.project.paymentservice.entity.PaymentOutboxEvent> events = outboxEventRepository.findByAggregateIdAndStatus(payment.getId().toString(), OutboxStatus.PENDING);
+                    if (!events.isEmpty()) {
+                        com.project.paymentservice.entity.PaymentOutboxEvent eventToDeliver = events.get(0);
+                        notifyReq = objectMapper.readValue(eventToDeliver.getPayload(), com.project.paymentservice.client.booking.BookingPaymentResultRequest.class);
+                        bookingClient.notifyPaymentResult(payment.getBookingId(), notifyReq);
+                        eventToDeliver.setStatus(OutboxStatus.PUBLISHED);
+                        outboxEventRepository.save(eventToDeliver);
+                    }
                 }
             } catch (Exception e) {
-                logger.error("Failed to notify Booking Service of cancelled CASH for paymentId={}", response.getPaymentId(), e);
+                logger.error("Failed to synchronously notify Booking Service of cancelled CASH for paymentId={}. Delivery will be retried later.", response.getPaymentId(), e);
             }
 
             return response;
