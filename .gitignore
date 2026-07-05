@@ -45,3 +45,4 @@ kafka_data
 logs
 
 .ui-prototype/
+**/target/
