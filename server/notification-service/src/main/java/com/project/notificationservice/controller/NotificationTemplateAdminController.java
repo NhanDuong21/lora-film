@@ -3,7 +3,6 @@ package com.project.notificationservice.controller;
 import com.project.notificationservice.common.ApiResponse;
 import com.project.notificationservice.dto.request.CreateNotificationTemplateRequest;
 import com.project.notificationservice.dto.request.UpdateNotificationTemplateRequest;
-import com.project.notificationservice.dto.request.UpdateNotificationTemplateStatusRequest;
 import com.project.notificationservice.dto.response.NotificationTemplateResponse;
 import com.project.notificationservice.dto.response.NotificationTemplateSummaryResponse;
 import com.project.notificationservice.dto.response.PageResponse;
@@ -12,6 +11,7 @@ import com.project.notificationservice.service.NotificationTemplateService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -26,10 +26,25 @@ public class NotificationTemplateAdminController {
         this.service = service;
     }
 
-    @PostMapping
+    @InitBinder
+    public void initBinder(org.springframework.web.bind.WebDataBinder binder) {
+        binder.registerCustomEditor(org.springframework.web.multipart.MultipartFile.class, new java.beans.PropertyEditorSupport() {
+            @Override
+            public void setAsText(String text) throws IllegalArgumentException {
+                if (text == null || text.trim().isEmpty()) {
+                    setValue(null);
+                } else {
+                    throw new IllegalArgumentException("Cannot convert non-empty string to MultipartFile");
+                }
+            }
+        });
+    }
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('NOTIFICATION_TEMPLATE_CREATE') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<NotificationTemplateResponse>> createTemplate(
-            @Valid @RequestBody CreateNotificationTemplateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Create template payload")
+            @Valid @ModelAttribute CreateNotificationTemplateRequest request) {
         NotificationTemplateResponse response = service.createTemplate(request);
         ApiResponse<NotificationTemplateResponse> apiResponse = ApiResponse.success(
                 "Notification template created successfully", response);
@@ -63,25 +78,15 @@ public class NotificationTemplateAdminController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    @PutMapping("/{templateId}")
+    @PutMapping(value = "/{templateId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('NOTIFICATION_TEMPLATE_UPDATE') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<NotificationTemplateResponse>> updateTemplate(
             @PathVariable Integer templateId,
-            @Valid @RequestBody UpdateNotificationTemplateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Update template payload")
+            @Valid @ModelAttribute UpdateNotificationTemplateRequest request) {
         NotificationTemplateResponse response = service.updateTemplate(templateId, request);
         ApiResponse<NotificationTemplateResponse> apiResponse = ApiResponse.success(
                 "Notification template updated successfully", response);
-        return ResponseEntity.ok(apiResponse);
-    }
-
-    @PatchMapping("/{templateId}/status")
-    @PreAuthorize("hasAuthority('NOTIFICATION_TEMPLATE_UPDATE') or hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<NotificationTemplateResponse>> updateTemplateStatus(
-            @PathVariable Integer templateId,
-            @Valid @RequestBody UpdateNotificationTemplateStatusRequest request) {
-        NotificationTemplateResponse response = service.updateTemplateStatus(templateId, request);
-        ApiResponse<NotificationTemplateResponse> apiResponse = ApiResponse.success(
-                "Notification template status updated successfully", response);
         return ResponseEntity.ok(apiResponse);
     }
 }

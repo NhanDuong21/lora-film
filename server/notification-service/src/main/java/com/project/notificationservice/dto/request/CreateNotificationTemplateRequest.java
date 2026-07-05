@@ -17,8 +17,8 @@ public class CreateNotificationTemplateRequest {
     @Size(max = 255, message = "Title must not exceed 255 characters")
     private String title;
 
-    @NotBlank(message = "Content is required")
-    private String content;
+    @NotNull(message = "HTML file is required")
+    private org.springframework.web.multipart.MultipartFile htmlFile;
 
     @NotNull(message = "Channel type is required")
     private NotificationChannel channelType;
@@ -44,12 +44,12 @@ public class CreateNotificationTemplateRequest {
         this.title = title;
     }
 
-    public String getContent() {
-        return content;
+    public org.springframework.web.multipart.MultipartFile getHtmlFile() {
+        return htmlFile;
     }
 
-    public void setContent(String content) {
-        this.content = content;
+    public void setHtmlFile(org.springframework.web.multipart.MultipartFile htmlFile) {
+        this.htmlFile = htmlFile;
     }
 
     public NotificationChannel getChannelType() {
