@@ -118,7 +118,7 @@ public class CashPaymentIntegrationTest {
                 .header("Idempotency-Key", "collect-" + p.getId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.changeAmount").value(50000.0));
     }
@@ -173,7 +173,7 @@ public class CashPaymentIntegrationTest {
                 .header("Idempotency-Key", "cancel-" + p.getId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("CANCELLED"));
     }

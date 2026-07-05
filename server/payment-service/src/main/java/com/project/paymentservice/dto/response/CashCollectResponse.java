@@ -13,8 +13,9 @@ public class CashCollectResponse {
     private BigDecimal changeAmount;
     private Long collectedByAccountId;
     private LocalDateTime collectedAt;
+    private String bookingDeliveryStatus;
 
-    public CashCollectResponse(Long paymentId, Long bookingId, String paymentMethod, String status, BigDecimal amount, BigDecimal receivedAmount, BigDecimal changeAmount, Long collectedByAccountId, LocalDateTime collectedAt) {
+    public CashCollectResponse(Long paymentId, Long bookingId, String paymentMethod, String status, BigDecimal amount, BigDecimal receivedAmount, BigDecimal changeAmount, Long collectedByAccountId, LocalDateTime collectedAt, String bookingDeliveryStatus) {
         this.paymentId = paymentId;
         this.bookingId = bookingId;
         this.paymentMethod = paymentMethod;
@@ -24,6 +25,7 @@ public class CashCollectResponse {
         this.changeAmount = changeAmount;
         this.collectedByAccountId = collectedByAccountId;
         this.collectedAt = collectedAt;
+        this.bookingDeliveryStatus = bookingDeliveryStatus;
     }
 
     public Long getPaymentId() { return paymentId; }
@@ -35,4 +37,6 @@ public class CashCollectResponse {
     public BigDecimal getChangeAmount() { return changeAmount; }
     public Long getCollectedByAccountId() { return collectedByAccountId; }
     public LocalDateTime getCollectedAt() { return collectedAt; }
+    public String getBookingDeliveryStatus() { return bookingDeliveryStatus; }
+    public void setBookingDeliveryStatus(String bookingDeliveryStatus) { this.bookingDeliveryStatus = bookingDeliveryStatus; }
 }
