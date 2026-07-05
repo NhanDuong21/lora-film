@@ -15,4 +15,5 @@ public interface ScoreService {
     ScoreEarnResponse earnScore(ScoreEarnRequest request);
     ScoreRedeemResponse redeemScore(ScoreRedeemRequest request);
     ScoreRefundResponse refundRedeem(ScoreRefundRequest request);
+    ScoreRevokeResponse revokeEarn(ScoreRevokeRequest request);
 }

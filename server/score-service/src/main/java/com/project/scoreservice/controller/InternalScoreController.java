@@ -8,11 +8,14 @@ import com.project.scoreservice.dto.ScoreRedeemRequest;
 import com.project.scoreservice.dto.ScoreRedeemResponse;
 import com.project.scoreservice.dto.ScoreRefundRequest;
 import com.project.scoreservice.dto.ScoreRefundResponse;
+import com.project.scoreservice.dto.ScoreRevokeRequest;
+import com.project.scoreservice.dto.ScoreRevokeResponse;
 import com.project.scoreservice.dto.UserScoreResponse;
 import com.project.scoreservice.service.ScoreService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -62,5 +65,16 @@ public class InternalScoreController {
                 ? "Redeemed score refund was already processed"
                 : "Redeemed score refunded successfully";
         return ResponseEntity.ok(ApiResponse.success(message, response));
+    }
+
+    @PostMapping("/revoke-earn")
+    @Operation(summary = "Revoke earned score internally", description = "Internal endpoint to revoke earned score points for a refunded booking")
+    public ResponseEntity<ApiResponse<ScoreRevokeResponse>> revokeEarn(@Valid @RequestBody ScoreRevokeRequest request) {
+        ScoreRevokeResponse response = scoreService.revokeEarn(request);
+        if (Boolean.TRUE.equals(response.getIdempotent())) {
+            return ResponseEntity.ok(ApiResponse.success("Earned score revoke was already processed", response));
+        }
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Earned score revoked successfully", response));
     }
 }

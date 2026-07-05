@@ -82,15 +82,15 @@ public class ScoreRedeemRefundControllerIntegrationTest {
     }
 
     @Test
-    public void testRedeemScore_SecurityInvalidToken_ReturnsUnauthorized() throws Exception {
+    public void testRedeemScore_SecurityInvalidToken_ReturnsForbidden() throws Exception {
         ScoreRedeemRequest request = new ScoreRedeemRequest(1L, 1001L, 10, "evt-1", "idem-1");
         mockMvc.perform(post("/internal/scores/redeem")
                         .header(INTERNAL_TOKEN_HEADER, "invalid-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("UNAUTHORIZED")));
+                .andExpect(jsonPath("$.errorCode", is("FORBIDDEN")));
     }
 
     @Test
