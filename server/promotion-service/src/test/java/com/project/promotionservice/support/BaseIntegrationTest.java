@@ -41,19 +41,14 @@ public abstract class BaseIntegrationTest {
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        if (USE_LOCAL_MYSQL) {
-            String port = System.getenv("DB_PORT") != null ? System.getenv("DB_PORT") : (System.getenv("MYSQL_PORT") != null ? System.getenv("MYSQL_PORT") : "3306");
-            registry.add("spring.datasource.url", () -> "jdbc:mysql://localhost:" + port + "/promotion_db?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true");
-            registry.add("spring.datasource.username", () -> "root");
-            registry.add("spring.datasource.password", () -> "THGaming809");
-        } else {
+        if (!USE_LOCAL_MYSQL && mysql != null) {
             registry.add("spring.datasource.url", mysql::getJdbcUrl);
             registry.add("spring.datasource.username", mysql::getUsername);
             registry.add("spring.datasource.password", mysql::getPassword);
+            registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+            registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
+            registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
+            registry.add("spring.jpa.show-sql", () -> "true");
         }
-        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
-        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
-        registry.add("spring.jpa.show-sql", () -> "true");
     }
 }

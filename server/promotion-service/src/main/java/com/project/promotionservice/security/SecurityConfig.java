@@ -35,6 +35,8 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/admin/**").authenticated()
+                .requestMatchers("/api/promotions/validate").authenticated()
+                .requestMatchers("/api/promotions/preview").authenticated()
                 .anyRequest().permitAll()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
