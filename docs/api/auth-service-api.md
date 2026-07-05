@@ -26,8 +26,7 @@
 
 **Ngày:** 20/06/2026
 
-* **Cập nhật Backend:** Đồng bộ request body của hai API `send-otp` và `resend-otp` (chỉ nhận trường `email` thay vì `accountId`).
-* **Cập nhật Backend:** Mở rộng logic `resend-otp` cho nhiều mục đích (FORGOTTEN PASSWORD, LOGIN...) thay vì chỉ giới hạn xác thực tài khoản (REGISTRATION).
+* **Cập nhật Backend:** Xóa bỏ hoàn toàn API `resend-otp`, gộp chung luồng gửi OTP vào `send-otp`. Xóa bỏ trường `purpose` khỏi `send-otp` và `verify` để đơn giản hóa luồng xác thực, thay vào đó hệ thống tự nhận diện dựa trên trạng thái Account trong Database hoặc Redis.
 * **Cập nhật API Contract:** Xóa bỏ hoàn toàn trường `token` bị trùng lặp trong cấu trúc phản hồi của API Login và Refresh Token.
 
 **Ngày:** 19/06/2026 | **Người chỉnh sửa:** Trần Hiển Vinh
@@ -460,7 +459,28 @@ Status: **409 Conflict**
 **Case 2: Lỗi trùng lặp dữ liệu (Đã tồn tại)**
 Status: **409 Conflict**
 
-Trùng Số Điện Thoại:
+Trùng Cả Số Điện Thoại và CCCD (Báo lỗi nhiều field cùng lúc):
+```json
+{
+  "success": false,
+  "message": "Registration information (Phone number or CCCD) already exists.",
+  "errorCode": "VALIDATION_ERROR",
+  "errors": [
+    {
+      "field": "phoneNumber",
+      "code": "Duplicate",
+      "message": "Phone number already exists or is reserved."
+    },
+    {
+      "field": "cccd",
+      "code": "Duplicate",
+      "message": "CCCD already exists or is reserved."
+    }
+  ]
+}
+```
+
+Trùng Số Điện Thoại (chỉ 1 field):
 ```json
 {
   "success": false,
@@ -470,7 +490,7 @@ Trùng Số Điện Thoại:
 }
 ```
 
-Trùng CCCD:
+Trùng CCCD (chỉ 1 field):
 ```json
 {
   "success": false,
@@ -642,12 +662,10 @@ API này dùng để xác thực mã định danh OTP sau khi đăng ký thành 
 ```json
 {
   "email": "user@example.com",
-  "otp": "123456",
-  "purpose": "REGISTRATION"
+  "otp": "123456"
 }
 ```
 
-* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
 
 ### 7.4. Response Success
 
@@ -719,11 +737,9 @@ Gửi mã OTP cho các mục đích như REGISTER.
 ```json
 {
   "email": "user@example.com",
-  "purpose": "REGISTRATION"
 }
 ```
 
-* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
 
 ### 7.5.3. Response Success
 
@@ -735,8 +751,7 @@ Status: **200 OK**
   "message": "OTP sent successfully",
   "data": {
     "accountId": 15,
-    "expiresIn": 300,
-    "resendAvailableIn": 60
+    "expiresIn": 300
   }
 }
 ```
@@ -759,153 +774,6 @@ Status: **429 Too Many Requests**
 
 ---
 
-## 7.6. Resend OTP API
-
-### 7.6.1. Mục Tiêu API
-
-Gửi lại mã OTP trong trường hợp mã cũ bị hết hạn, chưa nhận được hoặc cần lấy lại mã mới. Dùng chung cho tất cả các mục đích (REGISTRATION, FORGOTTEN PASSWORD...).
-
-| Mục | Nội dung |
-| :--- | :--- |
-| Method | POST |
-| Endpoint | `/api/auth/resend-otp` |
-| Local URL | `http://localhost:8081/api/auth/resend-otp` |
-| Content-Type | application/json |
-
-### 7.6.2. Request Body
-
-```json
-{
-  "email": "user@example.com",
-  "purpose": "REGISTRATION"
-}
-```
-
-* Tham số `purpose` nhận một trong các giá trị: `REGISTRATION`, `FORGOTTEN PASSWORD`, `CHANGE EMAIL`, `CHANGE PASSWORD`.
-
-### 7.6.3. Response Success
-
-Status: **200 OK**
-
-```json
-{
-  "success": true,
-  "message": "OTP resent successfully",
-  "data": {
-    "accountId": 15,
-    "expiresIn": 300,
-    "resendAvailableIn": 60
-  }
-}
-```
-
-### 7.6.4. Response Error
-
-**Case 1: Tài khoản không tồn tại**
-Status: **404 Not Found**
-
-```json
-{
-  "success": false,
-  "message": "Account not found",
-  "errorCode": "AUTH_ACCOUNT_NOT_FOUND",
-  "data": null
-}
-```
-
-**Case 2: Tài khoản đã xác thực**
-Status: **409 Conflict**
-
-```json
-{
-  "success": false,
-  "message": "Account is already verified",
-  "errorCode": "AUTH_ACCOUNT_ALREADY_VERIFIED",
-  "data": null
-}
-```
-
-**Case 3: Quá giới hạn rate limit (1 phút)**
-Status: **429 Too Many Requests**
-
-```json
-{
-  "success": false,
-  "message": "Please wait before requesting another OTP",
-  "errorCode": "OTP_RATE_LIMIT",
-  "data": {
-    "retryAfter": 45
-  }
-}
-```
-
-### 7.6.5. Ghi Chú Bảo Mật & Business Rules
-
-* Account gọi API bắt buộc phải tồn tại.
-* Nếu `purpose` là `REGISTRATION` thì tài khoản phải đang trong trạng thái chờ kích hoạt (`account_status` = 'PENDING'). Các mục đích khác không bị giới hạn.
-* Mỗi lần gọi `Resend OTP`, mã OTP cũ chưa sử dụng sẽ bị thay thế (ghi đè trên Redis) và tự động hết hiệu lực.
-* Không trả mã OTP mới sinh dưới dạng chuỗi rõ ràng (plaintext) qua phản hồi HTTP.
-* Nếu Notification Service chưa sẵn sàng (như trong môi trường DEV/TEST), hệ thống tạm thời chỉ log mã OTP ra Console.
-* Áp dụng nghiêm ngặt thời gian chờ (cooldown 60s) giữa mỗi lần yêu cầu để chống spam.
-
-**Case 1: Quá giới hạn rate limit (1 phút)**
-Status: **429 Too Many Requests**
-
-```json
-{
-  "success": false,
-  "message": "Please wait before requesting another OTP.",
-  "errorCode": "OTP_RATE_LIMIT",
-  "data": {
-    "retryAfter": 45
-  }
-}
-```
-
-**Case 2: Tài khoản không tồn tại**
-Status: **404 Not Found**
-
-```json
-{
-  "success": false,
-  "message": "Account not found",
-  "errorCode": "AUTH_ACCOUNT_NOT_FOUND",
-  "data": null
-}
-```
-
-**Case 3: Tài khoản đã xác thực**
-Status: **409 Conflict**
-
-```json
-{
-  "success": false,
-  "message": "Account is already verified",
-  "errorCode": "AUTH_ACCOUNT_ALREADY_VERIFIED",
-  "data": null
-}
-```
-
-**Case 4: Validation error**
-Status: **422 Unprocessable Content**
-
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "errorCode": "VALIDATION_ERROR",
-  "data": null,
-  "errors": [
-    {
-      "field": "accountId",
-      "code": "NotBlank",
-      "message": "Account ID is required"
-    }
-  ]
-}
-```
-
----
 
 ## 8. Login API
 

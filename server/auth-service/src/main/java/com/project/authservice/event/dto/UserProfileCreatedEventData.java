@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserProfileCreatedEventData {
     private Long accountId;
+    private String email;
     private String requestId;
     private String createdAt;
+    private String status;
 }

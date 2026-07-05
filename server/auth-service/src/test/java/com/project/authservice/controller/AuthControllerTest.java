@@ -19,6 +19,9 @@ import com.project.authservice.dto.request.LoginRequest;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.dto.response.JwtResponse;
 import com.project.authservice.dto.response.RegistrationInitiatedResponse;
+import com.project.authservice.dto.response.SendOtpResponse;
+import com.project.authservice.dto.request.VerifyRequest;
+import com.project.authservice.dto.request.SendOtpRequest;
 import com.project.authservice.service.AuthService;
 import com.project.authservice.service.VerificationService;
 
@@ -75,5 +78,34 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.accessToken").exists())
                 .andExpect(jsonPath("$.data.token").doesNotExist())
                 .andExpect(jsonPath("$.data.password").doesNotExist());
+    }
+
+    @Test
+    void testVerifySuccessReturns200() throws Exception {
+        VerifyRequest request = new VerifyRequest("test@example.com", "123456");
+
+        mockMvc.perform(post("/api/auth/verify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Account verified successfully"));
+    }
+
+    @Test
+    void testSendOtpSuccessReturns200() throws Exception {
+        SendOtpRequest request = new SendOtpRequest("test@example.com");
+        SendOtpResponse mockResponse = new SendOtpResponse(1L, 300L);
+
+        when(verificationService.sendOtp(any(SendOtpRequest.class))).thenReturn(mockResponse);
+
+        mockMvc.perform(post("/api/auth/send-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("OTP sent successfully"))
+                .andExpect(jsonPath("$.data.accountId").value(1))
+                .andExpect(jsonPath("$.data.expiresIn").value(300));
     }
 }

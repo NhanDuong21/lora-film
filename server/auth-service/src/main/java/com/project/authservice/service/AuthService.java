@@ -29,7 +29,7 @@ public interface AuthService {
 	 *
 	 * @param request verification request
 	 */
-	void verifyRegistration(VerifyRequest request);
+	void verify(VerifyRequest request);
 
 	/**
 	 * Authenticates user and generates JWT token.

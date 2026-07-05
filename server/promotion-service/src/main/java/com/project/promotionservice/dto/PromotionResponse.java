@@ -27,6 +27,7 @@ public class PromotionResponse {
     private String status;
     private String availabilityStatus;
     private Long campaignId;
+    private String campaignName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

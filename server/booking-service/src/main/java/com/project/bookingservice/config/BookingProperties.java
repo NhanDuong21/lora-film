@@ -11,9 +11,18 @@ public class BookingProperties {
     private Redis redis = new Redis();
     private Idempotency idempotency = new Idempotency();
     private ExpirationWorker expirationWorker = new ExpirationWorker();
-    
+    private Internal internal = new Internal();
+
     private long seatReservationTtlMinutes = 5;
     private long paymentTimeoutMinutes = 15;
+
+    public Internal getInternal() {
+        return internal;
+    }
+
+    public void setInternal(Internal internal) {
+        this.internal = internal;
+    }
 
     public Reservation getReservation() {
         return reservation;
@@ -138,6 +147,18 @@ public class BookingProperties {
 
         public void setBatchSize(int batchSize) {
             this.batchSize = batchSize;
+        }
+    }
+
+    public static class Internal {
+        private String token;
+
+        public String getToken() {
+            return token;
+        }
+
+        public void setToken(String token) {
+            this.token = token;
         }
     }
 }

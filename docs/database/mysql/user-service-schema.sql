@@ -4,16 +4,13 @@ CREATE TABLE `users` (
   `phone_number` varchar(15) UNIQUE NOT NULL,
   `gender` varchar(10) COMMENT 'MALE, FEMALE, OTHER',
   `birthday` date,
-  `is_verified_phone` boolean DEFAULT false,
   `created_at` timestamp DEFAULT (now()),
   `updated_at` timestamp DEFAULT (now()),
   `cccd` varchar(12) UNIQUE,
   `cccd_masked` varchar(20),
   `province_code` varchar(10),
   `province_name` varchar(100),
-  `birth_year` int,
-  `cccd_checked_at` timestamp,
-  `cccd_check_note` varchar(255)
+  `birth_year` int
 );
 
 CREATE TABLE `employee_profiles` (
