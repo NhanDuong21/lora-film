@@ -51,9 +51,16 @@ Idempotency-Key: f8c72b64-b2d8-4e4d-9bad-b7f62f248b55
     - API trả về `201 Created` cùng ID của nhóm giữ chỗ (`reservationIds`). (Lưu lại `reservationIds` để dùng cho Flow 3).
     - Database chèn vào `seat_reservations` với trạng thái `HELD`.
     - Redis khóa ghế trong 5 phút.
-  - **Negative Case 1 (Lỗi trùng ghế)**: Truyền lại `seatIds` bằng `[10, 11]` (ghế vừa bị giữ) -> API trả về `409 Conflict` (Mã lỗi `BOOKING_SEAT_ALREADY_HELD`).
-  - **Negative Case 2 (Lỗi sai lịch chiếu)**: Đổi `showtimeId` thành `99999` (không tồn tại) -> API trả về `404 Not Found` (Mã lỗi `BOOKING_SHOWTIME_NOT_FOUND`).
-  - **Negative Case 3 (Lỗi Validation)**: Đổi `seatIds` thành `[]` rỗng -> API trả về `400 Bad Request` (Mã lỗi `VALIDATION_ERROR`).
+  - **Negative Case 1 (Lỗi trùng ghế)**: Truyền lại `seatIds` bằng `[10, 11]` (ghế vừa bị giữ) -> API trả về `409 Conflict` (Mã lỗi `BOOKING_SEAT_ALREADY_HELD`). Payload: `{"showtimeId": 120, "seatIds": [10, 11]}`
+  - **Negative Case 2 (Lỗi sai lịch chiếu)**: Đổi `showtimeId` thành `99999` (không tồn tại) -> API trả về `404 Not Found` (Mã lỗi `BOOKING_SHOWTIME_NOT_FOUND`). Payload: `{"showtimeId": 99999, "seatIds": [10, 11]}`
+  - **Negative Case 3 (Lỗi Validation)**: Đổi `seatIds` thành `[]` rỗng -> API trả về `400 Bad Request` (Mã lỗi `VALIDATION_ERROR`). Payload: `{"showtimeId": 120, "seatIds": []}`
+  - **Negative Case 4 (Ghế không tồn tại)**: Truyền ID ghế ảo -> API trả về `404 Not Found` (Mã lỗi `BOOKING_SEAT_NOT_FOUND`). Payload: `{"showtimeId": 120, "seatIds": [9999]}`
+  - **Negative Case 5 (Ghế không hoạt động)**: Truyền ghế đang bảo trì -> API trả về `400 Bad Request` (Mã lỗi `BOOKING_SEAT_NOT_ACTIVE`). Payload: `{"showtimeId": 120, "seatIds": [99]}` (giả sử 99 bảo trì)
+  - **Negative Case 6 (Ghế sai phòng)**: Truyền ghế thuộc phòng khác của lịch chiếu -> API trả về `400 Bad Request` (Mã lỗi `BOOKING_SEAT_ROOM_MISMATCH`). Payload: `{"showtimeId": 120, "seatIds": [300]}`
+  - **Negative Case 7 (Lỗi kết nối Movie Service)**: Service bị sập -> API trả về `503 Service Unavailable` (Mã lỗi `MOVIE_SERVICE_UNAVAILABLE`). Payload: `{"showtimeId": 120, "seatIds": [10, 11]}`
+  - **Negative Case 8 (Ghế đã bán)**: Ghế đã có người thanh toán xong -> API trả về `409 Conflict` (Mã lỗi `BOOKING_SEAT_ALREADY_BOOKED`). Payload: `{"showtimeId": 120, "seatIds": [20, 21]}`
+  - **Negative Case 9 (Lịch chiếu chưa mở bán)**: Suất chiếu bị khóa/chưa mở bán giá vé -> API trả về `409 Conflict` (Mã lỗi `BOOKING_SHOWTIME_NOT_AVAILABLE`). Payload: `{"showtimeId": 125, "seatIds": [10]}`
+  - **Negative Case 10 (Chưa đăng nhập)**: Không truyền header Authorization -> API trả về `401 Unauthorized` (Mã lỗi `UNAUTHORIZED`).
 
 ### Flow 2: Xung đột giữ chỗ (Concurrency Lock)
 - **API**: `POST /api/bookings/seat-reservations`
@@ -90,8 +97,14 @@ Idempotency-Key: f8c72b64-b2d8-4e4d-9bad-b7f62f248b55
     - API trả về `201 Created` với `bookingId` và `totalAmount`. (Lưu lại để test Flow 7, 8).
     - Database tạo `bookings` với trạng thái `PENDING_PAYMENT`.
     - Các ghế trong `seat_reservations` đổi từ `HELD` sang `CONVERTED`.
-  - **Negative Case 1 (Lỗi quá hạn giữ chỗ)**: Truyền `reservationIds` của các ghế đã giữ quá 5 phút (trạng thái `EXPIRED`) -> API trả về `409 Conflict` (Mã lỗi `SEAT_RESERVATION_EXPIRED`).
-  - **Negative Case 2 (Lỗi không phải chủ sở hữu)**: Truyền `reservationIds` mà User khác tạo -> API trả về `403 Forbidden` (Mã lỗi `SEAT_RESERVATION_OWNERSHIP_MISMATCH`).
+  - **Negative Case 1 (Lỗi quá hạn giữ chỗ)**: Truyền `reservationIds` của các ghế đã giữ quá 5 phút (trạng thái `EXPIRED`) -> API trả về `409 Conflict` (Mã lỗi `SEAT_RESERVATION_EXPIRED`). Payload: `{"reservationIds": [991]}`
+  - **Negative Case 2 (Lỗi không phải chủ sở hữu)**: Truyền `reservationIds` mà User khác tạo -> API trả về `403 Forbidden` (Mã lỗi `SEAT_RESERVATION_OWNERSHIP_MISMATCH`). Payload: `{"reservationIds": [501]}`
+  - **Negative Case 3 (Trạng thái ghế không hợp lệ)**: Truyền ghế đã bị hủy/release thay vì `HELD` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_INVALID_STATUS`). Payload: `{"reservationIds": [992]}`
+  - **Negative Case 4 (Nhiều suất chiếu)**: Đặt các ghế thuộc nhiều suất chiếu khác nhau -> API trả về `400 Bad Request` (Mã lỗi `BOOKING_MULTIPLE_SHOWTIMES_NOT_ALLOWED`). Payload: `{"reservationIds": [501, 801]}`
+  - **Negative Case 5 (Ghế đã đặt rồi)**: Truyền ghế đã `CONVERTED` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_ALREADY_CREATED` hoặc `SEAT_RESERVATION_ALREADY_CONVERTED`). Payload: `{"reservationIds": [501]}`
+  - **Negative Case 6 (Lỗi kết nối Movie Service)**: Service sập khi lấy giá vé -> API trả về `503 Service Unavailable` (Mã lỗi `MOVIE_SERVICE_UNAVAILABLE`). Payload: `{"reservationIds": [501, 502]}`
+  - **Negative Case 7 (Ghế giữ chỗ không tồn tại)**: Truyền ID giữ chỗ ảo -> API trả về `404 Not Found` (Mã lỗi `SEAT_RESERVATION_NOT_FOUND`). Payload: `{"reservationIds": [999999]}`
+  - **Negative Case 8 (Xung đột Idempotency)**: Truyền lại `Idempotency-Key` cũ nhưng thay đổi Payload khác Lần 1 -> API trả về `409 Conflict` (Mã lỗi `BOOKING_IDEMPOTENCY_CONFLICT`). Payload: `{"reservationIds": [901]}`
 
 ### Flow 4: Hủy tự động ghế bị giữ quá hạn (Seat Expiration Worker)
 - **Ngữ cảnh**: Người dùng giữ ghế nhưng thoát trang không tạo booking (quá 5 phút).
@@ -151,9 +164,11 @@ Idempotency-Key: f8c72b64-b2d8-4e4d-9bad-b7f62f248b55
     - API trả về `200 OK` kèm danh sách vé (`tickets`) vừa được tạo.
     - Booking đổi trạng thái sang `CONFIRMED`.
     - Redis nhả khóa ghế hoàn toàn.
-  - **Negative Case 1 (Lỗi sai Token)**: Đổi `X-Internal-Token` thành `wrong-secret` -> API trả về `401 Unauthorized`.
-  - **Negative Case 2 (Lỗi thiếu tiền)**: Sửa `paidAmount` thành `10000` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_PAYMENT_AMOUNT_MISMATCH`).
-  - **Negative Case 3 (Lỗi quá hạn thanh toán)**: Gọi trên booking đã chuyển sang `EXPIRED` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_CANNOT_BE_CANCELLED` hoặc `BOOKING_INVALID_STATUS_TRANSITION`).
+  - **Negative Case 1 (Lỗi sai Token)**: Đổi `X-Internal-Token` thành `wrong-secret` -> API trả về `401 Unauthorized` (Mã lỗi `INTERNAL_TOKEN_INVALID`).
+  - **Negative Case 2 (Lỗi thiếu tiền)**: Sửa `paidAmount` thành `10000` -> API trả về `409 Conflict` (Mã lỗi `PAYMENT_AMOUNT_MISMATCH`).
+  - **Negative Case 3 (Lỗi sai loại tiền tệ)**: Sửa `currency` thành `USD` -> API trả về `409 Conflict` (Mã lỗi `PAYMENT_CURRENCY_MISMATCH`).
+  - **Negative Case 4 (Lỗi quá hạn thanh toán)**: Gọi trên booking đã chuyển sang `EXPIRED` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_CANNOT_BE_CANCELLED` hoặc `BOOKING_INVALID_STATUS_TRANSITION`).
+  - **Negative Case 5 (Không cho phép thanh toán)**: Booking trạng thái CANCELLED -> API trả về `409 Conflict` (Mã lỗi `BOOKING_NOT_PAYABLE`).
 
 ### Flow 8: Ghi nhận thanh toán thất bại (Fail Payment - Internal)
 - **API**: `POST /internal/bookings/{bookingId}/payment-results`
@@ -205,6 +220,26 @@ Idempotency-Key: f8c72b64-b2d8-4e4d-9bad-b7f62f248b55
   - **Negative Case 4 (Lỗi đã hết hạn)**: Gọi trên booking trạng thái `EXPIRED` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_CANNOT_BE_CANCELLED`).
   - **Negative Case 5 (Lỗi đã hủy từ trước)**: Gọi trên booking trạng thái `CANCELLED` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_CANNOT_BE_CANCELLED`).
   - **Negative Case 6 (Lỗi sai vòng đời)**: Nếu booking không ở trạng thái `PENDING_PAYMENT` -> API trả về `409 Conflict` (Mã lỗi `BOOKING_INVALID_STATUS_TRANSITION`).
+
+### Flow 10: Truy vấn Vé của Booking (Get Tickets)
+- **API**: `GET /api/bookings/{bookingId}/tickets`
+- **Ngữ cảnh**: Người dùng xem danh sách vé sau khi thanh toán thành công.
+- **Headers**:
+  - `Authorization`: `Bearer <user-jwt-token>`
+- **Kết quả mong đợi**:
+  - **Happy Case**: API trả về `200 OK` cùng mảng vé (nếu đã `CONFIRMED`) hoặc rỗng (nếu chưa).
+  - **Negative Case 1 (Lỗi Booking không tồn tại)**: Trả về `404 Not Found` (Mã lỗi `BOOKING_NOT_FOUND`).
+  - **Negative Case 2 (Lỗi sai người dùng)**: Dùng Token của người khác -> `403 Forbidden` (Mã lỗi `FORBIDDEN`).
+
+### Flow 11: Xem Chi tiết Vé (Get Ticket Detail)
+- **API**: `GET /api/tickets/{ticketId}`
+- **Ngữ cảnh**: Người dùng xem chi tiết 1 vé cụ thể.
+- **Headers**:
+  - `Authorization`: `Bearer <user-jwt-token>`
+- **Kết quả mong đợi**:
+  - **Happy Case**: API trả về `200 OK` cùng đối tượng vé.
+  - **Negative Case 1 (Lỗi Vé không tồn tại)**: Trả về `404 Not Found` (Mã lỗi `TICKET_NOT_FOUND`).
+  - **Negative Case 2 (Lỗi sai người dùng)**: Người khác xem -> `403 Forbidden` (Mã lỗi `FORBIDDEN`).
 
 ---
 
