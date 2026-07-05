@@ -212,8 +212,7 @@ Status: `200 OK`
     "birthday": "2005-06-12",
     "cccdMasked": "092******789",
     "provinceName": "Cần Thơ",
-    "birthYear": 2005,
-    "verifiedPhone": false
+    "birthYear": 2005
   }
 }
 ```
@@ -232,7 +231,6 @@ Status: `200 OK`
 | cccdMasked        | string  | CCCD đã được che một phần an toàn           |
 | provinceName      | string  | Tỉnh/thành nơi làm thẻ CCCD suy ra từ mã    |
 | birthYear         | number  | Năm sinh suy ra từ CCCD                     |
-| verifiedPhone     | boolean | Trạng thái SĐT đã xác thực hay chưa         |
 
 ---
 
