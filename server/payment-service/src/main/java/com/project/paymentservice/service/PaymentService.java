@@ -22,4 +22,8 @@ public interface PaymentService {
     CancelPaymentResponse cancelPayment(Long accountId, String idempotencyKey, Long paymentId);
 
     void processMockCallback(MockCallbackRequest request);
+
+    com.project.paymentservice.dto.response.CashCollectResponse collectCashPayment(Long accountId, String idempotencyKey, Long paymentId, com.project.paymentservice.dto.request.CashCollectRequest request);
+
+    com.project.paymentservice.dto.response.CashCancelResponse cancelCashPayment(Long accountId, String idempotencyKey, Long paymentId, com.project.paymentservice.dto.request.CashCancelRequest request);
 }
