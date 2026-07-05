@@ -12,8 +12,10 @@ public class CashPaymentDetail {
     @Column(name = "payment_id")
     private Long paymentId;
 
-    @Column(name = "cashier_account_id", nullable = false)
-    private Long cashierAccountId;
+    @OneToOne(fetch = FetchType.LAZY)
+    @MapsId
+    @JoinColumn(name = "payment_id")
+    private Payment payment;
 
     @Column(name = "received_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal receivedAmount;
@@ -21,20 +23,34 @@ public class CashPaymentDetail {
     @Column(name = "change_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal changeAmount;
 
-    @Column(name = "counter_code", nullable = false, length = 50)
-    private String counterCode;
+    @Column(name = "collected_by_account_id", nullable = false)
+    private Long collectedByAccountId;
 
     @Column(name = "collected_at", nullable = false)
     private LocalDateTime collectedAt;
 
-    @Column(name = "created_at", insertable = false, updatable = false)
+    @Column(name = "note_sanitized", length = 500)
+    private String noteSanitized;
+
+
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", insertable = false, updatable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public CashPaymentDetail() {
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = this.createdAt;
     }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    // Getters and Setters
 
     public Long getPaymentId() {
         return paymentId;
@@ -44,12 +60,12 @@ public class CashPaymentDetail {
         this.paymentId = paymentId;
     }
 
-    public Long getCashierAccountId() {
-        return cashierAccountId;
+    public Payment getPayment() {
+        return payment;
     }
 
-    public void setCashierAccountId(Long cashierAccountId) {
-        this.cashierAccountId = cashierAccountId;
+    public void setPayment(Payment payment) {
+        this.payment = payment;
     }
 
     public BigDecimal getReceivedAmount() {
@@ -68,12 +84,12 @@ public class CashPaymentDetail {
         this.changeAmount = changeAmount;
     }
 
-    public String getCounterCode() {
-        return counterCode;
+    public Long getCollectedByAccountId() {
+        return collectedByAccountId;
     }
 
-    public void setCounterCode(String counterCode) {
-        this.counterCode = counterCode;
+    public void setCollectedByAccountId(Long collectedByAccountId) {
+        this.collectedByAccountId = collectedByAccountId;
     }
 
     public LocalDateTime getCollectedAt() {
@@ -84,19 +100,19 @@ public class CashPaymentDetail {
         this.collectedAt = collectedAt;
     }
 
+    public String getNoteSanitized() {
+        return noteSanitized;
+    }
+
+    public void setNoteSanitized(String noteSanitized) {
+        this.noteSanitized = noteSanitized;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
     }
 }

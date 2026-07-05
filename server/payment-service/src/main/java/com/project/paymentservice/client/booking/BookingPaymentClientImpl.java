@@ -29,7 +29,7 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
 
     public BookingPaymentClientImpl(
             ObjectMapper objectMapper,
-            @Value("${booking.service.base-url:http://localhost:8084}") String baseUrl,
+            @Value("${booking.service.base-url:http://localhost:8083}") String baseUrl,
             @Value("${booking.service.internal-token:}") String internalToken,
             @Value("${booking.service.connect-timeout:5000}") int connectTimeout,
             @Value("${booking.service.read-timeout:10000}") int readTimeout) {
@@ -143,6 +143,74 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
             throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
                     "Booking Service returned incomplete analytics snapshot",
                     HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
+    @Override
+    public void notifyPaymentResult(Long bookingId, BookingPaymentResultRequest request) {
+        String url = baseUrl + "/internal/bookings/" + bookingId + "/payment-results";
+
+        try {
+            String requestBody = objectMapper.writeValueAsString(request);
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .timeout(Duration.ofMillis(10000))
+                    .header("Content-Type", "application/json");
+
+            if (internalToken != null && !internalToken.isBlank()) {
+                requestBuilder.header("X-Internal-Token", internalToken);
+            }
+
+            HttpResponse<String> response = httpClient.send(requestBuilder.build(),
+                    HttpResponse.BodyHandlers.ofString());
+
+            int statusCode = response.statusCode();
+            if (statusCode == 404) {
+                throw new BusinessException("BOOKING_NOT_FOUND",
+                        "Booking not found: " + bookingId, HttpStatus.NOT_FOUND);
+            }
+            if (statusCode == 409) {
+                // Determine if it's already processed or already confirmed by another payment
+                // We'll throw a specific conflict exception
+                try {
+                    JsonNode root = objectMapper.readTree(response.body());
+                    JsonNode errorNode = root.get("errorCode");
+                    if (errorNode != null && !errorNode.isNull()) {
+                        String errorCode = errorNode.asText();
+                        throw new BusinessException(errorCode, "Booking Service reported conflict: " + errorCode, HttpStatus.CONFLICT);
+                    }
+                } catch (Exception e) {
+                    if (e instanceof BusinessException) {
+                        throw e;
+                    }
+                }
+                throw new BusinessException("PAYMENT_RESULT_CONFLICT",
+                        "Conflict reported by Booking Service", HttpStatus.CONFLICT);
+            }
+            if (statusCode == 401) {
+                throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
+                        "Internal authentication failed with Booking Service",
+                        HttpStatus.SERVICE_UNAVAILABLE);
+            }
+            if (statusCode != 200) {
+                throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
+                        "Booking Service returned unexpected status: " + statusCode,
+                        HttpStatus.SERVICE_UNAVAILABLE);
+            }
+        } catch (BusinessException e) {
+            throw e;
+        } catch (java.net.http.HttpTimeoutException e) {
+            logger.error("Booking Service timeout for bookingId={} payment-results", bookingId);
+            throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
+                    "Booking Service timed out", HttpStatus.SERVICE_UNAVAILABLE);
+        } catch (java.io.IOException | InterruptedException e) {
+            logger.error("Booking Service communication error for bookingId={} payment-results", bookingId, e);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
+                    "Booking Service is unavailable", HttpStatus.SERVICE_UNAVAILABLE);
         }
     }
 }

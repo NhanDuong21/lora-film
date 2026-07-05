@@ -51,7 +51,7 @@ public class PaymentSecurityTest {
         paymentRepository.deleteAllInBatch();
     }
 
-    private String generateJwt(Long userId, String email) {
+    private String generateJwt(Long userId, String email, String role) {
         byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
         SecretKey key = Keys.hmacShaKeyFor(keyBytes);
         
@@ -65,6 +65,9 @@ public class PaymentSecurityTest {
         }
         if (email != null) {
             builder.subject(email);
+        }
+        if (role != null) {
+            builder.claim("role", role);
         }
                 
         return builder.compact();
@@ -91,7 +94,7 @@ public class PaymentSecurityTest {
 
     @Test
     void jwtWithoutRequiredAccountIdClaimShouldReturnUnauthorized() throws Exception {
-        String token = generateJwt(null, "user@test.com"); // Missing userId claim
+        String token = generateJwt(null, "user@test.com", "CUSTOMER"); // Missing userId claim
 
         mockMvc.perform(get("/api/payments/1")
                 .header("Authorization", "Bearer " + token))
@@ -112,7 +115,7 @@ public class PaymentSecurityTest {
         p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
         p = paymentRepository.save(p);
 
-        String token = generateJwt(15L, "user@test.com");
+        String token = generateJwt(15L, "user@test.com", "CUSTOMER");
 
         mockMvc.perform(get("/api/payments/" + p.getId())
                 .header("Authorization", "Bearer " + token))
@@ -133,7 +136,7 @@ public class PaymentSecurityTest {
         p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
         p = paymentRepository.save(p);
 
-        String wrongToken = generateJwt(99L, "other@test.com");
+        String wrongToken = generateJwt(99L, "other@test.com", "CUSTOMER");
 
         mockMvc.perform(get("/api/payments/" + p.getId())
                 .header("Authorization", "Bearer " + wrongToken))

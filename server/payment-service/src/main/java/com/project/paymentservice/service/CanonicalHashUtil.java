@@ -24,6 +24,23 @@ public final class CanonicalHashUtil {
         return sha256Hex(canonical);
     }
 
+    public static String hashCollectCashPayment(Long accountId, Long paymentId, java.math.BigDecimal receivedAmount, String note) {
+        String canonical = "operation=COLLECT_CASH_PAYMENT"
+                + "|accountId=" + accountId
+                + "|paymentId=" + paymentId
+                + "|receivedAmount=" + receivedAmount
+                + "|note=" + (note == null ? "" : note.trim());
+        return sha256Hex(canonical);
+    }
+
+    public static String hashCancelCashPayment(Long accountId, Long paymentId, String reason) {
+        String canonical = "operation=CANCEL_CASH_PAYMENT"
+                + "|accountId=" + accountId
+                + "|paymentId=" + paymentId
+                + "|reason=" + (reason == null ? "" : reason.trim());
+        return sha256Hex(canonical);
+    }
+
     private static String sha256Hex(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

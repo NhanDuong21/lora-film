@@ -100,15 +100,29 @@ CREATE TABLE `payment_logs` (
 -- ============================================================================
 CREATE TABLE `cash_payment_details` (
   `payment_id` bigint PRIMARY KEY,
-  `cashier_account_id` bigint NOT NULL,
   `received_amount` decimal(12,2) NOT NULL,
   `change_amount` decimal(12,2) NOT NULL,
-  `counter_code` varchar(50) NOT NULL,
+  `collected_by_account_id` bigint NOT NULL,
   `collected_at` timestamp NOT NULL,
+  `note_sanitized` varchar(500),
+
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE RESTRICT
+  CONSTRAINT `fk_cash_payment_details_payment`
+    FOREIGN KEY (`payment_id`)
+    REFERENCES `payments` (`id`)
+    ON DELETE RESTRICT,
+  CONSTRAINT `chk_cash_received_amount`
+    CHECK (`received_amount` >= 0),
+  CONSTRAINT `chk_cash_change_amount`
+    CHECK (`change_amount` >= 0)
 );
+
+CREATE INDEX `idx_cash_payment_collector`
+ON `cash_payment_details` (`collected_by_account_id`, `collected_at`);
+
+CREATE INDEX `idx_cash_payment_collected_at`
+ON `cash_payment_details` (`collected_at`);
 
 -- ============================================================================
 -- TABLE: payment_analytics_snapshots

@@ -51,6 +51,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final TransactionTemplate transactionTemplate;
     private final TransactionTemplate requiresNewTransactionTemplate;
     private final ObjectMapper objectMapper;
+    private final CashPaymentDetailRepository cashPaymentDetailRepository;
+    private final PaymentOutboxEventRepository outboxEventRepository;
 
     public PaymentServiceImpl(
             PaymentRepository paymentRepository,
@@ -63,7 +65,9 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentLogService paymentLogService,
             PaymentStateTransitionService stateTransitionService,
             TransactionTemplate transactionTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            CashPaymentDetailRepository cashPaymentDetailRepository,
+            PaymentOutboxEventRepository outboxEventRepository) {
         this.paymentRepository = paymentRepository;
         this.guardRepository = guardRepository;
         this.idempotencyRepository = idempotencyRepository;
@@ -77,6 +81,8 @@ public class PaymentServiceImpl implements PaymentService {
         this.requiresNewTransactionTemplate = new TransactionTemplate(transactionTemplate.getTransactionManager());
         this.requiresNewTransactionTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.objectMapper = objectMapper;
+        this.cashPaymentDetailRepository = cashPaymentDetailRepository;
+        this.outboxEventRepository = outboxEventRepository;
     }
 
     @Override
@@ -89,17 +95,13 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException("VALIDATION_ERROR",
                     "Unsupported payment method: " + request.getPaymentMethod(), HttpStatus.BAD_REQUEST);
         }
-        if (method == PaymentMethod.CASH) {
+        if (method != PaymentMethod.MOCK && method != PaymentMethod.CASH) {
             throw new BusinessException("VALIDATION_ERROR",
-                    "CASH payment cannot be created through customer API", HttpStatus.BAD_REQUEST);
-        }
-        if (method != PaymentMethod.MOCK) {
-            throw new BusinessException("VALIDATION_ERROR",
-                    "Only MOCK payment method is supported in this version", HttpStatus.BAD_REQUEST);
+                    "Only MOCK and CASH payment methods are supported in this version", HttpStatus.BAD_REQUEST);
         }
 
         // Verify provider is available
-        PaymentProvider provider = providerRegistry.getProvider(method);
+        PaymentProvider provider = method == PaymentMethod.CASH ? null : providerRegistry.getProvider(method);
 
         String requestHash = CanonicalHashUtil.hashCreatePayment(accountId, request.getBookingId(), method.name());
 
@@ -146,39 +148,46 @@ public class PaymentServiceImpl implements PaymentService {
             });
 
             // Phase E — Create provider session (no DB transaction)
-            PaymentSession session;
-            try {
-                PaymentSessionRequest sessionReq = new PaymentSessionRequest();
-                sessionReq.setPaymentId(payment.getId());
-                sessionReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
-                sessionReq.setBookingId(request.getBookingId());
-                sessionReq.setAmount(payment.getAmount());
-                sessionReq.setCurrency(payment.getCurrency());
-                session = provider.createSession(sessionReq);
-            } catch (Exception e) {
-                logger.error("Provider session creation failed for paymentId={}", payment.getId(), e);
-                // Mark Payment FAILED, clear Guard, complete idempotency as FAILED
-                handleSessionCreationFailure(payment, accountId, idempotencyKey);
-                throw new BusinessException("PAYMENT_SESSION_CREATION_FAILED",
-                        "Failed to create payment session", HttpStatus.BAD_GATEWAY);
+            PaymentSession session = null;
+            if (method != PaymentMethod.CASH) {
+                try {
+                    PaymentSessionRequest sessionReq = new PaymentSessionRequest();
+                    sessionReq.setPaymentId(payment.getId());
+                    sessionReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
+                    sessionReq.setBookingId(request.getBookingId());
+                    sessionReq.setAmount(payment.getAmount());
+                    sessionReq.setCurrency(payment.getCurrency());
+                    session = provider.createSession(sessionReq);
+                } catch (Exception e) {
+                    logger.error("Provider session creation failed for paymentId={}", payment.getId(), e);
+                    // Mark Payment FAILED, clear Guard, complete idempotency as FAILED
+                    handleSessionCreationFailure(payment, accountId, idempotencyKey);
+                    throw new BusinessException("PAYMENT_SESSION_CREATION_FAILED",
+                            "Failed to create payment session", HttpStatus.BAD_GATEWAY);
+                }
             }
 
             // Phase F — Finalize session/idempotency (short transaction)
+            PaymentSession finalSession = session;
             CreatePaymentResponse response = transactionTemplate.execute(status -> {
                 Payment p = paymentRepository.findById(payment.getId()).orElseThrow();
 
-                p.setProviderOrderId(session.getProviderOrderId());
-                p.setProviderSessionId(session.getProviderSessionId());
+                String paymentUrl = null;
+                if (method != PaymentMethod.CASH && finalSession != null) {
+                    p.setProviderOrderId(finalSession.getProviderOrderId());
+                    p.setProviderSessionId(finalSession.getProviderSessionId());
+                    paymentUrl = finalSession.getPaymentUrl();
+                    paymentLogService.log(p.getId(), PaymentLogEventType.PROVIDER_SESSION_CREATED, SOURCE,
+                            ActorType.SYSTEM, null, PaymentStatus.PENDING, PaymentStatus.PENDING,
+                            "Provider session created", "providerOrderId=" + finalSession.getProviderOrderId());
+                }
 
                 // For MOCK we keep PENDING (per contract: NULL -> PENDING, callback transitions to SUCCESS/FAILED)
+                // For CASH we also keep PENDING until collected
                 p.setSettlementHoldUntil(LocalDateTime.now().plusMinutes(15));
                 paymentRepository.save(p);
 
-                paymentLogService.log(p.getId(), PaymentLogEventType.PROVIDER_SESSION_CREATED, SOURCE,
-                        ActorType.SYSTEM, null, PaymentStatus.PENDING, PaymentStatus.PENDING,
-                        "MOCK session created", "providerOrderId=" + session.getProviderOrderId());
-
-                CreatePaymentResponse resp = PaymentMapper.toCreateResponse(p, session.getPaymentUrl());
+                CreatePaymentResponse resp = PaymentMapper.toCreateResponse(p, paymentUrl);
 
                 // Complete idempotency
                 completeIdempotency(accountId, "CREATE_PAYMENT", idempotencyKey, 201, resp, p.getId());
@@ -414,6 +423,293 @@ public class PaymentServiceImpl implements PaymentService {
 
             return null;
         });
+    }
+
+    @Override
+    public com.project.paymentservice.dto.response.CashCollectResponse collectCashPayment(Long accountId, String idempotencyKey, Long paymentId, com.project.paymentservice.dto.request.CashCollectRequest request) {
+        String requestHash = CanonicalHashUtil.hashCollectCashPayment(accountId, paymentId, request.getReceivedAmount(), request.getNote());
+
+        IdempotencyReservationResult idempResult;
+        try {
+            idempResult = transactionTemplate.execute(status -> {
+                return reserveIdempotency(accountId, "COLLECT_CASH_PAYMENT", idempotencyKey, requestHash);
+            });
+        } catch (org.springframework.dao.DataAccessException | org.springframework.transaction.TransactionException e) {
+            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
+                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+        }
+
+        if (idempResult != null && idempResult.replay) {
+            return deserializeReplay(idempResult.record, com.project.paymentservice.dto.response.CashCollectResponse.class);
+        }
+
+        if (idempResult != null && idempResult.decision == ReservationDecision.IN_PROGRESS_NON_OWNER) {
+            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
+                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+        }
+
+        if (idempResult != null && idempResult.decision == ReservationDecision.KEY_REUSED) {
+            throw new BusinessException("IDEMPOTENCY_KEY_REUSED",
+                    "Idempotency key reused with different request", HttpStatus.CONFLICT);
+        }
+
+        try {
+            com.project.paymentservice.dto.response.CashCollectResponse response = transactionTemplate.execute(status -> {
+                Payment payment = paymentRepository.findById(paymentId)
+                        .orElseThrow(() -> new BusinessException("PAYMENT_NOT_FOUND",
+                                "Payment not found", HttpStatus.NOT_FOUND));
+
+                if (payment.getPaymentMethod() != PaymentMethod.CASH) {
+                    throw new BusinessException("PAYMENT_METHOD_NOT_ALLOWED",
+                            "Payment method is not CASH", HttpStatus.CONFLICT);
+                }
+
+                if (payment.getStatus() != PaymentStatus.PENDING) {
+                    throw new BusinessException("PAYMENT_NOT_COLLECTABLE",
+                            "Payment is not PENDING", HttpStatus.CONFLICT);
+                }
+
+                if (payment.getExpiresAt().isBefore(LocalDateTime.now())) {
+                    throw new BusinessException("PAYMENT_NOT_COLLECTABLE",
+                            "Payment is expired", HttpStatus.CONFLICT);
+                }
+
+                if (request.getReceivedAmount().compareTo(payment.getAmount()) < 0) {
+                    throw new BusinessException("INSUFFICIENT_CASH_RECEIVED",
+                            "Received amount is less than payment amount", HttpStatus.BAD_REQUEST);
+                }
+
+                java.math.BigDecimal changeAmount = request.getReceivedAmount().subtract(payment.getAmount());
+
+                PaymentStatus previousStatus = payment.getStatus();
+                payment.setStatus(PaymentStatus.SUCCESS);
+                payment.setSucceededAt(LocalDateTime.now());
+                paymentRepository.save(payment);
+
+                com.project.paymentservice.entity.CashPaymentDetail detail = new com.project.paymentservice.entity.CashPaymentDetail();
+                detail.setPayment(payment);
+                detail.setReceivedAmount(request.getReceivedAmount());
+                detail.setChangeAmount(changeAmount);
+                detail.setCollectedByAccountId(accountId);
+                detail.setCollectedAt(LocalDateTime.now());
+                detail.setNoteSanitized(request.getNote());
+                cashPaymentDetailRepository.save(detail);
+
+                BookingPaymentGuard guard = guardRepository.findByBookingIdForUpdate(payment.getBookingId()).orElse(null);
+                if (guard != null) {
+                    guard.setActivePaymentId(null);
+                    guard.setSuccessfulPaymentId(payment.getId());
+                    guardRepository.save(guard);
+                }
+
+                paymentLogService.log(payment.getId(), PaymentLogEventType.CASH_PAYMENT_COLLECTED, SOURCE,
+                        ActorType.SYSTEM, accountId, previousStatus, PaymentStatus.SUCCESS,
+                        "Cash payment collected", "received=" + request.getReceivedAmount() + ",change=" + changeAmount);
+                // Also add standard PAYMENT_SUCCEEDED log just to be safe with existing analytics, or we can just stick to CASH_PAYMENT_COLLECTED
+                paymentLogService.log(payment.getId(), PaymentLogEventType.PAYMENT_SUCCEEDED, SOURCE,
+                        ActorType.SYSTEM, accountId, previousStatus, PaymentStatus.SUCCESS,
+                        "Cash payment collected", null);
+
+                com.project.paymentservice.dto.response.CashCollectResponse resp = new com.project.paymentservice.dto.response.CashCollectResponse(
+                        payment.getId(), payment.getBookingId(), payment.getPaymentMethod().name(),
+                        payment.getStatus().name(), payment.getAmount(), request.getReceivedAmount(), changeAmount,
+                        accountId, detail.getCollectedAt(), OutboxStatus.PENDING.name());
+
+                com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
+                notifyReq.setEventId(java.util.UUID.randomUUID().toString());
+                notifyReq.setSchemaVersion("1.0");
+                notifyReq.setPaymentId(payment.getId());
+                notifyReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
+                notifyReq.setPaymentMethod(payment.getPaymentMethod().name());
+                notifyReq.setResult("SUCCESS");
+                notifyReq.setAmount(payment.getAmount());
+                notifyReq.setCurrency(payment.getCurrency());
+                notifyReq.setOccurredAt(payment.getSucceededAt());
+                notifyReq.setExternalTransactionId(payment.getExternalTransactionId());
+                notifyReq.setReconciliationStatus(payment.getReconciliationStatus().name());
+
+                com.project.paymentservice.entity.PaymentOutboxEvent outboxEvent = new com.project.paymentservice.entity.PaymentOutboxEvent();
+                outboxEvent.setEventId(notifyReq.getEventId());
+                outboxEvent.setAggregateType("PAYMENT");
+                outboxEvent.setAggregateId(payment.getId().toString());
+                outboxEvent.setEventType("PAYMENT_RESULT");
+                outboxEvent.setSchemaVersion("1.0");
+                outboxEvent.setDestination(OutboxDestination.BOOKING_SERVICE_REST);
+                try {
+                    outboxEvent.setPayload(objectMapper.writeValueAsString(notifyReq));
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to serialize outbox payload", e);
+                }
+                outboxEventRepository.save(outboxEvent);
+
+                completeIdempotency(accountId, "COLLECT_CASH_PAYMENT", idempotencyKey, 200, resp, payment.getId());
+
+                return resp;
+            });
+
+            try {
+                com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
+                Payment payment = paymentRepository.findById(response.getPaymentId()).orElse(null);
+                if (payment != null) {
+                    // Try to send it synchronously for immediate confirmation
+                    // Find the pending outbox event
+                    java.util.List<com.project.paymentservice.entity.PaymentOutboxEvent> events = outboxEventRepository.findByAggregateIdAndStatus(payment.getId().toString(), OutboxStatus.PENDING);
+                    if (!events.isEmpty()) {
+                        com.project.paymentservice.entity.PaymentOutboxEvent eventToDeliver = events.get(0);
+                        notifyReq = objectMapper.readValue(eventToDeliver.getPayload(), com.project.paymentservice.client.booking.BookingPaymentResultRequest.class);
+                        bookingClient.notifyPaymentResult(payment.getBookingId(), notifyReq);
+                        eventToDeliver.setStatus(OutboxStatus.PUBLISHED);
+                        eventToDeliver.setPublishedAt(LocalDateTime.now());
+                        outboxEventRepository.save(eventToDeliver);
+                        response.setBookingDeliveryStatus(OutboxStatus.PUBLISHED.name());
+                    }
+                }
+            } catch (Exception e) {
+                logger.error("Failed to synchronously notify Booking Service of successful CASH collection for paymentId={}. Delivery will be retried later.", response.getPaymentId(), e);
+            }
+
+            return response;
+        } catch (BusinessException e) {
+            if (idempResult != null && idempResult.owner) {
+                markIdempotencyFailed(accountId, "COLLECT_CASH_PAYMENT", idempotencyKey, e.getErrorCode(), e.getMessage());
+            }
+            throw e;
+        } catch (Exception e) {
+            logger.error("Unexpected error in collectCashPayment", e);
+            if (idempResult != null && idempResult.owner) {
+                markIdempotencyFailed(accountId, "COLLECT_CASH_PAYMENT", idempotencyKey, "INTERNAL_SERVER_ERROR", e.getMessage());
+            }
+            throw new BusinessException("INTERNAL_SERVER_ERROR", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @Override
+    public com.project.paymentservice.dto.response.CashCancelResponse cancelCashPayment(Long accountId, String idempotencyKey, Long paymentId, com.project.paymentservice.dto.request.CashCancelRequest request) {
+        String requestHash = CanonicalHashUtil.hashCancelCashPayment(accountId, paymentId, request.getReason());
+
+        IdempotencyReservationResult idempResult;
+        try {
+            idempResult = transactionTemplate.execute(status -> {
+                return reserveIdempotency(accountId, "CANCEL_CASH_PAYMENT", idempotencyKey, requestHash);
+            });
+        } catch (org.springframework.dao.DataAccessException | org.springframework.transaction.TransactionException e) {
+            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
+                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+        }
+
+        if (idempResult != null && idempResult.replay) {
+            return deserializeReplay(idempResult.record, com.project.paymentservice.dto.response.CashCancelResponse.class);
+        }
+
+        if (idempResult != null && idempResult.decision == ReservationDecision.IN_PROGRESS_NON_OWNER) {
+            throw new BusinessException("IDEMPOTENCY_REQUEST_IN_PROGRESS",
+                    "Request with this idempotency key is already in progress", HttpStatus.CONFLICT);
+        }
+
+        if (idempResult != null && idempResult.decision == ReservationDecision.KEY_REUSED) {
+            throw new BusinessException("IDEMPOTENCY_KEY_REUSED",
+                    "Idempotency key reused with different request", HttpStatus.CONFLICT);
+        }
+
+        try {
+            com.project.paymentservice.dto.response.CashCancelResponse response = transactionTemplate.execute(status -> {
+                Payment payment = paymentRepository.findById(paymentId)
+                        .orElseThrow(() -> new BusinessException("PAYMENT_NOT_FOUND",
+                                "Payment not found", HttpStatus.NOT_FOUND));
+
+                if (payment.getPaymentMethod() != PaymentMethod.CASH) {
+                    throw new BusinessException("PAYMENT_METHOD_NOT_ALLOWED",
+                            "Payment method is not CASH", HttpStatus.CONFLICT);
+                }
+
+                if (payment.getStatus() != PaymentStatus.PENDING) {
+                    throw new BusinessException("PAYMENT_NOT_COLLECTABLE",
+                            "Payment is not PENDING", HttpStatus.CONFLICT);
+                }
+
+                PaymentStatus previousStatus = payment.getStatus();
+                payment.setStatus(PaymentStatus.CANCELLED);
+                payment.setCancelledAt(LocalDateTime.now());
+                paymentRepository.save(payment);
+
+                BookingPaymentGuard guard = guardRepository.findByBookingIdForUpdate(payment.getBookingId()).orElse(null);
+                if (guard != null && payment.getId().equals(guard.getActivePaymentId())) {
+                    guard.setActivePaymentId(null);
+                    guardRepository.save(guard);
+                }
+
+                paymentLogService.log(payment.getId(), PaymentLogEventType.PAYMENT_CANCELLED, SOURCE,
+                        ActorType.SYSTEM, accountId, previousStatus, PaymentStatus.CANCELLED,
+                        "Cash payment cancelled", "reason=" + request.getReason());
+
+                com.project.paymentservice.dto.response.CashCancelResponse resp = new com.project.paymentservice.dto.response.CashCancelResponse(
+                        payment.getId(), PaymentStatus.CANCELLED.name(), accountId, payment.getCancelledAt(), OutboxStatus.PENDING.name());
+
+                com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
+                notifyReq.setEventId(java.util.UUID.randomUUID().toString());
+                notifyReq.setSchemaVersion("1.0");
+                notifyReq.setPaymentId(payment.getId());
+                notifyReq.setPaymentTransactionCode(payment.getPaymentTransactionCode());
+                notifyReq.setPaymentMethod(payment.getPaymentMethod().name());
+                notifyReq.setResult("CANCELLED");
+                notifyReq.setAmount(payment.getAmount());
+                notifyReq.setCurrency(payment.getCurrency());
+                notifyReq.setOccurredAt(payment.getCancelledAt());
+                notifyReq.setExternalTransactionId(payment.getExternalTransactionId());
+                notifyReq.setReconciliationStatus(payment.getReconciliationStatus().name());
+
+                com.project.paymentservice.entity.PaymentOutboxEvent outboxEvent = new com.project.paymentservice.entity.PaymentOutboxEvent();
+                outboxEvent.setEventId(notifyReq.getEventId());
+                outboxEvent.setAggregateType("PAYMENT");
+                outboxEvent.setAggregateId(payment.getId().toString());
+                outboxEvent.setEventType("PAYMENT_RESULT");
+                outboxEvent.setSchemaVersion("1.0");
+                outboxEvent.setDestination(OutboxDestination.BOOKING_SERVICE_REST);
+                try {
+                    outboxEvent.setPayload(objectMapper.writeValueAsString(notifyReq));
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to serialize outbox payload", e);
+                }
+                outboxEventRepository.save(outboxEvent);
+
+                completeIdempotency(accountId, "CANCEL_CASH_PAYMENT", idempotencyKey, 200, resp, payment.getId());
+
+                return resp;
+            });
+
+            try {
+                Payment payment = paymentRepository.findById(response.getPaymentId()).orElse(null);
+                if (payment != null) {
+                    com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
+                    // Try to send it synchronously for immediate confirmation
+                    java.util.List<com.project.paymentservice.entity.PaymentOutboxEvent> events = outboxEventRepository.findByAggregateIdAndStatus(payment.getId().toString(), OutboxStatus.PENDING);
+                    if (!events.isEmpty()) {
+                        com.project.paymentservice.entity.PaymentOutboxEvent eventToDeliver = events.get(0);
+                        notifyReq = objectMapper.readValue(eventToDeliver.getPayload(), com.project.paymentservice.client.booking.BookingPaymentResultRequest.class);
+                        bookingClient.notifyPaymentResult(payment.getBookingId(), notifyReq);
+                        eventToDeliver.setStatus(OutboxStatus.PUBLISHED);
+                        eventToDeliver.setPublishedAt(LocalDateTime.now());
+                        outboxEventRepository.save(eventToDeliver);
+                        response.setBookingDeliveryStatus(OutboxStatus.PUBLISHED.name());
+                    }
+                }
+            } catch (Exception e) {
+                logger.error("Failed to synchronously notify Booking Service of cancelled CASH for paymentId={}. Delivery will be retried later.", response.getPaymentId(), e);
+            }
+
+            return response;
+        } catch (BusinessException e) {
+            if (idempResult != null && idempResult.owner) {
+                markIdempotencyFailed(accountId, "CANCEL_CASH_PAYMENT", idempotencyKey, e.getErrorCode(), e.getMessage());
+            }
+            throw e;
+        } catch (Exception e) {
+            logger.error("Unexpected error in cancelCashPayment", e);
+            if (idempResult != null && idempResult.owner) {
+                markIdempotencyFailed(accountId, "CANCEL_CASH_PAYMENT", idempotencyKey, "INTERNAL_SERVER_ERROR", e.getMessage());
+            }
+            throw new BusinessException("INTERNAL_SERVER_ERROR", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     // ========== Private helpers ==========
