@@ -47,6 +47,15 @@ public class AuditLog {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
+	@Column(name = "created_by")
+	private Long createdBy;
+
+	@Column(name = "updated_at")
+	private LocalDateTime updatedAt;
+
+	@Column(name = "updated_by")
+	private Long updatedBy;
+
 	@PrePersist
 	void prePersist() {
 		if (createdAt == null) {

@@ -82,7 +82,7 @@ Gói tin được truyền tải qua Kafka sử dụng định dạng chuỗi JS
   }
 }
 ```
-*(Ghi chú: Nếu thất bại, `status` là `FAILED` và `errorCode` có thể là `PHONE_NUMBER_ALREADY_EXISTS`, `CCCD_ALREADY_EXISTS`, `PHONE_NUMBER_RESERVED`, hoặc `CCCD_RESERVED`. Trường `retryAfterSeconds` chỉ xuất hiện nếu đang bị reserve)*
+*(Ghi chú: Nếu thất bại, `status` là `FAILED` và `errorCode` có thể là `PHONE_NUMBER_AND_CCCD_ALREADY_EXIST`, `PHONE_NUMBER_AND_CCCD_RESERVED`, `PHONE_NUMBER_ALREADY_EXISTS`, `CCCD_ALREADY_EXISTS`, `PHONE_NUMBER_RESERVED`, hoặc `CCCD_RESERVED`. Trường `retryAfterSeconds` chỉ xuất hiện nếu đang bị reserve)*
 
 ### 3.3. Event: ACCOUNT_VERIFIED
 

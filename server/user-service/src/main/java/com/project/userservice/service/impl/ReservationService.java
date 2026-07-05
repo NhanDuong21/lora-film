@@ -23,12 +23,16 @@ public class ReservationService {
         String phoneKey = "reserved_phone:" + phoneNumber;
         String cccdKey = "reserved_cccd:" + cccd;
 
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(phoneKey))) {
+        boolean phoneHasKey = Boolean.TRUE.equals(redisTemplate.hasKey(phoneKey));
+        boolean cccdHasKey = Boolean.TRUE.equals(redisTemplate.hasKey(cccdKey));
+
+        if (phoneHasKey && cccdHasKey) {
+            Long expire = redisTemplate.getExpire(phoneKey, TimeUnit.SECONDS);
+            return new ReservationResult(false, "PHONE_NUMBER_AND_CCCD_RESERVED", expire != null && expire > 0 ? expire : null);
+        } else if (phoneHasKey) {
             Long expire = redisTemplate.getExpire(phoneKey, TimeUnit.SECONDS);
             return new ReservationResult(false, "PHONE_NUMBER_RESERVED", expire != null && expire > 0 ? expire : null);
-        }
-
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(cccdKey))) {
+        } else if (cccdHasKey) {
             Long expire = redisTemplate.getExpire(cccdKey, TimeUnit.SECONDS);
             return new ReservationResult(false, "CCCD_RESERVED", expire != null && expire > 0 ? expire : null);
         }

@@ -44,15 +44,6 @@ public class User {
     @Column(name = "birth_year")
     private Integer birthYear;
 
-    @Column(name = "is_verified_phone")
-    private Boolean verifiedPhone = false;
-
-    @Column(name = "cccd_checked_at")
-    private LocalDateTime cccdCheckedAt;
-
-    @Column(name = "cccd_check_note")
-    private String cccdCheckNote;
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -66,8 +57,7 @@ public class User {
 
     public User(Long accountId, String fullName, String phoneNumber, String cccd, String cccdMasked,
                 String provinceCode, String provinceName, Gender gender, LocalDate birthday,
-                Integer birthYear, Boolean verifiedPhone, LocalDateTime cccdCheckedAt,
-                String cccdCheckNote, LocalDateTime createdAt, LocalDateTime updatedAt) {
+                Integer birthYear, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.accountId = accountId;
         this.fullName = fullName;
         this.phoneNumber = phoneNumber;
@@ -78,9 +68,6 @@ public class User {
         this.gender = gender;
         this.birthday = birthday;
         this.birthYear = birthYear;
-        this.verifiedPhone = verifiedPhone;
-        this.cccdCheckedAt = cccdCheckedAt;
-        this.cccdCheckNote = cccdCheckNote;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -163,30 +150,6 @@ public class User {
 
     public void setBirthYear(Integer birthYear) {
         this.birthYear = birthYear;
-    }
-
-    public Boolean getVerifiedPhone() {
-        return verifiedPhone;
-    }
-
-    public void setVerifiedPhone(Boolean verifiedPhone) {
-        this.verifiedPhone = verifiedPhone;
-    }
-
-    public LocalDateTime getCccdCheckedAt() {
-        return cccdCheckedAt;
-    }
-
-    public void setCccdCheckedAt(LocalDateTime cccdCheckedAt) {
-        this.cccdCheckedAt = cccdCheckedAt;
-    }
-
-    public String getCccdCheckNote() {
-        return cccdCheckNote;
-    }
-
-    public void setCccdCheckNote(String cccdCheckNote) {
-        this.cccdCheckNote = cccdCheckNote;
     }
 
     public LocalDateTime getCreatedAt() {

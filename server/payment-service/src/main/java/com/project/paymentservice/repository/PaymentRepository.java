@@ -17,6 +17,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Page<Payment> findByBookingId(Long bookingId, Pageable pageable);
 
+    Page<Payment> findByBookingIdAndAccountId(Long bookingId, Long accountId, Pageable pageable);
+
     Page<Payment> findByAccountId(Long accountId, Pageable pageable);
 
     Optional<Payment> findByBookingIdAndAttemptNumber(Long bookingId, Integer attemptNumber);

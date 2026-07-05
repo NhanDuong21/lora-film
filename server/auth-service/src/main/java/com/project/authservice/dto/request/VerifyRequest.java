@@ -15,18 +15,12 @@ public class VerifyRequest {
     @Pattern(regexp = "^\\d{6}$", message = "OTP must be exactly 6 digits")
     private String otp;
 
-    @NotBlank(message = "Purpose is required")
-    @Pattern(regexp = "^(REGISTRATION|FORGOTTEN PASSWORD|CHANGE EMAIL|CHANGE PASSWORD)$", message = "Invalid OTP purpose")
-    @Schema(example = "REGISTRATION")
-    private String purpose;
-
     public VerifyRequest() {
     }
 
-    public VerifyRequest(String email, String otp, String purpose) {
+    public VerifyRequest(String email, String otp) {
         this.email = email;
         this.otp = otp;
-        this.purpose = purpose;
     }
 
     public String getEmail() {
@@ -43,13 +37,5 @@ public class VerifyRequest {
 
     public void setOtp(String otp) {
         this.otp = otp;
-    }
-
-    public String getPurpose() {
-        return purpose;
-    }
-
-    public void setPurpose(String purpose) {
-        this.purpose = purpose;
     }
 }

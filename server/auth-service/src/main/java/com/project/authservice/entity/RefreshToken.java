@@ -35,7 +35,7 @@ public class RefreshToken {
 	@JoinColumn(name = "account_id", nullable = false)
 	private Account account;
 
-	@Column(name = "token", nullable = false, unique = true, length = 255)
+	@Column(name = "token_hash", nullable = false, unique = true, length = 255)
 	private String token;
 
 	@Column(name = "expiry_date", nullable = false)
@@ -47,6 +47,15 @@ public class RefreshToken {
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
+
+	@Column(name = "created_by")
+	private Long createdBy;
+
+	@Column(name = "updated_at")
+	private LocalDateTime updatedAt;
+
+	@Column(name = "updated_by")
+	private Long updatedBy;
 
 	@PrePersist
 	void prePersist() {

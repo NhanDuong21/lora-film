@@ -1,16 +1,14 @@
 package com.project.authservice.dto.response;
 
-public class ResendOtpResponse {
+public class SendOtpResponse {
     private Long accountId;
     private Long expiresIn;
-    private Long resendAvailableIn;
 
-    public ResendOtpResponse() {}
+    public SendOtpResponse() {}
 
-    public ResendOtpResponse(Long accountId, Long expiresIn, Long resendAvailableIn) {
+    public SendOtpResponse(Long accountId, Long expiresIn) {
         this.accountId = accountId;
         this.expiresIn = expiresIn;
-        this.resendAvailableIn = resendAvailableIn;
     }
 
     public Long getAccountId() {
@@ -27,13 +25,5 @@ public class ResendOtpResponse {
 
     public void setExpiresIn(Long expiresIn) {
         this.expiresIn = expiresIn;
-    }
-
-    public Long getResendAvailableIn() {
-        return resendAvailableIn;
-    }
-
-    public void setResendAvailableIn(Long resendAvailableIn) {
-        this.resendAvailableIn = resendAvailableIn;
     }
 }

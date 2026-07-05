@@ -1,4 +1,4 @@
-# Tài Liệu Kiểm Thử Tích Hợp Hệ Thống - Luồng Xác Thực Và Đăng Ký LoraFilm
+﻿# Tài Liệu Kiểm Thử Tích Hợp Hệ Thống - Luồng Xác Thực Và Đăng Ký LoraFilm
 
 ## Lịch sử chỉnh sửa
 
@@ -237,7 +237,7 @@ Dưới đây là các kịch bản kiểm thử tích hợp chi tiết được
 
 * **Kết luận**: PASS theo yêu cầu API contract hiện tại. Cần ghi nhận cải tiến bảo mật token storage như một technical debt cho giai đoạn production hardening.
 
-### Kịch Bản 9: Gửi Lại Mã Xác Thực OTP Thành Công (Resend OTP Success)
+### Kịch Bản 9: Yêu Cầu Mã Xác Thực OTP Mới (Request New OTP Success)
 - **Mục đích**: Kiểm tra chức năng gửi lại mã OTP cho tài khoản chưa được xác thực.
 - **Các bước thực hiện**:
   1. Người dùng vào trang xác thực OTP (hoặc được điều hướng từ đăng nhập thất bại do chưa xác thực).
@@ -248,16 +248,16 @@ Dưới đây là các kịch bản kiểm thử tích hợp chi tiết được
   - Mã OTP mới được tạo và mã cũ bị vô hiệu hóa.
 - **Trạng thái**: ĐẠT
 
-### Kịch Bản 10: Gửi Lại Mã Xác Thực OTP Quá Sớm (Resend OTP Rate Limit)
+### Kịch Bản 10: Yêu Cầu Mã OTP Mới Quá Sớm (Request OTP Rate Limit)
 - **Mục đích**: Kiểm tra cơ chế rate limiting/cooldown (chống spam) cho API gửi OTP.
 - **Các bước thực hiện**:
   1. Gửi lại mã OTP thành công.
-  2. Ngay lập tức dùng API (Postman/Curl) gọi tiếp POST `/api/auth/resend-otp` khi chưa hết 60s cooldown.
+  2. Ngay lập tức dùng API (Postman/Curl) gọi tiếp POST `/api/auth/send-otp` khi chưa hết 60s cooldown.
 - **Kết quả mong đợi**:
   - Backend từ chối với lỗi 429 Too Many Requests, mã `AUTH_OTP_RESEND_TOO_SOON`, trả về biến `retryAfter`.
 - **Trạng thái**: ĐẠT
 
-### Kịch Bản 11: Xác Thực Mã Cũ Bị Vô Hiệu Sau Khi Gửi Lại (Invalid Old OTP)
+### Kịch Bản 11: Xác Thực Mã Cũ Bị Vô Hiệu Sau Khi Xin Mã Mới (Invalid Old OTP)
 - **Mục đích**: Đảm bảo bảo mật khi sinh OTP mới.
 - **Các bước thực hiện**:
   1. Nhận mã OTP 1 nhưng không nhập.
@@ -405,3 +405,213 @@ Không còn trả về:
 ### Kết Luận Chung
 
 Hệ thống tích hợp xác thực của LoraFilm về cơ bản đã đáp ứng đầy đủ yêu cầu nghiệp vụ của luồng Đăng ký và Đăng nhập đầu cuối. Các tương tác mạng, kiểm tra dữ liệu nhạy cảm (CCCD), lưu trữ Token và quy trình Gửi lại OTP (Resend OTP) đã được triển khai chính xác, hoạt động ổn định. Để chuẩn bị cho việc tích hợp vào nhánh chính develop, khuyến nghị đội ngũ phát triển nhanh chóng khắc phục lỗ hổng định tuyến tuyến API nội bộ trên Gateway. Các sai lệch về hợp đồng đăng nhập đã được xử lý triệt để.
+
+
+## Tài Liệu Kiểm Thử Hệ Thống - Auth Service (Chi tiết Kịch Bản & Body)
+
+## Lịch sử chỉnh sửa
+**Ngày:** 03/07/2026
+
+---
+
+## 1. Phân Hệ Điều Khiển Giao Tiếp (Controllers - API Level)
+
+Đây là các kịch bản kiểm thử Controller (E2E/Integration test cấp độ API). Dữ liệu đầu vào (Body) và kết quả mong đợi được định nghĩa cụ thể.
+
+### 1.1. API Đăng ký (POST `/api/auth/register`)
+
+**Case 1: Đăng ký thành công (`testRegisterSuccessReturns200`)**
+- **Mô tả:** Người dùng gửi thông tin đăng ký hợp lệ, chưa từng tồn tại trong hệ thống.
+- **Request Body:**
+  ```json
+  {
+    "fullName": "Nguyen Van A",
+    "email": "testuser@example.com",
+    "phoneNumber": "0901234567",
+    "cccd": "092205006789",
+    "birthday": "2005-06-12",
+    "password": "User@123"
+  }
+  ```
+- **Kết quả mong đợi:** HTTP 200 OK
+  ```json
+  {
+    "success": true,
+    "message": "Registration initiated",
+    "data": {
+      "requestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    }
+  }
+  ```
+  *(Lưu ý: Response không được phép trả về password hay cccd dạng raw).*
+
+**Case 2: Đăng ký thất bại do trùng Email (`testRegister_EmailAlreadyExists`)**
+- **Mô tả:** Email đã được đăng ký trước đó.
+- **Request Body:** Giống Case 1, nhưng `email` là "da_ton_tai@example.com".
+- **Kết quả mong đợi:** HTTP 409 Conflict (Mã lỗi: `AUTH_EMAIL_ALREADY_EXISTS`).
+
+**Case 3: Lỗi Validation (`testRegister_ValidationErrors`)**
+- **Mô tả:** Gửi payload thiếu thông tin hoặc sai định dạng (ví dụ: email sai định dạng, password quá ngắn).
+- **Request Body:**
+  ```json
+  {
+    "fullName": "",
+    "email": "invalid-email",
+    "password": "123"
+  }
+  ```
+- **Kết quả mong đợi:** HTTP 422 Unprocessable Content. Trả về chi tiết các field bị lỗi (email, fullName, password).
+
+---
+
+### 1.2. API Đăng nhập (POST `/api/auth/login`)
+
+**Case 1: Đăng nhập thành công (`testLoginSuccessHidesToken`)**
+- **Mô tả:** Người dùng nhập đúng email và password của tài khoản đã được kích hoạt (ACTIVE).
+- **Request Body:**
+  ```json
+  {
+    "email": "testuser@example.com",
+    "password": "User@123"
+  }
+  ```
+- **Kết quả mong đợi:** HTTP 200 OK
+  ```json
+  {
+    "success": true,
+    "message": "Login successful",
+    "data": {
+      "accessToken": "eyJhbGciOiJIUzI...",
+      "refreshToken": "550e8400-e29b-41d4-a716-446655440000",
+      "tokenType": "Bearer",
+      "expiresIn": 3600,
+      "email": "testuser@example.com",
+      "role": "CUSTOMER",
+      "accountId": 1
+    }
+  }
+  ```
+
+**Case 2: Sai mật khẩu hoặc Email không tồn tại (`testLogin_InvalidCredentials`)**
+- **Mô tả:** Nhập sai mật khẩu.
+- **Request Body:**
+  ```json
+  {
+    "email": "testuser@example.com",
+    "password": "WrongPassword123"
+  }
+  ```
+- **Kết quả mong đợi:** HTTP 401 Unauthorized (Mã lỗi: `AUTH_INVALID_CREDENTIALS`).
+
+**Case 3: Tài khoản chưa kích hoạt (`testLogin_AccountNotVerified`)**
+- **Mô tả:** Đăng nhập vào tài khoản có trạng thái `PENDING`.
+- **Request Body:** Giống Case 1.
+- **Kết quả mong đợi:** HTTP 403 Forbidden (Mã lỗi: `AUTH_ACCOUNT_NOT_VERIFIED`), trả về kèm `accountId` để gọi API gửi lại OTP.
+
+---
+
+### 1.3. API Xác thực OTP (POST `/api/auth/verify`)
+
+**Case 1: Xác thực thành công (`testVerifySuccessReturns200`)**
+- **Mô tả:** Người dùng nhập đúng OTP còn hạn.
+- **Request Body:**
+  ```json
+  {
+    "email": "testuser@example.com",
+    "otp": "123456"
+  }
+  ```
+- **Kết quả mong đợi:** HTTP 200 OK.
+  ```json
+  {
+    "success": true,
+    "message": "Account verified successfully",
+    "data": null
+  }
+  ```
+
+**Case 2: Xác thực thất bại do sai mã OTP (`testVerify_InvalidOtp`)**
+- **Request Body:**
+  ```json
+  {
+    "email": "testuser@example.com",
+    "otp": "000000"
+  }
+  ```
+- **Kết quả mong đợi:** HTTP 401 Unauthorized (Mã lỗi: `AUTH_INVALID_OTP`).
+
+**Case 3: Mã OTP đã hết hạn (`testVerify_ExpiredOtp`)**
+- **Request Body:** Giống Case 1 nhưng gửi sau 5 phút.
+- **Kết quả mong đợi:** HTTP 401 Unauthorized (Mã lỗi: `AUTH_OTP_EXPIRED`).
+
+---
+
+### 1.4. API Gửi OTP (POST `/api/auth/send-otp`)
+
+**Case 1: Gửi OTP thành công (`testSendOtpSuccessReturns200`)**
+- **Mô tả:** Tài khoản hợp lệ, chưa kích hoạt, cần gửi lại OTP.
+- **Request Body:**
+  ```json
+  {
+    "email": "testuser@example.com"
+  }
+  ```
+- **Kết quả mong đợi:** HTTP 200 OK.
+  ```json
+  {
+    "success": true,
+    "message": "OTP sent successfully",
+    "data": {
+      "accountId": 1,
+      "expiresIn": 300
+    }
+  }
+  ```
+
+**Case 2: Gọi API quá nhanh (Spam OTP) (`testSendOtp_RateLimitExceeded`)**
+- **Mô tả:** Gọi lại API send-otp khi chưa hết thời gian cooldown (thường là 60 giây).
+- **Request Body:** Giống Case 1.
+- **Kết quả mong đợi:** HTTP 429 Too Many Requests (Mã lỗi: `AUTH_OTP_RESEND_TOO_SOON`).
+
+---
+
+## 2. Phân Hệ Thông Điệp Sự Kiện (Kafka Events)
+
+### 2.1. Phát sự kiện Đăng ký chờ đối soát (Kafka Publisher)
+- **Tình huống:** Sau khi người dùng gọi API `/api/auth/register` và lưu `PENDING` vào Redis.
+- **Topic:** `registration-validation-requested`
+- **Body Sự kiện (Event Payload):**
+  ```json
+  {
+    "requestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "cccd": "092205006789",
+    "phoneNumber": "0901234567"
+  }
+  ```
+- **Kỳ vọng:** `AuthAccountEventPublisher` gửi chính xác payload trên lên Kafka.
+
+### 2.2. Nhận sự kiện User Profile được tạo (Kafka Consumer)
+- **Tình huống:** Nhận phản hồi từ `user-service` sau khi profile tạo thành công.
+- **Topic:** `auth.user.profile.created`
+- **Body Sự kiện (Event Payload):**
+  ```json
+  {
+    "accountId": 1,
+    "email": "testuser@example.com",
+    "status": "SUCCESS"
+  }
+  ```
+- **Kỳ vọng (`UserProfileCreatedConsumer`):** Nếu `accountStatus` của accountId=1 đang là `PENDING`, hệ thống sẽ cập nhật trạng thái nếu cần và xóa key `pending_registration:testuser@example.com` khỏi Redis.
+
+### 2.3. Phát sự kiện Tài khoản kích hoạt thành công (Kafka Publisher)
+- **Tình huống:** Người dùng nhập đúng mã OTP tại `/api/auth/verify`.
+- **Topic:** `account-verified`
+- **Body Sự kiện (Event Payload):**
+  ```json
+  {
+    "accountId": 1,
+    "email": "testuser@example.com"
+  }
+  ```
+- **Kỳ vọng:** `user-service` sẽ nghe sự kiện này và cập nhật trạng thái hoạt động của User Profile.
+

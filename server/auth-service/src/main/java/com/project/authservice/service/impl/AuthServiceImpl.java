@@ -117,7 +117,7 @@ public class AuthServiceImpl implements AuthService {
 
 			Account existingAccount = accountRepository.findByEmail(email).orElse(null);
 			if (existingAccount != null) {
-				if (existingAccount.getRegistrationCompleted() == 1) {
+				if (existingAccount.getAccountStatus() != com.project.authservice.enums.AccountStatus.PENDING) {
 					log.warn("Email already registered and verified: {}", email);
 					throw new EmailAlreadyExistsException();
 				} else {
@@ -200,13 +200,12 @@ public class AuthServiceImpl implements AuthService {
 					account.setEmail(email);
 					account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 					account.setRole(role);
-					account.setIsActive(0);
-					account.setRegistrationCompleted(0);
+					account.setAccountStatus(com.project.authservice.enums.AccountStatus.PENDING);
 					accountRepository.save(account);
 
 					String pendingKey = "pending_registration:" + email;
 					redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
-					verificationService.sendOtp(new SendOtpRequest(email, "REGISTRATION"));
+					verificationService.sendOtp(new SendOtpRequest(email));
 					redisTemplate.delete("temp_request:" + requestId);
 					
 					return new RegistrationInitiatedResponse(requestId, "Registration successful, please check your email for OTP");
@@ -214,34 +213,45 @@ public class AuthServiceImpl implements AuthService {
 					redisTemplate.delete("temp_request:" + requestId);
                     
                     String message = "Registration information (Phone number or CCCD) already exists.";
-                    if ("PHONE_NUMBER_RESERVED".equals(result.getErrorCode())) {
+                    if ("PHONE_NUMBER_AND_CCCD_RESERVED".equals(result.getErrorCode())) {
+                        message = "Phone number and CCCD are currently reserved by another pending registration. Please try again later.";
+                    } else if ("PHONE_NUMBER_RESERVED".equals(result.getErrorCode())) {
                         message = "Phone number is currently reserved by another pending registration. Please try again later.";
                     } else if ("CCCD_RESERVED".equals(result.getErrorCode())) {
                         message = "CCCD is currently reserved by another pending registration. Please try again later.";
+                    } else if ("PHONE_NUMBER_AND_CCCD_ALREADY_EXIST".equals(result.getErrorCode())) {
+                        message = "Phone number and CCCD already exist.";
                     } else if ("PHONE_NUMBER_ALREADY_EXISTS".equals(result.getErrorCode())) {
                         message = "Phone number already exists.";
                     } else if ("CCCD_ALREADY_EXISTS".equals(result.getErrorCode())) {
                         message = "CCCD already exists.";
                     }
                     
+                    java.util.List<com.project.authservice.common.ApiResponse.ValidationError> validationErrors = null;
+                    if ("PHONE_NUMBER_AND_CCCD_ALREADY_EXIST".equals(result.getErrorCode()) || "PHONE_NUMBER_AND_CCCD_RESERVED".equals(result.getErrorCode())) {
+                        validationErrors = java.util.Arrays.asList(
+                            new com.project.authservice.common.ApiResponse.ValidationError("phoneNumber", "Duplicate", "Phone number already exists or is reserved."),
+                            new com.project.authservice.common.ApiResponse.ValidationError("cccd", "Duplicate", "CCCD already exists or is reserved.")
+                        );
+                        // Also change the errorCode to VALIDATION_ERROR so the frontend handles it like standard validation errors
+                        throw new RegistrationConflictException(message, "VALIDATION_ERROR", result.getRetryAfterSeconds(), validationErrors);
+                    }
+
                     if (result.getRetryAfterSeconds() != null) {
                         throw new RegistrationConflictException(message, result.getErrorCode(), result.getRetryAfterSeconds());
                     }
-                    // For already exists, use DuplicateResourceException mapped to BUSINESS_ERROR previously, 
-                    // but since the requirement says "Replace the generic error code with the following specific error codes",
-                    // we will throw RegistrationConflictException for all to carry the correct errorCode.
 					throw new RegistrationConflictException(message, result.getErrorCode() != null ? result.getErrorCode() : "BUSINESS_ERROR", null);
 				}
 			} catch (TimeoutException e) {
 				redisTemplate.delete("temp_request:" + requestId);
-				throw new RuntimeException("Request timeout waiting for validation", e);
+				throw new RuntimeException("System overload. Failed to validate registration. Please try again later.", e);
 			} catch (RegistrationConflictException | RegistrationAlreadyPendingException e) {
 				throw e;
 			} catch (DuplicateResourceException e) {
 				throw e;
 			} catch (Exception e) {
 				redisTemplate.delete("temp_request:" + requestId);
-				throw new RuntimeException("Internal error processing registration", e);
+				throw new RuntimeException("System overload. Failed to validate registration. Please try again later.", e);
 			} finally {
 				pendingRequests.remove(requestId);
 			}
@@ -256,7 +266,7 @@ public class AuthServiceImpl implements AuthService {
 
 	@Override
 	@Transactional
-	public void verifyRegistration(VerifyRequest request) {
+	public void verify(VerifyRequest request) {
 		verificationService.verify(request);
 
 		String email = request.getEmail();
@@ -264,8 +274,7 @@ public class AuthServiceImpl implements AuthService {
 
 		String json = redisTemplate.opsForValue().get(pendingKey);
 		if (json == null) {
-			log.error("Pending registration data not found for verified email {}", email);
-			throw new ResourceNotFoundException("Pending registration data not found");
+			return; // Not a registration verification, just regular OTP verification
 		}
 
 		PendingRegistrationData data;
@@ -282,7 +291,8 @@ public class AuthServiceImpl implements AuthService {
 		Account savedAccount = accountRepository.findByEmail(email)
 				.orElseThrow(() -> new ResourceNotFoundException("Account not found for email: " + email));
 
-		savedAccount.setRegistrationCompleted(1);
+		// Update status to VERIFIED (OTP is correct, waiting for User Profile creation)
+		savedAccount.setAccountStatus(com.project.authservice.enums.AccountStatus.VERIFIED);
 		accountRepository.save(savedAccount);
 
 		log.info("Account verified successfully for email={} with accountId={}", email, savedAccount.getId());
@@ -293,6 +303,7 @@ public class AuthServiceImpl implements AuthService {
 		} catch (Exception kafkaEx) {
 			log.error("ACCOUNT_VERIFIED Kafka event failed for accountId={} email={}: {}",
 					savedAccount.getId(), email, kafkaEx.getMessage(), kafkaEx);
+			throw new RuntimeException("System overload. Failed to send profile creation request. Please try again later.", kafkaEx);
 		}
 
 		// DO NOT delete pendingKey here. It will be deleted by UserProfileCreatedConsumer after User Profile is created.
@@ -325,16 +336,16 @@ public class AuthServiceImpl implements AuthService {
 			throw new InvalidCredentialsException();
 		}
 
-		// 3. Check registrationCompleted == 1
-		if (account.getRegistrationCompleted() == null || account.getRegistrationCompleted() != 1) {
+		// 3. Check account status
+		if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
 			log.warn("Login failed: account is not verified for email {}", email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_NOT_VERIFIED", servletRequest);
 			throw new AccountNotVerifiedException(account.getId());
 		}
 
-		// 4. Check isActive == 1 (account must be active to log in)
-		if (account.getIsActive() == null || account.getIsActive() != 1) {
-			log.warn("Login failed: account is inactive for email {}", email);
+		// 4. Check if account is active
+		if (account.getAccountStatus() != com.project.authservice.enums.AccountStatus.ACTIVE) {
+			log.warn("Login failed: account is inactive (status={}) for email {}", account.getAccountStatus(), email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_INACTIVE_ACCOUNT", servletRequest);
 			throw new AccountInactiveException();
 		}
@@ -415,12 +426,12 @@ public class AuthServiceImpl implements AuthService {
 				throw new InvalidRefreshTokenException("Account not found");
 			}
 
-			if (account.getIsActive() == null || account.getIsActive() != 1) {
-				throw new AccountInactiveException();
+			if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
+				throw new AccountNotVerifiedException(account.getId());
 			}
 
-			if (account.getRegistrationCompleted() == null || account.getRegistrationCompleted() != 1) {
-				throw new AccountNotVerifiedException(account.getId());
+			if (account.getAccountStatus() != com.project.authservice.enums.AccountStatus.ACTIVE) {
+				throw new AccountInactiveException();
 			}
 
 			// Calculate remaining duration until expiryDate

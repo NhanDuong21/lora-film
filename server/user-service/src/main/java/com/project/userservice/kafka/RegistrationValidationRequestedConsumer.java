@@ -42,13 +42,18 @@ public class RegistrationValidationRequestedConsumer {
         log.info("Received REGISTRATION_VALIDATION_REQUESTED for requestId={}", requestId);
 
         // 1. Check DB for conflicts
-        if (userRepository.existsByPhoneNumber(phoneNumber)) {
+        boolean phoneExists = userRepository.existsByPhoneNumber(phoneNumber);
+        boolean cccdExists = userRepository.existsByCccd(cccd);
+
+        if (phoneExists && cccdExists) {
+            log.warn("Validation failed: phoneNumber and CCCD already exist in DB for requestId={}", requestId);
+            eventPublisher.publishRegistrationValidationResult(requestId, "FAILED", "PHONE_NUMBER_AND_CCCD_ALREADY_EXIST", null);
+            return;
+        } else if (phoneExists) {
             log.warn("Validation failed: phoneNumber already exists in DB for requestId={}", requestId);
             eventPublisher.publishRegistrationValidationResult(requestId, "FAILED", "PHONE_NUMBER_ALREADY_EXISTS", null);
             return;
-        }
-
-        if (userRepository.existsByCccd(cccd)) {
+        } else if (cccdExists) {
             log.warn("Validation failed: CCCD already exists in DB for requestId={}", requestId);
             eventPublisher.publishRegistrationValidationResult(requestId, "FAILED", "CCCD_ALREADY_EXISTS", null);
             return;
