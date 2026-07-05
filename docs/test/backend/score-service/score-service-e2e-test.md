@@ -794,3 +794,118 @@ mvn clean test
 #### Case 3.5 - Xung đột Idempotency (Idempotency Conflict)
 * Gửi request với cùng `idempotencyKey` hoặc `eventId` nhưng số điểm `points` khác.
 * **Kết quả mong đợi**: HTTP `409 Conflict`, mã lỗi `SCORE_IDEMPOTENCY_CONFLICT`.
+
+---
+# Hướng dẫn Kiểm thử và Mô tả Kết quả Triển khai - Issue #139 (Admin APIs)
+
+## 1. Mở Swagger của `score-service`
+* Hãy đăng nhập bằng tài khoản có quyền Admin (hoặc thêm các authority: `SCORE_READ`, `SCORE_ADJUST`, `SCORE_MANAGE`, `MEMBERSHIP_TIER_READ`, `MEMBERSHIP_TIER_MANAGE` vào token của bạn).
+* Thiết lập Bearer token trong Swagger Authorize.
+
+## 2. Các kịch bản kiểm thử API Admin Score
+
+### 2.1. API: `GET /api/admin/scores/users/{userId}` (Get User Score Detail)
+* **Mục tiêu**: Lấy chi tiết điểm và hạng thẻ của một user.
+* **Kịch bản**: Nhập `userId` của tài khoản đã tồn tại trong database (ví dụ: `4`).
+* **Kết quả mong đợi**: HTTP `200 OK`, trả về đầy đủ các thông tin: `userId`, `currentPoints`, `accumulatedPoints`, `currentTier`, `nextTier`, `updatedAt`.
+* **Kịch bản lỗi**: Nhập `userId` không tồn tại (ví dụ: `9999`).
+* **Kết quả mong đợi**: HTTP `404 Not Found`, `errorCode = "SCORE_ACCOUNT_NOT_FOUND"`.
+
+### 2.2. API: `GET /api/admin/scores/users/{userId}/history` (Get User Score History)
+* **Mục tiêu**: Xem lịch sử giao dịch điểm của user với nhiều tham số lọc.
+* **Kịch bản**: Nhập `userId = 4`. Thiết lập các tham số lọc mong muốn (ví dụ: `page = 0`, `size = 10`, `sort = createdAt,desc`).
+* **Kết quả mong đợi**: HTTP `200 OK`, trả về danh sách lịch sử điểm bao gồm đầy đủ thông tin: `createdBy`, `requestId`, `reason`, `requestedPointChange`, `outstandingPoints`, `reconciliationStatus`.
+* **Kịch bản lỗi**: Sắp xếp theo một cột không thuộc danh sách whitelist (ví dụ: `sort = invalidColumn,desc`).
+* **Kết quả mong đợi**: HTTP `400 Bad Request`, `errorCode = "SCORE_INVALID_QUERY"`.
+
+### 2.3. API: `POST /api/admin/scores/users/{userId}/adjustments` (Manual Score Adjustment)
+* **Mục tiêu**: Cộng hoặc trừ điểm thủ công cho user.
+* **Case 2.3.1: Cộng điểm thủ công không ảnh hưởng hạng (MANUAL_ADD - affectAccumulatedPoints = false)**
+  * **Request Body**:
+    ```json
+    {
+      "adjustmentType": "ADD",
+      "points": 100,
+      "affectAccumulatedPoints": false,
+      "reason": "Customer support compensation",
+      "requestId": "REQ-ADJUST-ADD-001"
+    }
+    ```
+  * **Kết quả mong đợi**: HTTP `201 Created`, `currentPoints` tăng thêm 100, `accumulatedPoints` giữ nguyên, `idempotent = false`.
+* **Case 2.3.2: Cộng điểm thủ công nâng hạng (MANUAL_ADD - affectAccumulatedPoints = true)**
+  * **Request Body**:
+    ```json
+    {
+      "adjustmentType": "ADD",
+      "points": 400,
+      "affectAccumulatedPoints": true,
+      "reason": "Bonus points for special upgrade",
+      "requestId": "REQ-ADJUST-ADD-002"
+    }
+    ```
+  * **Kết quả mong đợi**: HTTP `201 Created`, `currentPoints` và `accumulatedPoints` cùng tăng 400. Hạng thành viên của user được nâng lên `GOLD` (trường `tierChanged = true`).
+* **Case 2.3.3: Trừ điểm thủ công làm giảm hạng (MANUAL_DEDUCT - affectAccumulatedPoints = true)**
+  * **Request Body**:
+    ```json
+    {
+      "adjustmentType": "DEDUCT",
+      "points": 400,
+      "affectAccumulatedPoints": true,
+      "reason": "Correction of duplicate points",
+      "requestId": "REQ-ADJUST-DED-001"
+    }
+    ```
+  * **Kết quả mong đợi**: HTTP `201 Created`, `currentPoints` và `accumulatedPoints` cùng giảm 400. Hạng thành viên của user quay về `SILVER` (trường `tierChanged = true`).
+* **Case 2.3.4: Trừ điểm thủ công gây số dư âm (Balance Underflow)**
+  * Gửi request trừ số điểm lớn hơn số dư hiện tại của user.
+  * **Kết quả mong đợi**: HTTP `409 Conflict`, `errorCode = "SCORE_BALANCE_WOULD_BE_NEGATIVE"`.
+* **Case 2.3.5: Idempotency (Retry)**
+  * Gửi lại đúng request của Case 2.3.1.
+  * **Kết quả mong đợi**: HTTP `200 OK`, `idempotent = true`, không ghi nhận cộng điểm lần hai.
+* **Case 2.3.6: Idempotency Conflict**
+  * Gửi request có cùng `requestId` của Case 2.3.1 nhưng đổi `points` thành `200`.
+  * **Kết quả mong đợi**: HTTP `409 Conflict`, `errorCode = "SCORE_ADJUSTMENT_IDEMPOTENCY_CONFLICT"`.
+
+### 2.4. API: `POST /api/admin/scores/users/{userId}/recalculate-tier` (Recalculate User Tier)
+* **Mục tiêu**: Ép buộc tính toán và cập nhật lại hạng thành viên cho user dựa trên điểm tích lũy hiện có.
+* **Kịch bản**: Gọi API cho user.
+* **Kết quả mong đợi**: HTTP `200 OK`, trả về thông tin `previousTier`, `currentTier` và `tierChanged`.
+
+---
+
+## 3. Các kịch bản kiểm thử API Admin Membership Tier
+
+### 3.1. API: `POST /api/admin/membership-tiers` (Create Tier)
+* **Mục tiêu**: Tạo hạng thành viên mới.
+* **Request Body**:
+  ```json
+  {
+    "tierName": "PLATINUM",
+    "minPoints": 1500,
+    "earningRate": 0.12,
+    "description": "Platinum VIP member"
+  }
+  ```
+* **Kết quả mong đợi**: HTTP `201 Created`, tạo thành công tier `PLATINUM`.
+* **Kịch bản lỗi (Trùng tên)**: Gửi lại request trên với tên `"PLATINUM"`.
+* **Kết quả mong đợi**: HTTP `409 Conflict`, `errorCode = "SCORE_TIER_NAME_ALREADY_EXISTS"`.
+* **Kịch bản lỗi (Trùng ngưỡng điểm)**: Gửi request tạo tier mới với `minPoints = 400` (đã trùng với GOLD).
+* **Kết quả mong đợi**: HTTP `409 Conflict`, `errorCode = "SCORE_TIER_THRESHOLD_CONFLICT"`.
+
+### 3.2. API: `GET /api/admin/membership-tiers` (List Tiers)
+* **Kết quả mong đợi**: HTTP `200 OK`, trả về danh sách tất cả các tier đã sắp xếp tăng dần theo `minPoints`. Mỗi tier đi kèm trường `userCount` thể hiện số lượng user hiện tại ở hạng đó.
+
+### 3.3. API: `GET /api/admin/membership-tiers/{tierId}` (Get Detail)
+* **Kết quả mong đợi**: HTTP `200 OK`, hiển thị thông tin chi tiết hạng thành viên của `{tierId}`.
+
+### 3.4. API: `PUT /api/admin/membership-tiers/{tierId}` (Update Tier)
+* **Mục tiêu**: Cập nhật cấu hình hạng thành viên.
+* **Case 3.4.1: Cập nhật thông số bình thường (không đổi minPoints)**
+  * Gửi PUT request cập nhật `earningRate` hoặc `description`.
+  * **Kết quả mong đợi**: HTTP `200 OK`, `recalculationRequired = false`.
+* **Case 3.4.2: Cập nhật thay đổi ngưỡng điểm (đổi minPoints)**
+  * Gửi PUT request thay đổi `minPoints` (ví dụ từ 400 thành 500).
+  * **Kết quả mong đợi**: HTTP `200 OK`, `recalculationRequired = true` (không chạy bulk update bất đồng bộ chặn thread).
+* **Case 3.4.3: Vi phạm bảo vệ Lowest Tier**
+  * Gửi PUT request cập nhật tier `SILVER` (đang có `minPoints = 0`) thành `minPoints = 100`.
+  * **Kết quả mong đợi**: HTTP `409 Conflict`, `errorCode = "SCORE_TIER_CONFIGURATION_INVALID"` (do hệ thống không cho phép sửa hạng thẻ duy nhất có minPoints = 0 thành giá trị khác 0).
