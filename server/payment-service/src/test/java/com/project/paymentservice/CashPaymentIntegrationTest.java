@@ -8,6 +8,9 @@ import com.project.paymentservice.enumtype.PaymentMethod;
 import com.project.paymentservice.enumtype.PaymentStatus;
 import com.project.paymentservice.repository.CashPaymentDetailRepository;
 import com.project.paymentservice.repository.PaymentRepository;
+import com.project.paymentservice.repository.PaymentLogRepository;
+import com.project.paymentservice.repository.PaymentIdempotencyRecordRepository;
+import com.project.paymentservice.repository.PaymentOutboxEventRepository;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,12 +51,24 @@ public class CashPaymentIntegrationTest {
     @Autowired
     private CashPaymentDetailRepository cashPaymentDetailRepository;
 
+    @Autowired
+    private PaymentLogRepository paymentLogRepository;
+
+    @Autowired
+    private PaymentIdempotencyRecordRepository paymentIdempotencyRecordRepository;
+
+    @Autowired
+    private PaymentOutboxEventRepository paymentOutboxEventRepository;
+
     @Value("${jwt.secret}")
     private String jwtSecret;
 
     @BeforeEach
     void setUp() {
         cashPaymentDetailRepository.deleteAllInBatch();
+        paymentLogRepository.deleteAllInBatch();
+        paymentIdempotencyRecordRepository.deleteAllInBatch();
+        paymentOutboxEventRepository.deleteAllInBatch();
         paymentRepository.deleteAllInBatch();
     }
 

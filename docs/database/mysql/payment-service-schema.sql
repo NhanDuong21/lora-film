@@ -105,9 +105,7 @@ CREATE TABLE `cash_payment_details` (
   `collected_by_account_id` bigint NOT NULL,
   `collected_at` timestamp NOT NULL,
   `note_sanitized` varchar(500),
-  `cancelled_by_account_id` bigint,
-  `cancelled_at` timestamp NULL,
-  `cancellation_reason_sanitized` varchar(500),
+
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT `fk_cash_payment_details_payment`
