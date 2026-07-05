@@ -113,7 +113,7 @@ public class AccountVerifiedConsumer {
             log.info("Successfully created user profile for accountId: {}. Masked CCCD: {}", accountId, event.getData().getCccdMasked());
             
         } catch (Exception e) {
-            log.error("Error processing event message: {}", message, e);
+            log.error("Error processing event message", e);
             try {
                 com.project.userservice.dto.AccountVerifiedEvent event = objectMapper.readValue(message, com.project.userservice.dto.AccountVerifiedEvent.class);
                 Long accountId = event.getData().getAccountId();
@@ -123,6 +123,7 @@ public class AccountVerifiedConsumer {
             } catch (Exception pubEx) {
                 log.error("Could not publish FAILED event", pubEx);
             }
+            throw new RuntimeException("Kafka message processing failed, triggering retry/DLQ", e);
         }
     }
 }
