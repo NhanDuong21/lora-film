@@ -152,60 +152,55 @@ WHERE user_id = 4;
 - Thực hiện gửi request.
 - **Kết quả mong đợi:** HTTP **200 OK**, hiển thị thông tin điểm và hạng thẻ tương ứng với dữ liệu đã nạp ở Database.
 
-#### 3. API: `GET /api/scores/me/tier` (Yêu cầu Token)
-
-- Thực hiện gửi request.
-- **Kết quả mong đợi:** HTTP **200 OK**, hiển thị chi tiết hạng thẻ hiện tại của tài khoản.
-
-#### 4. API: `GET /api/scores/me/history` (Yêu cầu Token - Kiểm tra sort)
+#### 3. API: `GET /api/scores/me/history` (Yêu cầu Token - Kiểm tra sort)
 
 Thực hiện test các trường hợp lỗi định dạng query đầu vào:
 
-- **Case 4.1: Page index âm**
+- **Case 3.1: Page index âm**
   - Thiết lập param: `page = -1`
   - **Kết quả:** HTTP **400 Bad Request**, `errorCode = "SCORE_INVALID_QUERY"`.
-- **Case 4.2: Sắp xếp theo cột không hợp lệ (Không thuộc whitelist)**
+- **Case 3.2: Sắp xếp theo cột không hợp lệ (Không thuộc whitelist)**
   - Thiết lập param: `sort = userScore.id,desc`
   - **Kết quả:** HTTP **400 Bad Request**, `errorCode = "SCORE_INVALID_QUERY"`.
-- **Case 4.3: Khoảng thời gian không hợp lệ (`from` > `to`)**
+- **Case 3.3: Khoảng thời gian không hợp lệ (`from` > `to`)**
   - Thiết lập param: `from = 2026-06-30T00:00:00`, `to = 2026-06-29T00:00:00`
   - **Kết quả:** HTTP **400 Bad Request**, `errorCode = "SCORE_INVALID_QUERY"`.
 
-#### 5. API: `GET /internal/scores/users/{userId}` (Yêu cầu X-Internal-Token)
+#### 4. API: `GET /internal/scores/users/{userId}` (Yêu cầu X-Internal-Token)
 
 - **Ý nghĩa:** Gọi nội bộ giữa các microservices để lấy nhanh thông tin điểm và tỉ lệ tích lũy của user.
-- **Case 5.1: Thiếu hoặc sai header `X-Internal-Token`**
+- **Case 4.1: Thiếu hoặc sai header `X-Internal-Token`**
   - Nhập `userId = 4` (hoặc ID tài khoản của bạn).
   - Trong phần Headers của Swagger (hoặc Postman), để trống hoặc nhập sai header `X-Internal-Token`.
   - **Kết quả:** HTTP **401 Unauthorized**, `errorCode = "UNAUTHORIZED"`, `message = "Invalid internal token"`.
-- **Case 5.2: Truyền đúng Header `X-Internal-Token` (Happy Case)**
+- **Case 4.2: Truyền đúng Header `X-Internal-Token` (Happy Case)**
   - Nhập `userId = 4` (hoặc ID tài khoản của bạn).
   - Thêm header: `X-Internal-Token = secret-internal-token`
   - **Kết quả:** HTTP **200 OK**, hiển thị thông tin điểm và `earningRate` tương ứng của User.
 
-#### 6. API: `POST /api/scores/me/redeem-preview` (Yêu cầu Token)
+#### 5. API: `POST /api/scores/me/redeem-preview` (Yêu cầu Token)
 
 Thực hiện gửi request body JSON theo từng kịch bản sau để kiểm tra:
 
-- **Case 6.1: Happy Case (Xem trước thành công)**
+- **Case 5.1: Happy Case (Xem trước thành công)**
   - Request Body: `{ "bookingId": 1001, "requestedPoints": 100 }`
   - **Kết quả:** HTTP **200 OK**, trả về số tiền quy đổi `redeemValue` là `100000` VND. Dữ liệu điểm trong DB vẫn giữ nguyên không thay đổi (không lưu vết trừ điểm).
-- **Case 6.2: Nhập số điểm bằng 0 hoặc âm (Lỗi Blocker đã fix)**
+- **Case 5.2: Nhập số điểm bằng 0 hoặc âm (Lỗi Blocker đã fix)**
   - Request Body: `{ "bookingId": 1001, "requestedPoints": 0 }` (hoặc `-10`)
   - **Kết quả:** HTTP **400 Bad Request**, `errorCode = "SCORE_INVALID_POINT_AMOUNT"`.
-- **Case 6.3: Yêu cầu đổi điểm lớn hơn số dư**
+- **Case 5.3: Yêu cầu đổi điểm lớn hơn số dư**
   - Request Body: `{ "bookingId": 1001, "requestedPoints": 999999 }`
   - **Kết quả:** HTTP **409 Conflict**, `errorCode = "SCORE_INSUFFICIENT_BALANCE"`.
-- **Case 6.4: Sai chủ sở hữu Booking**
+- **Case 5.4: Sai chủ sở hữu Booking**
   - Request Body: `{ "bookingId": 1002, "requestedPoints": 10 }`
   - **Kết quả:** HTTP **403 Forbidden**, `errorCode = "SCORE_BOOKING_OWNERSHIP_MISMATCH"`.
-- **Case 6.5: Booking không tồn tại / Dịch vụ lỗi**
+- **Case 5.5: Booking không tồn tại / Dịch vụ lỗi**
   - Request Body: `{ "bookingId": 9999, "requestedPoints": 10 }`
   - **Kết quả:** HTTP **503 Service Unavailable**, `errorCode = "BOOKING_SERVICE_UNAVAILABLE"`.
-- **Case 6.6: Vé đã bị hủy hoặc trạng thái không hợp lệ**
+- **Case 5.6: Vé đã bị hủy hoặc trạng thái không hợp lệ**
   - Request Body: `{ "bookingId": 1003, "requestedPoints": 10 }`
   - **Kết quả:** HTTP **409 Conflict**, `errorCode = "SCORE_BOOKING_NOT_ELIGIBLE"`.
-- **Case 6.7: Vé quá hạn thanh toán**
+- **Case 5.7: Vé quá hạn thanh toán**
   - Request Body: `{ "bookingId": 1004, "requestedPoints": 10 }`
   - **Kết quả:** HTTP **409 Conflict**, `errorCode = "SCORE_BOOKING_NOT_ELIGIBLE"`.
 

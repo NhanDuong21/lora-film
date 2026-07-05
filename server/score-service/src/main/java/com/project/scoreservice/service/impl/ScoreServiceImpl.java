@@ -105,31 +105,6 @@ public class ScoreServiceImpl implements ScoreService {
  
     @Override
     @Transactional(readOnly = true)
-    public UserTierResponse getUserTier(Long userId) {
-        UserScore userScore = getOrCreateUserScoreEntity(userId);
-        
-        MembershipTier currentTier = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
-        Optional<MembershipTier> nextTierOpt = membershipTierRepository.findFirstByMinPointsGreaterThanOrderByMinPointsAsc(userScore.getAccumulatedPoints());
-        
-        NextTierResponse nextTier = null;
-        if (nextTierOpt.isPresent()) {
-            MembershipTier nt = nextTierOpt.get();
-            int pointsReq = nt.getMinPoints() - userScore.getAccumulatedPoints();
-            nextTier = new NextTierResponse(nt.getId(), nt.getTierName(), nt.getMinPoints(), pointsReq);
-        }
- 
-        return new UserTierResponse(
-                currentTier.getId(),
-                currentTier.getTierName(),
-                currentTier.getMinPoints(),
-                currentTier.getEarningRate(),
-                userScore.getAccumulatedPoints(),
-                nextTier
-        );
-    }
- 
-    @Override
-    @Transactional(readOnly = true)
     public RedeemPreviewResponse previewRedeem(Long userId, RedeemPreviewRequest request) {
         UserScore userScore = getOrCreateUserScoreEntity(userId);
         

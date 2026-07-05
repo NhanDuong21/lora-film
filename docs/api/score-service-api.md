@@ -930,7 +930,6 @@ GET /api/membership-tiers
 ```txt
 GET  /api/scores/me
 GET  /api/scores/me/history
-GET  /api/scores/me/tier
 POST /api/scores/me/redeem-preview
 ```
 
@@ -970,7 +969,6 @@ PUT   /api/admin/membership-tiers/{tierId}
 | GET    | `/api/membership-tiers`                         | Public    | Danh sách tier          |
 | GET    | `/api/scores/me`                                | Protected | Score balance hiện tại  |
 | GET    | `/api/scores/me/history`                        | Protected | Lịch sử điểm            |
-| GET    | `/api/scores/me/tier`                           | Protected | Tier hiện tại           |
 | POST   | `/api/scores/me/redeem-preview`                 | Protected | Preview đổi điểm        |
 | POST   | `/internal/scores/earn`                         | Internal  | Cộng điểm               |
 | POST   | `/internal/scores/redeem`                       | Internal  | Trừ/redeem điểm         |
@@ -1091,38 +1089,7 @@ Việc khởi tạo phải an toàn khi có hai request đồng thời và dựa
 
 ---
 
-## 18.2. Get Current Membership Tier
-
-### Endpoint
-
-```http
-GET /api/scores/me/tier
-```
-
-### Response Success
-
-```json
-{
-  "success": true,
-  "message": "Membership tier retrieved successfully",
-  "data": {
-    "tierId": 2,
-    "tierName": "GOLD",
-    "minPoints": 200,
-    "earningRate": 0.07,
-    "accumulatedPoints": 450,
-    "nextTier": {
-      "tierId": 3,
-      "tierName": "DIAMOND",
-      "pointsRequired": 150
-    }
-  }
-}
-```
-
----
-
-## 18.3. Get Current User Score History
+## 18.2. Get Current User Score History
 
 ### Endpoint
 

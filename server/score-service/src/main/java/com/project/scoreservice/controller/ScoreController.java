@@ -47,15 +47,7 @@ public class ScoreController {
         UserScoreResponse response = scoreService.getUserScore(userId);
         return ResponseEntity.ok(ApiResponse.success("Score balance retrieved successfully", response));
     }
- 
-    @GetMapping("/tier")
-    @Operation(summary = "Get current membership tier", description = "Retrieve details about current membership tier and upgrade progress")
-    public ResponseEntity<ApiResponse<UserTierResponse>> getMembershipTier() {
-        Long userId = getCurrentUserId();
-        UserTierResponse response = scoreService.getUserTier(userId);
-        return ResponseEntity.ok(ApiResponse.success("Membership tier retrieved successfully", response));
-    }
- 
+  
     @GetMapping("/history")
     @Operation(summary = "Get score history", description = "Retrieve paginated history of point transactions for the authenticated customer")
     public ResponseEntity<ApiResponse<PageResponse<ScoreHistoryResponse>>> getScoreHistory(
