@@ -61,4 +61,12 @@ public class BookingController implements BookingApi {
         bookingService.cancelBooking(bookingId, idempotencyKey);
         return ResponseEntity.ok(ApiResponse.success("Booking cancelled successfully", null));
     }
+
+    @GetMapping("/{bookingId}/tickets")
+    @Override
+    public ResponseEntity<ApiResponse<java.util.List<com.project.bookingservice.dto.response.TicketResponse>>> getTickets(
+            @PathVariable Long bookingId) {
+        java.util.List<com.project.bookingservice.dto.response.TicketResponse> response = bookingService.getTicketsByBookingId(bookingId);
+        return ResponseEntity.ok(ApiResponse.success("Tickets retrieved successfully", response));
+    }
 }
