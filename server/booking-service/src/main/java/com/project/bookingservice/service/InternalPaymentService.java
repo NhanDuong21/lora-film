@@ -112,7 +112,7 @@ public class InternalPaymentService {
         // 3. Check for amount and currency mismatch (only for SUCCESS attempts to confirm booking)
         if ("SUCCESS".equals(request.getResult())) {
             if (booking.getTotalAmount().compareTo(request.getAmount()) != 0) {
-                throw new BusinessException("PAYMENT_AMOUNT_MISMATCH", "Paid amount does not match booking total");
+                throw new BusinessException("BOOKING_PAYMENT_AMOUNT_MISMATCH", "Paid amount does not match booking total");
             }
             if (!"VND".equals(request.getCurrency())) {
                 throw new BusinessException("PAYMENT_CURRENCY_MISMATCH", "Currency does not match");
@@ -159,13 +159,12 @@ public class InternalPaymentService {
                 
                 response.setApplied(true);
                 response.setResult("BOOKING_CONFIRMED");
+            } else if (booking.getStatus() == BookingStatus.EXPIRED) {
+                logger.info("Booking {} cannot be confirmed due to status {}", bookingId, booking.getStatus());
+                throw new BusinessException("BOOKING_PAYMENT_EXPIRED", "Booking payment expired");
             } else {
                 logger.info("Booking {} cannot be confirmed due to status {}", bookingId, booking.getStatus());
-                event.setApplied(false);
-                event.setAcknowledgementResult("BOOKING_INVALID_STATE");
-                
-                response.setApplied(false);
-                response.setResult("BOOKING_INVALID_STATE");
+                throw new BusinessException("BOOKING_PAYMENT_CONFIRMATION_CONFLICT", "Booking cannot be confirmed due to status " + booking.getStatus());
             }
         } else { // FAILED, CANCELLED, EXPIRED
             logger.info("Payment result is {}, acknowledging but not changing booking {}", request.getResult(), bookingId);

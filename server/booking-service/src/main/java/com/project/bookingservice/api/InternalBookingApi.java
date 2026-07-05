@@ -25,7 +25,7 @@ public interface InternalBookingApi {
             @RequestHeader(value = "X-Internal-Token", required = true) String internalToken);
 
     @Operation(summary = "Process Payment Results", description = "Handles SUCCESS, FAILED, CANCELLED, EXPIRED payment results")
-    @PostMapping("/{bookingId}/payment-results")
+    @PostMapping("/{bookingId}/confirm-payment")
     ResponseEntity<ApiResponse<PaymentResultResponse>> processPaymentResult(
             @PathVariable @Positive(message = "Booking ID must be greater than 0") Long bookingId,
             @RequestHeader(value = "X-Internal-Token", required = true) String internalToken,

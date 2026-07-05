@@ -45,7 +45,7 @@ public class InternalBookingController implements InternalBookingApi {
     }
 
     @Override
-    @PostMapping("/{bookingId}/payment-results")
+    @PostMapping("/{bookingId}/confirm-payment")
     public ResponseEntity<ApiResponse<PaymentResultResponse>> processPaymentResult(
             @PathVariable @Positive(message = "Booking ID must be greater than 0") Long bookingId,
             @RequestHeader(value = "X-Internal-Token", required = true) String internalToken,

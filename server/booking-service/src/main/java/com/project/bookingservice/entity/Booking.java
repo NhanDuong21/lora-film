@@ -10,6 +10,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.JoinColumn;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -49,6 +51,10 @@ public class Booking {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
+
+    @OneToMany
+    @JoinColumn(name = "booking_id", referencedColumnName = "id", insertable = false, updatable = false)
+    private java.util.List<Ticket> tickets;
 
     public Booking() {}
 
@@ -130,5 +136,13 @@ public class Booking {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public java.util.List<Ticket> getTickets() {
+        return tickets;
+    }
+
+    public void setTickets(java.util.List<Ticket> tickets) {
+        this.tickets = tickets;
     }
 }
