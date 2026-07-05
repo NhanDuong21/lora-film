@@ -41,8 +41,4 @@ public interface BookingApi {
     ResponseEntity<ApiResponse<Void>> cancelBooking(
             @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
             @PathVariable Long bookingId);
-
-    @Operation(summary = "Get tickets by booking")
-    ResponseEntity<ApiResponse<java.util.List<com.project.bookingservice.dto.response.TicketResponse>>> getTickets(
-            @PathVariable Long bookingId);
 }

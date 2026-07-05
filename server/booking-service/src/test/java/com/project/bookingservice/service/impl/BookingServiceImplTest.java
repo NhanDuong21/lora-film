@@ -39,8 +39,7 @@ public class BookingServiceImplTest {
     private BookingRepository bookingRepository;
     @Mock
     private SeatReservationRepository seatReservationRepository;
-    @Mock
-    private com.project.bookingservice.repository.TicketRepository ticketRepository;
+
 
     @Mock
     private CurrentUserProvider currentUserProvider;
@@ -82,7 +81,7 @@ public class BookingServiceImplTest {
     @BeforeEach
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        bookingService = new BookingServiceImpl(bookingRepository, seatReservationRepository, currentUserProvider, movieServiceClient, seatLockManager, ticketRepository);
+        bookingService = new BookingServiceImpl(bookingRepository, seatReservationRepository, currentUserProvider, movieServiceClient, seatLockManager);
         when(currentUserProvider.getCurrentUserId()).thenReturn(userId);
         releaseLocksCount = 0;
     }

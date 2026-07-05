@@ -30,8 +30,6 @@ public class GlobalExceptionHandler {
 
         if ("BOOKING_IDEMPOTENCY_CONFLICT".equals(errorCode) ||
             "BOOKING_PAYMENT_AMOUNT_MISMATCH".equals(errorCode) ||
-            "PAYMENT_AMOUNT_MISMATCH".equals(errorCode) ||
-            "PAYMENT_CURRENCY_MISMATCH".equals(errorCode) ||
             "BOOKING_PAYMENT_EXPIRED".equals(errorCode) ||
             "BOOKING_PAYMENT_CONFIRMATION_CONFLICT".equals(errorCode) ||
             "BOOKING_SHOWTIME_NOT_AVAILABLE".equals(errorCode) ||
@@ -41,18 +39,12 @@ public class GlobalExceptionHandler {
             "SEAT_RESERVATION_EXPIRED".equals(errorCode) ||
             "BOOKING_INVALID_STATUS_TRANSITION".equals(errorCode) ||
             "BOOKING_CANNOT_BE_CANCELLED".equals(errorCode) ||
-            "BOOKING_ALREADY_CREATED".equals(errorCode) ||
-            "BOOKING_INVALID_STATUS".equals(errorCode) ||
-            "BOOKING_NOT_PAYABLE".equals(errorCode)) {
+            "BOOKING_ALREADY_CREATED".equals(errorCode)) {
             status = HttpStatus.CONFLICT;
-        } else if ("FORBIDDEN".equals(errorCode) || "UNAUTHORIZED".equals(errorCode) || "SEAT_RESERVATION_OWNERSHIP_MISMATCH".equals(errorCode) || "INTERNAL_TOKEN_INVALID".equals(errorCode)) {
-            status = ("UNAUTHORIZED".equals(errorCode) || "INTERNAL_TOKEN_INVALID".equals(errorCode)) ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
-        } else if ("BOOKING_NOT_FOUND".equals(errorCode) || "TICKET_NOT_FOUND".equals(errorCode) || "SEAT_RESERVATION_NOT_FOUND".equals(errorCode) || "BOOKING_SHOWTIME_NOT_FOUND".equals(errorCode) || "BOOKING_SEAT_NOT_FOUND".equals(errorCode) || (errorCode != null && errorCode.contains("NOT_FOUND"))) {
+        } else if ("FORBIDDEN".equals(errorCode) || "UNAUTHORIZED".equals(errorCode) || "SEAT_RESERVATION_OWNERSHIP_MISMATCH".equals(errorCode)) {
+            status = "UNAUTHORIZED".equals(errorCode) ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
+        } else if (errorCode != null && errorCode.contains("NOT_FOUND")) {
             status = HttpStatus.NOT_FOUND;
-        } else if ("MOVIE_SERVICE_UNAVAILABLE".equals(errorCode)) {
-            status = HttpStatus.SERVICE_UNAVAILABLE;
-        } else if ("BOOKING_CODE_GENERATION_FAILED".equals(errorCode)) {
-            status = HttpStatus.INTERNAL_SERVER_ERROR;
         }
 
         ApiResponse<Object> response = new ApiResponse<>(false, ex.getMessage() != null ? ex.getMessage() : "Business logic error", errorCode, ex.getData(), null);
