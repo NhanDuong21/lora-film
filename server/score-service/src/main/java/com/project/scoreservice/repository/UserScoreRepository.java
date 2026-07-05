@@ -16,6 +16,8 @@ public interface UserScoreRepository extends JpaRepository<UserScore, Long> {
 
     Optional<UserScore> findByUserId(Long userId);
 
+    long countByCurrentTier(com.project.scoreservice.entity.MembershipTier currentTier);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM UserScore u WHERE u.userId = :userId")
     Optional<UserScore> findWithLockByUserId(@Param("userId") Long userId);

@@ -12,6 +12,8 @@ public interface MembershipTierRepository extends JpaRepository<MembershipTier, 
 
     Optional<MembershipTier> findByTierName(String tierName);
 
+    Optional<MembershipTier> findByMinPoints(Integer minPoints);
+
     boolean existsByTierName(String tierName);
 
     List<MembershipTier> findAllByOrderByMinPointsAsc();
