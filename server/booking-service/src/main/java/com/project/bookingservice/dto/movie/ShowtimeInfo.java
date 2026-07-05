@@ -5,15 +5,19 @@ public class ShowtimeInfo {
     private Long roomId;
     private boolean available;
     private java.math.BigDecimal price;
+    private Long movieId;
+    private String movieTitle;
 
     public ShowtimeInfo() {
     }
 
-    public ShowtimeInfo(Long id, Long roomId, boolean available, java.math.BigDecimal price) {
+    public ShowtimeInfo(Long id, Long roomId, boolean available, java.math.BigDecimal price, Long movieId, String movieTitle) {
         this.id = id;
         this.roomId = roomId;
         this.available = available;
         this.price = price;
+        this.movieId = movieId;
+        this.movieTitle = movieTitle;
     }
 
     public Long getId() {
@@ -46,5 +50,21 @@ public class ShowtimeInfo {
 
     public void setPrice(java.math.BigDecimal price) {
         this.price = price;
+    }
+
+    public Long getMovieId() {
+        return movieId;
+    }
+
+    public void setMovieId(Long movieId) {
+        this.movieId = movieId;
+    }
+
+    public String getMovieTitle() {
+        return movieTitle;
+    }
+
+    public void setMovieTitle(String movieTitle) {
+        this.movieTitle = movieTitle;
     }
 }
