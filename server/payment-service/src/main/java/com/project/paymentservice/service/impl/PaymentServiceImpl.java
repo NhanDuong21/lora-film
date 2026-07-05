@@ -513,7 +513,7 @@ public class PaymentServiceImpl implements PaymentService {
                 com.project.paymentservice.dto.response.CashCollectResponse resp = new com.project.paymentservice.dto.response.CashCollectResponse(
                         payment.getId(), payment.getBookingId(), payment.getPaymentMethod().name(),
                         payment.getStatus().name(), payment.getAmount(), request.getReceivedAmount(), changeAmount,
-                        accountId, detail.getCollectedAt());
+                        accountId, detail.getCollectedAt(), OutboxStatus.PENDING.name());
 
                 com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
                 notifyReq.setEventId(java.util.UUID.randomUUID().toString());
@@ -559,7 +559,9 @@ public class PaymentServiceImpl implements PaymentService {
                         notifyReq = objectMapper.readValue(eventToDeliver.getPayload(), com.project.paymentservice.client.booking.BookingPaymentResultRequest.class);
                         bookingClient.notifyPaymentResult(payment.getBookingId(), notifyReq);
                         eventToDeliver.setStatus(OutboxStatus.PUBLISHED);
+                        eventToDeliver.setPublishedAt(LocalDateTime.now());
                         outboxEventRepository.save(eventToDeliver);
+                        response.setBookingDeliveryStatus(OutboxStatus.PUBLISHED.name());
                     }
                 }
             } catch (Exception e) {
@@ -641,7 +643,7 @@ public class PaymentServiceImpl implements PaymentService {
                         "Cash payment cancelled", "reason=" + request.getReason());
 
                 com.project.paymentservice.dto.response.CashCancelResponse resp = new com.project.paymentservice.dto.response.CashCancelResponse(
-                        payment.getId(), PaymentStatus.CANCELLED.name(), accountId, payment.getCancelledAt());
+                        payment.getId(), PaymentStatus.CANCELLED.name(), accountId, payment.getCancelledAt(), OutboxStatus.PENDING.name());
 
                 com.project.paymentservice.client.booking.BookingPaymentResultRequest notifyReq = new com.project.paymentservice.client.booking.BookingPaymentResultRequest();
                 notifyReq.setEventId(java.util.UUID.randomUUID().toString());
@@ -686,7 +688,9 @@ public class PaymentServiceImpl implements PaymentService {
                         notifyReq = objectMapper.readValue(eventToDeliver.getPayload(), com.project.paymentservice.client.booking.BookingPaymentResultRequest.class);
                         bookingClient.notifyPaymentResult(payment.getBookingId(), notifyReq);
                         eventToDeliver.setStatus(OutboxStatus.PUBLISHED);
+                        eventToDeliver.setPublishedAt(LocalDateTime.now());
                         outboxEventRepository.save(eventToDeliver);
+                        response.setBookingDeliveryStatus(OutboxStatus.PUBLISHED.name());
                     }
                 }
             } catch (Exception e) {

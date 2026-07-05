@@ -46,6 +46,10 @@ public class EmployeePaymentController {
 
         Long accountId = currentUserProvider.getCurrentUserId();
         CashCollectResponse response = paymentService.collectCashPayment(accountId, idempotencyKey, paymentId, request);
+        if ("PENDING".equals(response.getBookingDeliveryStatus())) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .body(ApiResponse.success("Cash payment collected successfully; booking confirmation is pending delivery", response));
+        }
         return ResponseEntity.ok(ApiResponse.success("Cash payment collected successfully", response));
     }
 
@@ -61,9 +65,12 @@ public class EmployeePaymentController {
             throw new BusinessException("IDEMPOTENCY_KEY_REQUIRED",
                     "Idempotency-Key header is required", HttpStatus.BAD_REQUEST);
         }
-
         Long accountId = currentUserProvider.getCurrentUserId();
         CashCancelResponse response = paymentService.cancelCashPayment(accountId, idempotencyKey, paymentId, request);
+        if ("PENDING".equals(response.getBookingDeliveryStatus())) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .body(ApiResponse.success("Cash payment cancelled successfully; booking confirmation is pending delivery", response));
+        }
         return ResponseEntity.ok(ApiResponse.success("Cash payment cancelled successfully", response));
     }
 }
