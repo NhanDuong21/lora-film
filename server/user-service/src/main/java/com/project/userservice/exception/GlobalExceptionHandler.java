@@ -20,6 +20,8 @@ public class GlobalExceptionHandler {
             status = HttpStatus.CONFLICT;
         } else if ("USER_NOT_FOUND".equals(ex.getErrorCode())) {
             status = HttpStatus.NOT_FOUND;
+        } else if ("FORBIDDEN_ACCESS".equals(ex.getErrorCode())) {
+            status = HttpStatus.FORBIDDEN;
         }
 
         return ResponseEntity.status(status)

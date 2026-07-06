@@ -576,23 +576,22 @@ Sprint 2 không cần Public Notification API.
 
 ## 14. Endpoint Summary
 
-| Method | Endpoint                                        | Access    | Mục đích                  |
-| ------ | ----------------------------------------------- | --------- | ------------------------- |
-| GET    | `/api/notifications/me`                         | Protected | Notification/log của user |
-| GET    | `/api/notifications/me/{id}`                    | Protected | Notification detail       |
-| PATCH  | `/api/notifications/me/{id}/read`               | Protected | Mark read nếu hỗ trợ      |
-| PATCH  | `/api/notifications/me/read-all`                | Protected | Mark all read nếu hỗ trợ  |
-| POST   | `/internal/notifications/send`                  | Internal  | Gửi một notification      |
-| POST   | `/internal/notifications/send-batch`            | Internal  | Gửi batch foundation      |
-| POST   | `/internal/notifications/{id}/retry`            | Internal  | Retry notification        |
-| POST   | `/api/admin/notification-templates`             | Admin     | Tạo template              |
-| GET    | `/api/admin/notification-templates`             | Admin     | Danh sách template        |
-| GET    | `/api/admin/notification-templates/{id}`        | Admin     | Template detail           |
-| PUT    | `/api/admin/notification-templates/{id}`        | Admin     | Cập nhật template         |
-| PATCH  | `/api/admin/notification-templates/{id}/status` | Admin     | Enable/disable template   |
-| GET    | `/api/admin/notification-logs`                  | Admin     | Danh sách log             |
-| GET    | `/api/admin/notification-logs/{id}`             | Admin     | Log detail                |
-| POST   | `/api/admin/notification-logs/{id}/retry`       | Admin     | Retry thủ công            |
+| Method | Endpoint                                 | Access    | Mục đích                  |
+| ------ | ---------------------------------------- | --------- | ------------------------- |
+| GET    | `/api/notifications/me`                  | Protected | Notification/log của user |
+| GET    | `/api/notifications/me/{id}`             | Protected | Notification detail       |
+| PATCH  | `/api/notifications/me/{id}/read`        | Protected | Mark read nếu hỗ trợ      |
+| PATCH  | `/api/notifications/me/read-all`         | Protected | Mark all read nếu hỗ trợ  |
+| POST   | `/internal/notifications/send`           | Internal  | Gửi một notification      |
+| POST   | `/internal/notifications/send-batch`     | Internal  | Gửi batch foundation      |
+| POST   | `/internal/notifications/{id}/retry`     | Internal  | Retry notification        |
+| POST   | `/api/admin/notification-templates`      | Admin     | Tạo template              |
+| GET    | `/api/admin/notification-templates`      | Admin     | Danh sách template        |
+| GET    | `/api/admin/notification-templates/{id}` | Admin     | Template detail           |
+| PUT    | `/api/admin/notification-templates/{id}` | Admin     | Cập nhật template         |
+| GET    | `/api/admin/notification-logs`           | Admin     | Danh sách log             |
+| GET    | `/api/admin/notification-logs/{id}`      | Admin     | Log detail                |
+| POST   | `/api/admin/notification-logs/{id}/retry`| Admin     | Retry thủ công            |
 
 ---
 
@@ -608,25 +607,17 @@ POST /api/admin/notification-templates
 
 ### Request Body
 
-```json
-{
-  "templateCode": "TICKET_CONFIRMATION",
-  "title": "Xác nhận vé LoraFilm",
-  "content": "Xin chào {name}, vé của bạn có mã {bookingCode}. Suất chiếu lúc {showtime}.",
-  "channelType": "EMAIL",
-  "isActive": true
-}
-```
+- Format: `multipart/form-data`
 
-### Field Definitions
+### Request Parameters
 
-| Field        | Type    | Required | Validation                    |
-| ------------ | ------- | -------: | ----------------------------- |
-| templateCode | string  |      Yes | Uppercase, unique, tối đa 100 |
-| title        | string  |      Yes | Không rỗng, tối đa 255        |
-| content      | string  |      Yes | Không rỗng                    |
-| channelType  | string  |      Yes | Enum hợp lệ                   |
-| isActive     | boolean |       No | Mặc định true                 |
+| Field        | Type    | Required | Validation                                                                                 |
+| ------------ | ------- | -------: | ------------------------------------------------------------------------------------------ |
+| templateCode | string  |      Yes | Chứa chữ cái, số, gạch dưới; tự động trim và viết hoa; tối đa 100 ký tự                     |
+| title        | string  |      Yes | Không rỗng, tối đa 255 ký tự                                                               |
+| htmlFile     | file    |      Yes | Tệp định dạng HTML (đuôi `.html`), nội dung mã hóa UTF-8 hợp lệ, không được rỗng           |
+| channelType  | string  |      Yes | Giá trị Enum hợp lệ: `EMAIL`, `SMS`, `PUSH_NOTIFICATION`, `IN_APP`                           |
+| isActive     | boolean |       No | Mặc định `true`                                                                            |
 
 ### Template Code Normalization
 
@@ -780,68 +771,26 @@ PUT /api/admin/notification-templates/{templateId}
 
 ### Request
 
-```json
-{
-  "templateCode": "TICKET_CONFIRMATION",
-  "title": "Vé xem phim của bạn đã được xác nhận",
-  "content": "Xin chào {name}, booking {bookingCode} đã được xác nhận.",
-  "channelType": "EMAIL",
-  "isActive": true
-}
-```
+- Format: `multipart/form-data`
+- Hỗ trợ cập nhật một phần (Dynamic Partial Update). Các trường không truyền lên hoặc truyền rỗng sẽ được giữ nguyên giá trị cũ.
+
+### Request Parameters
+
+| Field        | Type    | Required | Validation                                                                                 |
+| ------------ | ------- | -------: | ------------------------------------------------------------------------------------------ |
+| templateCode | string  |       No | Nếu truyền lên, phải khớp với templateCode hiện tại (giá trị này là bất biến)              |
+| title        | string  |       No | Tiêu đề mới, tối đa 255 ký tự                                                             |
+| htmlFile     | file    |       No | Tệp HTML giao diện mới (`.html`), mã hóa UTF-8 hợp lệ, không rỗng                          |
+| channelType  | string  |       No | Kiểu kênh mới (`EMAIL`, `SMS`, `PUSH_NOTIFICATION`, `IN_APP`)                               |
+| isActive     | boolean |       No | Trạng thái hoạt động mới                                                                   |
+| version      | integer |      Yes | Số phiên bản hiện tại (Optimistic Locking version) phục vụ kiểm soát ghi đè                |
 
 ### Business Rules
 
-* Không nên đổi `templateCode` sau khi đã có log sử dụng.
-* Nếu đổi template code, foreign key log có thể bị ảnh hưởng.
-* Update template chỉ ảnh hưởng notification gửi mới.
-* Notification log cũ giữ `actualTitle` và `actualContent` đã render.
-
-Khuyến nghị:
-
-```txt
-templateCode immutable sau khi tạo
-```
-
----
-
-## 15.5. Enable/Disable Notification Template
-
-### Endpoint
-
-```http
-PATCH /api/admin/notification-templates/{templateId}/status
-```
-
-### Request
-
-```json
-{
-  "isActive": false
-}
-```
-
-### Response
-
-```json
-{
-  "success": true,
-  "message": "Notification template status updated successfully",
-  "data": {
-    "templateId": 10,
-    "templateCode": "TICKET_CONFIRMATION",
-    "isActive": false
-  }
-}
-```
-
-Template bị disable:
-
-* Không được dùng cho send request mới.
-* Không xóa log cũ.
-* Không làm thay đổi notification đã gửi.
-
----
+* `templateCode` là bất biến (immutable) sau khi tạo, không thể thay đổi qua API cập nhật.
+* Tính năng kích hoạt / vô hiệu hóa mẫu thông báo (Enable/Disable) được tích hợp chung vào API này thông qua tham số `isActive`. Endpoint PATCH trạng thái cũ `/api/admin/notification-templates/{templateId}/status` đã bị loại bỏ hoàn toàn.
+* Xử lý xung đột cập nhật đồng thời dựa trên trường `version` bắt buộc gửi kèm.
+* Việc thay đổi cấu trúc mẫu chỉ ảnh hưởng tới các yêu cầu gửi thông báo mới. Các nhật ký thông báo cũ vẫn lưu giữ tiêu đề và nội dung đã render trước đó.
 
 # 16. Internal Send Notification API
 

@@ -24,13 +24,24 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         
         String path = request.getServletPath();
-        if (path.startsWith("/internal")) {
+        if (path == null || path.isEmpty()) {
+            path = request.getRequestURI();
+        }
+        if (path != null && path.startsWith("/internal")) {
             String tokenHeader = request.getHeader("X-Internal-Token");
-            if (tokenHeader == null || !tokenHeader.equals(internalToken)) {
+            if (tokenHeader == null || tokenHeader.isEmpty()) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
- 
-                ApiResponse<Void> apiResponse = ApiResponse.error("Invalid internal token", "UNAUTHORIZED");
+
+                ApiResponse<Void> apiResponse = ApiResponse.error("Missing internal token", "UNAUTHORIZED");
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.writeValue(response.getOutputStream(), apiResponse);
+                return;
+            } else if (!tokenHeader.equals(internalToken)) {
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+
+                ApiResponse<Void> apiResponse = ApiResponse.error("Invalid internal token", "FORBIDDEN");
                 ObjectMapper mapper = new ObjectMapper();
                 mapper.writeValue(response.getOutputStream(), apiResponse);
                 return;

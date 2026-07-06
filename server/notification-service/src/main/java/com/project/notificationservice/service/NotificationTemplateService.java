@@ -2,7 +2,6 @@ package com.project.notificationservice.service;
 
 import com.project.notificationservice.dto.request.CreateNotificationTemplateRequest;
 import com.project.notificationservice.dto.request.UpdateNotificationTemplateRequest;
-import com.project.notificationservice.dto.request.UpdateNotificationTemplateStatusRequest;
 import com.project.notificationservice.dto.response.NotificationTemplateResponse;
 import com.project.notificationservice.dto.response.NotificationTemplateSummaryResponse;
 import com.project.notificationservice.enums.NotificationChannel;
@@ -18,6 +17,4 @@ public interface NotificationTemplateService {
     NotificationTemplateResponse getTemplateDetail(Integer templateId);
 
     NotificationTemplateResponse updateTemplate(Integer templateId, UpdateNotificationTemplateRequest request);
-
-    NotificationTemplateResponse updateTemplateStatus(Integer templateId, UpdateNotificationTemplateStatusRequest request);
 }

@@ -1,9 +1,5 @@
 package com.project.notificationservice.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.project.notificationservice.dto.request.CreateNotificationTemplateRequest;
-import com.project.notificationservice.dto.request.UpdateNotificationTemplateRequest;
-import com.project.notificationservice.dto.request.UpdateNotificationTemplateStatusRequest;
 import com.project.notificationservice.enums.NotificationChannel;
 import com.project.notificationservice.entity.NotificationTemplate;
 import com.project.notificationservice.repository.NotificationTemplateRepository;
@@ -38,15 +34,13 @@ public class NotificationTemplateAdminControllerTest {
     @Autowired
     private NotificationTemplateRepository repository;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
     private String adminToken;
     private String userToken;
 
     @BeforeEach
     public void setUp() {
         repository.deleteAll();
+        repository.flush();
         adminToken = "Bearer " + generateToken("ADMIN");
         userToken = "Bearer " + generateToken("USER");
     }
@@ -65,17 +59,20 @@ public class NotificationTemplateAdminControllerTest {
 
     @Test
     public void testCreateTemplate_Success() throws Exception {
-        CreateNotificationTemplateRequest request = new CreateNotificationTemplateRequest();
-        request.setTemplateCode("  ticket_confirmation  "); // test trim and uppercase normalization
-        request.setTitle("  Xác nhận vé LoraFilm  ");
-        request.setContent("  Xin chào {name}, vé của bạn có mã {bookingCode}.  ");
-        request.setChannelType(NotificationChannel.EMAIL);
-        request.setIsActive(true);
+        org.springframework.mock.web.MockMultipartFile htmlFile = new org.springframework.mock.web.MockMultipartFile(
+                "htmlFile",
+                "template.html",
+                MediaType.TEXT_HTML_VALUE,
+                "  Xin chào {name}, vé của bạn có mã {bookingCode}.  ".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
 
-        mockMvc.perform(post("/api/admin/notification-templates")
+        mockMvc.perform(multipart("/api/admin/notification-templates")
+                        .file(htmlFile)
                         .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .param("templateCode", "  ticket_confirmation  ") // test trim and uppercase normalization
+                        .param("title", "  Xác nhận vé LoraFilm  ")
+                        .param("channelType", "EMAIL")
+                        .param("isActive", "true"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.message", containsString("created successfully")))
@@ -92,16 +89,19 @@ public class NotificationTemplateAdminControllerTest {
         NotificationTemplate existing = new NotificationTemplate("TICKET_CONFIRMATION", "Title", "Content", NotificationChannel.EMAIL, true);
         repository.save(existing);
 
-        CreateNotificationTemplateRequest request = new CreateNotificationTemplateRequest();
-        request.setTemplateCode("ticket_confirmation");
-        request.setTitle("Title");
-        request.setContent("Content");
-        request.setChannelType(NotificationChannel.EMAIL);
+        org.springframework.mock.web.MockMultipartFile htmlFile = new org.springframework.mock.web.MockMultipartFile(
+                "htmlFile",
+                "template.html",
+                MediaType.TEXT_HTML_VALUE,
+                "Content".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
 
-        mockMvc.perform(post("/api/admin/notification-templates")
+        mockMvc.perform(multipart("/api/admin/notification-templates")
+                        .file(htmlFile)
                         .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .param("templateCode", "ticket_confirmation")
+                        .param("title", "Title")
+                        .param("channelType", "EMAIL"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.errorCode", is("NOTIFICATION_TEMPLATE_CODE_ALREADY_EXISTS")));
@@ -109,16 +109,19 @@ public class NotificationTemplateAdminControllerTest {
 
     @Test
     public void testCreateTemplate_ValidationFailed() throws Exception {
-        CreateNotificationTemplateRequest request = new CreateNotificationTemplateRequest();
-        request.setTemplateCode("INVALID-CODE-WITH-DASHES!"); // pattern validation fail
-        request.setTitle(""); // blank fail
-        request.setContent("Content");
-        request.setChannelType(null); // null fail
+        org.springframework.mock.web.MockMultipartFile htmlFile = new org.springframework.mock.web.MockMultipartFile(
+                "htmlFile",
+                "template.html",
+                MediaType.TEXT_HTML_VALUE,
+                "Content".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
 
-        mockMvc.perform(post("/api/admin/notification-templates")
+        mockMvc.perform(multipart("/api/admin/notification-templates")
+                        .file(htmlFile)
                         .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .param("templateCode", "INVALID-CODE-WITH-DASHES!") // pattern validation fail on create
+                        .param("title", "") // blank fail
+                        .param("channelType", "")) // null/empty fail
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.errorCode", is("VALIDATION_ERROR")));
@@ -126,20 +129,83 @@ public class NotificationTemplateAdminControllerTest {
 
     @Test
     public void testCreateTemplate_InvalidChannelEnum() throws Exception {
-        String invalidJsonPayload = "{\n" +
-                "  \"templateCode\": \"TICKET_CONFIRMATION\",\n" +
-                "  \"title\": \"Xác nhận vé LoraFilm\",\n" +
-                "  \"content\": \"Hello\",\n" +
-                "  \"channelType\": \"INVALID_CHANNEL\"\n" +
-                "}";
+        org.springframework.mock.web.MockMultipartFile htmlFile = new org.springframework.mock.web.MockMultipartFile(
+                "htmlFile",
+                "template.html",
+                MediaType.TEXT_HTML_VALUE,
+                "Hello".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
 
-        mockMvc.perform(post("/api/admin/notification-templates")
+        mockMvc.perform(multipart("/api/admin/notification-templates")
+                        .file(htmlFile)
                         .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidJsonPayload))
+                        .param("templateCode", "TICKET_CONFIRMATION")
+                        .param("title", "Xác nhận vé LoraFilm")
+                        .param("channelType", "INVALID_CHANNEL"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.errorCode", is("NOTIFICATION_INVALID_CHANNEL")));
+    }
+
+    @Test
+    public void testCreateTemplate_InvalidFileExtension() throws Exception {
+        org.springframework.mock.web.MockMultipartFile textFile = new org.springframework.mock.web.MockMultipartFile(
+                "htmlFile",
+                "template.txt",
+                MediaType.TEXT_PLAIN_VALUE,
+                "Some text".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/admin/notification-templates")
+                        .file(textFile)
+                        .header("Authorization", adminToken)
+                        .param("templateCode", "TICKET_CONFIRMATION")
+                        .param("title", "Title")
+                        .param("channelType", "EMAIL"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_ERROR")));
+    }
+
+    @Test
+    public void testCreateTemplate_EmptyFile() throws Exception {
+        org.springframework.mock.web.MockMultipartFile emptyFile = new org.springframework.mock.web.MockMultipartFile(
+                "htmlFile",
+                "template.html",
+                MediaType.TEXT_HTML_VALUE,
+                new byte[0]
+        );
+
+        mockMvc.perform(multipart("/api/admin/notification-templates")
+                        .file(emptyFile)
+                        .header("Authorization", adminToken)
+                        .param("templateCode", "TICKET_CONFIRMATION")
+                        .param("title", "Title")
+                        .param("channelType", "EMAIL"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_ERROR")));
+    }
+
+    @Test
+    public void testCreateTemplate_NonUtf8File() throws Exception {
+        byte[] invalidBytes = new byte[]{(byte) 0xC0, (byte) 0xAF}; // invalid UTF-8 sequence
+        org.springframework.mock.web.MockMultipartFile invalidFile = new org.springframework.mock.web.MockMultipartFile(
+                "htmlFile",
+                "template.html",
+                MediaType.TEXT_HTML_VALUE,
+                invalidBytes
+        );
+
+        mockMvc.perform(multipart("/api/admin/notification-templates")
+                        .file(invalidFile)
+                        .header("Authorization", adminToken)
+                        .param("templateCode", "TICKET_CONFIRMATION")
+                        .param("title", "Title")
+                        .param("channelType", "EMAIL"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_ERROR")));
     }
 
     @Test
@@ -190,18 +256,25 @@ public class NotificationTemplateAdminControllerTest {
         NotificationTemplate saved = repository.saveAndFlush(template);
         int initialVersion = saved.getVersion();
 
-        UpdateNotificationTemplateRequest request = new UpdateNotificationTemplateRequest();
-        request.setTemplateCode("TICKET_CONFIRMATION");
-        request.setTitle("Updated Title");
-        request.setContent("Updated Content");
-        request.setChannelType(NotificationChannel.EMAIL);
-        request.setIsActive(true);
-        request.setVersion(initialVersion);
+        org.springframework.mock.web.MockMultipartFile htmlFile = new org.springframework.mock.web.MockMultipartFile(
+                "htmlFile",
+                "updated.html",
+                MediaType.TEXT_HTML_VALUE,
+                "Updated Content".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
 
-        mockMvc.perform(put("/api/admin/notification-templates/" + saved.getId())
+        mockMvc.perform(multipart("/api/admin/notification-templates/" + saved.getId())
+                        .file(htmlFile)
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
                         .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .param("templateCode", "TICKET_CONFIRMATION")
+                        .param("title", "Updated Title")
+                        .param("channelType", "EMAIL")
+                        .param("isActive", "true")
+                        .param("version", String.valueOf(initialVersion)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.title", is("Updated Title")))
@@ -210,22 +283,41 @@ public class NotificationTemplateAdminControllerTest {
     }
 
     @Test
+    public void testUpdateTemplate_StatusOnly() throws Exception {
+        NotificationTemplate template = new NotificationTemplate("TICKET_CONFIRMATION", "Title", "Content", NotificationChannel.EMAIL, true);
+        NotificationTemplate saved = repository.saveAndFlush(template);
+        int initialVersion = saved.getVersion();
+
+        mockMvc.perform(multipart("/api/admin/notification-templates/" + saved.getId())
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
+                        .header("Authorization", adminToken)
+                        .param("isActive", "false")
+                        .param("version", String.valueOf(initialVersion)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.title", is("Title")))
+                .andExpect(jsonPath("$.data.content", is("Content")))
+                .andExpect(jsonPath("$.data.isActive", is(false)))
+                .andExpect(jsonPath("$.data.version", is(initialVersion + 1)));
+    }
+
+    @Test
     public void testUpdateTemplate_ImmutableCodeViolation() throws Exception {
         NotificationTemplate template = new NotificationTemplate("TICKET_CONFIRMATION", "Title", "Content", NotificationChannel.EMAIL, true);
         NotificationTemplate saved = repository.saveAndFlush(template);
 
-        UpdateNotificationTemplateRequest request = new UpdateNotificationTemplateRequest();
-        request.setTemplateCode("MODIFIED_CODE"); // violates immutability
-        request.setTitle("Updated Title");
-        request.setContent("Updated Content");
-        request.setChannelType(NotificationChannel.EMAIL);
-        request.setIsActive(true);
-        request.setVersion(saved.getVersion());
-
-        mockMvc.perform(put("/api/admin/notification-templates/" + saved.getId())
+        mockMvc.perform(multipart("/api/admin/notification-templates/" + saved.getId())
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
                         .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .param("templateCode", "MODIFIED_CODE") // violates immutability
+                        .param("title", "Updated Title")
+                        .param("version", String.valueOf(saved.getVersion())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.errorCode", is("VALIDATION_ERROR")));
@@ -236,48 +328,15 @@ public class NotificationTemplateAdminControllerTest {
         NotificationTemplate template = new NotificationTemplate("TICKET_CONFIRMATION", "Title", "Content", NotificationChannel.EMAIL, true);
         NotificationTemplate saved = repository.saveAndFlush(template);
 
-        UpdateNotificationTemplateRequest request = new UpdateNotificationTemplateRequest();
-        request.setTemplateCode("TICKET_CONFIRMATION");
-        request.setTitle("Updated Title");
-        request.setContent("Updated Content");
-        request.setChannelType(NotificationChannel.EMAIL);
-        request.setIsActive(true);
-        request.setVersion(saved.getVersion() + 99); // stale version
-
-        mockMvc.perform(put("/api/admin/notification-templates/" + saved.getId())
+        mockMvc.perform(multipart("/api/admin/notification-templates/" + saved.getId())
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
                         .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("NOTIFICATION_OPTIMISTIC_LOCK_CONFLICT")));
-    }
-
-    @Test
-    public void testUpdateStatus_SuccessAndConflict() throws Exception {
-        NotificationTemplate template = new NotificationTemplate("TICKET_CONFIRMATION", "Title", "Content", NotificationChannel.EMAIL, true);
-        NotificationTemplate saved = repository.saveAndFlush(template);
-        int initialVersion = saved.getVersion();
-
-        UpdateNotificationTemplateStatusRequest request = new UpdateNotificationTemplateStatusRequest();
-        request.setIsActive(false);
-        request.setVersion(initialVersion);
-
-        mockMvc.perform(patch("/api/admin/notification-templates/" + saved.getId() + "/status")
-                        .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.data.isActive", is(false)))
-                .andExpect(jsonPath("$.data.version", is(initialVersion + 1)));
-
-        // Conflict check with old version
-        request.setVersion(initialVersion); // version is now version+1, using old version will mismatch
-        mockMvc.perform(patch("/api/admin/notification-templates/" + saved.getId() + "/status")
-                        .header("Authorization", adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .param("templateCode", "TICKET_CONFIRMATION")
+                        .param("title", "Updated Title")
+                        .param("version", String.valueOf(saved.getVersion() + 99))) // stale version
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.errorCode", is("NOTIFICATION_OPTIMISTIC_LOCK_CONFLICT")));

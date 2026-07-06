@@ -11,7 +11,6 @@ import com.project.authservice.common.ApiResponse;
 import com.project.authservice.dto.request.LoginRequest;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.dto.request.SendOtpRequest;
-import com.project.authservice.dto.request.ResendOtpRequest;
 import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.dto.request.RefreshTokenRequest;
 import com.project.authservice.dto.response.JwtResponse;
@@ -41,8 +40,7 @@ public class AuthController {
 	public ResponseEntity<ApiResponse<RegistrationInitiatedResponse>> register(@Valid @RequestBody RegisterRequest request) {
 		log.info("Register endpoint called for email={}", request.getEmail());
 		RegistrationInitiatedResponse response = authService.register(request);
-		return ResponseEntity.status(HttpStatus.ACCEPTED)
-				.body(ApiResponse.success("Registration initiated", response));
+		return ResponseEntity.ok(ApiResponse.success("Registration initiated", response));
 	}
 
 	/**
@@ -66,12 +64,8 @@ public class AuthController {
 	 */
 	@PostMapping("/verify")
 	public ResponseEntity<ApiResponse<Void>> verify(@Valid @RequestBody VerifyRequest request) {
-		log.info("Verify endpoint called for email={} purpose={}", request.getEmail(), request.getPurpose());
-		if ("REGISTRATION".equals(request.getPurpose())) {
-			authService.verifyRegistration(request);
-		} else {
-			verificationService.verify(request);
-		}
+		log.info("Verify endpoint called for email={}", request.getEmail());
+		authService.verify(request);
 		return ResponseEntity.ok(ApiResponse.success("Account verified successfully", null));
 	}
 
@@ -82,23 +76,10 @@ public class AuthController {
 	 * @return success response wrapped in ApiResponse
 	 */
 	@PostMapping("/send-otp")
-	public ResponseEntity<ApiResponse<com.project.authservice.dto.response.ResendOtpResponse>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+	public ResponseEntity<ApiResponse<com.project.authservice.dto.response.SendOtpResponse>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
 		log.info("Send OTP endpoint called for email={}", request.getEmail());
-		com.project.authservice.dto.response.ResendOtpResponse response = verificationService.sendOtp(request);
+		com.project.authservice.dto.response.SendOtpResponse response = verificationService.sendOtp(request);
 		return ResponseEntity.ok(ApiResponse.success("OTP sent successfully", response));
-	}
-
-	/**
-	 * Resends an OTP (equivalent to refresh-otp).
-	 *
-	 * @param request resend otp request payload
-	 * @return success response wrapped in ApiResponse
-	 */
-	@PostMapping("/resend-otp")
-	public ResponseEntity<ApiResponse<com.project.authservice.dto.response.ResendOtpResponse>> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-		log.info("Resend OTP endpoint called for email={}", request.getEmail());
-		com.project.authservice.dto.response.ResendOtpResponse response = verificationService.resendOtp(request);
-		return ResponseEntity.ok(ApiResponse.success("OTP resent successfully", response));
 	}
 
 	/**

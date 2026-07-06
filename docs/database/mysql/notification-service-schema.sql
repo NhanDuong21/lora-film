@@ -8,7 +8,7 @@ CREATE TABLE `notification_templates` (
   `title` VARCHAR(255) NOT NULL
     COMMENT 'Tieu de email hoac tieu de thong bao push',
 
-  `content` TEXT NOT NULL
+  `content` MEDIUMTEXT NOT NULL
     COMMENT 'Noi dung mau co chua cac bien cho',
 
   `channel_type` VARCHAR(30) NOT NULL
@@ -66,7 +66,7 @@ CREATE TABLE `notification_logs` (
   `actual_title` VARCHAR(255) NULL
     COMMENT 'Tieu de thuc te sau khi render template',
 
-  `actual_content` TEXT NOT NULL
+  `actual_content` MEDIUMTEXT NOT NULL
     COMMENT 'Noi dung thuc te sau khi render template',
 
   `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING'

@@ -54,7 +54,9 @@ Bảng danh mục quản lý sơ đồ ERD vật lý tương ứng với từng 
 
 ### Auth Service
 
-Quản lý đăng ký, đăng nhập, phân quyền (ADMIN, EMPLOYEE, CUSTOMER), mã hóa bảo mật mật khẩu và cấp phát token JWT.
+Quản lý đăng ký, đăng nhập, phân quyền (ADMIN, EMPLOYEE, CUSTOMER), mã hóa bảo mật mật khẩu, cấp phát token JWT và hỗ trợ liên kết tài khoản định danh mạng xã hội (Social Login).
+
+*Lưu ý: Bảng `email_verification_tokens` đã được loại bỏ, việc quản lý token tạm thời được chuyển sang Redis. Đồng thời, schema bổ sung bảng `account_providers` để sẵn sàng mở rộng tính năng Social Login.*
 
 ![Auth Service Physical ERD](./physical/auth-service-physical-erd.png)
 

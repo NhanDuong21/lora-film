@@ -74,6 +74,18 @@ public class SeatLockManager {
 
 
 
+    public void evictLocks(Long showtimeId, List<Long> seatIds) {
+        List<String> keys = seatIds.stream()
+                .map(seatId -> getLockKey(showtimeId, seatId))
+                .collect(Collectors.toList());
+
+        if (keys.isEmpty()) {
+            return;
+        }
+
+        redisTemplate.delete(keys);
+    }
+
     private String getLockKey(Long showtimeId, Long seatId) {
         return LOCK_PREFIX + "{" + showtimeId + "}:" + seatId;
     }

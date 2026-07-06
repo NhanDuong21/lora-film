@@ -11,6 +11,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import com.project.authservice.enums.AccountStatus;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,19 +44,27 @@ public class Account {
 	@JoinColumn(name = "role_id", nullable = false)
 	private Role role;
 
+	@Enumerated(EnumType.STRING)
 	@Builder.Default
-	@Column(name = "is_active", nullable = false)
-	private Integer isActive = 0;
+	@Column(name = "account_status", length = 20)
+	private AccountStatus accountStatus = AccountStatus.PENDING;
 
+	@Version
 	@Builder.Default
-	@Column(name = "registration_completed", nullable = false)
-	private Integer registrationCompleted = 0;
+	@Column(name = "version")
+	private Integer version = 0;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
+	@Column(name = "created_by")
+	private Long createdBy;
+
 	@Column(name = "updated_at", nullable = false)
 	private LocalDateTime updatedAt;
+
+	@Column(name = "updated_by")
+	private Long updatedBy;
 
 	@PrePersist
 	void prePersist() {
@@ -61,11 +73,11 @@ public class Account {
 			createdAt = now;
 		}
 		updatedAt = now;
-		if (isActive == null) {
-			isActive = 0;
+		if (accountStatus == null) {
+			accountStatus = AccountStatus.PENDING;
 		}
-		if (registrationCompleted == null) {
-			registrationCompleted = 0;
+		if (version == null) {
+			version = 0;
 		}
 	}
 

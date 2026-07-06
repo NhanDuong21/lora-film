@@ -27,4 +27,14 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             @Param("to") LocalDateTime to,
             Pageable pageable
     );
+
+    @Query("SELECT b FROM Booking b WHERE b.status = :status AND b.expiresAt < :now ORDER BY b.createdAt ASC")
+    Page<Booking> findExpiredBookings(
+            @Param("status") BookingStatus status, 
+            @Param("now") LocalDateTime now, 
+            Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.id = :id")
+    java.util.Optional<Booking> findByIdWithPessimisticLock(@Param("id") Long id);
 }

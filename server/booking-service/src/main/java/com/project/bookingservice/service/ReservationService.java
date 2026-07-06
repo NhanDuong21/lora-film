@@ -12,7 +12,6 @@ import com.project.bookingservice.enumtype.ReservationStatus;
 import com.project.bookingservice.exception.BusinessException;
 import com.project.bookingservice.repository.SeatReservationRepository;
 import com.project.bookingservice.security.CurrentUserProvider;
-import com.project.bookingservice.service.idempotency.IdempotencyService;
 import com.project.bookingservice.service.lock.SeatLockManager;
 import com.project.bookingservice.service.movie.MovieServiceClient;
 import org.slf4j.Logger;
@@ -21,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -34,20 +34,17 @@ public class ReservationService {
     private final SeatReservationRepository seatReservationRepository;
     private final MovieServiceClient movieServiceClient;
     private final SeatLockManager seatLockManager;
-    private final IdempotencyService idempotencyService;
     private final CurrentUserProvider currentUserProvider;
     private final BookingProperties bookingProperties;
 
     public ReservationService(SeatReservationRepository seatReservationRepository,
             MovieServiceClient movieServiceClient,
             SeatLockManager seatLockManager,
-            IdempotencyService idempotencyService,
             CurrentUserProvider currentUserProvider,
             BookingProperties bookingProperties) {
         this.seatReservationRepository = seatReservationRepository;
         this.movieServiceClient = movieServiceClient;
         this.seatLockManager = seatLockManager;
-        this.idempotencyService = idempotencyService;
         this.currentUserProvider = currentUserProvider;
         this.bookingProperties = bookingProperties;
     }
@@ -66,50 +63,6 @@ public class ReservationService {
         request.setSeatIds(request.getSeatIds().stream().sorted().collect(Collectors.toList()));
 
         Long userId = currentUserProvider.getCurrentUserId();
-
-        // 1. Idempotency Check (Atomic)
-        boolean acquired = idempotencyService.acquireIdempotency(userId, idempotencyKey, request);
-        if (!acquired) {
-            // Polling for idempotency resolution (Option B)
-            for (int i = 0; i < 20; i++) { // wait up to 2 seconds
-                try {
-                    IdempotencyService.IdempotencyRecord record = idempotencyService.getIdempotencyRecord(userId, idempotencyKey);
-                    if (record != null) {
-                        String currentHash = idempotencyService.generateHash(request);
-                        if (!record.getRequestHash().equals(currentHash)) {
-                            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                        }
-
-                        if (record.getResponse() != null) {
-                            logger.info("Idempotency replay for key {}", idempotencyKey);
-                            if (record.getResponse() instanceof ReservationGroupResponse) {
-                                return (ReservationGroupResponse) record.getResponse();
-                            } else {
-                                // In case it's a LinkedHashMap
-                                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                                mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-                                return mapper.convertValue(record.getResponse(), ReservationGroupResponse.class);
-                            }
-                        }
-                    } else {
-                        break; // Record vanished
-                    }
-                } catch (BusinessException be) {
-                    throw be;
-                } catch (Exception e) {
-                    logger.warn("Error during idempotency polling, treating as conflict", e);
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-                }
-                
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Interrupted during idempotency wait");
-                }
-            }
-            throw new BusinessException("BOOKING_IDEMPOTENCY_CONFLICT", "Idempotency key was already used with a different request");
-        }
 
         try {
             Long showtimeId = request.getShowtimeId();
@@ -165,15 +118,14 @@ public class ReservationService {
                     public void afterCompletion(int status) {
                         if (status == STATUS_ROLLED_BACK) {
                             seatLockManager.releaseLocks(showtimeId, request.getSeatIds(), lockOwner);
-                            idempotencyService.removeIdempotencyKey(userId, idempotencyKey);
-                            logger.info("Rolled back locks and idempotency key for user {} on showtime {}", userId, showtimeId);
+                            logger.info("Rolled back locks for user {} on showtime {}", userId, showtimeId);
                         }
                     }
                 }
             );
 
             // 7. Create reservations
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
             LocalDateTime expiresAt = now.plusMinutes(bookingProperties.getReservation().getTtlSeconds() / 60);
 
             List<SeatReservation> newReservations = new ArrayList<>();
@@ -196,14 +148,10 @@ public class ReservationService {
                     seatResponses
             );
 
-            // 8. Save idempotency result
-            idempotencyService.saveResponse(userId, idempotencyKey, request, groupResponse);
             logger.info("Reservation created successfully for idempotencyKey: {}", idempotencyKey);
             return groupResponse;
 
         } catch (Exception e) {
-            // Remove the idempotency placeholder if an exception is thrown before commit
-            idempotencyService.removeIdempotencyKey(userId, idempotencyKey);
             throw e;
         }
     }
@@ -215,7 +163,7 @@ public class ReservationService {
 
         Long currentUserId = currentUserProvider.getCurrentUserId();
         if (!reservation.getUserId().equals(currentUserId)) {
-            throw new BusinessException("FORBIDDEN", "You cannot access this reservation");
+            throw new BusinessException("SEAT_RESERVATION_OWNERSHIP_MISMATCH", "You cannot access this reservation");
         }
 
         return new ReservationResponse(reservation.getId(), reservation.getUserId(), reservation.getShowtimeId(), reservation.getSeatId(),
@@ -229,7 +177,7 @@ public class ReservationService {
 
         Long currentUserId = currentUserProvider.getCurrentUserId();
         if (!reservation.getUserId().equals(currentUserId)) {
-            throw new BusinessException("FORBIDDEN", "You cannot access this reservation");
+            throw new BusinessException("SEAT_RESERVATION_OWNERSHIP_MISMATCH", "You cannot access this reservation");
         }
 
         if (reservation.getStatus() == ReservationStatus.RELEASED) {

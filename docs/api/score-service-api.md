@@ -1447,7 +1447,28 @@ Validate internal request
     "redeemedPoints": 50,
     "redeemValue": 50000,
     "currentPoints": 112,
-    "historyId": 7004
+    "accumulatedPoints": 362,
+    "historyId": 7004,
+    "idempotent": false
+  }
+}
+```
+
+### Idempotent Response
+
+Nếu cùng `eventId` hoặc `idempotencyKey` đã được xử lý (trả về HTTP `200 OK`):
+
+```json
+{
+  "success": true,
+  "message": "Score redeem event was already processed",
+  "data": {
+    "userId": 15,
+    "bookingId": 1002,
+    "redeemedPoints": 50,
+    "currentPoints": 112,
+    "historyId": 7004,
+    "idempotent": true
   }
 }
 ```
@@ -1545,7 +1566,29 @@ Dùng khi:
     "bookingId": 1002,
     "refundedPoints": 50,
     "currentPoints": 162,
-    "historyId": 7005
+    "accumulatedPoints": 362,
+    "originalHistoryId": 7004,
+    "historyId": 7005,
+    "idempotent": false
+  }
+}
+```
+
+### Idempotent Response
+
+Nếu cùng refund `eventId` hoặc `idempotencyKey` đã được xử lý (trả về HTTP `200 OK`):
+
+```json
+{
+  "success": true,
+  "message": "Redeemed score refund was already processed",
+  "data": {
+    "userId": 15,
+    "bookingId": 1002,
+    "refundedPoints": 50,
+    "currentPoints": 162,
+    "historyId": 7005,
+    "idempotent": true
   }
 }
 ```
@@ -1621,7 +1664,7 @@ Trong đó:
 reconciliation_status = NONE | PENDING | RESOLVED
 ```
 
-### Response
+### Response (HTTP 201 Created cho lần đầu, HTTP 200 OK khi idempotent)
 
 ```json
 {
@@ -1635,9 +1678,13 @@ reconciliation_status = NONE | PENDING | RESOLVED
     "outstandingPoints": 80,
     "currentPoints": 0,
     "accumulatedPoints": 250,
+    "previousTier": "GOLD",
+    "currentTier": "SILVER",
+    "tierChanged": true,
     "historyId": 7006,
     "reconciliationStatus": "PENDING",
-    "requiresManualReconciliation": true
+    "requiresManualReconciliation": true,
+    "idempotent": false
   }
 }
 ```
@@ -2238,20 +2285,27 @@ Quy tắc:
 | `SCORE_BALANCE_WOULD_BE_NEGATIVE`      |          409 | Operation làm điểm âm          |
 | `SCORE_EVENT_ALREADY_PROCESSED`        | 409 hoặc 200 | Event đã xử lý                 |
 | `SCORE_ORIGINAL_TRANSACTION_NOT_FOUND` |          404 | Không tìm thấy transaction gốc |
+| `SCORE_ORIGINAL_TRANSACTION_INVALID`   |          409 | Giao dịch gốc không hợp lệ     |
+| `SCORE_ORIGINAL_TRANSACTION_MISMATCH`  |          409 | Giao dịch gốc không khớp user/booking |
+| `SCORE_REFUND_AMOUNT_EXCEEDS_ORIGINAL` |          409 | Số điểm refund vượt quá gốc    |
+| `SCORE_REVOKE_AMOUNT_EXCEEDS_ORIGINAL` |          409 | Số điểm thu hồi vượt quá gốc   |
 | `SCORE_REFUND_ALREADY_PROCESSED`       |          409 | Hoàn điểm rồi                  |
 | `SCORE_REVOKE_ALREADY_PROCESSED`       |          409 | Thu hồi rồi                    |
+| `SCORE_IDEMPOTENCY_CONFLICT`           |          409 | Xung đột idempotency key/event |
 | `SCORE_REDEEM_NOT_ALLOWED`             |          409 | Không được redeem              |
 | `SCORE_RECONCILIATION_REQUIRED`        |          409 | Còn outstanding revoke cần reconciliation |
 | `SCORE_TIER_NOT_FOUND`                 |          404 | Không tìm thấy tier            |
 | `SCORE_TIER_NAME_ALREADY_EXISTS`       |          409 | Tên tier trùng                 |
 | `SCORE_TIER_THRESHOLD_CONFLICT`        |          409 | Ngưỡng tier xung đột           |
 | `SCORE_TIER_CONFIGURATION_INVALID`     |          500 | Cấu hình tier sai              |
+| `SCORE_POINT_OVERFLOW`                 |          400 | Điểm số vượt giới hạn          |
 | `SCORE_INVALID_TRANSACTION_TYPE`       |          400 | Transaction type sai           |
 | `SCORE_INVALID_QUERY`                  |          400 | Query sai                      |
 | `BOOKING_SERVICE_UNAVAILABLE`          |          503 | Booking Service không khả dụng |
 | `PAYMENT_SERVICE_UNAVAILABLE`          |          503 | Payment Service không khả dụng |
 | `VALIDATION_ERROR`                     |          400 | Validation lỗi                 |
 | `UNAUTHORIZED`                         |          401 | Chưa đăng nhập                 |
+| `INTERNAL_UNAUTHORIZED`                 |          401 | Yêu cầu internal token hợp lệ  |
 | `FORBIDDEN`                            |          403 | Không có quyền                 |
 | `INTERNAL_SERVER_ERROR`                |          500 | Lỗi hệ thống                   |
 

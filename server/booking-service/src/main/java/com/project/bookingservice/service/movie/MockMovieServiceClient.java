@@ -5,6 +5,7 @@ import com.project.bookingservice.dto.movie.ShowtimeInfo;
 import org.springframework.stereotype.Service;
 import org.springframework.context.annotation.Profile;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -18,9 +19,9 @@ public class MockMovieServiceClient implements MovieServiceClient {
             return null; // missing showtime
         }
         if (showtimeId == 888L) {
-            return new ShowtimeInfo(888L, 1L, false, new java.math.BigDecimal("12.50")); // inactive showtime
+            return new ShowtimeInfo(888L, 1L, false, new BigDecimal("12.50"), 100L, "Dune"); // inactive showtime
         }
-        return new ShowtimeInfo(showtimeId, 1L, true, new java.math.BigDecimal("12.50")); // valid showtime in room 1
+        return new ShowtimeInfo(showtimeId, 1L, true, new BigDecimal("12.50"), 101L, "Avengers"); // valid showtime in room 1
     }
 
     @Override

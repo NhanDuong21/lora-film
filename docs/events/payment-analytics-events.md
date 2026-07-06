@@ -1,202 +1,202 @@
-# Đặc Tả Hợp Đồng Event: Payment & Analytics (Payment Events Contract)
+# LoraFilm Payment Service
+# Analytics Event Contract
 
-Tài liệu này quy định cấu trúc gói tin (Message Schema), định dạng phân phối và các nguyên tắc xử lý bất đồng bộ đối với luồng thanh toán và thống kê doanh thu giữa Payment Service và Analytics Service.
+## 1. Document Control
 
----
+| Field | Value |
+|---|---|
+| Project | LoraFilm |
+| Service | payment-service |
+| Document Type | Event Contract |
+| Implementation Owner | Dương Thiện Nhân |
+| Contract Requester/Reviewer | Dương Thiện Nhân — Payment Service Owner |
+| Related Issue | #156 |
+| Related Roadmap | #155 |
+| Reviewed Branch | docs/payment-architecture-contracts |
+| Reviewed Commit | 5878fd088a935405da303ff28a7329fa796c54c1 |
+| Release | Product Release 1 |
+| Status | PROPOSED — READY FOR REVIEW |
+| Last Updated | 2026-07-03 |
+| Language | Vietnamese |
+| Source of Truth | latest develop source + approved contracts |
 
-## 1. Kiến Trúc Luồng Đi Dữ Liệu (Message Topology Flow)
+## 2. Table of Contents
+- [1. Document Control](#1-document-control)
+- [2. Table of Contents](#2-table-of-contents)
+- [3. Purpose](#3-purpose)
+- [4. Scope](#4-scope)
+- [5. Producer/consumer](#5-producerconsumer)
+- [6. Topic topology](#6-topic-topology)
+- [7. Ordering](#7-ordering)
+- [8. Event envelope](#8-event-envelope)
+- [9. PAYMENT_SUCCEEDED](#9-payment_succeeded)
+- [10. Field definitions](#10-field-definitions)
+- [11. Validation](#11-validation)
+- [12. Snapshot source](#12-snapshot-source)
+- [13. Reconciliation-required revenue behavior](#13-reconciliation-required-revenue-behavior)
+- [14. Producer idempotency](#14-producer-idempotency)
+- [15. Consumer idempotency and transaction](#15-consumer-idempotency-and-transaction)
+- [16. Retry and DLQ](#16-retry-and-dlq)
+- [17. Schema versioning](#17-schema-versioning)
+- [18. Privacy](#18-privacy)
+- [19. MOCK Isolation](#19-mock-isolation)
+- [20. Observability](#20-observability)
+- [21. Implementation mapping](#21-implementation-mapping)
+- [22. Deferred PAYMENT_REFUNDED](#22-deferred-payment_refunded)
+- [23. Reviewer checklist](#23-reviewer-checklist)
 
-Payment Service đóng vai trò là Producer, phát hành các sự kiện liên quan đến giao dịch thanh toán thành công hoặc hoàn tiền. Analytics Service đóng vai trò là Consumer, lắng nghe các sự kiện này để cập nhật các thống kê: `daily_revenue_stats`, `movie_revenue_stats`, `movie_daily_revenue_stats` và `processed_analytics_events`.
-Analytics Service tiêu thụ các sự kiện này để tổng hợp doanh thu theo thời gian thực mà không cần query trực tiếp Payment Database hay Booking Database. Mọi dữ liệu cần cho việc aggregate phải được cung cấp đầy đủ trong event.
+## 3. Purpose
+Định nghĩa hợp đồng kỹ thuật cho sự kiện Analytics nhằm đồng bộ dữ liệu doanh thu một cách đáng tin cậy.
 
-### Giai đoạn 1: Thanh Toán Thành Công
-- Payment Service xử lý thanh toán. Sau khi giao dịch thành công và lưu vào DB, phát hành sự kiện `PAYMENT_SUCCEEDED`.
-- Analytics Service tiêu thụ sự kiện này để tăng doanh thu cho bộ phim tương ứng.
+Production revenue events bao gồm:
+- CASH
+- VNPAY
+- MOMO
 
-### Giai đoạn 2: Hoàn Tiền (Refund)
-- Payment Service xử lý hoàn tiền (có thể là một phần hoặc toàn bộ).
-- Phát hành sự kiện `PAYMENT_REFUNDED`.
-- Analytics Service tiêu thụ sự kiện này để giảm trừ doanh thu. Có thể có nhiều sự kiện hoàn tiền cho cùng một thanh toán.
+Non-production revenue events (Chỉ tồn tại ở môi trường mô phỏng):
+- MOCK
 
----
+## 4. Scope
+- Sự kiện `PAYMENT_SUCCEEDED`.
+- Phát hành tự động qua Transactional Outbox.
 
-## 2. Thông Tin Cấu Hình Hàng Đợi Kafka (Kafka Stream Configurations)
+## 5. Producer/consumer
+- **Producer**: Payment Service (Outbox Worker).
+- **Consumer**: Analytics Service.
 
-| Thuộc tính | Sự kiện 1 (Thanh toán thành công) | Sự kiện 2 (Hoàn tiền) |
-| :--- | :--- | :--- |
-| **Topic** | `payment.payment-succeeded.v1` | `payment.payment-refunded.v1` |
-| **DLQ Topic** | `payment.payment-succeeded.v1.dlq` | `payment.payment-refunded.v1.dlq` |
-| **Loại Sự Kiện** | `PAYMENT_SUCCEEDED` | `PAYMENT_REFUNDED` |
-| **Producer** | `payment-service` | `payment-service` |
-| **Consumer** | `analytics-service` | `analytics-service` |
-| **Consumer Group** | `analytics-service-payment-group` | `analytics-service-refund-group` |
-| **Message Key** | `paymentId` | `paymentId` |
+## 6. Topic topology
+**EVT-001**: 
+- **Production Topic**: `payment.events.v1`
+- **Production DLQ**: `payment.events.v1.dlq`
+- **Non-Production MOCK Isolation**: Sử dụng environment-specific topic naming theo cấu hình (ví dụ `dev.payment.events.v1`) hoặc Kafka cluster cách ly hoàn toàn. Production `payment.events.v1` không bao giờ tiếp nhận MOCK revenue.
 
-> **Lưu ý Message Key:** Cả hai topic đều sử dụng `paymentId` làm message key để đảm bảo tất cả các sự kiện liên quan đến cùng một giao dịch (thành công, hoàn tiền lần 1, hoàn tiền lần 2...) được điều phối vào cùng một Partition.
-> * Ordering được bảo đảm trong cùng partition (cùng một Payment).
-> * **Không bảo đảm ordering** giữa các payment khác nhau.
+## 7. Ordering
+**EVT-002**: Producer phân bổ các sự kiện vào partition thông qua Kafka Message Key là `bookingId`. Đảm bảo các thay đổi cho cùng 1 Booking diễn ra tuần tự. Không có bảo đảm thứ tự chéo giữa các Booking khác nhau.
+- **Lưu ý**: Kafka message key là `bookingId`, danh tính aggregate (Aggregate Identity) của event là `PAYMENT`.
 
----
+## 8. Event envelope
+Tất cả sự kiện tuân thủ cấu trúc phong bì chung:
 
-## 3. Đặc Tả Gói Tin Sự Kiện (Event Payload Specification)
+| Envelope Field | Type | Description |
+|---|---|---|
+| `eventId` | UUID | Định danh duy nhất cho event (Dùng để Consumer Deduplicate) |
+| `eventType` | String | Tên loại sự kiện (VD: `PAYMENT_SUCCEEDED`) |
+| `schemaVersion` | String | Phiên bản (VD: `1.0`) |
+| `sourceService` | String | Tên service phát hành (`payment-service`) |
+| `occurredAt` | Timestamp | Thời điểm sinh sự kiện (ISO-8601 UTC) |
+| `correlationId` | String | Chuỗi liên kết trace qua nhiều services (Nullable) |
+| `traceId` | String | OpenTelemetry Trace ID (Nullable) |
+| `aggregateType` | String | Cố định: `PAYMENT` |
+| `aggregateId` | String | Bằng với `paymentId` |
+| `data` | JSON | Cấu trúc payload cụ thể theo sự kiện |
 
-Định dạng gói tin thống nhất (Event Envelope) sử dụng **payload wrapper object** (để đồng nhất với tiêu chuẩn hiện tại của repository như `account-created-event.md`).
+## 9. PAYMENT_SUCCEEDED
+Báo cáo doanh thu và giao dịch thanh toán thành công.
 
-**Event Envelope:**
-Bao gồm các trường metadata chuẩn: `eventId`, `eventType`, `eventVersion`, `sourceService`, `occurredAt`, `correlationId`, `traceId`. Dữ liệu nghiệp vụ chi tiết được đặt trong object `data`.
-
-### 3.1. Event: PAYMENT_SUCCEEDED
-
-**Mô tả:** Được Payment Service phát hành sau khi giao dịch thanh toán thành công.
-
-**Định Dạng Mẫu (JSON):**
+### Example JSON
 ```json
 {
-  "eventId": "PAYMENT-SUCCEEDED-3001",
+  "eventId": "123e4567-e89b-12d3-a456-426614174000",
   "eventType": "PAYMENT_SUCCEEDED",
-  "eventVersion": "1.0",
+  "schemaVersion": "1.0",
   "sourceService": "payment-service",
-  "occurredAt": "2026-06-24T20:12:00+07:00",
-  "correlationId": "corr-12345",
-  "traceId": "trace-67890",
+  "occurredAt": "2026-07-03T10:05:00Z",
+  "correlationId": "trace-9999",
+  "traceId": "span-8888",
+  "aggregateType": "PAYMENT",
+  "aggregateId": "55",
   "data": {
-    "paymentId": 3001,
+    "paymentId": 55,
+    "paymentTransactionCode": "PAY-1001-XYZ",
     "bookingId": 1001,
-    "paidAmount": 216000,
+    "paymentMethod": "VNPAY",
+    "provider": "VNPAY",
+    "paidAmount": 250000.00,
     "currency": "VND",
-    "movieId": 101,
+    "movieId": 99,
     "movieTitle": "Avengers",
-    "ticketCount": 2
+    "ticketCount": 2,
+    "reconciliationStatus": "NONE"
   }
 }
 ```
 
-**Định Nghĩa Trường Dữ Liệu (Field Definitions):**
+## 10. Field definitions
+| Field | Data Type | Required | Description |
+|---|---|---|---|
+| `paymentId` | Number | Yes | ID định danh attempt thanh toán nội bộ |
+| `paymentTransactionCode` | String | Yes | Mã giao dịch nội bộ Payment Service |
+| `bookingId` | Number | Yes | ID của Booking (Kafka Message Key) |
+| `paymentMethod` | String | Yes | MOCK, CASH, VNPAY, MOMO |
+| `provider` | String | No | VNPAY, MOMO, null đối với CASH/MOCK |
+| `paidAmount` | Decimal | Yes | Tổng tiền khách thực tế đã thanh toán |
+| `currency` | String | Yes | Đơn vị tiền tệ (VND) |
+| `movieId` | Number | Yes | Lấy từ Analytics Snapshot |
+| `movieTitle` | String | Yes | Lấy từ Analytics Snapshot |
+| `ticketCount` | Number | Yes | Lấy từ Analytics Snapshot |
+| `reconciliationStatus`| String | Yes | `NONE`, `REQUIRED` (Trong Product Release 1) |
 
-*   **`eventId`** (String): Định danh duy nhất của sự kiện. Sinh ra một lần và cố định cho dù có retry.
-*   **`eventType`** (String): Luôn là `PAYMENT_SUCCEEDED`.
-*   **`eventVersion`** (String): Phiên bản cấu trúc sự kiện (hiện tại `1.0`).
-*   **`sourceService`** (String): Nguồn phát hành, luôn là `payment-service`.
-*   **`occurredAt`** (String - ISO-8601): Thời điểm Payment chuyển sang trạng thái thành công. Phải dùng ISO-8601 và có timezone/offset rõ ràng. Analytics dùng field này để xác định `statDate` khi aggregate.
-*   **`correlationId`, `traceId`** (String): Hỗ trợ truy vết log liên dịch vụ (Distributed Tracing).
-*   **`data.paymentId`** (Long): ID giao dịch thanh toán. Ý nghĩa nghiệp vụ: Xác định duy nhất giao dịch thanh toán.
-*   **`data.bookingId`** (Long): ID của đơn đặt vé liên kết.
-*   **`data.paidAmount`** (Long/BigDecimal): Số tiền cuối cùng Payment Service xác nhận đã thanh toán thành công. Số tiền này có thể đã phản ánh các khoản giảm giá như Promotion discount, Membership discount, Score Redeem... Analytics không tự tính lại.
-*   **`data.currency`** (String): Đơn vị tiền tệ, cố định là `VND`.
-*   **`data.movieId`** (Long): ID của bộ phim.
-*   **`data.movieTitle`** (String): Tên bộ phim, giúp Analytics Service không cần query Movie Service.
-*   **`data.ticketCount`** (Integer): Số lượng vé đã mua trong giao dịch này.
+## 11. Validation
+**EVT-003**: `paidAmount > 0`. Event chỉ được sinh khi trạng thái của Payment đã được ghi nhận `SUCCESS`.
 
-### 3.2. Event: PAYMENT_REFUNDED
+## 12. Snapshot source
+**EVT-004**: Dữ liệu `movieId`, `movieTitle`, `ticketCount` được trích xuất từ bảng `payment_analytics_snapshots`. Payment Service không thực hiện gọi API mạng (Network call) đến Booking/Movie để trích xuất dữ liệu khi tạo sự kiện.
 
-**Mô tả:** Được Payment Service phát hành khi tiến hành hoàn tiền cho người dùng.
+## 13. Reconciliation-required revenue behavior
+**EVT-005**: 
+- **Normal success (`reconciliationStatus = NONE`)**: Consumer cập nhật tổng doanh thu xác nhận thông thường.
+- **Reconciliation-required success (`reconciliationStatus = REQUIRED`)**: Consumer KHÔNG cộng vào tổng doanh thu chuẩn. Dữ liệu này phải được lưu vào khu vực riêng (ví dụ: `analytics_reconciliation_events`) phục vụ tra cứu ngoại lệ.
+- *Lưu ý*: `RESOLVED` là trạng thái bảo lưu dành cho cơ chế mở rộng trong tương lai, không xuất hiện trong sự kiện ở Release 1.
 
-**Hành vi hỗ trợ hoàn tiền:**
-*   **Full & Partial Refund:** Hỗ trợ hoàn tiền toàn bộ hoặc một phần.
-*   **Multiple Refund Events:** Cho phép nhiều sự kiện hoàn tiền trên cùng một `paymentId` (ví dụ: hoàn tiền làm nhiều đợt).
-*   **Refund Event Semantics (Quan trọng):**
-    *   Mỗi `PAYMENT_REFUNDED` event đại diện cho một refund transaction độc lập.
-    *   `refundAmount` và `refundedTicketCount` là giá trị của lần refund đó, **không phải** giá trị cộng dồn (cumulative) của toàn bộ payment.
-*   **Ordering:** Đảm bảo `PAYMENT_REFUNDED` luôn được consume sau `PAYMENT_SUCCEEDED` đối với cùng một `paymentId` bằng cách sử dụng chung Message Key.
+## 14. Producer idempotency
+**EVT-006**: Outbox Pattern bảo vệ việc insert Event Payload vào Database cùng transaction với lệnh cập nhật Payment `SUCCESS`. Cột `eventId` không đổi ngay cả khi Worker Outbox thực hiện phát hành lại (Retry).
 
-**Định Dạng Mẫu (JSON):**
-```json
-{
-  "eventId": "PAYMENT-REFUNDED-3001-1",
-  "eventType": "PAYMENT_REFUNDED",
-  "eventVersion": "1.0",
-  "sourceService": "payment-service",
-  "occurredAt": "2026-06-24T21:00:00+07:00",
-  "correlationId": "corr-12345",
-  "traceId": "trace-67890",
-  "data": {
-    "paymentId": 3001,
-    "bookingId": 1001,
-    "refundAmount": 216000,
-    "currency": "VND",
-    "movieId": 101,
-    "movieTitle": "Avengers",
-    "refundedTicketCount": 2
-  }
-}
-```
+## 15. Consumer idempotency and transaction
+**EVT-007**: **The Local Database transaction and Kafka Offset commit are not one distributed atomic transaction.**
+Trường hợp xảy ra ngắt quãng (crash):
+- Nếu quá trình DB commit thành công nhưng service ngưng hoạt động trước khi Kafka offset được commit, Kafka có thể sẽ tiến hành phát hành lại chính event đó (duplicate delivery).
+Hành vi bắt buộc của Consumer:
+- Deduplicate bằng `eventId`.
+- Bảng `processed_analytics_events` phải được ghi cùng Local Transaction với các thao tác cập nhật doanh thu/đối soát.
+- Lần phát hành trùng lặp không được phép làm tăng doanh thu kép.
+- Offset Kafka chỉ được commit sau khi DB transaction cục bộ đã thành công. Bản thân Offset Kafka không được xem là cơ chế thay thế Idempotency.
 
-> **Lưu ý `eventId` Generation Strategy:** Vì có thể có nhiều Refund cho 1 Payment, `eventId` của Refund nên kết hợp giữa ID của Payment và ID của Refund Transaction (hoặc sequence), ví dụ: `PAYMENT-REFUNDED-<paymentId>-<refundSeq>`.
+## 16. Retry and DLQ
+**EVT-008**:
+- **Retryable Errors**: Lỗi mất kết nối tạm thời, khóa Database timeout. Consumer thực hiện Retry theo cấu hình (ví dụ: Exponential backoff).
+- **Non-retryable Errors**: Lỗi logic nghiệp vụ, schema không hợp lệ.
+- **DLQ Routing**: Sau khi hết số lượt Retry cấu hình, hoặc phát hiện Non-retryable error, Consumer chuyển Message vào `payment.events.v1.dlq` và cảnh báo Observability.
 
----
+## 17. Schema versioning
+**EVT-009**: 
+- Consumers cần chủ động bỏ qua các optional fields không nhận diện được (ignore unknown optional fields when safe).
+- Bất kỳ thao tác xóa bỏ trường dữ liệu (breaking field removals), thay đổi kiểu dữ liệu (type changes), hoặc thay đổi định nghĩa dữ liệu (semantic changes) đều bắt buộc phải gia tăng `schemaVersion`.
+- Các schema phiên bản không được hỗ trợ sẽ bị đẩy vào DLQ.
+- Producer và Consumer phải phối hợp (coordinated migration) trước khi thực hiện breaking changes.
 
-## 4. Ràng Buộc Dữ Liệu (Validation Rules)
+## 18. Privacy
+**EVT-010**: Không đưa dữ liệu cá nhân (PII), Secret keys, Dữ liệu thẻ tín dụng vào Event Payload.
 
-### 4.1. Phía Producer (Payment Service)
-Trước khi gửi thông điệp, Payment Service phải đảm bảo:
-*   Event được publish **chỉ sau khi** giao dịch database của nghiệp vụ đã commit thành công (sử dụng Transactional Outbox Pattern nếu có).
-*   Bổ sung đầy đủ thông tin phim (`movieId`, `movieTitle`) vào Payload, tránh việc Analytics phải gọi các API nội bộ khác.
+## 19. MOCK Isolation
+**EVT-011**: Production Analytics Service tuyệt đối không được phép tiếp nhận MOCK revenue. Sự kiện MOCK chỉ tồn tại ở các topic không thuộc Production cluster (Ví dụ: thông qua environment-specific topic naming cấu hình linh hoạt).
 
-### 4.2. Phía Consumer (Analytics Service)
-**PAYMENT_SUCCEEDED:**
-*   `eventId` không được rỗng (not blank).
-*   `paymentId`, `bookingId`, `movieId`, `ticketCount` > 0.
-*   `paidAmount` >= 0.
-*   `currency` = "VND".
-*   `movieTitle` không được rỗng.
-*   `occurredAt` đúng định dạng ISO-8601.
+## 20. Observability
+**EVT-012**: Các log và metrics của Consumer phải chứa `traceId` và `eventId`.
 
-**PAYMENT_REFUNDED:**
-*   `eventId` không được rỗng (not blank).
-*   `paymentId`, `bookingId`, `movieId`, `refundedTicketCount` > 0.
-*   `refundAmount` > 0.
-*   `currency` = "VND".
-*   `movieTitle` không được rỗng.
-*   `occurredAt` đúng định dạng ISO-8601.
+## 21. Implementation mapping
+- `#157`: Schema cơ bản cho Snapshot, Outbox.
+- `#161`: Outbox Worker Foundation.
+- `#166`: Producer & Consumer Event logic.
+- `#169`: Reconciliation Operations.
+- `#170`: Runtime E2E verification.
 
----
+## 22. Deferred PAYMENT_REFUNDED
+- Trạng thái: DEFERRED — NOT IMPLEMENTED IN PRODUCT RELEASE 1.
+- Ghi chú: Yêu cầu #166 không chịu trách nhiệm implement event hoàn tiền.
 
-## 5. Cơ Chế Xử Lý Trùng Lặp & Tính Cố Vị (Idempotency)
-
-Mạng Kafka cung cấp cơ chế At-Least-Once Delivery, có thể dẫn đến việc nhận 1 gói tin nhiều lần (Duplicate Events).
-
-*   **Một Business Event = Một Event ID ổn định:** `eventId` sinh ra phải cố định theo nghiệp vụ, không thay đổi ngay cả khi Producer retry gửi.
-*   **Consumer Deduplication:** Analytics Service BẮT BUỘC lưu `eventId` vào bảng `processed_analytics_events.event_id` trong **cùng một Transaction** của bước cộng/trừ doanh thu. 
-*   Trước khi xử lý, Analytics Service phải kiểm tra `eventId` đã tồn tại trong bảng này chưa. Nếu có rồi -> Bỏ qua Event (Duplicate handling) và Ack Kafka bình thường. Tuyệt đối không phụ thuộc vào Kafka offsets cho Idempotency.
-
----
-
-## 6. Lỗi & Chiến Lược Khôi Phục (Retry & DLQ)
-
-### 6.1. Xử lý Consumer Lỗi (Retry Behavior)
-*   **Lỗi Retryable (Có thể thử lại):** Database unavailable, Kafka transient failure, Transaction deadlock, Temporary infrastructure error.
-    *   *Chiến lược:* Consumer throw Exception để Kafka poll lại message.
-    *   *Retry count & Backoff:* Cấu hình Backoff theo hướng tăng dần (ví dụ 1s, 2s, 5s) và giới hạn số lần Retry (ví dụ max 3 lần). Duplicate event không được retry vô hạn.
-    *   *Chuyển DLQ:* Khi vượt quá số lần Retry count tối đa, thông điệp sẽ bị chuyển sang DLQ.
-    *   *Acknowledge behavior:* Consumer chỉ acknowledge (commit offset) khi xử lý thành công hoặc sau khi đã ném thành công vào DLQ.
-*   **Lỗi Non-Retryable (Không thể thử lại):** Sai cấu trúc JSON, thiếu trường bắt buộc (`invalid payload`), phiên bản event không hỗ trợ, sai kiểu dữ liệu (`invalid amount`, `invalid currency`).
-    *   *Chiến lược:* Consumer bắt lỗi, in cảnh báo, không retry và ném thẳng Message vào **DLQ (Dead Letter Queue)**. Không ảnh hưởng đến các Message tiếp theo.
-
-### 6.2. DLQ (Dead Letter Queue)
-Sử dụng 2 topic tương ứng:
-*   `payment.payment-succeeded.v1.dlq`
-*   `payment.payment-refunded.v1.dlq`
-
-Những event quá số lần Retry tối đa (Retry Exhausted) hoặc dính lỗi Non-Retryable sẽ được lưu vào DLQ để đội ngũ vận hành kiểm tra (Manual Intervention) mà không gây tắc nghẽn luồng xử lý chính.
-
----
-
-## 7. Trách Nhiệm Phân Hệ (Responsibilities)
-
-### 7.1. Payment Service (Producer)
-*   Publish event sau khi transaction nghiệp vụ đã hoàn thành (nếu dùng Outbox Pattern, phải mô tả direction trong implementation issue riêng).
-*   Không publish success event khi payment chưa thực sự thành công.
-*   Không publish refund event khi refund chưa thực sự thành công.
-*   Giữ `eventId` ổn định qua các lần retry.
-*   Publish payload đúng Event Version đã thoả thuận.
-*   Cung cấp đủ enriched fields (từ Booking/Movie) để Analytics không cần query ngược lại.
-
-### 7.2. Analytics Service (Consumer)
-*   Phải tự thực hiện validate payload đầu vào.
-*   Từ chối và không xử lý các bản tin có `eventVersion` chưa được hỗ trợ (đẩy sang DLQ).
-*   Dùng `eventId` cho idempotency, lưu vào bảng `processed_analytics_events` để chống aggregate trùng.
-*   Dùng `occurredAt` để xác định ngày aggregate (`statDate`).
-*   Thực hiện Aggregate trong một transaction duy nhất.
-*   Không gọi API ngược lại Payment/Booking/Movie Service trong aggregate transaction.
-*   Không tự tính lại discount hoặc payment amount, chỉ sử dụng field cung cấp trong event.
-*   Xử lý phòng thủ (Defensive Consumer Handling): Consumer vẫn phải xử lý phòng thủ nếu event đến sai thứ tự (ví dụ Refund event đến trước Succeeded event).
+## 23. Reviewer checklist
+- [ ] Xác minh Kafka Topic và DLQ Namespace đã phân tách an toàn MOCK/Production.
+- [ ] Xác minh Consumer Transaction xử lý Idempotency và Commit Offset tuần tự.
+- [ ] Xác minh luật `reconciliationStatus = REQUIRED` KHÔNG tính khống doanh thu chuẩn.
+- [ ] Đảm bảo Schema Versioning tuân thủ luật Breaking Changes.
+- [ ] Đảm bảo Aggregate Identity đúng là `PAYMENT`, Message Key là `bookingId`.
