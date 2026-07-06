@@ -60,7 +60,7 @@ class AdminGenreControllerTest {
     @WithMockUser(authorities = "ROLE_ADMIN")
     void createGenre_ShouldReturnCreated_WhenAdmin() throws Exception {
         GenreCreateRequest request = new GenreCreateRequest("Action");
-        GenreResponse response = new GenreResponse(1, "Action");
+        GenreResponse response = new GenreResponse(1, "Action", "ACTIVE");
         when(genreService.createGenre(any())).thenReturn(response);
 
         mockMvc.perform(post("/api/admin/genres")
@@ -99,8 +99,8 @@ class AdminGenreControllerTest {
     @Test
     @WithMockUser(authorities = "ROLE_ADMIN")
     void updateGenre_ShouldReturnOk_WhenAdmin() throws Exception {
-        GenreUpdateRequest request = new GenreUpdateRequest("Sci-Fi");
-        GenreResponse response = new GenreResponse(1, "Sci-Fi");
+        GenreUpdateRequest request = new GenreUpdateRequest("Sci-Fi", "ACTIVE");
+        GenreResponse response = new GenreResponse(1, "Sci-Fi", "ACTIVE");
         when(genreService.updateGenre(eq(1), any())).thenReturn(response);
 
         mockMvc.perform(put("/api/admin/genres/1")
@@ -114,7 +114,7 @@ class AdminGenreControllerTest {
     @Test
     @WithMockUser(authorities = "ROLE_ADMIN")
     void updateGenre_ShouldReturn404_WhenNotFound() throws Exception {
-        GenreUpdateRequest request = new GenreUpdateRequest("Sci-Fi");
+        GenreUpdateRequest request = new GenreUpdateRequest("Sci-Fi", "ACTIVE");
         when(genreService.updateGenre(eq(1), any())).thenThrow(new BusinessException("Genre not found", "GENRE_NOT_FOUND", HttpStatus.NOT_FOUND));
 
         mockMvc.perform(put("/api/admin/genres/1")

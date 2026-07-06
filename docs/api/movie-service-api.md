@@ -12,7 +12,9 @@
 | Reviewer       | Phan Tuấn Thành                                  |
 | Trạng thái     | Approved                                         |
 | Milestone      | Sprint 2 - Core Service API Foundation           |
-| Ngày cập nhật  | 23/06/2026                                       |
+| Ngày cập nhật  | 06/07/2026                                       |
+
+**Ghi chú (06/07/2026):** *Đã update Requirement Conflict theo yêu cầu của Reviewer: Các endpoint `PATCH .../status` và `GET /api/admin...` (lấy danh sách) của Movie và Room đã chính thức BỊ GỠ BỎ (DEPRECATED). API Public GET được gộp chung để xử lý logic dựa trên Role (Admin/Customer). Bổ sung phương thức `DELETE` thay thế cho mục đích Xóa mềm (Soft Delete) đối với Movie, Genre, Room.*
 
 ---
 
@@ -97,6 +99,7 @@ Các nghiệp vụ trên thuộc Booking, Payment, Promotion, Score và Analytic
 | ---------- | ------------ | -------------------- |
 | id         | int          | Primary key          |
 | genre_name | varchar(100) | Tên thể loại, unique |
+| status     | varchar(20)  | Trạng thái           |
 
 ### 4.3. Bảng `movies_genres`
 
@@ -384,22 +387,19 @@ API này chỉ trả cấu trúc ghế vật lý, không trả trạng thái gi�
 Yêu cầu role `ADMIN` hoặc permission phù hợp:
 
 ```txt
-GET    /api/admin/movies
-GET    /api/admin/movies/{movieId}
 POST   /api/admin/movies
 PUT    /api/admin/movies/{movieId}
-PATCH  /api/admin/movies/{movieId}/status
+DELETE /api/admin/movies/{movieId}
 
-GET    /api/admin/genres
-GET    /api/admin/genres/{genreId}
 POST   /api/admin/genres
 PUT    /api/admin/genres/{genreId}
+DELETE /api/admin/genres/{genreId}
 
 GET    /api/admin/rooms
 GET    /api/admin/rooms/{roomId}
 POST   /api/admin/rooms
 PUT    /api/admin/rooms/{roomId}
-PATCH  /api/admin/rooms/{roomId}/status
+DELETE /api/admin/rooms/{roomId}
 
 GET    /api/admin/rooms/{roomId}/seats
 GET    /api/admin/seats/{seatId}
@@ -427,20 +427,17 @@ PATCH  /api/admin/showtimes/{showtimeId}/status
 | GET    | `/api/movies/{movieId}/showtimes`          | Public    | Suất chiếu theo phim           |
 | GET    | `/api/showtimes/{showtimeId}`              | Public    | Chi tiết suất chiếu            |
 | GET    | `/api/rooms/{roomId}/seats`                | Protected | Sơ đồ ghế vật lý               |
-| GET    | `/api/admin/movies`                        | Admin     | Danh sách phim quản trị        |
-| GET    | `/api/admin/movies/{movieId}`              | Admin     | Chi tiết phim quản trị         |
 | POST   | `/api/admin/movies`                        | Admin     | Tạo phim                       |
 | PUT    | `/api/admin/movies/{movieId}`              | Admin     | Cập nhật phim                  |
-| PATCH  | `/api/admin/movies/{movieId}/status`       | Admin     | Cập nhật trạng thái phim       |
-| GET    | `/api/admin/genres`                        | Admin     | Danh sách thể loại quản trị    |
-| GET    | `/api/admin/genres/{genreId}`              | Admin     | Chi tiết thể loại quản trị     |
+| DELETE | `/api/admin/movies/{movieId}`              | Admin     | Xoá phim (soft delete)         |
 | POST   | `/api/admin/genres`                        | Admin     | Tạo thể loại                   |
 | PUT    | `/api/admin/genres/{genreId}`              | Admin     | Cập nhật thể loại              |
+| DELETE | `/api/admin/genres/{genreId}`              | Admin     | Xoá thể loại (soft delete)     |
 | GET    | `/api/admin/rooms`                         | Admin     | Danh sách phòng                |
 | GET    | `/api/admin/rooms/{roomId}`                | Admin     | Chi tiết phòng                 |
 | POST   | `/api/admin/rooms`                         | Admin     | Tạo phòng                      |
 | PUT    | `/api/admin/rooms/{roomId}`                | Admin     | Cập nhật phòng                 |
-| PATCH  | `/api/admin/rooms/{roomId}/status`         | Admin     | Cập nhật trạng thái phòng      |
+| DELETE | `/api/admin/rooms/{roomId}`                | Admin     | Xoá phòng (soft delete)        |
 | GET    | `/api/admin/rooms/{roomId}/seats`          | Admin     | Danh sách ghế quản trị         |
 | GET    | `/api/admin/seats/{seatId}`                | Admin     | Chi tiết ghế                   |
 | POST   | `/api/admin/rooms/{roomId}/seats`          | Admin     | Tạo ghế hàng loạt              |

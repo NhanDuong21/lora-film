@@ -2,7 +2,7 @@ package com.project.movieservice.dto;
 
 import java.util.List;
 
-public class MoviePageResponse<T> {
+public class MoviePageResponse<T> implements java.io.Serializable {
     private List<T> content;
     private int page;
     private int size;

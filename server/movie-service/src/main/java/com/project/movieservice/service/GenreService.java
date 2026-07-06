@@ -8,11 +8,13 @@ import java.util.List;
 
 public interface GenreService {
     
-    List<GenreResponse> getGenres();
+    List<GenreResponse> getGenres(boolean isAdmin);
     
-    GenreResponse getGenreById(Integer genreId);
+    GenreResponse getGenreById(Integer genreId, boolean isAdmin);
     
     GenreResponse createGenre(GenreCreateRequest request);
     
     GenreResponse updateGenre(Integer genreId, GenreUpdateRequest request);
+
+    void softDeleteGenre(Integer genreId);
 }

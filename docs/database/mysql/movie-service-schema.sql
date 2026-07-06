@@ -19,7 +19,8 @@ CREATE TABLE `movies` (
 
 CREATE TABLE `genres` (
   `id` int PRIMARY KEY AUTO_INCREMENT,
-  `genre_name` varchar(100) UNIQUE NOT NULL
+  `genre_name` varchar(100) UNIQUE NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, INACTIVE'
 );
 
 CREATE TABLE `movies_genres` (

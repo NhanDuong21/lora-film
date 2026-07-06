@@ -11,6 +11,8 @@ public interface GenreRepository extends JpaRepository<Genre, Integer> {
     
     List<Genre> findAllByOrderByGenreNameAsc();
 
+    List<Genre> findByStatusOrderByGenreNameAsc(com.project.movieservice.enumtype.GenreStatus status);
+
     boolean existsByGenreNameIgnoreCase(String genreName);
 
     boolean existsByGenreNameIgnoreCaseAndIdNot(String genreName, Integer id);

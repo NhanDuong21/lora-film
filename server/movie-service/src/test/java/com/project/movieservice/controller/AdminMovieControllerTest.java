@@ -41,20 +41,6 @@ public class AdminMovieControllerTest {
         objectMapper.registerModule(new JavaTimeModule());
     }
 
-    @Test
-    void getAdminMovieDetail_Success() throws Exception {
-        AdminMovieDetailResponse response = new AdminMovieDetailResponse();
-        response.setId(1L);
-        response.setTitle("Test Movie");
-        
-        when(movieService.getAdminMovieDetail("1")).thenReturn(response);
-
-        mockMvc.perform(get("/api/admin/movies/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.id").value(1))
-                .andExpect(jsonPath("$.data.title").value("Test Movie"));
-    }
 
     @Test
     void createMovie_Success() throws Exception {
@@ -78,18 +64,9 @@ public class AdminMovieControllerTest {
     }
 
     @Test
-    void updateMovieStatus_Success() throws Exception {
-        MovieStatusUpdateRequest request = new MovieStatusUpdateRequest();
-        request.setStatus("NOW_SHOWING");
-
-        MovieStatusResponse response = new MovieStatusResponse(1L, "NOW_SHOWING");
-        when(movieService.updateMovieStatus(eq("1"), any(MovieStatusUpdateRequest.class))).thenReturn(response);
-
-        mockMvc.perform(patch("/api/admin/movies/1/status")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+    void deleteMovie_Success() throws Exception {
+        mockMvc.perform(delete("/api/admin/movies/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.status").value("NOW_SHOWING"));
+                .andExpect(jsonPath("$.success").value(true));
     }
 }

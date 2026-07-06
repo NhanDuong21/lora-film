@@ -20,28 +20,6 @@ public class AdminMovieController {
         this.movieService = movieService;
     }
 
-    @GetMapping
-    public ResponseEntity<ApiResponse<MoviePageResponse<AdminMovieListItemResponse>>> getAdminMovies(
-            @RequestParam(required = false) String page,
-            @RequestParam(required = false) String size,
-            @RequestParam(required = false) String search,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String genreId,
-            @RequestParam(required = false) String releaseFrom,
-            @RequestParam(required = false) String releaseTo,
-            @RequestParam(required = false) String sort) {
-
-        MoviePageResponse<AdminMovieListItemResponse> response = movieService.getAdminMovies(
-                page, size, search, status, genreId, releaseFrom, releaseTo, sort);
-        return ResponseEntity.ok(ApiResponse.success("Movies retrieved successfully", response));
-    }
-
-    @GetMapping("/{movieId}")
-    public ResponseEntity<ApiResponse<AdminMovieDetailResponse>> getAdminMovieDetail(@PathVariable String movieId) {
-        AdminMovieDetailResponse response = movieService.getAdminMovieDetail(movieId);
-        return ResponseEntity.ok(ApiResponse.success("Movie retrieved successfully", response));
-    }
-
     @PostMapping
     public ResponseEntity<ApiResponse<MovieCreatedResponse>> createMovie(@Valid @RequestBody MovieCreateRequest request) {
         MovieCreatedResponse response = movieService.createMovie(request);
@@ -56,11 +34,9 @@ public class AdminMovieController {
         return ResponseEntity.ok(ApiResponse.success("Movie updated successfully", response));
     }
 
-    @PatchMapping("/{movieId}/status")
-    public ResponseEntity<ApiResponse<MovieStatusResponse>> updateMovieStatus(
-            @PathVariable String movieId,
-            @Valid @RequestBody MovieStatusUpdateRequest request) {
-        MovieStatusResponse response = movieService.updateMovieStatus(movieId, request);
-        return ResponseEntity.ok(ApiResponse.success("Movie status updated successfully", response));
+    @DeleteMapping("/{movieId}")
+    public ResponseEntity<ApiResponse<Void>> deleteMovie(@PathVariable String movieId) {
+        movieService.softDeleteMovie(movieId);
+        return ResponseEntity.ok(ApiResponse.success("Movie deleted successfully", null));
     }
 }

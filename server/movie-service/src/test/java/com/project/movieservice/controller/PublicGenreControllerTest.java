@@ -27,8 +27,8 @@ class PublicGenreControllerTest {
 
     @Test
     void getGenres_ShouldReturnOk_WithoutToken() throws Exception {
-        GenreResponse genreResponse = new GenreResponse(1, "Action");
-        when(genreService.getGenres()).thenReturn(Collections.singletonList(genreResponse));
+        GenreResponse genreResponse = new GenreResponse(1, "Action", "ACTIVE");
+        when(genreService.getGenres(false)).thenReturn(Collections.singletonList(genreResponse));
 
         mockMvc.perform(get("/api/genres"))
                 .andExpect(status().isOk())
@@ -38,8 +38,8 @@ class PublicGenreControllerTest {
 
     @Test
     void getGenreById_ShouldReturnOk_WithoutToken() throws Exception {
-        GenreResponse genreResponse = new GenreResponse(1, "Action");
-        when(genreService.getGenreById(1)).thenReturn(genreResponse);
+        GenreResponse genreResponse = new GenreResponse(1, "Action", "ACTIVE");
+        when(genreService.getGenreById(1, false)).thenReturn(genreResponse);
 
         mockMvc.perform(get("/api/genres/1"))
                 .andExpect(status().isOk())
