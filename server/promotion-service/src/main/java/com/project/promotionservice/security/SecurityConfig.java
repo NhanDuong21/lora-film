@@ -17,11 +17,16 @@ public class SecurityConfig {
     private final JwtFilter jwtFilter;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final CustomAccessDeniedHandler accessDeniedHandler;
+    private final InternalTokenFilter internalTokenFilter;
 
-    public SecurityConfig(JwtFilter jwtFilter, CustomAuthenticationEntryPoint authenticationEntryPoint, CustomAccessDeniedHandler accessDeniedHandler) {
+    public SecurityConfig(JwtFilter jwtFilter,
+                          CustomAuthenticationEntryPoint authenticationEntryPoint,
+                          CustomAccessDeniedHandler accessDeniedHandler,
+                          InternalTokenFilter internalTokenFilter) {
         this.jwtFilter = jwtFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.accessDeniedHandler = accessDeniedHandler;
+        this.internalTokenFilter = internalTokenFilter;
     }
 
     @Bean
@@ -37,9 +42,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").authenticated()
                 .requestMatchers("/api/promotions/validate").authenticated()
                 .requestMatchers("/api/promotions/preview").authenticated()
+                .requestMatchers("/internal/**").permitAll()
                 .anyRequest().permitAll()
             )
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(internalTokenFilter, JwtFilter.class);
 
         return http.build();
     }
