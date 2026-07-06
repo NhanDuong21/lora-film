@@ -48,9 +48,18 @@ class AuthControllerTest {
         
         when(authService.register(any(RegisterRequest.class))).thenReturn(mockResponse);
 
+        String jsonRequest = "{" +
+                "\"fullName\":\"Nguyen Van A\"," +
+                "\"email\":\"test@example.com\"," +
+                "\"phoneNumber\":\"0901234567\"," +
+                "\"cccd\":\"092205006789\"," +
+                "\"birthday\":\"2005-06-12\"," +
+                "\"password\":\"Password@123\"" +
+                "}";
+
         mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(jsonRequest))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Registration initiated"))
@@ -70,9 +79,14 @@ class AuthControllerTest {
         
         when(authService.login(any(LoginRequest.class))).thenReturn(mockResponse);
 
+        String jsonRequest = "{" +
+                "\"email\":\"test@example.com\"," +
+                "\"password\":\"Password@123\"" +
+                "}";
+
         mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(jsonRequest))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accessToken").exists())
