@@ -21,7 +21,6 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import java.util.Map;
-
 import com.project.authservice.entity.Account;
 import com.project.authservice.entity.RedisOtpData;
 import com.project.authservice.exception.AccountAlreadyVerifiedException;
@@ -49,7 +48,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
     private String notificationServiceUrl;
 
     public OtpVerificationServiceImpl(AccountRepository accountRepository, 
-                                      StringRedisTemplate redisTemplate, 
+                                      StringRedisTemplate redisTemplate,
                                       PasswordEncoder passwordEncoder,
                                       RestTemplate restTemplate) {
         this.accountRepository = accountRepository;
@@ -65,7 +64,8 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
     private RedisOtpData getRedisOtpData(String key) {
         String json = redisTemplate.opsForValue().get(key);
-        if (json == null) return null;
+        if (json == null)
+            return null;
         try {
             return objectMapper.readValue(json, RedisOtpData.class);
         } catch (JsonProcessingException e) {
@@ -91,23 +91,11 @@ public class OtpVerificationServiceImpl implements VerificationService {
     @Override
     public com.project.authservice.dto.response.SendOtpResponse sendOtp(SendOtpRequest request) {
         String email = request.getEmail();
-        
-        Account account = accountRepository.findByEmail(email).orElse(null);
-        String pendingKey = "pending_registration:" + email;
-        boolean isPendingRegistration = Boolean.TRUE.equals(redisTemplate.hasKey(pendingKey))
-                || (account != null && account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING);
-        String purpose = isPendingRegistration ? "REGISTRATION" : "OTHER";
 
-        Long accountId = null;
-        if (!"REGISTRATION".equals(purpose)) {
-            if (account == null) {
-                throw new AccountNotFoundException();
-            }
-            accountId = account.getId();
-        } else {
-            accountId = account != null ? account.getId() : 1L;
-        }
-        
+        Account account = accountRepository.findByEmail(email)
+                .orElseThrow(AccountNotFoundException::new);
+        Long accountId = account.getId();
+
         String key = getRedisKey(email);
 
         RedisOtpData existingData = getRedisOtpData(key);
@@ -127,7 +115,8 @@ public class OtpVerificationServiceImpl implements VerificationService {
         RedisOtpData newData = new RedisOtpData();
         newData.setOtpHash(otpHash);
         newData.setFailedAttempts(0);
-        newData.setCreatedAt(existingData != null && existingData.getCreatedAt() > 0 ? existingData.getCreatedAt() : System.currentTimeMillis());
+        newData.setCreatedAt(existingData != null && existingData.getCreatedAt() > 0 ? existingData.getCreatedAt()
+                : System.currentTimeMillis());
         newData.setLastSentAt(System.currentTimeMillis());
 
         saveRedisOtpData(key, newData);
@@ -138,10 +127,11 @@ public class OtpVerificationServiceImpl implements VerificationService {
         System.out.println("OTP: " + otp);
         System.out.println("==================================\n");
 
-        log.info("OTP generated for email={} purpose={}", email, purpose);
+        log.info("OTP generated for email={}", email);
 
-        if ("REGISTRATION".equals(purpose)) {
+        if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
             String name = "Khách hàng";
+            String pendingKey = "pending_registration:" + email;
             String pendingJson = redisTemplate.opsForValue().get(pendingKey);
             if (pendingJson != null) {
                 try {
@@ -182,7 +172,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
                 log.warn("Failed to send OTP email via notification-service: {}", e.getMessage(), e);
             }
         }
-        
+
         return new com.project.authservice.dto.response.SendOtpResponse(accountId, 300L);
     }
 
@@ -191,7 +181,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
     public void verify(VerifyRequest request) {
         String email = request.getEmail();
         String otp = request.getOtp();
-        
+
         if (email != null) {
             if (!accountRepository.existsByEmail(email)) {
                 throw new AccountNotFoundException();
@@ -199,7 +189,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
         } else {
             throw new AccountNotFoundException();
         }
-        
+
         String key = getRedisKey(email);
 
         RedisOtpData existingData = getRedisOtpData(key);
@@ -232,7 +222,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
         redisTemplate.delete(key);
         log.info("OTP verified successfully for email={}", email);
 
-        // Account status activation should be handled by the caller or Saga pattern, not here.
+        // Account status activation should be handled by the caller or Saga pattern,
+        // not here.
     }
 }
-

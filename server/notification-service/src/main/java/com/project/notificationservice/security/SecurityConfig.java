@@ -54,7 +54,7 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(internalTokenFilter, JwtFilter.class);
+                .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
