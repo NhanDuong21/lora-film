@@ -11,6 +11,7 @@ import com.project.bookingservice.enumtype.ReservationStatus;
 import com.project.bookingservice.exception.BusinessException;
 import com.project.bookingservice.repository.BookingRepository;
 import com.project.bookingservice.repository.SeatReservationRepository;
+import com.project.bookingservice.repository.TicketRepository;
 import com.project.bookingservice.security.CurrentUserProvider;
 import com.project.bookingservice.service.BookingService;
 import com.project.bookingservice.service.lock.SeatLockManager;
@@ -42,17 +43,20 @@ public class BookingServiceImpl implements BookingService {
     private final CurrentUserProvider currentUserProvider;
     private final MovieServiceClient movieServiceClient;
     private final SeatLockManager seatLockManager;
+    private final TicketRepository ticketRepository;
 
     public BookingServiceImpl(BookingRepository bookingRepository,
                               SeatReservationRepository seatReservationRepository,
                               CurrentUserProvider currentUserProvider,
                               MovieServiceClient movieServiceClient,
-                              SeatLockManager seatLockManager) {
+                              SeatLockManager seatLockManager,
+                              TicketRepository ticketRepository) {
         this.bookingRepository = bookingRepository;
         this.seatReservationRepository = seatReservationRepository;
         this.currentUserProvider = currentUserProvider;
         this.movieServiceClient = movieServiceClient;
         this.seatLockManager = seatLockManager;
+        this.ticketRepository = ticketRepository;
     }
 
     @Override
@@ -238,6 +242,39 @@ public class BookingServiceImpl implements BookingService {
         } catch (Exception e) {
             throw e;
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.project.bookingservice.dto.response.TicketResponse> getTicketsByBookingId(Long bookingId) {
+        Long userId = currentUserProvider.getCurrentUserId();
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BusinessException("BOOKING_NOT_FOUND", "Booking not found"));
+        if (!booking.getUserId().equals(userId)) {
+            throw new BusinessException("FORBIDDEN", "Booking does not belong to the user");
+        }
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
+            return Collections.emptyList();
+        }
+        return ticketRepository.findAllByBookingId(bookingId).stream()
+                .map(t -> new com.project.bookingservice.dto.response.TicketResponse(
+                        t.getId(), t.getBookingId(), t.getSeatId(), t.getPrice(), t.getCreatedAt()))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.project.bookingservice.dto.response.TicketResponse getTicketById(Long ticketId) {
+        Long userId = currentUserProvider.getCurrentUserId();
+        com.project.bookingservice.entity.Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new BusinessException("TICKET_NOT_FOUND", "Ticket not found"));
+        Booking booking = bookingRepository.findById(ticket.getBookingId())
+                .orElseThrow(() -> new BusinessException("BOOKING_NOT_FOUND", "Booking not found"));
+        if (!booking.getUserId().equals(userId)) {
+            throw new BusinessException("FORBIDDEN", "Ticket does not belong to the user");
+        }
+        return new com.project.bookingservice.dto.response.TicketResponse(
+                ticket.getId(), ticket.getBookingId(), ticket.getSeatId(), ticket.getPrice(), ticket.getCreatedAt());
     }
 
     private String generateBookingCode() {

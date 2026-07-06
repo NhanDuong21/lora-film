@@ -17,4 +17,8 @@ public interface BookingService {
     Page<BookingResponse> getMyBookings(BookingStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
     void cancelBooking(Long bookingId, String idempotencyKey);
+
+    java.util.List<com.project.bookingservice.dto.response.TicketResponse> getTicketsByBookingId(Long bookingId);
+
+    com.project.bookingservice.dto.response.TicketResponse getTicketById(Long ticketId);
 }

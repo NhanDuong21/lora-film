@@ -5,6 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public class RegisterRequest {
@@ -41,13 +44,14 @@ public class RegisterRequest {
     )
     private String birthday;
 
-    @Schema(example = "User@123")
+    @Schema(example = "********")
     @NotBlank(message = "Password is required")
     @Size(min = 8, max = 50, message = "password length must be between 8 and 50")
     @Pattern(
         regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*(),.?\":{}|<>]).+$",
         message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
     )
+    @JsonSerialize(using = com.project.authservice.util.PasswordMaskSerializer.class)
     private String password;
 
     public RegisterRequest() {}
@@ -107,5 +111,17 @@ public class RegisterRequest {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    @Override
+    public String toString() {
+        return "RegisterRequest{" +
+                "fullName='" + fullName + '\'' +
+                ", email='" + email + '\'' +
+                ", phoneNumber='" + phoneNumber + '\'' +
+                ", cccd='" + cccd + '\'' +
+                ", birthday='" + birthday + '\'' +
+                ", password='[PROTECTED]'" +
+                '}';
     }
 }
