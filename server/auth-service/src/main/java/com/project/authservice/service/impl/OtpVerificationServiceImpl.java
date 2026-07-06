@@ -22,7 +22,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import java.util.Map;
 
-import com.project.authservice.entity.PendingRegistrationData;
 import com.project.authservice.entity.Account;
 import com.project.authservice.entity.RedisOtpData;
 import com.project.authservice.exception.AccountAlreadyVerifiedException;
@@ -93,15 +92,20 @@ public class OtpVerificationServiceImpl implements VerificationService {
     public com.project.authservice.dto.response.SendOtpResponse sendOtp(SendOtpRequest request) {
         String email = request.getEmail();
         
+        Account account = accountRepository.findByEmail(email).orElse(null);
+        String pendingKey = "pending_registration:" + email;
+        boolean isPendingRegistration = Boolean.TRUE.equals(redisTemplate.hasKey(pendingKey))
+                || (account != null && account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING);
+        String purpose = isPendingRegistration ? "REGISTRATION" : "OTHER";
+
         Long accountId = null;
         if (!"REGISTRATION".equals(purpose)) {
-            Account account = accountRepository.findByEmail(email)
-                    .orElseThrow(AccountNotFoundException::new);
+            if (account == null) {
+                throw new AccountNotFoundException();
+            }
             accountId = account.getId();
         } else {
-            accountId = accountRepository.findByEmail(email)
-                    .map(Account::getId)
-                    .orElse(1L);
+            accountId = account != null ? account.getId() : 1L;
         }
         
         String key = getRedisKey(email);
@@ -138,7 +142,6 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         if ("REGISTRATION".equals(purpose)) {
             String name = "Khách hàng";
-            String pendingKey = "pending_registration:" + email;
             String pendingJson = redisTemplate.opsForValue().get(pendingKey);
             if (pendingJson != null) {
                 try {
