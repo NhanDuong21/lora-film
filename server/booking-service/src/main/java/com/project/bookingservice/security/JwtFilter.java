@@ -12,8 +12,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
@@ -44,8 +49,20 @@ public class JwtFilter extends OncePerRequestFilter {
                 }
 
                 if (userId != null) {
+                    List<GrantedAuthority> authorities = new ArrayList<>();
+                    Object rolesClaim = claims.get("roles");
+                    if (rolesClaim instanceof List<?>) {
+                        for (Object roleObj : (List<?>) rolesClaim) {
+                            String role = roleObj.toString();
+                            authorities.add(new SimpleGrantedAuthority(role.startsWith("ROLE_") ? role : "ROLE_" + role));
+                        }
+                    } else if (rolesClaim instanceof String) {
+                        String role = (String) rolesClaim;
+                        authorities.add(new SimpleGrantedAuthority(role.startsWith("ROLE_") ? role : "ROLE_" + role));
+                    }
+
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                            userId, null, Collections.emptyList());
+                            userId, null, authorities);
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                     SecurityContextHolder.getContext().setAuthentication(authentication);

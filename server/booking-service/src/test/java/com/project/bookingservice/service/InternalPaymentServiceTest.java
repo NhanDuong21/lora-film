@@ -194,4 +194,33 @@ public class InternalPaymentServiceTest {
         verify(bookingRepository, never()).save(any());
         verify(eventRepository).save(any(BookingPaymentResultEvent.class));
     }
+
+    @Test
+    public void testProcessPaymentResult_Failed() {
+        Long bookingId = 1L;
+        PaymentResultRequest request = new PaymentResultRequest();
+        request.setEventId(UUID.randomUUID().toString());
+        request.setResult("FAILED");
+        request.setAmount(new BigDecimal("100000.00"));
+        request.setCurrency("VND");
+        request.setOccurredAt(LocalDateTime.now());
+
+        Booking booking = new Booking();
+        booking.setId(bookingId);
+        booking.setStatus(BookingStatus.PENDING_PAYMENT);
+        booking.setTotalAmount(new BigDecimal("100000.00"));
+
+        when(eventRepository.findByEventId(request.getEventId())).thenReturn(Optional.empty());
+        when(bookingRepository.findByIdWithPessimisticLock(bookingId)).thenReturn(Optional.of(booking));
+
+        PaymentResultResponse response = internalPaymentService.processPaymentResult(bookingId, request);
+
+        assertNotNull(response);
+        assertFalse(response.isApplied());
+        assertFalse(response.isDuplicate());
+        assertEquals("ALREADY_PROCESSED", response.getResult());
+        
+        verify(bookingRepository, never()).save(any());
+        verify(eventRepository).save(any(BookingPaymentResultEvent.class));
+    }
 }

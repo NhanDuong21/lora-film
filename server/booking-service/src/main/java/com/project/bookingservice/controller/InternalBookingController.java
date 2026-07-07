@@ -36,7 +36,7 @@ public class InternalBookingController implements InternalBookingApi {
     }
 
     private void validateToken(String token) {
-        if (!internalTokenConfig.equals(token)) {
+        if (token == null || !internalTokenConfig.equals(token)) {
             throw new BusinessException("INTERNAL_TOKEN_INVALID", "Invalid internal token");
         }
     }
@@ -45,7 +45,7 @@ public class InternalBookingController implements InternalBookingApi {
     @GetMapping("/{bookingId}/payment-context")
     public ResponseEntity<ApiResponse<PaymentContextResponse>> getPaymentContext(
             @PathVariable @Positive(message = "Booking ID must be greater than 0") Long bookingId,
-            @RequestHeader(value = "X-Internal-Token", required = true) String internalToken) {
+            @RequestHeader(value = "X-Internal-Token", required = false) String internalToken) {
         
         validateToken(internalToken);
         PaymentContextResponse response = internalPaymentService.getPaymentContext(bookingId);
@@ -53,10 +53,10 @@ public class InternalBookingController implements InternalBookingApi {
     }
 
     @Override
-    @PostMapping("/{bookingId}/confirm-payment")
+    @PostMapping("/{bookingId}/payment-results")
     public ResponseEntity<ApiResponse<PaymentResultResponse>> processPaymentResult(
             @PathVariable @Positive(message = "Booking ID must be greater than 0") Long bookingId,
-            @RequestHeader(value = "X-Internal-Token", required = true) String internalToken,
+            @RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
             @Valid @RequestBody PaymentResultRequest request) {
         
         validateToken(internalToken);

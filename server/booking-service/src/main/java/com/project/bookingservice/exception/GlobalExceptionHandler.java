@@ -39,10 +39,13 @@ public class GlobalExceptionHandler {
             "SEAT_RESERVATION_EXPIRED".equals(errorCode) ||
             "BOOKING_INVALID_STATUS_TRANSITION".equals(errorCode) ||
             "BOOKING_CANNOT_BE_CANCELLED".equals(errorCode) ||
+            "BOOKING_NOT_PAYABLE".equals(errorCode) ||
             "BOOKING_ALREADY_CREATED".equals(errorCode)) {
             status = HttpStatus.CONFLICT;
-        } else if ("FORBIDDEN".equals(errorCode) || "UNAUTHORIZED".equals(errorCode) || "SEAT_RESERVATION_OWNERSHIP_MISMATCH".equals(errorCode)) {
-            status = "UNAUTHORIZED".equals(errorCode) ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
+        } else if ("FORBIDDEN".equals(errorCode) || "UNAUTHORIZED".equals(errorCode) || 
+                   "SEAT_RESERVATION_OWNERSHIP_MISMATCH".equals(errorCode) || 
+                   "INTERNAL_TOKEN_INVALID".equals(errorCode)) {
+            status = ("UNAUTHORIZED".equals(errorCode) || "INTERNAL_TOKEN_INVALID".equals(errorCode)) ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
         } else if (errorCode != null && errorCode.contains("NOT_FOUND")) {
             status = HttpStatus.NOT_FOUND;
         }
@@ -85,6 +88,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ApiResponse<Void>> handleMissingRequestHeaderException(MissingRequestHeaderException ex) {
         logger.warn("Missing request header: {}", ex.getHeaderName());
+        if ("X-Internal-Token".equalsIgnoreCase(ex.getHeaderName())) {
+            return new ResponseEntity<>(ApiResponse.error("Invalid internal token", "INTERNAL_TOKEN_INVALID"), HttpStatus.UNAUTHORIZED);
+        }
         String errorCode = "Idempotency-Key".equalsIgnoreCase(ex.getHeaderName()) ? "BOOKING_IDEMPOTENCY_KEY_REQUIRED" : "MISSING_HEADER";
         return new ResponseEntity<>(ApiResponse.error("Missing required header: " + ex.getHeaderName(), errorCode), HttpStatus.BAD_REQUEST);
     }
@@ -125,6 +131,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleHttpRequestMethodNotSupportedException(org.springframework.web.HttpRequestMethodNotSupportedException ex) {
         logger.warn("Method not supported: {}", ex.getMessage());
         return new ResponseEntity<>(ApiResponse.error("Method not supported", "METHOD_NOT_ALLOWED"), HttpStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @ExceptionHandler({
+        org.springframework.security.access.AccessDeniedException.class,
+        org.springframework.security.authorization.AuthorizationDeniedException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(Exception ex) {
+        logger.warn("Access denied: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error("Access denied", "FORBIDDEN"), HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(Throwable.class)
