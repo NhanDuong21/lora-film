@@ -4,8 +4,10 @@ import com.project.movieservice.dto.GenreCreateRequest;
 import com.project.movieservice.dto.GenreResponse;
 import com.project.movieservice.dto.GenreUpdateRequest;
 import com.project.movieservice.entity.Genre;
+import com.project.movieservice.enumtype.GenreStatus;
 import com.project.movieservice.exception.BusinessException;
 import com.project.movieservice.repository.GenreRepository;
+import com.project.movieservice.repository.MovieRepository;
 import com.project.movieservice.service.impl.GenreServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,9 @@ class GenreServiceImplTest {
     @Mock
     private GenreRepository genreRepository;
 
+    @Mock
+    private MovieRepository movieRepository;
+
     @InjectMocks
     private GenreServiceImpl genreService;
 
@@ -39,12 +44,13 @@ class GenreServiceImplTest {
     @BeforeEach
     void setUp() {
         genre = new Genre(1, "Action");
+        genre.setStatus(GenreStatus.ACTIVE);
     }
 
     @Test
     void getGenres_ShouldReturnList() {
         when(genreRepository.findAllByOrderByGenreNameAsc()).thenReturn(Collections.singletonList(genre));
-        List<GenreResponse> responses = genreService.getGenres();
+        List<GenreResponse> responses = genreService.getGenres(true);
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getGenreName()).isEqualTo("Action");
     }
@@ -52,14 +58,14 @@ class GenreServiceImplTest {
     @Test
     void getGenreById_ShouldReturnGenre_WhenExists() {
         when(genreRepository.findById(1)).thenReturn(Optional.of(genre));
-        GenreResponse response = genreService.getGenreById(1);
+        GenreResponse response = genreService.getGenreById(1, true);
         assertThat(response.getGenreName()).isEqualTo("Action");
     }
 
     @Test
     void getGenreById_ShouldThrowNotFound_WhenNotExists() {
         when(genreRepository.findById(1)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> genreService.getGenreById(1))
+        assertThatThrownBy(() -> genreService.getGenreById(1, true))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("Genre not found");
     }
@@ -71,6 +77,7 @@ class GenreServiceImplTest {
         when(genreRepository.save(any())).thenAnswer(i -> {
             Genre g = i.getArgument(0);
             g.setId(2);
+            g.setStatus(GenreStatus.ACTIVE);
             return g;
         });
 
@@ -91,7 +98,7 @@ class GenreServiceImplTest {
 
     @Test
     void updateGenre_ShouldReturnGenre_WhenValid() {
-        GenreUpdateRequest request = new GenreUpdateRequest(" Sci-Fi ");
+        GenreUpdateRequest request = new GenreUpdateRequest(" Sci-Fi ", "ACTIVE");
         when(genreRepository.findById(1)).thenReturn(Optional.of(genre));
         when(genreRepository.existsByGenreNameIgnoreCaseAndIdNot("Sci-Fi", 1)).thenReturn(false);
         when(genreRepository.save(any())).thenReturn(genre);
@@ -102,7 +109,7 @@ class GenreServiceImplTest {
 
     @Test
     void updateGenre_ShouldThrowConflict_WhenDuplicate() {
-        GenreUpdateRequest request = new GenreUpdateRequest("Sci-Fi");
+        GenreUpdateRequest request = new GenreUpdateRequest("Sci-Fi", "ACTIVE");
         when(genreRepository.findById(1)).thenReturn(Optional.of(genre));
         when(genreRepository.existsByGenreNameIgnoreCaseAndIdNot("Sci-Fi", 1)).thenReturn(true);
 
@@ -113,7 +120,7 @@ class GenreServiceImplTest {
 
     @Test
     void updateGenre_ShouldThrowNotFound_WhenNotExists() {
-        GenreUpdateRequest request = new GenreUpdateRequest("Sci-Fi");
+        GenreUpdateRequest request = new GenreUpdateRequest("Sci-Fi", "ACTIVE");
         when(genreRepository.findById(1)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> genreService.updateGenre(1, request))

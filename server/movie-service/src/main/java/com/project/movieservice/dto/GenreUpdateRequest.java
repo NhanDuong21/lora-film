@@ -11,11 +11,16 @@ public class GenreUpdateRequest {
     @Pattern(regexp = "^(?=.*[a-zA-ZÀ-ỹ])[a-zA-ZÀ-ỹ0-9\\s\\-&]+$", message = "Genre name must contain at least one letter and can only include letters, numbers, spaces, hyphens, and ampersands")
     private String genreName;
 
+    @NotBlank(message = "Status is required")
+    @Pattern(regexp = "^(ACTIVE|INACTIVE)$", message = "Status must be ACTIVE or INACTIVE")
+    private String status;
+
     public GenreUpdateRequest() {
     }
 
-    public GenreUpdateRequest(String genreName) {
+    public GenreUpdateRequest(String genreName, String status) {
         this.genreName = genreName;
+        this.status = status;
     }
 
     public String getGenreName() {
@@ -24,5 +29,13 @@ public class GenreUpdateRequest {
 
     public void setGenreName(String genreName) {
         this.genreName = genreName;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

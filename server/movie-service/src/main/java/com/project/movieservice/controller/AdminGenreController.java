@@ -10,8 +10,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/admin/genres")
 public class AdminGenreController {
@@ -20,18 +18,6 @@ public class AdminGenreController {
 
     public AdminGenreController(GenreService genreService) {
         this.genreService = genreService;
-    }
-
-    @GetMapping
-    public ResponseEntity<ApiResponse<List<GenreResponse>>> getGenres() {
-        List<GenreResponse> data = genreService.getGenres();
-        return ResponseEntity.ok(ApiResponse.success("Genres retrieved successfully", data));
-    }
-
-    @GetMapping("/{genreId}")
-    public ResponseEntity<ApiResponse<GenreResponse>> getGenreById(@PathVariable Integer genreId) {
-        GenreResponse data = genreService.getGenreById(genreId);
-        return ResponseEntity.ok(ApiResponse.success("Genre retrieved successfully", data));
     }
 
     @PostMapping
@@ -46,5 +32,11 @@ public class AdminGenreController {
             @Valid @RequestBody GenreUpdateRequest request) {
         GenreResponse data = genreService.updateGenre(genreId, request);
         return ResponseEntity.ok(ApiResponse.success("Genre updated successfully", data));
+    }
+
+    @DeleteMapping("/{genreId}")
+    public ResponseEntity<ApiResponse<Void>> deleteGenre(@PathVariable Integer genreId) {
+        genreService.softDeleteGenre(genreId);
+        return ResponseEntity.ok(ApiResponse.success("Genre deleted successfully", null));
     }
 }

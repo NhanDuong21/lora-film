@@ -3,7 +3,7 @@ package com.project.movieservice.dto;
 import java.time.LocalDate;
 import java.util.List;
 
-public class MovieDetailResponse {
+public class MovieDetailResponse implements java.io.Serializable {
     private Long id;
     private String title;
     private String description;

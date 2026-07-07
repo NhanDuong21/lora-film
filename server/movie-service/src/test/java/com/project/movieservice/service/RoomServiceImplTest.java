@@ -2,7 +2,7 @@ package com.project.movieservice.service;
 
 import com.project.movieservice.dto.RoomCreateRequest;
 import com.project.movieservice.dto.RoomResponse;
-import com.project.movieservice.dto.RoomStatusUpdateRequest;
+
 import com.project.movieservice.entity.Room;
 import com.project.movieservice.enumtype.RoomStatus;
 import com.project.movieservice.enumtype.ScreenType;
@@ -94,25 +94,20 @@ public class RoomServiceImplTest {
     }
 
     @Test
-    void testUpdateRoomStatus_InvalidTransition() {
+    void testSoftDeleteRoom_Success() {
         when(roomRepository.findById(1)).thenReturn(Optional.of(room)); // ACTIVE
-        
-        RoomStatusUpdateRequest req = new RoomStatusUpdateRequest();
-        req.setStatus(RoomStatus.ACTIVE); // ACTIVE to ACTIVE is invalid
+        when(showtimeRepository.existsByRoomIdAndEndTimeAfter(eq(1), any())).thenReturn(false);
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> roomService.updateRoomStatus(1, req));
-        assertEquals("ROOM_INVALID_STATUS_TRANSITION", ex.getErrorCode());
+        roomService.softDeleteRoom(1);
+        assertEquals(RoomStatus.INACTIVE, room.getStatus());
     }
 
     @Test
-    void testUpdateRoomStatus_FutureShowtimes() {
+    void testSoftDeleteRoom_FutureShowtimes() {
         when(roomRepository.findById(1)).thenReturn(Optional.of(room)); // ACTIVE
-        when(showtimeRepository.existsByRoomIdAndStartTimeAfterAndStatusIn(eq(1), any(), any())).thenReturn(true);
+        when(showtimeRepository.existsByRoomIdAndEndTimeAfter(eq(1), any())).thenReturn(true);
         
-        RoomStatusUpdateRequest req = new RoomStatusUpdateRequest();
-        req.setStatus(RoomStatus.INACTIVE);
-
-        BusinessException ex = assertThrows(BusinessException.class, () -> roomService.updateRoomStatus(1, req));
-        assertEquals("ROOM_HAS_FUTURE_SHOWTIMES", ex.getErrorCode());
+        BusinessException ex = assertThrows(BusinessException.class, () -> roomService.softDeleteRoom(1));
+        assertEquals("ROOM_HAS_ACTIVE_SHOWTIMES", ex.getErrorCode());
     }
 }

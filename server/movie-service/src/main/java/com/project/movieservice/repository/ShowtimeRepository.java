@@ -12,4 +12,8 @@ import java.util.List;
 public interface ShowtimeRepository extends JpaRepository<Showtime, Long> {
     
     boolean existsByRoomIdAndStartTimeAfterAndStatusIn(Integer roomId, LocalDateTime time, List<ShowtimeStatus> statuses);
+
+    boolean existsByRoomIdAndEndTimeAfter(Integer roomId, LocalDateTime time);
+
+    boolean existsByMovieIdAndEndTimeAfter(Long movieId, LocalDateTime time);
 }

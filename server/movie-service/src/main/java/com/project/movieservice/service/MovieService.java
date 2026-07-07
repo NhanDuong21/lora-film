@@ -7,21 +7,15 @@ import com.project.movieservice.dto.AdminMovieListItemResponse;
 import com.project.movieservice.dto.AdminMovieDetailResponse;
 
 public interface MovieService {
-    MoviePageResponse<MovieListItemResponse> getMovies(
+    MoviePageResponse<?> getMovies(
             String pageStr, String sizeStr, String search, String status, String genreIdStr,
-            String releaseFrom, String releaseTo, String sort);
+            String releaseFrom, String releaseTo, String sort, boolean isAdmin);
 
-    MovieDetailResponse getMovieDetail(String movieIdStr);
-
-    MoviePageResponse<AdminMovieListItemResponse> getAdminMovies(
-            String pageStr, String sizeStr, String search, String status, String genreIdStr,
-            String releaseFrom, String releaseTo, String sort);
-
-    AdminMovieDetailResponse getAdminMovieDetail(String movieIdStr);
+    Object getMovieDetail(String movieIdStr, boolean isAdmin);
 
     com.project.movieservice.dto.MovieCreatedResponse createMovie(com.project.movieservice.dto.MovieCreateRequest request);
 
     com.project.movieservice.dto.MovieUpdatedResponse updateMovie(String movieIdStr, com.project.movieservice.dto.MovieUpdateRequest request);
 
-    com.project.movieservice.dto.MovieStatusResponse updateMovieStatus(String movieIdStr, com.project.movieservice.dto.MovieStatusUpdateRequest request);
+    void softDeleteMovie(String movieIdStr);
 }

@@ -11,10 +11,10 @@ import com.project.movieservice.dto.*;
 import com.project.movieservice.exception.BusinessException;
 import com.project.movieservice.repository.GenreRepository;
 import com.project.movieservice.repository.MovieRepository;
+import com.project.movieservice.repository.ShowtimeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -30,6 +30,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +41,9 @@ public class MovieServiceTest {
 
     @Mock
     private GenreRepository genreRepository;
+
+    @Mock
+    private ShowtimeRepository showtimeRepository;
 
     @InjectMocks
     private MovieServiceImpl movieService;
@@ -65,20 +69,22 @@ public class MovieServiceTest {
     void getMovieDetail_Success() {
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
 
-        MovieDetailResponse response = movieService.getMovieDetail("1");
+        Object response = movieService.getMovieDetail("1", false);
 
         assertNotNull(response);
-        assertEquals(1L, response.getId());
-        assertEquals("Avengers", response.getTitle());
-        assertEquals("NOW_SHOWING", response.getStatus());
-        assertEquals(1, response.getGenres().size());
+        assertTrue(response instanceof MovieDetailResponse);
+        MovieDetailResponse dto = (MovieDetailResponse) response;
+        assertEquals(1L, dto.getId());
+        assertEquals("Avengers", dto.getTitle());
+        assertEquals("NOW_SHOWING", dto.getStatus());
+        assertEquals(1, dto.getGenres().size());
     }
 
     @Test
     void getMovieDetail_NotFound() {
         when(movieRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThrows(BusinessException.class, () -> movieService.getMovieDetail("1"));
+        assertThrows(BusinessException.class, () -> movieService.getMovieDetail("1", false));
     }
 
     @Test
@@ -86,12 +92,12 @@ public class MovieServiceTest {
         movie.setStatus(MovieStatus.INACTIVE);
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
 
-        assertThrows(BusinessException.class, () -> movieService.getMovieDetail("1"));
+        assertThrows(BusinessException.class, () -> movieService.getMovieDetail("1", false));
     }
 
     @Test
     void getMovieDetail_InvalidFormat() {
-        assertThrows(BusinessException.class, () -> movieService.getMovieDetail("abc"));
+        assertThrows(BusinessException.class, () -> movieService.getMovieDetail("abc", false));
     }
 
     @Test
@@ -99,21 +105,22 @@ public class MovieServiceTest {
         Page<Movie> page = new PageImpl<>(Collections.singletonList(movie));
         when(movieRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
 
-        MoviePageResponse<MovieListItemResponse> response = movieService.getMovies(
-                "0", "10", null, null, null, null, null, null);
+        MoviePageResponse<?> response = movieService.getMovies(
+                "0", "10", null, null, null, null, null, null, false);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
-        assertEquals("Avengers", response.getContent().get(0).getTitle());
+        assertTrue(response.getContent().get(0) instanceof MovieListItemResponse);
+        assertEquals("Avengers", ((MovieListItemResponse)response.getContent().get(0)).getTitle());
     }
 
     @Test
     void getMovies_InvalidPagination() {
         assertThrows(BusinessException.class, () -> movieService.getMovies(
-                "-1", "10", null, null, null, null, null, null));
+                "-1", "10", null, null, null, null, null, null, false));
                 
         assertThrows(BusinessException.class, () -> movieService.getMovies(
-                "0", "51", null, null, null, null, null, null));
+                "0", "51", null, null, null, null, null, null, false));
     }
 
     @Test
@@ -121,24 +128,26 @@ public class MovieServiceTest {
         when(genreRepository.existsById(1)).thenReturn(false);
 
         assertThrows(BusinessException.class, () -> movieService.getMovies(
-                "0", "10", null, null, "1", null, null, null));
+                "0", "10", null, null, "1", null, null, null, false));
     }
 
     @Test
     void getAdminMovieDetail_Success() {
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
-        AdminMovieDetailResponse response = movieService.getAdminMovieDetail("1");
+        Object response = movieService.getMovieDetail("1", true);
         assertNotNull(response);
-        assertEquals(1L, response.getId());
+        assertTrue(response instanceof AdminMovieDetailResponse);
+        assertEquals(1L, ((AdminMovieDetailResponse)response).getId());
     }
 
     @Test
     void getAdminMovieDetail_Inactive_Success() {
         movie.setStatus(MovieStatus.INACTIVE);
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie));
-        AdminMovieDetailResponse response = movieService.getAdminMovieDetail("1");
+        Object response = movieService.getMovieDetail("1", true);
         assertNotNull(response);
-        assertEquals("INACTIVE", response.getStatus());
+        assertTrue(response instanceof AdminMovieDetailResponse);
+        assertEquals("INACTIVE", ((AdminMovieDetailResponse)response).getStatus());
     }
 
     @Test
@@ -179,24 +188,36 @@ public class MovieServiceTest {
     }
 
     @Test
-    void updateMovieStatus_Success() {
+    void softDeleteMovie_Success() {
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie)); // NOW_SHOWING
-        MovieStatusUpdateRequest request = new MovieStatusUpdateRequest();
-        request.setStatus("ENDED");
+        when(showtimeRepository.existsByMovieIdAndEndTimeAfter(anyLong(), any())).thenReturn(false);
         
         when(movieRepository.save(any(Movie.class))).thenReturn(movie);
-        MovieStatusResponse response = movieService.updateMovieStatus("1", request);
-        assertNotNull(response);
-        assertEquals("ENDED", response.getStatus());
+        movieService.softDeleteMovie("1");
+        
+        assertEquals(MovieStatus.INACTIVE, movie.getStatus());
     }
 
     @Test
-    void updateMovieStatus_InvalidTransition() {
+    void softDeleteMovie_Failed_WhenFutureShowtimes() {
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie)); // NOW_SHOWING
-        MovieStatusUpdateRequest request = new MovieStatusUpdateRequest();
-        request.setStatus("UPCOMING"); // Invalid transition from NOW_SHOWING
+        when(showtimeRepository.existsByMovieIdAndEndTimeAfter(anyLong(), any())).thenReturn(true);
         
-        assertThrows(BusinessException.class, () -> movieService.updateMovieStatus("1", request));
+        assertThrows(BusinessException.class, () -> movieService.softDeleteMovie("1"));
+    }
+
+    @Test
+    void updateMovie_InvalidTransition() {
+        when(movieRepository.findById(1L)).thenReturn(Optional.of(movie)); // NOW_SHOWING
+        MovieUpdateRequest request = new MovieUpdateRequest();
+        request.setTitle("Avengers");
+        request.setReleaseDate(LocalDate.now().minusDays(10));
+        request.setEndDate(LocalDate.now().plusDays(10));
+        request.setDurationMinutes(180); 
+        request.setStatus("UPCOMING"); // Invalid transition from NOW_SHOWING
+        request.setGenreIds(java.util.Set.of(1));
+        
+        assertThrows(BusinessException.class, () -> movieService.updateMovie("1", request));
     }
 
     @Test

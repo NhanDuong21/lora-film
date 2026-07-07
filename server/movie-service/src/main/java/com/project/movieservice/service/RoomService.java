@@ -18,5 +18,5 @@ public interface RoomService {
     
     RoomResponse updateRoom(Integer roomId, RoomUpdateRequest request);
     
-    void updateRoomStatus(Integer roomId, RoomStatusUpdateRequest request);
+    void softDeleteRoom(Integer roomId);
 }

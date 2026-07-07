@@ -58,12 +58,9 @@ public class AdminRoomController {
         return ResponseEntity.ok(ApiResponse.success("Room updated successfully", response));
     }
 
-    @PatchMapping("/{roomId}/status")
-    public ResponseEntity<ApiResponse<Void>> updateRoomStatus(
-            @PathVariable Integer roomId,
-            @Valid @RequestBody RoomStatusUpdateRequest request) {
-        
-        roomService.updateRoomStatus(roomId, request);
-        return ResponseEntity.ok(ApiResponse.success("Room status updated successfully", null));
+    @DeleteMapping("/{roomId}")
+    public ResponseEntity<ApiResponse<Void>> deleteRoom(@PathVariable Integer roomId) {
+        roomService.softDeleteRoom(roomId);
+        return ResponseEntity.ok(ApiResponse.success("Room deleted successfully", null));
     }
 }

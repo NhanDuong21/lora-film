@@ -17,4 +17,6 @@ public interface MovieRepository extends JpaRepository<Movie, Long>, JpaSpecific
     Optional<Movie> findById(Long id);
 
     Page<Movie> findAll(org.springframework.data.jpa.domain.Specification<Movie> spec, Pageable pageable);
+
+    boolean existsByGenresIdAndStatusIn(Integer genreId, java.util.Collection<com.project.movieservice.enumtype.MovieStatus> statuses);
 }

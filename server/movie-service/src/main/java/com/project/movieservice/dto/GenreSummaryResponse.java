@@ -1,6 +1,6 @@
 package com.project.movieservice.dto;
 
-public class GenreSummaryResponse {
+public class GenreSummaryResponse implements java.io.Serializable {
     private Integer id;
     private String genreName;
 

@@ -3,7 +3,6 @@ package com.project.movieservice.service.impl;
 import com.project.movieservice.dto.RoomCreateRequest;
 import com.project.movieservice.dto.RoomPageResponse;
 import com.project.movieservice.dto.RoomResponse;
-import com.project.movieservice.dto.RoomStatusUpdateRequest;
 import com.project.movieservice.dto.RoomUpdateRequest;
 import com.project.movieservice.entity.Room;
 import com.project.movieservice.enumtype.RoomStatus;
@@ -15,6 +14,8 @@ import com.project.movieservice.repository.SeatRepository;
 import com.project.movieservice.repository.ShowtimeRepository;
 import com.project.movieservice.service.RoomService;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -88,6 +89,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "rooms", allEntries = true)
     public RoomResponse createRoom(RoomCreateRequest request) {
         String trimmedName = request.getRoomName().trim();
         if (trimmedName.isEmpty()) {
@@ -110,6 +112,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"rooms", "roomDetail"}, allEntries = true)
     public RoomResponse updateRoom(Integer roomId, RoomUpdateRequest request) {
         Room room = getRoom(roomId);
 
@@ -127,7 +130,6 @@ public class RoomServiceImpl implements RoomService {
             throw new BusinessException("Total seats update mismatch with existing seats", "ROOM_TOTAL_SEATS_MISMATCH", HttpStatus.CONFLICT);
         }
 
-        // Check future showtime if status is changed to INACTIVE
         if (request.getStatus() == RoomStatus.INACTIVE && room.getStatus() != RoomStatus.INACTIVE) {
             checkFutureShowtimes(roomId);
             validateStatusTransition(room.getStatus(), request.getStatus());
@@ -150,18 +152,20 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     @Transactional
-    public void updateRoomStatus(Integer roomId, RoomStatusUpdateRequest request) {
+    @CacheEvict(value = {"rooms", "roomDetail"}, allEntries = true)
+    public void softDeleteRoom(Integer roomId) {
         Room room = getRoom(roomId);
-        RoomStatus currentStatus = room.getStatus();
-        RoomStatus newStatus = request.getStatus();
-
-        validateStatusTransition(currentStatus, newStatus);
-
-        if (newStatus == RoomStatus.INACTIVE) {
-            checkFutureShowtimes(roomId);
+        
+        if (room.getStatus() == RoomStatus.INACTIVE) {
+            return;
         }
 
-        room.setStatus(newStatus);
+        boolean hasActiveShowtimes = showtimeRepository.existsByRoomIdAndEndTimeAfter(roomId, LocalDateTime.now());
+        if (hasActiveShowtimes) {
+            throw new BusinessException("Cannot delete room with future showtimes", "ROOM_HAS_ACTIVE_SHOWTIMES", HttpStatus.CONFLICT);
+        }
+
+        room.setStatus(RoomStatus.INACTIVE);
         roomRepository.save(room);
     }
 
