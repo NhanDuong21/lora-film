@@ -1,5 +1,15 @@
 package com.project.bookingservice.controller;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.project.bookingservice.api.InternalBookingApi;
 import com.project.bookingservice.common.ApiResponse;
 import com.project.bookingservice.dto.payment.PaymentContextResponse;
@@ -7,11 +17,9 @@ import com.project.bookingservice.dto.payment.PaymentResultRequest;
 import com.project.bookingservice.dto.payment.PaymentResultResponse;
 import com.project.bookingservice.exception.BusinessException;
 import com.project.bookingservice.service.InternalPaymentService;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/internal/bookings")
@@ -22,7 +30,7 @@ public class InternalBookingController implements InternalBookingApi {
 
     public InternalBookingController(
             InternalPaymentService internalPaymentService,
-            @Value("${internal.api.token:default-secret-token}") String internalTokenConfig) {
+            @Value("${internal.api.token}") String internalTokenConfig) {
         this.internalPaymentService = internalPaymentService;
         this.internalTokenConfig = internalTokenConfig;
     }
