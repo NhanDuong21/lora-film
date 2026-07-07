@@ -53,8 +53,8 @@ public class InternalNotificationControllerIntegrationTest {
 
     @BeforeEach
     public void setUp() {
-        logRepository.deleteAll();
-        templateRepository.deleteAll();
+        logRepository.deleteAllInBatch();
+        templateRepository.deleteAllInBatch();
         providerProperties.getMockEmail().setSimulateFailure(false);
     }
 
@@ -126,7 +126,7 @@ public class InternalNotificationControllerIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.status", is("SENT")))
-                .andExpect(jsonPath("$.data.recipient", is(nullValue())));
+                .andExpect(jsonPath("$.data.recipient").doesNotExist());
 
         NotificationLog saved = logRepository.findByEventId("EVT-TEST-123").orElse(null);
         assertNotNull(saved);
@@ -149,7 +149,7 @@ public class InternalNotificationControllerIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.status", is("SENT")))
-                .andExpect(jsonPath("$.data.templateCode", is(nullValue())));
+                .andExpect(jsonPath("$.data.templateCode").doesNotExist());
 
         NotificationLog saved = logRepository.findByEventId("EVT-TEST-123").orElse(null);
         assertNotNull(saved);
@@ -304,7 +304,7 @@ public class InternalNotificationControllerIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.status", is("SENT")))
-                .andExpect(jsonPath("$.data.idempotent", is(nullValue())));
+                .andExpect(jsonPath("$.data.idempotent").doesNotExist());
 
         // Send duplicate request (200 OK)
         mockMvc.perform(post("/internal/notifications/send")

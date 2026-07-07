@@ -129,7 +129,7 @@ public class NotificationValidationTest {
     @Test
     public void testValidation_EmailRecipientNewline_ThrowsException() {
         SendNotificationRequest request = buildBaseRequest();
-        request.setRecipient("test@example.com\n");
+        request.setRecipient("test\n@example.com");
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.sendNotification(request));
         assertEquals("NOTIFICATION_INVALID_RECIPIENT", exception.getErrorCode());

@@ -26,7 +26,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             @org.springframework.lang.NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
-        String path = request.getServletPath();
+        String path = request.getRequestURI();
         if (path != null && path.startsWith("/internal")) {
             String tokenHeader = request.getHeader("X-Internal-Token");
             if (tokenHeader == null || !tokenHeader.equals(internalToken)) {
