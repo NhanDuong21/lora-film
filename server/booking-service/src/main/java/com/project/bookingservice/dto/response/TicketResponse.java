@@ -10,7 +10,8 @@ public class TicketResponse {
     private BigDecimal price;
     private LocalDateTime createdAt;
 
-    public TicketResponse() {}
+    public TicketResponse() {
+    }
 
     public TicketResponse(Long ticketId, Long bookingId, Long seatId, BigDecimal price, LocalDateTime createdAt) {
         this.ticketId = ticketId;

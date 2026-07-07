@@ -12,7 +12,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.FetchType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -47,15 +46,15 @@ public class Booking {
     @Column(name = "version", nullable = false)
     private Integer version;
 
-    @OneToMany(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id", insertable = false, updatable = false)
-    private java.util.List<Ticket> tickets;
-
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
+
+    @OneToMany
+    @JoinColumn(name = "booking_id", referencedColumnName = "id", insertable = false, updatable = false)
+    private java.util.List<Ticket> tickets;
 
     public Booking() {}
 

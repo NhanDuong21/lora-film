@@ -244,39 +244,6 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public java.util.List<com.project.bookingservice.dto.response.TicketResponse> getTicketsByBookingId(Long bookingId) {
-        Long userId = currentUserProvider.getCurrentUserId();
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new BusinessException("BOOKING_NOT_FOUND", "Booking not found"));
-        if (!booking.getUserId().equals(userId)) {
-            throw new BusinessException("FORBIDDEN", "Booking does not belong to the user");
-        }
-        if (booking.getStatus() != BookingStatus.CONFIRMED) {
-            return Collections.emptyList();
-        }
-        return ticketRepository.findAllByBookingId(bookingId).stream()
-                .map(t -> new com.project.bookingservice.dto.response.TicketResponse(
-                        t.getId(), t.getBookingId(), t.getSeatId(), t.getPrice(), t.getCreatedAt()))
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public com.project.bookingservice.dto.response.TicketResponse getTicketById(Long ticketId) {
-        Long userId = currentUserProvider.getCurrentUserId();
-        com.project.bookingservice.entity.Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new BusinessException("TICKET_NOT_FOUND", "Ticket not found"));
-        Booking booking = bookingRepository.findById(ticket.getBookingId())
-                .orElseThrow(() -> new BusinessException("BOOKING_NOT_FOUND", "Booking not found"));
-        if (!booking.getUserId().equals(userId)) {
-            throw new BusinessException("FORBIDDEN", "Ticket does not belong to the user");
-        }
-        return new com.project.bookingservice.dto.response.TicketResponse(
-                ticket.getId(), ticket.getBookingId(), ticket.getSeatId(), ticket.getPrice(), ticket.getCreatedAt());
-    }
-
     private String generateBookingCode() {
         String dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         for (int i = 0; i < 5; i++) {
@@ -294,7 +261,13 @@ public class BookingServiceImpl implements BookingService {
                 .map(r -> new ReservationSeatResponse(r.getId(), r.getSeatId()))
                 .collect(Collectors.toList());
 
-        List<Object> tickets = (booking.getStatus() == BookingStatus.CONFIRMED) ? new ArrayList<>() : null;
+        List<com.project.bookingservice.dto.response.TicketResponse> tickets = null;
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            tickets = ticketRepository.findByBookingId(booking.getId()).stream()
+                    .map(t -> new com.project.bookingservice.dto.response.TicketResponse(
+                            t.getId(), t.getBookingId(), t.getSeatId(), t.getPrice(), t.getCreatedAt()))
+                    .collect(Collectors.toList());
+        }
 
         return new BookingResponse(
                 booking.getId(),

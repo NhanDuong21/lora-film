@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
             status = HttpStatus.CONFLICT;
         } else if ("FORBIDDEN".equals(errorCode) || "UNAUTHORIZED".equals(errorCode) || "SEAT_RESERVATION_OWNERSHIP_MISMATCH".equals(errorCode)) {
             status = "UNAUTHORIZED".equals(errorCode) ? HttpStatus.UNAUTHORIZED : HttpStatus.FORBIDDEN;
-        } else if ("BOOKING_NOT_FOUND".equals(errorCode) || "TICKET_NOT_FOUND".equals(errorCode) || "SEAT_RESERVATION_NOT_FOUND".equals(errorCode) || "BOOKING_SHOWTIME_NOT_FOUND".equals(errorCode) || "BOOKING_SEAT_NOT_FOUND".equals(errorCode) || (errorCode != null && errorCode.contains("NOT_FOUND"))) {
+        } else if (errorCode != null && errorCode.contains("NOT_FOUND")) {
             status = HttpStatus.NOT_FOUND;
         }
 

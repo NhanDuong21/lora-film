@@ -9,5 +9,4 @@ import java.util.List;
 @Repository
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
     List<Ticket> findByBookingId(Long bookingId);
-    List<Ticket> findAllByBookingId(Long bookingId);
 }
