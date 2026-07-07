@@ -11,6 +11,7 @@ import com.project.bookingservice.enumtype.ReservationStatus;
 import com.project.bookingservice.exception.BusinessException;
 import com.project.bookingservice.repository.BookingRepository;
 import com.project.bookingservice.repository.SeatReservationRepository;
+import com.project.bookingservice.repository.TicketRepository;
 import com.project.bookingservice.security.CurrentUserProvider;
 import com.project.bookingservice.service.BookingService;
 import com.project.bookingservice.service.lock.SeatLockManager;
@@ -42,17 +43,20 @@ public class BookingServiceImpl implements BookingService {
     private final CurrentUserProvider currentUserProvider;
     private final MovieServiceClient movieServiceClient;
     private final SeatLockManager seatLockManager;
+    private final TicketRepository ticketRepository;
 
     public BookingServiceImpl(BookingRepository bookingRepository,
                               SeatReservationRepository seatReservationRepository,
                               CurrentUserProvider currentUserProvider,
                               MovieServiceClient movieServiceClient,
-                              SeatLockManager seatLockManager) {
+                              SeatLockManager seatLockManager,
+                              TicketRepository ticketRepository) {
         this.bookingRepository = bookingRepository;
         this.seatReservationRepository = seatReservationRepository;
         this.currentUserProvider = currentUserProvider;
         this.movieServiceClient = movieServiceClient;
         this.seatLockManager = seatLockManager;
+        this.ticketRepository = ticketRepository;
     }
 
     @Override
@@ -257,7 +261,13 @@ public class BookingServiceImpl implements BookingService {
                 .map(r -> new ReservationSeatResponse(r.getId(), r.getSeatId()))
                 .collect(Collectors.toList());
 
-        List<Object> tickets = (booking.getStatus() == BookingStatus.CONFIRMED) ? new ArrayList<>() : null;
+        List<com.project.bookingservice.dto.response.TicketResponse> tickets = null;
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            tickets = ticketRepository.findByBookingId(booking.getId()).stream()
+                    .map(t -> new com.project.bookingservice.dto.response.TicketResponse(
+                            t.getId(), t.getBookingId(), t.getSeatId(), t.getPrice(), t.getCreatedAt()))
+                    .collect(Collectors.toList());
+        }
 
         return new BookingResponse(
                 booking.getId(),

@@ -6,7 +6,8 @@ import java.util.List;
 public class CreateBookingRequest {
 
     @NotEmpty(message = "reservationIds cannot be empty")
-    private List<Long> reservationIds;
+    @org.hibernate.validator.constraints.UniqueElements(message = "Reservation IDs must be unique")
+    private List<@jakarta.validation.constraints.NotNull(message = "Reservation ID cannot be null") @jakarta.validation.constraints.Positive(message = "Reservation ID must be positive") Long> reservationIds;
 
     public CreateBookingRequest() {
     }

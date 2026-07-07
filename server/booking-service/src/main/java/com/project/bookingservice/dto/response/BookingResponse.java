@@ -18,14 +18,14 @@ public class BookingResponse {
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;
     private List<ReservationSeatResponse> seats;
-    private List<Object> tickets; // Since ticket generation is out of scope
+    private List<TicketResponse> tickets;
 
     public BookingResponse() {
     }
 
     public BookingResponse(Long bookingId, String bookingCode, Long showtimeId, BigDecimal totalAmount,
                            BookingStatus status, LocalDateTime expiresAt, LocalDateTime createdAt,
-                           List<ReservationSeatResponse> seats, List<Object> tickets) {
+                           List<ReservationSeatResponse> seats, List<TicketResponse> tickets) {
         this.bookingId = bookingId;
         this.bookingCode = bookingCode;
         this.showtimeId = showtimeId;
@@ -101,11 +101,11 @@ public class BookingResponse {
         this.seats = seats;
     }
 
-    public List<Object> getTickets() {
+    public List<TicketResponse> getTickets() {
         return tickets;
     }
 
-    public void setTickets(List<Object> tickets) {
+    public void setTickets(List<TicketResponse> tickets) {
         this.tickets = tickets;
     }
 }
