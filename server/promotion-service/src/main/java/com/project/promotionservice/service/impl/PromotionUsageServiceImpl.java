@@ -74,7 +74,7 @@ public class PromotionUsageServiceImpl implements PromotionUsageService {
         }
 
         if (oldStatus == PromotionUsageStatus.REVERTED) {
-            throw new BusinessException("Cannot confirm a reverted promotion", "PROMOTION_INVALID_TRANSACTION", HttpStatus.CONFLICT);
+            throw new BusinessException("Cannot confirm a reverted promotion", "PROMOTION_USAGE_INVALID_TRANSITION", HttpStatus.CONFLICT);
         }
 
         usage.setStatus(PromotionUsageStatus.APPLIED);
@@ -136,7 +136,7 @@ public class PromotionUsageServiceImpl implements PromotionUsageService {
         }
 
         if (oldStatus == PromotionUsageStatus.APPLIED) {
-            throw new BusinessException("Cannot revert an applied promotion", "PROMOTION_INVALID_TRANSACTION", HttpStatus.CONFLICT);
+            throw new BusinessException("Cannot revert an applied promotion", "PROMOTION_USAGE_INVALID_TRANSITION", HttpStatus.CONFLICT);
         }
 
         int affectedRows = promotionRepository.decrementUsedCountIfPositive(usage.getPromotion().getId());

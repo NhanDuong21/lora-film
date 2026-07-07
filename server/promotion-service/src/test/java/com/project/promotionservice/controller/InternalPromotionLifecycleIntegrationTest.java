@@ -207,7 +207,7 @@ public class InternalPromotionLifecycleIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("PROMOTION_INVALID_TRANSACTION")));
+                .andExpect(jsonPath("$.errorCode", is("PROMOTION_USAGE_INVALID_TRANSITION")));
     }
 
     @Test
@@ -290,7 +290,7 @@ public class InternalPromotionLifecycleIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.errorCode", is("PROMOTION_INVALID_TRANSACTION")));
+                .andExpect(jsonPath("$.errorCode", is("PROMOTION_USAGE_INVALID_TRANSITION")));
     }
 
     @Test
