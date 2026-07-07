@@ -169,10 +169,10 @@ public class InternalPaymentService {
         } else { // FAILED, CANCELLED, EXPIRED
             logger.info("Payment result is {}, acknowledging but not changing booking {}", request.getResult(), bookingId);
             event.setApplied(false);
-            event.setAcknowledgementResult("ACKNOWLEDGED_NO_ACTION");
+            event.setAcknowledgementResult("ALREADY_PROCESSED");
             
             response.setApplied(false);
-            response.setResult("ACKNOWLEDGED_NO_ACTION");
+            response.setResult("ALREADY_PROCESSED");
         }
 
         // 5. Save Deduplication Event

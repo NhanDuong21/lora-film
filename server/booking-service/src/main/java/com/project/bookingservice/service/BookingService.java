@@ -17,4 +17,10 @@ public interface BookingService {
     Page<BookingResponse> getMyBookings(BookingStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
     void cancelBooking(Long bookingId, String idempotencyKey);
+
+    Page<BookingResponse> searchBookings(Long userId, Long showtimeId, String bookingCode, BookingStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    BookingResponse getAdminBookingDetail(Long bookingId);
+
+    void updateBookingStatusAdmin(Long bookingId, BookingStatus newStatus, String reason);
 }

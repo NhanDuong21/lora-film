@@ -244,6 +244,60 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BookingResponse> searchBookings(Long userId, Long showtimeId, String bookingCode, BookingStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+        Page<Booking> bookings = bookingRepository.searchBookings(userId, showtimeId, bookingCode, status, from, to, pageable);
+        return bookings.map(b -> mapToResponse(b, seatReservationRepository.findByBookingId(b.getId())));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingResponse getAdminBookingDetail(Long bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BusinessException("BOOKING_NOT_FOUND", "Booking not found"));
+        List<SeatReservation> reservations = seatReservationRepository.findByBookingId(bookingId);
+        return mapToResponse(booking, reservations);
+    }
+
+    @Override
+    @Transactional
+    public void updateBookingStatusAdmin(Long bookingId, BookingStatus newStatus, String reason) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BusinessException("BOOKING_NOT_FOUND", "Booking not found"));
+
+        BookingStatus oldStatus = booking.getStatus();
+
+        if (newStatus == BookingStatus.CANCELLED) {
+            if (oldStatus == BookingStatus.EXPIRED) {
+                throw new BusinessException("BOOKING_ALREADY_EXPIRED", "Booking already expired, cannot cancel.");
+            }
+            if (oldStatus == BookingStatus.CANCELLED) {
+                throw new BusinessException("BOOKING_ALREADY_CANCELLED", "Booking already cancelled.");
+            }
+            if (oldStatus != BookingStatus.PENDING_PAYMENT && oldStatus != BookingStatus.CONFIRMED) {
+                throw new BusinessException("BOOKING_STATUS_TRANSITION_NOT_ALLOWED", "Invalid status transition to CANCELLED.");
+            }
+            
+            booking.setStatus(BookingStatus.CANCELLED);
+            bookingRepository.save(booking);
+
+            List<SeatReservation> reservations = seatReservationRepository.findByBookingId(bookingId);
+            if (!reservations.isEmpty()) {
+                Long showtimeId = reservations.get(0).getShowtimeId();
+                List<Long> seatIds = reservations.stream().map(SeatReservation::getSeatId).collect(Collectors.toList());
+                seatLockManager.releaseLocks(showtimeId, seatIds, "ADMIN"); 
+            }
+            
+        } else {
+             throw new BusinessException("BOOKING_STATUS_TRANSITION_NOT_ALLOWED", "Admin can only change status to CANCELLED for now.");
+        }
+
+        Long adminId = currentUserProvider.getCurrentUserId();
+        logger.info("AUDIT - Booking status changed. Actor: {}, BookingId: {}, OldStatus: {}, NewStatus: {}, Reason: {}", 
+                     adminId, bookingId, oldStatus, newStatus, reason);
+    }
+
     private String generateBookingCode() {
         String dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         for (int i = 0; i < 5; i++) {

@@ -45,6 +45,8 @@ public class BookingServiceImplTest {
     private CurrentUserProvider currentUserProvider;
     @Mock
     private MovieServiceClient movieServiceClient;
+    @Mock
+    private com.project.bookingservice.repository.TicketRepository ticketRepository;
     
     private SeatLockManager seatLockManager = new SeatLockManager(null, null) {
         @Override
@@ -81,7 +83,7 @@ public class BookingServiceImplTest {
     @BeforeEach
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        bookingService = new BookingServiceImpl(bookingRepository, seatReservationRepository, currentUserProvider, movieServiceClient, seatLockManager);
+        bookingService = new BookingServiceImpl(bookingRepository, seatReservationRepository, currentUserProvider, movieServiceClient, seatLockManager, ticketRepository);
         when(currentUserProvider.getCurrentUserId()).thenReturn(userId);
         releaseLocksCount = 0;
     }
@@ -293,5 +295,38 @@ public class BookingServiceImplTest {
         
         assertNotNull(response);
         verify(bookingRepository, times(2)).existsByBookingCode(anyString());
+    }
+
+    // Admin methods tests
+    @Test
+    public void testUpdateBookingStatusAdmin_Success() {
+        Booking booking = new Booking();
+        booking.setId(500L);
+        booking.setUserId(userId);
+        booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setShowtimeId(showtimeId);
+        
+        SeatReservation res = new SeatReservation(showtimeId, 10L, userId, LocalDateTime.now().plusMinutes(5));
+        res.setId(1L); res.setSeatId(10L);
+        when(bookingRepository.findById(500L)).thenReturn(Optional.of(booking));
+        when(seatReservationRepository.findByBookingId(500L)).thenReturn(Arrays.asList(res));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
+        
+        bookingService.updateBookingStatusAdmin(500L, BookingStatus.CANCELLED, "Admin cancelled");
+        
+        assertEquals(BookingStatus.CANCELLED, booking.getStatus());
+        verify(bookingRepository).save(booking);
+        assertEquals(1, releaseLocksCount);
+    }
+
+    @Test
+    public void testUpdateBookingStatusAdmin_InvalidStatus_ThrowsException() {
+        Booking booking = new Booking();
+        booking.setId(500L);
+        booking.setStatus(BookingStatus.EXPIRED);
+        when(bookingRepository.findById(500L)).thenReturn(Optional.of(booking));
+        
+        BusinessException e = assertThrows(BusinessException.class, () -> bookingService.updateBookingStatusAdmin(500L, BookingStatus.CANCELLED, "Admin cancelled"));
+        assertEquals("BOOKING_ALREADY_EXPIRED", e.getErrorCode());
     }
 }
