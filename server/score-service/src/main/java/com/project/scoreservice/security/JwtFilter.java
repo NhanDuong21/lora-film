@@ -43,13 +43,31 @@ public class JwtFilter extends OncePerRequestFilter {
                 Claims claims = jwtProvider.getClaimsFromToken(jwt);
                 String role = claims.get("role", String.class);
                 
+                List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
                 if (role == null) {
                     role = "ROLE_USER"; // default fallback
                 } else if (!role.startsWith("ROLE_")) {
                     role = "ROLE_" + role;
                 }
- 
-                List<SimpleGrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(role));
+                authorities.add(new SimpleGrantedAuthority(role));
+
+                // Map roles to granular permissions
+                if ("ROLE_ADMIN".equalsIgnoreCase(role)) {
+                    authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
+                    authorities.add(new SimpleGrantedAuthority("SCORE_ADJUST"));
+                    authorities.add(new SimpleGrantedAuthority("SCORE_MANAGE"));
+                    authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_READ"));
+                    authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_MANAGE"));
+                } else if ("ROLE_SCORE_MANAGE".equalsIgnoreCase(role)) {
+                    authorities.add(new SimpleGrantedAuthority("SCORE_MANAGE"));
+                    authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
+                } else if ("ROLE_SCORE_ADJUST".equalsIgnoreCase(role)) {
+                    authorities.add(new SimpleGrantedAuthority("SCORE_ADJUST"));
+                    authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
+                } else if ("ROLE_MEMBERSHIP_TIER_MANAGE".equalsIgnoreCase(role)) {
+                    authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_MANAGE"));
+                    authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_READ"));
+                }
  
                 Object userIdVal = claims.get("userId");
                 String principal = userIdVal != null ? userIdVal.toString() : claims.getSubject();
