@@ -47,10 +47,10 @@ public class OtpVerificationServiceImpl implements VerificationService {
     @Value("${app.notification-service.url}")
     private String notificationServiceUrl;
 
-    public OtpVerificationServiceImpl(AccountRepository accountRepository, 
-                                      StringRedisTemplate redisTemplate,
-                                      PasswordEncoder passwordEncoder,
-                                      RestTemplate restTemplate) {
+    public OtpVerificationServiceImpl(AccountRepository accountRepository,
+            StringRedisTemplate redisTemplate,
+            PasswordEncoder passwordEncoder,
+            RestTemplate restTemplate) {
         this.accountRepository = accountRepository;
         this.redisTemplate = redisTemplate;
         this.passwordEncoder = passwordEncoder;
@@ -121,12 +121,6 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         saveRedisOtpData(key, newData);
 
-        System.out.println("\n==================================");
-        System.out.println("OTP GENERATED (Do not use in production)");
-        System.out.println("Email: " + email);
-        System.out.println("OTP: " + otp);
-        System.out.println("==================================\n");
-
         log.info("OTP generated for email={}", email);
 
         if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
@@ -151,17 +145,15 @@ public class OtpVerificationServiceImpl implements VerificationService {
                 headers.set("X-Internal-Token", internalToken);
 
                 Map<String, Object> body = Map.of(
-                    "eventId", "AUTH-OTP-REGISTRATION-" + email + "-" + System.currentTimeMillis(),
-                    "requestSource", "auth-service",
-                    "templateCode", "OTP_REGISTRATION",
-                    "userId", accountId,
-                    "recipient", email,
-                    "channelType", "EMAIL",
-                    "variables", Map.of(
-                        "name", name,
-                        "otp", otp
-                    )
-                );
+                        "eventId", "AUTH-OTP-REGISTRATION-" + email + "-" + System.currentTimeMillis(),
+                        "requestSource", "auth-service",
+                        "templateCode", "OTP_REGISTRATION",
+                        "userId", accountId,
+                        "recipient", email,
+                        "channelType", "EMAIL",
+                        "variables", Map.of(
+                                "name", name,
+                                "otp", otp));
 
                 HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(body, headers);
                 String url = notificationServiceUrl + "/internal/notifications/send";
