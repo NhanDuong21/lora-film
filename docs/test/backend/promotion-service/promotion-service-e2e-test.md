@@ -545,8 +545,8 @@ Hệ thống bảo vệ tranh chấp tài nguyên (Concurrency) bằng cơ chế
 ### Flow 28: Kiểm soát lỗi chuyển trạng thái trái phép (Invalid Transition)
 - **API**: `POST /internal/promotions/usages/{usageId}/confirm` và `POST /internal/promotions/usages/{usageId}/revert`
 - **Các kịch bản kiểm tra**:
-  1. **Confirm khi đã Revert**: Gửi yêu cầu confirm trên một usage có trạng thái là `REVERTED` -> Trả về `409 Conflict` kèm mã lỗi `PROMOTION_INVALID_TRANSACTION` ("Cannot confirm a reverted promotion").
-  2. **Revert khi đã Confirm**: Gửi yêu cầu revert trên một usage có trạng thái là `APPLIED` -> Trả về `409 Conflict` kèm mã lỗi `PROMOTION_INVALID_TRANSACTION` ("Cannot revert an applied promotion").
+  1. **Confirm khi đã Revert**: Gửi yêu cầu confirm trên một usage có trạng thái là `REVERTED` -> Trả về `409 Conflict` kèm mã lỗi `PROMOTION_USAGE_INVALID_TRANSITION` ("Cannot confirm a reverted promotion").
+  2. **Revert khi đã Confirm**: Gửi yêu cầu revert trên một usage có trạng thái là `APPLIED` -> Trả về `409 Conflict` kèm mã lỗi `PROMOTION_USAGE_INVALID_TRANSITION` ("Cannot revert an applied promotion").
   - Toàn bộ dữ liệu dưới Database không bị thay đổi.
 
 ---
