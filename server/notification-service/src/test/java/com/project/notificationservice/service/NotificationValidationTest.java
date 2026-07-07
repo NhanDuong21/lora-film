@@ -28,7 +28,7 @@ public class NotificationValidationTest {
     public void setUp() {
         templateRepository = Mockito.mock(NotificationTemplateRepository.class);
         logRepository = Mockito.mock(NotificationLogRepository.class);
-        templateRenderer = Mockito.mock(TemplateRenderer.class);
+        templateRenderer = new TemplateRenderer();
         senderResolver = Mockito.mock(NotificationSenderResolver.class);
         transactionTemplate = Mockito.mock(TransactionTemplate.class);
 
