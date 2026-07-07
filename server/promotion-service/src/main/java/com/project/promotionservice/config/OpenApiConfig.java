@@ -17,14 +17,19 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Promotion Service API")
                         .version("1.0")
-                        .description("Promotion Service API documentation with JWT Bearer Authentication"))
+                        .description("Promotion Service API documentation with JWT Bearer and Internal Token Authentication"))
                 .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
+                .addSecurityItem(new SecurityRequirement().addList("internalToken"))
                 .components(new Components()
                         .addSecuritySchemes("bearerAuth", new SecurityScheme()
                                 .name("bearerAuth")
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
                                 .bearerFormat("JWT")
+                                .in(SecurityScheme.In.HEADER))
+                        .addSecuritySchemes("internalToken", new SecurityScheme()
+                                .name("X-Internal-Token")
+                                .type(SecurityScheme.Type.APIKEY)
                                 .in(SecurityScheme.In.HEADER)));
     }
 }

@@ -8,6 +8,7 @@ import com.project.promotionservice.dto.PromotionUsageResponse;
 import com.project.promotionservice.dto.RevertUsageRequest;
 import com.project.promotionservice.service.PromotionApplyService;
 import com.project.promotionservice.service.PromotionUsageService;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +29,7 @@ public class InternalPromotionController {
 
     @PostMapping("/apply")
     public ResponseEntity<ApiResponse<ApplyPromotionResponse>> applyPromotion(
-            @RequestHeader(value = "X-Internal-Token") String internalToken,
+            @RequestHeader(value = "X-Internal-Token") @Parameter(hidden = true) String internalToken,
             @Valid @RequestBody ApplyPromotionRequest request) {
         
         ApplyPromotionResponse response = promotionApplyService.applyPromotion(request);
@@ -46,7 +47,7 @@ public class InternalPromotionController {
 
     @PostMapping("/usages/{usageId}/confirm")
     public ResponseEntity<ApiResponse<PromotionUsageResponse>> confirmUsage(
-            @RequestHeader(value = "X-Internal-Token") String internalToken,
+            @RequestHeader(value = "X-Internal-Token") @Parameter(hidden = true) String internalToken,
             @PathVariable Long usageId,
             @Valid @RequestBody ConfirmUsageRequest request) {
         
@@ -56,7 +57,7 @@ public class InternalPromotionController {
 
     @PostMapping("/usages/{usageId}/revert")
     public ResponseEntity<ApiResponse<PromotionUsageResponse>> revertUsage(
-            @RequestHeader(value = "X-Internal-Token") String internalToken,
+            @RequestHeader(value = "X-Internal-Token") @Parameter(hidden = true) String internalToken,
             @PathVariable Long usageId,
             @Valid @RequestBody RevertUsageRequest request) {
         
@@ -66,11 +67,12 @@ public class InternalPromotionController {
 
     @GetMapping("/bookings/{bookingId}")
     public ResponseEntity<ApiResponse<PromotionUsageResponse>> getUsageByBookingId(
-            @RequestHeader(value = "X-Internal-Token") String internalToken,
+            @RequestHeader(value = "X-Internal-Token") @Parameter(hidden = true) String internalToken,
             @PathVariable Long bookingId) {
         
         PromotionUsageResponse response = promotionUsageService.getUsageByBookingId(bookingId);
         return ResponseEntity.ok(ApiResponse.success("Promotion usage retrieved successfully", response));
     }
 }
+
 
