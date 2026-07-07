@@ -5,9 +5,11 @@
 - **Tính năng**: 
   - Promotion Query, Validation and Preview (Issue #130)
   - Promotion Apply & Reservation Flow (Issue #131)
+  - Promotion Confirm, Revert and Expiration Flow (Issue #132)
 - **Mục tiêu**: 
   - Kiểm thử các luồng truy vấn thông tin chương trình khuyến mãi (Public), xác thực mã giảm giá (validate), xem trước mức giảm giá (preview) liên kết với dữ liệu booking thực tế từ `booking-service`.
   - Kiểm thử quy trình áp dụng mã khuyến mãi chính thức từ các dịch vụ nội bộ, thực hiện giữ chỗ (RESERVED) nguyên tử bảo đảm đồng thời (concurrency), đảm bảo tính an toàn dữ liệu và cơ chế khôi phục (rollback) giao dịch khi có sự cố.
+  - Kiểm thử quy trình Xác nhận (Confirm), Hoàn tác (Revert) và quét tự động thu hồi khuyến mãi hết hạn (Expiration Worker) nguyên tử, bảo đảm tính nhất quán dữ liệu và chống trùng lặp (idempotency).
 
 ---
 
@@ -450,25 +452,199 @@ Hệ thống bảo vệ tranh chấp tài nguyên (Concurrency) bằng cơ chế
 
 ---
 
+### Flow 24: Xác nhận sử dụng khuyến mãi thành công (Confirm Promotion Usage Success)
+- **API**: `POST /internal/promotions/usages/{usageId}/confirm`
+- **Ngữ cảnh**: Hệ thống xác nhận thanh toán đơn hàng thành công, chuyển trạng thái giữ chỗ voucher thành áp dụng chính thức.
+- **Headers**:
+  - `X-Internal-Token`: `secret-internal-token`
+  - `Content-Type`: `application/json`
+- **Request Body**:
+  ```json
+  {
+    "bookingId": 8888,
+    "confirmedAt": "2026-07-07T09:00:00"
+  }
+  ```
+- **Kết quả mong đợi**:
+  - API trả về `200 OK` với dữ liệu phản hồi:
+    - `status`: `"APPLIED"`
+    - `confirmedAt`: `"2026-07-07T09:00:00"`
+    - `revertedAt`: `null`, `revertReason`: `null`
+  - Cơ sở dữ liệu:
+    - Cột `status` của `promotion_usages` được cập nhật thành `APPLIED`.
+    - Lượt dùng `used_count` của chương trình khuyến mãi **giữ nguyên** (không tăng thêm).
+
+---
+
+### Flow 25: Xác nhận sử dụng khuyến mãi trùng lặp (Idempotent Confirm)
+- **API**: `POST /internal/promotions/usages/{usageId}/confirm`
+- **Ngữ cảnh**: Gửi yêu cầu xác nhận thanh toán lần thứ 2 cho cùng một đơn hàng do sự cố mạng hoặc gửi lại yêu cầu.
+- **Headers**:
+  - `X-Internal-Token`: `secret-internal-token`
+  - `Content-Type`: `application/json`
+- **Request Body**:
+  ```json
+  {
+    "bookingId": 8888,
+    "confirmedAt": "2026-07-07T09:00:00"
+  }
+  ```
+- **Kết quả mong đợi**:
+  - API trả về `200 OK` ngay lập tức.
+  - Cờ `"idempotent": true` được trả về trong dữ liệu.
+  - Trường `confirmedAt` và thông tin trạng thái giữ nguyên, không làm thay đổi hay trùng lặp tác dụng phụ dưới Database.
+
+---
+
+### Flow 26: Hủy áp dụng mã khuyến mãi thành công (Revert Promotion Usage Success)
+- **API**: `POST /internal/promotions/usages/{usageId}/revert`
+- **Ngữ cảnh**: Đơn hàng bị hủy hoặc hết hạn thanh toán, hệ thống thu hồi voucher và trả lại lượt sử dụng cho khuyến mãi.
+- **Headers**:
+  - `X-Internal-Token`: `secret-internal-token`
+  - `Content-Type`: `application/json`
+- **Request Body**:
+  ```json
+  {
+    "bookingId": 8888,
+    "reason": "Booking expired before payment"
+  }
+  ```
+- **Kết quả mong đợi**:
+  - API trả về `200 OK` với dữ liệu:
+    - `status`: `"REVERTED"`
+    - `revertReason`: `"Booking expired before payment"`
+    - `revertedAt` chứa mốc thời gian hệ thống thực hiện revert.
+    - `confirmedAt`: `null`
+  - Cơ sở dữ liệu:
+    - Cột `status` của `promotion_usages` được cập nhật thành `REVERTED`.
+    - **Lượt dùng `used_count` của chương trình khuyến mãi tự động giảm đi 1** (ví dụ từ `1` về `0`).
+    - Lượt dùng được trả lại nguyên vẹn và an toàn (không bao giờ giảm xuống dưới `0`).
+
+---
+
+### Flow 27: Hủy áp dụng mã khuyến mãi trùng lặp (Idempotent Revert)
+- **API**: `POST /internal/promotions/usages/{usageId}/revert`
+- **Ngữ cảnh**: Gửi yêu cầu hủy áp dụng mã voucher lần thứ 2 cho cùng một đơn hàng.
+- **Headers**:
+  - `X-Internal-Token`: `secret-internal-token`
+  - `Content-Type`: `application/json`
+- **Request Body**:
+  ```json
+  {
+    "bookingId": 8888,
+    "reason": "Booking expired before payment"
+  }
+  ```
+- **Kết quả mong đợi**:
+  - API trả về `200 OK`.
+  - Trả về cờ `"idempotent": true` trong `"data"`.
+  - Lượt sử dụng `used_count` **không bị trừ thêm lần nữa** (chỉ trừ đúng 1 lần duy nhất ở yêu cầu đầu tiên).
+
+---
+
+### Flow 28: Kiểm soát lỗi chuyển trạng thái trái phép (Invalid Transition)
+- **API**: `POST /internal/promotions/usages/{usageId}/confirm` và `POST /internal/promotions/usages/{usageId}/revert`
+- **Các kịch bản kiểm tra**:
+  1. **Confirm khi đã Revert**: Gửi yêu cầu confirm trên một usage có trạng thái là `REVERTED` -> Trả về `409 Conflict` kèm mã lỗi `PROMOTION_USAGE_INVALID_TRANSITION` ("Cannot confirm a reverted promotion").
+  2. **Revert khi đã Confirm**: Gửi yêu cầu revert trên một usage có trạng thái là `APPLIED` -> Trả về `409 Conflict` kèm mã lỗi `PROMOTION_USAGE_INVALID_TRANSITION` ("Cannot revert an applied promotion").
+  - Toàn bộ dữ liệu dưới Database không bị thay đổi.
+
+---
+
+### Flow 29: Kiểm soát lỗi sai đơn hàng đối chiếu (Booking Mismatch)
+- **API**: `POST /internal/promotions/usages/{usageId}/confirm` và `POST /internal/promotions/usages/{usageId}/revert`
+- **Ngữ cảnh**: Gọi API confirm/revert với mã `bookingId` truyền lên không khớp với thông tin lưu trên bản ghi giữ chỗ.
+- **Request Body**:
+  ```json
+  {
+    "bookingId": 9999,
+    "confirmedAt": "2026-07-07T09:00:00"
+  }
+  ```
+- **Kết quả mong đợi**:
+  - API trả về `409 Conflict` kèm mã lỗi nghiệp vụ `PROMOTION_BOOKING_MISMATCH` ("Booking ID mismatch").
+  - Giao dịch bị từ chối và không có thay đổi trạng thái nào dưới Database.
+
+---
+
+### Flow 30: Tra cứu trạng thái sử dụng voucher theo Booking (Query by Booking Success)
+- **API**: `GET /internal/promotions/bookings/{bookingId}`
+- **Ngữ cảnh**: Dịch vụ booking truy vấn xem đơn hàng đã áp dụng voucher nào, trạng thái và số tiền giảm giá chi tiết ra sao.
+- **Headers**:
+  - `X-Internal-Token`: `secret-internal-token`
+- **Kết quả mong đợi**:
+  - **Happy Case**:
+    - Trả về `200 OK` chứa chi tiết thông tin: `usageId`, `promotionId`, `promotionCode`, `bookingId`, `userId`, `status`, `originalAmount`, `discountAmount`, `finalAmount`, `expiresAt`, `reservedAt`, `confirmedAt`, `revertedAt`, `revertReason`.
+  - **Negative Case (Không tìm thấy)**: Tra cứu với `bookingId = 99999` không tồn tại -> Trả về `404 Not Found` kèm mã lỗi nghiệp vụ `PROMOTION_USAGE_NOT_FOUND`.
+
+---
+
+### Flow 31: Tự động thu hồi voucher hết hạn bằng Worker (Worker Expiration Success)
+- **Tiến trình**: `PromotionUsageExpirationWorker` chạy ngầm theo lịch biểu.
+- **Ngữ cảnh**: Đơn hàng hết hạn thanh toán nhưng không được kích hoạt revert chủ động qua API.
+- **Cơ chế hoạt động**:
+  1. Quét các bản ghi có trạng thái `RESERVED` và `expiresAt < thời gian hiện tại` theo từng trang phân trang (phù hợp với cấu hình `promotion.usage.reconciliation.batch-size`).
+  2. Thực hiện cập nhật độc lập từng bản ghi trong các transaction con (`Propagation.REQUIRES_NEW`).
+- **Kết quả kiểm tra**:
+  - Các bản ghi quá hạn chuyển sang trạng thái `REVERTED` với lý do `"Reservation expired"`.
+  - Lượt sử dụng `used_count` của các mã khuyến mãi liên quan được giảm đi chính xác.
+  - Các bản ghi chưa quá hạn, hoặc đã ở trạng thái `APPLIED`, `REVERTED` đều giữ nguyên.
+  - Nếu xảy ra xung đột khóa lạc quan (optimistic locking) do có API gọi song song, worker tự động bỏ qua bản ghi đó và tiếp tục chạy tiếp (không bị rollback toàn bộ lô dữ liệu).
+
+---
+
+## 3. Kiểm thử tính đồng thời (Concurrency Testing)
+
+Hệ thống bảo vệ tranh chấp tài nguyên (Concurrency) bằng cơ chế cập nhật SQL nguyên tử ở tầng cơ sở dữ liệu (Atomic SQL Update) kết hợp cơ chế khóa lạc quan (Optimistic Locking) trên thực thể `Promotion` và `PromotionUsage` qua trường `@Version`.
+
+### Kịch bản kiểm thử hiệu năng đồng thời:
+*   **Công cụ thực hiện**: Sử dụng Apache JMeter tạo ra luồng kiểm thử giả lập 100 luồng request gửi đồng thời (Ramp-up period: 1 giây) gọi tới API `POST /internal/promotions/apply` để cạnh tranh 5 lượt sử dụng còn lại của chương trình khuyến mãi.
+*   **Kết quả kỳ vọng**:
+    *   Chỉ có chính xác **5 yêu cầu được ghi nhận thành công** (`201 Created`).
+    *   **95 yêu cầu còn lại bị từ chối** một cách an toàn (`409 Conflict`) do hết lượt dùng hoặc tranh chấp khóa dữ liệu.
+    *   Không xảy ra lỗi nghẽn hệ thống (Deadlock) hay sập kết nối Database Pool.
+    *   Giá trị `used_count` trong database tăng lên chính xác thêm 5 đơn vị.
+*   **Concurrent Confirm & Revert (Issue #132)**:
+    *   Gửi đồng thời 2 yêu cầu Confirm (hoặc 2 yêu cầu Revert) cho cùng một bản ghi giữ chỗ.
+    *   Kết quả kiểm tra: Chỉ có duy nhất 1 yêu cầu thực hiện chuyển đổi trạng thái thực tế. Yêu cầu còn lại gặp tranh chấp khóa lạc quan được tự động bắt và trả về kết quả thành công dưới dạng Idempotency (`idempotent = true`) một cách an toàn.
+
+---
+
+## 4. Hiệu năng & Bảo mật (Performance & Security)
+
+### Hiệu năng (Performance)
+*   **Atomic DB Update**: Thay vì thực hiện luồng đọc `used_count` lên bộ nhớ rồi tăng 1 và ghi xuống (dễ gây ra race conditions), hệ thống cập nhật lượt dùng nguyên tử bằng câu lệnh SQL duy nhất có điều kiện kiểm tra giới hạn tại DB.
+*   **Transactional Isolation**: Toàn bộ luồng áp dụng và tạo bản ghi được đóng gói trong một Transaction duy nhất giúp giảm thiểu thời gian chiếm giữ kết nối dữ liệu. Đối với Worker, mỗi bản ghi hết hạn được xử lý trong một giao dịch độc lập (`REQUIRES_NEW`) để cô lập lỗi (Failure Isolation).
+*   **Optimistic Locking**: Tích hợp trường `@Version` trên thực thể để tránh việc ghi đè dữ liệu cũ khi có luồng chỉnh sửa đồng thời từ trang quản trị Admin hoặc tiến trình chạy ngầm.
+*   **Timeout Reliability**: Cấu hình thời gian kết nối tối đa 3 giây (`connect-timeout`) và thời gian đọc socket tối đa 5 giây (`read-timeout`) cho `RestTemplate` nhằm tránh nguy cơ treo luồng vô hạn khi dịch vụ booking gặp sự cố tải cao hoặc treo mạng.
+
+### Bảo mật (Security)
+*   **Xác thực Token nội bộ chéo (East-West Traffic)**: Bảo vệ hoàn toàn API nội bộ bằng cơ chế lọc Header `X-Internal-Token` độc lập, tránh việc kẻ xấu cố tình khai thác cổng API này từ môi trường Public bên ngoài.
+*   **Đối soát dữ liệu kép (Double validation)**: Không tin tưởng mù quáng vào số tiền do client gửi lên mà luôn đối soát chéo giá trị đơn hàng thực tế lấy trực tiếp từ `booking-service`.
+*   **Chống rò rỉ dữ liệu nhạy cảm**: Ẩn toàn bộ thông tin Stack Trace lỗi hệ thống, thay vào đó trả về các mã lỗi nghiệp vụ chuẩn hóa tại `GlobalExceptionHandler`.
+*   **Bảo vệ Token trên Log**: Bộ lọc và dịch vụ hoàn toàn không ghi nhận giá trị của `X-Internal-Token`, JWT, hay Authorization Header trên Log nhằm bảo vệ an toàn thông tin đăng nhập.
+
+---
+
 ## 5. Tổng hợp kết quả tự động (Automated Test Metrics)
 *   **Môi trường chạy**: Local Integration Tests với cơ sở dữ liệu MySQL và Spring Boot MockMvc.
 *   **Lệnh thực thi**: `mvn clean test`
-*   **Tổng số Test Cases hoạt động**: **88** (bao gồm cả Unit và Integration Tests)
+*   **Tổng số Test Cases hoạt động**: **105** (bao gồm cả Unit và Integration Tests)
     *   Các test case quản trị và nghiệp vụ khách hàng cũ: 70 tests.
-    *   Các test case tích hợp mới cho Issue #131 (xác thực token, giữ chỗ, kiểm soát giới hạn, idempotency, concurrent race): **16 tests** (nằm trong file `InternalPromotionControllerTest.java`).
-    *   Các test case kiểm thử lỗi timeout và ngoại lệ RestTemplate: **2 tests** (nằm trong file `RealBookingInternalClientTest.java`).
+    *   Các test case tích hợp cho Issue #131 (giữ chỗ, kiểm soát giới hạn, idempotency, concurrent race): **16 tests**.
+    *   Các test case kiểm thử lỗi timeout và ngoại lệ RestTemplate: **2 tests**.
+    *   Các test case tích hợp mới cho Issue #132 (xác nhận, hoàn tác, tra cứu theo booking, worker quét hết hạn, kiểm soát đồng thời): **17 tests**.
 *   **Tỉ lệ vượt qua (Pass Rate)**: **100%** (0 Failures, 0 Errors, 0 Skipped).
 
 ---
 
 ## 6. Danh sách kiểm tra cuối cùng (Final Verification Checklist)
-- [x] Đảm bảo tuân thủ thiết kế đặc tả API Contract Sprint 2 đối với endpoint nội bộ.
-- [x] Kiểm thử giữ chỗ nguyên tử (Atomic reservation) hoạt động chính xác và an toàn.
-- [x] Đảm bảo tính chất chống trùng lắp (Idempotency) theo đúng ID của Booking.
-- [x] Toàn bộ các kiểm tra nghiệp vụ ràng buộc thời gian hiệu lực và trạng thái Booking hoạt động đầy đủ.
-- [x] Tính toán số tiền được giảm giá và số tiền cuối cùng làm tròn `HALF_UP` chính xác theo đơn vị tiền tệ VND.
-- [x] Cơ chế Rollback tự động phục hồi nguyên trạng dữ liệu khi có lỗi xảy ra.
+- [x] Đảm bảo tuân thủ thiết kế đặc tả API Contract Sprint 2 đối với tất cả các endpoint nội bộ.
+- [x] Xác nhận sử dụng voucher (Confirm) chuyển trạng thái `RESERVED` -> `APPLIED` thành công và ghi nhận thời gian `confirmedAt`.
+- [x] Hoàn tác sử dụng voucher (Revert) chuyển trạng thái `RESERVED` -> `REVERTED` thành công, ghi nhận `revertReason` và tự động giảm lượt dùng `used_count` chính xác.
+- [x] Đảm bảo tính chất chống trùng lắp (Idempotency) đối với cả yêu cầu Confirm và Revert.
+- [x] Tra cứu chi tiết sử dụng mã giảm giá theo BookingId hoạt động chính xác và trả về đầy đủ các trường dữ liệu theo hợp đồng.
+- [x] Tiến trình chạy ngầm quét dọn tự động (Worker) thực hiện phân trang, sắp xếp đúng thứ tự, và có cơ chế xử lý tranh chấp khóa lạc quan an toàn (Failure Isolation).
+- [x] Cơ chế Rollback tự động khôi phục nguyên trạng dữ liệu khi có lỗi xảy ra.
 - [x] Token bảo mật nội bộ được đồng bộ hóa và bảo vệ API nội bộ thành công.
-- [x] Cấu hình timeout (connect & read timeout) cho RestTemplate và map lỗi về `BOOKING_SERVICE_UNAVAILABLE`.
-- [x] Viết thêm 2 unit test kiểm định kịch bản timeout và lỗi RestTemplate thành công.
-- [x] 100% các ca kiểm thử tự động (88 tests) chạy thành công vượt qua kiểm duyệt.
+- [x] 100% các ca kiểm thử tự động (105 tests) chạy thành công vượt qua kiểm duyệt.
