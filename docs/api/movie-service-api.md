@@ -1,2295 +1,492 @@
-# Movie Service API Specification
+# Movie Service API Contract
 
-## 1. Thông Tin Chung
+## 1. API Principles
 
-| Mục            | Nội dung                                         |
-| -------------- | ------------------------------------------------ |
-| Service        | `movie-service`                                  |
-| Feature        | Movie, Genre, Room, Seat and Showtime Management |
-| API liên quan  | Movies, Genres, Rooms, Seats, Showtimes          |
-| Contract Owner | Dương Thiện Nhân                                 |
-| Backend Owner  | Phan Tuấn Thành                                  |
-| Reviewer       | Phan Tuấn Thành                                  |
-| Trạng thái     | Approved                                         |
-| Milestone      | Sprint 2 - Core Service API Foundation           |
-| Ngày cập nhật  | 06/07/2026                                       |
-
-**Ghi chú (06/07/2026):** *Đã update Requirement Conflict theo yêu cầu của Reviewer: Các endpoint `PATCH .../status` và `GET /api/admin...` (lấy danh sách) của Movie và Room đã chính thức BỊ GỠ BỎ (DEPRECATED). API Public GET được gộp chung để xử lý logic dựa trên Role (Admin/Customer). Bổ sung phương thức `DELETE` thay thế cho mục đích Xóa mềm (Soft Delete) đối với Movie, Genre, Room.*
+* Customer APIs chỉ expose dữ liệu public/active.
+* Admin APIs yêu cầu authentication và admin role.
+* Internal APIs yêu cầu internal token.
+* Customer APIs nên dùng `slug` hoặc `public_id` thay vì auto-increment database id.
+* API responses không được expose deleted records.
+* Movie Service không quản lý trạng thái ghế `HELD` / `BOOKED`.
 
 ---
 
-## 2. Mục Tiêu Tài Liệu
+## 2. Customer APIs
 
-Tài liệu này đặc tả các API thuộc `movie-service` của hệ thống **LoraFilm**.
-
-Mục tiêu:
-
-* Thống nhất API Contract giữa Backend, Frontend, API Gateway và các service liên quan.
-* Làm cơ sở để Backend triển khai API mà không phải tự suy đoán endpoint, request, response hoặc business rule.
-* Giúp Frontend chuẩn bị các màn hình danh sách phim, chi tiết phim, suất chiếu, phòng và sơ đồ ghế.
-* Phân định rõ dữ liệu thuộc Movie Service và dữ liệu thuộc Booking Service.
-* Chuẩn hóa validation, authorization, status code và error code.
-* Làm cơ sở để tách các implementation issue sau khi contract được duyệt.
-
----
-
-## 3. Phạm Vi Movie Service
-
-Movie Service sở hữu các bảng:
-
-```txt
-movies
-genres
-movies_genres
-rooms
-seats
-showtimes
-```
-
-Movie Service chịu trách nhiệm:
-
-* Quản lý thông tin phim.
-* Quản lý thể loại phim.
-* Quản lý quan hệ nhiều-nhiều giữa phim và thể loại.
-* Quản lý phòng chiếu.
-* Quản lý cấu trúc ghế vật lý của từng phòng.
-* Quản lý suất chiếu.
-* Quản lý giá vé cơ bản theo suất chiếu.
-* Quản lý trạng thái phim, phòng, ghế và suất chiếu.
-
-Movie Service không chịu trách nhiệm:
-
-* Giữ ghế thời gian thực.
-* Xác định ghế đang được giữ hoặc đã bán.
-* Booking.
-* Ticket.
-* Payment.
-* Promotion.
-* Điểm thưởng.
-* Doanh thu thực tế.
-
-Các nghiệp vụ trên thuộc Booking, Payment, Promotion, Score và Analytics Service.
-
----
-
-## 4. Physical Schema
-- Physical schema trong tài liệu phản ánh cấu trúc dữ liệu hiện tại và chỉ dùng làm căn cứ đối chiếu API contract. Schema, constraint, index và migration cuối cùng do Movie Service Owner xác nhận. Nếu schema hiện tại không đáp ứng contract, contract và implementation phải được thống nhất trong quá trình review.
-### 4.1. Bảng `movies`
-
-| Field            | Type         | Ghi chú                       |
-| ---------------- | ------------ | ----------------------------- |
-| id               | bigint       | Primary key                   |
-| title            | varchar(255) | Tên phim                      |
-| description      | text         | Mô tả phim                    |
-| duration_minutes | int          | Thời lượng phim               |
-| director         | varchar(100) | Đạo diễn                      |
-| actor            | varchar(255) | Danh sách diễn viên dạng text |
-| release_date     | date         | Ngày khởi chiếu (NOT NULL)    |
-| end_date         | date         | Ngày kết thúc chiếu (NOT NULL)|
-| poster_url       | varchar(255) | URL poster                    |
-| trailer_url      | varchar(255) | URL trailer                   |
-| age_rating       | varchar(10)  | P, K, T13, T16, T18           |
-| status           | varchar(30)  | Trạng thái phim (NOT NULL)    |
-| created_at       | timestamp    | Ngày tạo                      |
-| updated_at       | timestamp    | Ngày cập nhật                 |
-
-### 4.2. Bảng `genres`
-
-| Field      | Type         | Ghi chú              |
-| ---------- | ------------ | -------------------- |
-| id         | int          | Primary key          |
-| genre_name | varchar(100) | Tên thể loại, unique |
-| status     | varchar(20)  | Trạng thái           |
-
-### 4.3. Bảng `movies_genres`
-
-| Field    | Type   | Ghi chú                   |
-| -------- | ------ | ------------------------- |
-| movie_id | bigint | FK nội bộ tới `movies.id` |
-| genre_id | int    | FK nội bộ tới `genres.id` |
-
-### 4.4. Bảng `rooms`
-
-| Field       | Type        | Ghi chú           |
-| ----------- | ----------- | ----------------- |
-| id          | int         | Primary key       |
-| room_name   | varchar(50) | Tên phòng, unique |
-| total_seats | int         | Tổng số ghế       |
-| screen_type | varchar(20) | Loại màn hình (NOT NULL) |
-| status      | varchar(20) | Trạng thái phòng (NOT NULL)|
-
-### 4.5. Bảng `seats`
-
-| Field       | Type        | Ghi chú                  |
-| ----------- | ----------- | ------------------------ |
-| id          | bigint      | Primary key              |
-| room_id     | int         | FK nội bộ tới `rooms.id` |
-| seat_row    | varchar(5)  | Hàng ghế                 |
-| seat_number | int         | Số ghế                   |
-| seat_type   | varchar(20) | Loại ghế (NOT NULL)      |
-| status      | varchar(20) | Trạng thái vật lý (NOT NULL)|
-
-### 4.6. Bảng `showtimes`
-
-| Field        | Type          | Ghi chú                   |
-| ------------ | ------------- | ------------------------- |
-| id           | bigint        | Primary key               |
-| movie_id     | bigint        | FK nội bộ tới `movies.id` |
-| room_id      | int           | FK nội bộ tới `rooms.id`  |
-| start_time   | timestamp     | Thời gian bắt đầu         |
-| end_time     | timestamp     | Thời gian kết thúc        |
-| ticket_price | decimal(10,2) | Giá vé cơ bản             |
-| status       | varchar(20)   | Trạng thái suất chiếu (NOT NULL)|
-| created_at   | timestamp     | Ngày tạo                  |
-| updated_at   | timestamp     | Ngày cập nhật             |
-
----
-
-## 5. Database-per-Service và Logical Reference
-
-Hệ thống áp dụng nguyên tắc Database-per-Service.
-
-Các service khác chỉ lưu ID thuộc Movie Service dưới dạng logical reference:
-
-```txt
-movieId
-showtimeId
-roomId
-seatId
-```
-
-Ví dụ:
-
-```txt
-Booking Service
-→ lưu showtimeId và seatId
-
-Analytics Service
-→ lưu movieId và movieTitle dạng snapshot
-```
-
-Không tạo foreign key vật lý từ database của Booking hoặc Analytics sang database của Movie Service.
-
-Movie Service không truy cập trực tiếp database của service khác.
-
----
-
-## 6. API Gateway và Service URL
-
-### 6.1. API Gateway URL
-
-Frontend gọi API thông qua:
-
-```txt
-http://localhost:8080
-```
-
-### 6.2. Movie Service Direct URL
-
-Chỉ dùng để Backend debug hoặc test riêng service:
-
-```txt
-http://localhost:8082
-```
-
-Port chính thức lấy từ cấu hình project, không hardcode trong Frontend.
-
-### 6.3. Request Flow
-
-```txt
-React Frontend
-→ API Gateway
-→ Movie Service
-→ Movie Service Database
-```
-
-Frontend không gọi trực tiếp port nội bộ của Movie Service.
-
----
-
-## 7. Quy Ước Chung
-
-### 7.1. Content Type
+### 2.1. Movie Listing
 
 ```http
-Content-Type: application/json
+GET /api/movies?status=&genreId=&keyword=&city=&cinemaId=&date=&page=&size=&sort=
 ```
 
-### 7.2. Authorization Header
+#### Supported status
 
-Protected/Admin API yêu cầu:
+```txt
+now-showing
+coming-soon
+```
+
+#### Response includes
+
+* `publicId`
+* `slug`
+* `title`
+* `originalTitle`
+* `synopsis`
+* `durationMinutes`
+* `ageRating`
+* `releaseDate`
+* `endDate`
+* `genres`
+* `primaryPoster`
+* `status`
+
+---
+
+### 2.2. Movie Detail
 
 ```http
-Authorization: Bearer <accessToken>
+GET /api/movies/{movieSlug}
 ```
 
-### 7.3. Date Format
+#### Response includes
 
-```txt
-YYYY-MM-DD
-```
-
-Ví dụ:
-
-```txt
-2026-06-20
-```
-
-### 7.4. Datetime Format
-
-Sử dụng ISO-8601:
-
-```txt
-YYYY-MM-DDTHH:mm:ss
-```
-
-Ví dụ:
-
-```txt
-2026-06-20T19:00:00
-```
-
-### 7.5. Timezone
-
-Timezone nghiệp vụ mặc định:
-
-```txt
-Asia/Ho_Chi_Minh
-```
-
-Backend phải xử lý thống nhất timezone khi lưu và trả dữ liệu.
-
-### 7.6. Currency
-
-```txt
-VND
-```
-
-`ticketPrice` được trả về dưới dạng number:
-
-```json
-{
-  "ticketPrice": 120000
-}
-```
-
-Không hiển thị ký hiệu tiền tệ trong giá trị API.
-
-### 7.7. Pagination
-
-* `page` bắt đầu từ `0`.
-* `size` mặc định `10`.
-* `size` tối đa `50`.
-
-### 7.8. Sorting
-
-Format:
-
-```txt
-sort=<field>,<direction>
-```
-
-Ví dụ:
-
-```txt
-sort=releaseDate,desc
-```
-
-Direction hợp lệ:
-
-```txt
-asc
-desc
-```
+* Movie basic info
+* Translations nếu có
+* Genres
+* Credits
+* Production companies
+* Versions
+* Media
+* Available showtimes summary nếu cần mở rộng sau
 
 ---
 
-## 8. Common Response Contract
-
-### 8.1. Success Response
-
-```json
-{
-  "success": true,
-  "message": "Operation completed successfully",
-  "data": {}
-}
-```
-
-### 8.2. Error Response
-
-```json
-{
-  "success": false,
-  "message": "Operation failed",
-  "errorCode": "ERROR_CODE",
-  "data": null,
-  "errors": null
-}
-```
-
-### 8.3. Validation Error
-
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "errorCode": "VALIDATION_ERROR",
-  "data": null,
-  "errors": [
-    {
-      "field": "title",
-      "message": "Title is required"
-    }
-  ]
-}
-```
-
-### 8.4. Field Definitions
-
-| Field     | Type              |        Required | Mô tả              |
-| --------- | ----------------- | --------------: | ------------------ |
-| success   | boolean           |             Yes | Trạng thái request |
-| message   | string            |             Yes | Thông báo kết quả  |
-| data      | object/array/null |             Yes | Dữ liệu response   |
-| errorCode | string/null       |      Error only | Mã lỗi ổn định     |
-| errors    | array/null        | Validation only | Chi tiết lỗi field |
-
----
-
-## 9. Phân Loại API
-
-### 9.1. Public API
-
-Không yêu cầu đăng nhập:
-
-```txt
-GET /api/movies
-GET /api/movies/{movieId}
-GET /api/genres
-GET /api/genres/{genreId}
-GET /api/movies/{movieId}/showtimes
-GET /api/showtimes/{showtimeId}
-```
-
-### 9.2. Protected API
-
-Yêu cầu Bearer Token:
-
-```txt
-GET /api/rooms/{roomId}/seats
-```
-
-API này chỉ trả cấu trúc ghế vật lý, không trả trạng thái giữ ghế hoặc booking.
-
-### 9.3. Admin API
-
-Yêu cầu role `ADMIN` hoặc permission phù hợp:
-
-```txt
-POST   /api/admin/movies
-PUT    /api/admin/movies/{movieId}
-DELETE /api/admin/movies/{movieId}
-
-POST   /api/admin/genres
-PUT    /api/admin/genres/{genreId}
-DELETE /api/admin/genres/{genreId}
-
-GET    /api/admin/rooms
-GET    /api/admin/rooms/{roomId}
-POST   /api/admin/rooms
-PUT    /api/admin/rooms/{roomId}
-DELETE /api/admin/rooms/{roomId}
-
-GET    /api/admin/rooms/{roomId}/seats
-GET    /api/admin/seats/{seatId}
-POST   /api/admin/rooms/{roomId}/seats
-PUT    /api/admin/seats/{seatId}
-PATCH  /api/admin/seats/{seatId}/status
-
-GET    /api/admin/showtimes
-GET    /api/admin/showtimes/{showtimeId}
-POST   /api/admin/showtimes
-PUT    /api/admin/showtimes/{showtimeId}
-PATCH  /api/admin/showtimes/{showtimeId}/status
-```
-
----
-
-## 10. Endpoint Summary
-
-| Method | Endpoint                                   | Access    | Mục đích                       |
-| ------ | ------------------------------------------ | --------- | ------------------------------ |
-| GET    | `/api/movies`                              | Public    | Danh sách phim                 |
-| GET    | `/api/movies/{movieId}`                    | Public    | Chi tiết phim                  |
-| GET    | `/api/genres`                              | Public    | Danh sách thể loại             |
-| GET    | `/api/genres/{genreId}`                    | Public    | Chi tiết thể loại              |
-| GET    | `/api/movies/{movieId}/showtimes`          | Public    | Suất chiếu theo phim           |
-| GET    | `/api/showtimes/{showtimeId}`              | Public    | Chi tiết suất chiếu            |
-| GET    | `/api/rooms/{roomId}/seats`                | Protected | Sơ đồ ghế vật lý               |
-| POST   | `/api/admin/movies`                        | Admin     | Tạo phim                       |
-| PUT    | `/api/admin/movies/{movieId}`              | Admin     | Cập nhật phim                  |
-| DELETE | `/api/admin/movies/{movieId}`              | Admin     | Xoá phim (soft delete)         |
-| POST   | `/api/admin/genres`                        | Admin     | Tạo thể loại                   |
-| PUT    | `/api/admin/genres/{genreId}`              | Admin     | Cập nhật thể loại              |
-| DELETE | `/api/admin/genres/{genreId}`              | Admin     | Xoá thể loại (soft delete)     |
-| GET    | `/api/admin/rooms`                         | Admin     | Danh sách phòng                |
-| GET    | `/api/admin/rooms/{roomId}`                | Admin     | Chi tiết phòng                 |
-| POST   | `/api/admin/rooms`                         | Admin     | Tạo phòng                      |
-| PUT    | `/api/admin/rooms/{roomId}`                | Admin     | Cập nhật phòng                 |
-| DELETE | `/api/admin/rooms/{roomId}`                | Admin     | Xoá phòng (soft delete)        |
-| GET    | `/api/admin/rooms/{roomId}/seats`          | Admin     | Danh sách ghế quản trị         |
-| GET    | `/api/admin/seats/{seatId}`                | Admin     | Chi tiết ghế                   |
-| POST   | `/api/admin/rooms/{roomId}/seats`          | Admin     | Tạo ghế hàng loạt              |
-| PUT    | `/api/admin/seats/{seatId}`                | Admin     | Cập nhật ghế                   |
-| PATCH  | `/api/admin/seats/{seatId}/status`         | Admin     | Cập nhật trạng thái ghế        |
-| GET    | `/api/admin/showtimes`                     | Admin     | Danh sách suất chiếu           |
-| GET    | `/api/admin/showtimes/{showtimeId}`        | Admin     | Chi tiết suất chiếu            |
-| POST   | `/api/admin/showtimes`                     | Admin     | Tạo suất chiếu                 |
-| PUT    | `/api/admin/showtimes/{showtimeId}`        | Admin     | Cập nhật suất chiếu            |
-| PATCH  | `/api/admin/showtimes/{showtimeId}/status` | Admin     | Cập nhật trạng thái suất chiếu |
-
----
-
-# 11. Public Movie APIs
-
-## 11.1. Get Movie List
-
-### Endpoint
+### 2.3. Movie Showtimes
 
 ```http
-GET /api/movies
+GET /api/movies/{movieSlug}/showtimes?city=&cinemaId=&date=
 ```
 
-### Query Parameters
+#### Behavior
 
-| Parameter   | Type    | Required | Validation       | Mô tả          |
-| ----------- | ------- | -------: | ---------------- | -------------- |
-| page        | integer |       No | >= 0             | Trang hiện tại |
-| size        | integer |       No | 1–50             | Số phần tử     |
-| search      | string  |       No | Tối đa 255 ký tự | Tìm theo tên   |
-| status      | string  |       No | MovieStatus      | Trạng thái     |
-| genreId     | integer |       No | > 0              | Thể loại       |
-| releaseFrom | date    |       No | YYYY-MM-DD       | Từ ngày        |
-| releaseTo   | date    |       No | YYYY-MM-DD       | Đến ngày       |
-| sort        | string  |       No | field,direction  | Sắp xếp        |
-
-### Public Filtering Rule
-
-Public API chỉ trả các phim được phép hiển thị:
-
-```txt
-UPCOMING
-NOW_SHOWING
-ENDED
-```
-
-Không trả phim:
-
-```txt
-INACTIVE
-```
-
-### Response Success
-
-Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "Movies retrieved successfully",
-  "data": {
-    "content": [
-      {
-        "id": 1,
-        "title": "Avengers",
-        "durationMinutes": 180,
-        "releaseDate": "2026-06-20",
-        "endDate": "2026-07-20",
-        "posterUrl": "https://example.com/poster.jpg",
-        "trailerUrl": "https://example.com/trailer.mp4",
-        "ageRating": "T16",
-        "status": "NOW_SHOWING",
-        "genres": [
-          {
-            "id": 1,
-            "genreName": "Action"
-          }
-        ]
-      }
-    ],
-    "page": 0,
-    "size": 10,
-    "totalElements": 1,
-    "totalPages": 1,
-    "first": true,
-    "last": true
-  }
-}
-```
-
-### Empty Result
-
-Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "Movies retrieved successfully",
-  "data": {
-    "content": [],
-    "page": 0,
-    "size": 10,
-    "totalElements": 0,
-    "totalPages": 0,
-    "first": true,
-    "last": true
-  }
-}
-```
-
-### Response Error: Invalid Query
-
-Status: `400 Bad Request`
-
-```json
-{
-  "success": false,
-  "message": "Invalid movie query parameters",
-  "errorCode": "MOVIE_INVALID_QUERY",
-  "data": null,
-  "errors": [
-    {
-      "field": "size",
-      "message": "Size must be between 1 and 50"
-    }
-  ]
-}
-```
-
-### Response Error: Genre Not Found
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "Genre not found",
-  "errorCode": "GENRE_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
+* Response group showtimes theo cinema.
+* Chỉ trả về showtimes có status `OPEN_FOR_BOOKING`.
 
 ---
 
-## 11.2. Get Movie Detail
-
-### Endpoint
+### 2.4. Cinema Listing
 
 ```http
-GET /api/movies/{movieId}
+GET /api/cinemas?city=&district=&keyword=&page=&size=
 ```
 
-### Path Parameter
+#### Behavior
 
-| Field   | Type    | Required | Validation |
-| ------- | ------- | -------: | ---------- |
-| movieId | integer |      Yes | > 0        |
-
-### Response Success
-
-Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "Movie retrieved successfully",
-  "data": {
-    "id": 1,
-    "title": "Avengers",
-    "description": "Movie description",
-    "durationMinutes": 180,
-    "director": "Director Name",
-    "actor": "Actor A, Actor B",
-    "releaseDate": "2026-06-20",
-    "endDate": "2026-07-20",
-    "posterUrl": "https://example.com/poster.jpg",
-    "trailerUrl": "https://example.com/trailer.mp4",
-    "ageRating": "T16",
-    "status": "NOW_SHOWING",
-    "genres": [
-      {
-        "id": 1,
-        "genreName": "Action"
-      }
-    ]
-  }
-}
-```
-
-### Response Error: Movie Not Found
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "Movie not found",
-  "errorCode": "MOVIE_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
-
-Phim `INACTIVE` được xem như không tồn tại với Public API.
+* Chỉ trả về active cinemas.
 
 ---
 
-# 12. Public Genre APIs
-
-## 12.1. Get Genre List
-
-### Endpoint
+### 2.5. Cinema Detail
 
 ```http
-GET /api/genres
+GET /api/cinemas/{cinemaSlug}
 ```
 
-### Response Success
+#### Response includes
 
-Status: `200 OK`
-
-```json
-{
-  "success": true,
-  "message": "Genres retrieved successfully",
-  "data": [
-    {
-      "id": 1,
-      "genreName": "Action"
-    },
-    {
-      "id": 2,
-      "genreName": "Animation"
-    }
-  ]
-}
-```
-
-### Empty Result
-
-```json
-{
-  "success": true,
-  "message": "Genres retrieved successfully",
-  "data": []
-}
-```
+* Cinema info
+* Address
+* City / district
+* Timezone
+* Hotline
+* Media
+* Operating hours
 
 ---
 
-## 12.2. Get Genre Detail
-
-### Endpoint
+### 2.6. Cinema Showtimes
 
 ```http
-GET /api/genres/{genreId}
+GET /api/cinemas/{cinemaSlug}/showtimes?date=
 ```
 
-### Response Success
+#### Behavior
 
-```json
-{
-  "success": true,
-  "message": "Genre retrieved successfully",
-  "data": {
-    "id": 1,
-    "genreName": "Action"
-  }
-}
-```
-
-### Response Error
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "Genre not found",
-  "errorCode": "GENRE_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
+* Chỉ trả về open showtimes.
 
 ---
 
-# 13. Public Showtime APIs
-
-## 13.1. Get Showtimes by Movie
-
-### Endpoint
+### 2.7. Showtime Search
 
 ```http
-GET /api/movies/{movieId}/showtimes
+GET /api/showtimes?movieSlug=&cinemaSlug=&city=&date=&format=&audioLanguage=&subtitleLanguage=
 ```
 
-### Query Parameters
+#### Behavior
 
-| Parameter | Type   | Required | Validation     | Mô tả      |
-| --------- | ------ | -------: | -------------- | ---------- |
-| date      | date   |       No | YYYY-MM-DD     | Ngày chiếu |
-| status    | string |       No | ShowtimeStatus | Trạng thái |
-
-### Public Showtime Rule
-
-Public API chỉ trả các suất chiếu:
-
-```txt
-SCHEDULED
-OPEN
-```
-
-Không trả:
-
-```txt
-CANCELLED
-COMPLETED
-CLOSED
-```
-
-### Response Success
-
-```json
-{
-  "success": true,
-  "message": "Showtimes retrieved successfully",
-  "data": [
-    {
-      "id": 10,
-      "movieId": 1,
-      "roomId": 2,
-      "roomName": "Cinema 02",
-      "screenType": "IMAX",
-      "startTime": "2026-06-20T19:00:00",
-      "endTime": "2026-06-20T22:00:00",
-      "ticketPrice": 120000,
-      "status": "OPEN"
-    }
-  ]
-}
-```
-
-### Empty Result
-
-```json
-{
-  "success": true,
-  "message": "Showtimes retrieved successfully",
-  "data": []
-}
-```
-
-### Response Error: Movie Not Found
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "Movie not found",
-  "errorCode": "MOVIE_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
-
-### Response Error: Invalid Date
-
-Status: `400 Bad Request`
-
-```json
-{
-  "success": false,
-  "message": "Invalid showtime date",
-  "errorCode": "SHOWTIME_INVALID_DATE",
-  "data": null,
-  "errors": null
-}
-```
-
-### Response Error: Invalid Status
-
-Status: `400 Bad Request`
-
-```json
-{
-  "success": false,
-  "message": "Invalid showtime status",
-  "errorCode": "SHOWTIME_INVALID_STATUS",
-  "data": null,
-  "errors": null
-}
-```
+* Chỉ trả về open showtimes.
 
 ---
 
-## 13.2. Get Showtime Detail
-
-### Endpoint
+### 2.8. Showtime Detail
 
 ```http
-GET /api/showtimes/{showtimeId}
+GET /api/showtimes/{showtimePublicId}
 ```
 
-### Response Success
+#### Response includes
 
-```json
-{
-  "success": true,
-  "message": "Showtime retrieved successfully",
-  "data": {
-    "id": 10,
-    "movie": {
-      "id": 1,
-      "title": "Avengers",
-      "durationMinutes": 180,
-      "ageRating": "T16"
-    },
-    "room": {
-      "id": 2,
-      "roomName": "Cinema 02",
-      "screenType": "IMAX"
-    },
-    "startTime": "2026-06-20T19:00:00",
-    "endTime": "2026-06-20T22:00:00",
-    "ticketPrice": 120000,
-    "status": "OPEN"
-  }
-}
-```
-
-### Response Error: Showtime Not Found
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "Showtime not found",
-  "errorCode": "SHOWTIME_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
-
-Suất chiếu `CANCELLED` không được hiển thị bằng Public API.
+* `showtimePublicId`
+* Movie
+* Movie version
+* Cinema
+* Auditorium
+* `startTime`
+* `endTime`
+* Booking window
+* Status
 
 ---
 
-# 14. Protected Room Seat API
-
-## 14.1. Get Room Seats
-
-### Endpoint
+### 2.9. Showtime Seat Layout
 
 ```http
-GET /api/rooms/{roomId}/seats
+GET /api/showtimes/{showtimePublicId}/seat-layout
 ```
 
-### Headers
-
-```http
-Authorization: Bearer <accessToken>
-```
-
-### Response Success
+#### Response example
 
 ```json
 {
-  "success": true,
-  "message": "Room seats retrieved successfully",
-  "data": {
-    "roomId": 2,
-    "roomName": "Cinema 02",
+  "showtimePublicId": "uuid",
+  "movie": {
+    "publicId": "uuid",
+    "slug": "dune-part-two",
+    "title": "Dune: Part Two"
+  },
+  "movieVersion": {
+    "publicId": "uuid",
+    "versionName": "IMAX Vietsub",
+    "format": "IMAX",
+    "audioLanguage": "EN",
+    "subtitleLanguage": "VI"
+  },
+  "cinema": {
+    "publicId": "uuid",
+    "slug": "lorafilm-nguyen-trai",
+    "name": "LoraFilm Nguyễn Trãi",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  "auditorium": {
+    "publicId": "uuid",
+    "name": "Room 2",
     "screenType": "IMAX",
-    "totalSeats": 100,
-    "seats": [
-      {
-        "id": 101,
-        "seatRow": "A",
-        "seatNumber": 1,
-        "seatType": "STANDARD",
-        "status": "ACTIVE"
-      }
-    ]
-  }
+    "soundType": "DOLBY_ATMOS"
+  },
+  "startTime": "2026-07-20T19:30:00+07:00",
+  "endTime": "2026-07-20T21:50:00+07:00",
+  "seats": [
+    {
+      "publicId": "uuid",
+      "seatCode": "F7",
+      "rowLabel": "F",
+      "seatNumber": 7,
+      "positionRow": 6,
+      "positionColumn": 7,
+      "seatType": "VIP",
+      "price": 120000,
+      "currency": "VND",
+      "status": "ACTIVE",
+      "blockedForShowtime": false
+    }
+  ]
 }
 ```
 
-### Response Error: Unauthorized
+#### Important
 
-Status: `401 Unauthorized`
-
-```json
-{
-  "success": false,
-  "message": "Unauthorized access",
-  "errorCode": "UNAUTHORIZED",
-  "data": null,
-  "errors": null
-}
-```
-
-### Response Error: Room Not Found
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "Room not found",
-  "errorCode": "ROOM_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
-
-### Response Error: Room Not Available
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Room is not available",
-  "errorCode": "ROOM_NOT_AVAILABLE",
-  "data": null,
-  "errors": null
-}
-```
-
-### Quan Trọng
-
-Movie Service chỉ trả:
-
-```txt
-seat structure
-seat type
-physical seat status
-```
-
-Movie Service không trả:
-
-```txt
-AVAILABLE
-HELD
-BOOKED
-```
-
-Trạng thái giữ ghế và đặt ghế thuộc Booking Service.
+* Seat status ở response này là master/operation status.
+* `HELD` / `BOOKED` không được trả về từ Movie Service.
+* Trạng thái giữ ghế và đã đặt ghế thuộc trách nhiệm của Booking Service.
 
 ---
 
-# 15. Admin Movie APIs
+## 3. Admin APIs
 
-## 15.1. Get Admin Movie List
-
-### Endpoint
+### 3.1. Aggregate Movie Create
 
 ```http
-GET /api/admin/movies
+POST /api/admin/movies/full
 ```
 
-### Headers
+#### Behavior
 
-```http
-Authorization: Bearer <accessToken>
-```
-
-### Query Parameters
-
-Giống `GET /api/movies`, nhưng Admin được phép xem cả:
-
-```txt
-UPCOMING
-NOW_SHOWING
-ENDED
-INACTIVE
-```
-
-### Response Success
-
-Sử dụng pagination contract như Public Movie List.
-
-### Response Error
-
-* `400 MOVIE_INVALID_QUERY`
-* `401 UNAUTHORIZED`
-* `403 FORBIDDEN`
+* Tạo movie cùng với genres, credits, production companies, versions và media trong một transaction.
+* Nếu bất kỳ nested validation nào fail, rollback toàn bộ transaction.
 
 ---
 
-## 15.2. Get Admin Movie Detail
-
-```http
-GET /api/admin/movies/{movieId}
-```
-
-Admin có thể xem cả phim `INACTIVE`.
-
-### Error
-
-* `404 MOVIE_NOT_FOUND`
-* `401 UNAUTHORIZED`
-* `403 FORBIDDEN`
-
----
-
-## 15.3. Create Movie
-
-### Endpoint
+### 3.2. Movie Management
 
 ```http
 POST /api/admin/movies
+PUT /api/admin/movies/{moviePublicId}
+PATCH /api/admin/movies/{moviePublicId}/status
+DELETE /api/admin/movies/{moviePublicId}
 ```
 
-### Headers
+#### Important
 
-```http
-Authorization: Bearer <accessToken>
-Content-Type: application/json
-```
-
-### Request Body
-
-```json
-{
-  "title": "Avengers",
-  "description": "Movie description",
-  "durationMinutes": 180,
-  "director": "Director Name",
-  "actor": "Actor A, Actor B",
-  "releaseDate": "2026-06-20",
-  "endDate": "2026-07-20",
-  "posterUrl": "https://example.com/poster.jpg",
-  "trailerUrl": "https://example.com/trailer.mp4",
-  "ageRating": "T16",
-  "status": "UPCOMING",
-  "genreIds": [1, 2]
-}
-```
-
-### Field Definitions
-
-| Field           | Type          | Required | Validation               |
-| --------------- | ------------- | -------: | ------------------------ |
-| title           | string        |      Yes | 1–255 ký tự              |
-| description     | string        |       No | Không giới hạn nghiệp vụ |
-| durationMinutes | integer       |      Yes | > 0                      |
-| director        | string        |       No | Tối đa 100 ký tự         |
-| actor           | string        |       No | Tối đa 255 ký tự         |
-| releaseDate     | date          |      Yes | YYYY-MM-DD               |
-| endDate         | date          |      Yes | >= releaseDate           |
-| posterUrl       | string        |       No | URL hợp lệ, tối đa 255   |
-| trailerUrl      | string        |       No | URL hợp lệ, tối đa 255   |
-| ageRating       | string        |       No | AgeRating enum           |
-| status          | string        |      Yes | MovieStatus              |
-| genreIds        | array<number> |      Yes | Không rỗng, không trùng  |
-
-### Processing Rules
-
-* Trim khoảng trắng đầu/cuối.
-* Không cho title rỗng sau khi trim.
-* Tất cả genre phải tồn tại.
-* `durationMinutes > 0`.
-* `endDate >= releaseDate`.
-* **Status and Date Consistency:**
-  * `UPCOMING`: Không được có `releaseDate` ở trong quá khứ (so với ngày hiện tại).
-  * `NOW_SHOWING`: Thời điểm hiện tại (today) phải nằm trong khoảng từ `releaseDate` đến `endDate`.
-  * `ENDED`: Không được có `releaseDate` ở trong tương lai (phim chưa chiếu thì không thể kết thúc).
-
-### Response Success
-
-Status: `201 Created`
-
-```json
-{
-  "success": true,
-  "message": "Movie created successfully",
-  "data": {
-    "id": 1,
-    "title": "Avengers",
-    "status": "UPCOMING"
-  }
-}
-```
-
-### Response Error: Validation
-
-Status: `400 Bad Request`
-
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "errorCode": "VALIDATION_ERROR",
-  "data": null,
-  "errors": [
-    {
-      "field": "durationMinutes",
-      "message": "Duration must be greater than 0"
-    }
-  ]
-}
-```
-
-### Response Error: Invalid Date Range
-
-```json
-{
-  "success": false,
-  "message": "Movie end date cannot be before release date",
-  "errorCode": "MOVIE_INVALID_DATE_RANGE",
-  "data": null,
-  "errors": null
-}
-```
-
-### Response Error: Genre Not Found
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "One or more genres were not found",
-  "errorCode": "GENRE_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
-
-### Response Error: Forbidden
-
-Status: `403 Forbidden`
-
-```json
-{
-  "success": false,
-  "message": "Access denied",
-  "errorCode": "FORBIDDEN",
-  "data": null,
-  "errors": null
-}
-```
+* `DELETE` là soft delete.
 
 ---
 
-## 15.4. Update Movie
-
-### Endpoint
-
-```http
-PUT /api/admin/movies/{movieId}
-```
-
-PUT được xem là full update. Các field bắt buộc phải được gửi đầy đủ.
-
-### Business Rules
-
-* Không cho đổi `durationMinutes` nếu đã có showtime tương lai, trừ khi tất cả showtime liên quan được cập nhật trong cùng nghiệp vụ.
-* Không tự động thay đổi `endTime` của showtime cũ nếu chưa có rule rõ ràng.
-* Không cho xóa toàn bộ genre.
-* Không cho date range không hợp lệ.
-* **Status and Date Consistency:**
-  * `UPCOMING`: Không được có `releaseDate` ở trong quá khứ (so với ngày hiện tại).
-  * `NOW_SHOWING`: Thời điểm hiện tại (today) phải nằm trong khoảng từ `releaseDate` đến `endDate`.
-  * `ENDED`: Không được có `releaseDate` ở trong tương lai (phim chưa chiếu thì không thể kết thúc).
-
-### Response Success
-
-```json
-{
-  "success": true,
-  "message": "Movie updated successfully",
-  "data": {
-    "id": 1,
-    "title": "Avengers Updated",
-    "status": "NOW_SHOWING"
-  }
-}
-```
-
-### Response Error: Movie Not Found
-
-Status: `404 Not Found`
-
-```json
-{
-  "success": false,
-  "message": "Movie not found",
-  "errorCode": "MOVIE_NOT_FOUND",
-  "data": null,
-  "errors": null
-}
-```
-
-### Response Error: Existing Showtimes Conflict
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Movie duration cannot be changed because future showtimes already exist",
-  "errorCode": "MOVIE_HAS_FUTURE_SHOWTIMES",
-  "data": null,
-  "errors": null
-}
-```
-
----
-
-## 15.5. Update Movie Status
-
-### Endpoint
-
-```http
-PATCH /api/admin/movies/{movieId}/status
-```
-
-### Request Body
-
-```json
-{
-  "status": "NOW_SHOWING"
-}
-```
-
-### Allowed Transitions
-
-| Current     | Allowed Next          |
-| ----------- | --------------------- |
-| UPCOMING    | NOW_SHOWING, INACTIVE |
-| NOW_SHOWING | ENDED, INACTIVE       |
-| ENDED       | INACTIVE              |
-| INACTIVE    | UPCOMING              |
-
-Các transition khác không hợp lệ.
-
-### Response Success
-
-```json
-{
-  "success": true,
-  "message": "Movie status updated successfully",
-  "data": {
-    "id": 1,
-    "status": "NOW_SHOWING"
-  }
-}
-```
-
-### Response Error
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Invalid movie status transition",
-  "errorCode": "MOVIE_INVALID_STATUS_TRANSITION",
-  "data": null,
-  "errors": null
-}
-```
-
----
-
-# 16. Admin Genre APIs
-
-## 16.1. Get Admin Genre List
-
-```http
-GET /api/admin/genres
-```
-
-Response giống Public Genre List.
-
-## 16.2. Get Admin Genre Detail
-
-```http
-GET /api/admin/genres/{genreId}
-```
-
-## 16.3. Create Genre
-
-### Endpoint
+### 3.3. Genre Management
 
 ```http
 POST /api/admin/genres
+PUT /api/admin/genres/{genrePublicId}
+PATCH /api/admin/genres/{genrePublicId}/status
+DELETE /api/admin/genres/{genrePublicId}
 ```
-
-### Request
-
-```json
-{
-  "genreName": "Science Fiction"
-}
-```
-
-### Business Rules
-
-* Trim khoảng trắng.
-* Tối đa 100 ký tự.
-* Tên genre unique không phân biệt hoa thường.
-* Schema hiện tại không có status.
-
-### Response Success
-
-Status: `201 Created`
-
-```json
-{
-  "success": true,
-  "message": "Genre created successfully",
-  "data": {
-    "id": 3,
-    "genreName": "Science Fiction"
-  }
-}
-```
-
-### Response Error: Duplicate
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Genre already exists",
-  "errorCode": "GENRE_ALREADY_EXISTS",
-  "data": null,
-  "errors": null
-}
-```
-
-## 16.4. Update Genre
-
-```http
-PUT /api/admin/genres/{genreId}
-```
-
-### Error
-
-* `404 GENRE_NOT_FOUND`
-* `409 GENRE_ALREADY_EXISTS`
-* `400 VALIDATION_ERROR`
-
-### Delete Policy
-
-Không hỗ trợ hard delete genre trong Sprint 2.
-
-Nếu cần xóa genre sau này, phải kiểm tra genre có đang được movie sử dụng hay không và tạo issue/schema change riêng.
 
 ---
 
-# 17. Admin Room APIs
-
-## 17.1. Get Room List
+### 3.4. People / Credits
 
 ```http
-GET /api/admin/rooms
+POST /api/admin/people
+PUT /api/admin/people/{personPublicId}
+PATCH /api/admin/people/{personPublicId}/status
+DELETE /api/admin/people/{personPublicId}
 ```
-
-### Query Parameters
-
-| Field      | Type       | Required |
-| ---------- | ---------- | -------: |
-| page       | integer    |       No |
-| size       | integer    |       No |
-| status     | RoomStatus |       No |
-| screenType | ScreenType |       No |
-| search     | string     |       No |
-
-### Response Success
-
-Trả pagination.
-
-## 17.2. Get Room Detail
 
 ```http
-GET /api/admin/rooms/{roomId}
+POST /api/admin/movies/{moviePublicId}/credits
+PUT /api/admin/movies/{moviePublicId}/credits
 ```
-
-### Response
-
-```json
-{
-  "success": true,
-  "message": "Room retrieved successfully",
-  "data": {
-    "id": 2,
-    "roomName": "Cinema 02",
-    "totalSeats": 100,
-    "screenType": "IMAX",
-    "status": "ACTIVE"
-  }
-}
-```
-
-## 17.3. Create Room
-
-### Endpoint
-
-```http
-POST /api/admin/rooms
-```
-
-### Request
-
-```json
-{
-  "roomName": "Cinema 02",
-  "totalSeats": 100,
-  "screenType": "IMAX",
-  "status": "ACTIVE"
-}
-```
-
-### Validation
-
-| Field      | Validation                  |
-| ---------- | --------------------------- |
-| roomName   | Required, unique, tối đa 50 |
-| totalSeats | > 0                         |
-| screenType | ScreenType enum             |
-| status     | RoomStatus enum             |
-
-### Response Success
-
-Status: `201 Created`
-
-### Response Error: Duplicate Room
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Room already exists",
-  "errorCode": "ROOM_ALREADY_EXISTS",
-  "data": null,
-  "errors": null
-}
-```
-
-## 17.4. Update Room
-
-```http
-PUT /api/admin/rooms/{roomId}
-```
-
-### Business Rules
-
-* Không cho đổi `totalSeats` nếu số ghế thực tế đã tồn tại không khớp.
-* Không cho đổi trạng thái không hợp lệ.
-* Không cho chuyển room sang `INACTIVE` nếu có showtime tương lai đang hoạt động.
-
-### Response Error
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Room has future showtimes",
-  "errorCode": "ROOM_HAS_FUTURE_SHOWTIMES",
-  "data": null,
-  "errors": null
-}
-```
-
-## 17.5. Update Room Status
-
-```http
-PATCH /api/admin/rooms/{roomId}/status
-```
-
-### Allowed Transitions
-
-| Current     | Allowed Next          |
-| ----------- | --------------------- |
-| ACTIVE      | MAINTENANCE, INACTIVE |
-| MAINTENANCE | ACTIVE, INACTIVE      |
-| INACTIVE    | ACTIVE                |
 
 ---
 
-# 18. Admin Seat APIs
-
-## 18.1. Get Seats by Room
+### 3.5. Production Companies
 
 ```http
-GET /api/admin/rooms/{roomId}/seats
+POST /api/admin/production-companies
+PUT /api/admin/production-companies/{companyPublicId}
+PATCH /api/admin/production-companies/{companyPublicId}/status
+DELETE /api/admin/production-companies/{companyPublicId}
 ```
-
-Admin được xem cả seat `INACTIVE` và `MAINTENANCE`.
-
-## 18.2. Get Seat Detail
 
 ```http
-GET /api/admin/seats/{seatId}
+POST /api/admin/movies/{moviePublicId}/production-companies
+PUT /api/admin/movies/{moviePublicId}/production-companies
 ```
-
-## 18.3. Create Seats for Room
-
-### Endpoint
-
-```http
-POST /api/admin/rooms/{roomId}/seats
-```
-
-### Request
-
-```json
-{
-  "seats": [
-    {
-      "seatRow": "A",
-      "seatNumber": 1,
-      "seatType": "STANDARD",
-      "status": "ACTIVE"
-    },
-    {
-      "seatRow": "A",
-      "seatNumber": 2,
-      "seatType": "STANDARD",
-      "status": "ACTIVE"
-    }
-  ]
-}
-```
-
-### Field Rules
-
-| Field      | Validation      |
-| ---------- | --------------- |
-| seats      | Không rỗng      |
-| seatRow    | 1–5 ký tự       |
-| seatNumber | > 0             |
-| seatType   | SeatType enum   |
-| status     | SeatStatus enum |
-
-Trong cùng phòng, cặp sau phải unique:
-
-```txt
-seatRow + seatNumber
-```
-
-Bulk create là atomic:
-
-```txt
-Nếu một seat lỗi → rollback toàn bộ batch
-```
-
-### Response Success
-
-Status: `201 Created`
-
-```json
-{
-  "success": true,
-  "message": "Seats created successfully",
-  "data": {
-    "roomId": 2,
-    "createdCount": 2
-  }
-}
-```
-
-### Response Error: Duplicate Seat
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "One or more seats already exist",
-  "errorCode": "SEAT_ALREADY_EXISTS",
-  "data": null,
-  "errors": [
-    {
-      "field": "seats[0]",
-      "message": "Seat A1 already exists in this room"
-    }
-  ]
-}
-```
-
-### Response Error: Batch Validation
-
-Status: `400 Bad Request`
-
-```json
-{
-  "success": false,
-  "message": "Seat batch validation failed",
-  "errorCode": "SEAT_BATCH_VALIDATION_FAILED",
-  "data": null,
-  "errors": [
-    {
-      "field": "seats[1].seatNumber",
-      "message": "Seat number must be greater than 0"
-    }
-  ]
-}
-```
-
-## 18.4. Update Seat
-
-```http
-PUT /api/admin/seats/{seatId}
-```
-
-Không cho thay đổi vị trí ghế nếu seat đã được service khác sử dụng trong booking/ticket lịch sử.
-
-Nếu cần thay đổi vị trí, nên tạo seat mới và vô hiệu hóa seat cũ.
-
-## 18.5. Update Seat Status
-
-```http
-PATCH /api/admin/seats/{seatId}/status
-```
-
-### Allowed Transitions
-
-| Current     | Allowed Next          |
-| ----------- | --------------------- |
-| ACTIVE      | MAINTENANCE, INACTIVE |
-| MAINTENANCE | ACTIVE, INACTIVE      |
-| INACTIVE    | ACTIVE                |
 
 ---
 
-# 19. Admin Showtime APIs
-
-## 19.1. Get Showtime List
+### 3.6. Movie Versions / Media
 
 ```http
-GET /api/admin/showtimes
+POST /api/admin/movies/{moviePublicId}/versions
+PUT /api/admin/movie-versions/{versionPublicId}
+PATCH /api/admin/movie-versions/{versionPublicId}/status
+DELETE /api/admin/movie-versions/{versionPublicId}
 ```
-
-### Query Parameters
-
-| Field   | Type           | Required |
-| ------- | -------------- | -------: |
-| page    | integer        |       No |
-| size    | integer        |       No |
-| movieId | integer        |       No |
-| roomId  | integer        |       No |
-| date    | date           |       No |
-| status  | ShowtimeStatus |       No |
-| from    | datetime       |       No |
-| to      | datetime       |       No |
-
-Admin được xem mọi trạng thái.
-
-## 19.2. Get Showtime Detail
 
 ```http
-GET /api/admin/showtimes/{showtimeId}
+POST /api/admin/movies/{moviePublicId}/media
+PUT /api/admin/movie-media/{mediaPublicId}
+PATCH /api/admin/movie-media/{mediaPublicId}/status
+DELETE /api/admin/movie-media/{mediaPublicId}
 ```
 
-## 19.3. Create Showtime
+---
 
-### Endpoint
+### 3.7. Cinema Management
+
+```http
+POST /api/admin/cinemas
+PUT /api/admin/cinemas/{cinemaPublicId}
+PATCH /api/admin/cinemas/{cinemaPublicId}/status
+DELETE /api/admin/cinemas/{cinemaPublicId}
+```
+
+```http
+POST /api/admin/cinemas/{cinemaPublicId}/media
+PUT /api/admin/cinema-media/{mediaPublicId}
+PATCH /api/admin/cinema-media/{mediaPublicId}/status
+```
+
+```http
+PUT /api/admin/cinemas/{cinemaPublicId}/operating-hours
+```
+
+```http
+POST /api/admin/cinemas/{cinemaPublicId}/closure-periods
+PATCH /api/admin/cinema-closure-periods/{closureId}/cancel
+```
+
+---
+
+### 3.8. Auditorium / Seat Layout
+
+```http
+POST /api/admin/cinemas/{cinemaPublicId}/auditoriums
+PUT /api/admin/auditoriums/{auditoriumPublicId}
+PATCH /api/admin/auditoriums/{auditoriumPublicId}/status
+DELETE /api/admin/auditoriums/{auditoriumPublicId}
+```
+
+```http
+POST /api/admin/auditoriums/{auditoriumPublicId}/maintenance-windows
+PATCH /api/admin/auditorium-maintenance-windows/{windowId}/cancel
+```
+
+```http
+POST /api/admin/seat-types
+PUT /api/admin/seat-types/{seatTypePublicId}
+PATCH /api/admin/seat-types/{seatTypePublicId}/status
+```
+
+```http
+POST /api/admin/auditoriums/{auditoriumPublicId}/seats/bulk
+GET /api/admin/auditoriums/{auditoriumPublicId}/seat-layout
+PUT /api/admin/seats/{seatPublicId}
+PATCH /api/admin/seats/{seatPublicId}/status
+DELETE /api/admin/seats/{seatPublicId}
+```
+
+---
+
+### 3.9. Showtime / Pricing
 
 ```http
 POST /api/admin/showtimes
+PUT /api/admin/showtimes/{showtimePublicId}
 ```
-
-### Request
-
-```json
-{
-  "movieId": 1,
-  "roomId": 2,
-  "startTime": "2026-06-20T19:00:00",
-  "ticketPrice": 120000,
-  "status": "SCHEDULED"
-}
-```
-
-### Field Definitions
-
-| Field       | Type     | Required | Validation       |
-| ----------- | -------- | -------: | ---------------- |
-| movieId     | integer  |      Yes | > 0              |
-| roomId      | integer  |      Yes | > 0              |
-| startTime   | datetime |      Yes | Phải ở tương lai |
-| ticketPrice | number   |      Yes | > 0              |
-| status      | string   |      Yes | ShowtimeStatus   |
-
-Backend tự tính:
-
-```txt
-endTime = startTime + movie.durationMinutes
-```
-
-Frontend không gửi `endTime`.
-
-### Business Rules
-
-* Movie phải tồn tại.
-* Movie không được `INACTIVE`.
-* Room phải tồn tại.
-* Room phải `ACTIVE`.
-* Start time phải ở tương lai.
-* Start time phải nằm trong khoảng release date và end date của phim.
-* Ticket price phải lớn hơn 0.
-* Showtime không được trùng lịch trong cùng phòng.
-
-### Cleanup Buffer
-
-Khoảng nghỉ mặc định:
-
-```txt
-15 phút
-```
-
-Nên đưa thành cấu hình:
-
-```properties
-movie.showtime.cleanup-buffer-minutes=15
-```
-
-### Conflict Formula
-
-```txt
-newStart < existingEnd + cleanupBuffer
-AND
-newEnd + cleanupBuffer > existingStart
-```
-
-### Concurrency Rule
-
-Conflict validation phải chạy trong transaction.
-
-Nếu hai request đồng thời gây conflict:
-
-```txt
-Chỉ một request được thành công
-```
-
-### Response Success
-
-Status: `201 Created`
-
-```json
-{
-  "success": true,
-  "message": "Showtime created successfully",
-  "data": {
-    "id": 10,
-    "movieId": 1,
-    "roomId": 2,
-    "startTime": "2026-06-20T19:00:00",
-    "endTime": "2026-06-20T22:00:00",
-    "ticketPrice": 120000,
-    "status": "SCHEDULED"
-  }
-}
-```
-
-### Error: Schedule Conflict
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Showtime conflicts with another showtime in this room",
-  "errorCode": "SHOWTIME_SCHEDULE_CONFLICT",
-  "data": null,
-  "errors": null
-}
-```
-
-### Error: Movie Not Available
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Movie is not available for scheduling",
-  "errorCode": "MOVIE_NOT_AVAILABLE",
-  "data": null,
-  "errors": null
-}
-```
-
-### Error: Room Not Available
-
-Status: `409 Conflict`
-
-```json
-{
-  "success": false,
-  "message": "Room is not available",
-  "errorCode": "ROOM_NOT_AVAILABLE",
-  "data": null,
-  "errors": null
-}
-```
-
-### Error: Outside Release Period
-
-Status: `400 Bad Request`
-
-```json
-{
-  "success": false,
-  "message": "Showtime is outside the movie release period",
-  "errorCode": "SHOWTIME_OUTSIDE_MOVIE_RELEASE_PERIOD",
-  "data": null,
-  "errors": null
-}
-```
-
-## 19.4. Update Showtime
 
 ```http
-PUT /api/admin/showtimes/{showtimeId}
+PATCH /api/admin/showtimes/{showtimePublicId}/open
+PATCH /api/admin/showtimes/{showtimePublicId}/close
+PATCH /api/admin/showtimes/{showtimePublicId}/cancel
+PATCH /api/admin/showtimes/{showtimePublicId}/finish
 ```
 
-### Business Rules
+```http
+PUT /api/admin/showtimes/{showtimePublicId}/prices
+GET /api/admin/showtimes/{showtimePublicId}/prices
+```
 
-* Không cho update showtime đã `COMPLETED`.
-* Không cho update thời gian nếu showtime đã có booking, trừ flow nghiệp vụ riêng.
-* Phải kiểm tra conflict lại.
-* Backend tính lại `endTime`.
+```http
+POST /api/admin/showtimes/{showtimePublicId}/blocked-seats
+PATCH /api/admin/showtime-blocked-seats/{blockedSeatId}/cancel
+```
 
-### Error: Showtime Has Bookings
+```http
+GET /api/admin/showtimes/{showtimePublicId}/status-history
+```
 
-Status: `409 Conflict`
+---
+
+## 4. Internal APIs
+
+### 4.1. Showtime Booking Context
+
+```http
+POST /internal/showtimes/{showtimePublicId}/booking-context
+X-Internal-Token: ...
+Content-Type: application/json
+```
+
+#### Request
 
 ```json
 {
-  "success": false,
-  "message": "Showtime cannot be updated because bookings already exist",
-  "errorCode": "SHOWTIME_HAS_BOOKINGS",
-  "data": null,
-  "errors": null
+  "seatPublicIds": ["uuid-1", "uuid-2"]
 }
 ```
 
-## 19.5. Update Showtime Status
+#### Response
 
-```http
-PATCH /api/admin/showtimes/{showtimeId}/status
+```json
+{
+  "showtimePublicId": "uuid",
+  "movie": {
+    "publicId": "uuid",
+    "title": "Dune: Part Two",
+    "slug": "dune-part-two"
+  },
+  "movieVersion": {
+    "publicId": "uuid",
+    "versionName": "IMAX Vietsub",
+    "format": "IMAX",
+    "audioLanguage": "EN",
+    "subtitleLanguage": "VI"
+  },
+  "cinema": {
+    "publicId": "uuid",
+    "name": "LoraFilm Nguyễn Trãi",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  "auditorium": {
+    "publicId": "uuid",
+    "name": "Room 2"
+  },
+  "status": "OPEN_FOR_BOOKING",
+  "seats": [
+    {
+      "publicId": "uuid-1",
+      "seatCode": "F7",
+      "seatType": "VIP",
+      "price": 120000,
+      "currency": "VND"
+    }
+  ],
+  "totalAmount": 120000,
+  "currency": "VND"
+}
 ```
 
-### Allowed Transitions
+#### Validation
 
-| Current   | Allowed Next      |
-| --------- | ----------------- |
-| SCHEDULED | OPEN, CANCELLED   |
-| OPEN      | CLOSED, CANCELLED |
-| CLOSED    | COMPLETED         |
-| CANCELLED | Không có          |
-| COMPLETED | Không có          |
-
-### Cancel Rule
-
-Nếu showtime đã có booking:
-
-```txt
-Movie Service không tự hoàn tiền.
-Movie Service chỉ phát tín hiệu trạng thái CANCELLED.
-Booking/Payment/Notification xử lý tiếp qua integration flow hoặc event ở sprint sau.
-```
+* Internal token required.
+* Showtime phải tồn tại.
+* Showtime phải có status `OPEN_FOR_BOOKING`.
+* Selected seats phải thuộc auditorium của showtime.
+* Selected seats phải active.
+* Selected seats không bị blocked cho showtime đó.
+* Prices phải tồn tại.
+* Movie Service không validate trạng thái `HELD` / `BOOKED`.
 
 ---
 
-# 20. Enum Definitions
-
-## 20.1. MovieStatus
-
-```txt
-UPCOMING
-NOW_SHOWING
-ENDED
-INACTIVE
-```
-
-## 20.2. RoomStatus
-
-```txt
-ACTIVE
-MAINTENANCE
-INACTIVE
-```
-
-## 20.3. ScreenType
-
-```txt
-STANDARD
-IMAX
-4DX
-```
-
-## 20.4. SeatStatus
-
-```txt
-ACTIVE
-MAINTENANCE
-INACTIVE
-```
-
-## 20.5. SeatType
-
-```txt
-STANDARD
-VIP
-COUPLE
-```
-
-## 20.6. ShowtimeStatus
-
-```txt
-SCHEDULED
-OPEN
-CLOSED
-CANCELLED
-COMPLETED
-```
-
-## 20.7. AgeRating
-
-Đề xuất:
-
-```txt
-P
-K
-T13
-T16
-T18
-```
-
-Enum cuối cùng phải đồng bộ với business rule và UI.
-
----
-
-# 21. Movie Status Source of Truth
-
-Trong Sprint 2, Movie Status được quản lý trực tiếp bởi Admin API.
-
-Không tự động suy ra status hoàn toàn từ ngày.
-
-Tuy nhiên:
-
-* `releaseDate`
-* `endDate`
-* `status`
-
-phải hợp lý với nhau.
-
-Ví dụ:
-
-```txt
-Không nên để NOW_SHOWING khi releaseDate còn ở tương lai.
-Không nên để UPCOMING khi endDate đã qua.
-```
-
-Scheduled job tự cập nhật status có thể được bổ sung ở issue riêng sau.
-
----
-
-# 22. Delete Policy
-
-Không hỗ trợ hard delete cho:
-
-```txt
-movies
-rooms
-seats
-showtimes
-```
-
-Sử dụng trạng thái:
-
-```txt
-INACTIVE
-CANCELLED
-ENDED
-```
-
-Lý do:
-
-* ID có thể đã được service khác lưu dưới dạng logical reference.
-* Cần giữ lịch sử.
-* Tránh làm hỏng booking/ticket cũ.
-
-Genre chưa có status trong schema nên Sprint 2 không hỗ trợ delete genre.
-
-Mọi yêu cầu delete phải được tách issue/schema change riêng.
-
----
-
-# 23. Idempotency và Duplicate Request
-
-Sprint 2 chưa bắt buộc hỗ trợ header:
-
-```http
-Idempotency-Key
-```
-
-Client phải:
-
-* Disable nút submit khi request đang xử lý.
-* Không gửi lặp create request.
-
-Backend vẫn phải bảo vệ duplicate bằng:
-
-* Unique constraint.
-* Business validation.
-* Transaction.
-
-Áp dụng cho:
-
-* Create Movie.
-* Create Genre.
-* Create Room.
-* Bulk Create Seats.
-* Create Showtime.
-
----
-
-# 24. Authorization Rules
-
-| Nhóm API             | Quyền                             |
-| -------------------- | --------------------------------- |
-| Xem phim             | Public                            |
-| Xem thể loại         | Public                            |
-| Xem suất chiếu       | Public                            |
-| Xem sơ đồ ghế vật lý | Authenticated User                |
-| Quản lý phim         | ADMIN                             |
-| Quản lý thể loại     | ADMIN                             |
-| Quản lý phòng        | ADMIN                             |
-| Quản lý ghế          | ADMIN                             |
-| Quản lý suất chiếu   | ADMIN hoặc EMPLOYEE có permission |
-
-Permission đề xuất:
-
-```txt
-MOVIE_READ
-MOVIE_MANAGE
-GENRE_MANAGE
-ROOM_MANAGE
-SEAT_MANAGE
-SHOWTIME_MANAGE
-```
-
----
-
-# 25. Error Code Catalog
-
-| Error Code                              | HTTP Status | Ý nghĩa                          |
-| --------------------------------------- | ----------: | -------------------------------- |
-| `MOVIE_NOT_FOUND`                       |         404 | Không tìm thấy phim              |
-| `MOVIE_INVALID_QUERY`                   |         400 | Query phim không hợp lệ          |
-| `MOVIE_INVALID_DATE_RANGE`              |         400 | Date range không hợp lệ          |
-| `MOVIE_INVALID_DURATION`                |         400 | Duration không hợp lệ            |
-| `MOVIE_INVALID_STATUS`                  |         400 | Status không hợp lệ              |
-| `MOVIE_INVALID_STATUS_TRANSITION`       |         409 | Chuyển status không hợp lệ       |
-| `MOVIE_HAS_FUTURE_SHOWTIMES`            |         409 | Phim đang có showtime tương lai  |
-| `MOVIE_NOT_AVAILABLE`                   |         409 | Phim không khả dụng              |
-| `GENRE_NOT_FOUND`                       |         404 | Không tìm thấy thể loại          |
-| `GENRE_ALREADY_EXISTS`                  |         409 | Thể loại đã tồn tại              |
-| `ROOM_NOT_FOUND`                        |         404 | Không tìm thấy phòng             |
-| `ROOM_ALREADY_EXISTS`                   |         409 | Phòng đã tồn tại                 |
-| `ROOM_NOT_AVAILABLE`                    |         409 | Phòng không khả dụng             |
-| `ROOM_HAS_FUTURE_SHOWTIMES`             |         409 | Phòng có showtime tương lai      |
-| `ROOM_TOTAL_SEATS_MISMATCH`             |         409 | Tổng số ghế không khớp           |
-| `ROOM_INVALID_STATUS_TRANSITION`        |         409 | Chuyển status phòng không hợp lệ |
-| `SEAT_NOT_FOUND`                        |         404 | Không tìm thấy ghế               |
-| `SEAT_ALREADY_EXISTS`                   |         409 | Ghế đã tồn tại                   |
-| `SEAT_INVALID_TYPE`                     |         400 | Loại ghế không hợp lệ            |
-| `SEAT_INVALID_POSITION`                 |         400 | Vị trí ghế không hợp lệ          |
-| `SEAT_BATCH_VALIDATION_FAILED`          |         400 | Batch ghế không hợp lệ           |
-| `SEAT_IN_USE`                           |         409 | Ghế đã được sử dụng              |
-| `SHOWTIME_NOT_FOUND`                    |         404 | Không tìm thấy suất chiếu        |
-| `SHOWTIME_INVALID_DATE`                 |         400 | Ngày truy vấn không hợp lệ       |
-| `SHOWTIME_INVALID_STATUS`               |         400 | Status không hợp lệ              |
-| `SHOWTIME_INVALID_TIME`                 |         400 | Thời gian không hợp lệ           |
-| `SHOWTIME_INVALID_PRICE`                |         400 | Giá vé không hợp lệ              |
-| `SHOWTIME_OUTSIDE_MOVIE_RELEASE_PERIOD` |         400 | Ngoài thời gian chiếu phim       |
-| `SHOWTIME_SCHEDULE_CONFLICT`            |         409 | Trùng lịch phòng                 |
-| `SHOWTIME_HAS_BOOKINGS`                 |         409 | Suất chiếu đã có booking         |
-| `SHOWTIME_INVALID_STATUS_TRANSITION`    |         409 | Chuyển status không hợp lệ       |
-| `VALIDATION_ERROR`                      |         400 | Request validation lỗi           |
-| `UNAUTHORIZED`                          |         401 | Chưa xác thực                    |
-| `FORBIDDEN`                             |         403 | Không có quyền                   |
-| `INTERNAL_SERVER_ERROR`                 |         500 | Lỗi hệ thống                     |
-
----
-
-# 26. Cross-Service Integration Notes
-
-## 26.1. Booking Service
-
-Booking Service sử dụng:
-
-```txt
-showtimeId
-seatId
-```
-
-Booking Service chịu trách nhiệm:
-
-```txt
-seat reservation
-real-time availability
-booking status
-ticket
-```
-
-## 26.2. Analytics Service
-
-Analytics Service có thể lưu:
-
-```txt
-movieId
-movieTitle
-```
-
-`movieTitle` là snapshot phục vụ dữ liệu lịch sử.
-
-## 26.3. Payment Service
-
-Movie Service không giao tiếp trực tiếp với Payment Service trong flow cơ bản.
-
-## 26.4. Notification Service
-
-Sau này Movie Service có thể publish event khi:
-
-```txt
-SHOWTIME_CANCELLED
-MOVIE_STATUS_CHANGED
-```
-
-Không nằm trong implementation scope hiện tại.
-
----
-
-# 27. Frontend Notes
-
-Frontend chỉ gọi:
-
-```txt
-http://localhost:8080/api/...
-```
-
-Frontend không gọi trực tiếp Movie Service port.
-
-Frontend không được dùng trạng thái vật lý của seat để suy ra:
-
-```txt
-AVAILABLE
-HELD
-BOOKED
-```
-
-Frontend phải lấy seat availability từ Booking Service.
-
----
-
-# 28. Scope Chưa Bao Gồm
-
-* Automatic Showtime Scheduler.
-* Real-time seat locking.
-* Seat availability theo booking.
-* Movie rating và review.
-* Actor CRUD riêng.
-* Cinema branch hoặc multi-location.
-* Dynamic pricing.
-* Recommendation engine.
-* Revenue calculation.
-* Production media upload.
-* Showtime cancellation compensation flow.
-* Kafka event implementation.
-* Scheduled movie status update.
-* Hard delete API.
-
----
-
-# 29. Implementation Issue Direction
-
-Sau khi contract được duyệt, có thể tách thành các issue:
-
-```txt
-[Backend] Implement Movie and Genre APIs
-[Backend] Implement Room and Seat APIs
-[Backend] Implement Showtime APIs
-```
-
-Mỗi implementation issue phải tuân thủ contract này.
-
-Nếu implementation cần thay đổi endpoint, request, response hoặc business rule:
-
-```txt
-Contract phải được cập nhật trong cùng MR.
-```
-
----
-
-# 30. Acceptance Criteria
-
-Contract được xem là hoàn thành khi:
-
-* [x] Có endpoint summary đầy đủ.
-* [x] Có Public/Protected/Admin classification.
-* [x] Có request headers.
-* [x] Có path/query parameter definitions.
-* [x] Có field definitions.
-* [x] Có success response.
-* [x] Có error response cho từng nhóm API.
-* [x] Có pagination/filter/sort.
-* [x] Có business rules.
-* [x] Có enum/status.
-* [x] Có status transition rules.
-* [x] Có date/time/timezone convention.
-* [x] Có currency convention.
-* [x] Có logical reference notes.
-* [x] Có concurrency rule cho Showtime.
-* [x] Có idempotency/duplicate request note.
-* [x] Có delete policy.
-* [x] Không tạo Room/Seat/Showtime Service riêng.
-* [x] Thành xác nhận contract khả thi với code hiện tại.
-* [x] Tài liệu đủ rõ để tách implementation issues.
-* [x] MR target vào `develop`.
-
----
-
-# 31. Các Điểm Reviewer Cần Xác Nhận
-
-Reviewer cần xác nhận:
-
-1. [x] Prefix `/api/admin/**` có phù hợp với Gateway/Security hiện tại không.
-2. [x] Movie Service port chính thức.
-3. [x] `cleanupBuffer = 15 phút`.
-4. [x] Backend tự tính `endTime`.
-5. [x] Bộ enum status.
-6. [x] Age rating enum.
-7. [x] API xem seat structure là Protected.
-8. [x] Bulk create seats rollback toàn bộ khi một item lỗi.
-9. [x] Không hard delete dữ liệu.
-10. [x] PUT là full update.
-11. [x] Không cho đổi duration khi có future showtime.
-12. [x] Showtime không được sửa khi đã có booking.
-13. [x] Phân quyền ADMIN/EMPLOYEE và permission code.
+## 5. Responsibility Boundary
+
+### Movie Service chịu trách nhiệm
+
+* Movie metadata.
+* Cinema metadata.
+* Auditorium metadata.
+* Seat master layout.
+* Showtime schedule.
+* Showtime lifecycle.
+* Showtime pricing.
+* Showtime blocked seats.
+* Validate booking context cho Booking Service.
+
+### Movie Service không chịu trách nhiệm
+
+* Giữ ghế tạm thời.
+* Xác nhận ghế đã được đặt.
+* Quản lý booking transaction.
+* Quản lý payment transaction.
+* Trả về seat state `HELD` / `BOOKED` cho customer APIs.
+
+### Booking Service chịu trách nhiệm
+
+* Seat reservation.
+* Seat lock.
+* Trạng thái ghế theo showtime: `AVAILABLE`, `HELD`, `BOOKED`.
+* Booking lifecycle.
+* Payment coordination.

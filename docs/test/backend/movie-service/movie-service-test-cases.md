@@ -1,112 +1,183 @@
-# Tài Liệu Kiểm Thử Tích Hợp Hệ Thống - Movie Service
+# Movie Service Backend Test Matrix
 
-## Lịch sử chỉnh sửa
+## 1. Movie Catalog Tests
 
-**Ngày:** 06/07/2026 | **Người chỉnh sửa:** Phan Tuấn Thành
-
-* **Cập nhật Backend (Gộp API):** Loại bỏ các API `GET /api/admin/movies` và `GET /api/admin/genres`. Tích hợp phân quyền động (`isAdmin`) trực tiếp vào Public API.
-* **Cập nhật Backend (Soft Delete):** Xóa bỏ các API `PATCH /status` thừa thãi, tích hợp luồng Xóa Mềm an toàn (Soft Delete) thông qua `DELETE` HTTP Method cho Movie, Room, Genre với các ràng buộc nghiệp vụ về suất chiếu.
-
----
-
-## 1. Tổng Quan Kiến Trúc Và Định Tuyến Mạng
-
-Tài liệu này đặc tả quy trình và kết quả kiểm thử tích hợp (E2E) đối với luồng Quản lý Dữ liệu Phim, Thể Loại và Phòng Chiếu trên hệ thống Đặt vé Xem phim trực tuyến LoraFilm. Các thao tác quản trị được kiểm soát an toàn qua API Gateway và `movie-service`.
-
-### Sơ Đồ Định Tuyến Mạng Thực Tế
-
-1. **React Frontend**: Gọi API qua cổng của Gateway `http://localhost:8080`.
-2. **API Gateway**: Cấu hình tại cổng `http://localhost:8080`.
-3. **Movie-Service**: Hoạt động nội bộ. Gateway ánh tuyến các yêu cầu `/api/movies/**`, `/api/genres/**`, `/api/admin/movies/**`, `/api/admin/rooms/**` về dịch vụ này.
+- Create movie success.
+- Create movie with duration <= 0 should fail.
+- Create movie with endDate before releaseDate should fail.
+- Create movie without required fields should fail.
+- Publish movie without genre should fail.
+- Publish movie without active version should fail.
+- Publish movie without primary poster should fail.
+- Customer cannot see DRAFT movie.
+- Customer cannot see INACTIVE movie.
+- Customer can see NOW_SHOWING movie.
+- Customer can see UPCOMING movie in coming-soon API.
+- Soft-deleted movie is hidden from customer APIs.
+- Duplicate active slug should fail.
+- Reuse slug after soft delete should be allowed if active_slug strategy is implemented.
 
 ---
 
-## 2. Danh Sách Kịch Bản Kiểm Thử Tích Hợp (E2E Test Scenarios)
+## 2. Movie Version / Media Tests
 
-Dưới đây là các kịch bản kiểm thử tích hợp chi tiết, cung cấp hướng dẫn từng bước để QA/Tester có thể thực hiện kiểm tra thủ công thông qua Postman hoặc Frontend UI.
-
-### Kịch Bản 1: Luồng Xem Danh Sách Phim Dựa Trên Phân Quyền (Role-Based Content Delivery)
-- **Mục đích**: Xác nhận API `GET /api/movies` trả về kết quả khác nhau tùy thuộc vào Role (vai trò) của người gọi. Admin sẽ thấy cả phim đang ẩn (INACTIVE), còn Khách hàng chỉ thấy phim hợp lệ (UPCOMING, NOW_SHOWING, ENDED).
-- **Các bước thực hiện**:
-  1. Gửi request `GET http://localhost:8080/api/movies` **không có** Access Token (Khách vãng lai) hoặc bằng Access Token của tài khoản Customer.
-  2. Gửi request `GET http://localhost:8080/api/movies` **kèm theo** Access Token của tài khoản Admin.
-- **Kết quả mong đợi**:
-  - Tại bước 1: Phản hồi HTTP 200 OK. Danh sách trả về không chứa bất kỳ phim nào có `status = INACTIVE`.
-  - Tại bước 2: Phản hồi HTTP 200 OK. Danh sách trả về bao gồm toàn bộ phim, kể cả các phim bị ẩn (`INACTIVE`).
-- **Trạng thái**: ĐẠT
-
-### Kịch Bản 2: Xóa Mềm Phim Không Có Suất Chiếu Tương Lai (Safe Soft Delete Movie)
-- **Mục đích**: Xác nhận tính năng Xóa Phim của Admin chỉ là xóa mềm (chuyển trạng thái sang INACTIVE) khi phim không vướng bận suất chiếu tương lai.
-- **Các bước thực hiện**:
-  1. Sử dụng Access Token Admin.
-  2. Tạo mới một bộ phim không có lịch chiếu: `POST /api/admin/movies`.
-  3. Gửi request `DELETE http://localhost:8080/api/admin/movies/{movieId}`.
-- **Kết quả mong đợi**:
-  - Máy chủ trả về HTTP 200/204 No Content/OK.
-  - Kiểm tra Database bảng `movies`, bản ghi vẫn tồn tại nhưng trường `status` được cập nhật thành `INACTIVE`.
-  - Phim này lập tức biến mất khỏi danh sách hiển thị của Khách hàng ở (Kịch bản 1).
-- **Trạng thái**: ĐẠT
-
-### Kịch Bản 3: Chặn Xóa Mềm Phim Có Suất Chiếu Tương Lai (Block Soft Delete with Future Showtimes)
-- **Mục đích**: Đảm bảo an toàn dữ liệu và trải nghiệm khách hàng. Không cho phép ẩn một bộ phim nếu nó đang có vé mở bán hoặc lịch chiếu trong tương lai.
-- **Các bước thực hiện**:
-  1. Dùng Database hoặc API tạo một `Showtime` (Lịch chiếu) cho phim X với `endTime` lớn hơn thời gian hiện tại (`endTime > now()`).
-  2. Sử dụng Access Token Admin gọi request `DELETE http://localhost:8080/api/admin/movies/{movieId}` đối với phim X.
-- **Kết quả mong đợi**:
-  - Hệ thống từ chối và trả về HTTP 409 Conflict hoặc 400 Bad Request.
-  - Thông báo lỗi hiển thị rõ ràng: "Không thể xóa phim vì vẫn còn lịch chiếu trong tương lai."
-  - Trạng thái phim trong Database vẫn giữ nguyên (ACTIVE/NOW_SHOWING).
-- **Trạng thái**: ĐẠT
-
-### Kịch Bản 4: Chặn Xóa Phòng Chiếu Trái Phép (Block Soft Delete Room)
-- **Mục đích**: Xác minh quy tắc nghiệp vụ nghiêm ngặt: Phòng chiếu không thể bị đóng/xóa (chuyển sang INACTIVE) nếu phòng đó đã lên lịch suất chiếu trong tương lai (để tránh phải hủy vé khách đã mua).
-- **Các bước thực hiện**:
-  1. Thêm một suất chiếu vào phòng chiếu số Y cho tuần tới.
-  2. Gọi request `DELETE http://localhost:8080/api/admin/rooms/{roomId}` đối với phòng Y.
-- **Kết quả mong đợi**:
-  - Hệ thống trả về lỗi HTTP 409 Conflict.
-  - Thông báo lỗi: "Không thể xóa/đóng phòng vì phòng này đang có suất chiếu chưa hoàn thành."
-- **Trạng thái**: ĐẠT
-
-### Kịch Bản 5: Xóa Mềm Thể Loại Phim (Soft Delete Genre & Cascade)
-- **Mục đích**: Đảm bảo Thể loại phim có thể bị vô hiệu hóa an toàn mà không gây sập cấu trúc CSDL do lỗi Khóa Ngoại (Foreign Key constraint).
-- **Các bước thực hiện**:
-  1. Sử dụng Access Token Admin, gọi `DELETE http://localhost:8080/api/admin/genres/{genreId}`.
-- **Kết quả mong đợi**:
-  - Trả về HTTP 200 OK.
-  - Bảng `genres` cập nhật `status = INACTIVE`.
-  - Các phim đang gắn với Thể loại này vẫn hiển thị bình thường, nhưng Thể loại đó sẽ bị ẩn khỏi bộ lọc công khai.
-- **Trạng thái**: ĐẠT
+- Create movie version success.
+- Duplicate movie version should fail.
+- Inactive version is hidden from customer.
+- Showtime cannot use inactive movie version.
+- Create movie media success.
+- Primary poster validation works.
+- Media display order works.
+- Inactive media is hidden from customer.
 
 ---
 
-## 3. Danh Sách Kịch Bản Kiểm Thử Nội Bộ (Unit/Integration Tests)
+## 3. People / Production Tests
 
-Bên cạnh các kịch bản kiểm định đầu cuối (E2E), đội ngũ lập trình viên đã viết sẵn các bộ kiểm tra tự động chạy ngầm dưới Spring Boot (MockMvc & Mockito) để bảo vệ luồng nghiệp vụ.
-
-**Controller Level**
-- `getMovies_Admin_Success`: Phân quyền Admin xem chi tiết phim bao gồm INACTIVE.
-- `createGenre_ShouldReturn403_WhenNotAdmin`: Đảm bảo các API quản trị từ chối request nếu thiếu Role Admin.
-- `deleteMovie_Success`: Kiểm tra định tuyến xóa mềm.
-
-**Service Level**
-- `getMovieDetail_Admin_Inactive_Success`: Xác nhận Service nhận cờ `isAdmin = true` và cho phép xuất dữ liệu INACTIVE.
-- `softDeleteMovie_Success`: Nghiệp vụ xác thực thời gian `endTime` của Showtime trả về kết quả chuẩn xác.
-- `testSoftDeleteRoom_FutureShowtimes`: Bắt lỗi Constraint cho Phòng chiếu qua Exception Handling.
-
-**Repository Level**
-- `existsByMovieIdAndEndTimeAfter`: Kiểm tra JPA Query truy vấn đúng các lịch chiếu nằm ở tương lai dựa theo thông số `LocalDateTime`.
-- `existsByRoomIdAndEndTimeAfter`: Đảm bảo kiểm tra chéo Lịch chiếu với ID của phòng.
+- Create person success.
+- Add director to movie success.
+- Add actor with character_name success.
+- Add production company to movie success.
+- One person can participate in multiple movies.
+- One movie can have multiple production companies.
+- Inactive/deleted person should not be used in new credits.
 
 ---
 
-## 4. Kết Quả Nghiệm Thu (Acceptance Sign-off)
+## 4. Cinema Tests
 
-| Tiêu Chí Đánh Giá           | Kết Quả Đạt Được                                                                                                                                                                                                                                                                     | Kết Luận |
-| :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------- |
-| **Gộp Chức Năng Cấp API**  | Endpoint Public tự động thay đổi kết quả dựa trên mã Token mà không làm rò rỉ Security Context vào Service Layer. Mã Code tuân thủ Clean Architecture. | ĐẠT      |
-| **Bảo Toàn Nghiệp Vụ Xóa (Soft Delete)** | Quá trình xóa mềm được chặn an toàn khi dữ liệu (Room/Movie) dính dáng tới các suất chiếu ở tương lai. | ĐẠT |
-| **Bảo Toàn Schema Dữ Liệu** | Các thay đổi trên Database (`movieId`, `endTime` vào bảng `showtimes`) chạy ổn định với Script Migration mới nhất. | ĐẠT |
-| **Bảo Trì & Coverage** | 53/53 Unit Test và Integration Test chạy thành công. Không có lỗi biên dịch. | ĐẠT |
+- Create cinema success.
+- Cinema without city/address should fail.
+- Activate cinema without operating hours should fail.
+- Customer cannot see DRAFT cinema.
+- Customer cannot see INACTIVE/PERMANENTLY_CLOSED cinema.
+- Customer can see ACTIVE cinema.
+- Cinema timezone defaults to Asia/Ho_Chi_Minh.
+- Create operating hours success.
+- Invalid day_of_week should fail.
+- close_time <= open_time should fail.
+- Create closure period success.
+- Invalid closure time should fail.
+- Cancelled closure period does not block showtime.
 
-*Kết luận chung*: Phân hệ `movie-service` đã tối ưu hóa toàn diện, sẵn sàng triển khai tích hợp mà không để lại rủi ro nghiệp vụ nào về việc thất thoát vé đã bán của Khách hàng.
+---
+
+## 5. Auditorium / Seat Layout Tests
+
+- Create auditorium success.
+- Auditorium name duplicate in same cinema should fail.
+- Same auditorium name in different cinema should pass.
+- Capacity <= 0 should fail.
+- cleaning_buffer_minutes < 0 should fail.
+- Create maintenance window success.
+- Invalid maintenance time should fail.
+- Create seat type success.
+- Create bulk seat layout success.
+- Duplicate seat code in same auditorium should fail.
+- Duplicate position row/column in same auditorium should fail.
+- Seat type inactive should fail when assigning new seat.
+- Seat layout returns ordered row/column.
+- Capacity validation works.
+
+---
+
+## 6. Showtime Tests
+
+- Create showtime success.
+- Create showtime with end_time <= start_time should fail.
+- Create showtime with movie version not belonging to movie should fail.
+- Create showtime with auditorium not belonging to cinema should fail.
+- Create showtime with inactive movie version should fail.
+- Create showtime with inactive cinema should fail.
+- Create showtime with inactive auditorium should fail.
+- Create showtime outside movie release window should fail.
+- Create showtime outside cinema operating hours should fail.
+- Create showtime overlapping another non-cancelled showtime should fail.
+- Create showtime overlapping existing showtime including cleaning buffer should fail.
+- Create showtime overlapping cinema closure period should fail.
+- Create showtime overlapping auditorium maintenance window should fail.
+- Cancelled showtime should not block overlap if business rule allows.
+- Open showtime without prices should fail.
+- Cancel showtime without reason should fail.
+- Invalid status transition should fail.
+- Status history is created when status changes.
+- Customer only sees OPEN_FOR_BOOKING showtimes.
+
+---
+
+## 7. Showtime Concurrency Tests
+
+- Simulate two concurrent requests creating overlapping showtimes in the same auditorium.
+- Expected:
+  - one request succeeds;
+  - one request fails with SHOWTIME_OVERLAP_CONFLICT;
+  - database contains no overlapping showtimes.
+
+Implementation note:
+- Service should use transaction + SELECT FOR UPDATE on auditorium row before overlap check.
+
+---
+
+## 8. Pricing Tests
+
+- Set showtime prices success.
+- Negative price should fail.
+- Currency defaults to VND.
+- Missing price for active seat type should block opening showtime.
+- Seat layout returns price by seat type.
+- Price is read from showtime_prices snapshot.
+- Cannot update prices for FINISHED/CANCELLED showtime.
+
+---
+
+## 9. Showtime Blocked Seats Tests
+
+- Admin blocks seat for showtime success.
+- Blocking seat not belonging to showtime auditorium should fail.
+- Duplicate blocked seat should fail.
+- Cancel blocked seat success.
+- Seat layout marks blockedForShowtime.
+- Blocked seat is not HELD/BOOKED state.
+
+---
+
+## 10. Internal Booking Context Tests
+
+- Internal API requires internal token.
+- Invalid internal token should fail.
+- Valid internal token should pass.
+- Showtime not found should fail.
+- Showtime not OPEN_FOR_BOOKING should fail.
+- Seat not belonging to showtime auditorium should fail.
+- Inactive seat should fail.
+- Blocked seat should fail.
+- Missing price should fail.
+- Total amount is calculated by Movie Service.
+- Response includes movie/cinema/auditorium/seat/price context.
+- Response does not include HELD/BOOKED state.
+
+---
+
+## 11. Audit / Security Tests
+
+- Admin create entity sets created_by.
+- Admin update entity sets updated_by.
+- Admin soft delete entity sets deleted_by/deleted_at.
+- Client cannot override created_by/updated_by/deleted_by.
+- Customer cannot call admin APIs.
+- Customer cannot call internal APIs.
+- Admin can call admin APIs.
+- Error response format is consistent.
+
+---
+
+## 12. Customer API Visibility Tests
+
+- Customer cannot see draft movie.
+- Customer cannot see inactive movie.
+- Customer cannot see deleted movie.
+- Customer cannot see inactive cinema.
+- Customer cannot see cancelled showtime.
+- Customer cannot see closed showtime.
+- Customer cannot see finished showtime.
+- Customer only sees active media/version.
