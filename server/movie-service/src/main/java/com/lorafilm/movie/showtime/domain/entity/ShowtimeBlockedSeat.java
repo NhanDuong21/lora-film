@@ -3,16 +3,10 @@ package com.lorafilm.movie.showtime.domain.entity;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import jakarta.persistence.*;
-import lombok.*;
 import java.time.Instant;
 
 @Entity
 @Table(name = "showtime_blocked_seats")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class ShowtimeBlockedSeat {
 
     @Id
@@ -32,7 +26,7 @@ public class ShowtimeBlockedSeat {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private ActionStatus status;
+    private ActionStatus status = ActionStatus.ACTIVE;
 
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
@@ -45,6 +39,80 @@ public class ShowtimeBlockedSeat {
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
+    public ShowtimeBlockedSeat() {}
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Showtime getShowtime() {
+        return showtime;
+    }
+
+    public void setShowtime(Showtime showtime) {
+        this.showtime = showtime;
+    }
+
+    public Seat getSeat() {
+        return seat;
+    }
+
+    public void setSeat(Seat seat) {
+        this.seat = seat;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public void setReason(String reason) {
+        this.reason = reason;
+    }
+
+    public ActionStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ActionStatus status) {
+        this.status = status;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
+    }
 
     @PrePersist
     protected void onCreate() {

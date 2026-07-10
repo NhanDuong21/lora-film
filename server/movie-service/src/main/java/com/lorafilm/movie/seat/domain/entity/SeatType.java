@@ -2,16 +2,11 @@ package com.lorafilm.movie.seat.domain.entity;
 
 import com.lorafilm.movie.common.audit.BaseAuditableEntity;
 import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
 import jakarta.persistence.*;
-import lombok.*;
 
 @Entity
 @Table(name = "seat_types")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class SeatType extends BaseAuditableEntity {
 
     @Id
@@ -33,5 +28,55 @@ public class SeatType extends BaseAuditableEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private ActiveStatus status;
+    private ActiveStatus status = ActiveStatus.ACTIVE;
+
+    public SeatType() {}
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getPublicId() {
+        return publicId;
+    }
+
+    public void setPublicId(String publicId) {
+        this.publicId = publicId;
+    }
+
+    public SeatTypeCode getCode() {
+        return code;
+    }
+
+    public void setCode(SeatTypeCode code) {
+        this.code = code;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public ActiveStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ActiveStatus status) {
+        this.status = status;
+    }
 }

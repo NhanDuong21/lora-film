@@ -3,15 +3,9 @@ package com.lorafilm.movie.movie.domain.entity;
 import com.lorafilm.movie.common.audit.BaseAuditableEntity;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import jakarta.persistence.*;
-import lombok.*;
 
 @Entity
 @Table(name = "production_companies")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class ProductionCompany extends BaseAuditableEntity {
 
     @Id
@@ -32,5 +26,55 @@ public class ProductionCompany extends BaseAuditableEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private ActiveStatus status;
+    private ActiveStatus status = ActiveStatus.ACTIVE;
+
+    public ProductionCompany() {}
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getPublicId() {
+        return publicId;
+    }
+
+    public void setPublicId(String publicId) {
+        this.publicId = publicId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getCountry() {
+        return country;
+    }
+
+    public void setCountry(String country) {
+        this.country = country;
+    }
+
+    public String getLogoUrl() {
+        return logoUrl;
+    }
+
+    public void setLogoUrl(String logoUrl) {
+        this.logoUrl = logoUrl;
+    }
+
+    public ActiveStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ActiveStatus status) {
+        this.status = status;
+    }
 }

@@ -1,16 +1,11 @@
 package com.lorafilm.movie.showtime.domain.entity;
 
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import jakarta.persistence.*;
-import lombok.*;
 import java.time.Instant;
 
 @Entity
 @Table(name = "showtime_status_history")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class ShowtimeStatusHistory {
 
     @Id
@@ -37,6 +32,64 @@ public class ShowtimeStatusHistory {
 
     @Column(name = "changed_by", updatable = false)
     private Long changedBy;
+
+    public ShowtimeStatusHistory() {}
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Showtime getShowtime() {
+        return showtime;
+    }
+
+    public void setShowtime(Showtime showtime) {
+        this.showtime = showtime;
+    }
+
+    public ShowtimeStatus getPreviousStatus() {
+        return previousStatus;
+    }
+
+    public void setPreviousStatus(ShowtimeStatus previousStatus) {
+        this.previousStatus = previousStatus;
+    }
+
+    public ShowtimeStatus getNewStatus() {
+        return newStatus;
+    }
+
+    public void setNewStatus(ShowtimeStatus newStatus) {
+        this.newStatus = newStatus;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public void setReason(String reason) {
+        this.reason = reason;
+    }
+
+    public Instant getChangedAt() {
+        return changedAt;
+    }
+
+    public void setChangedAt(Instant changedAt) {
+        this.changedAt = changedAt;
+    }
+
+    public Long getChangedBy() {
+        return changedBy;
+    }
+
+    public void setChangedBy(Long changedBy) {
+        this.changedBy = changedBy;
+    }
 
     @PrePersist
     protected void onCreate() {

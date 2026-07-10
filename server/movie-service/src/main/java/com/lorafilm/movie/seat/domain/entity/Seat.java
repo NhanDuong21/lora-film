@@ -1,17 +1,12 @@
 package com.lorafilm.movie.seat.domain.entity;
 
-import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.common.audit.BaseAuditableEntity;
+import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
+import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import jakarta.persistence.*;
-import lombok.*;
 
 @Entity
 @Table(name = "seats")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class Seat extends BaseAuditableEntity {
 
     @Id
@@ -49,5 +44,95 @@ public class Seat extends BaseAuditableEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private SeatStatus status;
+    private SeatStatus status = SeatStatus.ACTIVE;
+
+    public Seat() {}
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getPublicId() {
+        return publicId;
+    }
+
+    public void setPublicId(String publicId) {
+        this.publicId = publicId;
+    }
+
+    public Auditorium getAuditorium() {
+        return auditorium;
+    }
+
+    public void setAuditorium(Auditorium auditorium) {
+        this.auditorium = auditorium;
+    }
+
+    public SeatType getSeatType() {
+        return seatType;
+    }
+
+    public void setSeatType(SeatType seatType) {
+        this.seatType = seatType;
+    }
+
+    public String getRowLabel() {
+        return rowLabel;
+    }
+
+    public void setRowLabel(String rowLabel) {
+        this.rowLabel = rowLabel;
+    }
+
+    public Integer getSeatNumber() {
+        return seatNumber;
+    }
+
+    public void setSeatNumber(Integer seatNumber) {
+        this.seatNumber = seatNumber;
+    }
+
+    public String getSeatCode() {
+        return seatCode;
+    }
+
+    public void setSeatCode(String seatCode) {
+        this.seatCode = seatCode;
+    }
+
+    public Integer getPositionRow() {
+        return positionRow;
+    }
+
+    public void setPositionRow(Integer positionRow) {
+        this.positionRow = positionRow;
+    }
+
+    public Integer getPositionColumn() {
+        return positionColumn;
+    }
+
+    public void setPositionColumn(Integer positionColumn) {
+        this.positionColumn = positionColumn;
+    }
+
+    public String getPairGroup() {
+        return pairGroup;
+    }
+
+    public void setPairGroup(String pairGroup) {
+        this.pairGroup = pairGroup;
+    }
+
+    public SeatStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(SeatStatus status) {
+        this.status = status;
+    }
 }
