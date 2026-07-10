@@ -14,7 +14,7 @@ public class Movie extends BaseAuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", updatable = false, unique = true, nullable = false)
+    @Column(name = "public_id", updatable = false, unique = true, nullable = false, columnDefinition = "CHAR(36)")
     private String publicId;
 
     @Column(name = "title", nullable = false)

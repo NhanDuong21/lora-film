@@ -25,7 +25,7 @@ public class ShowtimePrice {
     @Column(name = "price", nullable = false)
     private BigDecimal price;
 
-    @Column(name = "currency", nullable = false)
+    @Column(name = "currency", nullable = false, columnDefinition = "CHAR(3)")
     private String currency = "VND";
 
     @Column(name = "created_at", updatable = false)

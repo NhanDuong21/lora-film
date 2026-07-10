@@ -99,7 +99,7 @@ public class SeatRepositoryTest {
         seat2.setStatus(SeatStatus.ACTIVE);
         seatRepository.save(seat2);
 
-        List<Seat> layout = seatRepository.findLayoutByAuditoriumId(auditorium.getId());
+        List<Seat> layout = seatRepository.findAdminLayoutByAuditoriumId(auditorium.getId());
 
         assertThat(layout).hasSize(2);
         assertThat(layout.get(0).getSeatCode()).isEqualTo("A1");
