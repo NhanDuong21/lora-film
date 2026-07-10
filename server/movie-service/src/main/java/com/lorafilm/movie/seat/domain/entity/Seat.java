@@ -6,14 +6,17 @@ import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "seats")
+@Table(name = "seats", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_seats_auditorium_code", columnNames = {"auditorium_id", "seat_code"}),
+        @UniqueConstraint(name = "uk_seats_auditorium_position", columnNames = {"auditorium_id", "position_row", "position_column"})
+})
 public class Seat extends BaseAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", updatable = false, unique = true, nullable = false)
+    @Column(name = "public_id", updatable = false, unique = true, nullable = false, length = 36)
     private String publicId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -24,13 +27,13 @@ public class Seat extends BaseAuditableEntity {
     @JoinColumn(name = "seat_type_id", nullable = false)
     private SeatType seatType;
 
-    @Column(name = "row_label", nullable = false)
+    @Column(name = "row_label", nullable = false, length = 5)
     private String rowLabel;
 
     @Column(name = "seat_number", nullable = false)
     private Integer seatNumber;
 
-    @Column(name = "seat_code", nullable = false)
+    @Column(name = "seat_code", nullable = false, length = 10)
     private String seatCode;
 
     @Column(name = "position_row", nullable = false)
@@ -39,11 +42,11 @@ public class Seat extends BaseAuditableEntity {
     @Column(name = "position_column", nullable = false)
     private Integer positionColumn;
 
-    @Column(name = "pair_group")
+    @Column(name = "pair_group", length = 30)
     private String pairGroup;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false, length = 30)
     private SeatStatus status = SeatStatus.ACTIVE;
 
     public Seat() {}

@@ -22,11 +22,11 @@ public class AuditoriumMaintenanceWindow {
     @Column(name = "end_time", nullable = false)
     private Instant endTime;
 
-    @Column(name = "reason")
+    @Column(name = "reason", length = 255)
     private String reason;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false, length = 30)
     private ActionStatus status = ActionStatus.ACTIVE;
 
     @Column(name = "created_at", updatable = false)

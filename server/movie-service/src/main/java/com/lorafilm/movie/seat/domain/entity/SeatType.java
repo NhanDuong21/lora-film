@@ -13,21 +13,21 @@ public class SeatType extends BaseAuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", updatable = false, unique = true, nullable = false)
+    @Column(name = "public_id", updatable = false, unique = true, nullable = false, length = 36)
     private String publicId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "code", nullable = false, unique = true)
+    @Column(name = "code", nullable = false, unique = true, length = 30)
     private SeatTypeCode code;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "name", nullable = false, length = 80)
     private String name;
 
-    @Column(name = "description")
+    @Column(name = "description", length = 255)
     private String description;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false, length = 30)
     private ActiveStatus status = ActiveStatus.ACTIVE;
 
     public SeatType() {}

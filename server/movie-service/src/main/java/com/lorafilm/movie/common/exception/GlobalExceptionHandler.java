@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.stream.Collectors;
 
@@ -38,6 +39,28 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.fail(fullMessage));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
+        log.error("DataIntegrityViolationException: ", ex);
+        String rootMsg = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
+        
+        if (rootMsg != null) {
+            if (rootMsg.contains("uk_auditoriums_cinema_name")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.fail(ErrorCode.AUDITORIUM_NAME_DUPLICATED.getMessage()));
+            }
+            if (rootMsg.contains("uk_seats_auditorium_code")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_CODE.getMessage()));
+            }
+            if (rootMsg.contains("uk_seats_auditorium_position")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_POSITION.getMessage()));
+            }
+        }
+        
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail("Data integrity constraint violated"));
     }
 
     @ExceptionHandler(Exception.class)

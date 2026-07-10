@@ -16,7 +16,7 @@ public class CinemaOperatingHour {
     @JoinColumn(name = "cinema_id", nullable = false)
     private Cinema cinema;
 
-    @Column(name = "day_of_week", nullable = false)
+    @Column(name = "day_of_week", nullable = false, columnDefinition = "TINYINT")
     private Integer dayOfWeek;
 
     @Column(name = "open_time", nullable = false)
@@ -40,7 +40,8 @@ public class CinemaOperatingHour {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    public CinemaOperatingHour() {}
+    public CinemaOperatingHour() {
+    }
 
     public Long getId() {
         return id;

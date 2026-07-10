@@ -13,8 +13,8 @@ public class CinemaMedia extends BaseAuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", updatable = false, unique = true, nullable = false)
-    private String publicId;
+    @Column(name = "public_id", updatable = false, unique = true, nullable = false, columnDefinition = "CHAR(36)")
+    private String publicId; 
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cinema_id", nullable = false)
