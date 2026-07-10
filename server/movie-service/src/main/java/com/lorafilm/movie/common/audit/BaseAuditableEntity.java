@@ -10,6 +10,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
@@ -17,18 +18,22 @@ public abstract class BaseAuditableEntity {
 
     @CreatedDate
     @Column(name = "created_at", updatable = false, nullable = false)
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Instant createdAt;
 
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Instant updatedAt;
 
     @CreatedBy
     @Column(name = "created_by", updatable = false)
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Long createdBy;
 
     @LastModifiedBy
     @Column(name = "updated_by")
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Long updatedBy;
 
     @Column(name = "deleted_at")
