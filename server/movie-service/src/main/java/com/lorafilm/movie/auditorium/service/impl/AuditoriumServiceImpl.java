@@ -5,7 +5,7 @@ import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
 import com.lorafilm.movie.auditorium.dto.AuditoriumResponse;
 import com.lorafilm.movie.auditorium.dto.CreateAuditoriumRequest;
 import com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest;
-import com.lorafilm.movie.auditorium.dto.UpdateAuditoriumStatusRequest;
+
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.auditorium.service.AuditoriumService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -81,28 +81,19 @@ public class AuditoriumServiceImpl implements AuditoriumService {
         if (request.capacity() < activeSeatCount) {
             throw new BusinessException(ErrorCode.AUDITORIUM_CAPACITY_BELOW_CURRENT_SEAT_COUNT);
         }
-        
-        
+        validateStatusTransition(auditorium.getStatus(), request.status(), auditorium);
 
         auditorium.setName(request.name().trim());
         auditorium.setScreenType(request.screenType());
         auditorium.setSoundType(request.soundType());
         auditorium.setCapacity(request.capacity());
         auditorium.setCleaningBufferMinutes(request.cleaningBufferMinutes());
+        auditorium.setStatus(request.status());
         
         return mapToResponse(auditorium);
     }
 
-    @Override
-    @Transactional
-    public AuditoriumResponse updateStatus(String auditoriumPublicId, UpdateAuditoriumStatusRequest request) {
-        Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate(auditoriumPublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
-                
-        validateStatusTransition(auditorium.getStatus(), request.status(), auditorium);
-        auditorium.setStatus(request.status());
-        return mapToResponse(auditorium);
-    }
+
 
     @Override
     @Transactional

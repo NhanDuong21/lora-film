@@ -3,7 +3,7 @@ package com.lorafilm.movie.auditorium.controller;
 import com.lorafilm.movie.auditorium.dto.AuditoriumResponse;
 import com.lorafilm.movie.auditorium.dto.CreateAuditoriumRequest;
 import com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest;
-import com.lorafilm.movie.auditorium.dto.UpdateAuditoriumStatusRequest;
+
 import com.lorafilm.movie.auditorium.service.AuditoriumService;
 import com.lorafilm.movie.common.api.ApiResponse;
 import jakarta.validation.Valid;
@@ -36,12 +36,7 @@ public class AdminAuditoriumController {
         return ResponseEntity.ok(ApiResponse.ok(auditoriumService.updateAuditorium(auditoriumPublicId, request)));
     }
 
-    @PutMapping("/auditoriums/{auditoriumPublicId}/status")
-    public ResponseEntity<ApiResponse<AuditoriumResponse>> updateStatus(
-            @PathVariable String auditoriumPublicId,
-            @Valid @RequestBody UpdateAuditoriumStatusRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(auditoriumService.updateStatus(auditoriumPublicId, request)));
-    }
+
 
     @DeleteMapping("/auditoriums/{auditoriumPublicId}")
     public ResponseEntity<ApiResponse<Void>> deleteAuditorium(@PathVariable String auditoriumPublicId) {

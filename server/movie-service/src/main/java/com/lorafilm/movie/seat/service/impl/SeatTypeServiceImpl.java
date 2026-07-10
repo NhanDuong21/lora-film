@@ -7,7 +7,7 @@ import com.lorafilm.movie.seat.domain.entity.SeatType;
 import com.lorafilm.movie.seat.dto.CreateSeatTypeRequest;
 import com.lorafilm.movie.seat.dto.SeatTypeResponse;
 import com.lorafilm.movie.seat.dto.UpdateSeatTypeRequest;
-import com.lorafilm.movie.seat.dto.UpdateSeatTypeStatusRequest;
+
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import com.lorafilm.movie.seat.service.SeatTypeService;
@@ -60,17 +60,7 @@ public class SeatTypeServiceImpl implements SeatTypeService {
         return mapToResponse(seatType);
     }
 
-    @Override
-    @Transactional
-    public SeatTypeResponse updateStatus(String publicId, UpdateSeatTypeStatusRequest request) {
-        SeatType seatType = seatTypeRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SEAT_TYPE_NOT_FOUND));
 
-        validateStatusTransition(seatType.getStatus(), request.status(), seatType);
-        seatType.setStatus(request.status());
-        
-        return mapToResponse(seatType);
-    }
 
     private void validateStatusTransition(ActiveStatus current, ActiveStatus target, SeatType seatType) {
         if (current == target) return;

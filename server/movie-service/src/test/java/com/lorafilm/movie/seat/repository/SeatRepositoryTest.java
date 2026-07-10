@@ -51,6 +51,10 @@ public class SeatRepositoryTest {
         Cinema cinema = new Cinema();
         cinema.setPublicId(UUID.randomUUID().toString());
         cinema.setName("Test Cinema");
+        cinema.setAddress("Test Address");
+        cinema.setDistrict("Test District");
+        cinema.setCity("Test City");
+        cinema.setSlug("test-cinema");
         cinema.setStatus(CinemaStatus.ACTIVE);
         cinema = cinemaRepository.save(cinema);
 

@@ -4,7 +4,7 @@ import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.seat.dto.BulkCreateSeatsRequest;
 import com.lorafilm.movie.seat.dto.SeatResponse;
 import com.lorafilm.movie.seat.dto.UpdateSeatRequest;
-import com.lorafilm.movie.seat.dto.UpdateSeatStatusRequest;
+
 import com.lorafilm.movie.seat.service.SeatService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -23,25 +23,18 @@ public class AdminSeatController {
         this.seatService = seatService;
     }
 
-    @PostMapping("/auditoriums/{id}/seats/bulk")
+    @PostMapping("/auditoriums/{auditoriumPublicId}/seats/bulk")
     public ResponseEntity<ApiResponse<List<SeatResponse>>> bulkCreateSeats(
-            @PathVariable String id,
+            @PathVariable String auditoriumPublicId,
             @Valid @RequestBody BulkCreateSeatsRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(seatService.bulkCreateSeats(id, request)));
+                .body(ApiResponse.ok(seatService.bulkCreateSeats(auditoriumPublicId, request)));
     }
 
-    @PutMapping("/seats/{seatId}")
+    @PutMapping("/seats/{seatPublicId}")
     public ResponseEntity<ApiResponse<SeatResponse>> updateSeat(
-            @PathVariable String seatId,
+            @PathVariable String seatPublicId,
             @Valid @RequestBody UpdateSeatRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(seatService.updateSeat(seatId, request)));
-    }
-
-    @PutMapping("/seats/{seatId}/status")
-    public ResponseEntity<ApiResponse<SeatResponse>> updateSeatStatus(
-            @PathVariable String seatId,
-            @Valid @RequestBody UpdateSeatStatusRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(seatService.updateSeatStatus(seatId, request)));
+        return ResponseEntity.ok(ApiResponse.ok(seatService.updateSeat(seatPublicId, request)));
     }
 }

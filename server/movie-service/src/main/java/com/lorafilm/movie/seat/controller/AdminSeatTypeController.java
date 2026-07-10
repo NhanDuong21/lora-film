@@ -4,7 +4,7 @@ import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.seat.dto.CreateSeatTypeRequest;
 import com.lorafilm.movie.seat.dto.SeatTypeResponse;
 import com.lorafilm.movie.seat.dto.UpdateSeatTypeRequest;
-import com.lorafilm.movie.seat.dto.UpdateSeatTypeStatusRequest;
+
 import com.lorafilm.movie.seat.service.SeatTypeService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -28,17 +28,10 @@ public class AdminSeatTypeController {
                 .body(ApiResponse.ok(seatTypeService.createSeatType(request)));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{seatTypePublicId}")
     public ResponseEntity<ApiResponse<SeatTypeResponse>> updateSeatType(
-            @PathVariable String id,
+            @PathVariable String seatTypePublicId,
             @Valid @RequestBody UpdateSeatTypeRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(seatTypeService.updateSeatType(id, request)));
-    }
-
-    @PutMapping("/{id}/status")
-    public ResponseEntity<ApiResponse<SeatTypeResponse>> updateStatus(
-            @PathVariable String id,
-            @Valid @RequestBody UpdateSeatTypeStatusRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(seatTypeService.updateStatus(id, request)));
+        return ResponseEntity.ok(ApiResponse.ok(seatTypeService.updateSeatType(seatTypePublicId, request)));
     }
 }

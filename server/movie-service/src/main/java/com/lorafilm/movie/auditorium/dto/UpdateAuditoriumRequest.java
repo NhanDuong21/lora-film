@@ -14,5 +14,6 @@ public record UpdateAuditoriumRequest(
         @NotNull ScreenType screenType,
         @NotNull SoundType soundType,
         @NotNull @Positive Integer capacity,
-        @NotNull @PositiveOrZero Integer cleaningBufferMinutes
+        @NotNull @PositiveOrZero Integer cleaningBufferMinutes,
+        @NotNull AuditoriumStatus status
 ) {}

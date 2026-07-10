@@ -7,7 +7,6 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
-import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import com.lorafilm.movie.seat.dto.*;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
@@ -115,7 +114,8 @@ public class SeatServiceImpl implements SeatService {
         Seat seat = seatRepository.findByPublicIdAndDeletedAtIsNull(seatPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SEAT_NOT_FOUND));
 
-        Auditorium auditorium = seat.getAuditorium();
+        Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate(seat.getAuditorium().getPublicId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
 
         String normalizedSeatCode = request.seatCode() != null ? request.seatCode().trim() : null;
         String normalizedRowLabel = request.rowLabel() != null ? request.rowLabel().trim() : null;
@@ -150,15 +150,6 @@ public class SeatServiceImpl implements SeatService {
         return mapToResponse(seat);
     }
 
-    @Override
-    @Transactional
-    public SeatResponse updateSeatStatus(String seatPublicId, UpdateSeatStatusRequest request) {
-        Seat seat = seatRepository.findByPublicIdAndDeletedAtIsNull(seatPublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SEAT_NOT_FOUND));
-
-        seat.setStatus(request.status());
-        return mapToResponse(seat);
-    }
 
     private SeatResponse mapToResponse(Seat s) {
         SeatTypeResponse typeResp = new SeatTypeResponse(

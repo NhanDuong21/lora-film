@@ -107,4 +107,62 @@ public class AuditoriumServiceTest {
                 () -> auditoriumService.createAuditorium("cinema-pub-id", createRequest));
         assertEquals(ErrorCode.AUDITORIUM_NAME_DUPLICATED, ex.getErrorCode());
     }
+
+    @Test
+    void updateAuditorium_ValidRequest_Success() {
+        Auditorium auditorium = new Auditorium();
+        auditorium.setId(10L);
+        auditorium.setCinema(activeCinema);
+        auditorium.setName("Old Name");
+        auditorium.setStatus(AuditoriumStatus.DRAFT);
+        
+        com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest updateReq = 
+            new com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest("New Name", ScreenType.IMAX, SoundType.DOLBY_ATMOS, 150, 20, AuditoriumStatus.ACTIVE);
+
+        when(auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate("pub-10"))
+                .thenReturn(Optional.of(auditorium));
+        when(seatRepository.countByAuditoriumIdAndDeletedAtIsNull(10L)).thenReturn(100L);
+
+        AuditoriumResponse response = auditoriumService.updateAuditorium("pub-10", updateReq);
+        assertEquals("New Name", response.name());
+        assertEquals(AuditoriumStatus.ACTIVE, response.status());
+        assertEquals(150, response.capacity());
+    }
+
+    @Test
+    void updateAuditorium_InvalidStatusTransition_ThrowsException() {
+        Auditorium auditorium = new Auditorium();
+        auditorium.setId(10L);
+        auditorium.setCinema(activeCinema);
+        auditorium.setStatus(AuditoriumStatus.DRAFT);
+        
+        com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest updateReq = 
+            new com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest("New Name", ScreenType.IMAX, SoundType.DOLBY_ATMOS, 150, 20, AuditoriumStatus.MAINTENANCE);
+
+        when(auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate("pub-10"))
+                .thenReturn(Optional.of(auditorium));
+
+        BusinessException ex = assertThrows(BusinessException.class, 
+                () -> auditoriumService.updateAuditorium("pub-10", updateReq));
+        assertEquals(ErrorCode.INVALID_AUDITORIUM_STATUS_TRANSITION, ex.getErrorCode());
+    }
+
+    @Test
+    void updateAuditorium_CapacitySmallerThanActiveSeats_ThrowsException() {
+        Auditorium auditorium = new Auditorium();
+        auditorium.setId(10L);
+        auditorium.setCinema(activeCinema);
+        auditorium.setStatus(AuditoriumStatus.ACTIVE);
+        
+        com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest updateReq = 
+            new com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest("New Name", ScreenType.IMAX, SoundType.DOLBY_ATMOS, 50, 20, AuditoriumStatus.ACTIVE);
+
+        when(auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate("pub-10"))
+                .thenReturn(Optional.of(auditorium));
+        when(seatRepository.countByAuditoriumIdAndDeletedAtIsNull(10L)).thenReturn(100L);
+
+        BusinessException ex = assertThrows(BusinessException.class, 
+                () -> auditoriumService.updateAuditorium("pub-10", updateReq));
+        assertEquals(ErrorCode.AUDITORIUM_CAPACITY_BELOW_CURRENT_SEAT_COUNT, ex.getErrorCode());
+    }
 }
