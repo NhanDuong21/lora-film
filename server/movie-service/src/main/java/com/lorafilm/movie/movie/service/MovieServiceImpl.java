@@ -1,10 +1,21 @@
 package com.lorafilm.movie.movie.service;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+
 import com.lorafilm.movie.common.dto.PageResponse;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieMedia;
-import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.MovieDto;
@@ -13,16 +24,6 @@ import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieSpecification;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 public class MovieServiceImpl implements MovieService {
@@ -33,9 +34,9 @@ public class MovieServiceImpl implements MovieService {
     private final MovieMapper movieMapper;
 
     public MovieServiceImpl(MovieRepository movieRepository,
-                            MovieGenreRepository movieGenreRepository,
-                            MovieMediaRepository movieMediaRepository,
-                            MovieMapper movieMapper) {
+            MovieGenreRepository movieGenreRepository,
+            MovieMediaRepository movieMediaRepository,
+            MovieMapper movieMapper) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMediaRepository = movieMediaRepository;
@@ -47,12 +48,11 @@ public class MovieServiceImpl implements MovieService {
         Specification<Movie> spec = Specification.where(MovieSpecification.isNotDeleted());
 
         if (status != null && !status.isEmpty()) {
-            MovieStatus parsedStatus = MovieStatus.fromString(status);
-            if (parsedStatus == MovieStatus.NOW_SHOWING || parsedStatus == MovieStatus.UPCOMING) {
-                spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
-            } else {
-                spec = spec.and(MovieSpecification.isPubliclyVisible());
+            MovieStatus parsedStatus = MovieStatus.valueOf(status.toUpperCase());
+            if (parsedStatus == null) {
+                throw new IllegalArgumentException("Invalid status: " + status);
             }
+            spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
         } else {
             spec = spec.and(MovieSpecification.isPubliclyVisible());
         }
@@ -72,8 +72,7 @@ public class MovieServiceImpl implements MovieService {
                 moviePage.getSize(),
                 moviePage.getTotalElements(),
                 moviePage.getTotalPages(),
-                moviePage.isLast()
-        );
+                moviePage.isLast());
     }
 
     @Override
