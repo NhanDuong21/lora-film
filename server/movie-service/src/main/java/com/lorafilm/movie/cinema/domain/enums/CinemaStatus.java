@@ -1,4 +1,4 @@
-package com.lorafilm.movie.cinema.domain;
+package com.lorafilm.movie.cinema.domain.enums;
 
 public enum CinemaStatus {
     DRAFT,

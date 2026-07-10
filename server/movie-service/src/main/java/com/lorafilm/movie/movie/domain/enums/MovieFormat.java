@@ -1,4 +1,4 @@
-package com.lorafilm.movie.movie.domain;
+package com.lorafilm.movie.movie.domain.enums;
 
 public enum MovieFormat {
     TWO_D,
