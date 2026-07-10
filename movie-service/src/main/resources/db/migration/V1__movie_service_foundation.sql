@@ -1,2 +1,0 @@
--- Initial migration for movie-service
--- Schema structure will be added here
