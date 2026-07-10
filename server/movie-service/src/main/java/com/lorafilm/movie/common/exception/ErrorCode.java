@@ -1,22 +1,49 @@
 package com.lorafilm.movie.common.exception;
 
-import lombok.Getter;
-
-@Getter
 public enum ErrorCode {
+    // --- Hệ thống chung ---
+    INTERNAL_SERVER_ERROR("Internal server error", 500),
+    VALIDATION_ERROR("Validation failed", 400),
+    ACCESS_DENIED("Access denied", 403),
+    RESOURCE_NOT_FOUND("Resource not found", 404),
+    INTERNAL_TOKEN_INVALID("Internal token is invalid or expired", 401),
 
-    BAD_REQUEST(400, "Bad Request"),
-    UNAUTHORIZED(401, "Unauthorized"),
-    FORBIDDEN(403, "Forbidden"),
-    RESOURCE_NOT_FOUND(404, "Resource Not Found"),
-    VALIDATION_ERROR(400, "Validation Error"),
-    INTERNAL_SERVER_ERROR(500, "Internal Server Error");
+    // --- Module Phim ---
+    MOVIE_NOT_FOUND("Movie not found", 404),
+    MOVIE_VERSION_NOT_FOUND("Movie version not found", 404),
 
-    private final int status;
+    // --- Module Rạp & Phòng chiếu ---
+    CINEMA_NOT_FOUND("Cinema not found", 404),
+    AUDITORIUM_NOT_FOUND("Auditorium not found", 404),
+    AUDITORIUM_NAME_DUPLICATED("Auditorium name already exists in this cinema", 400),
+    CINEMA_CLOSURE_CONFLICT("Action conflicts with cinema closure schedule", 409),
+    AUDITORIUM_MAINTENANCE_CONFLICT("Action conflicts with auditorium maintenance schedule", 409),
+
+    // --- Module Ghế ngồi ---
+    SEAT_NOT_FOUND("Seat not found", 404),
+    SEAT_TYPE_NOT_FOUND("Seat type not found", 404),
+    SEAT_CODE_DUPLICATED("Seat code already exists in this auditorium", 400),
+    SEAT_POSITION_DUPLICATED("Seat position (Row/Column) already occupied", 400),
+
+    // --- Module Lịch chiếu ---
+    SHOWTIME_NOT_FOUND("Showtime not found", 404),
+    SHOWTIME_OVERLAP_CONFLICT("Showtime overlaps with an existing schedule", 409),
+    SHOWTIME_PRICE_MISSING("Showtime price config is missing", 400),
+    INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400);
+
     private final String message;
+    private final int httpStatus;
 
-    ErrorCode(int status, String message) {
-        this.status = status;
+    ErrorCode(String message, int httpStatus) {
         this.message = message;
+        this.httpStatus = httpStatus;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public int getHttpStatus() {
+        return httpStatus;
     }
 }
