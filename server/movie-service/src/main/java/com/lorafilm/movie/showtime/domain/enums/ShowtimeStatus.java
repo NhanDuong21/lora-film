@@ -1,4 +1,4 @@
-package com.lorafilm.movie.showtime.domain;
+package com.lorafilm.movie.showtime.domain.enums;
 
 public enum ShowtimeStatus {
     DRAFT,

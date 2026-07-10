@@ -1,4 +1,4 @@
-package com.lorafilm.movie.seat.domain;
+package com.lorafilm.movie.seat.domain.enums;
 
 public enum SeatTypeCode {
     STANDARD,
