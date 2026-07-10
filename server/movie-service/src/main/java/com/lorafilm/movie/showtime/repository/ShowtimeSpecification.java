@@ -1,0 +1,40 @@
+package com.lorafilm.movie.showtime.repository;
+
+import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import org.springframework.data.jpa.domain.Specification;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+
+public class ShowtimeSpecification {
+
+    public static Specification<Showtime> isNotDeleted() {
+        return (root, query, cb) -> cb.isNull(root.get("deletedAt"));
+    }
+
+    public static Specification<Showtime> hasStatus(ShowtimeStatus status) {
+        return (root, query, cb) -> cb.equal(root.get("status"), status);
+    }
+
+    public static Specification<Showtime> hasMovieSlug(String movieSlug) {
+        return (root, query, cb) -> cb.equal(root.get("movie").get("slug"), movieSlug);
+    }
+
+    public static Specification<Showtime> hasCinemaSlug(String cinemaSlug) {
+        return (root, query, cb) -> cb.equal(root.get("cinema").get("slug"), cinemaSlug);
+    }
+
+    public static Specification<Showtime> hasCity(String city) {
+        return (root, query, cb) -> cb.equal(cb.lower(root.get("cinema").get("city")), city.toLowerCase());
+    }
+
+    public static Specification<Showtime> hasDate(LocalDate date) {
+        return (root, query, cb) -> {
+            Instant startOfDay = date.atStartOfDay().toInstant(ZoneOffset.ofHours(7)); // default VN time
+            Instant endOfDay = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.ofHours(7));
+            return cb.between(root.get("startTime"), startOfDay, endOfDay);
+        };
+    }
+}
