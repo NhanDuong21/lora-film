@@ -6,9 +6,10 @@ import java.util.List;
 
 public class SeatLayoutDto {
     private String showtimePublicId;
-    private String movieTitle;
-    private String cinemaName;
-    private String auditoriumName;
+    private ShowtimeMovieDto movie;
+    private ShowtimeMovieVersionDto movieVersion;
+    private ShowtimeCinemaDto cinema;
+    private ShowtimeAuditoriumDto auditorium;
     private Instant startTime;
     private Instant endTime;
     private List<SeatPriceDto> seats;
@@ -17,12 +18,14 @@ public class SeatLayoutDto {
 
     public String getShowtimePublicId() { return showtimePublicId; }
     public void setShowtimePublicId(String showtimePublicId) { this.showtimePublicId = showtimePublicId; }
-    public String getMovieTitle() { return movieTitle; }
-    public void setMovieTitle(String movieTitle) { this.movieTitle = movieTitle; }
-    public String getCinemaName() { return cinemaName; }
-    public void setCinemaName(String cinemaName) { this.cinemaName = cinemaName; }
-    public String getAuditoriumName() { return auditoriumName; }
-    public void setAuditoriumName(String auditoriumName) { this.auditoriumName = auditoriumName; }
+    public ShowtimeMovieDto getMovie() { return movie; }
+    public void setMovie(ShowtimeMovieDto movie) { this.movie = movie; }
+    public ShowtimeMovieVersionDto getMovieVersion() { return movieVersion; }
+    public void setMovieVersion(ShowtimeMovieVersionDto movieVersion) { this.movieVersion = movieVersion; }
+    public ShowtimeCinemaDto getCinema() { return cinema; }
+    public void setCinema(ShowtimeCinemaDto cinema) { this.cinema = cinema; }
+    public ShowtimeAuditoriumDto getAuditorium() { return auditorium; }
+    public void setAuditorium(ShowtimeAuditoriumDto auditorium) { this.auditorium = auditorium; }
     public Instant getStartTime() { return startTime; }
     public void setStartTime(Instant startTime) { this.startTime = startTime; }
     public Instant getEndTime() { return endTime; }

@@ -47,10 +47,11 @@ public class MovieServiceImpl implements MovieService {
         Specification<Movie> spec = Specification.where(MovieSpecification.isNotDeleted());
 
         if (status != null && !status.isEmpty()) {
-            if ("now-showing".equalsIgnoreCase(status)) {
-                spec = spec.and(MovieSpecification.hasStatus(MovieStatus.NOW_SHOWING));
-            } else if ("coming-soon".equalsIgnoreCase(status)) {
-                spec = spec.and(MovieSpecification.hasStatus(MovieStatus.UPCOMING));
+            MovieStatus parsedStatus = MovieStatus.fromString(status);
+            if (parsedStatus == MovieStatus.NOW_SHOWING || parsedStatus == MovieStatus.UPCOMING) {
+                spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
+            } else {
+                spec = spec.and(MovieSpecification.isPubliclyVisible());
             }
         } else {
             spec = spec.and(MovieSpecification.isPubliclyVisible());

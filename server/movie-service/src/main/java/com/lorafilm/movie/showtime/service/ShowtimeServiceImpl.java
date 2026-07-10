@@ -21,6 +21,10 @@ import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.SeatLayoutDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeMovieDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeMovieVersionDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeCinemaDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeAuditoriumDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
 import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
@@ -117,9 +121,35 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
         SeatLayoutDto layout = new SeatLayoutDto();
         layout.setShowtimePublicId(showtime.getPublicId());
-        layout.setMovieTitle(showtime.getMovie().getTitle());
-        layout.setCinemaName(showtime.getCinema().getName());
-        layout.setAuditoriumName(showtime.getAuditorium().getName());
+
+        ShowtimeMovieDto movieDto = new ShowtimeMovieDto();
+        movieDto.setPublicId(showtime.getMovie().getPublicId());
+        movieDto.setSlug(showtime.getMovie().getSlug());
+        movieDto.setTitle(showtime.getMovie().getTitle());
+        layout.setMovie(movieDto);
+
+        ShowtimeMovieVersionDto versionDto = new ShowtimeMovieVersionDto();
+        versionDto.setPublicId(showtime.getMovieVersion().getPublicId());
+        versionDto.setVersionName(showtime.getMovieVersion().getVersionName());
+        versionDto.setFormat(showtime.getMovieVersion().getFormat() != null ? showtime.getMovieVersion().getFormat().name() : null);
+        versionDto.setAudioLanguage(showtime.getMovieVersion().getAudioLanguage());
+        versionDto.setSubtitleLanguage(showtime.getMovieVersion().getSubtitleLanguage());
+        layout.setMovieVersion(versionDto);
+
+        ShowtimeCinemaDto cinemaDto = new ShowtimeCinemaDto();
+        cinemaDto.setPublicId(showtime.getCinema().getPublicId());
+        cinemaDto.setSlug(showtime.getCinema().getSlug());
+        cinemaDto.setName(showtime.getCinema().getName());
+        cinemaDto.setTimezone(showtime.getCinema().getTimezone());
+        layout.setCinema(cinemaDto);
+
+        ShowtimeAuditoriumDto auditoriumDto = new ShowtimeAuditoriumDto();
+        auditoriumDto.setPublicId(showtime.getAuditorium().getPublicId());
+        auditoriumDto.setName(showtime.getAuditorium().getName());
+        auditoriumDto.setScreenType(showtime.getAuditorium().getScreenType() != null ? showtime.getAuditorium().getScreenType().name() : null);
+        auditoriumDto.setSoundType(showtime.getAuditorium().getSoundType() != null ? showtime.getAuditorium().getSoundType().name() : null);
+        layout.setAuditorium(auditoriumDto);
+
         layout.setStartTime(showtime.getStartTime());
         layout.setEndTime(showtime.getEndTime());
         layout.setSeats(seatPriceDtos);
