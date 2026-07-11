@@ -29,6 +29,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@org.springframework.transaction.annotation.Transactional
 public class SeatRepositoryTest {
 
     @Autowired
@@ -69,12 +70,21 @@ public class SeatRepositoryTest {
         auditorium.setStatus(AuditoriumStatus.ACTIVE);
         auditorium = auditoriumRepository.save(auditorium);
 
-        seatType = new SeatType();
-        seatType.setPublicId(UUID.randomUUID().toString());
-        seatType.setCode(SeatTypeCode.STANDARD);
-        seatType.setName("Standard Seat");
-        seatType.setStatus(ActiveStatus.ACTIVE);
-        seatType = seatTypeRepository.save(seatType);
+        // --- SỬA ĐOẠN NÀY: Dùng cú pháp an toàn để tránh Duplicate entry ---
+        java.util.Optional<SeatType> existingType = seatTypeRepository.findAll().stream()
+                .filter(st -> st.getCode() == SeatTypeCode.STANDARD)
+                .findFirst();
+
+        if (existingType.isPresent()) {
+            seatType = existingType.get();
+        } else {
+            seatType = new SeatType();
+            seatType.setPublicId(UUID.randomUUID().toString());
+            seatType.setCode(SeatTypeCode.STANDARD);
+            seatType.setName("Standard Seat");
+            seatType.setStatus(ActiveStatus.ACTIVE);
+            seatType = seatTypeRepository.save(seatType);
+        }
     }
 
     @Test

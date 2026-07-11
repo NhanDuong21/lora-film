@@ -24,7 +24,8 @@ public class SeatServiceImpl implements SeatService {
     private final SeatTypeRepository seatTypeRepository;
     private final AuditoriumRepository auditoriumRepository;
 
-    public SeatServiceImpl(SeatRepository seatRepository, SeatTypeRepository seatTypeRepository, AuditoriumRepository auditoriumRepository) {
+    public SeatServiceImpl(SeatRepository seatRepository, SeatTypeRepository seatTypeRepository,
+            AuditoriumRepository auditoriumRepository) {
         this.seatRepository = seatRepository;
         this.seatTypeRepository = seatTypeRepository;
         this.auditoriumRepository = auditoriumRepository;
@@ -57,17 +58,20 @@ public class SeatServiceImpl implements SeatService {
 
         Map<String, Integer> requestSeatCodes = new HashMap<>();
         Map<String, Integer> requestPositions = new HashMap<>();
-        List<String> typeIds = request.seats().stream().map(BulkSeatItemRequest::seatTypePublicId).filter(Objects::nonNull).collect(Collectors.toList());
+        List<String> typeIds = request.seats().stream().map(BulkSeatItemRequest::seatTypePublicId)
+                .filter(Objects::nonNull).collect(Collectors.toList());
 
         Map<String, SeatType> seatTypeMap = seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(typeIds).stream()
                 .collect(Collectors.toMap(SeatType::getPublicId, t -> t));
 
-        List<com.lorafilm.movie.seat.repository.SeatConflictProjection> existingConflicts = seatRepository.findConflictDataByAuditoriumId(auditorium.getId());
+        List<com.lorafilm.movie.seat.repository.SeatConflictProjection> existingConflicts = seatRepository
+                .findConflictDataByAuditoriumId(auditorium.getId());
         Set<String> existingCodes = existingConflicts.stream().map(c -> c.getSeatCode()).collect(Collectors.toSet());
-        Set<String> existingPositions = existingConflicts.stream().map(c -> c.getPositionRow() + "-" + c.getPositionColumn()).collect(Collectors.toSet());
+        Set<String> existingPositions = existingConflicts.stream()
+                .map(c -> c.getPositionRow() + "-" + c.getPositionColumn()).collect(Collectors.toSet());
 
         List<Seat> seatsToSave = new ArrayList<>();
-        
+
         for (int i = 0; i < totalItems; i++) {
             BulkSeatItemRequest item = request.seats().get(i);
             String normalizedSeatCode = item.seatCode() != null ? item.seatCode().trim() : null;
@@ -79,26 +83,32 @@ public class SeatServiceImpl implements SeatService {
 
             // Null checks
             if (normalizedSeatCode == null || normalizedSeatCode.isEmpty()) {
-                errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode, "VALIDATION_FAILED", "seatCode không được để trống"));
+                errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode, "VALIDATION_FAILED",
+                        "seatCode không được để trống"));
                 hasError = true;
             }
             if (item.positionRow() <= 0) {
-                errors.add(new BulkItemError(i, normalizedSeatCode, "positionRow", item.positionRow(), "VALIDATION_FAILED", "positionRow phải lớn hơn 0"));
+                errors.add(new BulkItemError(i, normalizedSeatCode, "positionRow", item.positionRow(),
+                        "VALIDATION_FAILED", "positionRow phải lớn hơn 0"));
                 hasError = true;
             }
             if (item.positionColumn() <= 0) {
-                errors.add(new BulkItemError(i, normalizedSeatCode, "positionColumn", item.positionColumn(), "VALIDATION_FAILED", "positionColumn phải lớn hơn 0"));
+                errors.add(new BulkItemError(i, normalizedSeatCode, "positionColumn", item.positionColumn(),
+                        "VALIDATION_FAILED", "positionColumn phải lớn hơn 0"));
                 hasError = true;
             }
             if (item.seatTypePublicId() == null || item.seatTypePublicId().isEmpty()) {
-                errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(), "VALIDATION_FAILED", "seatTypePublicId không được để trống"));
+                errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(),
+                        "VALIDATION_FAILED", "seatTypePublicId không được để trống"));
                 hasError = true;
             }
 
             // In-request duplicates
             if (normalizedSeatCode != null && !normalizedSeatCode.isEmpty()) {
                 if (requestSeatCodes.containsKey(normalizedSeatCode)) {
-                    errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode, "DUPLICATE_SEAT_CODE_IN_REQUEST", "seatCode bị trùng với phần tử tại index " + requestSeatCodes.get(normalizedSeatCode)));
+                    errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode,
+                            "DUPLICATE_SEAT_CODE_IN_REQUEST",
+                            "seatCode bị trùng với phần tử tại index " + requestSeatCodes.get(normalizedSeatCode)));
                     hasError = true;
                 } else {
                     requestSeatCodes.put(normalizedSeatCode, i);
@@ -107,7 +117,9 @@ public class SeatServiceImpl implements SeatService {
 
             if (item.positionRow() > 0 && item.positionColumn() > 0) {
                 if (requestPositions.containsKey(posKey)) {
-                    errors.add(new BulkItemError(i, normalizedSeatCode, "position", posKey, "DUPLICATE_SEAT_POSITION_IN_REQUEST", "Vị trí bị trùng với phần tử tại index " + requestPositions.get(posKey)));
+                    errors.add(new BulkItemError(i, normalizedSeatCode, "position", posKey,
+                            "DUPLICATE_SEAT_POSITION_IN_REQUEST",
+                            "Vị trí bị trùng với phần tử tại index " + requestPositions.get(posKey)));
                     hasError = true;
                 } else {
                     requestPositions.put(posKey, i);
@@ -116,11 +128,13 @@ public class SeatServiceImpl implements SeatService {
 
             // Database conflicts
             if (normalizedSeatCode != null && existingCodes.contains(normalizedSeatCode)) {
-                errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode, "DUPLICATE_SEAT_CODE", "Mã ghế đã tồn tại trong khán phòng"));
+                errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode,
+                        "DUPLICATE_SEAT_CODE", "Mã ghế đã tồn tại trong khán phòng"));
                 hasError = true;
             }
             if (item.positionRow() > 0 && item.positionColumn() > 0 && existingPositions.contains(posKey)) {
-                errors.add(new BulkItemError(i, normalizedSeatCode, "position", posKey, "DUPLICATE_SEAT_POSITION", "Vị trí này đã được sử dụng bởi một ghế khác"));
+                errors.add(new BulkItemError(i, normalizedSeatCode, "position", posKey, "DUPLICATE_SEAT_POSITION",
+                        "Vị trí này đã được sử dụng bởi một ghế khác"));
                 hasError = true;
             }
 
@@ -128,10 +142,12 @@ public class SeatServiceImpl implements SeatService {
             if (item.seatTypePublicId() != null && !item.seatTypePublicId().isEmpty()) {
                 SeatType type = seatTypeMap.get(item.seatTypePublicId());
                 if (type == null) {
-                    errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(), "SEAT_TYPE_NOT_FOUND", "Không tìm thấy loại ghế"));
+                    errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(),
+                            "SEAT_TYPE_NOT_FOUND", "Không tìm thấy loại ghế"));
                     hasError = true;
                 } else if (type.getStatus() != ActiveStatus.ACTIVE) {
-                    errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(), "SEAT_TYPE_INACTIVE", "Loại ghế đang không hoạt động"));
+                    errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(),
+                            "SEAT_TYPE_INACTIVE", "Loại ghế đang không hoạt động"));
                     hasError = true;
                 }
             }
@@ -147,16 +163,22 @@ public class SeatServiceImpl implements SeatService {
                 seat.setPositionRow(item.positionRow());
                 seat.setPositionColumn(item.positionColumn());
                 seat.setPairGroup(normalizedPairGroup);
-                seat.setStatus(item.status() != null ? item.status() : com.lorafilm.movie.common.enums.SeatStatus.ACTIVE);
+                seat.setStatus(
+                        item.status() != null ? item.status() : com.lorafilm.movie.seat.domain.enums.SeatStatus.ACTIVE);
                 seatsToSave.add(seat);
             }
         }
 
         if (!errors.isEmpty()) {
+            int invalidCount = (int) errors.stream().map(BulkItemError::index).distinct().count();
+
             BulkValidationErrorData errorData = new BulkValidationErrorData(
-                totalItems, totalItems - errors.stream().map(BulkItemError::index).distinct().count(), (int) errors.stream().map(BulkItemError::index).distinct().count(), errors
-            );
-            throw new BusinessException(ErrorCode.BULK_SEAT_VALIDATION_ERROR, "Có " + errorData.invalidItems() + " ghế không hợp lệ", errorData);
+                    totalItems,
+                    totalItems - invalidCount, // Không còn bị lỗi long - int nữa
+                    invalidCount,
+                    errors);
+            throw new BusinessException(ErrorCode.BULK_SEAT_VALIDATION_ERROR,
+                    "Có " + errorData.invalidItems() + " ghế không hợp lệ", errorData);
         }
 
         seatsToSave = seatRepository.saveAll(seatsToSave);
@@ -169,19 +191,20 @@ public class SeatServiceImpl implements SeatService {
         Seat seat = seatRepository.findByPublicIdAndDeletedAtIsNull(seatPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SEAT_NOT_FOUND));
 
-        Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate(seat.getAuditorium().getPublicId())
+        Auditorium auditorium = auditoriumRepository
+                .findByPublicIdAndDeletedAtIsNullForUpdate(seat.getAuditorium().getPublicId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
 
-        boolean structuralChanged = 
-            !Objects.equals(seat.getSeatType().getPublicId(), request.seatTypePublicId()) ||
-            !Objects.equals(seat.getRowLabel(), request.rowLabel()) ||
-            !Objects.equals(seat.getSeatNumber(), request.seatNumber()) ||
-            !Objects.equals(seat.getSeatCode(), request.seatCode()) ||
-            !Objects.equals(seat.getPositionRow(), request.positionRow()) ||
-            !Objects.equals(seat.getPositionColumn(), request.positionColumn()) ||
-            !Objects.equals(seat.getPairGroup(), request.pairGroup());
+        boolean structuralChanged = !Objects.equals(seat.getSeatType().getPublicId(), request.seatTypePublicId()) ||
+                !Objects.equals(seat.getRowLabel(), request.rowLabel()) ||
+                !Objects.equals(seat.getSeatNumber(), request.seatNumber()) ||
+                !Objects.equals(seat.getSeatCode(), request.seatCode()) ||
+                !Objects.equals(seat.getPositionRow(), request.positionRow()) ||
+                !Objects.equals(seat.getPositionColumn(), request.positionColumn()) ||
+                !Objects.equals(seat.getPairGroup(), request.pairGroup());
 
-        if (structuralChanged && auditorium.getStatus() != com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.DRAFT) {
+        if (structuralChanged
+                && auditorium.getStatus() != com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.DRAFT) {
             Map<String, Object> errorData = new HashMap<>();
             errorData.put("auditoriumPublicId", auditorium.getPublicId());
             errorData.put("auditoriumStatus", auditorium.getStatus().name());
@@ -207,7 +230,7 @@ public class SeatServiceImpl implements SeatService {
 
             SeatType type = seatTypeRepository.findByPublicIdAndDeletedAtIsNull(request.seatTypePublicId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.SEAT_TYPE_NOT_FOUND));
-                    
+
             if (type.getStatus() != ActiveStatus.ACTIVE && !type.getId().equals(seat.getSeatType().getId())) {
                 throw new BusinessException(ErrorCode.SEAT_TYPE_INACTIVE);
             }
@@ -227,29 +250,26 @@ public class SeatServiceImpl implements SeatService {
         return mapToResponse(seat);
     }
 
-
     private SeatResponse mapToResponse(Seat s) {
         SeatTypeResponse typeResp = new SeatTypeResponse(
-            s.getSeatType().getPublicId(),
-            s.getSeatType().getCode(),
-            s.getSeatType().getName(),
-            s.getSeatType().getDescription(),
-            s.getSeatType().getStatus(),
-            s.getSeatType().getCreatedAt(),
-            s.getSeatType().getUpdatedAt()
-        );
+                s.getSeatType().getPublicId(),
+                s.getSeatType().getCode(),
+                s.getSeatType().getName(),
+                s.getSeatType().getDescription(),
+                s.getSeatType().getStatus(),
+                s.getSeatType().getCreatedAt(),
+                s.getSeatType().getUpdatedAt());
         return new SeatResponse(
-            s.getPublicId(),
-            s.getRowLabel(),
-            s.getSeatNumber(),
-            s.getSeatCode(),
-            s.getPositionRow(),
-            s.getPositionColumn(),
-            s.getPairGroup(),
-            s.getStatus(),
-            typeResp,
-            s.getCreatedAt(),
-            s.getUpdatedAt()
-        );
+                s.getPublicId(),
+                s.getRowLabel(),
+                s.getSeatNumber(),
+                s.getSeatCode(),
+                s.getPositionRow(),
+                s.getPositionColumn(),
+                s.getPairGroup(),
+                s.getStatus(),
+                typeResp,
+                s.getCreatedAt(),
+                s.getUpdatedAt());
     }
 }
