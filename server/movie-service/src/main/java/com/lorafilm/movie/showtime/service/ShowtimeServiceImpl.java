@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -29,21 +30,27 @@ import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
 import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeSpecification;
+import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
+import com.lorafilm.movie.showtime.domain.entity.ShowtimeBlockedSeat;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 
 @Service
 public class ShowtimeServiceImpl implements ShowtimeService {
 
     private final ShowtimeRepository showtimeRepository;
     private final ShowtimePriceRepository showtimePriceRepository;
+    private final ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository;
     private final SeatService seatService;
     private final ShowtimeMapper showtimeMapper;
 
     public ShowtimeServiceImpl(ShowtimeRepository showtimeRepository,
                                ShowtimePriceRepository showtimePriceRepository,
+                               ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository,
                                SeatService seatService,
                                ShowtimeMapper showtimeMapper) {
         this.showtimeRepository = showtimeRepository;
         this.showtimePriceRepository = showtimePriceRepository;
+        this.showtimeBlockedSeatRepository = showtimeBlockedSeatRepository;
         this.seatService = seatService;
         this.showtimeMapper = showtimeMapper;
     }
@@ -80,7 +87,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
             spec = spec.and(ShowtimeSpecification.hasSubtitleLanguage(subtitleLanguage));
         }
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("startTime").ascending());
         Page<Showtime> showtimePage = showtimeRepository.findAll(spec, pageable);
 
         List<ShowtimeDto> showtimeDtos = showtimePage.getContent().stream()
@@ -109,14 +116,19 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
         List<Seat> seats = seatService.getSeatsByAuditoriumId(showtime.getAuditorium().getId());
         List<ShowtimePrice> prices = showtimePriceRepository.findByShowtimeId(showtime.getId());
+        List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActiveStatus.ACTIVE);
 
         Map<Long, ShowtimePrice> priceMap = prices.stream()
                 .collect(Collectors.toMap(p -> p.getSeatType().getId(), p -> p));
+
+        Map<Long, ShowtimeBlockedSeat> blockedSeatMap = blockedSeats.stream()
+                .collect(Collectors.toMap(b -> b.getSeat().getId(), b -> b));
 
         List<SeatLayoutDto.SeatPriceDto> seatPriceDtos = seats.stream().map(seat -> {
             ShowtimePrice showtimePrice = priceMap.get(seat.getSeatType().getId());
             BigDecimal price = showtimePrice != null ? showtimePrice.getPrice() : BigDecimal.ZERO;
             String currency = showtimePrice != null ? showtimePrice.getCurrency() : "VND";
+            boolean isBlocked = blockedSeatMap.containsKey(seat.getId());
 
             SeatLayoutDto.SeatPriceDto dto = new SeatLayoutDto.SeatPriceDto();
             dto.setPublicId(seat.getPublicId());
@@ -129,7 +141,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
             dto.setPrice(price);
             dto.setCurrency(currency);
             dto.setStatus(seat.getStatus().name());
-            dto.setBlockedForShowtime(false); // Logic to check blocked seats can be added here
+            dto.setBlockedForShowtime(isBlocked);
             return dto;
         }).collect(Collectors.toList());
 

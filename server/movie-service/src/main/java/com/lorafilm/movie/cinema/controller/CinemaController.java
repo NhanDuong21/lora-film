@@ -1,6 +1,7 @@
 package com.lorafilm.movie.cinema.controller;
 
 import com.lorafilm.movie.cinema.dto.CinemaDto;
+import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
 import com.lorafilm.movie.cinema.service.CinemaService;
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
@@ -28,7 +29,7 @@ public class CinemaController {
     }
 
     @GetMapping("/{cinemaSlug}")
-    public ResponseEntity<ApiResponse<CinemaDto>> getCinemaDetail(@PathVariable String cinemaSlug) {
+    public ResponseEntity<ApiResponse<CinemaDetailDto>> getCinemaDetail(@PathVariable String cinemaSlug) {
         return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaBySlug(cinemaSlug)));
     }
 }

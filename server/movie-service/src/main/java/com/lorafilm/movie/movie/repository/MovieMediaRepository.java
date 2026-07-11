@@ -16,4 +16,6 @@ public interface MovieMediaRepository extends JpaRepository<MovieMedia, Long> {
     List<MovieMedia> findByMovieIdAndStatusAndDeletedAtIsNull(Long movieId, ActiveStatus status);
 
     Optional<MovieMedia> findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(Long movieId, MovieMediaType mediaType, ActiveStatus status);
+
+    List<MovieMedia> findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(List<Long> movieIds, MovieMediaType mediaType, ActiveStatus status);
 }
