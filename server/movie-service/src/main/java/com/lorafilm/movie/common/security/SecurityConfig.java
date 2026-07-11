@@ -39,7 +39,7 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/api/internal/**").permitAll() // Internal security is verified by InternalTokenFilter
+                .requestMatchers("/internal/**").permitAll() // Internal security is verified by InternalTokenFilter
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 .anyRequest().permitAll()
             )

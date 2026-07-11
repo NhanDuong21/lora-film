@@ -3,9 +3,17 @@ package com.lorafilm.movie.cinema.service;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
 import com.lorafilm.movie.cinema.dto.CinemaDto;
+import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
 import com.lorafilm.movie.cinema.dto.CinemaMapper;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.cinema.repository.CinemaSpecification;
+import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
+import com.lorafilm.movie.cinema.repository.CinemaMediaRepository;
+import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
+import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
+import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
+import com.lorafilm.movie.cinema.domain.entity.CinemaMedia;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
@@ -21,10 +29,20 @@ import java.util.stream.Collectors;
 public class CinemaServiceImpl implements CinemaService {
 
     private final CinemaRepository cinemaRepository;
+    private final CinemaOperatingHourRepository cinemaOperatingHourRepository;
+    private final CinemaMediaRepository cinemaMediaRepository;
+    private final AuditoriumRepository auditoriumRepository;
     private final CinemaMapper cinemaMapper;
 
-    public CinemaServiceImpl(CinemaRepository cinemaRepository, CinemaMapper cinemaMapper) {
+    public CinemaServiceImpl(CinemaRepository cinemaRepository,
+                             CinemaOperatingHourRepository cinemaOperatingHourRepository,
+                             CinemaMediaRepository cinemaMediaRepository,
+                             AuditoriumRepository auditoriumRepository,
+                             CinemaMapper cinemaMapper) {
         this.cinemaRepository = cinemaRepository;
+        this.cinemaOperatingHourRepository = cinemaOperatingHourRepository;
+        this.cinemaMediaRepository = cinemaMediaRepository;
+        this.auditoriumRepository = auditoriumRepository;
         this.cinemaMapper = cinemaMapper;
     }
 
@@ -61,7 +79,7 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
-    public CinemaDto getCinemaBySlug(String slug) {
+    public CinemaDetailDto getCinemaBySlug(String slug) {
         Cinema cinema = cinemaRepository.findBySlugAndDeletedAtIsNull(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
@@ -69,6 +87,55 @@ public class CinemaServiceImpl implements CinemaService {
             throw new ResourceNotFoundException("Cinema not found");
         }
 
-        return cinemaMapper.toDto(cinema);
+        return mapToDetailDto(cinema);
+    }
+
+    private CinemaDetailDto mapToDetailDto(Cinema cinema) {
+        CinemaDto baseDto = cinemaMapper.toDto(cinema);
+        CinemaDetailDto detailDto = new CinemaDetailDto();
+        detailDto.setPublicId(baseDto.getPublicId());
+        detailDto.setName(baseDto.getName());
+        detailDto.setSlug(baseDto.getSlug());
+        detailDto.setCity(baseDto.getCity());
+        detailDto.setDistrict(baseDto.getDistrict());
+        detailDto.setAddress(baseDto.getAddress());
+        detailDto.setHotline(baseDto.getHotline());
+        detailDto.setLatitude(baseDto.getLatitude());
+        detailDto.setLongitude(baseDto.getLongitude());
+        detailDto.setTimezone(baseDto.getTimezone());
+
+        List<CinemaOperatingHour> operatingHours = cinemaOperatingHourRepository.findByCinemaId(cinema.getId());
+        detailDto.setOperatingHours(operatingHours.stream().map(h -> {
+            CinemaDetailDto.OperatingHourDto dto = new CinemaDetailDto.OperatingHourDto();
+            dto.setDayOfWeek(h.getDayOfWeek());
+            dto.setOpenTime(h.getOpenTime() != null ? h.getOpenTime().toString() : null);
+            dto.setCloseTime(h.getCloseTime() != null ? h.getCloseTime().toString() : null);
+            dto.setIsClosed(h.getIsClosed());
+            return dto;
+        }).collect(Collectors.toList()));
+
+        List<CinemaMedia> media = cinemaMediaRepository.findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(cinema.getId(), ActiveStatus.ACTIVE);
+        detailDto.setGallery(media.stream().map(m -> {
+            CinemaDetailDto.CinemaMediaDto dto = new CinemaDetailDto.CinemaMediaDto();
+            dto.setPublicId(m.getPublicId());
+            dto.setMediaType(m.getMediaType().name());
+            dto.setUrl(m.getUrl());
+            dto.setTitle(m.getTitle());
+            dto.setIsPrimary(m.getIsPrimary());
+            return dto;
+        }).collect(Collectors.toList()));
+
+        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(), ActiveStatus.ACTIVE);
+        detailDto.setActiveAuditoriums(auditoriums.stream().map(a -> {
+            CinemaDetailDto.AuditoriumDto dto = new CinemaDetailDto.AuditoriumDto();
+            dto.setPublicId(a.getPublicId());
+            dto.setName(a.getName());
+            dto.setScreenType(a.getScreenType() != null ? a.getScreenType().name() : null);
+            dto.setSoundType(a.getSoundType() != null ? a.getSoundType().name() : null);
+            dto.setCapacity(a.getCapacity());
+            return dto;
+        }).collect(Collectors.toList()));
+
+        return detailDto;
     }
 }

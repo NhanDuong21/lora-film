@@ -1,17 +1,19 @@
 package com.lorafilm.movie.common.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lorafilm.movie.common.api.ApiResponse;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lorafilm.movie.common.api.ApiResponse;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 public class InternalTokenFilter extends OncePerRequestFilter {
@@ -27,7 +29,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
         if (path == null || path.isEmpty()) {
             path = request.getRequestURI();
         }
-        if (path != null && path.startsWith("/api/internal")) {
+        if (path != null && path.startsWith("/internal")) {
             String tokenHeader = request.getHeader("X-Internal-Token");
             if (tokenHeader == null || tokenHeader.isEmpty()) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);

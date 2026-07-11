@@ -10,4 +10,7 @@ import java.util.Optional;
 @Repository
 public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSpecificationExecutor<Showtime> {
     Optional<Showtime> findByPublicIdAndDeletedAtIsNull(String publicId);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
+    Optional<Showtime> findByIdAndDeletedAtIsNull(Long id);
 }

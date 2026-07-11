@@ -3,6 +3,7 @@ package com.lorafilm.movie.movie.controller;
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.movie.dto.MovieDto;
+import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.service.MovieService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -37,7 +38,7 @@ public class MovieController {
     }
 
     @GetMapping("/{movieSlug}")
-    public ResponseEntity<ApiResponse<MovieDto>> getMovieDetail(@PathVariable String movieSlug) {
+    public ResponseEntity<ApiResponse<MovieDetailDto>> getMovieDetail(@PathVariable String movieSlug) {
         return ResponseEntity.ok(ApiResponse.ok(movieService.getMovieBySlug(movieSlug)));
     }
 }

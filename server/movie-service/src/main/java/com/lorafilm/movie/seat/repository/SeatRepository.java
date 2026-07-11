@@ -8,5 +8,9 @@ import java.util.List;
 
 @Repository
 public interface SeatRepository extends JpaRepository<Seat, Long> {
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"seatType"})
     List<Seat> findByAuditoriumIdAndDeletedAtIsNull(Long auditoriumId);
+    
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"seatType"})
+    List<Seat> findByIdInAndDeletedAtIsNull(List<Long> ids);
 }
