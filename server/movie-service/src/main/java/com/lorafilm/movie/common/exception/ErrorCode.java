@@ -24,6 +24,8 @@ public enum ErrorCode {
     SEAT_TYPE_NOT_FOUND("Seat type not found", 404),
     SEAT_CODE_DUPLICATED("Seat code already exists in this auditorium", 400),
     SEAT_POSITION_DUPLICATED("Seat position (Row/Column) already occupied", 400),
+    SEAT_BELONGS_TO_ANOTHER_AUDITORIUM("Seat belongs to another auditorium", 400),
+    SEAT_INACTIVE("Seat is not active", 400),
 
     // --- Showtime Module ---
     SHOWTIME_NOT_FOUND("Showtime not found", 404),

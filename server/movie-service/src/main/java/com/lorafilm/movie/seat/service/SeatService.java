@@ -18,4 +18,8 @@ public class SeatService {
     public List<Seat> getSeatsByAuditoriumId(Long auditoriumId) {
         return seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditoriumId);
     }
+
+    public List<Seat> getSeatsByIds(List<Long> seatIds) {
+        return seatRepository.findByIdInAndDeletedAtIsNull(seatIds);
+    }
 }
