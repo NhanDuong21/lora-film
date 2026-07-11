@@ -2,6 +2,7 @@ package com.lorafilm.movie.common.security;
  
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -9,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
  
 import javax.crypto.SecretKey;
-import java.util.HexFormat;
  
 @Component
 public class JwtProvider {
@@ -20,7 +20,7 @@ public class JwtProvider {
     private String jwtSecret;
  
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(HexFormat.of().parseHex(jwtSecret));
+        return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
     }
  
     public boolean validateToken(String token) {

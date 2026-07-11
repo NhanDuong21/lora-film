@@ -179,4 +179,46 @@ class MovieVersionServiceTest {
         assertEquals(1, responses.size());
         assertEquals("version-uuid", responses.get(0).getPublicId());
     }
+
+    @Test
+    void getAllVersionsByMovie_Success() {
+        MovieVersion inactiveVersion = new MovieVersion();
+        inactiveVersion.setId(11L);
+        inactiveVersion.setPublicId("version-uuid-inactive");
+        inactiveVersion.setMovie(sampleMovie);
+        inactiveVersion.setVersionName("3D Subtitle");
+        inactiveVersion.setFormat(MovieFormat.THREE_D);
+        inactiveVersion.setAudioLanguage("EN");
+        inactiveVersion.setSubtitleLanguage("VI");
+        inactiveVersion.setDubLanguage("NONE");
+        inactiveVersion.setStatus(ActiveStatus.INACTIVE);
+
+        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-uuid")).thenReturn(Optional.of(sampleMovie));
+        when(movieVersionRepository.findByMovieIdAndDeletedAtIsNull(1L))
+                .thenReturn(List.of(sampleVersion, inactiveVersion));
+
+        List<MovieVersionResponse> responses = movieVersionService.getAllVersionsByMovie("movie-uuid");
+
+        assertNotNull(responses);
+        assertEquals(2, responses.size());
+        assertEquals("version-uuid", responses.get(0).getPublicId());
+        assertEquals(ActiveStatus.ACTIVE, responses.get(0).getStatus());
+        assertEquals("version-uuid-inactive", responses.get(1).getPublicId());
+        assertEquals(ActiveStatus.INACTIVE, responses.get(1).getStatus());
+
+        verify(movieRepository, times(1)).findByPublicIdAndDeletedAtIsNull("movie-uuid");
+        verify(movieVersionRepository, times(1)).findByMovieIdAndDeletedAtIsNull(1L);
+    }
+
+    @Test
+    void getAllVersionsByMovie_MovieNotFound() {
+        when(movieRepository.findByPublicIdAndDeletedAtIsNull("unknown-uuid")).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                movieVersionService.getAllVersionsByMovie("unknown-uuid")
+        );
+
+        assertEquals(ErrorCode.MOVIE_NOT_FOUND, exception.getErrorCode());
+        verify(movieVersionRepository, never()).findByMovieIdAndDeletedAtIsNull(anyLong());
+    }
 }

@@ -12,11 +12,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -25,7 +28,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = MovieVersionController.class)
+@WebMvcTest(
+        controllers = MovieVersionController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = {
+                        com.lorafilm.movie.common.security.SecurityConfig.class,
+                        com.lorafilm.movie.common.security.JwtFilter.class,
+                        com.lorafilm.movie.common.security.InternalTokenFilter.class
+                }
+        ),
+        excludeAutoConfiguration = {
+                org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration.class
+        }
+)
 @SuppressWarnings("null")
 class MovieVersionControllerTest {
 
@@ -152,5 +169,43 @@ class MovieVersionControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("INACTIVE"))
                 .andExpect(jsonPath("$.data.versionName").value("2D Vietsub Updated"));
+    }
+
+    @Test
+    void getAllVersions_Success() throws Exception {
+        MovieVersionResponse activeVersion = new MovieVersionResponse(
+                "version-uuid-1",
+                "2D Vietsub",
+                MovieFormat.TWO_D,
+                "VI",
+                "EN",
+                "NONE",
+                ActiveStatus.ACTIVE,
+                Instant.now(),
+                Instant.now()
+        );
+
+        MovieVersionResponse inactiveVersion = new MovieVersionResponse(
+                "version-uuid-2",
+                "3D Dubbed",
+                MovieFormat.THREE_D,
+                "EN",
+                "NONE",
+                "VI",
+                ActiveStatus.INACTIVE,
+                Instant.now(),
+                Instant.now()
+        );
+
+        when(movieVersionService.getAllVersionsByMovie("movie-uuid"))
+                .thenReturn(List.of(activeVersion, inactiveVersion));
+
+        mockMvc.perform(get("/api/admin/movies/{movieId}/versions", "movie-uuid"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].publicId").value("version-uuid-1"))
+                .andExpect(jsonPath("$.data[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data[1].publicId").value("version-uuid-2"))
+                .andExpect(jsonPath("$.data[1].status").value("INACTIVE"));
     }
 }

@@ -46,4 +46,10 @@ public class MovieVersionController {
         MovieVersionResponse response = movieVersionService.updateVersion(versionId, request);
         return ApiResponse.ok(response);
     }
+
+    @GetMapping("/api/admin/movies/{movieId}/versions")
+    public ApiResponse<List<MovieVersionResponse>> getAllVersions(@PathVariable("movieId") String movieId) {
+        List<MovieVersionResponse> versions = movieVersionService.getAllVersionsByMovie(movieId);
+        return ApiResponse.ok(versions);
+    }
 }
