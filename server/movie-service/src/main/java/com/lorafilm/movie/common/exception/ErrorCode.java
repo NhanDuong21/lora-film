@@ -11,6 +11,7 @@ public enum ErrorCode {
     // --- Module Phim ---
     MOVIE_NOT_FOUND("Movie not found", 404),
     MOVIE_VERSION_NOT_FOUND("Movie version not found", 404),
+    MOVIE_VERSION_DUPLICATED("Movie version already exists", 400),
 
     // --- Module Rạp & Phòng chiếu ---
     CINEMA_NOT_FOUND("Cinema not found", 404),
