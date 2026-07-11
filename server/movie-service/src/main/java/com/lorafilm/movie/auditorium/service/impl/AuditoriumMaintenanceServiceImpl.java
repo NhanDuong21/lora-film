@@ -39,17 +39,29 @@ public class AuditoriumMaintenanceServiceImpl implements AuditoriumMaintenanceSe
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
 
         if (request.startTime() == null || request.endTime() == null) {
-            throw new BusinessException(ErrorCode.INVALID_MAINTENANCE_TIME_RANGE);
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Thời gian bắt đầu và kết thúc không được để trống");
         }
         if (!request.startTime().isBefore(request.endTime())) {
-            throw new BusinessException(ErrorCode.INVALID_MAINTENANCE_TIME_RANGE);
+            java.util.Map<String, Object> errorData = new java.util.HashMap<>();
+            errorData.put("startTime", request.startTime());
+            errorData.put("endTime", request.endTime());
+            errorData.put("fieldErrors", java.util.List.of(
+                new com.lorafilm.movie.common.api.FieldErrorDetail("endTime", request.endTime(), "endTime phải sau startTime")
+            ));
+            throw new BusinessException(ErrorCode.INVALID_MAINTENANCE_TIME_RANGE, errorData);
         }
         if (request.startTime().isBefore(Instant.now(clock))) {
             throw new BusinessException(ErrorCode.MAINTENANCE_WINDOW_CANNOT_BE_CREATED_IN_PAST);
         }
 
-        if (maintenanceRepository.existsOverlap(auditorium.getId(), ActionStatus.ACTIVE, request.startTime(), request.endTime())) {
-            throw new BusinessException(ErrorCode.MAINTENANCE_WINDOW_OVERLAPS);
+        java.util.Optional<AuditoriumMaintenanceWindow> overlapOpt = maintenanceRepository.findFirstOverlap(auditorium.getId(), ActionStatus.ACTIVE, request.startTime(), request.endTime());
+        if (overlapOpt.isPresent()) {
+            AuditoriumMaintenanceWindow conflict = overlapOpt.get();
+            java.util.Map<String, Object> errorData = new java.util.HashMap<>();
+            errorData.put("conflictingWindowId", conflict.getId());
+            errorData.put("conflictingStartTime", conflict.getStartTime());
+            errorData.put("conflictingEndTime", conflict.getEndTime());
+            throw new BusinessException(ErrorCode.MAINTENANCE_WINDOW_OVERLAPS, errorData);
         }
 
         AuditoriumMaintenanceWindow window = new AuditoriumMaintenanceWindow();

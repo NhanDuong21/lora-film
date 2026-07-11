@@ -56,7 +56,10 @@ public enum ErrorCode {
     SHOWTIME_NOT_FOUND("Showtime not found", 404),
     SHOWTIME_OVERLAP_CONFLICT("Showtime overlaps with an existing schedule", 409),
     SHOWTIME_PRICE_MISSING("Showtime price config is missing", 400),
-    INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400);
+    INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400),
+    
+    AUDITORIUM_LAYOUT_NOT_EDITABLE("The seating arrangement cannot be changed while the auditorium is in operation", 409),
+    BULK_SEAT_VALIDATION_ERROR("Invalid data for bulk seat creation", 400);
 
     private final String message;
     private final int httpStatus;

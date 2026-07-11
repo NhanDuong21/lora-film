@@ -1,6 +1,11 @@
 package com.lorafilm.movie.common.exception;
 
 import com.lorafilm.movie.common.api.ApiResponse;
+import com.lorafilm.movie.common.api.FieldErrorDetail;
+import com.lorafilm.movie.common.api.InvalidDateFormatData;
+import com.lorafilm.movie.common.api.InvalidEnumErrorData;
+import com.lorafilm.movie.common.api.ValidationErrorData;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -10,6 +15,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.util.Comparator;
+import java.util.List;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -18,35 +26,54 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
+    public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
         ErrorCode errorCode = ex.getErrorCode();
         log.error("BusinessException [{}]: {}", errorCode.name(), ex.getMessage());
 
         return ResponseEntity
                 .status(HttpStatus.valueOf(errorCode.getHttpStatus()))
-                .body(ApiResponse.fail(ex.getMessage()));
+                .body(ApiResponse.fail(ex.getMessage(), errorCode.name(), ex.getErrorData()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
-        String errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .collect(Collectors.joining(", "));
+    public ResponseEntity<ApiResponse<ValidationErrorData>> handleValidationException(MethodArgumentNotValidException ex) {
+        List<FieldErrorDetail> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> new FieldErrorDetail(error.getField(), error.getRejectedValue(), error.getDefaultMessage()))
+                .sorted(Comparator.comparing(FieldErrorDetail::field))
+                .collect(Collectors.toList());
 
-        log.error("ValidationException: {}", errors);
+        log.error("ValidationException: {}", fieldErrors);
 
-        String fullMessage = ErrorCode.VALIDATION_ERROR.getMessage() + " (" + errors + ")";
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail(fullMessage));
+                .body(ApiResponse.fail("Dữ liệu đầu vào không hợp lệ", ErrorCode.VALIDATION_ERROR.name(), new ValidationErrorData(fieldErrors)));
     }
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+    public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
         log.error("HttpMessageNotReadableException: {}", ex.getMessage());
+        
+        Throwable cause = ex.getCause();
+        if (cause instanceof InvalidFormatException ife) {
+            if (ife.getTargetType() != null && ife.getTargetType().isEnum()) {
+                String fieldName = ife.getPath().stream().map(ref -> ref.getFieldName()).collect(Collectors.joining("."));
+                List<String> allowedValues = Arrays.stream(ife.getTargetType().getEnumConstants())
+                        .map(Object::toString)
+                        .collect(Collectors.toList());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ApiResponse.fail("Giá trị enum không hợp lệ", "INVALID_ENUM_VALUE", 
+                            new InvalidEnumErrorData(fieldName, ife.getValue(), allowedValues)));
+            } else if (ife.getTargetType() != null && (ife.getTargetType().getName().contains("Instant") || ife.getTargetType().getName().contains("Date") || ife.getTargetType().getName().contains("Time"))) {
+                String fieldName = ife.getPath().stream().map(ref -> ref.getFieldName()).collect(Collectors.joining("."));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ApiResponse.fail("Định dạng thời gian không hợp lệ", "INVALID_DATE_TIME_FORMAT", 
+                            new InvalidDateFormatData(fieldName, ife.getValue(), "yyyy-MM-dd'T'HH:mm:ss (or valid ISO format)")));
+            }
+        }
+        
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.getMessage() + ": " + "Invalid request format or value"));
+                .body(ApiResponse.fail("JSON request không hợp lệ", "MALFORMED_JSON"));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -56,28 +83,27 @@ public class GlobalExceptionHandler {
         
         if (rootMsg != null) {
             if (rootMsg.contains("uk_auditoriums_cinema_name")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.fail(ErrorCode.AUDITORIUM_NAME_DUPLICATED.getMessage()));
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.AUDITORIUM_NAME_DUPLICATED.getMessage(), ErrorCode.AUDITORIUM_NAME_DUPLICATED.name()));
             }
             if (rootMsg.contains("uk_seats_auditorium_code")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_CODE.getMessage()));
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_CODE.getMessage(), ErrorCode.DUPLICATE_SEAT_CODE.name()));
             }
             if (rootMsg.contains("uk_seats_auditorium_position")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_POSITION.getMessage()));
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_POSITION.getMessage(), ErrorCode.DUPLICATE_SEAT_POSITION.name()));
             }
         }
         
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(ApiResponse.fail("Data integrity constraint violated"));
+                .body(ApiResponse.fail("Data integrity constraint violated", "DATA_INTEGRITY_VIOLATION"));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
-        // Log kèm stack trace (ex) đối với lỗi hệ thống hệ trọng để dễ debug
         log.error("Unhandled Exception: ", ex);
 
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.getMessage()));
+                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.getMessage(), ErrorCode.INTERNAL_SERVER_ERROR.name()));
     }
-}
+}

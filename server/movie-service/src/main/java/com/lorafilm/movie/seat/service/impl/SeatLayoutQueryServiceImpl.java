@@ -46,7 +46,8 @@ public class SeatLayoutQueryServiceImpl implements SeatLayoutQueryService {
 
             CustomerSeatItemResponse cir = new CustomerSeatItemResponse(
                     seat.getPublicId(), seat.getSeatCode(), seat.getSeatNumber(),
-                    seat.getPositionColumn(), seat.getPairGroup(), tr
+                    seat.getPositionColumn(), seat.getPairGroup(), tr,
+                    seat.getStatus(), seat.getStatus() == SeatStatus.ACTIVE
             );
 
             groupedByRow.computeIfAbsent(seat.getPositionRow(), k -> new ArrayList<>()).add(cir);

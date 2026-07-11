@@ -38,7 +38,7 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
     @Query("SELECT s FROM Seat s JOIN FETCH s.seatType st " +
            "WHERE s.auditorium.id = :auditoriumId " +
-           "AND s.deletedAt IS NULL AND s.status = 'ACTIVE' " +
+           "AND s.deletedAt IS NULL AND s.status IN ('ACTIVE', 'MAINTENANCE') " +
            "AND st.deletedAt IS NULL AND st.status = 'ACTIVE' " +
            "ORDER BY s.positionRow ASC, s.positionColumn ASC")
     List<Seat> findCustomerLayoutByAuditoriumId(@Param("auditoriumId") Long auditoriumId);

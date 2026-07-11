@@ -6,5 +6,7 @@ public record CustomerSeatItemResponse(
         Integer seatNumber,
         Integer positionColumn,
         String pairGroup,
-        CustomerSeatTypeResponse seatType
+        CustomerSeatTypeResponse seatType,
+        com.lorafilm.movie.seat.domain.enums.SeatStatus status,
+        boolean selectable
 ) {}
