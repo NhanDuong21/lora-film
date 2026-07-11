@@ -73,7 +73,7 @@ class InternalShowtimeControllerTest {
 
         when(showtimeService.getBookingContext(eq(10L), any(BookingContextRequest.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/internal/showtimes/10/booking-context")
+        mockMvc.perform(post("/internal/showtimes/10/booking-context")
                 .header("X-Internal-Token", validToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -88,7 +88,7 @@ class InternalShowtimeControllerTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Arrays.asList(1L, 2L));
 
-        mockMvc.perform(post("/api/internal/showtimes/10/booking-context")
+        mockMvc.perform(post("/internal/showtimes/10/booking-context")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized())
@@ -101,7 +101,7 @@ class InternalShowtimeControllerTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Arrays.asList(1L, 2L));
 
-        mockMvc.perform(post("/api/internal/showtimes/10/booking-context")
+        mockMvc.perform(post("/internal/showtimes/10/booking-context")
                 .header("X-Internal-Token", "wrong-token")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -115,7 +115,7 @@ class InternalShowtimeControllerTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Collections.emptyList());
 
-        mockMvc.perform(post("/api/internal/showtimes/10/booking-context")
+        mockMvc.perform(post("/internal/showtimes/10/booking-context")
                 .header("X-Internal-Token", validToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))

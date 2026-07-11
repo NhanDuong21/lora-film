@@ -29,7 +29,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
         if (path == null || path.isEmpty()) {
             path = request.getRequestURI();
         }
-        if (path != null && path.startsWith("/api/internal")) {
+        if (path != null && path.startsWith("/internal")) {
             String tokenHeader = request.getHeader("X-Internal-Token");
             if (tokenHeader == null || tokenHeader.isEmpty()) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);

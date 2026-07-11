@@ -539,7 +539,7 @@ GET /api/admin/showtimes/{showtimePublicId}/status-history
 ### 4.1. Showtime Booking Context
 
 ```http
-POST /internal/showtimes/{showtimePublicId}/booking-context
+POST /internal/showtimes/{showtimeId}/booking-context
 X-Internal-Token: ...
 Content-Type: application/json
 ```
@@ -548,7 +548,7 @@ Content-Type: application/json
 
 ```json
 {
-  "seatPublicIds": ["uuid-1", "uuid-2"]
+  "seatIds": [1, 2]
 }
 ```
 
@@ -556,40 +556,60 @@ Content-Type: application/json
 
 ```json
 {
-  "showtimePublicId": "uuid",
-  "movie": {
-    "publicId": "uuid",
-    "title": "Dune: Part Two",
-    "slug": "dune-part-two"
-  },
-  "movieVersion": {
-    "publicId": "uuid",
-    "versionName": "IMAX Vietsub",
-    "format": "IMAX",
-    "audioLanguage": "EN",
-    "subtitleLanguage": "VI"
-  },
-  "cinema": {
-    "publicId": "uuid",
-    "name": "LoraFilm Nguyễn Trãi",
-    "timezone": "Asia/Ho_Chi_Minh"
-  },
-  "auditorium": {
-    "publicId": "uuid",
-    "name": "Room 2"
-  },
-  "status": "OPEN_FOR_BOOKING",
-  "seats": [
-    {
-      "publicId": "uuid-1",
-      "seatCode": "F7",
-      "seatType": "VIP",
-      "price": 120000,
+  "success": true,
+  "errorCode": "SUCCESS",
+  "message": "Success",
+  "data": {
+    "showtime": {
+      "id": 10,
+      "publicId": "uuid",
+      "status": "OPEN_FOR_BOOKING",
+      "startAt": "2026-07-20T19:30:00Z",
+      "endAt": "2026-07-20T21:50:00Z"
+    },
+    "movie": {
+      "publicId": "uuid",
+      "slug": "dune-part-two",
+      "title": "Dune: Part Two"
+    },
+    "movieVersion": {
+      "publicId": "uuid",
+      "versionName": "IMAX Vietsub",
+      "format": "IMAX",
+      "audioLanguage": "EN",
+      "subtitleLanguage": "VI"
+    },
+    "cinema": {
+      "publicId": "uuid",
+      "slug": "lorafilm-nguyen-trai",
+      "name": "LoraFilm Nguyễn Trãi",
+      "timezone": "Asia/Ho_Chi_Minh"
+    },
+    "auditorium": {
+      "publicId": "uuid",
+      "name": "Room 2",
+      "screenType": "IMAX",
+      "soundType": "DOLBY_ATMOS"
+    },
+    "selectedSeats": [
+      {
+        "seatId": 1,
+        "seatCode": "F7",
+        "seatType": "VIP",
+        "price": 120000,
+        "currency": "VND"
+      }
+    ],
+    "pricing": {
+      "seatAmount": 120000,
+      "discountAmount": 0,
+      "serviceFee": 0,
+      "totalAmount": 120000,
       "currency": "VND"
-    }
-  ],
-  "totalAmount": 120000,
-  "currency": "VND"
+    },
+    "bookingExpiredAt": "2026-07-20T19:45:00Z"
+  },
+  "errors": []
 }
 ```
 
