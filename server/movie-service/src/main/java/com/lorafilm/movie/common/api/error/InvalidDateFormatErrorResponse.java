@@ -9,7 +9,7 @@ public class InvalidDateFormatErrorResponse {
     @Schema(example = "false")
     private boolean success;
 
-    @Schema(example = "Định dạng thời gian không hợp lệ")
+    @Schema(example = "Invalid date-time format")
     private String message;
 
     @Schema(example = "INVALID_DATE_TIME_FORMAT")

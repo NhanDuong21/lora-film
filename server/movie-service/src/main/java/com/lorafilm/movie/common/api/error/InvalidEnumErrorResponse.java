@@ -9,7 +9,7 @@ public class InvalidEnumErrorResponse {
     @Schema(example = "false")
     private boolean success;
 
-    @Schema(example = "Giá trị enum không hợp lệ")
+    @Schema(example = "Invalid enum value")
     private String message;
 
     @Schema(example = "INVALID_ENUM_VALUE")

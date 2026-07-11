@@ -39,14 +39,14 @@ public class AuditoriumMaintenanceServiceImpl implements AuditoriumMaintenanceSe
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
 
         if (request.startTime() == null || request.endTime() == null) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Thời gian bắt đầu và kết thúc không được để trống");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Start time and end time must not be null");
         }
         if (!request.startTime().isBefore(request.endTime())) {
             java.util.Map<String, Object> errorData = new java.util.HashMap<>();
             errorData.put("startTime", request.startTime());
             errorData.put("endTime", request.endTime());
             errorData.put("fieldErrors", java.util.List.of(
-                new com.lorafilm.movie.common.api.FieldErrorDetail("endTime", request.endTime(), "endTime phải sau startTime")
+                new com.lorafilm.movie.common.api.FieldErrorDetail("endTime", request.endTime(), "endTime must be after startTime")
             ));
             throw new BusinessException(ErrorCode.INVALID_MAINTENANCE_TIME_RANGE, errorData);
         }

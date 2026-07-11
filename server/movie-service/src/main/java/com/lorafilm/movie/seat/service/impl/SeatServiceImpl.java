@@ -81,20 +81,19 @@ public class SeatServiceImpl implements SeatService {
 
             boolean hasError = false;
 
-            // Null checks
             if (normalizedSeatCode == null || normalizedSeatCode.isEmpty()) {
                 errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode, "VALIDATION_FAILED",
-                        "seatCode không được để trống"));
+                        "seatCode must not be blank"));
                 hasError = true;
             }
             if (item.positionRow() <= 0) {
                 errors.add(new BulkItemError(i, normalizedSeatCode, "positionRow", item.positionRow(),
-                        "VALIDATION_FAILED", "positionRow phải lớn hơn 0"));
+                        "VALIDATION_FAILED", "positionRow must be greater than 0"));
                 hasError = true;
             }
             if (item.positionColumn() <= 0) {
                 errors.add(new BulkItemError(i, normalizedSeatCode, "positionColumn", item.positionColumn(),
-                        "VALIDATION_FAILED", "positionColumn phải lớn hơn 0"));
+                        "VALIDATION_FAILED", "positionColumn must be greater than 0"));
                 hasError = true;
             }
             if (item.seatTypePublicId() == null || item.seatTypePublicId().isEmpty()) {

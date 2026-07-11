@@ -9,7 +9,7 @@ public class BulkSeatValidationErrorResponse {
     @Schema(example = "false")
     private boolean success;
 
-    @Schema(example = "Có 1 ghế không hợp lệ")
+    @Schema(example = "One seat is invalid")
     private String message;
 
     @Schema(example = "BULK_SEAT_VALIDATION_ERROR")

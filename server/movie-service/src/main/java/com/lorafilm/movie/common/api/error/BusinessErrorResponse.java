@@ -8,7 +8,7 @@ public class BusinessErrorResponse {
     @Schema(example = "false")
     private boolean success;
 
-    @Schema(example = "Lỗi nghiệp vụ")
+    @Schema(example = "Business rule violation")
     private String message;
 
     @Schema(example = "BUSINESS_ERROR")

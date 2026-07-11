@@ -8,7 +8,7 @@ public class ConflictErrorResponse {
     @Schema(example = "false")
     private boolean success;
 
-    @Schema(example = "Dữ liệu bị trùng lặp hoặc xung đột")
+    @Schema(example = "Resource conflict")
     private String message;
 
     @Schema(example = "DUPLICATE_SEAT_CODE")

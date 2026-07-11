@@ -8,7 +8,7 @@ public class NotFoundErrorResponse {
     @Schema(example = "false")
     private boolean success;
 
-    @Schema(example = "Không tìm thấy dữ liệu")
+    @Schema(example = "Resource not found")
     private String message;
 
     @Schema(example = "RESOURCE_NOT_FOUND")

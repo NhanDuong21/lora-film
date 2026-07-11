@@ -9,7 +9,7 @@ public class ValidationErrorResponse {
     @Schema(example = "false")
     private boolean success;
 
-    @Schema(example = "Dữ liệu đầu vào không hợp lệ")
+    @Schema(example = "Request validation failed")
     private String message;
 
     @Schema(example = "VALIDATION_ERROR")
