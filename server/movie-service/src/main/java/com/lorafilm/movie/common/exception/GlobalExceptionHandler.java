@@ -41,7 +41,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
-        // Log kèm stack trace (ex) đối với lỗi hệ thống hệ trọng để dễ debug
+        // Log with stack trace (ex) for critical system errors to ease debugging
         log.error("Unhandled Exception: ", ex);
 
         return ResponseEntity

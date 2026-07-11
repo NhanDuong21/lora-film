@@ -6,28 +6,27 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiResponse<T>(boolean success, String errorCode, String message, T data, List<String> errors) {
 
-    // Thành công và có kèm dữ liệu trả về
+    // Success with data payload
     public static <T> ApiResponse<T> ok(T data) {
         return new ApiResponse<>(true, "SUCCESS", "Success", data, null);
     }
 
-    // Thành công nhưng không cần trả về dữ liệu (ví dụ: Xóa thành công, Đăng xuất
-    // thành công)
+    // Success without data payload (e.g., Delete success, Logout success)
     public static <T> ApiResponse<T> ok(String message) {
         return new ApiResponse<>(true, "SUCCESS", message, null, null);
     }
 
-    // Thất bại với một thông báo lỗi cụ thể (Dữ liệu data sẽ là null)
+    // Failure with specific error message (data payload will be null)
     public static <T> ApiResponse<T> fail(String errorCode, String errorMessage) {
         return new ApiResponse<>(false, errorCode, errorMessage, null, null);
     }
 
-    // Thất bại kèm theo mã lỗi và dữ liệu chi tiết nếu cần
+    // Failure with error code and detailed error data if needed
     public static <T> ApiResponse<T> fail(String errorCode, String errorMessage, T errorDetails) {
         return new ApiResponse<>(false, errorCode, errorMessage, errorDetails, null);
     }
 
-    // Thất bại do validation
+    // Failure due to validation errors
     public static <T> ApiResponse<T> validationFail(String errorCode, String errorMessage, List<String> errors) {
         return new ApiResponse<>(false, errorCode, errorMessage, null, errors);
     }

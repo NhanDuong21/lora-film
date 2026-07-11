@@ -42,7 +42,7 @@ public abstract class BaseAuditableEntity {
     @Column(name = "deleted_by")
     private Long deletedBy;
 
-    // Hàm Helper hỗ trợ kích hoạt xóa mềm nhanh trong Business Logic
+    // Helper function to quickly enable soft delete in Business Logic
     public void performSoftDelete(Long userId) {
         this.deletedAt = Instant.now();
         this.deletedBy = userId;
