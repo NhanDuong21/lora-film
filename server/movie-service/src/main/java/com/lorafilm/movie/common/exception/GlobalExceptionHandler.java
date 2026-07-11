@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail("Dữ liệu đầu vào không hợp lệ", ErrorCode.VALIDATION_ERROR.name(), new ValidationErrorData(fieldErrors)));
+                .body(ApiResponse.fail("Request validation failed", ErrorCode.VALIDATION_ERROR.name(), new ValidationErrorData(fieldErrors)));
     }
 
     private String buildJsonPath(List<com.fasterxml.jackson.databind.JsonMappingException.Reference> path) {
@@ -76,19 +76,19 @@ public class GlobalExceptionHandler {
                         .map(Object::toString)
                         .collect(Collectors.toList());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.fail("Giá trị enum không hợp lệ", "INVALID_ENUM_VALUE", 
+                        .body(ApiResponse.fail("Invalid enum value", "INVALID_ENUM_VALUE", 
                             new InvalidEnumErrorData(fieldName, ife.getValue(), allowedValues)));
             } else if (ife.getTargetType() != null && (ife.getTargetType().getName().contains("Instant") || ife.getTargetType().getName().contains("Date") || ife.getTargetType().getName().contains("Time"))) {
                 String fieldName = buildJsonPath(ife.getPath());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.fail("Định dạng thời gian không hợp lệ", "INVALID_DATE_TIME_FORMAT", 
+                        .body(ApiResponse.fail("Invalid date-time format", "INVALID_DATE_TIME_FORMAT", 
                             new InvalidDateFormatData(fieldName, ife.getValue(), "yyyy-MM-dd'T'HH:mm:ss (or valid ISO format)")));
             }
         }
         
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail("JSON request không hợp lệ", "MALFORMED_JSON"));
+                .body(ApiResponse.fail("Malformed JSON request", "MALFORMED_JSON"));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

@@ -99,7 +99,7 @@ public class SeatServiceImpl implements SeatService {
             }
             if (item.seatTypePublicId() == null || item.seatTypePublicId().isEmpty()) {
                 errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(),
-                        "VALIDATION_FAILED", "seatTypePublicId không được để trống"));
+                        "VALIDATION_FAILED", "seatTypePublicId must not be blank"));
                 hasError = true;
             }
 
@@ -108,7 +108,7 @@ public class SeatServiceImpl implements SeatService {
                 if (requestSeatCodes.containsKey(normalizedSeatCode)) {
                     errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode,
                             "DUPLICATE_SEAT_CODE_IN_REQUEST",
-                            "seatCode bị trùng với phần tử tại index " + requestSeatCodes.get(normalizedSeatCode)));
+                            "Duplicate seatCode at index " + requestSeatCodes.get(normalizedSeatCode)));
                     hasError = true;
                 } else {
                     requestSeatCodes.put(normalizedSeatCode, i);
@@ -119,7 +119,7 @@ public class SeatServiceImpl implements SeatService {
                 if (requestPositions.containsKey(posKey)) {
                     errors.add(new BulkItemError(i, normalizedSeatCode, "position", posKey,
                             "DUPLICATE_SEAT_POSITION_IN_REQUEST",
-                            "Vị trí bị trùng với phần tử tại index " + requestPositions.get(posKey)));
+                            "Duplicate position at index " + requestPositions.get(posKey)));
                     hasError = true;
                 } else {
                     requestPositions.put(posKey, i);
@@ -129,12 +129,12 @@ public class SeatServiceImpl implements SeatService {
             // Database conflicts
             if (normalizedSeatCode != null && existingCodes.contains(normalizedSeatCode)) {
                 errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode,
-                        "DUPLICATE_SEAT_CODE", "Mã ghế đã tồn tại trong khán phòng"));
+                        "DUPLICATE_SEAT_CODE", "Seat code already exists in this auditorium"));
                 hasError = true;
             }
             if (item.positionRow() > 0 && item.positionColumn() > 0 && existingPositions.contains(posKey)) {
                 errors.add(new BulkItemError(i, normalizedSeatCode, "position", posKey, "DUPLICATE_SEAT_POSITION",
-                        "Vị trí này đã được sử dụng bởi một ghế khác"));
+                        "Seat position already occupied"));
                 hasError = true;
             }
 
@@ -143,11 +143,11 @@ public class SeatServiceImpl implements SeatService {
                 SeatType type = seatTypeMap.get(item.seatTypePublicId());
                 if (type == null) {
                     errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(),
-                            "SEAT_TYPE_NOT_FOUND", "Không tìm thấy loại ghế"));
+                            "SEAT_TYPE_NOT_FOUND", "Seat type not found"));
                     hasError = true;
                 } else if (type.getStatus() != ActiveStatus.ACTIVE) {
                     errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(),
-                            "SEAT_TYPE_INACTIVE", "Loại ghế đang không hoạt động"));
+                            "SEAT_TYPE_INACTIVE", "Seat type is inactive"));
                     hasError = true;
                 }
             }
@@ -178,7 +178,7 @@ public class SeatServiceImpl implements SeatService {
                     invalidCount,
                     errors);
             throw new BusinessException(ErrorCode.BULK_SEAT_VALIDATION_ERROR,
-                    "Có " + errorData.invalidItems() + " ghế không hợp lệ", errorData);
+                    errorData.invalidItems() + " invalid seat(s) found", errorData);
         }
 
         seatsToSave = seatRepository.saveAll(seatsToSave);
