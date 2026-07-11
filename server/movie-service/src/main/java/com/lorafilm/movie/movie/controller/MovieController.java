@@ -7,8 +7,13 @@ import com.lorafilm.movie.movie.service.MovieService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.validation.annotation.Validated;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+
 @RestController
 @RequestMapping("/api/movies")
+@Validated
 public class MovieController {
 
     private final MovieService movieService;
@@ -20,13 +25,13 @@ public class MovieController {
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<MovieDto>>> getMovies(
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) Long genreId,
+            @RequestParam(required = false) @Min(1) Long genreId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String city,
-            @RequestParam(required = false) Long cinemaId,
+            @RequestParam(required = false) @Min(1) Long cinemaId,
             @RequestParam(required = false) java.time.LocalDate date,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
             @RequestParam(defaultValue = "releaseDate,desc") String sort) {
         return ResponseEntity.ok(ApiResponse.ok(movieService.getMovies(status, genreId, keyword, city, cinemaId, date, page, size, sort)));
     }

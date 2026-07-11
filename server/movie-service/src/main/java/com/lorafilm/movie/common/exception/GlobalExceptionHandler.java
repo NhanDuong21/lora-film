@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.fail(ex.getMessage()));
+                .body(ApiResponse.fail(ErrorCode.RESOURCE_NOT_FOUND.name(), ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -50,13 +50,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.validationFail(ErrorCode.VALIDATION_ERROR.name(), ErrorCode.VALIDATION_ERROR.getMessage(), errors));
     }
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMessageNotReadableException(HttpMessageNotReadableException ex) {
-        log.error("HttpMessageNotReadableException: {}", ex.getMessage());
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Malformed JSON request"));
-    }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupportedException(HttpMediaTypeNotSupportedException ex) {
@@ -71,7 +64,7 @@ public class GlobalExceptionHandler {
         log.error("IllegalArgument/StateException: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail(ex.getMessage()));
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), ex.getMessage()));
     }
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
@@ -84,13 +77,13 @@ public class GlobalExceptionHandler {
             if (invalidFormatException.getTargetType() != null && invalidFormatException.getTargetType().isEnum()) {
                 return ResponseEntity
                         .status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.fail("Invalid enum value. Please check your request."));
+                        .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid enum value. Please check your request."));
             }
         }
         
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail("Invalid request payload. Please check your JSON format."));
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid request payload. Please check your JSON format."));
     }
 
     @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
@@ -99,7 +92,7 @@ public class GlobalExceptionHandler {
         log.error("MissingServletRequestParameterException: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail("Missing required parameter: " + name));
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Missing required parameter: " + name));
     }
 
     @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
@@ -107,7 +100,7 @@ public class GlobalExceptionHandler {
         log.error("MethodArgumentTypeMismatchException: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail("Invalid parameter type for '" + ex.getName() + "'"));
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid parameter type for '" + ex.getName() + "'"));
     }
 
     @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
@@ -115,7 +108,15 @@ public class GlobalExceptionHandler {
         log.error("ConstraintViolationException: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail("Validation error: " + ex.getMessage()));
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Validation error: " + ex.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.data.mapping.PropertyReferenceException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePropertyReferenceException(org.springframework.data.mapping.PropertyReferenceException ex) {
+        log.error("PropertyReferenceException: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid sort property: " + ex.getPropertyName()));
     }
 
     @ExceptionHandler(org.springframework.dao.DataAccessException.class)
@@ -123,7 +124,7 @@ public class GlobalExceptionHandler {
         log.error("DataAccessException: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.fail("Database operation failed. Please check the input or try again later."));
+                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.name(), ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
@@ -133,6 +134,6 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.name(), ErrorCode.INTERNAL_SERVER_ERROR.getMessage()));
+                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.name(), ex.getMessage() != null ? ex.getMessage() : "Unknown error"));
     }
 }

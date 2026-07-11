@@ -22,8 +22,8 @@ GET /api/movies?status=&genreId=&keyword=&city=&cinemaId=&date=&page=&size=&sort
 #### Supported status
 
 ```txt
-now-showing
-coming-soon
+NOW_SHOWING
+COMING_SOON
 ```
 
 #### Response Example
@@ -186,7 +186,7 @@ GET /api/cinemas/{cinemaSlug}/showtimes?date=
 ### 2.7. Showtime Search
 
 ```http
-GET /api/showtimes?movieSlug=&cinemaSlug=&city=&date=&format=&audioLanguage=&subtitleLanguage=
+GET /api/showtimes?movieSlug=&cinemaSlug=&city=&date=&format=&audioLanguage=&subtitleLanguage=&page=&size=
 ```
 
 #### Behavior

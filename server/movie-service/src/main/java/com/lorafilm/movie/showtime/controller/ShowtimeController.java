@@ -8,10 +8,14 @@ import com.lorafilm.movie.showtime.service.ShowtimeService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.validation.annotation.Validated;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/showtimes")
+@Validated
 public class ShowtimeController {
 
     private final ShowtimeService showtimeService;
@@ -29,8 +33,8 @@ public class ShowtimeController {
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String audioLanguage,
             @RequestParam(required = false) String subtitleLanguage,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
         return ResponseEntity.ok(ApiResponse.ok(showtimeService.getShowtimes(movieSlug, cinemaSlug, city, date, format, audioLanguage, subtitleLanguage, page, size)));
     }
 
