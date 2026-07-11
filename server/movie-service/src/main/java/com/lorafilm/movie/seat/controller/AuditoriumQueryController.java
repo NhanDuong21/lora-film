@@ -18,11 +18,23 @@ public class AuditoriumQueryController {
         this.queryService = queryService;
     }
 
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get customer seat layout")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not Found", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.lorafilm.movie.common.api.error.NotFoundErrorResponse.class)))
+    })
     @GetMapping("/api/auditoriums/{id}/seat-layout")
     public ResponseEntity<ApiResponse<CustomerSeatLayoutResponse>> getCustomerSeatLayout(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.ok(queryService.getCustomerSeatLayout(id)));
     }
 
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get admin seat layout")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not Found", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.lorafilm.movie.common.api.error.NotFoundErrorResponse.class)))
+    })
     @GetMapping("/api/admin/auditoriums/{id}/seat-layout")
     public ResponseEntity<ApiResponse<AdminSeatLayoutResponse>> getAdminSeatLayout(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.ok(queryService.getAdminSeatLayout(id)));

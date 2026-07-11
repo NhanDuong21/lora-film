@@ -49,6 +49,21 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail("Dữ liệu đầu vào không hợp lệ", ErrorCode.VALIDATION_ERROR.name(), new ValidationErrorData(fieldErrors)));
     }
 
+    private String buildJsonPath(List<com.fasterxml.jackson.databind.JsonMappingException.Reference> path) {
+        StringBuilder result = new StringBuilder();
+        for (com.fasterxml.jackson.databind.JsonMappingException.Reference reference : path) {
+            if (reference.getFieldName() != null) {
+                if (!result.isEmpty()) {
+                    result.append(".");
+                }
+                result.append(reference.getFieldName());
+            } else if (reference.getIndex() >= 0) {
+                result.append("[").append(reference.getIndex()).append("]");
+            }
+        }
+        return result.toString();
+    }
+
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
         log.error("HttpMessageNotReadableException: {}", ex.getMessage());
@@ -56,7 +71,7 @@ public class GlobalExceptionHandler {
         Throwable cause = ex.getCause();
         if (cause instanceof InvalidFormatException ife) {
             if (ife.getTargetType() != null && ife.getTargetType().isEnum()) {
-                String fieldName = ife.getPath().stream().map(ref -> ref.getFieldName()).collect(Collectors.joining("."));
+                String fieldName = buildJsonPath(ife.getPath());
                 List<String> allowedValues = Arrays.stream(ife.getTargetType().getEnumConstants())
                         .map(Object::toString)
                         .collect(Collectors.toList());
@@ -64,7 +79,7 @@ public class GlobalExceptionHandler {
                         .body(ApiResponse.fail("Giá trị enum không hợp lệ", "INVALID_ENUM_VALUE", 
                             new InvalidEnumErrorData(fieldName, ife.getValue(), allowedValues)));
             } else if (ife.getTargetType() != null && (ife.getTargetType().getName().contains("Instant") || ife.getTargetType().getName().contains("Date") || ife.getTargetType().getName().contains("Time"))) {
-                String fieldName = ife.getPath().stream().map(ref -> ref.getFieldName()).collect(Collectors.joining("."));
+                String fieldName = buildJsonPath(ife.getPath());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(ApiResponse.fail("Định dạng thời gian không hợp lệ", "INVALID_DATE_TIME_FORMAT", 
                             new InvalidDateFormatData(fieldName, ife.getValue(), "yyyy-MM-dd'T'HH:mm:ss (or valid ISO format)")));
