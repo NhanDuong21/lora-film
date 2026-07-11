@@ -1,93 +1,212 @@
-# HCM26_CPL_JAVA_05_Group3
+# Movie Booking System
 
+Welcome to the online movie booking system project by Group 3. This repository contains the complete source code of the project including the Frontend (Client), Backend (Microservices Server), and API Gateway.
 
+## Technology Stack
 
-## Getting started
+**Frontend (Client):**
+- React 19 (with Vite)
+- React Router DOM
+- Axios
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+**Backend (Server & API Gateway):**
+- Java 21
+- Spring Boot (Microservices)
+- Spring Cloud Gateway
+- Maven 3.9+
+- Database: MySQL 8+
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Project Structure
 
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
+```text
+hcm26_cpl_java_05_group3/
+├── client/                 # Frontend application (React/Vite)
+├── server/                 # Backend services (Java/Spring Boot)
+│   ├── auth-service/       # User authentication service (JWT/OAuth2)
+│   ├── movie-service/      # Service managing movies, cinemas, schedules
+│   ├── booking-service/    # Booking processing service
+│   ├── payment-service/    # Payment integration service
+│   ├── notification-service/# Email/SMS notification service
+│   ├── user-service/       # User profiles and management service
+│   ├── analytics-service/  # Data insights and reporting service
+│   ├── promotion-service/  # Coupons and discount service
+│   └── score-service/      # Loyalty points and movie rating service
+├── api-gateway/            # Intermediate API Gateway routing requests
+└── docs/                   # Project documentation (workflow, structure...)
 ```
-cd existing_repo
-git remote add origin https://git.fsoft-academy.edu.vn/hcm26_cpl_java_05/hcm26_cpl_java_05_group3.git
-git branch -M main
-git push -uf origin main
+*(For more details, see [Project Structure Documentation](docs/project-structure.md))*
+
+## 🛠 Clone Instructions
+
+1. Clone the repository to your local machine:
+   ```bash
+   git clone <repository_url>
+   cd hcm26_cpl_java_05_group3
+   ```
+2. Checkout the `develop` branch (main integration branch):
+   ```bash
+   git checkout develop
+   ```
+
+## Frontend Run Instructions
+
+Open a new terminal and run the following commands:
+
+```bash
+cd client
+npm install
+npm run dev
 ```
 
-## Integrate with your tools
+## Backend Run Instructions
 
-- [ ] [Set up project integrations](https://git.fsoft-academy.edu.vn/hcm26_cpl_java_05/hcm26_cpl_java_05_group3/-/settings/integrations)
+The backend uses a Microservices architecture. Ensure that you have MySQL installed and the corresponding databases created (`auth_db`, `movie_db`, `booking_db`, `payment_db`, `notification_db`, `user_db`, `promotion_db`, `score_db`, `analytics_db`).
 
-## Collaborate with your team
+Open a terminal in each service directory and run them independently. You can use the commands:
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+```bash
+mvn clean compile
+mvn spring-boot:run
+```
 
-## Test and Deploy
+**Recommended Startup Order:**
+1. `cd server/auth-service && mvn spring-boot:run` (Port: `8081`)
+2. `cd server/movie-service && mvn spring-boot:run` (Port: `8082`)
+3. `cd server/booking-service && mvn spring-boot:run` (Port: `8083`)
+4. `cd server/payment-service && mvn spring-boot:run` (Port: `8084`)
+5. `cd server/notification-service && mvn spring-boot:run` (Port: `8085`)
+6. `cd server/user-service && mvn spring-boot:run` (Port: `8086`)
+7. `cd server/promotion-service && mvn spring-boot:run` (Port: `8087`)
+8. `cd server/score-service && mvn spring-boot:run` (Port: `8088`)
+9. `cd server/analytics-service && mvn spring-boot:run` (Port: `8089`)
+10. `cd api-gateway && mvn spring-boot:run` (Port: `8080`)
 
-Use the built-in continuous integration in GitLab.
+1. `auth-service` (8081)
+2. `movie-service` (8082)
+3. `booking-service` (8083)
+4. `payment-service` (8084)
+5. `notification-service` (8085)
+6. `user-service` (8086)
+7. `promotion-service` (8087)
+8. `score-service` (8088)
+9. `analytics-service` (8089)
+10. `api-gateway` (8080)
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## Docker Compose Local Development
 
-***
+A base local environment is available at the repository root with:
 
-# Editing this README
+- MySQL 8
+- Redis
+- Zookeeper
+- Kafka
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### Prerequisites
 
-## Suggestions for a good README
+- Docker Desktop or Docker Engine installed
+- Docker Compose support enabled
+- `docker` and `docker compose` available in your terminal
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+### Setup
 
-## Name
-Choose a self-explaining name for your project.
+1. Copy the sample environment file:
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```bash
+cp .env.example .env
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+2. Edit `.env` and add your values for:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+- `MYSQL_ROOT_PASSWORD`
+- `MYSQL_DATABASE`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+### Start services
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```bash
+docker compose up -d
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### Stop services
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```bash
+docker compose down
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### Check logs
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```bash
+docker compose logs -f
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+Or check logs for a single service:
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```bash
+docker compose logs -f mysql
+```
 
-## License
-For open source projects, say how it is licensed.
+### Remove containers and volumes
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+```bash
+docker compose down -v
+```
+
+### Verify services are running
+
+- MySQL: `localhost:3306`
+- Redis: `localhost:6379`
+- Zookeeper: `localhost:2181`
+- Kafka: `localhost:9092`
+
+You can also check Docker status directly:
+
+```bash
+docker compose ps
+```
+Check the health status via the `GET /health` endpoint for each service (e.g., `http://localhost:8081/health`, `http://localhost:8086/health`). 
+
+The Gateway routes requests using the following static routes:
+- `/api/auth/**` -> `http://localhost:8081` (auth-service)
+- `/api/movies/**` -> `http://localhost:8082` (movie-service)
+- `/api/bookings/**` -> `http://localhost:8083` (booking-service)
+- `/api/payments/**` -> `http://localhost:8084` (payment-service)
+- `/api/notifications/**` -> `http://localhost:8085` (notification-service)
+- `/api/users/**` -> `http://localhost:8086` (user-service)
+- `/api/promotions/**` -> `http://localhost:8087` (promotion-service)
+- `/api/scores/**` -> `http://localhost:8088` (score-service)
+- `/api/analytics/**` -> `http://localhost:8089` (analytics-service)
+
+## Basic Branching Rules
+
+The project adopts a branch management process inspired by Git Flow:
+- **`main`**: Production branch, contains the most stable source code. No direct pushing allowed.
+- **`develop`**: Main integration branch. All feature branches must branch off from here.
+- **Development Branch Prefixes**:
+  - `feature/<issue-id>-<description>`: Develop a new feature.
+  - `fix/<issue-id>-<description>`: Fix a bug.
+  - `docs/<issue-id>-<description>`: Update documentation.
+  - `setup/<issue-id>-<description>`: Configuration setup, CI/CD.
+  - `test/<issue-id>-<description>`: Add/edit test cases.
+
+## Merge Request (MR) Process
+
+All code intended for `develop` must go through a Merge Request (MR).
+1. Complete the code on your local branch, ensuring it runs well and passes tests.
+2. Push the branch to GitLab.
+3. Create an MR with a clear title (following Conventional Commits standards), with `develop` as the target branch.
+4. Write a detailed description for the MR and link the corresponding Issue (e.g., `Closes #1`).
+5. Assign the Team Leader/Reviewer (Thành) to review the code.
+6. Once the MR is approved and passes the pipeline, it will be merged into `develop`.
+
+*(For more details, see [GitLab Workflow Guidelines](docs/gitlab-workflow.md))*
+
+## Team Members
+
+- **Phan Tuấn Thành** - Team Leader / Developer
+- **Dương Thiện Nhân** - Member / Developer
+- **Trần Hiển Vinh** - Member / Developer
+- **Trương Hoàng Khang** - Member / Developer
+- **Trần Lương Thiện Hoàn** - Member / Developer
+---
+**Note:** See detailed rules regarding Git, commits, and workflows in [docs/gitlab-workflow.md](docs/gitlab-workflow.md).

@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-dark text-white font-sans antialiased overflow-x-hidden;
+    background-color: #111111;
+  }
+}
+
+/* Custom Scrollbar for sleek cinematic appearance */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111111;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2A2A2F;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D88174;
+}
+
+/* Premium shadows & animations */
+.target-shadow {
+  box-shadow: 0 10px 30px -10px rgba(216, 129, 116, 0.15);
+}
+
+.target-shadow:hover {
+  box-shadow: 0 15px 40px -5px rgba(216, 129, 116, 0.3);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff 40%, #D88174 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Smooth transiton classes */
+.smooth-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Immersive 3D Spatial Layout Classes */
+.perspective-1200 {
+  perspective: 1200px;
+}
+.perspective-1000 {
+  perspective: 1000px;
+}
+.perspective-1500 {
+  perspective: 1500px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+/* Hero Content Monolith */
+.hero-3d-content {
+  transform-style: preserve-3d;
+  transform: translateZ(60px);
+  transition: transform 0.7s ease-out;
+}
+.hero-3d-content:hover {
+  transform: translateZ(60px) rotateX(2deg) rotateY(-2deg);
+}
+
+/* Volumetric Movie Cards */
+.volumetric-movie-card {
+  transform-style: preserve-3d;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.volumetric-movie-card:hover {
+  transform: rotateY(12deg) rotateX(-6deg) translateZ(30px);
+}
+
+/* Asymmetric Isometric Step Cards */
+.booking-step-card-1 {
+  transform: rotateY(-10deg) rotateX(5deg) translateZ(20px);
+  transition: all 0.5s ease-out;
+}
+.booking-step-card-1:hover {
+  transform: rotateY(0) rotateX(0) translateZ(20px);
+}
+
+.booking-step-card-2 {
+  transform: translateY(-12px) translateZ(50px);
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  box-shadow: 0 20px 40px -10px rgba(245, 158, 11, 0.15) !important;
+  transition: all 0.5s ease-out;
+}
+
+.booking-step-card-3 {
+  transform: rotateY(10deg) rotateX(5deg) translateZ(20px);
+  transition: all 0.5s ease-out;
+}
+.booking-step-card-3:hover {
+  transform: rotateY(0) rotateX(0) translateZ(20px);
+}
