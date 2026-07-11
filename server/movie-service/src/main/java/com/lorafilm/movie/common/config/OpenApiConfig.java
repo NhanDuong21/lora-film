@@ -18,9 +18,9 @@ public class OpenApiConfig {
     public OpenAPI movieServiceOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("Movie Service API")
-                        .version("v1")
-                        .description("Movie Service APIs for Admin and Customers"))
+                        .title("LoraFilm Movie Service API")
+                        .version("1.0.0")
+                        .description("Hệ thống tài liệu và kiểm thử API dành cho Movie Service. Kèm APIs for Admin and Customers."))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
                 .addSecurityItem(new SecurityRequirement().addList(INTERNAL_AUTH))
                 .components(new Components()

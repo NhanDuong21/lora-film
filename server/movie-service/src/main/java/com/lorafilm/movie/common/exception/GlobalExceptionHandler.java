@@ -1,6 +1,11 @@
 package com.lorafilm.movie.common.exception;
 
 import com.lorafilm.movie.common.api.ApiResponse;
+import com.lorafilm.movie.common.api.FieldErrorDetail;
+import com.lorafilm.movie.common.api.InvalidDateFormatData;
+import com.lorafilm.movie.common.api.InvalidEnumErrorData;
+import com.lorafilm.movie.common.api.ValidationErrorData;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -10,7 +15,11 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.dao.DataIntegrityViolationException;
 
+import java.util.Comparator;
+import java.util.List;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -19,9 +28,15 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
+    public ResponseEntity<ApiResponse<?>> handleBusinessException(BusinessException ex) {
         ErrorCode errorCode = ex.getErrorCode();
         log.error("BusinessException [{}]: {}", errorCode.name(), ex.getMessage());
+
+        if (ex.getErrorData() != null) {
+            return ResponseEntity
+                    .status(HttpStatus.valueOf(errorCode.getHttpStatus()))
+                    .body(ApiResponse.fail(errorCode.name(), ex.getMessage(), ex.getErrorData()));
+        }
 
         return ResponseEntity
                 .status(HttpStatus.valueOf(errorCode.getHttpStatus()))
@@ -38,18 +53,60 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Object>> handleValidationException(MethodArgumentNotValidException ex) {
-        java.util.List<String> errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+    public ResponseEntity<ApiResponse<ValidationErrorData>> handleValidationException(MethodArgumentNotValidException ex) {
+        List<FieldErrorDetail> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> new FieldErrorDetail(error.getField(), error.getRejectedValue(), error.getDefaultMessage()))
+                .sorted(Comparator.comparing(FieldErrorDetail::field))
                 .collect(Collectors.toList());
 
-        log.error("ValidationException: {}", errors);
+        log.error("ValidationException: {}", fieldErrors);
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.validationFail(ErrorCode.VALIDATION_ERROR.name(), ErrorCode.VALIDATION_ERROR.getMessage(), errors));
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Request validation failed", new ValidationErrorData(fieldErrors)));
     }
 
+    private String buildJsonPath(List<com.fasterxml.jackson.databind.JsonMappingException.Reference> path) {
+        StringBuilder result = new StringBuilder();
+        for (com.fasterxml.jackson.databind.JsonMappingException.Reference reference : path) {
+            if (reference.getFieldName() != null) {
+                if (!result.isEmpty()) {
+                    result.append(".");
+                }
+                result.append(reference.getFieldName());
+            } else if (reference.getIndex() >= 0) {
+                result.append("[").append(reference.getIndex()).append("]");
+            }
+        }
+        return result.toString();
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<?>> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        log.error("HttpMessageNotReadableException: {}", ex.getMessage());
+        
+        Throwable cause = ex.getCause();
+        if (cause instanceof InvalidFormatException ife) {
+            if (ife.getTargetType() != null && ife.getTargetType().isEnum()) {
+                String fieldName = buildJsonPath(ife.getPath());
+                List<String> allowedValues = Arrays.stream(ife.getTargetType().getEnumConstants())
+                        .map(Object::toString)
+                        .collect(Collectors.toList());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ApiResponse.fail("INVALID_ENUM_VALUE", "Invalid enum value", 
+                            new InvalidEnumErrorData(fieldName, ife.getValue(), allowedValues)));
+            } else if (ife.getTargetType() != null && (ife.getTargetType().getName().contains("Instant") || ife.getTargetType().getName().contains("Date") || ife.getTargetType().getName().contains("Time"))) {
+                String fieldName = buildJsonPath(ife.getPath());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ApiResponse.fail("INVALID_DATE_TIME_FORMAT", "Invalid date-time format", 
+                            new InvalidDateFormatData(fieldName, ife.getValue(), "yyyy-MM-dd'T'HH:mm:ss (or valid ISO format)")));
+            }
+        }
+        
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail("MALFORMED_JSON", "Malformed JSON request"));
+    }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupportedException(HttpMediaTypeNotSupportedException ex) {
@@ -65,25 +122,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), ex.getMessage()));
-    }
-
-    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
-        log.error("HttpMessageNotReadableException: {}", ex.getMessage());
-        
-        Throwable cause = ex.getCause();
-        if (cause instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException) {
-            com.fasterxml.jackson.databind.exc.InvalidFormatException invalidFormatException = (com.fasterxml.jackson.databind.exc.InvalidFormatException) cause;
-            if (invalidFormatException.getTargetType() != null && invalidFormatException.getTargetType().isEnum()) {
-                return ResponseEntity
-                        .status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid enum value. Please check your request."));
-            }
-        }
-        
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid request payload. Please check your JSON format."));
     }
 
     @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
@@ -119,6 +157,28 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid sort property: " + ex.getPropertyName()));
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
+        log.error("DataIntegrityViolationException: ", ex);
+        String rootMsg = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
+        
+        if (rootMsg != null) {
+            if (rootMsg.contains("uk_auditoriums_cinema_name")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.AUDITORIUM_NAME_DUPLICATED.name(), ErrorCode.AUDITORIUM_NAME_DUPLICATED.getMessage()));
+            }
+            if (rootMsg.contains("uk_seats_auditorium_code")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_CODE.name(), ErrorCode.DUPLICATE_SEAT_CODE.getMessage()));
+            }
+            if (rootMsg.contains("uk_seats_auditorium_position")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_POSITION.name(), ErrorCode.DUPLICATE_SEAT_POSITION.getMessage()));
+            }
+        }
+        
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail("DATA_INTEGRITY_VIOLATION", "Data integrity constraint violated"));
+    }
+
     @ExceptionHandler(org.springframework.dao.DataAccessException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataAccessException(org.springframework.dao.DataAccessException ex) {
         log.error("DataAccessException: {}", ex.getMessage());
@@ -129,7 +189,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
-        // Log with stack trace (ex) for critical system errors to ease debugging
         log.error("Unhandled Exception: ", ex);
 
         return ResponseEntity

@@ -68,7 +68,7 @@ class ShowtimeServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        seatService = new SeatService(seatRepository);
+        seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(seatRepository, null, null);
         showtimeMapper = new ShowtimeMapper();
         showtimeService = new ShowtimeServiceImpl(showtimeRepository, showtimePriceRepository, showtimeBlockedSeatRepository, seatService, showtimeMapper);
 
@@ -125,7 +125,7 @@ class ShowtimeServiceImplTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Arrays.asList(101L, 102L));
 
-        when(showtimeRepository.findById(10L)).thenReturn(Optional.of(showtime));
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
         when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Arrays.asList(seat1, seat2));
 
         ShowtimePrice price = new ShowtimePrice();
@@ -152,7 +152,7 @@ class ShowtimeServiceImplTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Collections.singletonList(101L));
 
-        when(showtimeRepository.findById(10L)).thenReturn(Optional.empty());
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> showtimeService.getBookingContext(10L, request));
     }
@@ -163,7 +163,7 @@ class ShowtimeServiceImplTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Collections.singletonList(101L));
 
-        when(showtimeRepository.findById(10L)).thenReturn(Optional.of(showtime));
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
         assertEquals(ErrorCode.INVALID_SHOWTIME_STATUS_TRANSITION, ex.getErrorCode());
@@ -174,7 +174,7 @@ class ShowtimeServiceImplTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Arrays.asList(101L, 101L));
 
-        when(showtimeRepository.findById(10L)).thenReturn(Optional.of(showtime));
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
         assertEquals(ErrorCode.VALIDATION_ERROR, ex.getErrorCode());
@@ -186,7 +186,7 @@ class ShowtimeServiceImplTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Arrays.asList(101L, 999L));
 
-        when(showtimeRepository.findById(10L)).thenReturn(Optional.of(showtime));
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
         when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
 
         assertThrows(ResourceNotFoundException.class, () -> showtimeService.getBookingContext(10L, request));
@@ -201,7 +201,7 @@ class ShowtimeServiceImplTest {
         otherAuditorium.setId(2L);
         seat1.setAuditorium(otherAuditorium);
 
-        when(showtimeRepository.findById(10L)).thenReturn(Optional.of(showtime));
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
         when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
@@ -215,7 +215,7 @@ class ShowtimeServiceImplTest {
 
         seat1.setStatus(SeatStatus.MAINTENANCE);
 
-        when(showtimeRepository.findById(10L)).thenReturn(Optional.of(showtime));
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
         when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
@@ -227,7 +227,7 @@ class ShowtimeServiceImplTest {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Collections.singletonList(101L));
 
-        when(showtimeRepository.findById(10L)).thenReturn(Optional.of(showtime));
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
         when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
         when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.emptyList());
 

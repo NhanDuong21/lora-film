@@ -9,5 +9,6 @@ import java.util.Optional;
 
 @Repository
 public interface CinemaRepository extends JpaRepository<Cinema, Long>, JpaSpecificationExecutor<Cinema> {
+    Optional<Cinema> findByPublicIdAndDeletedAtIsNull(String publicId);
     Optional<Cinema> findBySlugAndDeletedAtIsNull(String slug);
 }

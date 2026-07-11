@@ -31,6 +31,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.test.context.TestPropertySource;
+
 @WebMvcTest(
     value = InternalShowtimeController.class,
     excludeAutoConfiguration = {SecurityAutoConfiguration.class},
@@ -40,6 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     )
 )
 @Import({InternalTokenFilter.class})
+@TestPropertySource(properties = "app.internal-token=secret-internal-token")
 class InternalShowtimeControllerTest {
 
     @Autowired
