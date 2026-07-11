@@ -194,7 +194,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
     @Override
     public BookingContextResponse getBookingContext(Long showtimeId, BookingContextRequest request) {
-        Showtime showtime = showtimeRepository.findById(showtimeId)
+        Showtime showtime = showtimeRepository.findByIdAndDeletedAtIsNull(showtimeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
 
         if (showtime.getStatus() != ShowtimeStatus.OPEN_FOR_BOOKING) {

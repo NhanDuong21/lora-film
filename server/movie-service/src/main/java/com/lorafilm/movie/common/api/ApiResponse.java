@@ -8,12 +8,12 @@ public record ApiResponse<T>(boolean success, String errorCode, String message, 
 
     // Success with data payload
     public static <T> ApiResponse<T> ok(T data) {
-        return new ApiResponse<>(true, "SUCCESS", "Success", data, null);
+        return new ApiResponse<>(true, "SUCCESS", "Success", data, java.util.Collections.emptyList());
     }
 
     // Success without data payload (e.g., Delete success, Logout success)
     public static <T> ApiResponse<T> ok(String message) {
-        return new ApiResponse<>(true, "SUCCESS", message, null, null);
+        return new ApiResponse<>(true, "SUCCESS", message, null, java.util.Collections.emptyList());
     }
 
     // Failure with specific error message (data payload will be null)
