@@ -1,5 +1,5 @@
 package com.lorafilm.movie.common.security;
- 
+
 import java.io.IOException;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -14,17 +14,17 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
- 
+
 @Component
 public class InternalTokenFilter extends OncePerRequestFilter {
- 
+
     @Value("${app.internal-token}")
     private String internalToken;
- 
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        
+
         String path = request.getServletPath();
         if (path == null || path.isEmpty()) {
             path = request.getRequestURI();
@@ -51,7 +51,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
                 return;
             }
         }
-        
+
         filterChain.doFilter(request, response);
     }
 }
