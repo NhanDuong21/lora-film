@@ -40,6 +40,10 @@ public class SeatServiceImpl implements SeatService {
         Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate(auditoriumPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
 
+        if (auditorium.getStatus() != com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.CINEMA_NOT_CONFIGURABLE);
+        }
+
         long activeSeatCount = seatRepository.countByAuditoriumIdAndDeletedAtIsNull(auditorium.getId());
         if (activeSeatCount + request.seats().size() > auditorium.getCapacity()) {
             throw new BusinessException(ErrorCode.SEAT_CAPACITY_EXCEEDED);
@@ -116,6 +120,10 @@ public class SeatServiceImpl implements SeatService {
 
         Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate(seat.getAuditorium().getPublicId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
+
+        if (auditorium.getStatus() != com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.CINEMA_NOT_CONFIGURABLE);
+        }
 
         String normalizedSeatCode = request.seatCode() != null ? request.seatCode().trim() : null;
         String normalizedRowLabel = request.rowLabel() != null ? request.rowLabel().trim() : null;

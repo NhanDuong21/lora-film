@@ -38,6 +38,9 @@ public class AuditoriumMaintenanceServiceImpl implements AuditoriumMaintenanceSe
         Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate(auditoriumPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
 
+        if (request.startTime() == null || request.endTime() == null) {
+            throw new BusinessException(ErrorCode.INVALID_MAINTENANCE_TIME_RANGE);
+        }
         if (!request.startTime().isBefore(request.endTime())) {
             throw new BusinessException(ErrorCode.INVALID_MAINTENANCE_TIME_RANGE);
         }
