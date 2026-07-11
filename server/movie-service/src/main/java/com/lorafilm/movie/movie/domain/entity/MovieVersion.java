@@ -40,7 +40,8 @@ public class MovieVersion extends BaseAuditableEntity {
     @Column(name = "status", nullable = false)
     private ActiveStatus status = ActiveStatus.ACTIVE;
 
-    public MovieVersion() {}
+    public MovieVersion() {
+    }
 
     public Long getId() {
         return id;

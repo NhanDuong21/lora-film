@@ -22,24 +22,41 @@ GET /api/movies?status=&genreId=&keyword=&city=&cinemaId=&date=&page=&size=&sort
 #### Supported status
 
 ```txt
-now-showing
-coming-soon
+NOW_SHOWING
+COMING_SOON
 ```
 
-#### Response includes
+#### Response Example
 
-* `publicId`
-* `slug`
-* `title`
-* `originalTitle`
-* `synopsis`
-* `durationMinutes`
-* `ageRating`
-* `releaseDate`
-* `endDate`
-* `genres`
-* `primaryPoster`
-* `status`
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "data": [
+      {
+        "publicId": "UUID-1234",
+        "slug": "avengers-endgame",
+        "title": "Avengers: Endgame",
+        "originalTitle": "Avengers: Endgame",
+        "synopsis": "After the devastating events...",
+        "durationMinutes": 181,
+        "ageRating": "P",
+        "releaseDate": "2019-04-26",
+        "endDate": "2019-07-26",
+        "genres": ["Action", "Sci-Fi"],
+        "primaryPoster": "https://example.com/poster.jpg",
+        "status": "NOW_SHOWING"
+      }
+    ],
+    "pageNo": 0,
+    "pageSize": 10,
+    "totalElements": 1,
+    "totalPages": 1,
+    "last": true
+  }
+}
+```
 
 ---
 
@@ -49,16 +66,28 @@ coming-soon
 GET /api/movies/{movieSlug}
 ```
 
-#### Response includes
+#### Response Example
 
-* Movie basic info
-* Translations nếu có
-* Genres
-* Credits
-* Production companies
-* Versions
-* Media
-* Available showtimes summary nếu cần mở rộng sau
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "publicId": "UUID-1234",
+    "slug": "avengers-endgame",
+    "title": "Avengers: Endgame",
+    "originalTitle": "Avengers: Endgame",
+    "synopsis": "After the devastating events...",
+    "durationMinutes": 181,
+    "ageRating": "P",
+    "releaseDate": "2019-04-26",
+    "endDate": "2019-07-26",
+    "genres": ["Action", "Sci-Fi"],
+    "primaryPoster": "https://example.com/poster.jpg",
+    "status": "NOW_SHOWING"
+  }
+}
+```
 
 ---
 
@@ -85,6 +114,34 @@ GET /api/cinemas?city=&district=&keyword=&page=&size=
 
 * Chỉ trả về active cinemas.
 
+#### Response Example
+
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "data": [
+      {
+        "publicId": "CINEMA-UUID-001",
+        "name": "Lorafilm Quận 1",
+        "slug": "lorafilm-quan-1",
+        "address": "123 Lê Lợi, Quận 1",
+        "city": "Hồ Chí Minh",
+        "district": "Quận 1",
+        "hotline": "19001234",
+        "status": "ACTIVE"
+      }
+    ],
+    "pageNo": 0,
+    "pageSize": 10,
+    "totalElements": 1,
+    "totalPages": 1,
+    "last": true
+  }
+}
+```
+
 ---
 
 ### 2.5. Cinema Detail
@@ -93,15 +150,24 @@ GET /api/cinemas?city=&district=&keyword=&page=&size=
 GET /api/cinemas/{cinemaSlug}
 ```
 
-#### Response includes
+#### Response Example
 
-* Cinema info
-* Address
-* City / district
-* Timezone
-* Hotline
-* Media
-* Operating hours
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "publicId": "CINEMA-UUID-001",
+    "name": "Lorafilm Quận 1",
+    "slug": "lorafilm-quan-1",
+    "address": "123 Lê Lợi, Quận 1",
+    "city": "Hồ Chí Minh",
+    "district": "Quận 1",
+    "hotline": "19001234",
+    "status": "ACTIVE"
+  }
+}
+```
 
 ---
 
@@ -120,12 +186,60 @@ GET /api/cinemas/{cinemaSlug}/showtimes?date=
 ### 2.7. Showtime Search
 
 ```http
-GET /api/showtimes?movieSlug=&cinemaSlug=&city=&date=&format=&audioLanguage=&subtitleLanguage=
+GET /api/showtimes?movieSlug=&cinemaSlug=&city=&date=&format=&audioLanguage=&subtitleLanguage=&page=&size=
 ```
 
 #### Behavior
 
 * Chỉ trả về open showtimes.
+
+#### Response Example
+
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "data": [
+      {
+        "showtimePublicId": "SHOWTIME-UUID-555",
+        "movie": {
+          "publicId": "uuid",
+          "slug": "dune-part-two",
+          "title": "Dune: Part Two"
+        },
+        "movieVersion": {
+          "publicId": "uuid",
+          "versionName": "IMAX Vietsub",
+          "format": "IMAX",
+          "audioLanguage": "EN",
+          "subtitleLanguage": "VI"
+        },
+        "cinema": {
+          "publicId": "uuid",
+          "slug": "lorafilm-nguyen-trai",
+          "name": "LoraFilm Nguyễn Trãi",
+          "timezone": "Asia/Ho_Chi_Minh"
+        },
+        "auditorium": {
+          "publicId": "uuid",
+          "name": "Room 2",
+          "screenType": "IMAX",
+          "soundType": "DOLBY_ATMOS"
+        },
+        "startTime": "2026-07-20T19:30:00Z",
+        "endTime": "2026-07-20T21:50:00Z",
+        "status": "OPEN_FOR_BOOKING"
+      }
+    ],
+    "pageNo": 0,
+    "pageSize": 10,
+    "totalElements": 1,
+    "totalPages": 1,
+    "last": true
+  }
+}
+```
 
 ---
 
@@ -135,17 +249,44 @@ GET /api/showtimes?movieSlug=&cinemaSlug=&city=&date=&format=&audioLanguage=&sub
 GET /api/showtimes/{showtimePublicId}
 ```
 
-#### Response includes
+#### Response Example
 
-* `showtimePublicId`
-* Movie
-* Movie version
-* Cinema
-* Auditorium
-* `startTime`
-* `endTime`
-* Booking window
-* Status
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "showtimePublicId": "SHOWTIME-UUID-555",
+    "movie": {
+      "publicId": "uuid",
+      "slug": "dune-part-two",
+      "title": "Dune: Part Two"
+    },
+    "movieVersion": {
+      "publicId": "uuid",
+      "versionName": "IMAX Vietsub",
+      "format": "IMAX",
+      "audioLanguage": "EN",
+      "subtitleLanguage": "VI"
+    },
+    "cinema": {
+      "publicId": "uuid",
+      "slug": "lorafilm-nguyen-trai",
+      "name": "LoraFilm Nguyễn Trãi",
+      "timezone": "Asia/Ho_Chi_Minh"
+    },
+    "auditorium": {
+      "publicId": "uuid",
+      "name": "Room 2",
+      "screenType": "IMAX",
+      "soundType": "DOLBY_ATMOS"
+    },
+    "startTime": "2026-07-20T19:30:00Z",
+    "endTime": "2026-07-20T21:50:00Z",
+    "status": "OPEN_FOR_BOOKING"
+  }
+}
+```
 
 ---
 
@@ -159,48 +300,52 @@ GET /api/showtimes/{showtimePublicId}/seat-layout
 
 ```json
 {
-  "showtimePublicId": "uuid",
-  "movie": {
-    "publicId": "uuid",
-    "slug": "dune-part-two",
-    "title": "Dune: Part Two"
-  },
-  "movieVersion": {
-    "publicId": "uuid",
-    "versionName": "IMAX Vietsub",
-    "format": "IMAX",
-    "audioLanguage": "EN",
-    "subtitleLanguage": "VI"
-  },
-  "cinema": {
-    "publicId": "uuid",
-    "slug": "lorafilm-nguyen-trai",
-    "name": "LoraFilm Nguyễn Trãi",
-    "timezone": "Asia/Ho_Chi_Minh"
-  },
-  "auditorium": {
-    "publicId": "uuid",
-    "name": "Room 2",
-    "screenType": "IMAX",
-    "soundType": "DOLBY_ATMOS"
-  },
-  "startTime": "2026-07-20T19:30:00+07:00",
-  "endTime": "2026-07-20T21:50:00+07:00",
-  "seats": [
-    {
+  "success": true,
+  "message": "Success",
+  "data": {
+    "showtimePublicId": "uuid",
+    "movie": {
       "publicId": "uuid",
-      "seatCode": "F7",
-      "rowLabel": "F",
-      "seatNumber": 7,
-      "positionRow": 6,
-      "positionColumn": 7,
-      "seatType": "VIP",
-      "price": 120000,
-      "currency": "VND",
-      "status": "ACTIVE",
-      "blockedForShowtime": false
-    }
-  ]
+      "slug": "dune-part-two",
+      "title": "Dune: Part Two"
+    },
+    "movieVersion": {
+      "publicId": "uuid",
+      "versionName": "IMAX Vietsub",
+      "format": "IMAX",
+      "audioLanguage": "EN",
+      "subtitleLanguage": "VI"
+    },
+    "cinema": {
+      "publicId": "uuid",
+      "slug": "lorafilm-nguyen-trai",
+      "name": "LoraFilm Nguyễn Trãi",
+      "timezone": "Asia/Ho_Chi_Minh"
+    },
+    "auditorium": {
+      "publicId": "uuid",
+      "name": "Room 2",
+      "screenType": "IMAX",
+      "soundType": "DOLBY_ATMOS"
+    },
+    "startTime": "2026-07-20T19:30:00Z",
+    "endTime": "2026-07-20T21:50:00Z",
+    "seats": [
+      {
+        "publicId": "uuid",
+        "seatCode": "F7",
+        "rowLabel": "F",
+        "seatNumber": 7,
+        "positionRow": 6,
+        "positionColumn": 7,
+        "seatType": "VIP",
+        "price": 120000,
+        "currency": "VND",
+        "status": "ACTIVE",
+        "blockedForShowtime": false
+      }
+    ]
+  }
 }
 ```
 
@@ -394,7 +539,7 @@ GET /api/admin/showtimes/{showtimePublicId}/status-history
 ### 4.1. Showtime Booking Context
 
 ```http
-POST /internal/showtimes/{showtimePublicId}/booking-context
+POST /internal/showtimes/{showtimeId}/booking-context
 X-Internal-Token: ...
 Content-Type: application/json
 ```
@@ -403,7 +548,7 @@ Content-Type: application/json
 
 ```json
 {
-  "seatPublicIds": ["uuid-1", "uuid-2"]
+  "seatIds": [1, 2]
 }
 ```
 
@@ -411,40 +556,60 @@ Content-Type: application/json
 
 ```json
 {
-  "showtimePublicId": "uuid",
-  "movie": {
-    "publicId": "uuid",
-    "title": "Dune: Part Two",
-    "slug": "dune-part-two"
-  },
-  "movieVersion": {
-    "publicId": "uuid",
-    "versionName": "IMAX Vietsub",
-    "format": "IMAX",
-    "audioLanguage": "EN",
-    "subtitleLanguage": "VI"
-  },
-  "cinema": {
-    "publicId": "uuid",
-    "name": "LoraFilm Nguyễn Trãi",
-    "timezone": "Asia/Ho_Chi_Minh"
-  },
-  "auditorium": {
-    "publicId": "uuid",
-    "name": "Room 2"
-  },
-  "status": "OPEN_FOR_BOOKING",
-  "seats": [
-    {
-      "publicId": "uuid-1",
-      "seatCode": "F7",
-      "seatType": "VIP",
-      "price": 120000,
+  "success": true,
+  "errorCode": "SUCCESS",
+  "message": "Success",
+  "data": {
+    "showtime": {
+      "id": 10,
+      "publicId": "uuid",
+      "status": "OPEN_FOR_BOOKING",
+      "startAt": "2026-07-20T19:30:00Z",
+      "endAt": "2026-07-20T21:50:00Z"
+    },
+    "movie": {
+      "publicId": "uuid",
+      "slug": "dune-part-two",
+      "title": "Dune: Part Two"
+    },
+    "movieVersion": {
+      "publicId": "uuid",
+      "versionName": "IMAX Vietsub",
+      "format": "IMAX",
+      "audioLanguage": "EN",
+      "subtitleLanguage": "VI"
+    },
+    "cinema": {
+      "publicId": "uuid",
+      "slug": "lorafilm-nguyen-trai",
+      "name": "LoraFilm Nguyễn Trãi",
+      "timezone": "Asia/Ho_Chi_Minh"
+    },
+    "auditorium": {
+      "publicId": "uuid",
+      "name": "Room 2",
+      "screenType": "IMAX",
+      "soundType": "DOLBY_ATMOS"
+    },
+    "selectedSeats": [
+      {
+        "seatId": 1,
+        "seatCode": "F7",
+        "seatType": "VIP",
+        "price": 120000,
+        "currency": "VND"
+      }
+    ],
+    "pricing": {
+      "seatAmount": 120000,
+      "discountAmount": 0,
+      "serviceFee": 0,
+      "totalAmount": 120000,
       "currency": "VND"
-    }
-  ],
-  "totalAmount": 120000,
-  "currency": "VND"
+    },
+    "bookingExpiredAt": "2026-07-20T19:45:00Z"
+  },
+  "errors": []
 }
 ```
 

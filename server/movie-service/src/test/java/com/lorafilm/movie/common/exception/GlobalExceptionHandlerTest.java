@@ -22,7 +22,10 @@ import java.util.List;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+
 @WebMvcTest(controllers = {AdminSeatTypeController.class, AdminSeatController.class})
+@AutoConfigureMockMvc(addFilters = false)
 public class GlobalExceptionHandlerTest {
 
     @Autowired
@@ -30,6 +33,9 @@ public class GlobalExceptionHandlerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockBean
+    private com.lorafilm.movie.common.security.JwtProvider jwtProvider;
 
     @MockBean
     private SeatTypeService seatTypeService;

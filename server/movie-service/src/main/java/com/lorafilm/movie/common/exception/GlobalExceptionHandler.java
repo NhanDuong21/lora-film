@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,13 +28,28 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
+    public ResponseEntity<ApiResponse<?>> handleBusinessException(BusinessException ex) {
         ErrorCode errorCode = ex.getErrorCode();
         log.error("BusinessException [{}]: {}", errorCode.name(), ex.getMessage());
 
+        if (ex.getErrorData() != null) {
+            return ResponseEntity
+                    .status(HttpStatus.valueOf(errorCode.getHttpStatus()))
+                    .body(ApiResponse.fail(errorCode.name(), ex.getMessage(), ex.getErrorData()));
+        }
+
         return ResponseEntity
                 .status(HttpStatus.valueOf(errorCode.getHttpStatus()))
-                .body(ApiResponse.fail(ex.getMessage(), errorCode.name(), ex.getErrorData()));
+                .body(ApiResponse.fail(errorCode.name(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(ResourceNotFoundException ex) {
+        log.error("ResourceNotFoundException: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail(ErrorCode.RESOURCE_NOT_FOUND.name(), ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -46,7 +63,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail("Request validation failed", ErrorCode.VALIDATION_ERROR.name(), new ValidationErrorData(fieldErrors)));
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Request validation failed", new ValidationErrorData(fieldErrors)));
     }
 
     private String buildJsonPath(List<com.fasterxml.jackson.databind.JsonMappingException.Reference> path) {
@@ -64,8 +81,8 @@ public class GlobalExceptionHandler {
         return result.toString();
     }
 
-    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<?>> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
         log.error("HttpMessageNotReadableException: {}", ex.getMessage());
         
         Throwable cause = ex.getCause();
@@ -76,19 +93,68 @@ public class GlobalExceptionHandler {
                         .map(Object::toString)
                         .collect(Collectors.toList());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.fail("Invalid enum value", "INVALID_ENUM_VALUE", 
+                        .body(ApiResponse.fail("INVALID_ENUM_VALUE", "Invalid enum value", 
                             new InvalidEnumErrorData(fieldName, ife.getValue(), allowedValues)));
             } else if (ife.getTargetType() != null && (ife.getTargetType().getName().contains("Instant") || ife.getTargetType().getName().contains("Date") || ife.getTargetType().getName().contains("Time"))) {
                 String fieldName = buildJsonPath(ife.getPath());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.fail("Invalid date-time format", "INVALID_DATE_TIME_FORMAT", 
+                        .body(ApiResponse.fail("INVALID_DATE_TIME_FORMAT", "Invalid date-time format", 
                             new InvalidDateFormatData(fieldName, ife.getValue(), "yyyy-MM-dd'T'HH:mm:ss (or valid ISO format)")));
             }
         }
         
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail("Malformed JSON request", "MALFORMED_JSON"));
+                .body(ApiResponse.fail("MALFORMED_JSON", "Malformed JSON request"));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupportedException(HttpMediaTypeNotSupportedException ex) {
+        log.error("HttpMediaTypeNotSupportedException: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Unsupported media type"));
+    }
+
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(RuntimeException ex) {
+        log.error("IllegalArgument/StateException: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParams(org.springframework.web.bind.MissingServletRequestParameterException ex) {
+        String name = ex.getParameterName();
+        log.error("MissingServletRequestParameterException: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Missing required parameter: " + name));
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        log.error("MethodArgumentTypeMismatchException: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid parameter type for '" + ex.getName() + "'"));
+    }
+
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(jakarta.validation.ConstraintViolationException ex) {
+        log.error("ConstraintViolationException: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Validation error: " + ex.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.data.mapping.PropertyReferenceException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePropertyReferenceException(org.springframework.data.mapping.PropertyReferenceException ex) {
+        log.error("PropertyReferenceException: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(ErrorCode.VALIDATION_ERROR.name(), "Invalid sort property: " + ex.getPropertyName()));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -98,19 +164,27 @@ public class GlobalExceptionHandler {
         
         if (rootMsg != null) {
             if (rootMsg.contains("uk_auditoriums_cinema_name")) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.AUDITORIUM_NAME_DUPLICATED.getMessage(), ErrorCode.AUDITORIUM_NAME_DUPLICATED.name()));
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.AUDITORIUM_NAME_DUPLICATED.name(), ErrorCode.AUDITORIUM_NAME_DUPLICATED.getMessage()));
             }
             if (rootMsg.contains("uk_seats_auditorium_code")) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_CODE.getMessage(), ErrorCode.DUPLICATE_SEAT_CODE.name()));
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_CODE.name(), ErrorCode.DUPLICATE_SEAT_CODE.getMessage()));
             }
             if (rootMsg.contains("uk_seats_auditorium_position")) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_POSITION.getMessage(), ErrorCode.DUPLICATE_SEAT_POSITION.name()));
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_POSITION.name(), ErrorCode.DUPLICATE_SEAT_POSITION.getMessage()));
             }
         }
         
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(ApiResponse.fail("Data integrity constraint violated", "DATA_INTEGRITY_VIOLATION"));
+                .body(ApiResponse.fail("DATA_INTEGRITY_VIOLATION", "Data integrity constraint violated"));
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataAccessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataAccessException(org.springframework.dao.DataAccessException ex) {
+        log.error("DataAccessException: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.name(), ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
@@ -119,6 +193,6 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.getMessage(), ErrorCode.INTERNAL_SERVER_ERROR.name()));
+                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.name(), ex.getMessage() != null ? ex.getMessage() : "Unknown error"));
     }
-}
+}

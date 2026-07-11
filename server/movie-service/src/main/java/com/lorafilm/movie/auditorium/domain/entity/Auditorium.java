@@ -54,7 +54,8 @@ public class Auditorium extends BaseAuditableEntity {
     @Column(name = "status", nullable = false, length = 30)
     private AuditoriumStatus status = AuditoriumStatus.DRAFT;
 
-    public Auditorium() {}
+    public Auditorium() {
+    }
 
     public Long getId() {
         return id;

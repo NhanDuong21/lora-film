@@ -4,10 +4,12 @@ import com.lorafilm.movie.seat.domain.entity.Seat;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface SeatRepository extends JpaRepository<Seat, Long> {
     Optional<Seat> findByPublicIdAndDeletedAtIsNull(String publicId);
     
@@ -42,4 +44,10 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
            "AND st.deletedAt IS NULL AND st.status = 'ACTIVE' " +
            "ORDER BY s.positionRow ASC, s.positionColumn ASC")
     List<Seat> findCustomerLayoutByAuditoriumId(@Param("auditoriumId") Long auditoriumId);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"seatType"})
+    List<Seat> findByAuditoriumIdAndDeletedAtIsNull(Long auditoriumId);
+    
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"seatType"})
+    List<Seat> findByIdInAndDeletedAtIsNull(List<Long> ids);
 }

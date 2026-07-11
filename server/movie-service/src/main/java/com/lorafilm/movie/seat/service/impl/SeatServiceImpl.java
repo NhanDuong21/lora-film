@@ -271,4 +271,14 @@ public class SeatServiceImpl implements SeatService {
                 s.getCreatedAt(),
                 s.getUpdatedAt());
     }
+
+    @Override
+    public List<Seat> getSeatsByAuditoriumId(Long auditoriumId) {
+        return seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditoriumId);
+    }
+
+    @Override
+    public List<Seat> getSeatsByIds(List<Long> seatIds) {
+        return seatRepository.findByIdInAndDeletedAtIsNull(seatIds);
+    }
 }

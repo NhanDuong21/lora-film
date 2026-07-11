@@ -1,18 +1,18 @@
 package com.lorafilm.movie.common.exception;
 
 public enum ErrorCode {
-    // --- Hệ thống chung ---
+    // --- General System ---
     INTERNAL_SERVER_ERROR("Internal server error", 500),
     VALIDATION_ERROR("Validation failed", 400),
     ACCESS_DENIED("Access denied", 403),
     RESOURCE_NOT_FOUND("Resource not found", 404),
     INTERNAL_TOKEN_INVALID("Internal token is invalid or expired", 401),
 
-    // --- Module Phim ---
+    // --- Movie Module ---
     MOVIE_NOT_FOUND("Movie not found", 404),
     MOVIE_VERSION_NOT_FOUND("Movie version not found", 404),
 
-    // --- Module Rạp & Phòng chiếu ---
+    // --- Cinema & Auditorium Module ---
     CINEMA_NOT_FOUND("Cinema not found", 404),
     CINEMA_NOT_CONFIGURABLE("Cinema is not in a configurable state", 400),
     AUDITORIUM_NOT_FOUND("Auditorium not found", 404),
@@ -31,7 +31,7 @@ public enum ErrorCode {
     MAINTENANCE_WINDOW_ALREADY_CANCELLED("Maintenance window is already cancelled", 400),
     MAINTENANCE_WINDOW_CANNOT_BE_CREATED_IN_PAST("Maintenance window cannot be created in the past", 400),
 
-    // --- Module Ghế ngồi ---
+    // --- Seat Module ---
     SEAT_NOT_FOUND("Seat not found", 404),
     SEAT_TYPE_NOT_FOUND("Seat type not found", 404),
     SEAT_CODE_DUPLICATED("Seat code already exists in this auditorium", 400),
@@ -51,8 +51,10 @@ public enum ErrorCode {
     INVALID_SEAT_POSITION("Invalid seat position", 400),
     INVALID_SEAT_STATUS_TRANSITION("Invalid seat status transition", 400),
     EMPTY_SEAT_BULK_REQUEST("Empty seat bulk request", 400),
+    SEAT_BELONGS_TO_ANOTHER_AUDITORIUM("Seat belongs to another auditorium", 400),
+    SEAT_INACTIVE("Seat is not active", 400),
 
-    // --- Module Lịch chiếu ---
+    // --- Showtime Module ---
     SHOWTIME_NOT_FOUND("Showtime not found", 404),
     SHOWTIME_OVERLAP_CONFLICT("Showtime overlaps with an existing schedule", 409),
     SHOWTIME_PRICE_MISSING("Showtime price config is missing", 400),
