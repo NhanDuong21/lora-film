@@ -37,4 +37,16 @@ public class ShowtimeSpecification {
             return cb.between(root.get("startTime"), startOfDay, endOfDay);
         };
     }
+
+    public static Specification<Showtime> hasFormat(com.lorafilm.movie.movie.domain.enums.MovieFormat format) {
+        return (root, query, cb) -> cb.equal(root.get("movieVersion").get("format"), format);
+    }
+
+    public static Specification<Showtime> hasAudioLanguage(String audioLanguage) {
+        return (root, query, cb) -> cb.equal(cb.lower(root.get("movieVersion").get("audioLanguage")), audioLanguage.toLowerCase());
+    }
+
+    public static Specification<Showtime> hasSubtitleLanguage(String subtitleLanguage) {
+        return (root, query, cb) -> cb.equal(cb.lower(root.get("movieVersion").get("subtitleLanguage")), subtitleLanguage.toLowerCase());
+    }
 }

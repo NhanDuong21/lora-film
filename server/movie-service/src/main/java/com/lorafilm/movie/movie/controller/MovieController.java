@@ -20,11 +20,15 @@ public class MovieController {
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<MovieDto>>> getMovies(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long genreId,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) Long cinemaId,
+            @RequestParam(required = false) java.time.LocalDate date,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "releaseDate,desc") String sort) {
-        return ResponseEntity.ok(ApiResponse.ok(movieService.getMovies(status, keyword, page, size, sort)));
+        return ResponseEntity.ok(ApiResponse.ok(movieService.getMovies(status, genreId, keyword, city, cinemaId, date, page, size, sort)));
     }
 
     @GetMapping("/{movieSlug}")

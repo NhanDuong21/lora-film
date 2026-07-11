@@ -60,6 +60,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
         log.error("HttpMessageNotReadableException: {}", ex.getMessage());
+        
+        Throwable cause = ex.getCause();
+        if (cause instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException) {
+            com.fasterxml.jackson.databind.exc.InvalidFormatException invalidFormatException = (com.fasterxml.jackson.databind.exc.InvalidFormatException) cause;
+            if (invalidFormatException.getTargetType() != null && invalidFormatException.getTargetType().isEnum()) {
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body(ApiResponse.fail("Invalid enum value. Please check your request."));
+            }
+        }
+        
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.fail("Invalid request payload. Please check your JSON format."));

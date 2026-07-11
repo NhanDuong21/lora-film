@@ -44,21 +44,38 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    public PageResponse<MovieDto> getMovies(String status, String keyword, int page, int size, String sort) {
+    public PageResponse<MovieDto> getMovies(String status, Long genreId, String keyword, String city, Long cinemaId, java.time.LocalDate date, int page, int size, String sort) {
         Specification<Movie> spec = Specification.where(MovieSpecification.isNotDeleted());
 
         if (status != null && !status.isEmpty()) {
-            MovieStatus parsedStatus = MovieStatus.valueOf(status.toUpperCase());
-            if (parsedStatus == null) {
+            try {
+                MovieStatus parsedStatus = MovieStatus.valueOf(status.toUpperCase());
+                spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
+            } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Invalid status: " + status);
             }
-            spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
         } else {
             spec = spec.and(MovieSpecification.isPubliclyVisible());
         }
 
+        if (genreId != null) {
+            spec = spec.and(MovieSpecification.hasGenreId(genreId));
+        }
+
         if (keyword != null && !keyword.isEmpty()) {
             spec = spec.and(MovieSpecification.hasKeyword(keyword));
+        }
+
+        if (city != null && !city.isEmpty()) {
+            spec = spec.and(MovieSpecification.hasShowtimeInCity(city));
+        }
+
+        if (cinemaId != null) {
+            spec = spec.and(MovieSpecification.hasShowtimeInCinema(cinemaId));
+        }
+
+        if (date != null) {
+            spec = spec.and(MovieSpecification.hasShowtimeOnDate(date));
         }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("releaseDate").descending());

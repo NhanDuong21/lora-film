@@ -26,9 +26,12 @@ public class ShowtimeController {
             @RequestParam(required = false) String cinemaSlug,
             @RequestParam(required = false) String city,
             @RequestParam(required = false) LocalDate date,
+            @RequestParam(required = false) String format,
+            @RequestParam(required = false) String audioLanguage,
+            @RequestParam(required = false) String subtitleLanguage,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(ApiResponse.ok(showtimeService.getShowtimes(movieSlug, cinemaSlug, city, date, page, size)));
+        return ResponseEntity.ok(ApiResponse.ok(showtimeService.getShowtimes(movieSlug, cinemaSlug, city, date, format, audioLanguage, subtitleLanguage, page, size)));
     }
 
     @GetMapping("/{showtimePublicId}")

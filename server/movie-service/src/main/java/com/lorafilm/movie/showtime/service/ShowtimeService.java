@@ -6,7 +6,7 @@ import com.lorafilm.movie.showtime.dto.ShowtimeDto;
 import java.time.LocalDate;
 
 public interface ShowtimeService {
-    PageResponse<ShowtimeDto> getShowtimes(String movieSlug, String cinemaSlug, String city, LocalDate date, int page, int size);
+    PageResponse<ShowtimeDto> getShowtimes(String movieSlug, String cinemaSlug, String city, LocalDate date, String format, String audioLanguage, String subtitleLanguage, int page, int size);
     ShowtimeDto getShowtimeByPublicId(String publicId);
     SeatLayoutDto getSeatLayout(String publicId);
 }

@@ -49,7 +49,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     @Override
-    public PageResponse<ShowtimeDto> getShowtimes(String movieSlug, String cinemaSlug, String city, LocalDate date, int page, int size) {
+    public PageResponse<ShowtimeDto> getShowtimes(String movieSlug, String cinemaSlug, String city, LocalDate date, String format, String audioLanguage, String subtitleLanguage, int page, int size) {
         Specification<Showtime> spec = Specification.where(ShowtimeSpecification.isNotDeleted())
                 .and(ShowtimeSpecification.hasStatus(ShowtimeStatus.OPEN_FOR_BOOKING));
 
@@ -64,6 +64,20 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         }
         if (date != null) {
             spec = spec.and(ShowtimeSpecification.hasDate(date));
+        }
+        if (format != null && !format.isEmpty()) {
+            try {
+                com.lorafilm.movie.movie.domain.enums.MovieFormat parsedFormat = com.lorafilm.movie.movie.domain.enums.MovieFormat.valueOf(format.toUpperCase());
+                spec = spec.and(ShowtimeSpecification.hasFormat(parsedFormat));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid format: " + format);
+            }
+        }
+        if (audioLanguage != null && !audioLanguage.isEmpty()) {
+            spec = spec.and(ShowtimeSpecification.hasAudioLanguage(audioLanguage));
+        }
+        if (subtitleLanguage != null && !subtitleLanguage.isEmpty()) {
+            spec = spec.and(ShowtimeSpecification.hasSubtitleLanguage(subtitleLanguage));
         }
 
         Pageable pageable = PageRequest.of(page, size);
