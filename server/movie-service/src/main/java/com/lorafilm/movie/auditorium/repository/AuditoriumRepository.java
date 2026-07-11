@@ -8,9 +8,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
 
 public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
     Optional<Auditorium> findByPublicIdAndDeletedAtIsNull(String publicId);
+    Optional<Auditorium> findByPublicIdAndStatusAndDeletedAtIsNull(String publicId, AuditoriumStatus status);
     
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM Auditorium a WHERE a.publicId = :publicId AND a.deletedAt IS NULL")

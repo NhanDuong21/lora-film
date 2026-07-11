@@ -29,8 +29,7 @@ public class SeatLayoutQueryServiceImpl implements SeatLayoutQueryService {
     @Override
     @Transactional(readOnly = true)
     public CustomerSeatLayoutResponse getCustomerSeatLayout(String auditoriumPublicId) {
-        Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNull(auditoriumPublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
+        Auditorium auditorium = getCustomerVisibleAuditorium(auditoriumPublicId);
 
         List<Seat> seats = seatRepository.findCustomerLayoutByAuditoriumId(auditorium.getId());
 
@@ -71,8 +70,7 @@ public class SeatLayoutQueryServiceImpl implements SeatLayoutQueryService {
     @Override
     @Transactional(readOnly = true)
     public AdminSeatLayoutResponse getAdminSeatLayout(String auditoriumPublicId) {
-        Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNull(auditoriumPublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
+        Auditorium auditorium = getAdminVisibleAuditorium(auditoriumPublicId);
 
         List<Seat> seats = seatRepository.findAdminLayoutByAuditoriumId(auditorium.getId());
 
@@ -111,5 +109,15 @@ public class SeatLayoutQueryServiceImpl implements SeatLayoutQueryService {
                 auditorium.getScreenType(), auditorium.getSoundType(), auditorium.getCleaningBufferMinutes(),
                 auditorium.getStatus(), totalSeats, activeSeats, maintenanceSeats, rows
         );
+    }
+
+    private Auditorium getCustomerVisibleAuditorium(String publicId) {
+        return auditoriumRepository.findByPublicIdAndStatusAndDeletedAtIsNull(publicId, com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
+    }
+
+    private Auditorium getAdminVisibleAuditorium(String publicId) {
+        return auditoriumRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
     }
 }
