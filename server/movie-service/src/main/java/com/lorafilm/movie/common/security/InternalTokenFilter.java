@@ -31,6 +31,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             String tokenHeader = request.getHeader("X-Internal-Token");
             if (tokenHeader == null || tokenHeader.isEmpty()) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setCharacterEncoding("UTF-8");
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
                 ApiResponse<Void> apiResponse = ApiResponse.fail("ERR_401_UNAUTHORIZED", "Missing internal token");
@@ -39,6 +40,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
                 return;
             } else if (!tokenHeader.equals(internalToken)) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setCharacterEncoding("UTF-8");
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
 
                 ApiResponse<Void> apiResponse = ApiResponse.fail("ERR_403_FORBIDDEN", "Invalid internal token");
