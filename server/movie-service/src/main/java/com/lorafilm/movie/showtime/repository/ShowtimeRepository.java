@@ -15,4 +15,24 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
 
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
     Optional<Showtime> findByIdAndDeletedAtIsNull(Long id);
+
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s WHERE s.auditorium.id = :auditoriumId " +
+            "AND s.deletedAt IS NULL " +
+            "AND s.status != 'CANCELLED' " + // Exclude cancelled showtimes from overlap check
+            "AND ((s.startTime <= :endTime AND s.endTime >= :startTime))")
+    java.util.List<Showtime> findPotentialOverlaps(
+            @org.springframework.data.repository.query.Param("auditoriumId") Long auditoriumId,
+            @org.springframework.data.repository.query.Param("startTime") java.time.Instant startTime,
+            @org.springframework.data.repository.query.Param("endTime") java.time.Instant endTime);
+
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s WHERE s.auditorium.id = :auditoriumId " +
+            "AND s.id != :excludeShowtimeId " +
+            "AND s.deletedAt IS NULL " +
+            "AND s.status != 'CANCELLED' " +
+            "AND ((s.startTime <= :endTime AND s.endTime >= :startTime))")
+    java.util.List<Showtime> findPotentialOverlaps(
+            @org.springframework.data.repository.query.Param("auditoriumId") Long auditoriumId,
+            @org.springframework.data.repository.query.Param("startTime") java.time.Instant startTime,
+            @org.springframework.data.repository.query.Param("endTime") java.time.Instant endTime,
+            @org.springframework.data.repository.query.Param("excludeShowtimeId") Long excludeShowtimeId);
 }
