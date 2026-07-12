@@ -17,7 +17,7 @@ import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
-import com.lorafilm.movie.showtime.dto.response.ShowtimeDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeDto;
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.movie.domain.entity.Movie;

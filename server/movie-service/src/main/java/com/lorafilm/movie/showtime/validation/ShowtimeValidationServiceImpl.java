@@ -94,9 +94,8 @@ public class ShowtimeValidationServiceImpl implements ShowtimeValidationService 
     }
 
     private void validateTimeAndDuration(Instant startTime, Instant endTime, Cinema cinema, Movie movie) {
-        Duration duration = Duration.between(startTime, endTime);
-        if (duration.toMinutes() < 30) {
-            throw new BusinessException(ErrorCode.INVALID_MOVIE_DURATION, "Showtime duration must be at least 30 minutes");
+        if (movie.getDurationMinutes() == null || movie.getDurationMinutes() <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_MOVIE_DURATION, "Movie duration must be greater than zero");
         }
         
         ZoneId zoneId;
@@ -112,44 +111,49 @@ public class ShowtimeValidationServiceImpl implements ShowtimeValidationService 
         
         // Java DayOfWeek: 1 = Monday, 7 = Sunday. We assume CinemaOperatingHour maps DayOfWeek 1-7.
         int dayOfWeek = startZdt.getDayOfWeek().getValue();
+        int prevDayOfWeek = dayOfWeek == 1 ? 7 : dayOfWeek - 1;
         
         List<CinemaOperatingHour> operatingHours = cinemaOperatingHourRepository.findByCinemaId(cinema.getId());
         CinemaOperatingHour todayOpHour = operatingHours.stream()
                 .filter(oh -> oh.getDayOfWeek() != null && oh.getDayOfWeek() == dayOfWeek)
                 .findFirst()
                 .orElse(null);
+        CinemaOperatingHour prevOpHour = operatingHours.stream()
+                .filter(oh -> oh.getDayOfWeek() != null && oh.getDayOfWeek() == prevDayOfWeek)
+                .findFirst()
+                .orElse(null);
 
-        if (todayOpHour == null) {
-            // No configuration means we probably don't restrict, or we restrict completely.
-            // But let's assume default 08:00 - 23:59 if missing, as per requirement hint.
-            LocalTime defaultOpen = LocalTime.of(8, 0);
-            LocalTime defaultClose = LocalTime.of(23, 59);
-            validateAgainstOperatingHours(startZdt.toLocalTime(), endZdt.toLocalTime(), defaultOpen, defaultClose, false);
-        } else {
-            validateAgainstOperatingHours(startZdt.toLocalTime(), endZdt.toLocalTime(), 
-                    todayOpHour.getOpenTime(), todayOpHour.getCloseTime(), todayOpHour.getIsClosed());
+        boolean todayValid = checkOperatingWindow(startZdt, endZdt, todayOpHour, startZdt);
+        boolean prevValid = checkOperatingWindow(startZdt, endZdt, prevOpHour, startZdt.minusDays(1));
+
+        if (!todayValid && !prevValid) {
+            if (todayOpHour == null) {
+                throw new BusinessException(ErrorCode.CINEMA_OPERATING_HOURS_NOT_CONFIGURED, "Cinema operating hours are not configured for the selected day");
+            }
+            throw new BusinessException(ErrorCode.SHOWTIME_OUTSIDE_OPERATING_HOURS, "Showtime outside operating hours");
         }
     }
 
-    private void validateAgainstOperatingHours(LocalTime start, LocalTime end, LocalTime open, LocalTime close, boolean isClosed) {
-        if (isClosed) {
-            throw new BusinessException(ErrorCode.SHOWTIME_OUTSIDE_OPERATING_HOURS, "Cinema is closed on this day of week");
+    private boolean checkOperatingWindow(ZonedDateTime startZdt, ZonedDateTime endZdt, CinemaOperatingHour opHour, ZonedDateTime referenceDate) {
+        if (opHour == null || Boolean.TRUE.equals(opHour.getIsClosed()) || opHour.getOpenTime() == null || opHour.getCloseTime() == null) {
+            return false;
         }
-        if (open == null || close == null) {
-            return; // Config invalid, skip validation or allow
+        
+        ZonedDateTime openDateTime = referenceDate.withHour(opHour.getOpenTime().getHour())
+                                                  .withMinute(opHour.getOpenTime().getMinute())
+                                                  .withSecond(0).withNano(0);
+        ZonedDateTime closeDateTime;
+        if (opHour.getCloseTime().isBefore(opHour.getOpenTime())) {
+            closeDateTime = referenceDate.plusDays(1).withHour(opHour.getCloseTime().getHour())
+                                                      .withMinute(opHour.getCloseTime().getMinute())
+                                                      .withSecond(0).withNano(0);
+        } else {
+            closeDateTime = referenceDate.withHour(opHour.getCloseTime().getHour())
+                                          .withMinute(opHour.getCloseTime().getMinute())
+                                          .withSecond(0).withNano(0);
         }
-        if (start.isBefore(open) || end.isAfter(close)) {
-            // Handle cross-midnight close time, e.g. open 08:00, close 02:00
-            if (close.isBefore(open)) {
-                boolean isValid = (!start.isBefore(open) || start.isBefore(close)) && 
-                                  (!end.isAfter(close) || end.isAfter(open));
-                if (!isValid) {
-                    throw new BusinessException(ErrorCode.SHOWTIME_OUTSIDE_OPERATING_HOURS, "Showtime outside operating hours");
-                }
-            } else {
-                throw new BusinessException(ErrorCode.SHOWTIME_OUTSIDE_OPERATING_HOURS, "Showtime outside operating hours");
-            }
-        }
+        
+        return !startZdt.isBefore(openDateTime) && !endZdt.isAfter(closeDateTime);
     }
 
     private void validateOverlaps(ShowtimeValidationContext context) {

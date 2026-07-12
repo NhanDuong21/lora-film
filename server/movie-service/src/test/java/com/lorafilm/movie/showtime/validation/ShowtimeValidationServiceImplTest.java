@@ -60,6 +60,7 @@ class ShowtimeValidationServiceImplTest {
     private Instant startTime;
     private Instant endTime;
     private ShowtimeValidationContext context;
+    private CinemaOperatingHour validOpHour;
 
     @BeforeEach
     void setUp() {
@@ -68,6 +69,7 @@ class ShowtimeValidationServiceImplTest {
         movie.setStatus(MovieStatus.NOW_SHOWING);
         movie.setReleaseDate(LocalDate.now().minusDays(5));
         movie.setEndDate(LocalDate.now().plusDays(5));
+        movie.setDurationMinutes(120);
 
         movieVersion = new MovieVersion();
         movieVersion.setId(1L);
@@ -89,14 +91,22 @@ class ShowtimeValidationServiceImplTest {
         ZonedDateTime endZdt = startZdt.plusHours(2);
         
         startTime = startZdt.toInstant();
+        
+        validOpHour = new CinemaOperatingHour();
+        validOpHour.setDayOfWeek(startZdt.getDayOfWeek().getValue());
+        validOpHour.setOpenTime(LocalTime.of(8, 0));
+        validOpHour.setCloseTime(LocalTime.of(23, 0));
+        validOpHour.setIsClosed(false);
+
+
         endTime = endZdt.toInstant();
 
-        context = new ShowtimeValidationContext(movie, movieVersion, cinema, auditorium, startTime, endTime, null);
+        context = new ShowtimeValidationContext(movie, movieVersion, cinema, auditorium, startTime, startTime.plusSeconds(1800), null);
     }
 
     @Test
     void validateForScheduling_validContext_shouldPass() {
-        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(Collections.emptyList());
+        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(List.of(validOpHour));
         when(cinemaClosureRepository.findOverlappingClosures(eq(cinema.getId()), any(), any())).thenReturn(Collections.emptyList());
         when(auditoriumMaintenanceRepository.existsOverlap(eq(auditorium.getId()), any(), any(), any())).thenReturn(false);
         when(showtimeRepository.findPotentialOverlaps(eq(auditorium.getId()), any(), any())).thenReturn(Collections.emptyList());
@@ -161,35 +171,79 @@ class ShowtimeValidationServiceImplTest {
         assertEquals(ErrorCode.AUDITORIUM_NOT_ACTIVE, ex.getErrorCode());
     }
 
+
     @Test
-    void validateForScheduling_durationTooShort_shouldThrowException() {
-        // End time is only 15 minutes after start time
-        context = new ShowtimeValidationContext(movie, movieVersion, cinema, auditorium, startTime, startTime.plusSeconds(15 * 60), null);
-        
+    void validateForScheduling_invalidDuration_shouldThrowException() {
+        Integer[] invalidDurations = {null, 0, -1};
+        for (Integer dur : invalidDurations) {
+            movie.setDurationMinutes(dur);
+            ShowtimeValidationContext ctx = new ShowtimeValidationContext(movie, movieVersion, cinema, auditorium, startTime, startTime.plusSeconds(1800), null);
+            BusinessException ex = assertThrows(BusinessException.class, 
+                    () -> showtimeValidationService.validateScheduling(ctx));
+            assertEquals(ErrorCode.INVALID_MOVIE_DURATION, ex.getErrorCode());
+        }
+    }
+
+    @Test
+    void validateForScheduling_validDuration_shouldPass() {
+        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(List.of(validOpHour));
+        when(cinemaClosureRepository.findOverlappingClosures(eq(cinema.getId()), any(), any())).thenReturn(Collections.emptyList());
+        when(auditoriumMaintenanceRepository.existsOverlap(eq(auditorium.getId()), any(), any(), any())).thenReturn(false);
+        when(showtimeRepository.findPotentialOverlaps(eq(auditorium.getId()), any(), any())).thenReturn(Collections.emptyList());
+
+        Integer[] validDurations = {1, 29, 30, 138};
+        for (Integer dur : validDurations) {
+            movie.setDurationMinutes(dur);
+            ShowtimeValidationContext ctx = new ShowtimeValidationContext(movie, movieVersion, cinema, auditorium, startTime, startTime.plusSeconds(1800), null);
+            assertDoesNotThrow(() -> showtimeValidationService.validateScheduling(ctx));
+        }
+    }
+
+    @Test
+    void validateForScheduling_missingOperatingHours_shouldThrowException() {
+        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(Collections.emptyList());
         BusinessException ex = assertThrows(BusinessException.class, 
                 () -> showtimeValidationService.validateScheduling(context));
-        assertEquals(ErrorCode.INVALID_MOVIE_DURATION, ex.getErrorCode());
+        assertEquals(ErrorCode.CINEMA_OPERATING_HOURS_NOT_CONFIGURED, ex.getErrorCode());
     }
 
     @Test
     void validateForScheduling_outsideOperatingHours_shouldThrowException() {
-        CinemaOperatingHour opHour = new CinemaOperatingHour();
-        opHour.setDayOfWeek(startTime.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).getDayOfWeek().getValue());
-        opHour.setOpenTime(LocalTime.of(12, 0)); // opens at 12
-        opHour.setCloseTime(LocalTime.of(22, 0));
-        opHour.setIsClosed(false);
-
-        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(List.of(opHour));
-
-        // Start time is 10:00, which is before 12:00
+        validOpHour.setOpenTime(LocalTime.of(12, 0));
+        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(List.of(validOpHour));
         BusinessException ex = assertThrows(BusinessException.class, 
                 () -> showtimeValidationService.validateScheduling(context));
         assertEquals(ErrorCode.SHOWTIME_OUTSIDE_OPERATING_HOURS, ex.getErrorCode());
     }
 
     @Test
+    void validateForScheduling_overnightOperatingHours_shouldPass() {
+        // Monday 08:00 to 02:00
+        CinemaOperatingHour mondayOpHour = new CinemaOperatingHour();
+        mondayOpHour.setDayOfWeek(1); // Monday
+        mondayOpHour.setOpenTime(LocalTime.of(8, 0));
+        mondayOpHour.setCloseTime(LocalTime.of(2, 0));
+        mondayOpHour.setIsClosed(false);
+
+        // Showtime on Tuesday 01:00 AM
+        ZonedDateTime startZdt = ZonedDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"))
+                .with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.TUESDAY))
+                .withHour(1).withMinute(0).withSecond(0).withNano(0);
+        
+        movie.setDurationMinutes(30); // Ends at 01:30 AM
+        ShowtimeValidationContext ctx = new ShowtimeValidationContext(movie, movieVersion, cinema, auditorium, startZdt.toInstant(), startZdt.toInstant().plusSeconds(1800), null);
+        
+        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(List.of(mondayOpHour));
+        when(cinemaClosureRepository.findOverlappingClosures(eq(cinema.getId()), any(), any())).thenReturn(Collections.emptyList());
+        when(auditoriumMaintenanceRepository.existsOverlap(eq(auditorium.getId()), any(), any(), any())).thenReturn(false);
+        when(showtimeRepository.findPotentialOverlaps(eq(auditorium.getId()), any(), any())).thenReturn(Collections.emptyList());
+
+        assertDoesNotThrow(() -> showtimeValidationService.validateScheduling(ctx));
+    }
+
+    @Test
     void validateForScheduling_overlapsWithOtherShowtime_shouldThrowException() {
-        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(Collections.emptyList());
+        when(cinemaOperatingHourRepository.findByCinemaId(cinema.getId())).thenReturn(List.of(validOpHour));
         when(cinemaClosureRepository.findOverlappingClosures(eq(cinema.getId()), any(), any())).thenReturn(Collections.emptyList());
         when(auditoriumMaintenanceRepository.existsOverlap(eq(auditorium.getId()), any(), any(), any())).thenReturn(false);
         

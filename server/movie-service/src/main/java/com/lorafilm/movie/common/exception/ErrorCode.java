@@ -80,6 +80,7 @@ public enum ErrorCode {
     // --- New Validation Error Codes ---
     SHOWTIME_OUTSIDE_RELEASE_WINDOW("Showtime outside release window", 409),
     SHOWTIME_OUTSIDE_OPERATING_HOURS("Showtime outside operating hours", 409),
+    CINEMA_OPERATING_HOURS_NOT_CONFIGURED("Cinema operating hours are not configured for the selected day", 400),
     SHOWTIME_OVERLAPS_CINEMA_CLOSURE("Showtime overlaps cinema closure", 409),
     SHOWTIME_OVERLAPS_AUDITORIUM_MAINTENANCE("Showtime overlaps auditorium maintenance", 409),
     SHOWTIME_OVERLAP("Showtime overlap", 409);
