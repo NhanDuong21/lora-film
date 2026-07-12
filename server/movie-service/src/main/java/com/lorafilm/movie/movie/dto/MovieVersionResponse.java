@@ -1,56 +1,33 @@
-package com.lorafilm.movie.movie.domain.entity;
+package com.lorafilm.movie.movie.dto;
 
-import com.lorafilm.movie.common.audit.BaseAuditableEntity;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.movie.domain.enums.MovieFormat;
-import jakarta.persistence.*;
+import java.time.Instant;
 
-@Entity
-@Table(name = "movie_versions", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_movie_version_unique", columnNames = {"movie_id", "format", "audio_language", "subtitle_language", "dub_language"})
-})
-public class MovieVersion extends BaseAuditableEntity {
+public class MovieVersionResponse {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(name = "public_id", updatable = false, unique = true, nullable = false, columnDefinition = "CHAR(36)")
     private String publicId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "movie_id", nullable = false)
-    private Movie movie;
-
-    @Column(name = "version_name", nullable = false)
     private String versionName;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "format", nullable = false)
     private MovieFormat format;
-
-    @Column(name = "audio_language", nullable = false)
     private String audioLanguage;
-
-    @Column(name = "subtitle_language")
     private String subtitleLanguage;
-
-    @Column(name = "dub_language")
     private String dubLanguage;
+    private ActiveStatus status;
+    private Instant createdAt;
+    private Instant updatedAt;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private ActiveStatus status = ActiveStatus.ACTIVE;
+    public MovieVersionResponse() {}
 
-    public MovieVersion() {
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
+    public MovieVersionResponse(String publicId, String versionName, MovieFormat format, String audioLanguage, String subtitleLanguage, String dubLanguage, ActiveStatus status, Instant createdAt, Instant updatedAt) {
+        this.publicId = publicId;
+        this.versionName = versionName;
+        this.format = format;
+        this.audioLanguage = audioLanguage;
+        this.subtitleLanguage = subtitleLanguage;
+        this.dubLanguage = dubLanguage;
+        this.status = status;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
     }
 
     public String getPublicId() {
@@ -59,14 +36,6 @@ public class MovieVersion extends BaseAuditableEntity {
 
     public void setPublicId(String publicId) {
         this.publicId = publicId;
-    }
-
-    public Movie getMovie() {
-        return movie;
-    }
-
-    public void setMovie(Movie movie) {
-        this.movie = movie;
     }
 
     public String getVersionName() {
@@ -115,5 +84,21 @@ public class MovieVersion extends BaseAuditableEntity {
 
     public void setStatus(ActiveStatus status) {
         this.status = status;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

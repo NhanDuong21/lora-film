@@ -11,6 +11,12 @@ public enum ErrorCode {
     // --- Movie Module ---
     MOVIE_NOT_FOUND("Movie not found", 404),
     MOVIE_VERSION_NOT_FOUND("Movie version not found", 404),
+    MOVIE_VERSION_DUPLICATED("Movie version already exists", 400),
+    MOVIE_PRIMARY_MEDIA_INVALID("Only POSTER and BANNER can be set as primary", 400),
+    MOVIE_PRIMARY_POSTER_REQUIRED("Active primary poster is required to publish", 400),
+    MOVIE_ACTIVE_VERSION_REQUIRED("Active version is required to publish", 400),
+    MOVIE_PUBLISH_VALIDATION_FAILED("Movie publish validation failed", 400),
+    MOVIE_MEDIA_NOT_FOUND("Movie media not found", 404),
 
     // --- Cinema & Auditorium Module ---
     CINEMA_NOT_FOUND("Cinema not found", 404),
