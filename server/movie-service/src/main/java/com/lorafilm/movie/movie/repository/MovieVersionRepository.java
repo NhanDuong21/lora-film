@@ -1,12 +1,13 @@
 package com.lorafilm.movie.movie.repository;
 
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieFormat;
-import org.springframework.data.jpa.repository.JpaRepository;
-
-import java.util.List;
-import java.util.Optional;
 
 public interface MovieVersionRepository extends JpaRepository<MovieVersion, Long> {
     Optional<MovieVersion> findByPublicIdAndDeletedAtIsNull(String publicId);

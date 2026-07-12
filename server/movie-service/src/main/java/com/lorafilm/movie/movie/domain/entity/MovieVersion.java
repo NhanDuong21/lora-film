@@ -15,7 +15,7 @@ public class MovieVersion extends BaseAuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", updatable = false, unique = true, nullable = false)
+    @Column(name = "public_id", updatable = false, unique = true, nullable = false, columnDefinition = "CHAR(36)")
     private String publicId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -42,7 +42,8 @@ public class MovieVersion extends BaseAuditableEntity {
     @Column(name = "status", nullable = false)
     private ActiveStatus status = ActiveStatus.ACTIVE;
 
-    public MovieVersion() {}
+    public MovieVersion() {
+    }
 
     public Long getId() {
         return id;

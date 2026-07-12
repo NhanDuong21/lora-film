@@ -5,5 +5,7 @@ public enum MovieStatus {
     UPCOMING,
     NOW_SHOWING,
     ENDED,
-    INACTIVE
+    INACTIVE;
+
+  
 }
