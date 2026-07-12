@@ -9,6 +9,8 @@ import java.util.List;
 public interface MovieVersionService {
     MovieVersionResponse createVersion(String moviePublicId, CreateMovieVersionRequest request);
     MovieVersionResponse updateVersion(String versionPublicId, UpdateMovieVersionRequest request);
+    MovieVersionResponse getVersion(String versionPublicId);
+    void deleteVersion(String versionPublicId);
     List<MovieVersionResponse> getActiveVersionsByMovie(String moviePublicIdOrSlug);
     List<MovieVersionResponse> getAllVersionsByMovie(String moviePublicId);
 }

@@ -10,6 +10,7 @@ import com.lorafilm.movie.movie.dto.MovieVersionResponse;
 import com.lorafilm.movie.movie.dto.UpdateMovieVersionRequest;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.common.security.CurrentUserProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,10 +24,14 @@ public class MovieVersionServiceImpl implements MovieVersionService {
 
     private final MovieVersionRepository movieVersionRepository;
     private final MovieRepository movieRepository;
+    private final CurrentUserProvider currentUserProvider;
 
-    public MovieVersionServiceImpl(MovieVersionRepository movieVersionRepository, MovieRepository movieRepository) {
+    public MovieVersionServiceImpl(MovieVersionRepository movieVersionRepository,
+                                   MovieRepository movieRepository,
+                                   CurrentUserProvider currentUserProvider) {
         this.movieVersionRepository = movieVersionRepository;
         this.movieRepository = movieRepository;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Override
@@ -139,6 +144,24 @@ public class MovieVersionServiceImpl implements MovieVersionService {
             return null;
         }
         return trimmed.toUpperCase();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MovieVersionResponse getVersion(String versionPublicId) {
+        MovieVersion version = movieVersionRepository.findByPublicIdAndDeletedAtIsNull(versionPublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_VERSION_NOT_FOUND, ErrorCode.MOVIE_VERSION_NOT_FOUND.getMessage()));
+        return mapToResponse(version);
+    }
+
+    @Override
+    @Transactional
+    public void deleteVersion(String versionPublicId) {
+        MovieVersion version = movieVersionRepository.findByPublicIdAndDeletedAtIsNull(versionPublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_VERSION_NOT_FOUND, ErrorCode.MOVIE_VERSION_NOT_FOUND.getMessage()));
+
+        version.performSoftDelete(currentUserProvider.getCurrentUserId());
+        movieVersionRepository.save(version);
     }
 
     private MovieVersionResponse mapToResponse(MovieVersion version) {

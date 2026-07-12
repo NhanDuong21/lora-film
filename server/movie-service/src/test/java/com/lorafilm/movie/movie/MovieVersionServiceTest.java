@@ -10,6 +10,7 @@ import com.lorafilm.movie.movie.dto.CreateMovieVersionRequest;
 import com.lorafilm.movie.movie.dto.MovieVersionResponse;
 import com.lorafilm.movie.movie.dto.UpdateMovieVersionRequest;
 import com.lorafilm.movie.movie.repository.MovieRepository;
+import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.movie.service.MovieVersionServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,9 @@ class MovieVersionServiceTest {
 
     @Mock
     private MovieRepository movieRepository;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private MovieVersionServiceImpl movieVersionService;
@@ -220,5 +224,52 @@ class MovieVersionServiceTest {
 
         assertEquals(ErrorCode.MOVIE_NOT_FOUND, exception.getErrorCode());
         verify(movieVersionRepository, never()).findByMovieIdAndDeletedAtIsNull(anyLong());
+    }
+
+    @Test
+    void deleteVersion_Success() {
+        when(movieVersionRepository.findByPublicIdAndDeletedAtIsNull("version-uuid")).thenReturn(Optional.of(sampleVersion));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(42L);
+
+        movieVersionService.deleteVersion("version-uuid");
+
+        assertNotNull(sampleVersion.getDeletedAt());
+        assertEquals(42L, sampleVersion.getDeletedBy());
+
+        verify(movieVersionRepository, times(1)).save(sampleVersion);
+    }
+
+    @Test
+    void deleteVersion_VersionNotFound() {
+        when(movieVersionRepository.findByPublicIdAndDeletedAtIsNull("unknown-uuid")).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                movieVersionService.deleteVersion("unknown-uuid")
+        );
+
+        assertEquals(ErrorCode.MOVIE_VERSION_NOT_FOUND, exception.getErrorCode());
+        verify(movieVersionRepository, never()).save(any());
+    }
+
+    @Test
+    void getVersion_Success() {
+        when(movieVersionRepository.findByPublicIdAndDeletedAtIsNull("version-uuid")).thenReturn(Optional.of(sampleVersion));
+
+        MovieVersionResponse response = movieVersionService.getVersion("version-uuid");
+
+        assertNotNull(response);
+        assertEquals("version-uuid", response.getPublicId());
+        assertEquals("2D Vietsub", response.getVersionName());
+    }
+
+    @Test
+    void getVersion_NotFound() {
+        when(movieVersionRepository.findByPublicIdAndDeletedAtIsNull("unknown-uuid")).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                movieVersionService.getVersion("unknown-uuid")
+        );
+
+        assertEquals(ErrorCode.MOVIE_VERSION_NOT_FOUND, exception.getErrorCode());
     }
 }

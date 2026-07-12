@@ -47,9 +47,21 @@ public class MovieVersionController {
         return ApiResponse.ok(response);
     }
 
+    @GetMapping("/api/admin/movie-versions/{versionId}")
+    public ApiResponse<MovieVersionResponse> getVersion(@PathVariable("versionId") String versionId) {
+        MovieVersionResponse response = movieVersionService.getVersion(versionId);
+        return ApiResponse.ok(response);
+    }
+
     @GetMapping("/api/admin/movies/{movieId}/versions")
     public ApiResponse<List<MovieVersionResponse>> getAllVersions(@PathVariable("movieId") String movieId) {
         List<MovieVersionResponse> versions = movieVersionService.getAllVersionsByMovie(movieId);
         return ApiResponse.ok(versions);
+    }
+
+    @DeleteMapping("/api/admin/movie-versions/{versionId}")
+    public ApiResponse<Void> deleteVersion(@PathVariable("versionId") String versionId) {
+        movieVersionService.deleteVersion(versionId);
+        return ApiResponse.ok("Movie version deleted successfully");
     }
 }

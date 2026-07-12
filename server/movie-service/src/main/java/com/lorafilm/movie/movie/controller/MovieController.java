@@ -8,12 +8,12 @@ import com.lorafilm.movie.movie.service.MovieService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import org.springframework.validation.annotation.Validated;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 
 @RestController
-@RequestMapping("/api/movies")
 @Validated
 public class MovieController {
 
@@ -23,7 +23,7 @@ public class MovieController {
         this.movieService = movieService;
     }
 
-    @GetMapping
+    @GetMapping("/api/movies")
     public ResponseEntity<ApiResponse<PageResponse<MovieDto>>> getMovies(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) @Min(1) Long genreId,
@@ -37,8 +37,15 @@ public class MovieController {
         return ResponseEntity.ok(ApiResponse.ok(movieService.getMovies(status, genreId, keyword, city, cinemaId, date, page, size, sort)));
     }
 
-    @GetMapping("/{movieSlug}")
-    public ResponseEntity<ApiResponse<MovieDetailDto>> getMovieDetail(@PathVariable String movieSlug) {
-        return ResponseEntity.ok(ApiResponse.ok(movieService.getMovieBySlug(movieSlug)));
+    @GetMapping("/api/movies/{movieId}")
+    public ResponseEntity<ApiResponse<MovieDetailDto>> getMovieDetail(@PathVariable("movieId") String movieId) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.getMovieByIdentifier(movieId)));
+    }
+
+    @PutMapping("/api/admin/movies/{movieId}/status")
+    public ResponseEntity<ApiResponse<MovieDto>> updateMovieStatus(
+            @PathVariable("movieId") String movieId,
+            @RequestParam("status") MovieStatus status) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.updateMovieStatus(movieId, status)));
     }
 }

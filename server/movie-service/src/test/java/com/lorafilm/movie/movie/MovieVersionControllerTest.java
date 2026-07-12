@@ -24,6 +24,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -207,5 +208,38 @@ class MovieVersionControllerTest {
                 .andExpect(jsonPath("$.data[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$.data[1].publicId").value("version-uuid-2"))
                 .andExpect(jsonPath("$.data[1].status").value("INACTIVE"));
+    }
+
+    @Test
+    void deleteVersion_Success() throws Exception {
+        doNothing().when(movieVersionService).deleteVersion("version-uuid");
+
+        mockMvc.perform(delete("/api/admin/movie-versions/{versionId}", "version-uuid"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Movie version deleted successfully"));
+    }
+
+    @Test
+    void getVersion_Success() throws Exception {
+        MovieVersionResponse version = new MovieVersionResponse(
+                "version-uuid",
+                "2D Vietsub",
+                MovieFormat.TWO_D,
+                "VI",
+                "EN",
+                "NONE",
+                ActiveStatus.ACTIVE,
+                Instant.now(),
+                Instant.now()
+        );
+
+        when(movieVersionService.getVersion("version-uuid")).thenReturn(version);
+
+        mockMvc.perform(get("/api/admin/movie-versions/{versionId}", "version-uuid"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.publicId").value("version-uuid"))
+                .andExpect(jsonPath("$.data.versionName").value("2D Vietsub"));
     }
 }

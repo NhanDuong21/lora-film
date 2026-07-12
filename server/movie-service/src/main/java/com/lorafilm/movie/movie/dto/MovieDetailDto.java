@@ -80,6 +80,7 @@ public class MovieDetailDto extends MovieDto {
         private String url;
         private String title;
         private Boolean isPrimary;
+        private Integer displayOrder;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -91,5 +92,7 @@ public class MovieDetailDto extends MovieDto {
         public void setTitle(String title) { this.title = title; }
         public Boolean getIsPrimary() { return isPrimary; }
         public void setIsPrimary(Boolean isPrimary) { this.isPrimary = isPrimary; }
+        public Integer getDisplayOrder() { return displayOrder; }
+        public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
     }
 }

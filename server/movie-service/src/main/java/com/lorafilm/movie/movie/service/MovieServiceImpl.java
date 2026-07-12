@@ -11,9 +11,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieMedia;
@@ -135,15 +138,60 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    public MovieDetailDto getMovieBySlug(String slug) {
-        Movie movie = movieRepository.findBySlugAndDeletedAtIsNull(slug)
-                .orElseThrow(() -> new ResourceNotFoundException("Movie not found"));
+    @Transactional(readOnly = true)
+    public MovieDetailDto getMovieByIdentifier(String identifier) {
+        Optional<Movie> movieOpt = movieRepository.findByPublicIdAndDeletedAtIsNull(identifier);
+        if (movieOpt.isEmpty()) {
+            movieOpt = movieRepository.findBySlugAndDeletedAtIsNull(identifier);
+        }
+        Movie movie = movieOpt.orElseThrow(() -> new ResourceNotFoundException("Movie not found"));
 
         if (movie.getStatus() == MovieStatus.DRAFT || movie.getStatus() == MovieStatus.INACTIVE) {
             throw new ResourceNotFoundException("Movie not found");
         }
 
         return mapToDetailDto(movie);
+    }
+
+    @Override
+    @Transactional
+    public MovieDto updateMovieStatus(String moviePublicId, MovieStatus targetStatus) {
+        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
+
+        if (movie.getStatus() == MovieStatus.DRAFT && 
+            (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING || targetStatus == MovieStatus.ENDED)) {
+            validatePublishConditions(movie.getId());
+        }
+
+        movie.setStatus(targetStatus);
+        Movie savedMovie = movieRepository.save(movie);
+
+        List<String> genres = movieGenreRepository.findByMovieId(savedMovie.getId())
+                .stream().map(mg -> mg.getGenre().getName()).collect(Collectors.toList());
+        Optional<MovieMedia> primaryPoster = movieMediaRepository
+                .findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                        savedMovie.getId(), MovieMediaType.POSTER, ActiveStatus.ACTIVE);
+        String posterUrl = primaryPoster.map(MovieMedia::getUrl).orElse(null);
+
+        return movieMapper.toDto(savedMovie, genres, posterUrl);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void validatePublishConditions(Long movieId) {
+        boolean hasActiveVersion = movieVersionRepository.existsActiveVersion(movieId);
+        boolean hasPrimaryPoster = movieMediaRepository.existsPrimaryPoster(movieId);
+
+        if (!hasActiveVersion && !hasPrimaryPoster) {
+            throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least one active version and one primary poster to publish");
+        }
+        if (!hasActiveVersion) {
+            throw new BusinessException(ErrorCode.MOVIE_ACTIVE_VERSION_REQUIRED, "Movie must have at least one active version to publish");
+        }
+        if (!hasPrimaryPoster) {
+            throw new BusinessException(ErrorCode.MOVIE_PRIMARY_POSTER_REQUIRED, "Movie must have at least one active primary poster to publish");
+        }
     }
 
     private MovieDto mapToDto(Movie movie) {
