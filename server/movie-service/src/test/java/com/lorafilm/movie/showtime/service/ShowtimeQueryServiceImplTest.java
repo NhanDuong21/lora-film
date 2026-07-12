@@ -1,44 +1,38 @@
 package com.lorafilm.movie.showtime.service;
 
-import com.lorafilm.movie.common.exception.BusinessException;
-import com.lorafilm.movie.common.exception.ErrorCode;
-import com.lorafilm.movie.common.exception.ResourceNotFoundException;
-import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
-import com.lorafilm.movie.seat.domain.entity.Seat;
-import com.lorafilm.movie.seat.domain.entity.SeatType;
-import com.lorafilm.movie.seat.domain.enums.SeatStatus;
-import com.lorafilm.movie.seat.repository.SeatRepository;
-import com.lorafilm.movie.seat.service.SeatService;
-import com.lorafilm.movie.showtime.domain.entity.Showtime;
-import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
-import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
-import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
-import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
-import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
-import com.lorafilm.movie.showtime.dto.ShowtimeDto;
-import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
-import com.lorafilm.movie.cinema.domain.entity.Cinema;
-import com.lorafilm.movie.movie.domain.entity.Movie;
-import com.lorafilm.movie.movie.domain.entity.MovieVersion;
-import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
+import com.lorafilm.movie.cinema.domain.entity.Cinema;
+import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.movie.domain.entity.Movie;
+import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+import com.lorafilm.movie.seat.domain.entity.Seat;
+import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatStatus;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.service.SeatService;
+import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.dto.ShowtimeDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
+import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ShowtimeQueryServiceImplTest {
@@ -56,6 +50,7 @@ class ShowtimeQueryServiceImplTest {
     private SeatRepository seatRepository;
 
     private SeatService seatService;
+    @Mock
     private ShowtimeMapper showtimeMapper;
 
     @InjectMocks
@@ -70,8 +65,8 @@ class ShowtimeQueryServiceImplTest {
     @BeforeEach
     void setUp() {
         seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(seatRepository, null, null);
-        showtimeMapper = new ShowtimeMapper();
-        showtimeService = new ShowtimeQueryServiceImpl(showtimeRepository, showtimePriceRepository, showtimeBlockedSeatRepository, seatService, showtimeMapper);
+        showtimeService = new ShowtimeQueryServiceImpl(showtimeRepository, showtimePriceRepository,
+                showtimeBlockedSeatRepository, seatService, showtimeMapper);
 
         Movie movie = new Movie();
         movie.setId(1L);
@@ -138,17 +133,19 @@ class ShowtimeQueryServiceImplTest {
         showtime.setStatus(ShowtimeStatus.DRAFT);
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> showtimeService.getShowtimeByPublicId("public-123"));
         assertEquals("Showtime not found or not open for booking", ex.getMessage());
     }
-    
+
     @Test
     void getShowtimeByPublicId_statusClosed_throwsException() {
         showtime.setPublicId("public-123");
         showtime.setStatus(ShowtimeStatus.CLOSED);
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> showtimeService.getShowtimeByPublicId("public-123"));
         assertEquals("Showtime not found or not open for booking", ex.getMessage());
     }
 
@@ -158,25 +155,28 @@ class ShowtimeQueryServiceImplTest {
         showtime.setStatus(ShowtimeStatus.CANCELLED);
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> showtimeService.getShowtimeByPublicId("public-123"));
         assertEquals("Showtime not found or not open for booking", ex.getMessage());
     }
-    
+
     @Test
     void getShowtimeByPublicId_statusFinished_throwsException() {
         showtime.setPublicId("public-123");
         showtime.setStatus(ShowtimeStatus.FINISHED);
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> showtimeService.getShowtimeByPublicId("public-123"));
         assertEquals("Showtime not found or not open for booking", ex.getMessage());
     }
-    
+
     @Test
     void getShowtimeByPublicId_notFound_throwsException() {
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.empty());
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> showtimeService.getShowtimeByPublicId("public-123"));
         assertEquals("Showtime not found", ex.getMessage());
     }
 
@@ -184,10 +184,12 @@ class ShowtimeQueryServiceImplTest {
     void getSeatLayout_validOpenForBooking_returnsLayout() {
         showtime.setPublicId("public-123");
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
-        
-        when(seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditorium.getId())).thenReturn(Arrays.asList(seat1, seat2));
+
+        when(seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditorium.getId()))
+                .thenReturn(Arrays.asList(seat1, seat2));
         when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.emptyList());
-        when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L, com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE)).thenReturn(Collections.emptyList());
+        when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L,
+                com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE)).thenReturn(Collections.emptyList());
 
         com.lorafilm.movie.showtime.dto.SeatLayoutDto layout = showtimeService.getSeatLayout("public-123");
         assertNotNull(layout);
@@ -201,15 +203,17 @@ class ShowtimeQueryServiceImplTest {
         showtime.setStatus(ShowtimeStatus.DRAFT);
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getSeatLayout("public-123"));
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> showtimeService.getSeatLayout("public-123"));
         assertEquals("Showtime not found or not open for booking", ex.getMessage());
     }
-    
+
     @Test
     void getSeatLayout_notFound_throwsException() {
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.empty());
 
-        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getSeatLayout("public-123"));
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> showtimeService.getSeatLayout("public-123"));
         assertEquals("Showtime not found", ex.getMessage());
     }
 

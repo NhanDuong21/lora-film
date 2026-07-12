@@ -14,7 +14,7 @@ public interface CinemaClosurePeriodRepository extends JpaRepository<CinemaClosu
 
     @Query("SELECT c FROM CinemaClosurePeriod c WHERE c.cinema.id = :cinemaId " +
            "AND c.status = 'ACTIVE' " +
-           "AND ((c.startTime <= :endTime AND c.endTime >= :startTime))")
+           "AND (c.startTime < :endTime AND c.endTime > :startTime)")
     List<CinemaClosurePeriod> findOverlappingClosures(
             @Param("cinemaId") Long cinemaId,
             @Param("startTime") Instant startTime,

@@ -21,7 +21,9 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DataJpaTest
+@org.springframework.context.annotation.Import(com.lorafilm.movie.common.config.AuditConfig.class)
+@DataJpaTest(properties = {"spring.autoconfigure.exclude=org.springframework.boot.testcontainers.service.connection.ServiceConnectionAutoConfiguration"})
+@org.springframework.test.context.ActiveProfiles("test")
 
 class ShowtimeRepositoryIntegrationTest {
 
@@ -52,12 +54,21 @@ class ShowtimeRepositoryIntegrationTest {
         cinema.setSlug("test-cinema");
         cinema.setTimezone("Asia/Ho_Chi_Minh");
         cinema.setStatus(com.lorafilm.movie.cinema.domain.enums.CinemaStatus.ACTIVE);
+        cinema.setAddress("123 Street");
+        cinema.setCity("HCM");
+        cinema.setDistrict("Q1");
+        cinema.setPublicId(java.util.UUID.randomUUID().toString());
         cinemaRepository.save(cinema);
 
         auditorium = new Auditorium();
         auditorium.setName("Screen 1");
         auditorium.setCinema(cinema);
         auditorium.setStatus(com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE);
+        auditorium.setCapacity(100);
+        auditorium.setPublicId(java.util.UUID.randomUUID().toString());
+        auditorium.setScreenType(com.lorafilm.movie.auditorium.domain.enums.ScreenType.STANDARD);
+        auditorium.setSoundType(com.lorafilm.movie.auditorium.domain.enums.SoundType.DOLBY_ATMOS);
+        auditorium.setCleaningBufferMinutes(15);
         auditoriumRepository.save(auditorium);
 
         movie = new Movie();
@@ -65,12 +76,23 @@ class ShowtimeRepositoryIntegrationTest {
         movie.setSlug("test-movie");
         movie.setStatus(com.lorafilm.movie.movie.domain.enums.MovieStatus.NOW_SHOWING);
         movie.setDurationMinutes(120);
+        movie.setAgeRating(com.lorafilm.movie.movie.domain.enums.AgeRating.T13);
+        movie.setReleaseDate(java.time.LocalDate.now());
+        movie.setEndDate(java.time.LocalDate.now().plusDays(30));
+        movie.setCountry("USA");
+        movie.setOriginalTitle("Test Movie Org");
+        movie.setPublicId(java.util.UUID.randomUUID().toString());
         movieRepository.save(movie);
 
         movieVersion = new MovieVersion();
         movieVersion.setMovie(movie);
         movieVersion.setVersionName("2D");
         movieVersion.setStatus(com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE);
+        movieVersion.setAudioLanguage("EN");
+        movieVersion.setSubtitleLanguage("VI");
+        movieVersion.setDubLanguage("VI");
+        movieVersion.setFormat(com.lorafilm.movie.movie.domain.enums.MovieFormat.TWO_D);
+        movieVersion.setPublicId(java.util.UUID.randomUUID().toString());
         movieVersionRepository.save(movieVersion);
     }
 
@@ -83,6 +105,7 @@ class ShowtimeRepositoryIntegrationTest {
         st.setStartTime(start);
         st.setEndTime(end);
         st.setStatus(ShowtimeStatus.DRAFT);
+        st.setPublicId(java.util.UUID.randomUUID().toString());
         return showtimeRepository.save(st);
     }
 

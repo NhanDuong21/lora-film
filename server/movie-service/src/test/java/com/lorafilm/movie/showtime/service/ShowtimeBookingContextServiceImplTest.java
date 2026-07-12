@@ -236,4 +236,20 @@ class ShowtimeBookingContextServiceImplTest {
         BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
         assertEquals(ErrorCode.SHOWTIME_PRICE_MISSING, ex.getErrorCode());
     }
+    @Test
+    void getBookingContext_seatBlocked_throwsException() {
+        BookingContextRequest request = new BookingContextRequest();
+        request.setSeatIds(Collections.singletonList(101L));
+
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
+        when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
+        
+        com.lorafilm.movie.showtime.domain.entity.ShowtimeBlockedSeat blockedSeat = new com.lorafilm.movie.showtime.domain.entity.ShowtimeBlockedSeat();
+        blockedSeat.setSeat(seat1);
+        when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L, com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE))
+            .thenReturn(Collections.singletonList(blockedSeat));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
+        assertEquals(ErrorCode.SEAT_BLOCKED_FOR_SHOWTIME, ex.getErrorCode());
+    }
 }

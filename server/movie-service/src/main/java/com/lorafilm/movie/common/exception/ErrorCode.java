@@ -67,6 +67,7 @@ public enum ErrorCode {
     EMPTY_SEAT_BULK_REQUEST("Empty seat bulk request", 400),
     SEAT_BELONGS_TO_ANOTHER_AUDITORIUM("Seat belongs to another auditorium", 400),
     SEAT_INACTIVE("Seat is not active", 400),
+    SEAT_BLOCKED_FOR_SHOWTIME("Seat is blocked for this showtime", 400),
 
     // --- Showtime Module ---
     SHOWTIME_NOT_FOUND("Showtime not found", 404),

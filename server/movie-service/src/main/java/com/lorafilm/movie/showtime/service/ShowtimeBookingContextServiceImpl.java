@@ -87,6 +87,13 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
             throw new ResourceNotFoundException("One or more seats not found");
         }
 
+        List<ShowtimePrice> prices = showtimePriceRepository.findByShowtimeId(showtime.getId());
+        Map<Long, ShowtimePrice> priceMap = prices.stream()
+                .collect(Collectors.toMap(p -> p.getSeatType().getId(), p -> p));
+
+        List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActiveStatus.ACTIVE);
+        Set<Long> blockedSeatIds = blockedSeats.stream().map(b -> b.getSeat().getId()).collect(Collectors.toSet());
+
         for (Seat seat : seats) {
             if (!seat.getAuditorium().getId().equals(showtime.getAuditorium().getId())) {
                 throw new BusinessException(ErrorCode.SEAT_BELONGS_TO_ANOTHER_AUDITORIUM, "Seat " + seat.getId() + " belongs to another auditorium");
@@ -94,11 +101,10 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
             if (seat.getStatus() != SeatStatus.ACTIVE) {
                 throw new BusinessException(ErrorCode.SEAT_INACTIVE, "Seat " + seat.getId() + " is inactive");
             }
+            if (blockedSeatIds.contains(seat.getId())) {
+                throw new BusinessException(ErrorCode.SEAT_BLOCKED_FOR_SHOWTIME, "Seat " + seat.getId() + " is blocked for this showtime");
+            }
         }
-
-        List<ShowtimePrice> prices = showtimePriceRepository.findByShowtimeId(showtime.getId());
-        Map<Long, ShowtimePrice> priceMap = prices.stream()
-                .collect(Collectors.toMap(p -> p.getSeatType().getId(), p -> p));
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         String currency = "VND";
