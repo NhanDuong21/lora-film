@@ -22,6 +22,13 @@ public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
     @Query("SELECT a FROM Auditorium a WHERE a.publicId = :publicId AND a.deletedAt IS NULL")
     Optional<Auditorium> findByPublicIdAndDeletedAtIsNullForUpdate(@Param("publicId") String publicId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.QueryHints(
+        @jakarta.persistence.QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000")
+    )
+    @Query("select a from Auditorium a where a.id = :auditoriumId and a.deletedAt is null")
+    Optional<Auditorium> findByIdForScheduling(@Param("auditoriumId") Long auditoriumId);
+
     boolean existsByCinemaIdAndNameIgnoreCaseAndDeletedAtIsNull(Long cinemaId, String name);
     
     @Query("SELECT CASE WHEN count(a) > 0 THEN true ELSE false END FROM Auditorium a WHERE a.cinema.id = :cinemaId AND lower(a.name) = lower(:name) AND a.id != :excludeId AND a.deletedAt IS NULL")

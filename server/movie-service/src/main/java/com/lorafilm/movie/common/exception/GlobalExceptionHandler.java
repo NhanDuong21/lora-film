@@ -179,6 +179,21 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail("DATA_INTEGRITY_VIOLATION", "Data integrity constraint violated"));
     }
 
+    @ExceptionHandler({
+            org.hibernate.exception.LockAcquisitionException.class,
+            jakarta.persistence.PessimisticLockException.class,
+            jakarta.persistence.LockTimeoutException.class,
+            org.springframework.dao.CannotAcquireLockException.class,
+            org.springframework.dao.PessimisticLockingFailureException.class,
+            org.springframework.dao.DeadlockLoserDataAccessException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleLockingExceptions(Exception ex) {
+        log.error("Locking Exception: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail(ErrorCode.SHOWTIME_SCHEDULING_CONFLICT.name(), ErrorCode.SHOWTIME_SCHEDULING_CONFLICT.getMessage()));
+    }
+
     @ExceptionHandler(org.springframework.dao.DataAccessException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataAccessException(org.springframework.dao.DataAccessException ex) {
         log.error("DataAccessException: {}", ex.getMessage());

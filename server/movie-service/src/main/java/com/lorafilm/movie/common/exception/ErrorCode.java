@@ -84,7 +84,10 @@ public enum ErrorCode {
     CINEMA_OPERATING_HOURS_NOT_CONFIGURED("Cinema operating hours are not configured for the selected day", 400),
     SHOWTIME_OVERLAPS_CINEMA_CLOSURE("Showtime overlaps cinema closure", 409),
     SHOWTIME_OVERLAPS_AUDITORIUM_MAINTENANCE("Showtime overlaps auditorium maintenance", 409),
-    SHOWTIME_OVERLAP("Showtime overlap", 409);
+    SHOWTIME_OVERLAP("Showtime overlap", 409),
+    SHOWTIME_SCHEDULE_NOT_EDITABLE("Only draft showtimes can be updated", 409),
+    SHOWTIME_SCHEDULING_CONFLICT("Showtime scheduling is being modified by another request", 409),
+    CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
 
     private final String message;
     private final int httpStatus;
