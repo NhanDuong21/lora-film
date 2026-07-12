@@ -28,8 +28,33 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.lorafilm.movie.common.security.SecurityConfig;
+import com.lorafilm.movie.common.security.JwtFilter;
+import com.lorafilm.movie.common.security.InternalTokenFilter;
+import com.lorafilm.movie.common.security.CustomAuthenticationEntryPoint;
+import com.lorafilm.movie.common.security.CustomAccessDeniedHandler;
+import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
 @WebMvcTest(AdminShowtimeController.class)
+@Import({AdminShowtimeControllerTest.TestSecurityConfig.class})
 class AdminShowtimeControllerTest {
+
+    @TestConfiguration
+    static class TestSecurityConfig {
+        @Bean
+        public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+            http.csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                    .anyRequest().permitAll()
+                );
+            return http.build();
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -45,6 +70,9 @@ class AdminShowtimeControllerTest {
 
     @MockBean
     private ShowtimeStatusHistoryService historyService;
+
+    @MockBean
+    private com.lorafilm.movie.common.security.JwtProvider jwtProvider;
 
     @Test
     @WithMockUser(authorities = "ROLE_ADMIN")
