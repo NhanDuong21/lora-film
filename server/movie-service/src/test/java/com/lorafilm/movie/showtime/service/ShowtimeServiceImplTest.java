@@ -121,6 +121,98 @@ class ShowtimeServiceImplTest {
     }
 
     @Test
+    void getShowtimeByPublicId_validOpenForBooking_returnsDto() {
+        showtime.setPublicId("public-123");
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
+        ShowtimeDto dto = new ShowtimeDto();
+        when(showtimeMapper.toDto(showtime)).thenReturn(dto);
+
+        ShowtimeDto result = showtimeService.getShowtimeByPublicId("public-123");
+        assertNotNull(result);
+    }
+
+    @Test
+    void getShowtimeByPublicId_statusDraft_throwsException() {
+        showtime.setPublicId("public-123");
+        showtime.setStatus(ShowtimeStatus.DRAFT);
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        assertEquals("Showtime not found or not open for booking", ex.getMessage());
+    }
+    
+    @Test
+    void getShowtimeByPublicId_statusClosed_throwsException() {
+        showtime.setPublicId("public-123");
+        showtime.setStatus(ShowtimeStatus.CLOSED);
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        assertEquals("Showtime not found or not open for booking", ex.getMessage());
+    }
+
+    @Test
+    void getShowtimeByPublicId_statusCancelled_throwsException() {
+        showtime.setPublicId("public-123");
+        showtime.setStatus(ShowtimeStatus.CANCELLED);
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        assertEquals("Showtime not found or not open for booking", ex.getMessage());
+    }
+    
+    @Test
+    void getShowtimeByPublicId_statusFinished_throwsException() {
+        showtime.setPublicId("public-123");
+        showtime.setStatus(ShowtimeStatus.FINISHED);
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        assertEquals("Showtime not found or not open for booking", ex.getMessage());
+    }
+    
+    @Test
+    void getShowtimeByPublicId_notFound_throwsException() {
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.empty());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getShowtimeByPublicId("public-123"));
+        assertEquals("Showtime not found", ex.getMessage());
+    }
+
+    @Test
+    void getSeatLayout_validOpenForBooking_returnsLayout() {
+        showtime.setPublicId("public-123");
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
+        
+        when(seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditorium.getId())).thenReturn(Arrays.asList(seat1, seat2));
+        when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.emptyList());
+        when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L, com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE)).thenReturn(Collections.emptyList());
+
+        com.lorafilm.movie.showtime.dto.SeatLayoutDto layout = showtimeService.getSeatLayout("public-123");
+        assertNotNull(layout);
+        assertEquals("public-123", layout.getShowtimePublicId());
+        assertEquals(2, layout.getSeats().size());
+    }
+
+    @Test
+    void getSeatLayout_statusDraft_throwsException() {
+        showtime.setPublicId("public-123");
+        showtime.setStatus(ShowtimeStatus.DRAFT);
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getSeatLayout("public-123"));
+        assertEquals("Showtime not found or not open for booking", ex.getMessage());
+    }
+    
+    @Test
+    void getSeatLayout_notFound_throwsException() {
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.empty());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () -> showtimeService.getSeatLayout("public-123"));
+        assertEquals("Showtime not found", ex.getMessage());
+    }
+
+    @Test
     void getBookingContext_valid_returnsContext() {
         BookingContextRequest request = new BookingContextRequest();
         request.setSeatIds(Arrays.asList(101L, 102L));
