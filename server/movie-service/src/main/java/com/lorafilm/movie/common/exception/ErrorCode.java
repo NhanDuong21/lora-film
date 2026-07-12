@@ -87,6 +87,12 @@ public enum ErrorCode {
     SHOWTIME_OVERLAP("Showtime overlap", 409),
     SHOWTIME_SCHEDULE_NOT_EDITABLE("Only draft showtimes can be updated", 409),
     SHOWTIME_SCHEDULING_CONFLICT("Showtime scheduling is being modified by another request", 409),
+    
+    // --- Showtime Lifecycle ---
+    SHOWTIME_CANCELLATION_REASON_REQUIRED("Cancellation reason is required", 400),
+    SHOWTIME_CANNOT_OPEN_AFTER_START("Cannot open showtime for booking after it has started", 400),
+    SHOWTIME_CANNOT_FINISH_BEFORE_END("Cannot finish showtime before it ends", 400),
+    
     CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
 
     private final String message;

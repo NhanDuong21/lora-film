@@ -1,0 +1,99 @@
+package com.lorafilm.movie.showtime.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
+import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
+import com.lorafilm.movie.showtime.dto.response.ShowtimeStatusHistoryResponse;
+import com.lorafilm.movie.showtime.service.ShowtimeCommandService;
+import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
+import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.Collections;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(AdminShowtimeController.class)
+class AdminShowtimeControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private ShowtimeCommandService showtimeCommandService;
+
+    @MockBean
+    private ShowtimeStatusTransitionService transitionService;
+
+    @MockBean
+    private ShowtimeStatusHistoryService historyService;
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void transitionStatus_Success() throws Exception {
+        UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
+        request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+        
+        AdminShowtimeResponse response = new AdminShowtimeResponse();
+        response.setShowtimePublicId("pub-123");
+        response.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING.name());
+
+        when(transitionService.transitionStatus(eq("pub-123"), any(UpdateShowtimeStatusRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(put("/api/admin/showtimes/pub-123/status")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("OPEN_FOR_BOOKING"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_CUSTOMER")
+    void transitionStatus_ForbiddenForCustomer() throws Exception {
+        UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
+        request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+
+        mockMvc.perform(put("/api/admin/showtimes/pub-123/status")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void getStatusHistory_Success() throws Exception {
+        ShowtimeStatusHistoryResponse history = new ShowtimeStatusHistoryResponse();
+        history.setNewStatus("DRAFT");
+
+        when(historyService.getShowtimeStatusHistory("pub-123"))
+                .thenReturn(List.of(history));
+
+        mockMvc.perform(get("/api/admin/showtimes/pub-123/status-history")
+                .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].newStatus").value("DRAFT"));
+    }
+}

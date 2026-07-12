@@ -6,7 +6,9 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "showtime_status_history")
+@Table(name = "showtime_status_history", indexes = {
+    @Index(name = "idx_showtime_history_order", columnList = "showtime_id, changed_at, id")
+})
 public class ShowtimeStatusHistory {
 
     @Id

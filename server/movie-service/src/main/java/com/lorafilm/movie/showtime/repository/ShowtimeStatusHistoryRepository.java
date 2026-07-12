@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface ShowtimeStatusHistoryRepository extends JpaRepository<ShowtimeStatusHistory, Long> {
     List<ShowtimeStatusHistory> findByShowtimeId(Long showtimeId);
+    List<ShowtimeStatusHistory> findByShowtimeIdOrderByChangedAtAscIdAsc(Long showtimeId);
 }
