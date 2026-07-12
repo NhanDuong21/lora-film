@@ -10,6 +10,8 @@ export default {
         'brand-dark': '#111111',
         'brand-gray': '#1A1A1D',
         'brand-orange': '#FF7A00',
+        'brand-coral': '#D88174',
+        'coral-500': '#D88174',
         'brand-yellow': '#EAB308',
       },
       fontFamily: {

@@ -62,9 +62,9 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
       }
 
       if (data) {
-        const content = data.content || [];
+        const content = data.data || data.content || [];
         setMovies(content);
-        setPage(data.page || 0);
+        setPage(data.pageNo !== undefined ? data.pageNo : data.page || 0);
         setTotalPages(data.totalPages || 0);
         setTotalElements(data.totalElements || 0);
         setFirst(data.first !== undefined ? data.first : true);
