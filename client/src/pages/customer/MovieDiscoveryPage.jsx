@@ -70,7 +70,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
 
         const moviesData = await getMovies(queryParams);
         if (moviesData) {
-          setMovies(moviesData.content || []);
+          setMovies(moviesData.data || moviesData.content || []);
           setTotalPages(moviesData.totalPages || 0);
         }
       } catch (error) {

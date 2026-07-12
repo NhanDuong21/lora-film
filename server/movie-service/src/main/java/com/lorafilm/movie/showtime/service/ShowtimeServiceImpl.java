@@ -43,6 +43,7 @@ import com.lorafilm.movie.showtime.repository.ShowtimeSpecification;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
 import com.lorafilm.movie.showtime.domain.entity.ShowtimeBlockedSeat;
 import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.common.enums.ActionStatus;
 
 @Service
 public class ShowtimeServiceImpl implements ShowtimeService {
@@ -126,7 +127,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
         List<Seat> seats = seatService.getSeatsByAuditoriumId(showtime.getAuditorium().getId());
         List<ShowtimePrice> prices = showtimePriceRepository.findByShowtimeId(showtime.getId());
-        List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActiveStatus.ACTIVE);
+        List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActionStatus.ACTIVE);
 
         Map<Long, ShowtimePrice> priceMap = prices.stream()
                 .collect(Collectors.toMap(p -> p.getSeatType().getId(), p -> p));

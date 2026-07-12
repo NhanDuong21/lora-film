@@ -47,3 +47,60 @@ export const getGenres = async () => {
   const response = await apiClient.get("/api/genres");
   return response.data.data;
 };
+
+/**
+ * Fetch cinemas list from the public API
+ * @param {string} [city] - Optional city name to filter
+ * @returns {Promise<Object>} The cinemas page response
+ */
+export const getCinemas = async (city) => {
+  const params = {};
+  if (city) params.city = city;
+  const response = await apiClient.get("/api/cinemas", { params });
+  return response.data.data;
+};
+
+/**
+ * Fetch cinema details by slug
+ * @param {string} slug - The cinema slug
+ * @returns {Promise<Object>} The cinema details
+ */
+export const getCinemaBySlug = async (slug) => {
+  const response = await apiClient.get(`/api/cinemas/${slug}`);
+  return response.data.data;
+};
+
+/**
+ * Fetch showtimes list from the public API
+ * @param {Object} params - Query filters (movieSlug, cinemaSlug, city, date)
+ * @returns {Promise<Array>} The list of showtimes
+ */
+export const getShowtimes = async ({ movieSlug, cinemaSlug, city, date }) => {
+  const params = {};
+  if (movieSlug) params.movieSlug = movieSlug;
+  if (cinemaSlug) params.cinemaSlug = cinemaSlug;
+  if (city) params.city = city;
+  if (date) params.date = date; // date as YYYY-MM-DD
+  const response = await apiClient.get("/api/showtimes", { params });
+  return response.data.data;
+};
+
+/**
+ * Fetch showtime details by public ID
+ * @param {string} showtimePublicId - The public ID of the showtime
+ * @returns {Promise<Object>} The showtime details
+ */
+export const getShowtimeDetail = async (showtimePublicId) => {
+  const response = await apiClient.get(`/api/showtimes/${showtimePublicId}`);
+  return response.data.data;
+};
+
+/**
+ * Fetch seat layout and pricing by showtime public ID
+ * @param {string} showtimePublicId - The public ID of the showtime
+ * @returns {Promise<Object>} The auditorium seat layout with price lists
+ */
+export const getSeatLayout = async (showtimePublicId) => {
+  const response = await apiClient.get(`/api/showtimes/${showtimePublicId}/seat-layout`);
+  return response.data.data;
+};
