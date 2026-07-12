@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class ShowtimeServiceImplTest {
+class ShowtimeQueryServiceImplTest {
 
     @Mock
     private ShowtimeRepository showtimeRepository;
@@ -58,7 +58,7 @@ class ShowtimeServiceImplTest {
     private ShowtimeMapper showtimeMapper;
 
     @InjectMocks
-    private ShowtimeServiceImpl showtimeService;
+    private ShowtimeQueryServiceImpl showtimeService;
 
     private Showtime showtime;
     private Auditorium auditorium;
@@ -70,7 +70,7 @@ class ShowtimeServiceImplTest {
     void setUp() {
         seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(seatRepository, null, null);
         showtimeMapper = new ShowtimeMapper();
-        showtimeService = new ShowtimeServiceImpl(showtimeRepository, showtimePriceRepository, showtimeBlockedSeatRepository, seatService, showtimeMapper);
+        showtimeService = new ShowtimeQueryServiceImpl(showtimeRepository, showtimePriceRepository, showtimeBlockedSeatRepository, seatService, showtimeMapper);
 
         Movie movie = new Movie();
         movie.setId(1L);
@@ -212,118 +212,4 @@ class ShowtimeServiceImplTest {
         assertEquals("Showtime not found", ex.getMessage());
     }
 
-    @Test
-    void getBookingContext_valid_returnsContext() {
-        BookingContextRequest request = new BookingContextRequest();
-        request.setSeatIds(Arrays.asList(101L, 102L));
-
-        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
-        when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Arrays.asList(seat1, seat2));
-
-        ShowtimePrice price = new ShowtimePrice();
-        price.setSeatType(seatTypeStandard);
-        price.setPrice(new BigDecimal("100000"));
-        price.setCurrency("VND");
-
-        when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.singletonList(price));
-
-        BookingContextResponse response = showtimeService.getBookingContext(10L, request);
-
-        assertNotNull(response);
-        assertNotNull(response.getShowtime());
-        assertEquals(10L, response.getShowtime().getId());
-        assertEquals(2, response.getSelectedSeats().size());
-        assertNotNull(response.getPricing());
-        assertEquals(new BigDecimal("200000"), response.getPricing().getTotalAmount());
-        assertEquals("VND", response.getPricing().getCurrency());
-        assertNotNull(response.getBookingExpiredAt());
-    }
-
-    @Test
-    void getBookingContext_showtimeNotFound_throwsException() {
-        BookingContextRequest request = new BookingContextRequest();
-        request.setSeatIds(Collections.singletonList(101L));
-
-        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.empty());
-
-        assertThrows(ResourceNotFoundException.class, () -> showtimeService.getBookingContext(10L, request));
-    }
-
-    @Test
-    void getBookingContext_showtimeNotOpen_throwsException() {
-        showtime.setStatus(ShowtimeStatus.DRAFT);
-        BookingContextRequest request = new BookingContextRequest();
-        request.setSeatIds(Collections.singletonList(101L));
-
-        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
-
-        BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
-        assertEquals(ErrorCode.INVALID_SHOWTIME_STATUS_TRANSITION, ex.getErrorCode());
-    }
-
-    @Test
-    void getBookingContext_duplicateSeatIds_throwsException() {
-        BookingContextRequest request = new BookingContextRequest();
-        request.setSeatIds(Arrays.asList(101L, 101L));
-
-        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
-
-        BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
-        assertEquals(ErrorCode.VALIDATION_ERROR, ex.getErrorCode());
-        assertTrue(ex.getMessage().contains("Duplicate seat IDs"));
-    }
-
-    @Test
-    void getBookingContext_seatNotFound_throwsException() {
-        BookingContextRequest request = new BookingContextRequest();
-        request.setSeatIds(Arrays.asList(101L, 999L));
-
-        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
-        when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
-
-        assertThrows(ResourceNotFoundException.class, () -> showtimeService.getBookingContext(10L, request));
-    }
-
-    @Test
-    void getBookingContext_seatBelongsToAnotherAuditorium_throwsException() {
-        BookingContextRequest request = new BookingContextRequest();
-        request.setSeatIds(Collections.singletonList(101L));
-
-        Auditorium otherAuditorium = new Auditorium();
-        otherAuditorium.setId(2L);
-        seat1.setAuditorium(otherAuditorium);
-
-        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
-        when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
-
-        BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
-        assertEquals(ErrorCode.SEAT_BELONGS_TO_ANOTHER_AUDITORIUM, ex.getErrorCode());
-    }
-
-    @Test
-    void getBookingContext_seatInactive_throwsException() {
-        BookingContextRequest request = new BookingContextRequest();
-        request.setSeatIds(Collections.singletonList(101L));
-
-        seat1.setStatus(SeatStatus.MAINTENANCE);
-
-        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
-        when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
-
-        BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
-        assertEquals(ErrorCode.SEAT_INACTIVE, ex.getErrorCode());
-    }
-
-    @Test
-    void getBookingContext_missingPrice_throwsException() {
-        BookingContextRequest request = new BookingContextRequest();
-        request.setSeatIds(Collections.singletonList(101L));
-
-        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
-        when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds())).thenReturn(Collections.singletonList(seat1));
-        when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.emptyList());
-
-        BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
-        assertEquals(ErrorCode.SHOWTIME_PRICE_MISSING, ex.getErrorCode());
-    }
 }

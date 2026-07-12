@@ -8,7 +8,7 @@ import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
 import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
 import com.lorafilm.movie.showtime.dto.response.BookingContextShowtimeDto;
 import com.lorafilm.movie.showtime.dto.response.BookingContextPricingDto;
-import com.lorafilm.movie.showtime.service.ShowtimeService;
+import com.lorafilm.movie.showtime.service.ShowtimeBookingContextService;
 import com.lorafilm.movie.common.security.InternalTokenFilter;
 
 import org.junit.jupiter.api.Test;
@@ -52,7 +52,7 @@ class InternalShowtimeControllerTest {
     private ObjectMapper objectMapper;
 
     @MockBean
-    private ShowtimeService showtimeService;
+    private ShowtimeBookingContextService showtimeBookingContextService;
 
 
     // Since InternalTokenFilter reads this value from property, we might need to mock or set it.
@@ -74,7 +74,7 @@ class InternalShowtimeControllerTest {
         pricingDto.setTotalAmount(new java.math.BigDecimal("200000"));
         response.setPricing(pricingDto);
 
-        when(showtimeService.getBookingContext(eq(10L), any(BookingContextRequest.class))).thenReturn(response);
+        when(showtimeBookingContextService.getBookingContext(eq(10L), any(BookingContextRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/internal/showtimes/10/booking-context")
                 .header("X-Internal-Token", validToken)
