@@ -77,4 +77,63 @@ public class AdminMovieServiceTest {
         BusinessException exception = assertThrows(BusinessException.class, () -> adminMovieService.updateMovie("public-id", validRequest));
         assertEquals(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, exception.getErrorCode());
     }
+
+    @Test
+    void testCreateMovie_Success() {
+        Movie savedMovie = new Movie();
+        savedMovie.setId(1L);
+        savedMovie.setTitle("Test Movie");
+        savedMovie.setStatus(MovieStatus.DRAFT);
+        
+        when(movieRepository.save(any(Movie.class))).thenReturn(savedMovie);
+        com.lorafilm.movie.movie.dto.MovieDto dto = new com.lorafilm.movie.movie.dto.MovieDto();
+        dto.setTitle("Test Movie");
+        when(movieMapper.toDto(eq(savedMovie), any(), any())).thenReturn(dto);
+
+        com.lorafilm.movie.movie.dto.MovieDto response = adminMovieService.createMovie(validRequest);
+        
+        assertNotNull(response);
+        assertEquals("Test Movie", response.getTitle());
+    }
+
+    @Test
+    void testUpdateMovie_Success() {
+        validRequest.setTitle("Updated Title");
+        when(movieRepository.findByPublicIdAndDeletedAtIsNull("public-id")).thenReturn(Optional.of(existingMovie));
+        when(movieRepository.save(any(Movie.class))).thenReturn(existingMovie);
+        
+        com.lorafilm.movie.movie.dto.MovieDto dto = new com.lorafilm.movie.movie.dto.MovieDto();
+        dto.setTitle("Updated Title");
+        when(movieMapper.toDto(eq(existingMovie), any(), any())).thenReturn(dto);
+
+        com.lorafilm.movie.movie.dto.MovieDto response = adminMovieService.updateMovie("public-id", validRequest);
+        
+        assertNotNull(response);
+        assertEquals("Updated Title", response.getTitle());
+    }
+
+    @Test
+    void testAssignGenres_Success() {
+        com.lorafilm.movie.movie.domain.entity.Genre genre = new com.lorafilm.movie.movie.domain.entity.Genre();
+        genre.setId(1L);
+        
+        when(movieRepository.findByPublicIdAndDeletedAtIsNull("public-id")).thenReturn(Optional.of(existingMovie));
+        when(genreRepository.findByPublicIdInAndDeletedAtIsNull(any())).thenReturn(java.util.List.of(genre));
+        
+        assertDoesNotThrow(() -> adminMovieService.assignGenres("public-id", java.util.List.of("genre-1")));
+        
+        verify(movieGenreRepository).deleteByMovieId(1L);
+        verify(movieGenreRepository).save(any(com.lorafilm.movie.movie.domain.entity.MovieGenre.class));
+    }
+
+    @Test
+    void testAssignGenres_PublishedMovieEmptyGenres_ThrowsException() {
+        existingMovie.setStatus(MovieStatus.NOW_SHOWING);
+        when(movieRepository.findByPublicIdAndDeletedAtIsNull("public-id")).thenReturn(Optional.of(existingMovie));
+        
+        BusinessException exception = assertThrows(BusinessException.class, 
+            () -> adminMovieService.assignGenres("public-id", Collections.emptyList()));
+            
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
+    }
 }
