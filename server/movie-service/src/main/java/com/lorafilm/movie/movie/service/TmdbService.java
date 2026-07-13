@@ -84,7 +84,7 @@ public class TmdbService {
             List<String> genrePublicIds = new ArrayList<>();
             for (TmdbGenreDto tmdbGenre : tmdbMovie.getGenres()) {
                 String slug = generateSlug(tmdbGenre.getName());
-                Optional<Genre> existingGenre = genreRepository.findByActiveSlugAndDeletedAtIsNull(slug);
+                Optional<Genre> existingGenre = genreRepository.findBySlugAndDeletedAtIsNull(slug);
                 
                 if (existingGenre.isPresent()) {
                     genrePublicIds.add(existingGenre.get().getPublicId());
@@ -105,8 +105,9 @@ public class TmdbService {
     
     private String generateSlug(String input) {
         if (input == null) return "";
-        String normalized = Normalizer.normalize(input, Normalizer.Form.NFD);
-        String noAccents = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
-        return noAccents.toLowerCase().replaceAll("[^a-z0-9\\s-]", "").replaceAll("\\s+", "-").replaceAll("-+", "-");
+        String normalized = Normalizer.normalize(input.trim(), Normalizer.Form.NFD);
+        String noAccents = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                                   .replaceAll("đ", "d").replaceAll("Đ", "D");
+        return noAccents.toLowerCase().replaceAll("[^a-z0-9\\s-]", "").replaceAll("\\s+", "-").replaceAll("-+", "-").replaceAll("^-|-$", "");
     }
 }

@@ -62,7 +62,7 @@ public class TmdbServiceTest {
 
         Genre existingGenre = new Genre();
         existingGenre.setPublicId("public-genre-id");
-        when(genreRepository.findByActiveSlugAndDeletedAtIsNull("action")).thenReturn(Optional.of(existingGenre));
+        when(genreRepository.findBySlugAndDeletedAtIsNull(anyString())).thenReturn(Optional.of(existingGenre));
 
         tmdbService.approveTmdbMovie(1);
 

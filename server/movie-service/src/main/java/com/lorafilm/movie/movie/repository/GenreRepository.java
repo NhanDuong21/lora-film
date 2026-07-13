@@ -12,11 +12,11 @@ import java.util.Optional;
 @Repository
 public interface GenreRepository extends JpaRepository<Genre, Long> {
     Optional<Genre> findByPublicIdAndDeletedAtIsNull(String publicId);
-    boolean existsByActiveSlugAndDeletedAtIsNull(String activeSlug);
-    Optional<Genre> findByActiveSlugAndDeletedAtIsNull(String activeSlug);
+    boolean existsBySlugAndDeletedAtIsNull(String slug);
+    Optional<Genre> findBySlugAndDeletedAtIsNull(String slug);
     
-    @Query("SELECT g.activeSlug FROM Genre g WHERE g.activeSlug LIKE :slugPrefix% AND g.deletedAt IS NULL")
-    List<String> findActiveSlugsByPrefix(@Param("slugPrefix") String slugPrefix);
+    @Query("SELECT g.slug FROM Genre g WHERE g.slug LIKE :slugPrefix% AND g.deletedAt IS NULL")
+    List<String> findSlugsByPrefix(@Param("slugPrefix") String slugPrefix);
     
     List<Genre> findByPublicIdInAndDeletedAtIsNull(List<String> publicIds);
 }

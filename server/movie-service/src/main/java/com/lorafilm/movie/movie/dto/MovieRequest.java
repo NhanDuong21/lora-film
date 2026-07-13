@@ -25,11 +25,11 @@ public class MovieRequest {
 
     public MovieRequest() {}
     public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public void setTitle(String title) { this.title = title != null ? title.trim() : null; }
     public String getOriginalTitle() { return originalTitle; }
-    public void setOriginalTitle(String originalTitle) { this.originalTitle = originalTitle; }
+    public void setOriginalTitle(String originalTitle) { this.originalTitle = originalTitle != null ? originalTitle.trim() : null; }
     public String getSynopsis() { return synopsis; }
-    public void setSynopsis(String synopsis) { this. synopsis = synopsis; }
+    public void setSynopsis(String synopsis) { this.synopsis = synopsis != null ? synopsis.trim() : null; }
     public Integer getDurationMinutes() { return durationMinutes; }
     public void setDurationMinutes(Integer durationMinutes) { this.durationMinutes = durationMinutes; }
     public AgeRating getAgeRating() { return ageRating; }
@@ -39,7 +39,7 @@ public class MovieRequest {
     public LocalDate getEndDate() { return endDate; }
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
     public String getCountry() { return country; }
-    public void setCountry(String country) { this.country = country; }
+    public void setCountry(String country) { this.country = country != null ? country.trim() : null; }
     public MovieStatus getStatus() { return status; }
     public void setStatus(MovieStatus status) { this.status = status; }
 }

@@ -129,14 +129,16 @@ public class AdminMovieService {
 
     private String generateUniqueSlug(String title) {
         if (title == null) return "";
-        String normalized = Normalizer.normalize(title, Normalizer.Form.NFD);
+        String normalized = Normalizer.normalize(title.trim(), Normalizer.Form.NFD);
         String baseSlug = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                .replaceAll("đ", "d").replaceAll("Đ", "D")
                 .toLowerCase()
                 .replaceAll("[^a-z0-9\\s-]", "")
                 .replaceAll("\\s+", "-")
-                .replaceAll("-+", "-");
+                .replaceAll("-+", "-")
+                .replaceAll("^-|-$", "");
         
-        List<String> existingSlugs = movieRepository.findActiveSlugsByPrefix(baseSlug);
+        List<String> existingSlugs = movieRepository.findSlugsByPrefix(baseSlug);
         if (existingSlugs.isEmpty() || !existingSlugs.contains(baseSlug)) {
             return baseSlug;
         }

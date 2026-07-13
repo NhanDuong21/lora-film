@@ -17,12 +17,12 @@ public interface MovieRepository extends JpaRepository<Movie, Long>, JpaSpecific
     Optional<Movie> findByPublicIdAndDeletedAtIsNull(String publicId);
     Optional<Movie> findBySlugAndDeletedAtIsNull(String slug);
     
-    @Query("SELECT m FROM Movie m WHERE (m.publicId = :identifier OR m.activeSlug = :identifier) AND m.deletedAt IS NULL")
+    @Query("SELECT m FROM Movie m WHERE (m.publicId = :identifier OR m.slug = :identifier) AND m.deletedAt IS NULL")
     Optional<Movie> findByIdentifierAndDeletedAtIsNull(@Param("identifier") String identifier);
     
     Page<Movie> findByStatusAndDeletedAtIsNull(MovieStatus status, Pageable pageable);
     
-    @Query("SELECT m.activeSlug FROM Movie m WHERE m.activeSlug LIKE :slugPrefix% AND m.deletedAt IS NULL")
-    List<String> findActiveSlugsByPrefix(@Param("slugPrefix") String slugPrefix);
+    @Query("SELECT m.slug FROM Movie m WHERE m.slug LIKE :slugPrefix% AND m.deletedAt IS NULL")
+    List<String> findSlugsByPrefix(@Param("slugPrefix") String slugPrefix);
 }
 

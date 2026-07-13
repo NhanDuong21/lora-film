@@ -27,7 +27,7 @@ public class AdminGenreService {
     @Transactional
     public GenreResponse createGenre(GenreRequest request) {
         String baseSlug = generateSlug(request.getName());
-        if (genreRepository.existsByActiveSlugAndDeletedAtIsNull(baseSlug)) {
+        if (genreRepository.existsBySlugAndDeletedAtIsNull(baseSlug)) {
             throw new BusinessException(ErrorCode.GENRE_DUPLICATED, "Genre already exists.", null);
         }
 
@@ -49,7 +49,7 @@ public class AdminGenreService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Genre not found", null));
         
         String newSlug = generateSlug(request.getName());
-        if (!newSlug.equals(genre.getSlug()) && genreRepository.existsByActiveSlugAndDeletedAtIsNull(newSlug)) {
+        if (!newSlug.equals(genre.getSlug()) && genreRepository.existsBySlugAndDeletedAtIsNull(newSlug)) {
             throw new BusinessException(ErrorCode.GENRE_DUPLICATED, "Genre already exists.", null);
         }
 
@@ -65,8 +65,9 @@ public class AdminGenreService {
     
     private String generateSlug(String input) {
         if (input == null) return "";
-        String normalized = Normalizer.normalize(input, Normalizer.Form.NFD);
-        String noAccents = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
-        return noAccents.toLowerCase().replaceAll("[^a-z0-9\\s-]", "").replaceAll("\\s+", "-").replaceAll("-+", "-");
+        String normalized = Normalizer.normalize(input.trim(), Normalizer.Form.NFD);
+        String noAccents = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                                   .replaceAll("đ", "d").replaceAll("Đ", "D");
+        return noAccents.toLowerCase().replaceAll("[^a-z0-9\\s-]", "").replaceAll("\\s+", "-").replaceAll("-+", "-").replaceAll("^-|-$", "");
     }
 }
