@@ -147,12 +147,13 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                 const ratingMeta = getAgeRatingLabel(movie.ageRating);
                 return (
                   <div
-                    key={movie.id}
+                    key={movie.publicId || movie.id}
                     onClick={() => {
+                      const idToUse = movie.publicId || movie.id;
                       if (onSelectMovie) {
-                        onSelectMovie(movie.id);
+                        onSelectMovie(idToUse);
                       } else {
-                        navigate(`/movies/${movie.id}`);
+                        navigate(`/movies/${idToUse}`);
                       }
                     }}
                     className="w-full flex flex-col group cursor-pointer overflow-visible"
@@ -163,7 +164,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                       {/* Layer 1: The Background Frame */}
                       <div className="z-10 absolute inset-0 rounded-2xl overflow-hidden bg-zinc-900">
                         <img 
-                          src={movie.posterUrl || FALLBACK_POSTER} 
+                          src={movie.primaryPoster || movie.posterUrl || FALLBACK_POSTER} 
                           alt={movie.title}
                           loading="lazy"
                           className="w-full h-full object-cover rounded-2xl transition-transform duration-500 group-hover:scale-[1.02]" 
@@ -210,7 +211,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                             onClick={(e) => {
                               e.stopPropagation();
                               const defaultBooking = {
-                                movieId: movie.id,
+                                movieId: movie.publicId || movie.id,
                                 movieTitle: movie.title,
                                 cinema: 'Lora Nguyễn Du',
                                 time: '19:30',
