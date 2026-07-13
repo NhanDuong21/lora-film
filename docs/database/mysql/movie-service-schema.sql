@@ -547,3 +547,302 @@ CREATE TABLE showtime_blocked_seats (
     CONSTRAINT uk_showtime_blocked_seat UNIQUE (showtime_id, seat_id),
     INDEX idx_blocked_seats_showtime_status (showtime_id, status)
 );
+
+
+-- ============================================================
+-- 6.1. AUTO SHOWTIME SCHEDULING PREVIEW
+-- ============================================================
+
+CREATE TABLE showtime_schedule_previews (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    public_id CHAR(36) NOT NULL UNIQUE
+        COMMENT 'UUID dùng để expose preview qua Admin API',
+
+    cinema_id BIGINT NOT NULL
+        COMMENT 'Mỗi preview v1 chỉ thuộc một cinema',
+
+    schedule_from DATE NOT NULL,
+    schedule_to DATE NOT NULL,
+
+    timezone_snapshot VARCHAR(50) NOT NULL
+        COMMENT 'Snapshot timezone của cinema tại thời điểm generate preview',
+
+    strategy VARCHAR(30) NOT NULL
+        COMMENT 'BALANCED',
+
+    strategy_version VARCHAR(30) NOT NULL DEFAULT 'BALANCED_V1'
+        COMMENT 'Version thuật toán scoring để audit và tái hiện kết quả',
+
+    apply_mode VARCHAR(30) NOT NULL DEFAULT 'ALL_OR_NOTHING'
+        COMMENT 'Version đầu chỉ hỗ trợ ALL_OR_NOTHING',
+
+    status VARCHAR(30) NOT NULL DEFAULT 'GENERATING'
+        COMMENT 'GENERATING, PREVIEWED, APPLYING, APPLIED, EXPIRED, FAILED, CANCELLED',
+
+    slot_granularity_minutes INT NOT NULL DEFAULT 15
+        COMMENT 'Khoảng bước sinh candidate, ví dụ mỗi 15 phút',
+
+    total_candidate_count INT NOT NULL DEFAULT 0,
+    valid_candidate_count INT NOT NULL DEFAULT 0,
+    rejected_candidate_count INT NOT NULL DEFAULT 0,
+    selected_candidate_count INT NOT NULL DEFAULT 0,
+
+    generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+
+    generated_by BIGINT NOT NULL
+        COMMENT 'Logical account ID từ Auth/User Service, không tạo cross-service FK',
+
+    applied_at TIMESTAMP NULL,
+    applied_by BIGINT NULL
+        COMMENT 'Logical account ID của Admin thực hiện apply',
+
+    generate_idempotency_key VARCHAR(100) NOT NULL,
+    apply_idempotency_key VARCHAR(100) NULL,
+
+    request_fingerprint CHAR(64) NOT NULL
+        COMMENT 'SHA-256 của normalized generate request',
+
+    failure_reason VARCHAR(500) NULL,
+
+    version BIGINT NOT NULL DEFAULT 0
+        COMMENT 'Optimistic locking version',
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_schedule_preview_cinema
+        FOREIGN KEY (cinema_id)
+        REFERENCES cinemas(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT uk_schedule_preview_generate_idempotency
+        UNIQUE (generate_idempotency_key),
+
+    CONSTRAINT uk_schedule_preview_apply_idempotency
+        UNIQUE (apply_idempotency_key),
+
+    CONSTRAINT chk_schedule_preview_dates
+        CHECK (schedule_to >= schedule_from),
+
+    CONSTRAINT chk_schedule_preview_expiry
+        CHECK (expires_at > generated_at),
+
+    CONSTRAINT chk_schedule_preview_slot_granularity
+        CHECK (slot_granularity_minutes > 0),
+
+    CONSTRAINT chk_schedule_preview_counts
+        CHECK (
+            total_candidate_count >= 0
+            AND valid_candidate_count >= 0
+            AND rejected_candidate_count >= 0
+            AND selected_candidate_count >= 0
+            AND valid_candidate_count + rejected_candidate_count
+                = total_candidate_count
+            AND selected_candidate_count <= valid_candidate_count
+        ),
+
+    CONSTRAINT chk_schedule_preview_strategy
+        CHECK (
+            strategy IN ('BALANCED')
+        ),
+
+    CONSTRAINT chk_schedule_preview_apply_mode
+        CHECK (
+            apply_mode IN ('ALL_OR_NOTHING')
+        ),
+
+    CONSTRAINT chk_schedule_preview_status
+        CHECK (
+            status IN (
+                'GENERATING',
+                'PREVIEWED',
+                'APPLYING',
+                'APPLIED',
+                'EXPIRED',
+                'FAILED',
+                'CANCELLED'
+            )
+        ),
+
+    INDEX idx_schedule_preview_status_expiry (
+        status,
+        expires_at
+    ),
+
+    INDEX idx_schedule_preview_cinema_date (
+        cinema_id,
+        schedule_from,
+        schedule_to
+    ),
+
+    INDEX idx_schedule_preview_generated_by_time (
+        generated_by,
+        generated_at
+    ),
+
+    INDEX idx_schedule_preview_created_at (
+        created_at
+    )
+);
+
+
+CREATE TABLE showtime_schedule_preview_items (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    public_id CHAR(36) NOT NULL UNIQUE
+        COMMENT 'UUID dùng để thao tác item qua Admin API',
+
+    preview_id BIGINT NOT NULL,
+
+    movie_id BIGINT NOT NULL,
+    movie_version_id BIGINT NOT NULL,
+    cinema_id BIGINT NOT NULL,
+    auditorium_id BIGINT NOT NULL,
+
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP NOT NULL,
+
+    occupancy_end_time TIMESTAMP NOT NULL
+        COMMENT 'end_time cộng cleaning buffer tại thời điểm generate',
+
+    score DECIMAL(10, 3) NOT NULL DEFAULT 0,
+
+    score_breakdown_json JSON NULL
+        COMMENT 'Chi tiết các thành phần score để audit và explainability',
+
+    ranking_position INT NOT NULL DEFAULT 0,
+
+    validation_status VARCHAR(30) NOT NULL
+        COMMENT 'VALID, REJECTED',
+
+    rejection_code VARCHAR(100) NULL,
+    rejection_reason VARCHAR(500) NULL,
+
+    selected BOOLEAN NOT NULL DEFAULT FALSE,
+
+    selected_at TIMESTAMP NULL,
+    selected_by BIGINT NULL
+        COMMENT 'Logical account ID của Admin thay đổi selection',
+
+    apply_status VARCHAR(30) NOT NULL DEFAULT 'PENDING'
+        COMMENT 'PENDING, CREATED, CONFLICT, FAILED, SKIPPED',
+
+    created_showtime_id BIGINT NULL
+        COMMENT 'Showtime thật được tạo sau khi apply thành công',
+
+    apply_error_code VARCHAR(100) NULL,
+    apply_error_message VARCHAR(500) NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_schedule_preview_item_preview
+        FOREIGN KEY (preview_id)
+        REFERENCES showtime_schedule_previews(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_schedule_preview_item_movie
+        FOREIGN KEY (movie_id)
+        REFERENCES movies(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_schedule_preview_item_movie_version
+        FOREIGN KEY (movie_version_id)
+        REFERENCES movie_versions(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_schedule_preview_item_cinema
+        FOREIGN KEY (cinema_id)
+        REFERENCES cinemas(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_schedule_preview_item_auditorium
+        FOREIGN KEY (auditorium_id)
+        REFERENCES auditoriums(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_schedule_preview_item_created_showtime
+        FOREIGN KEY (created_showtime_id)
+        REFERENCES showtimes(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT uk_schedule_preview_item_slot
+        UNIQUE (
+            preview_id,
+            auditorium_id,
+            start_time
+        ),
+
+    CONSTRAINT chk_schedule_preview_item_time
+        CHECK (
+            end_time > start_time
+            AND occupancy_end_time >= end_time
+        ),
+
+    CONSTRAINT chk_schedule_preview_item_score
+        CHECK (score >= 0),
+
+    CONSTRAINT chk_schedule_preview_item_ranking
+        CHECK (ranking_position >= 0),
+
+    CONSTRAINT chk_schedule_preview_item_validation_status
+        CHECK (
+            validation_status IN (
+                'VALID',
+                'REJECTED'
+            )
+        ),
+
+    CONSTRAINT chk_schedule_preview_item_apply_status
+        CHECK (
+            apply_status IN (
+                'PENDING',
+                'CREATED',
+                'CONFLICT',
+                'FAILED',
+                'SKIPPED'
+            )
+        ),
+
+    CONSTRAINT chk_schedule_preview_item_selection
+        CHECK (
+            selected = FALSE
+            OR validation_status = 'VALID'
+        ),
+
+    INDEX idx_schedule_preview_items_preview_rank (
+        preview_id,
+        ranking_position,
+        id
+    ),
+
+    INDEX idx_schedule_preview_items_preview_selected (
+        preview_id,
+        selected,
+        validation_status
+    ),
+
+    INDEX idx_schedule_preview_items_apply_status (
+        preview_id,
+        apply_status
+    ),
+
+    INDEX idx_schedule_preview_items_auditorium_time (
+        auditorium_id,
+        start_time,
+        occupancy_end_time
+    ),
+
+    INDEX idx_schedule_preview_items_movie_version (
+        preview_id,
+        movie_version_id
+    ),
+
+    INDEX idx_schedule_preview_items_created_showtime (
+        created_showtime_id
+    )
+);
