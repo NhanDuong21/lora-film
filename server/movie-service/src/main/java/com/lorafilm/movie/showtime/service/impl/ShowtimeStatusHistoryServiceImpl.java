@@ -65,9 +65,10 @@ public class ShowtimeStatusHistoryServiceImpl implements ShowtimeStatusHistorySe
         return histories.stream().map(history -> {
             ShowtimeStatusHistoryResponse response = new ShowtimeStatusHistoryResponse();
             response.setPreviousStatus(history.getPreviousStatus() != null ? history.getPreviousStatus().name() : null);
-            response.setNewStatus(history.getNewStatus().name());
+            response.setNewStatus(history.getNewStatus() != null ? history.getNewStatus().name() : null);
             response.setReason(history.getReason());
             response.setChangedAt(history.getChangedAt());
+            response.setChangedBy(history.getChangedBy());
             return response;
         }).collect(Collectors.toList());
     }

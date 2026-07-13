@@ -8,6 +8,7 @@ public class ShowtimeStatusHistoryResponse {
     private String newStatus;
     private String reason;
     private Instant changedAt;
+    private Long changedBy;
 
     public ShowtimeStatusHistoryResponse() {}
 
@@ -41,5 +42,13 @@ public class ShowtimeStatusHistoryResponse {
 
     public void setChangedAt(Instant changedAt) {
         this.changedAt = changedAt;
+    }
+
+    public Long getChangedBy() {
+        return changedBy;
+    }
+
+    public void setChangedBy(Long changedBy) {
+        this.changedBy = changedBy;
     }
 }

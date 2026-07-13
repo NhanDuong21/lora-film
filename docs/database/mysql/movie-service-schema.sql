@@ -316,7 +316,6 @@ CREATE TABLE cinema_operating_hours (
     CONSTRAINT fk_operating_hours_cinema FOREIGN KEY (cinema_id) REFERENCES cinemas (id) ON DELETE CASCADE,
     CONSTRAINT uk_cinema_operating_day UNIQUE (cinema_id, day_of_week),
     CONSTRAINT chk_day_of_week CHECK (day_of_week BETWEEN 1 AND 7),
-    CONSTRAINT chk_operating_time CHECK (close_time > open_time),
     INDEX idx_operating_hours_cinema (cinema_id)
 );
 
