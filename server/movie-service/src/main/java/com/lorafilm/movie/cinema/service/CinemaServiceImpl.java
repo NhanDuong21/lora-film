@@ -8,19 +8,32 @@ import com.lorafilm.movie.cinema.dto.CinemaMapper;
 import com.lorafilm.movie.cinema.dto.CreateCinemaRequest;
 import com.lorafilm.movie.cinema.dto.UpdateCinemaRequest;
 import com.lorafilm.movie.cinema.dto.CinemaResponse;
+import com.lorafilm.movie.cinema.dto.CreateCinemaMediaRequest;
+import com.lorafilm.movie.cinema.dto.UpdateCinemaMediaRequest;
+import com.lorafilm.movie.cinema.dto.CinemaMediaResponse;
+import com.lorafilm.movie.cinema.dto.OperatingHourUpdateRequest;
+import com.lorafilm.movie.cinema.dto.OperatingHourResponse;
+import com.lorafilm.movie.cinema.dto.CreateCinemaClosurePeriodRequest;
+import com.lorafilm.movie.cinema.dto.CinemaClosurePeriodResponse;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.cinema.repository.CinemaSpecification;
 import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
 import com.lorafilm.movie.cinema.repository.CinemaMediaRepository;
+import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
 import com.lorafilm.movie.cinema.domain.entity.CinemaMedia;
+import com.lorafilm.movie.cinema.domain.entity.CinemaClosurePeriod;
 import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.common.security.CurrentUserProvider;
+import java.time.Instant;
+import java.time.LocalTime;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -36,17 +49,23 @@ public class CinemaServiceImpl implements CinemaService {
     private final CinemaRepository cinemaRepository;
     private final CinemaOperatingHourRepository cinemaOperatingHourRepository;
     private final CinemaMediaRepository cinemaMediaRepository;
+    private final CinemaClosurePeriodRepository cinemaClosurePeriodRepository;
+    private final CurrentUserProvider currentUserProvider;
     private final AuditoriumRepository auditoriumRepository;
     private final CinemaMapper cinemaMapper;
 
     public CinemaServiceImpl(CinemaRepository cinemaRepository,
                              CinemaOperatingHourRepository cinemaOperatingHourRepository,
                              CinemaMediaRepository cinemaMediaRepository,
+                             CinemaClosurePeriodRepository cinemaClosurePeriodRepository,
+                             CurrentUserProvider currentUserProvider,
                              AuditoriumRepository auditoriumRepository,
                              CinemaMapper cinemaMapper) {
         this.cinemaRepository = cinemaRepository;
         this.cinemaOperatingHourRepository = cinemaOperatingHourRepository;
         this.cinemaMediaRepository = cinemaMediaRepository;
+        this.cinemaClosurePeriodRepository = cinemaClosurePeriodRepository;
+        this.currentUserProvider = currentUserProvider;
         this.auditoriumRepository = auditoriumRepository;
         this.cinemaMapper = cinemaMapper;
     }
@@ -293,5 +312,203 @@ public class CinemaServiceImpl implements CinemaService {
         }).collect(Collectors.toList()));
 
         return detailDto;
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<CinemaDetailDto.CinemaMediaDto> getCinemaMedia(String cinemaPublicId) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        List<CinemaMedia> mediaList = cinemaMediaRepository.findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(cinema.getId(), ActiveStatus.ACTIVE);
+        return mediaList.stream().map(m -> {
+            CinemaDetailDto.CinemaMediaDto dto = new CinemaDetailDto.CinemaMediaDto();
+            dto.setPublicId(m.getPublicId());
+            dto.setMediaType(m.getMediaType().name());
+            dto.setUrl(m.getUrl());
+            dto.setTitle(m.getTitle());
+            dto.setIsPrimary(m.getIsPrimary());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<CinemaDetailDto.OperatingHourDto> getCinemaOperatingHours(String cinemaPublicId) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        List<CinemaOperatingHour> hours = cinemaOperatingHourRepository.findByCinemaIdOrderByDayOfWeekAsc(cinema.getId());
+        return hours.stream().map(h -> {
+            CinemaDetailDto.OperatingHourDto dto = new CinemaDetailDto.OperatingHourDto();
+            dto.setDayOfWeek(h.getDayOfWeek());
+            dto.setOpenTime(Boolean.TRUE.equals(h.getIsClosed()) ? null : (h.getOpenTime() != null ? h.getOpenTime().toString() : null));
+            dto.setCloseTime(Boolean.TRUE.equals(h.getIsClosed()) ? null : (h.getCloseTime() != null ? h.getCloseTime().toString() : null));
+            dto.setIsClosed(h.getIsClosed());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public CinemaMediaResponse addCinemaMedia(String cinemaPublicId, CreateCinemaMediaRequest request) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        if (Boolean.TRUE.equals(request.getIsPrimary())) {
+            List<CinemaMedia> existingPrimary = cinemaMediaRepository.findByCinemaIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                    cinema.getId(), request.getMediaType(), ActiveStatus.ACTIVE);
+            for (CinemaMedia m : existingPrimary) {
+                m.setIsPrimary(false);
+                cinemaMediaRepository.save(m);
+            }
+        }
+
+        CinemaMedia media = new CinemaMedia();
+        media.setPublicId(java.util.UUID.randomUUID().toString());
+        media.setCinema(cinema);
+        media.setMediaType(request.getMediaType());
+        media.setUrl(request.getUrl());
+        media.setTitle(request.getTitle());
+        media.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0);
+        media.setIsPrimary(Boolean.TRUE.equals(request.getIsPrimary()));
+        media.setStatus(ActiveStatus.ACTIVE);
+
+        CinemaMedia savedMedia = cinemaMediaRepository.save(media);
+        return cinemaMapper.toMediaResponse(savedMedia);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public CinemaMediaResponse updateCinemaMedia(String mediaPublicId, UpdateCinemaMediaRequest request) {
+        CinemaMedia media = cinemaMediaRepository.findByPublicIdAndDeletedAtIsNull(mediaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema media not found"));
+
+        if (Boolean.TRUE.equals(request.getIsPrimary()) && request.getStatus() == ActiveStatus.ACTIVE) {
+            List<CinemaMedia> existingPrimary = cinemaMediaRepository.findByCinemaIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                    media.getCinema().getId(), media.getMediaType(), ActiveStatus.ACTIVE);
+            for (CinemaMedia m : existingPrimary) {
+                if (!m.getId().equals(media.getId())) {
+                    m.setIsPrimary(false);
+                    cinemaMediaRepository.save(m);
+                }
+            }
+        }
+
+        media.setUrl(request.getUrl());
+        media.setTitle(request.getTitle());
+        media.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0);
+        media.setIsPrimary(Boolean.TRUE.equals(request.getIsPrimary()));
+        media.setStatus(request.getStatus());
+
+        CinemaMedia savedMedia = cinemaMediaRepository.save(media);
+        return cinemaMapper.toMediaResponse(savedMedia);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public List<OperatingHourResponse> updateOperatingHours(String cinemaPublicId, List<OperatingHourUpdateRequest> requests) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        if (requests == null || requests.size() != 7) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Must provide operating hours for exactly 7 days");
+        }
+
+        java.util.Set<Integer> days = new java.util.HashSet<>();
+        for (OperatingHourUpdateRequest req : requests) {
+            if (req.getDayOfWeek() < 1 || req.getDayOfWeek() > 7) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Day of week must be between 1 and 7");
+            }
+            if (!days.add(req.getDayOfWeek())) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Duplicate day of week: " + req.getDayOfWeek());
+            }
+            if (Boolean.FALSE.equals(req.getIsClosed())) {
+                if (req.getOpenTime() == null || req.getCloseTime() == null) {
+                    throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Open time and close time must not be null for open days");
+                }
+                if (!req.getOpenTime().isBefore(req.getCloseTime())) {
+                    throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Open time must be before close time");
+                }
+            }
+        }
+
+        Long userId = currentUserProvider.getCurrentUserId();
+        List<CinemaOperatingHour> existingHours = cinemaOperatingHourRepository.findByCinemaId(cinema.getId());
+        java.util.Map<Integer, CinemaOperatingHour> hoursMap = existingHours.stream()
+                .collect(Collectors.toMap(CinemaOperatingHour::getDayOfWeek, h -> h));
+
+        java.util.List<CinemaOperatingHour> toSave = new java.util.ArrayList<>();
+        for (OperatingHourUpdateRequest req : requests) {
+            CinemaOperatingHour hour = hoursMap.get(req.getDayOfWeek());
+            if (hour == null) {
+                hour = new CinemaOperatingHour();
+                hour.setCinema(cinema);
+                hour.setDayOfWeek(req.getDayOfWeek());
+                hour.setCreatedBy(userId);
+            }
+            hour.setOpenTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(0, 0) : req.getOpenTime());
+            hour.setCloseTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(23, 59) : req.getCloseTime());
+            hour.setIsClosed(req.getIsClosed());
+            hour.setUpdatedBy(userId);
+            toSave.add(hour);
+        }
+
+        List<CinemaOperatingHour> savedHours = cinemaOperatingHourRepository.saveAll(toSave);
+        return savedHours.stream()
+                .sorted(java.util.Comparator.comparing(CinemaOperatingHour::getDayOfWeek))
+                .map(cinemaMapper::toOperatingHourResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public CinemaClosurePeriodResponse createClosurePeriod(String cinemaPublicId, CreateCinemaClosurePeriodRequest request) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        if (!request.getEndTime().isAfter(request.getStartTime())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "End time must be after start time");
+        }
+        if (request.getStartTime().isBefore(Instant.now().minusSeconds(10))) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Start time must be in the future");
+        }
+
+        // Check overlapping active closures
+        List<CinemaClosurePeriod> overlapping = cinemaClosurePeriodRepository.findOverlappingClosures(
+                cinema.getId(), request.getStartTime(), request.getEndTime());
+        if (!overlapping.isEmpty()) {
+            throw new BusinessException(ErrorCode.CINEMA_CLOSURE_CONFLICT);
+        }
+
+        Long userId = currentUserProvider.getCurrentUserId();
+        CinemaClosurePeriod period = new CinemaClosurePeriod();
+        period.setCinema(cinema);
+        period.setStartTime(request.getStartTime());
+        period.setEndTime(request.getEndTime());
+        period.setReason(request.getReason());
+        period.setStatus(ActionStatus.ACTIVE);
+        period.setCreatedBy(userId);
+        period.setUpdatedBy(userId);
+
+        CinemaClosurePeriod savedPeriod = cinemaClosurePeriodRepository.save(period);
+        return cinemaMapper.toClosurePeriodResponse(savedPeriod);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public CinemaClosurePeriodResponse cancelClosurePeriod(Long closurePeriodId) {
+        CinemaClosurePeriod period = cinemaClosurePeriodRepository.findById(closurePeriodId)
+                .orElseThrow(() -> new ResourceNotFoundException("Closure period not found"));
+
+        if (period.getStatus() == ActionStatus.CANCELLED) {
+            throw new ResourceNotFoundException("Closure period not found or already cancelled");
+        }
+
+        Long userId = currentUserProvider.getCurrentUserId();
+        period.setStatus(ActionStatus.CANCELLED);
+        period.setUpdatedBy(userId);
+        CinemaClosurePeriod savedPeriod = cinemaClosurePeriodRepository.save(period);
+        return cinemaMapper.toClosurePeriodResponse(savedPeriod);
     }
 }

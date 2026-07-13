@@ -7,6 +7,7 @@ import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/cinemas")
@@ -31,5 +32,17 @@ public class CinemaController {
     @GetMapping("/{cinemaIdOrSlug}")
     public ResponseEntity<ApiResponse<CinemaDetailDto>> getCinemaDetail(@PathVariable String cinemaIdOrSlug) {
         return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaByIdentifier(cinemaIdOrSlug)));
+    }
+
+    @GetMapping("/{cinemaPublicId}/media")
+    public ResponseEntity<ApiResponse<List<CinemaDetailDto.CinemaMediaDto>>> getCinemaMedia(
+            @PathVariable String cinemaPublicId) {
+        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaMedia(cinemaPublicId)));
+    }
+
+    @GetMapping("/{cinemaPublicId}/operating-hours")
+    public ResponseEntity<ApiResponse<List<CinemaDetailDto.OperatingHourDto>>> getCinemaOperatingHours(
+            @PathVariable String cinemaPublicId) {
+        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaOperatingHours(cinemaPublicId)));
     }
 }

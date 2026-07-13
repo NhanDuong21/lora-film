@@ -12,6 +12,8 @@ import java.util.List;
 @Repository
 public interface CinemaClosurePeriodRepository extends JpaRepository<CinemaClosurePeriod, Long> {
 
+    List<CinemaClosurePeriod> findByCinemaId(Long cinemaId);
+
     @Query("SELECT c FROM CinemaClosurePeriod c WHERE c.cinema.id = :cinemaId " +
            "AND c.status = 'ACTIVE' " +
            "AND (c.startTime < :endTime AND c.endTime > :startTime)")

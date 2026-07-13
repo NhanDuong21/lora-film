@@ -2,10 +2,10 @@ package com.lorafilm.movie.cinema.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
-import com.lorafilm.movie.cinema.dto.CreateCinemaRequest;
-import com.lorafilm.movie.cinema.dto.UpdateCinemaRequest;
-import com.lorafilm.movie.cinema.dto.UpdateCinemaStatusRequest;
-import com.lorafilm.movie.cinema.dto.CinemaResponse;
+import com.lorafilm.movie.cinema.domain.enums.CinemaMediaType;
+import com.lorafilm.movie.cinema.dto.*;
+import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.cinema.service.CinemaService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,11 +16,15 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.ArrayList;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -143,5 +147,105 @@ class AdminCinemaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+    }
+
+    @Test
+    void addCinemaMedia_Success() throws Exception {
+        CreateCinemaMediaRequest request = new CreateCinemaMediaRequest();
+        request.setMediaType(CinemaMediaType.BANNER);
+        request.setUrl("http://example.com/banner.jpg");
+        request.setTitle("Banner Title");
+        request.setIsPrimary(true);
+
+        CinemaMediaResponse responseDto = new CinemaMediaResponse();
+        responseDto.setPublicId("media-uuid");
+        responseDto.setMediaType(CinemaMediaType.BANNER);
+        responseDto.setUrl(request.getUrl());
+        responseDto.setTitle(request.getTitle());
+        responseDto.setIsPrimary(true);
+
+        when(cinemaService.addCinemaMedia(eq("cinema-uuid"), any(CreateCinemaMediaRequest.class))).thenReturn(responseDto);
+
+        mockMvc.perform(post("/api/admin/cinemas/cinema-uuid/media")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.publicId").value("media-uuid"))
+                .andExpect(jsonPath("$.data.isPrimary").value(true));
+    }
+
+    @Test
+    void updateOperatingHours_Success() throws Exception {
+        List<OperatingHourUpdateRequest> requests = new ArrayList<>();
+        for (int i = 1; i <= 7; i++) {
+            OperatingHourUpdateRequest req = new OperatingHourUpdateRequest();
+            req.setDayOfWeek(i);
+            req.setIsClosed(false);
+            req.setOpenTime(LocalTime.of(8, 0));
+            req.setCloseTime(LocalTime.of(22, 0));
+            requests.add(req);
+        }
+
+        List<OperatingHourResponse> responses = new ArrayList<>();
+        for (int i = 1; i <= 7; i++) {
+            OperatingHourResponse resp = new OperatingHourResponse();
+            resp.setDayOfWeek(i);
+            resp.setIsClosed(false);
+            resp.setOpenTime(LocalTime.of(8, 0));
+            resp.setCloseTime(LocalTime.of(22, 0));
+            responses.add(resp);
+        }
+
+        when(cinemaService.updateOperatingHours(eq("cinema-uuid"), anyList())).thenReturn(responses);
+
+        mockMvc.perform(put("/api/admin/cinemas/cinema-uuid/operating-hours")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(requests)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(7));
+    }
+
+    @Test
+    void createClosurePeriod_Success() throws Exception {
+        CreateCinemaClosurePeriodRequest request = new CreateCinemaClosurePeriodRequest();
+        request.setStartTime(Instant.parse("2026-12-01T00:00:00Z"));
+        request.setEndTime(Instant.parse("2026-12-02T00:00:00Z"));
+        request.setReason("Renovation");
+
+        CinemaClosurePeriodResponse responseDto = new CinemaClosurePeriodResponse();
+        responseDto.setId(101L);
+        responseDto.setCinemaPublicId("cinema-uuid");
+        responseDto.setStartTime(request.getStartTime());
+        responseDto.setEndTime(request.getEndTime());
+        responseDto.setStatus(ActionStatus.ACTIVE);
+
+        when(cinemaService.createClosurePeriod(eq("cinema-uuid"), any(CreateCinemaClosurePeriodRequest.class))).thenReturn(responseDto);
+
+        mockMvc.perform(post("/api/admin/cinemas/cinema-uuid/closure-periods")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(101))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+    }
+
+    @Test
+    void cancelClosurePeriod_Success() throws Exception {
+        CinemaClosurePeriodResponse responseDto = new CinemaClosurePeriodResponse();
+        responseDto.setId(101L);
+        responseDto.setStatus(ActionStatus.CANCELLED);
+
+        when(cinemaService.cancelClosurePeriod(eq(101L))).thenReturn(responseDto);
+
+        mockMvc.perform(put("/api/admin/closure-periods/101/cancel")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(101))
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
     }
 }
