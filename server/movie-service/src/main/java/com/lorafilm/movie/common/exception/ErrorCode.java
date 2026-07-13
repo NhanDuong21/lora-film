@@ -10,6 +10,7 @@ public enum ErrorCode {
 
     // --- Movie Module ---
     MOVIE_NOT_FOUND("Movie not found", 404),
+    GENRE_DUPLICATED("Genre already exists", 409),
     MOVIE_VERSION_NOT_FOUND("Movie version not found", 404),
     MOVIE_VERSION_DUPLICATED("Movie version already exists", 400),
     MOVIE_PRIMARY_MEDIA_INVALID("Only POSTER and BANNER can be set as primary", 400),
