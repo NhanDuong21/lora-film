@@ -189,7 +189,7 @@ class ShowtimeQueryServiceImplTest {
                 .thenReturn(Arrays.asList(seat1, seat2));
         when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.emptyList());
         when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L,
-                com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE)).thenReturn(Collections.emptyList());
+                com.lorafilm.movie.common.enums.ActionStatus.ACTIVE)).thenReturn(Collections.emptyList());
 
         com.lorafilm.movie.showtime.dto.SeatLayoutDto layout = showtimeService.getSeatLayout("public-123");
         assertNotNull(layout);

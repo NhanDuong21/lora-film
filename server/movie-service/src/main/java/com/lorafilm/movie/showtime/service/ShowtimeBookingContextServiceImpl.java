@@ -1,21 +1,15 @@
 package com.lorafilm.movie.showtime.service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.time.OffsetDateTime;
 import java.util.stream.Collectors;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import com.lorafilm.movie.common.dto.PageResponse;
+import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
@@ -24,25 +18,21 @@ import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import com.lorafilm.movie.seat.service.SeatService;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.entity.ShowtimeBlockedSeat;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
-import com.lorafilm.movie.showtime.dto.SeatLayoutDto;
-import com.lorafilm.movie.showtime.dto.ShowtimeDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeAuditoriumDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeCinemaDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
+import com.lorafilm.movie.showtime.dto.ShowtimeMovieDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeMovieVersionDto;
 import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
+import com.lorafilm.movie.showtime.dto.response.BookingContextPricingDto;
 import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
 import com.lorafilm.movie.showtime.dto.response.BookingContextSeatDto;
 import com.lorafilm.movie.showtime.dto.response.BookingContextShowtimeDto;
-import com.lorafilm.movie.showtime.dto.response.BookingContextPricingDto;
-import com.lorafilm.movie.showtime.dto.ShowtimeMovieDto;
-import com.lorafilm.movie.showtime.dto.ShowtimeMovieVersionDto;
-import com.lorafilm.movie.showtime.dto.ShowtimeCinemaDto;
-import com.lorafilm.movie.showtime.dto.ShowtimeAuditoriumDto;
-import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
+import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimeSpecification;
-import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
-import com.lorafilm.movie.showtime.domain.entity.ShowtimeBlockedSeat;
-import com.lorafilm.movie.common.enums.ActiveStatus;
 
 @Service
 public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContextService {
@@ -91,7 +81,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         Map<Long, ShowtimePrice> priceMap = prices.stream()
                 .collect(Collectors.toMap(p -> p.getSeatType().getId(), p -> p));
 
-        List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActiveStatus.ACTIVE);
+        List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActionStatus.ACTIVE);
         Set<Long> blockedSeatIds = blockedSeats.stream().map(b -> b.getSeat().getId()).collect(Collectors.toSet());
 
         for (Seat seat : seats) {

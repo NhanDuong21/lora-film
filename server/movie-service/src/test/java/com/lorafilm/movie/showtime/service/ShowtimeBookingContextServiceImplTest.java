@@ -1,43 +1,44 @@
 package com.lorafilm.movie.showtime.service;
 
-import com.lorafilm.movie.common.exception.BusinessException;
-import com.lorafilm.movie.common.exception.ErrorCode;
-import com.lorafilm.movie.common.exception.ResourceNotFoundException;
-import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
-import com.lorafilm.movie.seat.domain.entity.Seat;
-import com.lorafilm.movie.seat.domain.entity.SeatType;
-import com.lorafilm.movie.seat.domain.enums.SeatStatus;
-import com.lorafilm.movie.seat.repository.SeatRepository;
-import com.lorafilm.movie.seat.service.SeatService;
-import com.lorafilm.movie.showtime.domain.entity.Showtime;
-import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
-import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
-import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
-import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
-import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
-import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
-import com.lorafilm.movie.cinema.domain.entity.Cinema;
-import com.lorafilm.movie.movie.domain.entity.Movie;
-import com.lorafilm.movie.movie.domain.entity.MovieVersion;
-import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
+import com.lorafilm.movie.cinema.domain.entity.Cinema;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
+import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.movie.domain.entity.Movie;
+import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.seat.domain.entity.Seat;
+import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatStatus;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.service.SeatService;
+import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
+import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
+import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
+import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ShowtimeBookingContextServiceImplTest {
@@ -246,7 +247,7 @@ class ShowtimeBookingContextServiceImplTest {
         
         com.lorafilm.movie.showtime.domain.entity.ShowtimeBlockedSeat blockedSeat = new com.lorafilm.movie.showtime.domain.entity.ShowtimeBlockedSeat();
         blockedSeat.setSeat(seat1);
-        when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L, com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE))
+        when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L, com.lorafilm.movie.common.enums.ActionStatus.ACTIVE))
             .thenReturn(Collections.singletonList(blockedSeat));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> showtimeService.getBookingContext(10L, request));
