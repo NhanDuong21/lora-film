@@ -68,7 +68,7 @@ public class CustomerMovieServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
         Page<Movie> moviePage = new PageImpl<>(List.of(activeMovie), pageable, 1);
         
-        when(movieRepository.findByStatusAndDeletedAtIsNull(MovieStatus.NOW_SHOWING, pageable)).thenReturn(moviePage);
+        when(movieRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), eq(pageable))).thenReturn(moviePage);
         when(movieGenreRepository.findByMovieId(1L)).thenReturn(Collections.emptyList());
         
         MovieDto dto = new MovieDto();

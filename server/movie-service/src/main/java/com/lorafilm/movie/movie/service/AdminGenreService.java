@@ -93,6 +93,7 @@ public class AdminGenreService {
             } catch (Exception e) {}
         }
         
+        genre.setStatus(com.lorafilm.movie.common.enums.ActiveStatus.INACTIVE);
         genre.performSoftDelete(userId);
         genreRepository.save(genre);
     }

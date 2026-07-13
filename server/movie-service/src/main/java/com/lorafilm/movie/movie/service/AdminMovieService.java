@@ -28,12 +28,14 @@ public class AdminMovieService {
     private final GenreRepository genreRepository;
     private final MovieGenreRepository movieGenreRepository;
     private final MovieMapper movieMapper;
+    private final com.lorafilm.movie.showtime.repository.ShowtimeRepository showtimeRepository;
 
-    public AdminMovieService(MovieRepository movieRepository, GenreRepository genreRepository, MovieGenreRepository movieGenreRepository, MovieMapper movieMapper) {
+    public AdminMovieService(MovieRepository movieRepository, GenreRepository genreRepository, MovieGenreRepository movieGenreRepository, MovieMapper movieMapper, com.lorafilm.movie.showtime.repository.ShowtimeRepository showtimeRepository) {
         this.movieRepository = movieRepository;
         this.genreRepository = genreRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMapper = movieMapper;
+        this.showtimeRepository = showtimeRepository;
     }
 
     @Transactional
@@ -192,5 +194,27 @@ public class AdminMovieService {
         List<MovieGenre> movieGenres = movieGenreRepository.findByMovieId(movie.getId());
         List<String> genreNames = movieGenres.stream().map(mg -> mg.getGenre().getName()).collect(Collectors.toList());
         return movieMapper.toDto(movie, genreNames, null);
+    }
+
+    @Transactional
+    public void deleteMovie(String publicId) {
+        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+        
+        if (showtimeRepository.existsByMovieIdAndDeletedAtIsNull(movie.getId())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Cannot delete movie because it has active showtimes.", null);
+        }
+        
+        Long userId = 1L;
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            try {
+                userId = Long.valueOf(auth.getName());
+            } catch (Exception e) {}
+        }
+
+        movie.setStatus(MovieStatus.INACTIVE);
+        movie.performSoftDelete(userId);
+        movieRepository.save(movie);
     }
 }

@@ -45,4 +45,10 @@ public class AdminMovieController {
         adminMovieService.assignGenres(publicId, request.getGenreIds());
         return ApiResponse.ok("Genres updated successfully");
     }
+
+    @DeleteMapping("/{publicId}")
+    public ApiResponse<String> deleteMovie(@PathVariable String publicId) {
+        adminMovieService.deleteMovie(publicId);
+        return ApiResponse.ok("Movie deleted successfully");
+    }
 }

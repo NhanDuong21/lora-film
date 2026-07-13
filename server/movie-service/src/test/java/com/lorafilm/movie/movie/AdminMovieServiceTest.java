@@ -37,6 +37,8 @@ public class AdminMovieServiceTest {
     private MovieGenreRepository movieGenreRepository;
     @Mock
     private MovieMapper movieMapper;
+    @Mock
+    private com.lorafilm.movie.showtime.repository.ShowtimeRepository showtimeRepository;
 
     @InjectMocks
     private AdminMovieService adminMovieService;
