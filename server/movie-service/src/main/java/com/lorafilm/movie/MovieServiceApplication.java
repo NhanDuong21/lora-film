@@ -12,8 +12,4 @@ public class MovieServiceApplication {
         SpringApplication.run(MovieServiceApplication.class, args);
     }
 
-    @org.springframework.context.annotation.Bean
-    public java.time.Clock clock() {
-        return java.time.Clock.systemUTC();
-    }
 }

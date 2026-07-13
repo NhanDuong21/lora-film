@@ -19,11 +19,19 @@ public enum ErrorCode {
     MOVIE_ACTIVE_VERSION_REQUIRED("Active version is required to publish", 400),
     MOVIE_PUBLISH_VALIDATION_FAILED("Movie publish validation failed", 400),
     MOVIE_MEDIA_NOT_FOUND("Movie media not found", 404),
+    MOVIE_NOT_AVAILABLE_FOR_SCHEDULING("Movie is not available for showtime scheduling", 400),
+    MOVIE_VERSION_NOT_ACTIVE("Movie version is not active", 400),
+    MOVIE_VERSION_NOT_BELONG_TO_MOVIE("Movie version does not belong to the movie", 400),
+    INVALID_MOVIE_DURATION("Invalid movie duration", 400),
 
     // --- Cinema & Auditorium Module ---
     CINEMA_NOT_FOUND("Cinema not found", 404),
     CINEMA_NOT_CONFIGURABLE("Cinema is not in a configurable state", 400),
+    CINEMA_NOT_ACTIVE("Cinema is not active", 400),
+    INVALID_CINEMA_TIMEZONE("Invalid cinema timezone", 400),
     AUDITORIUM_NOT_FOUND("Auditorium not found", 404),
+    AUDITORIUM_NOT_ACTIVE("Auditorium is not active", 400),
+    AUDITORIUM_NOT_BELONG_TO_CINEMA("Auditorium does not belong to the cinema", 400),
     AUDITORIUM_NAME_DUPLICATED("Auditorium name already exists in this cinema", 400),
     CINEMA_CLOSURE_CONFLICT("Action conflicts with cinema closure schedule", 409),
     AUDITORIUM_MAINTENANCE_CONFLICT("Action conflicts with auditorium maintenance schedule", 409),
@@ -61,6 +69,7 @@ public enum ErrorCode {
     EMPTY_SEAT_BULK_REQUEST("Empty seat bulk request", 400),
     SEAT_BELONGS_TO_ANOTHER_AUDITORIUM("Seat belongs to another auditorium", 400),
     SEAT_INACTIVE("Seat is not active", 400),
+    SEAT_BLOCKED_FOR_SHOWTIME("Seat is blocked for this showtime", 400),
 
     // --- Showtime Module ---
     SHOWTIME_NOT_FOUND("Showtime not found", 404),
@@ -69,7 +78,24 @@ public enum ErrorCode {
     INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400),
     
     AUDITORIUM_LAYOUT_NOT_EDITABLE("The seating arrangement cannot be changed while the auditorium is in operation", 409),
-    BULK_SEAT_VALIDATION_ERROR("Invalid data for bulk seat creation", 400);
+    BULK_SEAT_VALIDATION_ERROR("Invalid data for bulk seat creation", 400),
+
+    // --- New Validation Error Codes ---
+    SHOWTIME_OUTSIDE_RELEASE_WINDOW("Showtime outside release window", 409),
+    SHOWTIME_OUTSIDE_OPERATING_HOURS("Showtime outside operating hours", 409),
+    CINEMA_OPERATING_HOURS_NOT_CONFIGURED("Cinema operating hours are not configured for the selected day", 400),
+    SHOWTIME_OVERLAPS_CINEMA_CLOSURE("Showtime overlaps cinema closure", 409),
+    SHOWTIME_OVERLAPS_AUDITORIUM_MAINTENANCE("Showtime overlaps auditorium maintenance", 409),
+    SHOWTIME_OVERLAP("Showtime overlap", 409),
+    SHOWTIME_SCHEDULE_NOT_EDITABLE("Only draft showtimes can be updated", 409),
+    SHOWTIME_SCHEDULING_CONFLICT("Showtime scheduling is being modified by another request", 409),
+    
+    // --- Showtime Lifecycle ---
+    SHOWTIME_CANCELLATION_REASON_REQUIRED("Cancellation reason is required", 400),
+    SHOWTIME_CANNOT_OPEN_AFTER_START("Cannot open showtime for booking after it has started", 400),
+    SHOWTIME_CANNOT_FINISH_BEFORE_END("Cannot finish showtime before it ends", 400),
+    
+    CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
 
     private final String message;
     private final int httpStatus;

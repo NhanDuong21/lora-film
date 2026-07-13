@@ -4,7 +4,7 @@ import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.showtime.dto.SeatLayoutDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeDto;
-import com.lorafilm.movie.showtime.service.ShowtimeService;
+import com.lorafilm.movie.showtime.service.ShowtimeQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,10 +18,10 @@ import java.time.LocalDate;
 @Validated
 public class ShowtimeController {
 
-    private final ShowtimeService showtimeService;
+    private final ShowtimeQueryService showtimeQueryService;
 
-    public ShowtimeController(ShowtimeService showtimeService) {
-        this.showtimeService = showtimeService;
+    public ShowtimeController(ShowtimeQueryService showtimeQueryService) {
+        this.showtimeQueryService = showtimeQueryService;
     }
 
     @GetMapping
@@ -35,16 +35,16 @@ public class ShowtimeController {
             @RequestParam(required = false) String subtitleLanguage,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
-        return ResponseEntity.ok(ApiResponse.ok(showtimeService.getShowtimes(movieSlug, cinemaSlug, city, date, format, audioLanguage, subtitleLanguage, page, size)));
+        return ResponseEntity.ok(ApiResponse.ok(showtimeQueryService.getShowtimes(movieSlug, cinemaSlug, city, date, format, audioLanguage, subtitleLanguage, page, size)));
     }
 
     @GetMapping("/{showtimePublicId}")
     public ResponseEntity<ApiResponse<ShowtimeDto>> getShowtimeDetail(@PathVariable String showtimePublicId) {
-        return ResponseEntity.ok(ApiResponse.ok(showtimeService.getShowtimeByPublicId(showtimePublicId)));
+        return ResponseEntity.ok(ApiResponse.ok(showtimeQueryService.getShowtimeByPublicId(showtimePublicId)));
     }
 
     @GetMapping("/{showtimePublicId}/seat-layout")
     public ResponseEntity<ApiResponse<SeatLayoutDto>> getSeatLayout(@PathVariable String showtimePublicId) {
-        return ResponseEntity.ok(ApiResponse.ok(showtimeService.getSeatLayout(showtimePublicId)));
+        return ResponseEntity.ok(ApiResponse.ok(showtimeQueryService.getSeatLayout(showtimePublicId)));
     }
 }
