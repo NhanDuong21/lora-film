@@ -11,4 +11,6 @@ import java.util.Optional;
 public interface CinemaRepository extends JpaRepository<Cinema, Long>, JpaSpecificationExecutor<Cinema> {
     Optional<Cinema> findByPublicIdAndDeletedAtIsNull(String publicId);
     Optional<Cinema> findBySlugAndDeletedAtIsNull(String slug);
+    boolean existsBySlugAndDeletedAtIsNull(String slug);
+    boolean existsBySlugAndPublicIdNotAndDeletedAtIsNull(String slug, String publicId);
 }

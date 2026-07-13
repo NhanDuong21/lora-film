@@ -23,4 +23,26 @@ public class CinemaMapper {
         dto.setTimezone(cinema.getTimezone());
         return dto;
     }
+
+    public CinemaResponse toResponse(Cinema cinema) {
+        if (cinema == null) {
+            return null;
+        }
+        CinemaResponse response = new CinemaResponse();
+        response.setPublicId(cinema.getPublicId());
+        response.setName(cinema.getName());
+        response.setSlug(cinema.getSlug());
+        response.setCity(cinema.getCity());
+        response.setDistrict(cinema.getDistrict());
+        response.setAddress(cinema.getAddress());
+        response.setHotline(cinema.getHotline());
+        response.setLatitude(cinema.getLatitude());
+        response.setLongitude(cinema.getLongitude());
+        response.setTimezone(cinema.getTimezone());
+        response.setDescription(cinema.getDescription());
+        response.setStatus(cinema.getStatus());
+        response.setOpenedDate(cinema.getOpenedDate());
+        response.setClosedDate(cinema.getClosedDate());
+        return response;
+    }
 }

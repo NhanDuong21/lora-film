@@ -5,6 +5,9 @@ import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
 import com.lorafilm.movie.cinema.dto.CinemaDto;
 import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
 import com.lorafilm.movie.cinema.dto.CinemaMapper;
+import com.lorafilm.movie.cinema.dto.CreateCinemaRequest;
+import com.lorafilm.movie.cinema.dto.UpdateCinemaRequest;
+import com.lorafilm.movie.cinema.dto.CinemaResponse;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.cinema.repository.CinemaSpecification;
 import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
@@ -15,6 +18,8 @@ import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
 import com.lorafilm.movie.cinema.domain.entity.CinemaMedia;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.dto.PageResponse;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -80,14 +85,165 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     public CinemaDetailDto getCinemaBySlug(String slug) {
-        Cinema cinema = cinemaRepository.findBySlugAndDeletedAtIsNull(slug)
-                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+        return getCinemaByIdentifier(slug);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public CinemaDetailDto getCinemaByIdentifier(String identifier) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(identifier)
+                .orElseGet(() -> cinemaRepository.findBySlugAndDeletedAtIsNull(identifier)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found")));
 
         if (cinema.getStatus() != CinemaStatus.ACTIVE) {
             throw new ResourceNotFoundException("Cinema not found");
         }
 
         return mapToDetailDto(cinema);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public CinemaResponse createCinema(CreateCinemaRequest request) {
+        // Validate timezone
+        String tz = request.getTimezone();
+        if (tz == null || tz.trim().isEmpty()) {
+            tz = "Asia/Ho_Chi_Minh";
+        } else {
+            if (!java.time.ZoneId.getAvailableZoneIds().contains(tz)) {
+                throw new BusinessException(ErrorCode.INVALID_CINEMA_TIMEZONE);
+            }
+        }
+
+        // Validate opened and closed date
+        if (request.getOpenedDate() != null && request.getClosedDate() != null) {
+            if (request.getClosedDate().isBefore(request.getOpenedDate())) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Closed date must be on or after opened date");
+            }
+        }
+
+        // Generate and check unique slug
+        String slug = com.lorafilm.movie.cinema.util.SlugUtils.toSlug(request.getName());
+        if (cinemaRepository.existsBySlugAndDeletedAtIsNull(slug)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Cinema slug already exists");
+        }
+
+        Cinema cinema = new Cinema();
+        cinema.setPublicId(java.util.UUID.randomUUID().toString());
+        cinema.setName(request.getName());
+        cinema.setSlug(slug);
+        cinema.setCity(request.getCity());
+        cinema.setDistrict(request.getDistrict());
+        cinema.setAddress(request.getAddress());
+        cinema.setLatitude(request.getLatitude());
+        cinema.setLongitude(request.getLongitude());
+        cinema.setTimezone(tz);
+        cinema.setHotline(request.getHotline());
+        cinema.setDescription(request.getDescription());
+        cinema.setStatus(CinemaStatus.DRAFT);
+        cinema.setOpenedDate(request.getOpenedDate());
+        cinema.setClosedDate(request.getClosedDate());
+
+        Cinema savedCinema = cinemaRepository.save(cinema);
+        return cinemaMapper.toResponse(savedCinema);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public CinemaResponse updateCinema(String publicId, UpdateCinemaRequest request) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        // Validate timezone
+        String tz = request.getTimezone();
+        if (tz == null || tz.trim().isEmpty()) {
+            tz = "Asia/Ho_Chi_Minh";
+        } else {
+            if (!java.time.ZoneId.getAvailableZoneIds().contains(tz)) {
+                throw new BusinessException(ErrorCode.INVALID_CINEMA_TIMEZONE);
+            }
+        }
+
+        // Validate opened and closed date
+        if (request.getOpenedDate() != null && request.getClosedDate() != null) {
+            if (request.getClosedDate().isBefore(request.getOpenedDate())) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Closed date must be on or after opened date");
+            }
+        }
+
+        // Generate and check unique slug
+        String slug = com.lorafilm.movie.cinema.util.SlugUtils.toSlug(request.getName());
+        if (cinemaRepository.existsBySlugAndPublicIdNotAndDeletedAtIsNull(slug, publicId)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Cinema slug already exists");
+        }
+
+        cinema.setName(request.getName());
+        cinema.setSlug(slug);
+        cinema.setCity(request.getCity());
+        cinema.setDistrict(request.getDistrict());
+        cinema.setAddress(request.getAddress());
+        cinema.setLatitude(request.getLatitude());
+        cinema.setLongitude(request.getLongitude());
+        cinema.setTimezone(tz);
+        cinema.setHotline(request.getHotline());
+        cinema.setDescription(request.getDescription());
+        cinema.setOpenedDate(request.getOpenedDate());
+        cinema.setClosedDate(request.getClosedDate());
+
+        Cinema savedCinema = cinemaRepository.save(cinema);
+        return cinemaMapper.toResponse(savedCinema);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public CinemaResponse updateCinemaStatus(String publicId, CinemaStatus targetStatus) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        CinemaStatus currentStatus = cinema.getStatus();
+        if (currentStatus == targetStatus) {
+            return cinemaMapper.toResponse(cinema);
+        }
+
+        boolean isValid = false;
+        switch (currentStatus) {
+            case DRAFT:
+                isValid = (targetStatus == CinemaStatus.ACTIVE || targetStatus == CinemaStatus.INACTIVE);
+                break;
+            case ACTIVE:
+                isValid = (targetStatus == CinemaStatus.MAINTENANCE 
+                        || targetStatus == CinemaStatus.TEMPORARILY_CLOSED 
+                        || targetStatus == CinemaStatus.INACTIVE 
+                        || targetStatus == CinemaStatus.PERMANENTLY_CLOSED);
+                break;
+            case MAINTENANCE:
+                isValid = (targetStatus == CinemaStatus.ACTIVE 
+                        || targetStatus == CinemaStatus.TEMPORARILY_CLOSED 
+                        || targetStatus == CinemaStatus.INACTIVE 
+                        || targetStatus == CinemaStatus.PERMANENTLY_CLOSED);
+                break;
+            case TEMPORARILY_CLOSED:
+                isValid = (targetStatus == CinemaStatus.ACTIVE 
+                        || targetStatus == CinemaStatus.MAINTENANCE 
+                        || targetStatus == CinemaStatus.INACTIVE 
+                        || targetStatus == CinemaStatus.PERMANENTLY_CLOSED);
+                break;
+            case INACTIVE:
+                isValid = (targetStatus == CinemaStatus.ACTIVE || targetStatus == CinemaStatus.PERMANENTLY_CLOSED);
+                break;
+            case PERMANENTLY_CLOSED:
+                isValid = false; // Terminal state
+                break;
+        }
+
+        if (!isValid) {
+            throw new BusinessException(ErrorCode.INVALID_AUDITORIUM_STATUS_TRANSITION,
+                    "Invalid cinema status transition from " + currentStatus + " to " + targetStatus);
+        }
+
+        cinema.setStatus(targetStatus);
+        Cinema savedCinema = cinemaRepository.save(cinema);
+        return cinemaMapper.toResponse(savedCinema);
     }
 
     private CinemaDetailDto mapToDetailDto(Cinema cinema) {
@@ -125,7 +281,7 @@ public class CinemaServiceImpl implements CinemaService {
             return dto;
         }).collect(Collectors.toList()));
 
-        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(), ActiveStatus.ACTIVE);
+        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(), com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE);
         detailDto.setActiveAuditoriums(auditoriums.stream().map(a -> {
             CinemaDetailDto.AuditoriumDto dto = new CinemaDetailDto.AuditoriumDto();
             dto.setPublicId(a.getPublicId());

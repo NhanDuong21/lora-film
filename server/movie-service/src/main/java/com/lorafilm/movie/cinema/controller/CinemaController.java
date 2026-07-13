@@ -28,8 +28,8 @@ public class CinemaController {
         return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemas(city, district, keyword, page, size)));
     }
 
-    @GetMapping("/{cinemaSlug}")
-    public ResponseEntity<ApiResponse<CinemaDetailDto>> getCinemaDetail(@PathVariable String cinemaSlug) {
-        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaBySlug(cinemaSlug)));
+    @GetMapping("/{cinemaIdOrSlug}")
+    public ResponseEntity<ApiResponse<CinemaDetailDto>> getCinemaDetail(@PathVariable String cinemaIdOrSlug) {
+        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaByIdentifier(cinemaIdOrSlug)));
     }
 }

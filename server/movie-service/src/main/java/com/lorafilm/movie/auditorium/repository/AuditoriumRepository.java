@@ -34,5 +34,5 @@ public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
     @Query("SELECT CASE WHEN count(a) > 0 THEN true ELSE false END FROM Auditorium a WHERE a.cinema.id = :cinemaId AND lower(a.name) = lower(:name) AND a.id != :excludeId AND a.deletedAt IS NULL")
     boolean existsByCinemaIdAndNameIgnoreCaseAndIdNotAndDeletedAtIsNull(@Param("cinemaId") Long cinemaId, @Param("name") String name, @Param("excludeId") Long excludeId);
 
-    List<Auditorium> findByCinemaIdAndStatusAndDeletedAtIsNull(Long cinemaId, ActiveStatus status);
+    List<Auditorium> findByCinemaIdAndStatusAndDeletedAtIsNull(Long cinemaId, AuditoriumStatus status);
 }
