@@ -12,6 +12,7 @@ import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +33,7 @@ public class CustomerMovieService {
         this.movieMapper = movieMapper;
     }
 
-    public PageResponse<MovieDto> getMoviesByStatus(String statusStr, Pageable pageable) {
+    public PageResponse<MovieDto> getMoviesByStatus(String statusStr, String keyword, Pageable pageable) {
         MovieStatus status;
         if ("now-showing".equalsIgnoreCase(statusStr)) {
             status = MovieStatus.NOW_SHOWING;
@@ -42,7 +43,14 @@ public class CustomerMovieService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Invalid status query. Must be now-showing or coming-soon.", null);
         }
 
-        Page<Movie> moviePage = movieRepository.findByStatusAndDeletedAtIsNull(status, pageable);
+        Specification<Movie> spec = Specification.where(com.lorafilm.movie.movie.repository.MovieSpecification.isNotDeleted())
+                .and(com.lorafilm.movie.movie.repository.MovieSpecification.hasStatus(status));
+                
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            spec = spec.and(com.lorafilm.movie.movie.repository.MovieSpecification.hasKeyword(keyword.trim()));
+        }
+
+        Page<Movie> moviePage = movieRepository.findAll(spec, pageable);
         
         List<MovieDto> content = moviePage.getContent().stream()
                 .map(this::mapToDto)

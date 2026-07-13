@@ -15,6 +15,9 @@ public interface GenreRepository extends JpaRepository<Genre, Long> {
     boolean existsBySlugAndDeletedAtIsNull(String slug);
     Optional<Genre> findBySlugAndDeletedAtIsNull(String slug);
     
+    org.springframework.data.domain.Page<Genre> findByDeletedAtIsNull(org.springframework.data.domain.Pageable pageable);
+    List<Genre> findByStatusAndDeletedAtIsNull(com.lorafilm.movie.common.enums.ActiveStatus status);
+    
     @Query("SELECT g.slug FROM Genre g WHERE g.slug LIKE :slugPrefix% AND g.deletedAt IS NULL")
     List<String> findSlugsByPrefix(@Param("slugPrefix") String slugPrefix);
     

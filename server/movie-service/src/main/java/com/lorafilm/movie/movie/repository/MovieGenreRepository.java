@@ -12,4 +12,7 @@ public interface MovieGenreRepository extends JpaRepository<MovieGenre, MovieGen
     List<MovieGenre> findByMovieId(Long movieId);
     List<MovieGenre> findByMovieIdIn(List<Long> movieIds);
     void deleteByMovieId(Long movieId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(mg) > 0 FROM MovieGenre mg JOIN mg.movie m WHERE mg.genre.id = :genreId AND m.deletedAt IS NULL")
+    boolean existsByGenreIdAndMovieDeletedAtIsNull(@org.springframework.data.repository.query.Param("genreId") Long genreId);
 }

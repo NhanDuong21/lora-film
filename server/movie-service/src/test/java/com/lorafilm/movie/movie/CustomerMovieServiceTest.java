@@ -75,7 +75,7 @@ public class CustomerMovieServiceTest {
         dto.setPublicId("movie-1");
         when(movieMapper.toDto(eq(activeMovie), any(), any())).thenReturn(dto);
 
-        PageResponse<MovieDto> response = customerMovieService.getMoviesByStatus("now-showing", pageable);
+        PageResponse<MovieDto> response = customerMovieService.getMoviesByStatus("now-showing", null, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
@@ -87,7 +87,7 @@ public class CustomerMovieServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
         
         BusinessException exception = assertThrows(BusinessException.class, 
-            () -> customerMovieService.getMoviesByStatus("invalid", pageable));
+            () -> customerMovieService.getMoviesByStatus("invalid", null, pageable));
         
         assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
     }

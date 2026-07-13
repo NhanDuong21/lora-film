@@ -18,10 +18,23 @@ public class AdminGenreService {
     
     private final GenreRepository genreRepository;
     private final GenreMapper genreMapper;
+    private final com.lorafilm.movie.movie.repository.MovieGenreRepository movieGenreRepository;
 
-    public AdminGenreService(GenreRepository genreRepository, GenreMapper genreMapper) {
+    public AdminGenreService(GenreRepository genreRepository, GenreMapper genreMapper, com.lorafilm.movie.movie.repository.MovieGenreRepository movieGenreRepository) {
         this.genreRepository = genreRepository;
         this.genreMapper = genreMapper;
+        this.movieGenreRepository = movieGenreRepository;
+    }
+
+    public com.lorafilm.movie.common.api.PageResponse<GenreResponse> getGenres(int page, int size) {
+        org.springframework.data.domain.Page<Genre> genrePage = genreRepository.findByDeletedAtIsNull(org.springframework.data.domain.PageRequest.of(page - 1, size));
+        return com.lorafilm.movie.common.api.PageResponse.of(genrePage, genrePage.getContent().stream().map(genreMapper::toResponse).toList());
+    }
+
+    public GenreResponse getGenre(String publicId) {
+        Genre genre = genreRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Genre not found", null));
+        return genreMapper.toResponse(genre);
     }
 
     @Transactional
@@ -61,6 +74,27 @@ public class AdminGenreService {
 
         Genre saved = genreRepository.save(genre);
         return genreMapper.toResponse(saved);
+    }
+    
+    @Transactional
+    public void deleteGenre(String publicId) {
+        Genre genre = genreRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Genre not found", null));
+        
+        if (movieGenreRepository.existsByGenreIdAndMovieDeletedAtIsNull(genre.getId())) {
+            throw new BusinessException(ErrorCode.GENRE_IN_USE, "Cannot delete genre because it is currently used by one or more active movies", null);
+        }
+        
+        Long userId = 1L;
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            try {
+                userId = Long.valueOf(auth.getName());
+            } catch (Exception e) {}
+        }
+        
+        genre.performSoftDelete(userId);
+        genreRepository.save(genre);
     }
     
     private String generateSlug(String input) {

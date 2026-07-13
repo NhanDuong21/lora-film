@@ -58,7 +58,7 @@ public class CustomerMovieControllerTest {
         
         PageResponse<MovieDto> pageResponse = PageResponse.of(new PageImpl<>(List.of(movie), PageRequest.of(0, 10), 1), List.of(movie));
         
-        when(customerMovieService.getMoviesByStatus(eq("now-showing"), any())).thenReturn(pageResponse);
+        when(customerMovieService.getMoviesByStatus(eq("now-showing"), any(), any())).thenReturn(pageResponse);
 
         mockMvc.perform(get("/api/customer/movies")
                         .param("status", "now-showing")
@@ -93,7 +93,7 @@ public class CustomerMovieControllerTest {
         
         PageResponse<MovieDto> pageResponse = PageResponse.of(new PageImpl<>(List.of(movie), PageRequest.of(0, 10), 1), List.of(movie));
         
-        when(customerMovieService.getMoviesByStatus(eq("coming-soon"), any())).thenReturn(pageResponse);
+        when(customerMovieService.getMoviesByStatus(eq("coming-soon"), any(), any())).thenReturn(pageResponse);
 
         mockMvc.perform(get("/api/customer/movies")
                         .param("status", "coming-soon")
@@ -107,7 +107,7 @@ public class CustomerMovieControllerTest {
 
     @Test
     void getMovies_InvalidStatus() throws Exception {
-        when(customerMovieService.getMoviesByStatus(eq("invalid-status"), any()))
+        when(customerMovieService.getMoviesByStatus(eq("invalid-status"), any(), any()))
                 .thenThrow(new com.lorafilm.movie.common.exception.BusinessException(
                         com.lorafilm.movie.common.exception.ErrorCode.VALIDATION_ERROR, "Invalid status parameter", null));
 

@@ -15,6 +15,7 @@ import com.lorafilm.movie.movie.repository.MovieRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.text.Normalizer;
 import java.util.List;
 import java.util.UUID;
@@ -82,6 +83,8 @@ public class AdminMovieService {
             validatePublishStatus(movie.getId(), request.getStatus());
             movie.setStatus(request.getStatus());
         }
+        
+        validateStatusTimeConstraints(movie.getStatus(), movie.getReleaseDate(), movie.getEndDate());
 
         Movie saved = movieRepository.save(movie);
         return mapToDto(saved);
@@ -127,6 +130,31 @@ public class AdminMovieService {
         }
     }
 
+    private void validateStatusTimeConstraints(MovieStatus status, LocalDate releaseDate, LocalDate endDate) {
+        if (status == null || releaseDate == null) return;
+        
+        LocalDate today = LocalDate.now();
+        
+        if (status == MovieStatus.UPCOMING) {
+            if (!releaseDate.isAfter(today)) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For UPCOMING status, release date must be in the future", null);
+            }
+        } else if (status == MovieStatus.NOW_SHOWING) {
+            if (releaseDate.isAfter(today)) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For NOW_SHOWING status, release date cannot be in the future", null);
+            }
+            if (endDate != null && endDate.isBefore(today)) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For NOW_SHOWING status, end date cannot be in the past", null);
+            }
+        } else if (status == MovieStatus.ENDED) {
+            if (endDate == null) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For ENDED status, end date must be provided", null);
+            }
+            if (!endDate.isBefore(today)) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For ENDED status, end date must be in the past", null);
+            }
+        }
+    }
     private String generateUniqueSlug(String title) {
         if (title == null) return "";
         String normalized = Normalizer.normalize(title.trim(), Normalizer.Form.NFD);
@@ -137,6 +165,10 @@ public class AdminMovieService {
                 .replaceAll("\\s+", "-")
                 .replaceAll("-+", "-")
                 .replaceAll("^-|-$", "");
+        
+        if (baseSlug.isEmpty()) {
+            baseSlug = "movie-" + UUID.randomUUID().toString().substring(0, 8);
+        }
         
         List<String> existingSlugs = movieRepository.findSlugsByPrefix(baseSlug);
         if (existingSlugs.isEmpty() || !existingSlugs.contains(baseSlug)) {
