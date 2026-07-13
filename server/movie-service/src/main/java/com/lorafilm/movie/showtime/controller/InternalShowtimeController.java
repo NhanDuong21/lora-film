@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
 import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
-import com.lorafilm.movie.showtime.service.ShowtimeService;
+import com.lorafilm.movie.showtime.service.ShowtimeBookingContextService;
 
 import jakarta.validation.Valid;
 
@@ -20,10 +20,10 @@ import jakarta.validation.Valid;
 @Validated
 public class InternalShowtimeController {
 
-    private final ShowtimeService showtimeService;
+    private final ShowtimeBookingContextService showtimeBookingContextService;
 
-    public InternalShowtimeController(ShowtimeService showtimeService) {
-        this.showtimeService = showtimeService;
+    public InternalShowtimeController(ShowtimeBookingContextService showtimeBookingContextService) {
+        this.showtimeBookingContextService = showtimeBookingContextService;
     }
 
     @PostMapping("/{showtimeId}/booking-context")
@@ -31,7 +31,7 @@ public class InternalShowtimeController {
             @PathVariable Long showtimeId,
             @Valid @RequestBody BookingContextRequest request) {
 
-        BookingContextResponse response = showtimeService.getBookingContext(showtimeId, request);
+        BookingContextResponse response = showtimeBookingContextService.getBookingContext(showtimeId, request);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }
