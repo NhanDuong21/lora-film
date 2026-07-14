@@ -1,0 +1,95 @@
+package com.lorafilm.movie.movie.controller;
+
+import com.lorafilm.movie.common.api.ApiResponse;
+import com.lorafilm.movie.common.dto.PageResponse;
+import com.lorafilm.movie.movie.dto.MovieDto;
+import com.lorafilm.movie.movie.dto.MovieDetailDto;
+import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
+import com.lorafilm.movie.movie.dto.MovieRequest;
+import com.lorafilm.movie.movie.service.AdminMovieService;
+import com.lorafilm.movie.movie.service.MovieService;
+import com.lorafilm.movie.movie.domain.enums.MovieStatus;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/admin/movies")
+@Validated
+public class AdminMovieController {
+
+    private final AdminMovieService adminMovieService;
+    private final MovieService movieService;
+
+    public AdminMovieController(AdminMovieService adminMovieService, MovieService movieService) {
+        this.adminMovieService = adminMovieService;
+        this.movieService = movieService;
+    }
+
+    @PostMapping
+    public ApiResponse<MovieDto> createMovie(@Valid @RequestBody MovieRequest request) {
+        return ApiResponse.ok(adminMovieService.createMovie(request));
+    }
+
+    @PutMapping("/{publicId}")
+    public ApiResponse<MovieDto> updateMovie(
+            @PathVariable String publicId, 
+            @Valid @RequestBody MovieRequest request) {
+        return ApiResponse.ok(adminMovieService.updateMovie(publicId, request));
+    }
+
+    @PostMapping("/{publicId}/genres")
+    public ApiResponse<String> assignGenresPost(
+            @PathVariable String publicId,
+            @Valid @RequestBody MovieGenreAssignRequest request) {
+        adminMovieService.assignGenres(publicId, request.getGenreIds());
+        return ApiResponse.ok("Genres assigned successfully");
+    }
+
+    @PutMapping("/{publicId}/genres")
+    public ApiResponse<String> assignGenresPut(
+            @PathVariable String publicId,
+            @Valid @RequestBody MovieGenreAssignRequest request) {
+        adminMovieService.assignGenres(publicId, request.getGenreIds());
+        return ApiResponse.ok("Genres updated successfully");
+    }
+
+    @DeleteMapping("/{publicId}")
+    public ApiResponse<String> deleteMovie(@PathVariable String publicId) {
+        adminMovieService.deleteMovie(publicId);
+        return ApiResponse.ok("Movie deleted successfully");
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<PageResponse<MovieDto>>> getMovies(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @Min(1) Long genreId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) @Min(1) Long cinemaId,
+            @RequestParam(required = false) java.time.LocalDate date,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "releaseDate,desc") String sort) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.getMovies(status, genreId, keyword, city, cinemaId, date, page, size, sort)));
+    }
+
+    @GetMapping("/{publicId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<MovieDetailDto>> getMovieDetail(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.getMovieByIdentifier(publicId)));
+    }
+
+    @PutMapping("/{publicId}/status")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<MovieDto>> updateMovieStatus(
+            @PathVariable("publicId") String publicId,
+            @RequestParam("status") MovieStatus status) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.updateMovieStatus(publicId, status)));
+    }
+}
