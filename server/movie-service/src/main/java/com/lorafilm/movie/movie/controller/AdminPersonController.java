@@ -31,4 +31,11 @@ public class AdminPersonController {
     public ApiResponse<PersonDto> updatePerson(@PathVariable("personId") String personId, @Valid @RequestBody PersonRequest request) {
         return ApiResponse.ok(adminPersonService.updatePerson(personId, request));
     }
+
+    @DeleteMapping("/{personId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ApiResponse<String> deletePerson(@PathVariable("personId") String personId) {
+        adminPersonService.deletePerson(personId);
+        return ApiResponse.ok("Person deleted successfully");
+    }
 }

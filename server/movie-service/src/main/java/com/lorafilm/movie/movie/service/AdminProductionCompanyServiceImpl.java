@@ -23,8 +23,21 @@ public class AdminProductionCompanyServiceImpl implements AdminProductionCompany
     @Override
     @Transactional
     public ProductionCompanyDto createProductionCompany(ProductionCompanyRequest request) {
-        if (request.getName() != null && productionCompanyRepository.existsByNameIgnoreCase(request.getName().trim())) {
-            throw new BusinessException(ErrorCode.COMPANY_DUPLICATED, "Production company name already exists");
+        if (request.getName() != null) {
+            java.util.Optional<ProductionCompany> existingOpt = productionCompanyRepository.findByNameIgnoreCase(request.getName().trim());
+            if (existingOpt.isPresent()) {
+                ProductionCompany existing = existingOpt.get();
+                if (existing.getDeletedAt() != null) {
+                    // Restore soft-deleted record
+                    existing.setDeletedAt(null);
+                    existing.setDeletedBy(null);
+                    mapRequestToEntity(request, existing);
+                    ProductionCompany saved = productionCompanyRepository.save(existing);
+                    return mapToDto(saved);
+                } else {
+                    throw new BusinessException(ErrorCode.COMPANY_DUPLICATED, "Production company name already exists");
+                }
+            }
         }
 
         ProductionCompany company = new ProductionCompany();
@@ -49,6 +62,26 @@ public class AdminProductionCompanyServiceImpl implements AdminProductionCompany
         
         ProductionCompany saved = productionCompanyRepository.save(company);
         return mapToDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteProductionCompany(String publicId) {
+        ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found"));
+        
+        company.performSoftDelete(getCurrentUserId());
+        productionCompanyRepository.save(company);
+    }
+
+    private Long getCurrentUserId() {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            try {
+                return Long.valueOf(auth.getName());
+            } catch (NumberFormatException ignored) {}
+        }
+        return null;
     }
 
     private void mapRequestToEntity(ProductionCompanyRequest request, ProductionCompany company) {

@@ -43,6 +43,26 @@ public class AdminPersonServiceImpl implements AdminPersonService {
         return mapToDto(saved);
     }
 
+    @Override
+    @Transactional
+    public void deletePerson(String publicId) {
+        Person person = personRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found"));
+        
+        person.performSoftDelete(getCurrentUserId());
+        personRepository.save(person);
+    }
+
+    private Long getCurrentUserId() {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            try {
+                return Long.valueOf(auth.getName());
+            } catch (NumberFormatException ignored) {}
+        }
+        return null;
+    }
+
     private void mapRequestToEntity(PersonRequest request, Person person) {
         person.setFullName(trimAndCapitalize(request.getFullName()));
         person.setStageName(trimAndCapitalize(request.getStageName()));

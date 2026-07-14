@@ -10,6 +10,7 @@ import java.util.Optional;
 public interface ProductionCompanyRepository extends JpaRepository<ProductionCompany, Long> {
     Optional<ProductionCompany> findByPublicIdAndDeletedAtIsNull(String publicId);
     boolean existsByPublicIdAndDeletedAtIsNull(String publicId);
+    Optional<ProductionCompany> findByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCaseAndPublicIdNot(String name, String publicId);
 }

@@ -31,4 +31,11 @@ public class AdminProductionCompanyController {
     public ApiResponse<ProductionCompanyDto> updateProductionCompany(@PathVariable("companyId") String companyId, @Valid @RequestBody ProductionCompanyRequest request) {
         return ApiResponse.ok(adminProductionCompanyService.updateProductionCompany(companyId, request));
     }
+
+    @DeleteMapping("/{companyId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ApiResponse<String> deleteProductionCompany(@PathVariable("companyId") String companyId) {
+        adminProductionCompanyService.deleteProductionCompany(companyId);
+        return ApiResponse.ok("Production company deleted successfully");
+    }
 }
