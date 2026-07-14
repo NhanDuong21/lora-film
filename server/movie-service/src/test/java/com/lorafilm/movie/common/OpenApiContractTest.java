@@ -1,6 +1,5 @@
 package com.lorafilm.movie.common;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -12,8 +11,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
-@Disabled("Tạm thời bỏ qua test OpenAPI để build code")
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -24,7 +21,7 @@ public class OpenApiContractTest {
 
     @Test
     void openApiDocsShouldContainErrorSchemas() throws Exception {
-        mockMvc.perform(get("/v3/api-docs")
+        mockMvc.perform(get("/api-docs")
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.components.schemas.ValidationErrorResponse").exists())
@@ -34,7 +31,7 @@ public class OpenApiContractTest {
 
     @Test
     void bulkCreateSeatsEndpointShouldHaveCorrectErrorResponses() throws Exception {
-        mockMvc.perform(get("/v3/api-docs")
+        mockMvc.perform(get("/api-docs")
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 // Basic validation: verify that the BulkCreate endpoint has 400 response
