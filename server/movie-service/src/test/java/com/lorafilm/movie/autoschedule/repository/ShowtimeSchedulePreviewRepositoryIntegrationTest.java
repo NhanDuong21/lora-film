@@ -179,8 +179,9 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void PREVIEW_REPO_007_optimisticStaleUpdate() {
-        ShowtimeSchedulePreview preview = createValidPreview(UUID.randomUUID().toString(), "gen-12", null);
+        ShowtimeSchedulePreview preview = createValidPreview(UUID.randomUUID().toString(), UUID.randomUUID().toString(), null);
         previewRepository.saveAndFlush(preview);
         
         org.springframework.transaction.support.TransactionTemplate txTemplate = 
@@ -210,10 +211,10 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void PREVIEW_REPO_008_pessimisticLockQuery() throws InterruptedException {
-        ShowtimeSchedulePreview preview = createValidPreview(UUID.randomUUID().toString(), "gen-13", null);
+        ShowtimeSchedulePreview preview = createValidPreview(UUID.randomUUID().toString(), UUID.randomUUID().toString(), null);
         previewRepository.saveAndFlush(preview);
-        entityManager.clear();
         
         org.springframework.transaction.support.TransactionTemplate txTemplate = 
             new org.springframework.transaction.support.TransactionTemplate(transactionManager);
