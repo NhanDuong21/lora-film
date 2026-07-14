@@ -186,7 +186,7 @@ public class AdminMovieService {
             com.lorafilm.movie.movie.domain.entity.Person person = personRepository.findByPublicIdAndDeletedAtIsNull(req.getPersonPublicId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found", null));
 
-            if (movieCreditRepository.existsByMovieIdAndPersonIdAndRoleAndDeletedAtIsNull(movie.getId(), person.getId(), req.getRoleType())) {
+            if (movieCreditRepository.existsByMovieIdAndPersonIdAndRoleTypeAndDeletedAtIsNull(movie.getId(), person.getId(), req.getRoleType())) {
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Person already has this role in the movie", null);
             }
 

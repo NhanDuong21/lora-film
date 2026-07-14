@@ -11,5 +11,5 @@ import com.lorafilm.movie.movie.domain.entity.MovieCredit;
 public interface MovieCreditRepository extends JpaRepository<MovieCredit, Long> {
     List<MovieCredit> findByMovieIdAndDeletedAtIsNullOrderByDisplayOrderAsc(Long movieId);
     void deleteByMovieId(Long movieId);
-    boolean existsByMovieIdAndPersonIdAndRoleAndDeletedAtIsNull(Long movieId, Long personId, com.lorafilm.movie.movie.domain.enums.CreditRoleType role);
+    boolean existsByMovieIdAndPersonIdAndRoleTypeAndDeletedAtIsNull(Long movieId, Long personId, com.lorafilm.movie.movie.domain.enums.CreditRoleType role);
 }
