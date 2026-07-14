@@ -30,7 +30,7 @@ public interface ShowtimeSchedulePreviewRepository extends JpaRepository<Showtim
     @QueryHints(
         @QueryHint(
             name = "jakarta.persistence.lock.timeout",
-            value = "5000"
+            value = "0"
         )
     )
     @Query("""
