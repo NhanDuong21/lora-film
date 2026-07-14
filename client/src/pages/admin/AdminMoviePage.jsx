@@ -364,7 +364,7 @@ export default function AdminMoviePage() {
       const searchRes = await adminMovieService.getMovies({ search: mv.title, status: 'ALL' });
       const existingList = searchRes?.data?.data || searchRes?.data || searchRes?.content || [];
       const isDuplicate = Array.isArray(existingList) && existingList.some(
-        m => m.title && m.title.toLowerCase().trim() === mv.title.toLowerCase().trim()
+        m => m.title && m.title.toLowerCase().trim() === mv.title.toLowerCase().trim() && m.activeSlug
       );
 
       if (isDuplicate) {

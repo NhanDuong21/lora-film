@@ -234,6 +234,8 @@ public class MovieServiceImpl implements MovieService {
         detailDto.setGenres(baseDto.getGenres());
         detailDto.setPrimaryPoster(baseDto.getPrimaryPoster());
         detailDto.setStatus(baseDto.getStatus());
+        detailDto.setActiveSlug(baseDto.getActiveSlug());
+        detailDto.setCountry(baseDto.getCountry());
 
         List<MovieCredit> credits = movieCreditRepository.findByMovieIdAndDeletedAtIsNullOrderByDisplayOrderAsc(movie.getId());
         
