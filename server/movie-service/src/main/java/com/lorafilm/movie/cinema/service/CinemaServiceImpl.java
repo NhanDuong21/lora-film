@@ -23,6 +23,7 @@ import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
+import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
 import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
 import com.lorafilm.movie.cinema.domain.entity.CinemaMedia;
 import com.lorafilm.movie.cinema.domain.entity.CinemaClosurePeriod;
@@ -35,15 +36,14 @@ import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class CinemaServiceImpl implements CinemaService {
@@ -81,6 +81,7 @@ public class CinemaServiceImpl implements CinemaService {
                 .and(CinemaSpecification.hasStatus(CinemaStatus.ACTIVE));
 
         if (city != null && !city.isEmpty()) {
+
             spec = spec.and(CinemaSpecification.hasCity(city));
         }
         if (district != null && !district.isEmpty()) {
@@ -115,7 +116,7 @@ public class CinemaServiceImpl implements CinemaService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public CinemaDetailDto getCinemaByIdentifier(String identifier) {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(identifier)
-                .orElseGet(() -> cinemaRepository.findBySlugAndDeletedAtIsNull(identifier)
+                .orElseGet(() -> cinemaRepository.findByActiveSlugAndDeletedAtIsNull(identifier)
                         .orElseThrow(() -> new ResourceNotFoundException("Cinema not found")));
 
         if (cinema.getStatus() != CinemaStatus.ACTIVE) {
@@ -307,8 +308,7 @@ public class CinemaServiceImpl implements CinemaService {
             return dto;
         }).collect(Collectors.toList()));
 
-        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(),
-                com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE);
+        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(), AuditoriumStatus.ACTIVE);
         detailDto.setActiveAuditoriums(auditoriums.stream().map(a -> {
             CinemaDetailDto.AuditoriumDto dto = new CinemaDetailDto.AuditoriumDto();
             dto.setPublicId(a.getPublicId());

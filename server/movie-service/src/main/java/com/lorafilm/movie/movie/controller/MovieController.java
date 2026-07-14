@@ -7,6 +7,7 @@ import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.service.MovieService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import org.springframework.validation.annotation.Validated;
@@ -23,7 +24,8 @@ public class MovieController {
         this.movieService = movieService;
     }
 
-    @GetMapping("/api/movies")
+    @GetMapping("/api/admin/movies")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<MovieDto>>> getMovies(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) @Min(1) Long genreId,
@@ -37,15 +39,17 @@ public class MovieController {
         return ResponseEntity.ok(ApiResponse.ok(movieService.getMovies(status, genreId, keyword, city, cinemaId, date, page, size, sort)));
     }
 
-    @GetMapping("/api/movies/{movieId}")
-    public ResponseEntity<ApiResponse<MovieDetailDto>> getMovieDetail(@PathVariable("movieId") String movieId) {
-        return ResponseEntity.ok(ApiResponse.ok(movieService.getMovieByIdentifier(movieId)));
+    @GetMapping("/api/admin/movies/{publicId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<MovieDetailDto>> getMovieDetail(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.getMovieByIdentifier(publicId)));
     }
 
-    @PutMapping("/api/admin/movies/{movieId}/status")
+    @PutMapping("/api/admin/movies/{publicId}/status")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<MovieDto>> updateMovieStatus(
-            @PathVariable("movieId") String movieId,
+            @PathVariable("publicId") String publicId,
             @RequestParam("status") MovieStatus status) {
-        return ResponseEntity.ok(ApiResponse.ok(movieService.updateMovieStatus(movieId, status)));
+        return ResponseEntity.ok(ApiResponse.ok(movieService.updateMovieStatus(publicId, status)));
     }
 }

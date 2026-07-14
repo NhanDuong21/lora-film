@@ -48,7 +48,7 @@ public class CreateMovieMediaRequest {
     }
 
     public void setUrl(String url) {
-        this.url = url;
+        this.url = url != null ? url.trim() : null;
     }
 
     public String getTitle() {
@@ -56,7 +56,7 @@ public class CreateMovieMediaRequest {
     }
 
     public void setTitle(String title) {
-        this.title = title;
+        this.title = title != null ? title.trim() : null;
     }
 
     public Integer getDisplayOrder() {

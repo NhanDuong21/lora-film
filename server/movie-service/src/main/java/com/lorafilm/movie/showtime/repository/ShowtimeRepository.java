@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSpecificationExecutor<Showtime> {
     boolean existsByAuditoriumId(Long auditoriumId);
+    boolean existsByMovieIdAndDeletedAtIsNull(Long movieId);
 
     Optional<Showtime> findByPublicIdAndDeletedAtIsNull(String publicId);
 
