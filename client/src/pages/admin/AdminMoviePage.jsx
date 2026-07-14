@@ -1059,7 +1059,7 @@ export default function AdminMoviePage() {
                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Đạo diễn</p>
                     <div className="flex flex-wrap gap-2">
                       {directors.map(d => {
-                        const imgUrl = d.profileImageUrl || d.profileImage || DEFAULT_AVATAR;
+                        const imgUrl = d.profileUrl || d.profileImageUrl || d.profileImage || DEFAULT_AVATAR;
                         return (
                           <div key={d.tmdbId || d.name} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
                             <img src={imgUrl} alt={d.name} className="w-6 h-6 rounded-full object-cover" onError={e => { e.target.src = DEFAULT_AVATAR; }} />
@@ -1075,7 +1075,7 @@ export default function AdminMoviePage() {
                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Biên kịch</p>
                     <div className="flex flex-wrap gap-2">
                       {writers.map(w => {
-                        const imgUrl = w.profileImageUrl || w.profileImage || DEFAULT_AVATAR;
+                        const imgUrl = w.profileUrl || w.profileImageUrl || w.profileImage || DEFAULT_AVATAR;
                         return (
                           <div key={w.tmdbId || w.name} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
                             <img src={imgUrl} alt={w.name} className="w-6 h-6 rounded-full object-cover" onError={e => { e.target.src = DEFAULT_AVATAR; }} />
@@ -1094,7 +1094,7 @@ export default function AdminMoviePage() {
                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Diễn viên chính</p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {cast.map(c => {
-                        const imgUrl = c.profileImageUrl || c.profileImage || DEFAULT_AVATAR;
+                        const imgUrl = c.profileUrl || c.profileImageUrl || c.profileImage || DEFAULT_AVATAR;
                         return (
                           <div key={c.tmdbId || c.name} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">
                             <img src={imgUrl} alt={c.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" onError={e => { e.target.src = DEFAULT_AVATAR; }} />
