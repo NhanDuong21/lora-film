@@ -235,17 +235,20 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
             });
         });
         
+        thread1.setDaemon(true);
         thread1.start();
         lockAcquired.await();
 
-        assertThrows(org.springframework.dao.PessimisticLockingFailureException.class, () -> {
-            txTemplate.execute(status -> {
-                return previewRepository.findByPublicIdForUpdate(preview.getPublicId());
+        try {
+            assertThrows(org.springframework.dao.PessimisticLockingFailureException.class, () -> {
+                txTemplate.execute(status -> {
+                    return previewRepository.findByPublicIdForUpdate(preview.getPublicId());
+                });
             });
-        });
-
-        updateFinished.countDown();
-        thread1.join();
+        } finally {
+            updateFinished.countDown();
+            thread1.join();
+        }
     }
 
     @Test
