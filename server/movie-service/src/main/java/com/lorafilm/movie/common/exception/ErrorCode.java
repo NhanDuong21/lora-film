@@ -109,6 +109,15 @@ public enum ErrorCode {
     AUTO_SCHEDULE_REJECTED_ITEM_CANNOT_BE_SELECTED("Rejected preview item cannot be selected", 400),
     AUTO_SCHEDULE_DUPLICATE_ITEM_SELECTION("Duplicate preview item found in selection request", 400),
     
+    AUTO_SCHEDULE_INVALID_DATE_RANGE("Invalid auto schedule date range", 400),
+    AUTO_SCHEDULE_DATE_RANGE_TOO_LARGE("Auto schedule date range exceeds maximum allowed days", 400),
+    AUTO_SCHEDULE_EMPTY_MOVIE_VERSIONS("Auto schedule movie versions cannot be empty after normalization", 400),
+    AUTO_SCHEDULE_EMPTY_AUDITORIUMS("Auto schedule auditoriums cannot be empty after normalization", 400),
+    AUTO_SCHEDULE_UNSUPPORTED_SLOT_GRANULARITY("Unsupported auto schedule slot granularity", 400),
+    AUTO_SCHEDULE_INVALID_PREVIEW_TTL("Invalid auto schedule preview TTL", 400),
+    AUTO_SCHEDULE_TOO_MANY_CANDIDATES("Too many auto schedule candidates generated", 422),
+    AUTO_SCHEDULE_GENERATION_FAILED("Auto schedule generation failed", 500),
+    
     CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
 
     private final String message;

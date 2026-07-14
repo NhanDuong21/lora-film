@@ -52,11 +52,11 @@ class ShowtimeSchedulePreviewMapperTest {
     }
 
     @Test
-    void toItemResponse_shouldParseScoreBreakdown_whenValidJson() {
+    void toItemResponse_shouldPassScoreBreakdown() {
         ShowtimeSchedulePreviewItem item = mock(ShowtimeSchedulePreviewItem.class);
         when(item.getPublicId()).thenReturn("item-1");
         when(item.getScore()).thenReturn(new BigDecimal("9.5"));
-        when(item.getScoreBreakdownJson()).thenReturn("{\"baseScore\": 5.0, \"timeBonus\": 4.5}");
+        when(item.getScoreBreakdown()).thenReturn(java.util.Map.of("baseScore", new BigDecimal("5.0"), "timeBonus", new BigDecimal("4.5")));
 
         ShowtimeSchedulePreviewItemResponse response = mapper.toItemResponse(item);
 
@@ -65,18 +65,6 @@ class ShowtimeSchedulePreviewMapperTest {
         assertThat(response.getScore()).isEqualTo(new BigDecimal("9.5"));
         assertThat(response.getScoreBreakdown()).containsEntry("baseScore", new BigDecimal("5.0"))
                                                 .containsEntry("timeBonus", new BigDecimal("4.5"));
-    }
-
-    @Test
-    void toItemResponse_shouldReturnEmptyMap_whenMalformedJson() {
-        ShowtimeSchedulePreviewItem item = mock(ShowtimeSchedulePreviewItem.class);
-        when(item.getPublicId()).thenReturn("item-2");
-        when(item.getScoreBreakdownJson()).thenReturn("{malformed: true");
-
-        ShowtimeSchedulePreviewItemResponse response = mapper.toItemResponse(item);
-
-        assertThat(response).isNotNull();
-        assertThat(response.getScoreBreakdown()).isEmpty();
     }
 
     @Test

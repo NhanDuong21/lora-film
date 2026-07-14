@@ -84,7 +84,7 @@ public class ShowtimeSchedulePreviewMapper {
         response.setEndTime(item.getEndTime());
         response.setOccupancyEndTime(item.getOccupancyEndTime());
         response.setScore(item.getScore());
-        response.setScoreBreakdown(parseScoreBreakdown(item.getScoreBreakdownJson(), item.getPublicId()));
+        response.setScoreBreakdown(item.getScoreBreakdown());
         response.setRankingPosition(item.getRankingPosition());
         response.setValidationStatus(item.getValidationStatus());
         response.setRejectionCode(item.getRejectionCode());
@@ -113,15 +113,4 @@ public class ShowtimeSchedulePreviewMapper {
         return summary;
     }
 
-    private Map<String, BigDecimal> parseScoreBreakdown(String json, String itemPublicId) {
-        if (json == null || json.trim().isEmpty()) {
-            return Collections.emptyMap();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, BigDecimal>>() {});
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to parse scoreBreakdownJson for item {}: {}", itemPublicId, e.getMessage());
-            return Collections.emptyMap();
-        }
-    }
 }

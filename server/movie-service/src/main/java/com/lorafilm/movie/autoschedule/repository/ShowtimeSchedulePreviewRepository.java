@@ -22,6 +22,9 @@ public interface ShowtimeSchedulePreviewRepository extends JpaRepository<Showtim
 
     Optional<ShowtimeSchedulePreview> findByGenerateIdempotencyKey(String generateIdempotencyKey);
 
+    @Query("SELECT p FROM ShowtimeSchedulePreview p JOIN FETCH p.cinema WHERE p.generateIdempotencyKey = :generateIdempotencyKey")
+    Optional<ShowtimeSchedulePreview> findByGenerateIdempotencyKeyWithCinema(@Param("generateIdempotencyKey") String generateIdempotencyKey);
+
     Optional<ShowtimeSchedulePreview> findByApplyIdempotencyKey(String applyIdempotencyKey);
 
     boolean existsByGenerateIdempotencyKey(String generateIdempotencyKey);

@@ -9,8 +9,11 @@ import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import jakarta.persistence.*;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 
 @Entity
 @Table(name = "showtime_schedule_preview_items", uniqueConstraints = {
@@ -58,8 +61,9 @@ public class ShowtimeSchedulePreviewItem {
     @Column(name = "score", nullable = false, precision = 10, scale = 3)
     private BigDecimal score;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "score_breakdown_json", columnDefinition = "json")
-    private String scoreBreakdownJson;
+    private Map<String, BigDecimal> scoreBreakdown;
 
     @Column(name = "ranking_position", nullable = false)
     private Integer rankingPosition;
@@ -104,6 +108,34 @@ public class ShowtimeSchedulePreviewItem {
     private Instant updatedAt;
 
     protected ShowtimeSchedulePreviewItem() {}
+
+    public static ShowtimeSchedulePreviewItem createItem(ShowtimeSchedulePreview preview, com.lorafilm.movie.autoschedule.model.ShowtimeCandidate candidate) {
+        ShowtimeSchedulePreviewItem item = new ShowtimeSchedulePreviewItem();
+        item.setPublicId(java.util.UUID.randomUUID().toString());
+        item.setPreview(preview);
+        
+        item.setMovie(candidate.getMovie());
+        item.setMovieVersion(candidate.getMovieVersion());
+        item.setCinema(candidate.getCinema());
+        item.setAuditorium(candidate.getAuditorium());
+        
+        item.setStartTime(candidate.getStartTime());
+        item.setEndTime(candidate.getEndTime());
+        item.setOccupancyEndTime(candidate.getOccupancyEndTime());
+        
+        item.setScore(candidate.getScore());
+        item.setScoreBreakdown(candidate.getScoreBreakdown());
+        item.setRankingPosition(candidate.getRankingPosition());
+        item.setValidationStatus(candidate.getValidationStatus());
+        item.setRejectionCode(candidate.getRejectionCode());
+        item.setRejectionReason(candidate.getRejectionReason());
+        
+        item.setSelected(candidate.isSelected());
+        item.setSelectedAt(null);
+        item.setSelectedBy(null);
+        item.setApplyStatus(PreviewItemApplyStatus.PENDING);
+        return item;
+    }
 
     public Long getId() {
         return id;
@@ -189,12 +221,12 @@ public class ShowtimeSchedulePreviewItem {
         this.score = score;
     }
 
-    public String getScoreBreakdownJson() {
-        return scoreBreakdownJson;
+    public Map<String, BigDecimal> getScoreBreakdown() {
+        return scoreBreakdown;
     }
 
-    public void setScoreBreakdownJson(String scoreBreakdownJson) {
-        this.scoreBreakdownJson = scoreBreakdownJson;
+    public void setScoreBreakdown(Map<String, BigDecimal> scoreBreakdown) {
+        this.scoreBreakdown = scoreBreakdown;
     }
 
     public Integer getRankingPosition() {

@@ -107,6 +107,41 @@ public class ShowtimeSchedulePreview {
 
     protected ShowtimeSchedulePreview() {}
 
+    public static ShowtimeSchedulePreview createGenerating(Cinema cinema,
+                                                           LocalDate scheduleFrom,
+                                                           LocalDate scheduleTo,
+                                                           Integer slotGranularityMinutes,
+                                                           Integer previewTtlMinutes,
+                                                           String idempotencyKey,
+                                                           String fingerprint,
+                                                           Long adminUserId,
+                                                           Instant generatedAt) {
+        ShowtimeSchedulePreview preview = new ShowtimeSchedulePreview();
+        preview.setPublicId(java.util.UUID.randomUUID().toString());
+        preview.setCinema(cinema);
+        preview.setScheduleFrom(scheduleFrom);
+        preview.setScheduleTo(scheduleTo);
+        preview.setTimezoneSnapshot(cinema.getTimezone());
+        preview.setStrategy(AutoScheduleStrategy.BALANCED);
+        preview.setStrategyVersion("BALANCED_V1");
+        preview.setApplyMode(SchedulePreviewApplyMode.ALL_OR_NOTHING);
+        preview.setStatus(SchedulePreviewStatus.GENERATING);
+        preview.setSlotGranularityMinutes(slotGranularityMinutes);
+
+        preview.setTotalCandidateCount(0);
+        preview.setValidCandidateCount(0);
+        preview.setRejectedCandidateCount(0);
+        preview.setSelectedCandidateCount(0);
+
+        preview.setGeneratedAt(generatedAt);
+        preview.setExpiresAt(generatedAt.plus(previewTtlMinutes, java.time.temporal.ChronoUnit.MINUTES));
+        preview.setGeneratedBy(adminUserId);
+
+        preview.setGenerateIdempotencyKey(idempotencyKey);
+        preview.setRequestFingerprint(fingerprint);
+        return preview;
+    }
+
     public void addItem(ShowtimeSchedulePreviewItem item) {
         items.add(item);
         item.setPreview(this);

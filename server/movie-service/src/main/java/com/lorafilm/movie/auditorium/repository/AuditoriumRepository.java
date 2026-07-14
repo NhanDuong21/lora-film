@@ -17,6 +17,8 @@ import jakarta.persistence.LockModeType;
 @Repository
 public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
     Optional<Auditorium> findByPublicIdAndDeletedAtIsNull(String publicId);
+    
+    List<Auditorium> findByPublicIdInAndDeletedAtIsNull(List<String> publicIds);
 
     Optional<Auditorium> findByPublicIdAndStatusAndDeletedAtIsNull(String publicId, AuditoriumStatus status);
 

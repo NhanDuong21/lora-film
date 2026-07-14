@@ -18,9 +18,15 @@ import org.springframework.web.bind.annotation.*;
 public class AdminShowtimeScheduleController {
 
     private final ShowtimeSchedulePreviewService service;
+    private final com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService;
+    private final com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider;
 
-    public AdminShowtimeScheduleController(ShowtimeSchedulePreviewService service) {
+    public AdminShowtimeScheduleController(ShowtimeSchedulePreviewService service,
+                                           com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService,
+                                           com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider) {
         this.service = service;
+        this.generationService = generationService;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Operation(summary = "Get preview details", description = "Retrieves the persisted auto schedule preview and its candidates.")
@@ -37,6 +43,29 @@ public class AdminShowtimeScheduleController {
     ) {
         ShowtimeSchedulePreviewResponse response = service.getPreview(previewPublicId);
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview retrieved successfully", response));
+    }
+
+    @Operation(summary = "Generate preview", description = "Generates a new auto schedule preview.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Preview generated"),
+        @ApiResponse(responseCode = "400", description = "Invalid request or validation failed"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden"),
+        @ApiResponse(responseCode = "404", description = "Related entities not found"),
+        @ApiResponse(responseCode = "409", description = "Conflict, e.g. idempotency key reused"),
+        @ApiResponse(responseCode = "500", description = "Auto schedule generation failed")
+    })
+    @PostMapping("/generate-preview")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<ShowtimeSchedulePreviewResponse>> generatePreview(
+            @Valid @RequestBody com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest request
+    ) {
+        Long adminUserId = currentUserProvider.getCurrentUserId();
+        if (adminUserId == null) {
+            throw new com.lorafilm.movie.common.exception.BusinessException(com.lorafilm.movie.common.exception.ErrorCode.CURRENT_USER_NOT_AVAILABLE);
+        }
+        ShowtimeSchedulePreviewResponse response = generationService.generatePreview(request, adminUserId);
+        return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview generated successfully", response));
     }
 
     @Operation(summary = "Update preview item selections", description = "Update the selection status of candidate items in a preview.")

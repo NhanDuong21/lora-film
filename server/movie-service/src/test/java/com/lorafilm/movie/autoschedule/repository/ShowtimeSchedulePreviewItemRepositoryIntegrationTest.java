@@ -351,8 +351,7 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
     @Test
     void ITEM_REPO_009_jsonScoreBreakdown() {
         ShowtimeSchedulePreviewItem item = createValidItem();
-        String json = "{\"primeTime\": 90, \"utilization\": 80, \"fairness\": 70}";
-        item.setScoreBreakdownJson(json);
+        item.setScoreBreakdown(java.util.Map.of("base", java.math.BigDecimal.valueOf(50)));
         itemRepository.saveAndFlush(item);
         
         entityManager.clear();
@@ -360,8 +359,7 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
         ShowtimeSchedulePreviewItem found = itemRepository.findById(item.getId()).orElseThrow();
         
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            assertThat(mapper.readTree(found.getScoreBreakdownJson())).isEqualTo(mapper.readTree(json));
+            assertThat(found.getScoreBreakdown().get("base")).isEqualTo(java.math.BigDecimal.valueOf(50));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
