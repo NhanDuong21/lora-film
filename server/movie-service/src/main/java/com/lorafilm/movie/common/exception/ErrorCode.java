@@ -105,6 +105,10 @@ public enum ErrorCode {
     AUTO_SCHEDULE_PREVIEW_APPLY_IN_PROGRESS("Auto schedule preview is currently being applied", 409),
     AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT("Auto schedule preview was modified by another request", 409),
     IDEMPOTENCY_KEY_REUSED("Idempotency key was reused with a different request", 409),
+    AUTO_SCHEDULE_ITEM_NOT_BELONG_TO_PREVIEW("Preview item does not belong to the preview", 400),
+    AUTO_SCHEDULE_REJECTED_ITEM_CANNOT_BE_SELECTED("Rejected preview item cannot be selected", 400),
+    AUTO_SCHEDULE_DUPLICATE_ITEM_SELECTION("Duplicate preview item found in selection request", 400),
+    AUTO_SCHEDULE_NO_SELECTION_CHANGES("No preview item selection changes were provided", 400),
     
     CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
 

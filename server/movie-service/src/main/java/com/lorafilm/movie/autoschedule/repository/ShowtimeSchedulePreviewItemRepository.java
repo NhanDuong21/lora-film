@@ -36,4 +36,8 @@ public interface ShowtimeSchedulePreviewItemRepository extends JpaRepository<Sho
         order by i.rankingPosition asc, i.id asc
     """)
     List<ShowtimeSchedulePreviewItem> findDetailedItemsByPreviewId(@Param("previewId") Long previewId);
+
+    List<ShowtimeSchedulePreviewItem> findAllByPublicIdIn(java.util.Collection<String> publicIds);
+
+    long countByPreviewIdAndSelectedTrueAndValidationStatus(Long previewId, PreviewItemValidationStatus validationStatus);
 }
