@@ -1,29 +1,31 @@
 package com.lorafilm.movie.cinema.service;
 
-import com.lorafilm.movie.cinema.domain.entity.Cinema;
-import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
-import com.lorafilm.movie.cinema.dto.CinemaDto;
-import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
-import com.lorafilm.movie.cinema.dto.CinemaMapper;
-import com.lorafilm.movie.cinema.repository.CinemaRepository;
-import com.lorafilm.movie.cinema.repository.CinemaSpecification;
-import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
-import com.lorafilm.movie.cinema.repository.CinemaMediaRepository;
-import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
-import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
-import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
-import com.lorafilm.movie.cinema.domain.entity.CinemaMedia;
-import com.lorafilm.movie.common.enums.ActiveStatus;
-import com.lorafilm.movie.common.dto.PageResponse;
-import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
+import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
+import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
+import com.lorafilm.movie.cinema.domain.entity.Cinema;
+import com.lorafilm.movie.cinema.domain.entity.CinemaMedia;
+import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
+import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
+import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
+import com.lorafilm.movie.cinema.dto.CinemaDto;
+import com.lorafilm.movie.cinema.dto.CinemaMapper;
+import com.lorafilm.movie.cinema.repository.CinemaMediaRepository;
+import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
+import com.lorafilm.movie.cinema.repository.CinemaRepository;
+import com.lorafilm.movie.cinema.repository.CinemaSpecification;
+import com.lorafilm.movie.common.dto.PageResponse;
+import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 
 @Service
 public class CinemaServiceImpl implements CinemaService {
@@ -52,6 +54,7 @@ public class CinemaServiceImpl implements CinemaService {
                 .and(CinemaSpecification.hasStatus(CinemaStatus.ACTIVE));
 
         if (city != null && !city.isEmpty()) {
+
             spec = spec.and(CinemaSpecification.hasCity(city));
         }
         if (district != null && !district.isEmpty()) {
@@ -125,7 +128,7 @@ public class CinemaServiceImpl implements CinemaService {
             return dto;
         }).collect(Collectors.toList()));
 
-        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(), ActiveStatus.ACTIVE);
+        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(), AuditoriumStatus.ACTIVE);
         detailDto.setActiveAuditoriums(auditoriums.stream().map(a -> {
             CinemaDetailDto.AuditoriumDto dto = new CinemaDetailDto.AuditoriumDto();
             dto.setPublicId(a.getPublicId());
