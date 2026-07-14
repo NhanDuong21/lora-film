@@ -217,7 +217,7 @@ const emptyForm = () => ({
   originalTitle:  '',
   durationMinutes:'',
   ageRating:      'P',
-  showingStartDate: getTodayString(),
+  showingStartDate: '',
   endDate:        '',
   country:        '',
   synopsis:       '',
@@ -300,9 +300,9 @@ export default function AdminMoviePage() {
         page: currentPage,
         size: pageSize,
         search: searchTerm || undefined,
-        status: statusFilter || undefined,
+        status: statusFilter || 'ALL',
       });
-      const content     = data?.data?.content || data?.content || data?.data || data || [];
+      const content     = data?.data?.data || data?.data?.content || data?.content || data?.data || data || [];
       const totalEls    = data?.data?.totalElements ?? data?.totalElements ?? (Array.isArray(content) ? content.length : 0);
       const totalPgs    = data?.data?.totalPages    ?? data?.totalPages    ?? Math.ceil(totalEls / pageSize);
       setMovies(Array.isArray(content) ? content : []);
@@ -360,6 +360,18 @@ export default function AdminMoviePage() {
       const bundle = res.data;
       const mv = bundle.movie || {};
 
+      // Check if movie already exists in local DB
+      const searchRes = await adminMovieService.getMovies({ search: mv.title, status: 'ALL' });
+      const existingList = searchRes?.data?.data || searchRes?.data || searchRes?.content || [];
+      const isDuplicate = Array.isArray(existingList) && existingList.some(
+        m => m.title && m.title.toLowerCase().trim() === mv.title.toLowerCase().trim()
+      );
+
+      if (isDuplicate) {
+        triggerToast?.('Bộ phim này đã tồn tại trong hệ thống.', 'error');
+        return;
+      }
+
       // Fetch backdrops from TMDB API
       let backdrops = [];
       try {
@@ -379,7 +391,7 @@ export default function AdminMoviePage() {
         originalTitle:    mv.originalTitle || '',
         durationMinutes:  runtime ? String(runtime) : '',
         ageRating:        mapTmdbCert(certification),
-        showingStartDate: mv.releaseDate || getTodayString(),
+        showingStartDate: '', // Enter manually
         endDate:          '',
         country:          extractCountry(bundle),
         synopsis:         mv.overview || '',
@@ -565,17 +577,31 @@ export default function AdminMoviePage() {
 
   // ─── Validate form ────────────────────────────────────────────────────────────
   const validateForm = () => {
+    const isEdit = !!selectedMovie;
     const errs = {};
     if (!formBasic.title.trim())              errs.title           = 'Tên phim không được để trống.';
     if (!formBasic.durationMinutes || Number(formBasic.durationMinutes) <= 0)
                                               errs.durationMinutes = 'Thời lượng phải là số dương.';
     if (!formBasic.ageRating || !AGE_RATINGS.includes(formBasic.ageRating))
                                               errs.ageRating       = `Độ tuổi phải là một trong: ${AGE_RATINGS.join(', ')}.`;
-    if (isEdit) {
-      if (!formBasic.showingStartDate)          errs.showingStartDate = 'Ngày khởi chiếu bắt buộc phải chọn.';
-      if (formBasic.endDate && new Date(formBasic.endDate) < new Date(formBasic.showingStartDate))
-                                                errs.endDate         = 'Ngày kết thúc không thể trước ngày khởi chiếu.';
+    
+    // Dates validation applies to both create and edit
+    if (!formBasic.showingStartDate) {
+      errs.showingStartDate = 'Ngày khởi chiếu bắt buộc phải chọn.';
     }
+    if (formBasic.endDate && new Date(formBasic.endDate) < new Date(formBasic.showingStartDate)) {
+      errs.endDate = 'Ngày kết thúc không thể trước ngày khởi chiếu.';
+    }
+
+    // Ended movie validation
+    if (formBasic.status === 'ENDED') {
+      if (!formBasic.endDate) {
+        errs.endDate = 'Ngày kết thúc bắt buộc phải chọn khi ngừng chiếu.';
+      } else if (new Date(formBasic.endDate) >= new Date(getTodayString())) {
+        errs.endDate = 'Ngày kết thúc phải ở quá khứ đối với phim đã ngừng chiếu.';
+      }
+    }
+
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -945,24 +971,22 @@ export default function AdminMoviePage() {
               </div>
 
               {/* Dates section */}
-              {isEdit && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                  {formBasic.tmdbReleaseDate && (
-                    <Field label="Ngày phát hành gốc (TMDB)">
-                      <div className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-400 flex items-center gap-2">
-                        <Info className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />
-                        <span>{formatDate(formBasic.tmdbReleaseDate)}</span>
-                      </div>
-                    </Field>
-                  )}
-                  <Field label="Ngày khởi chiếu (tại rạp)" required error={formErrors.showingStartDate}>
-                    <Input type="date" value={formBasic.showingStartDate} onChange={e => setFormBasic(p => ({ ...p, showingStartDate: e.target.value }))} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                {formBasic.tmdbReleaseDate && (
+                  <Field label="Ngày phát hành gốc (TMDB)">
+                    <div className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-400 flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />
+                      <span>{formatDate(formBasic.tmdbReleaseDate)}</span>
+                    </div>
                   </Field>
-                  <Field label="Ngày ngừng chiếu" error={formErrors.endDate}>
-                    <Input type="date" value={formBasic.endDate} onChange={e => setFormBasic(p => ({ ...p, endDate: e.target.value }))} />
-                  </Field>
-                </div>
-              )}
+                )}
+                <Field label="Ngày khởi chiếu (tại rạp)" required error={formErrors.showingStartDate}>
+                  <Input type="date" value={formBasic.showingStartDate} onChange={e => setFormBasic(p => ({ ...p, showingStartDate: e.target.value }))} />
+                </Field>
+                <Field label="Ngày ngừng chiếu" error={formErrors.endDate}>
+                  <Input type="date" value={formBasic.endDate} onChange={e => setFormBasic(p => ({ ...p, endDate: e.target.value }))} />
+                </Field>
+              </div>
 
               <Field label="Nội dung tóm tắt">
                 <Textarea rows={5} value={formBasic.synopsis} onChange={e => setFormBasic(p => ({ ...p, synopsis: e.target.value }))} />
@@ -1146,8 +1170,8 @@ export default function AdminMoviePage() {
                         ['Ngôn ngữ thoại','audioLanguage','text',  {placeholder:'EN, VI, JA'}],
                         ['Phụ đề',        'subtitleLanguage','text',{placeholder:'VI, NONE'}],
                         ['Lồng tiếng',    'dubLanguage', 'text',   {placeholder:'VI, NONE'}],
-                        ['Trạng thái',    'status',      'select', {opts:['ACTIVE','INACTIVE']}],
-                      ].map(([lbl, field, type, opts]) => (
+                        isEdit && ['Tình trạng (Condition)', 'status', 'select', {opts:['ACTIVE','INACTIVE']}],
+                      ].filter(Boolean).map(([lbl, field, type, opts]) => (
                         <div key={field} className="space-y-1">
                           <p className="text-[9px] font-black uppercase text-zinc-500">{lbl}</p>
                           {type === 'select'

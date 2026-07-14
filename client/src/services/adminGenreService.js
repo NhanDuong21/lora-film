@@ -4,7 +4,7 @@ const API_URL = '/api/admin/genres';
 
 const adminGenreService = {
   getAllGenres: async () => {
-    const response = await apiClient.get(API_URL);
+    const response = await apiClient.get(API_URL, { params: { size: 100 } });
     return response.data;
   },
 
