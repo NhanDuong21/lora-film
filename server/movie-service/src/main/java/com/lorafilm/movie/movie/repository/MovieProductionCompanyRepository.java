@@ -11,4 +11,6 @@ import com.lorafilm.movie.movie.domain.entity.MovieProductionCompanyId;
 @Repository
 public interface MovieProductionCompanyRepository extends JpaRepository<MovieProductionCompany, MovieProductionCompanyId> {
     List<MovieProductionCompany> findByMovieId(Long movieId);
+    void deleteByMovieId(Long movieId);
+    boolean existsByMovieIdAndProductionCompanyIdAndRole(Long movieId, Long productionCompanyId, com.lorafilm.movie.movie.domain.enums.CompanyRoleType role);
 }
