@@ -22,7 +22,7 @@ public class ShowtimeSchedulePreviewItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", nullable = false, unique = true, updatable = false, length = 36)
+    @Column(name = "public_id", nullable = false, unique = true, updatable = false, length = 36, columnDefinition = "CHAR(36)")
     private String publicId;
 
     @ManyToOne(fetch = FetchType.LAZY)

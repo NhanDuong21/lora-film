@@ -19,7 +19,7 @@ public class ShowtimeSchedulePreview {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", nullable = false, unique = true, updatable = false, length = 36)
+    @Column(name = "public_id", nullable = false, unique = true, updatable = false, length = 36, columnDefinition = "CHAR(36)")
     private String publicId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -86,7 +86,7 @@ public class ShowtimeSchedulePreview {
     @Column(name = "apply_idempotency_key", unique = true, length = 100)
     private String applyIdempotencyKey;
 
-    @Column(name = "request_fingerprint", nullable = false, length = 64)
+    @Column(name = "request_fingerprint", nullable = false, length = 64, columnDefinition = "CHAR(64)")
     private String requestFingerprint;
 
     @Column(name = "failure_reason", length = 500)
