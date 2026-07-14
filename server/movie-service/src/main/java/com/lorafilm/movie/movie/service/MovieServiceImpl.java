@@ -99,7 +99,20 @@ public class MovieServiceImpl implements MovieService {
             spec = spec.and(MovieSpecification.hasShowtimeOnDate(date));
         }
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("releaseDate").descending());
+        Sort sorting = Sort.unsorted();
+        if (sort != null && !sort.isEmpty()) {
+            String[] sortParams = sort.split(",");
+            if (sortParams.length >= 2) {
+                sorting = sortParams[1].equalsIgnoreCase("desc") ? 
+                        Sort.by(sortParams[0]).descending() : 
+                        Sort.by(sortParams[0]).ascending();
+            } else {
+                sorting = Sort.by(sortParams[0]).ascending();
+            }
+        } else {
+            sorting = Sort.by("releaseDate").descending();
+        }
+        Pageable pageable = PageRequest.of(page, size, sorting);
         Page<Movie> moviePage = movieRepository.findAll(spec, pageable);
 
         List<Long> movieIds = moviePage.getContent().stream()
