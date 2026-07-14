@@ -146,10 +146,6 @@ public class MovieServiceImpl implements MovieService {
         }
         Movie movie = movieOpt.orElseThrow(() -> new ResourceNotFoundException("Movie not found"));
 
-        if (movie.getStatus() == MovieStatus.DRAFT || movie.getStatus() == MovieStatus.INACTIVE) {
-            throw new ResourceNotFoundException("Movie not found");
-        }
-
         return mapToDetailDto(movie);
     }
 
