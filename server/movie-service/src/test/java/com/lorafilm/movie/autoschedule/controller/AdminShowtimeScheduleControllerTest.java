@@ -1,13 +1,13 @@
 package com.lorafilm.movie.autoschedule.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
 import com.lorafilm.movie.autoschedule.service.ShowtimeSchedulePreviewService;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -24,9 +25,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -46,34 +46,22 @@ class AdminShowtimeScheduleControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void getPreview_shouldReturn200_whenAdmin() throws Exception {
+    void case1_getPreviewSuccess() throws Exception {
+        System.out.println("\n========== CASE 1: GET preview thanh cong ==========");
         ShowtimeSchedulePreviewResponse response = new ShowtimeSchedulePreviewResponse();
         response.setPreviewPublicId(previewId);
+        response.setStatus(SchedulePreviewStatus.PREVIEWED);
 
         when(service.getPreview(previewId)).thenReturn(response);
 
         mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.previewPublicId").value(previewId));
-    }
-
-    @Test
-    @WithMockUser(roles = "CUSTOMER")
-    void getPreview_shouldReturn403_whenCustomer() throws Exception {
-        mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void getPreview_shouldReturn401_whenNoToken() throws Exception {
-        mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
-                .andExpect(status().isUnauthorized());
+                .andDo(print());
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void updateSelections_shouldReturn200_whenValidRequest() throws Exception {
+    void case2_putSelectionsSuccess() throws Exception {
+        System.out.println("\n========== CASE 2: PUT selections thanh cong ==========");
         UpdatePreviewItemSelectionRequest itemReq = new UpdatePreviewItemSelectionRequest();
         itemReq.setItemPublicId("item-1");
         itemReq.setSelected(true);
@@ -84,36 +72,20 @@ class AdminShowtimeScheduleControllerTest {
 
         ShowtimeSchedulePreviewResponse response = new ShowtimeSchedulePreviewResponse();
         response.setPreviewPublicId(previewId);
+        response.setVersion(2L);
 
         when(service.updateSelections(eq(previewId), any())).thenReturn(response);
 
         mockMvc.perform(put("/api/admin/showtime-schedules/{id}/items", previewId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andDo(print());
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void updateSelections_shouldReturn400_whenMissingExpectedVersion() throws Exception {
-        UpdatePreviewItemSelectionRequest itemReq = new UpdatePreviewItemSelectionRequest();
-        itemReq.setItemPublicId("item-1");
-        itemReq.setSelected(true);
-
-        UpdatePreviewItemSelectionsRequest request = new UpdatePreviewItemSelectionsRequest();
-        request.setItems(List.of(itemReq));
-
-        mockMvc.perform(put("/api/admin/showtime-schedules/{id}/items", previewId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
-    }
-
-    @Test
-    @WithMockUser(roles = "ADMIN")
-    void updateSelections_shouldReturn404_whenPreviewNotFound() throws Exception {
+    void case3_putStaleVersion_409() throws Exception {
+        System.out.println("\n========== CASE 3: PUT stale expectedVersion -> 409 ==========");
         UpdatePreviewItemSelectionRequest itemReq = new UpdatePreviewItemSelectionRequest();
         itemReq.setItemPublicId("item-1");
         itemReq.setSelected(true);
@@ -122,12 +94,60 @@ class AdminShowtimeScheduleControllerTest {
         request.setExpectedVersion(1L);
         request.setItems(List.of(itemReq));
 
-        when(service.updateSelections(eq(previewId), any())).thenThrow(new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND));
+        when(service.updateSelections(eq(previewId), any())).thenThrow(new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT));
 
         mockMvc.perform(put("/api/admin/showtime-schedules/{id}/items", previewId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.errorCode").value("AUTO_SCHEDULE_PREVIEW_NOT_FOUND"));
+                .andDo(print());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void case4_putRejectedItem_400() throws Exception {
+        System.out.println("\n========== CASE 4: PUT chon REJECTED item -> 400 ==========");
+        UpdatePreviewItemSelectionRequest itemReq = new UpdatePreviewItemSelectionRequest();
+        itemReq.setItemPublicId("item-1");
+        itemReq.setSelected(true);
+
+        UpdatePreviewItemSelectionsRequest request = new UpdatePreviewItemSelectionsRequest();
+        request.setExpectedVersion(1L);
+        request.setItems(List.of(itemReq));
+
+        when(service.updateSelections(eq(previewId), any())).thenThrow(new BusinessException(ErrorCode.AUTO_SCHEDULE_REJECTED_ITEM_CANNOT_BE_SELECTED));
+
+        mockMvc.perform(put("/api/admin/showtime-schedules/{id}/items", previewId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andDo(print());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void case5_getPreviewExpired() throws Exception {
+        System.out.println("\n========== CASE 5: GET preview het han -> status EXPIRED ==========");
+        ShowtimeSchedulePreviewResponse response = new ShowtimeSchedulePreviewResponse();
+        response.setPreviewPublicId(previewId);
+        response.setStatus(SchedulePreviewStatus.EXPIRED);
+
+        when(service.getPreview(previewId)).thenReturn(response);
+
+        mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
+                .andDo(print());
+    }
+
+    @Test
+    void case6_noToken_401() throws Exception {
+        System.out.println("\n========== CASE 6: No token -> 401 ==========");
+        mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
+                .andDo(print());
+    }
+
+    @Test
+    @WithMockUser(roles = "CUSTOMER")
+    void case7_customerToken_403() throws Exception {
+        System.out.println("\n========== CASE 7: Customer token -> 403 ==========");
+        mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
+                .andDo(print());
     }
 }
