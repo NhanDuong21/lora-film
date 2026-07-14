@@ -30,7 +30,28 @@ public class CustomerMovieController {
     }
 
     @GetMapping("/{identifier}")
-    public ApiResponse<MovieDto> getMovieDetail(@PathVariable String identifier) {
+    public ApiResponse<com.lorafilm.movie.movie.dto.MovieDetailDto> getMovieDetail(@PathVariable String identifier) {
         return ApiResponse.ok(customerMovieService.getMovieDetail(identifier));
+    }
+
+    @GetMapping("/{identifier}/credits")
+    public ApiResponse<Object> getMovieCredits(@PathVariable String identifier) {
+        com.lorafilm.movie.movie.dto.MovieDetailDto detail = customerMovieService.getMovieDetail(identifier);
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("directors", detail.getDirectors());
+        response.put("actors", detail.getActors());
+        response.put("writers", detail.getWriters());
+        response.put("producers", detail.getProducers());
+        return ApiResponse.ok(response);
+    }
+
+    @GetMapping("/{identifier}/production-companies")
+    public ApiResponse<Object> getMovieProductionCompanies(@PathVariable String identifier) {
+        com.lorafilm.movie.movie.dto.MovieDetailDto detail = customerMovieService.getMovieDetail(identifier);
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("productionCompanies", detail.getProductionCompanies());
+        response.put("distributors", detail.getDistributors());
+        response.put("studios", detail.getStudios());
+        return ApiResponse.ok(response);
     }
 }

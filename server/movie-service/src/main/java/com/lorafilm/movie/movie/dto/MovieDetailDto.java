@@ -6,7 +6,11 @@ public class MovieDetailDto extends MovieDto {
 
     private List<PersonDto> directors;
     private List<PersonDto> actors;
+    private List<PersonDto> writers;
+    private List<PersonDto> producers;
     private List<ProductionCompanyDto> productionCompanies;
+    private List<ProductionCompanyDto> distributors;
+    private List<ProductionCompanyDto> studios;
     private List<MovieVersionDto> versions;
     private List<MovieMediaDto> media;
 
@@ -16,8 +20,18 @@ public class MovieDetailDto extends MovieDto {
     public void setDirectors(List<PersonDto> directors) { this.directors = directors; }
     public List<PersonDto> getActors() { return actors; }
     public void setActors(List<PersonDto> actors) { this.actors = actors; }
+    public List<PersonDto> getWriters() { return writers; }
+    public void setWriters(List<PersonDto> writers) { this.writers = writers; }
+    public List<PersonDto> getProducers() { return producers; }
+    public void setProducers(List<PersonDto> producers) { this.producers = producers; }
+    
     public List<ProductionCompanyDto> getProductionCompanies() { return productionCompanies; }
     public void setProductionCompanies(List<ProductionCompanyDto> productionCompanies) { this.productionCompanies = productionCompanies; }
+    public List<ProductionCompanyDto> getDistributors() { return distributors; }
+    public void setDistributors(List<ProductionCompanyDto> distributors) { this.distributors = distributors; }
+    public List<ProductionCompanyDto> getStudios() { return studios; }
+    public void setStudios(List<ProductionCompanyDto> studios) { this.studios = studios; }
+    
     public List<MovieVersionDto> getVersions() { return versions; }
     public void setVersions(List<MovieVersionDto> versions) { this.versions = versions; }
     public List<MovieMediaDto> getMedia() { return media; }

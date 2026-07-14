@@ -46,8 +46,8 @@ public class AdminMovieController {
     public ApiResponse<String> assignGenresPost(
             @PathVariable String publicId,
             @Valid @RequestBody MovieGenreAssignRequest request) {
-        adminMovieService.assignGenres(publicId, request.getGenreIds());
-        return ApiResponse.ok("Genres assigned successfully");
+        adminMovieService.appendGenres(publicId, request.getGenreIds());
+        return ApiResponse.ok("Genres appended successfully");
     }
 
     @PutMapping("/{publicId}/genres")
@@ -56,6 +56,42 @@ public class AdminMovieController {
             @Valid @RequestBody MovieGenreAssignRequest request) {
         adminMovieService.assignGenres(publicId, request.getGenreIds());
         return ApiResponse.ok("Genres updated successfully");
+    }
+
+    @PostMapping("/{publicId}/credits")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ApiResponse<String> assignCreditsPost(
+            @PathVariable("publicId") String publicId,
+            @Valid @RequestBody com.lorafilm.movie.movie.dto.MovieCreditAssignRequest request) {
+        adminMovieService.appendCredits(publicId, request.getCredits());
+        return ApiResponse.ok("Credits appended successfully");
+    }
+
+    @PutMapping("/{publicId}/credits")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ApiResponse<String> assignCreditsPut(
+            @PathVariable("publicId") String publicId,
+            @Valid @RequestBody com.lorafilm.movie.movie.dto.MovieCreditAssignRequest request) {
+        adminMovieService.assignCredits(publicId, request.getCredits());
+        return ApiResponse.ok("Credits updated successfully");
+    }
+
+    @PostMapping("/{publicId}/production-companies")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ApiResponse<String> assignProductionCompaniesPost(
+            @PathVariable("publicId") String publicId,
+            @Valid @RequestBody com.lorafilm.movie.movie.dto.MovieCompanyAssignRequest request) {
+        adminMovieService.appendProductionCompanies(publicId, request.getCompanies());
+        return ApiResponse.ok("Production companies appended successfully");
+    }
+
+    @PutMapping("/{publicId}/production-companies")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ApiResponse<String> assignProductionCompaniesPut(
+            @PathVariable("publicId") String publicId,
+            @Valid @RequestBody com.lorafilm.movie.movie.dto.MovieCompanyAssignRequest request) {
+        adminMovieService.assignProductionCompanies(publicId, request.getCompanies());
+        return ApiResponse.ok("Production companies updated successfully");
     }
 
     @DeleteMapping("/{publicId}")

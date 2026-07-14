@@ -9,8 +9,12 @@ import java.time.LocalDate;
 
 public class MovieRequest {
     @NotBlank(message = "Title is required")
-    @jakarta.validation.constraints.Pattern(regexp = ".*[a-zA-Z0-9\\p{L}].*", message = "Title must contain at least one alphanumeric character")
+    @jakarta.validation.constraints.Size(min = 1, max = 255)
+    @jakarta.validation.constraints.Pattern(regexp = "^[\\p{L}0-9\\s&\\-\\.,':;!\\?\\(\\)\\/]+$", message = "Title contains invalid characters")
     private String title;
+    
+    @jakarta.validation.constraints.Size(max = 255)
+    @jakarta.validation.constraints.Pattern(regexp = "^[\\p{L}0-9\\s&\\-\\.,':;!\\?\\(\\)\\/]*$", message = "Original title contains invalid characters")
     private String originalTitle;
     @NotNull(message = "Duration is required")
     @Positive(message = "Duration must be positive")

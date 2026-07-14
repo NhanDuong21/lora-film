@@ -26,11 +26,13 @@ public class CustomerMovieService {
     private final MovieRepository movieRepository;
     private final MovieGenreRepository movieGenreRepository;
     private final MovieMapper movieMapper;
+    private final MovieService movieService;
 
-    public CustomerMovieService(MovieRepository movieRepository, MovieGenreRepository movieGenreRepository, MovieMapper movieMapper) {
+    public CustomerMovieService(MovieRepository movieRepository, MovieGenreRepository movieGenreRepository, MovieMapper movieMapper, MovieService movieService) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMapper = movieMapper;
+        this.movieService = movieService;
     }
 
     public PageResponse<MovieDto> getMoviesByStatus(String statusStr, String keyword, Pageable pageable) {
@@ -59,7 +61,7 @@ public class CustomerMovieService {
         return PageResponse.of(moviePage, content);
     }
 
-    public MovieDto getMovieDetail(String identifier) {
+    public com.lorafilm.movie.movie.dto.MovieDetailDto getMovieDetail(String identifier) {
         Movie movie = movieRepository.findByIdentifierAndDeletedAtIsNull(identifier)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
         
@@ -67,7 +69,7 @@ public class CustomerMovieService {
             throw new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null);
         }
 
-        return mapToDto(movie);
+        return movieService.getMovieByIdentifier(movie.getPublicId());
     }
 
     private MovieDto mapToDto(Movie movie) {
