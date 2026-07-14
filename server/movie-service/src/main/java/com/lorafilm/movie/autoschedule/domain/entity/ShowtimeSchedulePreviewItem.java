@@ -16,7 +16,7 @@ import java.time.Instant;
 @Table(name = "showtime_schedule_preview_items", uniqueConstraints = {
     @UniqueConstraint(name = "uk_schedule_preview_item_slot", columnNames = {"preview_id", "auditorium_id", "start_time"})
 })
-@org.hibernate.annotations.Check(constraints = "(validation_status != 'REJECTED' OR selected = 0)")
+@org.hibernate.annotations.Check(constraints = "(validation_status != 'REJECTED' OR selected = false)")
 public class ShowtimeSchedulePreviewItem {
 
     @Id
