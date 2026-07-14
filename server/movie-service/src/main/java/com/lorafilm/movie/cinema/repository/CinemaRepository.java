@@ -12,4 +12,6 @@ import com.lorafilm.movie.cinema.domain.entity.Cinema;
 public interface CinemaRepository extends JpaRepository<Cinema, Long>, JpaSpecificationExecutor<Cinema> {
     Optional<Cinema> findByPublicIdAndDeletedAtIsNull(String publicId);
     Optional<Cinema> findByActiveSlugAndDeletedAtIsNull(String slug);
+    boolean existsBySlugAndDeletedAtIsNull(String slug);
+    boolean existsBySlugAndPublicIdNotAndDeletedAtIsNull(String slug, String publicId);
 }

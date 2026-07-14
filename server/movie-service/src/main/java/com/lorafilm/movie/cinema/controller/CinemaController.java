@@ -2,11 +2,13 @@ package com.lorafilm.movie.cinema.controller;
 
 import com.lorafilm.movie.cinema.dto.CinemaDto;
 import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
+import com.lorafilm.movie.cinema.dto.CinemaClosurePeriodResponse;
 import com.lorafilm.movie.cinema.service.CinemaService;
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/cinemas")
@@ -28,8 +30,14 @@ public class CinemaController {
         return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemas(city, district, keyword, page, size)));
     }
 
-    @GetMapping("/{cinemaSlug}")
-    public ResponseEntity<ApiResponse<CinemaDetailDto>> getCinemaDetail(@PathVariable String cinemaSlug) {
-        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaBySlug(cinemaSlug)));
+    @GetMapping("/{cinemaIdOrSlug}")
+    public ResponseEntity<ApiResponse<CinemaDetailDto>> getCinemaDetail(@PathVariable String cinemaIdOrSlug) {
+        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaByIdentifier(cinemaIdOrSlug)));
+    }
+
+    @GetMapping("/{cinemaPublicId}/closure-periods")
+    public ResponseEntity<ApiResponse<List<CinemaClosurePeriodResponse>>> getCinemaClosurePeriods(
+            @PathVariable String cinemaPublicId) {
+        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaClosurePeriods(cinemaPublicId)));
     }
 }
