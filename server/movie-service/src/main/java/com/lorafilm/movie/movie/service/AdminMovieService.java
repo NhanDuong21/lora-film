@@ -29,13 +29,25 @@ public class AdminMovieService {
     private final MovieGenreRepository movieGenreRepository;
     private final MovieMapper movieMapper;
     private final com.lorafilm.movie.showtime.repository.ShowtimeRepository showtimeRepository;
+    private final com.lorafilm.movie.movie.repository.PersonRepository personRepository;
+    private final com.lorafilm.movie.movie.repository.ProductionCompanyRepository productionCompanyRepository;
+    private final com.lorafilm.movie.movie.repository.MovieCreditRepository movieCreditRepository;
+    private final com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository movieProductionCompanyRepository;
 
-    public AdminMovieService(MovieRepository movieRepository, GenreRepository genreRepository, MovieGenreRepository movieGenreRepository, MovieMapper movieMapper, com.lorafilm.movie.showtime.repository.ShowtimeRepository showtimeRepository) {
+    public AdminMovieService(MovieRepository movieRepository, GenreRepository genreRepository, MovieGenreRepository movieGenreRepository, MovieMapper movieMapper, com.lorafilm.movie.showtime.repository.ShowtimeRepository showtimeRepository,
+                             com.lorafilm.movie.movie.repository.PersonRepository personRepository,
+                             com.lorafilm.movie.movie.repository.ProductionCompanyRepository productionCompanyRepository,
+                             com.lorafilm.movie.movie.repository.MovieCreditRepository movieCreditRepository,
+                             com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository movieProductionCompanyRepository) {
         this.movieRepository = movieRepository;
         this.genreRepository = genreRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMapper = movieMapper;
         this.showtimeRepository = showtimeRepository;
+        this.personRepository = personRepository;
+        this.productionCompanyRepository = productionCompanyRepository;
+        this.movieCreditRepository = movieCreditRepository;
+        this.movieProductionCompanyRepository = movieProductionCompanyRepository;
     }
 
     @Transactional
@@ -114,6 +126,124 @@ public class AdminMovieService {
             movieGenre.setMovie(movie);
             movieGenre.setGenre(genre);
             movieGenreRepository.save(movieGenre);
+        }
+    }
+
+    @Transactional
+    public void appendGenres(String moviePublicId, List<String> genreIds) {
+        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+        
+        if (genreIds == null || genreIds.isEmpty()) return;
+
+        List<Genre> genres = genreRepository.findByPublicIdInAndDeletedAtIsNull(genreIds);
+        if (genres.size() != genreIds.size()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "One or more genres do not exist", null);
+        }
+        
+        for (Genre genre : genres) {
+            if (!movieGenreRepository.existsByMovieIdAndGenreId(movie.getId(), genre.getId())) {
+                MovieGenre movieGenre = new MovieGenre();
+                movieGenre.setMovie(movie);
+                movieGenre.setGenre(genre);
+                movieGenreRepository.save(movieGenre);
+            }
+        }
+    }
+
+    @Transactional
+    public void assignCredits(String moviePublicId, List<com.lorafilm.movie.movie.dto.MovieCreditRequest> requests) {
+        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+        
+        movieCreditRepository.deleteByMovieId(movie.getId());
+        
+        if (requests == null || requests.isEmpty()) return;
+        
+        for (com.lorafilm.movie.movie.dto.MovieCreditRequest req : requests) {
+            com.lorafilm.movie.movie.domain.entity.Person person = personRepository.findByPublicIdAndDeletedAtIsNull(req.getPersonPublicId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found", null));
+            
+            com.lorafilm.movie.movie.domain.entity.MovieCredit credit = new com.lorafilm.movie.movie.domain.entity.MovieCredit();
+            credit.setMovie(movie);
+            credit.setPerson(person);
+            credit.setRoleType(req.getRoleType());
+            credit.setCharacterName(req.getCharacterName());
+            credit.setDisplayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder() : 0);
+            
+            movieCreditRepository.save(credit);
+        }
+    }
+
+    @Transactional
+    public void appendCredits(String moviePublicId, List<com.lorafilm.movie.movie.dto.MovieCreditRequest> requests) {
+        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+
+        if (requests == null || requests.isEmpty()) return;
+
+        for (com.lorafilm.movie.movie.dto.MovieCreditRequest req : requests) {
+            com.lorafilm.movie.movie.domain.entity.Person person = personRepository.findByPublicIdAndDeletedAtIsNull(req.getPersonPublicId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found", null));
+
+            if (movieCreditRepository.existsByMovieIdAndPersonIdAndRoleTypeAndDeletedAtIsNull(movie.getId(), person.getId(), req.getRoleType())) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Person already has this role in the movie", null);
+            }
+
+            com.lorafilm.movie.movie.domain.entity.MovieCredit credit = new com.lorafilm.movie.movie.domain.entity.MovieCredit();
+            credit.setMovie(movie);
+            credit.setPerson(person);
+            credit.setRoleType(req.getRoleType());
+            credit.setCharacterName(req.getCharacterName());
+            credit.setDisplayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder() : 0);
+
+            movieCreditRepository.save(credit);
+        }
+    }
+
+    @Transactional
+    public void assignProductionCompanies(String moviePublicId, List<com.lorafilm.movie.movie.dto.MovieCompanyRequest> requests) {
+        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+        
+        movieProductionCompanyRepository.deleteByMovieId(movie.getId());
+        
+        if (requests == null || requests.isEmpty()) return;
+        
+        for (com.lorafilm.movie.movie.dto.MovieCompanyRequest req : requests) {
+            com.lorafilm.movie.movie.domain.entity.ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(req.getCompanyPublicId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found", null));
+            
+            com.lorafilm.movie.movie.domain.entity.MovieProductionCompany mpc = new com.lorafilm.movie.movie.domain.entity.MovieProductionCompany();
+            mpc.setMovie(movie);
+            mpc.setProductionCompany(company);
+            mpc.setRole(req.getRole());
+            
+            movieProductionCompanyRepository.save(mpc);
+        }
+    }
+
+    @Transactional
+    public void appendProductionCompanies(String moviePublicId, List<com.lorafilm.movie.movie.dto.MovieCompanyRequest> requests) {
+        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+        
+        if (requests == null || requests.isEmpty()) return;
+        
+        for (com.lorafilm.movie.movie.dto.MovieCompanyRequest req : requests) {
+            com.lorafilm.movie.movie.domain.entity.ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(req.getCompanyPublicId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found", null));
+            
+            if (movieProductionCompanyRepository.existsByMovieIdAndProductionCompanyIdAndRole(movie.getId(), company.getId(), req.getRole())) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Company already has this role in the movie", null);
+            }
+
+            com.lorafilm.movie.movie.domain.entity.MovieProductionCompany mpc = new com.lorafilm.movie.movie.domain.entity.MovieProductionCompany();
+            mpc.setMovie(movie);
+            mpc.setProductionCompany(company);
+            mpc.setRole(req.getRole());
+            
+            movieProductionCompanyRepository.save(mpc);
         }
     }
 

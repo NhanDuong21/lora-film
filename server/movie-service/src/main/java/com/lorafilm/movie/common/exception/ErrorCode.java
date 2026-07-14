@@ -23,6 +23,7 @@ public enum ErrorCode {
     MOVIE_VERSION_NOT_ACTIVE("Movie version is not active", 400),
     MOVIE_VERSION_NOT_BELONG_TO_MOVIE("Movie version does not belong to the movie", 400),
     INVALID_MOVIE_DURATION("Invalid movie duration", 400),
+    COMPANY_DUPLICATED("Production company name already exists", 409),
 
     // --- Cinema & Auditorium Module ---
     CINEMA_NOT_FOUND("Cinema not found", 404),

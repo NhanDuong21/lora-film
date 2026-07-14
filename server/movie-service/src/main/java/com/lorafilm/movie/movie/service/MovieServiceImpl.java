@@ -263,18 +263,68 @@ public class MovieServiceImpl implements MovieService {
                 return p;
             }).collect(Collectors.toList());
 
+        List<MovieDetailDto.PersonDto> writers = credits.stream()
+            .filter(c -> c.getRoleType() == com.lorafilm.movie.movie.domain.enums.CreditRoleType.WRITER)
+            .map(c -> {
+                MovieDetailDto.PersonDto p = new MovieDetailDto.PersonDto();
+                p.setPublicId(c.getPerson().getPublicId());
+                p.setFullName(c.getPerson().getFullName());
+                p.setRoleType(c.getRoleType().name());
+                p.setCharacterName(c.getCharacterName());
+                return p;
+            }).collect(Collectors.toList());
+
+        List<MovieDetailDto.PersonDto> producers = credits.stream()
+            .filter(c -> c.getRoleType() == com.lorafilm.movie.movie.domain.enums.CreditRoleType.PRODUCER)
+            .map(c -> {
+                MovieDetailDto.PersonDto p = new MovieDetailDto.PersonDto();
+                p.setPublicId(c.getPerson().getPublicId());
+                p.setFullName(c.getPerson().getFullName());
+                p.setRoleType(c.getRoleType().name());
+                p.setCharacterName(c.getCharacterName());
+                return p;
+            }).collect(Collectors.toList());
+
         detailDto.setDirectors(directors);
         detailDto.setActors(actors);
+        detailDto.setWriters(writers);
+        detailDto.setProducers(producers);
 
         List<MovieProductionCompany> companies = movieProductionCompanyRepository.findByMovieId(movie.getId());
-        List<MovieDetailDto.ProductionCompanyDto> companyDtos = companies.stream().map(c -> {
-            MovieDetailDto.ProductionCompanyDto p = new MovieDetailDto.ProductionCompanyDto();
-            p.setPublicId(c.getProductionCompany().getPublicId());
-            p.setName(c.getProductionCompany().getName());
-            p.setRole(c.getRole() != null ? c.getRole().name() : null);
-            return p;
-        }).collect(Collectors.toList());
-        detailDto.setProductionCompanies(companyDtos);
+        
+        List<MovieDetailDto.ProductionCompanyDto> productionCompanies = companies.stream()
+            .filter(c -> c.getRole() == com.lorafilm.movie.movie.domain.enums.CompanyRoleType.PRODUCTION)
+            .map(c -> {
+                MovieDetailDto.ProductionCompanyDto p = new MovieDetailDto.ProductionCompanyDto();
+                p.setPublicId(c.getProductionCompany().getPublicId());
+                p.setName(c.getProductionCompany().getName());
+                p.setRole(c.getRole().name());
+                return p;
+            }).collect(Collectors.toList());
+
+        List<MovieDetailDto.ProductionCompanyDto> distributors = companies.stream()
+            .filter(c -> c.getRole() == com.lorafilm.movie.movie.domain.enums.CompanyRoleType.DISTRIBUTOR)
+            .map(c -> {
+                MovieDetailDto.ProductionCompanyDto p = new MovieDetailDto.ProductionCompanyDto();
+                p.setPublicId(c.getProductionCompany().getPublicId());
+                p.setName(c.getProductionCompany().getName());
+                p.setRole(c.getRole().name());
+                return p;
+            }).collect(Collectors.toList());
+
+        List<MovieDetailDto.ProductionCompanyDto> studios = companies.stream()
+            .filter(c -> c.getRole() == com.lorafilm.movie.movie.domain.enums.CompanyRoleType.STUDIO)
+            .map(c -> {
+                MovieDetailDto.ProductionCompanyDto p = new MovieDetailDto.ProductionCompanyDto();
+                p.setPublicId(c.getProductionCompany().getPublicId());
+                p.setName(c.getProductionCompany().getName());
+                p.setRole(c.getRole().name());
+                return p;
+            }).collect(Collectors.toList());
+
+        detailDto.setProductionCompanies(productionCompanies);
+        detailDto.setDistributors(distributors);
+        detailDto.setStudios(studios);
 
         List<MovieVersion> versions = movieVersionRepository.findByMovieIdAndStatusAndDeletedAtIsNull(movie.getId(), ActiveStatus.ACTIVE);
         List<MovieDetailDto.MovieVersionDto> versionDtos = versions.stream().map(v -> {

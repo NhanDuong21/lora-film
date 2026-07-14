@@ -72,7 +72,7 @@ public class CustomerMovieControllerTest {
 
     @Test
     void getMovieDetail_Success() throws Exception {
-        MovieDto movie = new MovieDto();
+        com.lorafilm.movie.movie.dto.MovieDetailDto movie = new com.lorafilm.movie.movie.dto.MovieDetailDto();
         movie.setPublicId("movie-1");
         movie.setTitle("Movie Detail");
         
