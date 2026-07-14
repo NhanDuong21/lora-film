@@ -33,6 +33,7 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
     private final ShowtimeSchedulePreviewItemRepository itemRepository;
     private final ShowtimeSchedulePreviewMapper mapper;
     private final CurrentUserProvider currentUserProvider;
+    private final ShowtimeSchedulePreviewExpiryService expiryService;
     private final Clock clock;
 
     public ShowtimeSchedulePreviewServiceImpl(
@@ -40,11 +41,13 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
             ShowtimeSchedulePreviewItemRepository itemRepository,
             ShowtimeSchedulePreviewMapper mapper,
             CurrentUserProvider currentUserProvider,
+            ShowtimeSchedulePreviewExpiryService expiryService,
             Clock clock) {
         this.previewRepository = previewRepository;
         this.itemRepository = itemRepository;
         this.mapper = mapper;
         this.currentUserProvider = currentUserProvider;
+        this.expiryService = expiryService;
         this.clock = clock;
     }
 
@@ -52,10 +55,12 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
     @Transactional
     public ShowtimeSchedulePreviewResponse getPreview(String previewPublicId) {
         log.info("Auto schedule preview retrieved. publicId={}", previewPublicId);
+        
+        Instant now = Instant.now(clock);
+        expiryService.expireIfNecessary(previewPublicId, now);
+
         ShowtimeSchedulePreview preview = previewRepository.findByPublicId(previewPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND));
-
-        normalizeExpiry(preview, Instant.now(clock));
 
         List<ShowtimeSchedulePreviewItem> items = itemRepository.findDetailedItemsByPreviewId(preview.getId());
         return mapper.toResponse(preview, items);
@@ -70,11 +75,11 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
             throw new BusinessException(ErrorCode.CURRENT_USER_NOT_AVAILABLE);
         }
 
+        Instant now = Instant.now(clock);
+        expiryService.expireIfNecessary(previewPublicId, now);
+
         ShowtimeSchedulePreview preview = previewRepository.findByPublicId(previewPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND));
-
-        Instant now = Instant.now(clock);
-        normalizeExpiry(preview, now);
 
         if (preview.getStatus() == SchedulePreviewStatus.EXPIRED) {
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_EXPIRED);
@@ -140,10 +145,4 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
         return mapper.toResponse(preview, detailedItems);
     }
 
-    private void normalizeExpiry(ShowtimeSchedulePreview preview, Instant now) {
-        if (preview.getStatus() == SchedulePreviewStatus.PREVIEWED && !now.isBefore(preview.getExpiresAt())) {
-            log.info("Auto schedule preview expired during access. publicId={}", preview.getPublicId());
-            preview.markExpired();
-        }
-    }
 }

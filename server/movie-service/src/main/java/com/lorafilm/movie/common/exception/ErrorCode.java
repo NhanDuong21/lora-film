@@ -108,7 +108,6 @@ public enum ErrorCode {
     AUTO_SCHEDULE_ITEM_NOT_BELONG_TO_PREVIEW("Preview item does not belong to the preview", 400),
     AUTO_SCHEDULE_REJECTED_ITEM_CANNOT_BE_SELECTED("Rejected preview item cannot be selected", 400),
     AUTO_SCHEDULE_DUPLICATE_ITEM_SELECTION("Duplicate preview item found in selection request", 400),
-    AUTO_SCHEDULE_NO_SELECTION_CHANGES("No preview item selection changes were provided", 400),
     
     CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
 

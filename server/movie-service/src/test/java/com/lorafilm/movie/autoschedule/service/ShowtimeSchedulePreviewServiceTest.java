@@ -45,6 +45,8 @@ class ShowtimeSchedulePreviewServiceTest {
     private ShowtimeSchedulePreviewMapper mapper;
     @Mock
     private CurrentUserProvider currentUserProvider;
+    @Mock
+    private com.lorafilm.movie.autoschedule.service.impl.ShowtimeSchedulePreviewExpiryService expiryService;
 
     private Clock clock = Clock.fixed(Instant.parse("2026-07-20T03:00:00Z"), ZoneId.of("UTC"));
 
@@ -60,6 +62,7 @@ class ShowtimeSchedulePreviewServiceTest {
                 itemRepository,
                 mapper,
                 currentUserProvider,
+                expiryService,
                 clock
         );
 
@@ -108,6 +111,11 @@ class ShowtimeSchedulePreviewServiceTest {
     void getPreview_shouldNormalizeExpiry_whenExpiredBoundary() {
         preview.setExpiresAt(Instant.parse("2026-07-20T03:00:00Z")); // Exact match with clock now
         when(previewRepository.findByPublicId("preview-1")).thenReturn(Optional.of(preview));
+        
+        doAnswer(invocation -> {
+            preview.setStatus(SchedulePreviewStatus.EXPIRED);
+            return true;
+        }).when(expiryService).expireIfNecessary(eq("preview-1"), any(Instant.class));
 
         service.getPreview("preview-1");
 
