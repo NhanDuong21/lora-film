@@ -93,6 +93,17 @@ public enum ErrorCode {
     SHOWTIME_CANNOT_OPEN_AFTER_START("Cannot open showtime for booking after it has started", 400),
     SHOWTIME_CANNOT_FINISH_BEFORE_END("Cannot finish showtime before it ends", 400),
     
+    // --- Auto Scheduling ---
+    AUTO_SCHEDULE_PREVIEW_NOT_FOUND("Auto schedule preview not found", 404),
+    AUTO_SCHEDULE_ITEM_NOT_FOUND("Auto schedule preview item not found", 404),
+    AUTO_SCHEDULE_PREVIEW_NOT_EDITABLE("Auto schedule preview is not editable", 409),
+    AUTO_SCHEDULE_PREVIEW_NOT_APPLICABLE("Auto schedule preview cannot be applied", 409),
+    AUTO_SCHEDULE_PREVIEW_EXPIRED("Auto schedule preview has expired", 409),
+    AUTO_SCHEDULE_PREVIEW_ALREADY_APPLIED("Auto schedule preview has already been applied", 409),
+    AUTO_SCHEDULE_PREVIEW_APPLY_IN_PROGRESS("Auto schedule preview is currently being applied", 409),
+    AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT("Auto schedule preview was modified by another request", 409),
+    IDEMPOTENCY_KEY_REUSED("Idempotency key was reused with a different request", 409),
+    
     CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
 
     private final String message;
