@@ -96,7 +96,11 @@ public enum ErrorCode {
     SHOWTIME_CANNOT_OPEN_AFTER_START("Cannot open showtime for booking after it has started", 400),
     SHOWTIME_CANNOT_FINISH_BEFORE_END("Cannot finish showtime before it ends", 400),
     
-    CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
+    CURRENT_USER_NOT_AVAILABLE("Current user not available", 401),
+
+    // --- Cinema Deletion ---
+    CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS("Cinema cannot be deleted because it has auditoriums", 409),
+    CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY("Cinema cannot be deleted because it has showtime history", 409);
 
     private final String message;
     private final int httpStatus;

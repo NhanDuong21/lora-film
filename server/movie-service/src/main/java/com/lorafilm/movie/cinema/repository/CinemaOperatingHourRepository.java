@@ -10,4 +10,5 @@ import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
 @Repository
 public interface CinemaOperatingHourRepository extends JpaRepository<CinemaOperatingHour, Long> {
     List<CinemaOperatingHour> findByCinemaId(Long cinemaId);
+    List<CinemaOperatingHour> findByCinemaIdOrderByDayOfWeekAsc(Long cinemaId);
 }
