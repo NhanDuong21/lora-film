@@ -36,4 +36,6 @@ public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
             @Param("name") String name, @Param("excludeId") Long excludeId);
 
     List<Auditorium> findByCinemaIdAndStatusAndDeletedAtIsNull(Long cinemaId, AuditoriumStatus status);
+
+    boolean existsByCinemaIdAndDeletedAtIsNull(Long cinemaId);
 }
