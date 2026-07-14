@@ -55,12 +55,12 @@ public class CinemaServiceImpl implements CinemaService {
     private final CinemaMapper cinemaMapper;
 
     public CinemaServiceImpl(CinemaRepository cinemaRepository,
-                             CinemaOperatingHourRepository cinemaOperatingHourRepository,
-                             CinemaMediaRepository cinemaMediaRepository,
-                             CinemaClosurePeriodRepository cinemaClosurePeriodRepository,
-                             CurrentUserProvider currentUserProvider,
-                             AuditoriumRepository auditoriumRepository,
-                             CinemaMapper cinemaMapper) {
+            CinemaOperatingHourRepository cinemaOperatingHourRepository,
+            CinemaMediaRepository cinemaMediaRepository,
+            CinemaClosurePeriodRepository cinemaClosurePeriodRepository,
+            CurrentUserProvider currentUserProvider,
+            AuditoriumRepository auditoriumRepository,
+            CinemaMapper cinemaMapper) {
         this.cinemaRepository = cinemaRepository;
         this.cinemaOperatingHourRepository = cinemaOperatingHourRepository;
         this.cinemaMediaRepository = cinemaMediaRepository;
@@ -98,8 +98,7 @@ public class CinemaServiceImpl implements CinemaService {
                 cinemaPage.getSize(),
                 cinemaPage.getTotalElements(),
                 cinemaPage.getTotalPages(),
-                cinemaPage.isLast()
-        );
+                cinemaPage.isLast());
     }
 
     @Override
@@ -112,7 +111,7 @@ public class CinemaServiceImpl implements CinemaService {
     public CinemaDetailDto getCinemaByIdentifier(String identifier) {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(identifier)
                 .orElseGet(() -> cinemaRepository.findBySlugAndDeletedAtIsNull(identifier)
-                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found")));
+                        .orElseThrow(() -> new ResourceNotFoundException("Cinema not found")));
 
         if (cinema.getStatus() != CinemaStatus.ACTIVE) {
             throw new ResourceNotFoundException("Cinema not found");
@@ -230,21 +229,21 @@ public class CinemaServiceImpl implements CinemaService {
                 isValid = (targetStatus == CinemaStatus.ACTIVE || targetStatus == CinemaStatus.INACTIVE);
                 break;
             case ACTIVE:
-                isValid = (targetStatus == CinemaStatus.MAINTENANCE 
-                        || targetStatus == CinemaStatus.TEMPORARILY_CLOSED 
-                        || targetStatus == CinemaStatus.INACTIVE 
+                isValid = (targetStatus == CinemaStatus.MAINTENANCE
+                        || targetStatus == CinemaStatus.TEMPORARILY_CLOSED
+                        || targetStatus == CinemaStatus.INACTIVE
                         || targetStatus == CinemaStatus.PERMANENTLY_CLOSED);
                 break;
             case MAINTENANCE:
-                isValid = (targetStatus == CinemaStatus.ACTIVE 
-                        || targetStatus == CinemaStatus.TEMPORARILY_CLOSED 
-                        || targetStatus == CinemaStatus.INACTIVE 
+                isValid = (targetStatus == CinemaStatus.ACTIVE
+                        || targetStatus == CinemaStatus.TEMPORARILY_CLOSED
+                        || targetStatus == CinemaStatus.INACTIVE
                         || targetStatus == CinemaStatus.PERMANENTLY_CLOSED);
                 break;
             case TEMPORARILY_CLOSED:
-                isValid = (targetStatus == CinemaStatus.ACTIVE 
-                        || targetStatus == CinemaStatus.MAINTENANCE 
-                        || targetStatus == CinemaStatus.INACTIVE 
+                isValid = (targetStatus == CinemaStatus.ACTIVE
+                        || targetStatus == CinemaStatus.MAINTENANCE
+                        || targetStatus == CinemaStatus.INACTIVE
                         || targetStatus == CinemaStatus.PERMANENTLY_CLOSED);
                 break;
             case INACTIVE:
@@ -283,13 +282,16 @@ public class CinemaServiceImpl implements CinemaService {
         detailDto.setOperatingHours(operatingHours.stream().map(h -> {
             CinemaDetailDto.OperatingHourDto dto = new CinemaDetailDto.OperatingHourDto();
             dto.setDayOfWeek(h.getDayOfWeek());
-            dto.setOpenTime(h.getOpenTime() != null ? h.getOpenTime().toString() : null);
-            dto.setCloseTime(h.getCloseTime() != null ? h.getCloseTime().toString() : null);
+            dto.setOpenTime(Boolean.TRUE.equals(h.getIsClosed()) ? null
+                    : (h.getOpenTime() != null ? h.getOpenTime().toString() : null));
+            dto.setCloseTime(Boolean.TRUE.equals(h.getIsClosed()) ? null
+                    : (h.getCloseTime() != null ? h.getCloseTime().toString() : null));
             dto.setIsClosed(h.getIsClosed());
             return dto;
         }).collect(Collectors.toList()));
 
-        List<CinemaMedia> media = cinemaMediaRepository.findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(cinema.getId(), ActiveStatus.ACTIVE);
+        List<CinemaMedia> media = cinemaMediaRepository
+                .findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(cinema.getId(), ActiveStatus.ACTIVE);
         detailDto.setGallery(media.stream().map(m -> {
             CinemaDetailDto.CinemaMediaDto dto = new CinemaDetailDto.CinemaMediaDto();
             dto.setPublicId(m.getPublicId());
@@ -300,7 +302,8 @@ public class CinemaServiceImpl implements CinemaService {
             return dto;
         }).collect(Collectors.toList()));
 
-        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(), com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE);
+        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(),
+                com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE);
         detailDto.setActiveAuditoriums(auditoriums.stream().map(a -> {
             CinemaDetailDto.AuditoriumDto dto = new CinemaDetailDto.AuditoriumDto();
             dto.setPublicId(a.getPublicId());
@@ -320,7 +323,8 @@ public class CinemaServiceImpl implements CinemaService {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
-        List<CinemaMedia> mediaList = cinemaMediaRepository.findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(cinema.getId(), ActiveStatus.ACTIVE);
+        List<CinemaMedia> mediaList = cinemaMediaRepository
+                .findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(cinema.getId(), ActiveStatus.ACTIVE);
         return mediaList.stream().map(m -> {
             CinemaDetailDto.CinemaMediaDto dto = new CinemaDetailDto.CinemaMediaDto();
             dto.setPublicId(m.getPublicId());
@@ -338,12 +342,15 @@ public class CinemaServiceImpl implements CinemaService {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
-        List<CinemaOperatingHour> hours = cinemaOperatingHourRepository.findByCinemaIdOrderByDayOfWeekAsc(cinema.getId());
+        List<CinemaOperatingHour> hours = cinemaOperatingHourRepository
+                .findByCinemaIdOrderByDayOfWeekAsc(cinema.getId());
         return hours.stream().map(h -> {
             CinemaDetailDto.OperatingHourDto dto = new CinemaDetailDto.OperatingHourDto();
             dto.setDayOfWeek(h.getDayOfWeek());
-            dto.setOpenTime(Boolean.TRUE.equals(h.getIsClosed()) ? null : (h.getOpenTime() != null ? h.getOpenTime().toString() : null));
-            dto.setCloseTime(Boolean.TRUE.equals(h.getIsClosed()) ? null : (h.getCloseTime() != null ? h.getCloseTime().toString() : null));
+            dto.setOpenTime(Boolean.TRUE.equals(h.getIsClosed()) ? null
+                    : (h.getOpenTime() != null ? h.getOpenTime().toString() : null));
+            dto.setCloseTime(Boolean.TRUE.equals(h.getIsClosed()) ? null
+                    : (h.getCloseTime() != null ? h.getCloseTime().toString() : null));
             dto.setIsClosed(h.getIsClosed());
             return dto;
         }).collect(Collectors.toList());
@@ -356,8 +363,9 @@ public class CinemaServiceImpl implements CinemaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
         if (Boolean.TRUE.equals(request.getIsPrimary())) {
-            List<CinemaMedia> existingPrimary = cinemaMediaRepository.findByCinemaIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
-                    cinema.getId(), request.getMediaType(), ActiveStatus.ACTIVE);
+            List<CinemaMedia> existingPrimary = cinemaMediaRepository
+                    .findByCinemaIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                            cinema.getId(), request.getMediaType(), ActiveStatus.ACTIVE);
             for (CinemaMedia m : existingPrimary) {
                 m.setIsPrimary(false);
                 cinemaMediaRepository.save(m);
@@ -385,8 +393,9 @@ public class CinemaServiceImpl implements CinemaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema media not found"));
 
         if (Boolean.TRUE.equals(request.getIsPrimary()) && request.getStatus() == ActiveStatus.ACTIVE) {
-            List<CinemaMedia> existingPrimary = cinemaMediaRepository.findByCinemaIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
-                    media.getCinema().getId(), media.getMediaType(), ActiveStatus.ACTIVE);
+            List<CinemaMedia> existingPrimary = cinemaMediaRepository
+                    .findByCinemaIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                            media.getCinema().getId(), media.getMediaType(), ActiveStatus.ACTIVE);
             for (CinemaMedia m : existingPrimary) {
                 if (!m.getId().equals(media.getId())) {
                     m.setIsPrimary(false);
@@ -407,7 +416,8 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     @org.springframework.transaction.annotation.Transactional
-    public List<OperatingHourResponse> updateOperatingHours(String cinemaPublicId, List<OperatingHourUpdateRequest> requests) {
+    public List<OperatingHourResponse> updateOperatingHours(String cinemaPublicId,
+            List<OperatingHourUpdateRequest> requests) {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
@@ -425,7 +435,8 @@ public class CinemaServiceImpl implements CinemaService {
             }
             if (Boolean.FALSE.equals(req.getIsClosed())) {
                 if (req.getOpenTime() == null || req.getCloseTime() == null) {
-                    throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Open time and close time must not be null for open days");
+                    throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                            "Open time and close time must not be null for open days");
                 }
                 if (!req.getOpenTime().isBefore(req.getCloseTime())) {
                     throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Open time must be before close time");
@@ -463,7 +474,8 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     @org.springframework.transaction.annotation.Transactional
-    public CinemaClosurePeriodResponse createClosurePeriod(String cinemaPublicId, CreateCinemaClosurePeriodRequest request) {
+    public CinemaClosurePeriodResponse createClosurePeriod(String cinemaPublicId,
+            CreateCinemaClosurePeriodRequest request) {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 

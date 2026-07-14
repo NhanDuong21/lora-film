@@ -17,17 +17,29 @@ import java.util.List;
 
 public interface CinemaService {
     PageResponse<CinemaDto> getCinemas(String city, String district, String keyword, int page, int size);
+
     CinemaDetailDto getCinemaBySlug(String slug);
+
     CinemaDetailDto getCinemaByIdentifier(String identifier);
+
     CinemaResponse createCinema(CreateCinemaRequest request);
+
     CinemaResponse updateCinema(String publicId, UpdateCinemaRequest request);
-    CinemaResponse updateCinemaStatus(String publicId, com.lorafilm.movie.cinema.domain.enums.CinemaStatus targetStatus);
+
+    CinemaResponse updateCinemaStatus(String publicId,
+            com.lorafilm.movie.cinema.domain.enums.CinemaStatus targetStatus);
 
     List<CinemaDetailDto.CinemaMediaDto> getCinemaMedia(String cinemaPublicId);
+
     List<CinemaDetailDto.OperatingHourDto> getCinemaOperatingHours(String cinemaPublicId);
+
     CinemaMediaResponse addCinemaMedia(String cinemaPublicId, CreateCinemaMediaRequest request);
+
     CinemaMediaResponse updateCinemaMedia(String mediaPublicId, UpdateCinemaMediaRequest request);
+
     List<OperatingHourResponse> updateOperatingHours(String cinemaPublicId, List<OperatingHourUpdateRequest> requests);
+
     CinemaClosurePeriodResponse createClosurePeriod(String cinemaPublicId, CreateCinemaClosurePeriodRequest request);
+
     CinemaClosurePeriodResponse cancelClosurePeriod(Long closurePeriodId);
 }

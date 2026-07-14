@@ -214,7 +214,7 @@ class CinemaServiceImplTest {
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
 
-        BusinessException exception = assertThrows(BusinessException.class, 
+        BusinessException exception = assertThrows(BusinessException.class,
                 () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.MAINTENANCE));
         assertEquals(ErrorCode.INVALID_AUDITORIUM_STATUS_TRANSITION, exception.getErrorCode());
         verify(cinemaRepository, never()).save(any(Cinema.class));
@@ -229,7 +229,7 @@ class CinemaServiceImplTest {
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
 
-        BusinessException exception = assertThrows(BusinessException.class, 
+        BusinessException exception = assertThrows(BusinessException.class,
                 () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE));
         assertEquals(ErrorCode.INVALID_AUDITORIUM_STATUS_TRANSITION, exception.getErrorCode());
         verify(cinemaRepository, never()).save(any(Cinema.class));
@@ -378,7 +378,8 @@ class CinemaServiceImplTest {
         when(cinemaClosurePeriodRepository.findOverlappingClosures(eq(1L), any(Instant.class), any(Instant.class)))
                 .thenReturn(java.util.Collections.singletonList(new CinemaClosurePeriod()));
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> cinemaService.createClosurePeriod("cinema-uuid", request));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> cinemaService.createClosurePeriod("cinema-uuid", request));
         assertEquals(ErrorCode.CINEMA_CLOSURE_CONFLICT, ex.getErrorCode());
     }
 

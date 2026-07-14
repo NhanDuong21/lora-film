@@ -31,21 +31,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(
-        controllers = AdminCinemaController.class,
-        excludeFilters = @ComponentScan.Filter(
-                type = FilterType.ASSIGNABLE_TYPE,
-                classes = {
-                        com.lorafilm.movie.common.security.SecurityConfig.class,
-                        com.lorafilm.movie.common.security.JwtFilter.class,
-                        com.lorafilm.movie.common.security.InternalTokenFilter.class
-                }
-        ),
-        excludeAutoConfiguration = {
-                org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration.class
-        }
-)
+@WebMvcTest(controllers = AdminCinemaController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {
+        com.lorafilm.movie.common.security.SecurityConfig.class,
+        com.lorafilm.movie.common.security.JwtFilter.class,
+        com.lorafilm.movie.common.security.InternalTokenFilter.class
+}), excludeAutoConfiguration = {
+        org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration.class
+})
 @SuppressWarnings("null")
 class AdminCinemaControllerTest {
 
@@ -83,8 +76,8 @@ class AdminCinemaControllerTest {
         when(cinemaService.createCinema(any(CreateCinemaRequest.class))).thenReturn(responseDto);
 
         mockMvc.perform(post("/api/admin/cinemas")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.publicId").value("cinema-uuid"))
@@ -101,8 +94,8 @@ class AdminCinemaControllerTest {
         request.setAddress("123 Street");
 
         mockMvc.perform(post("/api/admin/cinemas")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -123,8 +116,8 @@ class AdminCinemaControllerTest {
         when(cinemaService.updateCinema(eq("cinema-uuid"), any(UpdateCinemaRequest.class))).thenReturn(responseDto);
 
         mockMvc.perform(put("/api/admin/cinemas/cinema-uuid")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.name").value("Lorafilm Updated"));
@@ -142,8 +135,8 @@ class AdminCinemaControllerTest {
         when(cinemaService.updateCinemaStatus(eq("cinema-uuid"), eq(CinemaStatus.ACTIVE))).thenReturn(responseDto);
 
         mockMvc.perform(put("/api/admin/cinemas/cinema-uuid/status")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"));
@@ -164,11 +157,12 @@ class AdminCinemaControllerTest {
         responseDto.setTitle(request.getTitle());
         responseDto.setIsPrimary(true);
 
-        when(cinemaService.addCinemaMedia(eq("cinema-uuid"), any(CreateCinemaMediaRequest.class))).thenReturn(responseDto);
+        when(cinemaService.addCinemaMedia(eq("cinema-uuid"), any(CreateCinemaMediaRequest.class)))
+                .thenReturn(responseDto);
 
         mockMvc.perform(post("/api/admin/cinemas/cinema-uuid/media")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.publicId").value("media-uuid"))
@@ -200,8 +194,8 @@ class AdminCinemaControllerTest {
         when(cinemaService.updateOperatingHours(eq("cinema-uuid"), anyList())).thenReturn(responses);
 
         mockMvc.perform(put("/api/admin/cinemas/cinema-uuid/operating-hours")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requests)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(requests)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").isArray())
@@ -222,11 +216,12 @@ class AdminCinemaControllerTest {
         responseDto.setEndTime(request.getEndTime());
         responseDto.setStatus(ActionStatus.ACTIVE);
 
-        when(cinemaService.createClosurePeriod(eq("cinema-uuid"), any(CreateCinemaClosurePeriodRequest.class))).thenReturn(responseDto);
+        when(cinemaService.createClosurePeriod(eq("cinema-uuid"), any(CreateCinemaClosurePeriodRequest.class)))
+                .thenReturn(responseDto);
 
         mockMvc.perform(post("/api/admin/cinemas/cinema-uuid/closure-periods")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value(101))
@@ -242,7 +237,7 @@ class AdminCinemaControllerTest {
         when(cinemaService.cancelClosurePeriod(eq(101L))).thenReturn(responseDto);
 
         mockMvc.perform(put("/api/admin/closure-periods/101/cancel")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value(101))
