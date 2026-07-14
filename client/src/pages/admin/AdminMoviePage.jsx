@@ -1,329 +1,1445 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Pencil, Trash2, Plus, LayoutList, Image as ImageIcon } from 'lucide-react';
-import { getMovies } from '../../services/movieService';
+import {
+  Search, Pencil, Trash2, Plus, LayoutList, Image as ImageIcon, X, Check,
+  Eye, Trash, Calendar, Clock, Globe, Film, Play, ArrowLeft, Users, Building2,
+  ChevronDown, AlertCircle, Info
+} from 'lucide-react';
+import adminMovieService from '../../services/adminMovieService';
+import adminGenreService from '../../services/adminGenreService';
 import SkeletonTable from '../../components/common/SkeletonTable';
 import { useOutletContext } from 'react-router-dom';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const DEFAULT_AVATAR = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
+const getTodayString = () => new Date().toISOString().split('T')[0];
+
+const AGE_RATINGS = ['P', 'K', 'T13', 'T16', 'T18'];
+
+const AGE_RATING_LABELS = {
+  P:   'P – Phổ thông (Mọi lứa tuổi)',
+  K:   'K – Trẻ em (cần giám hộ)',
+  T13: 'T13 – Từ 13 tuổi',
+  T16: 'T16 – Từ 16 tuổi',
+  T18: 'T18 – Từ 18 tuổi',
+};
+
+const STATUS_LABELS = {
+  DRAFT:       'Nháp',
+  UPCOMING:    'Sắp chiếu',
+  NOW_SHOWING: 'Đang chiếu',
+  ENDED:       'Ngừng chiếu',
+  INACTIVE:    'Khóa',
+};
+
+const STATUS_COLORS = {
+  NOW_SHOWING: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  UPCOMING:    'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  ENDED:       'bg-neutral-500/10 text-neutral-400 border-neutral-500/20',
+  DRAFT:       'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  INACTIVE:    'bg-red-500/10 text-red-400 border-red-500/20',
+};
+
+const mapTmdbCert = (cert) => {
+  if (!cert) return 'P';
+  const c = cert.toUpperCase();
+  if (['G', 'P', 'ALL', 'PG', 'K', '12'].includes(c)) return 'T13';
+  if (['C13', 'T13', 'PG-13'].includes(c)) return 'T13';
+  if (['C16', 'T16', '16'].includes(c)) return 'T16';
+  if (['R', 'NC-17', 'C18', 'T18', '18'].includes(c)) return 'T18';
+  return 'P';
+};
+
+const FORMAT_MAP_TO_API = {
+  '2D': 'TWO_D',
+  '3D': 'THREE_D',
+  'IMAX': 'IMAX',
+  '4DX': 'FOUR_DX',
+  'SCREENX': 'SCREENX'
+};
+
+const FORMAT_MAP_FROM_API = {
+  'TWO_D': '2D',
+  'THREE_D': '3D',
+  'IMAX': 'IMAX',
+  'FOUR_DX': '4DX',
+  'SCREENX': 'SCREENX'
+};
+
+const extractTrailerUrl = (bundle) => {
+  if (!bundle) return '';
+  if (bundle.videos?.primaryTrailer?.url) return bundle.videos.primaryTrailer.url;
+  
+  const vidTrailers = Array.isArray(bundle.videos?.trailers) ? bundle.videos.trailers : [];
+  const firstVidTrailer = vidTrailers.find(t => t && t.url);
+  if (firstVidTrailer) return firstVidTrailer.url;
+  
+  const vidTeasers = Array.isArray(bundle.videos?.teasers) ? bundle.videos.teasers : [];
+  const firstVidTeaser = vidTeasers.find(t => t && t.url);
+  if (firstVidTeaser) return firstVidTeaser.url;
+
+  if (bundle.media?.primaryTrailer?.url) return bundle.media.primaryTrailer.url;
+  
+  const mediaTrailers = Array.isArray(bundle.media?.trailers) ? bundle.media.trailers : [];
+  const firstMediaTrailer = mediaTrailers.find(t => t && t.url);
+  if (firstMediaTrailer) return firstMediaTrailer.url;
+  
+  const trailers = Array.isArray(bundle.trailers) ? bundle.trailers : [];
+  const youtubeTrailer = trailers.find(t => t && t.site?.toLowerCase() === 'youtube' && t.key);
+  if (youtubeTrailer) return `https://www.youtube.com/watch?v=${youtubeTrailer.key}`;
+
+  const yTrailer = vidTrailers.find(t => t && t.site?.toLowerCase() === 'youtube' && t.key);
+  if (yTrailer) return `https://www.youtube.com/watch?v=${yTrailer.key}`;
+
+  const yTeaser = vidTeasers.find(t => t && t.site?.toLowerCase() === 'youtube' && t.key);
+  if (yTeaser) return `https://www.youtube.com/watch?v=${yTeaser.key}`;
+
+  return '';
+};
+
+const extractPosterUrl = (bundle) => {
+  if (!bundle) return '';
+  const mv = bundle.movie || {};
+  const posters = Array.isArray(bundle.media?.posters) ? bundle.media.posters : [];
+  const val = bundle.media?.primaryPoster?.url 
+    || mv.posterUrl 
+    || mv.poster?.url
+    || mv.poster 
+    || (posters[0]?.url) 
+    || '';
+  return typeof val === 'object' && val !== null ? (val.url || '') : String(val || '');
+};
+
+const extractBackdropUrl = (bundle) => {
+  if (!bundle) return '';
+  const mv = bundle.movie || {};
+  const backdrops = Array.isArray(bundle.media?.backdrops) ? bundle.media.backdrops : [];
+  const val = bundle.media?.primaryBackdrop?.url 
+    || mv.backdropUrl 
+    || mv.backdrop?.url
+    || mv.backdrop 
+    || (backdrops[0]?.url) 
+    || '';
+  return typeof val === 'object' && val !== null ? (val.url || '') : String(val || '');
+};
+
+const extractRuntime = (bundle) => {
+  if (!bundle) return 0;
+  const mv = bundle.movie || {};
+  return mv.runtimeMinutes || mv.runtime || mv.durationMinutes || mv.duration || 0;
+};
+
+const extractCountry = (bundle) => {
+  if (!bundle) return '';
+  const mv = bundle.movie || {};
+  const countries = mv.countries || mv.productionCountries || [];
+  if (Array.isArray(countries) && countries.length > 0) {
+    return countries[0]?.name || countries[0]?.countryName || '';
+  }
+  return mv.country || mv.productionCountry || '';
+};
+
+const getYoutubeEmbedUrl = (url) => {
+  if (!url) return '';
+  try {
+    if (url.includes('youtube.com/watch')) {
+      const k = new URLSearchParams(new URL(url).search).get('v');
+      return k ? `https://www.youtube.com/embed/${k}` : '';
+    }
+    if (url.includes('youtu.be/')) return `https://www.youtube.com/embed/${url.split('youtu.be/')[1]?.split('?')[0]}`;
+    if (url.includes('youtube.com/embed/')) return url.split('?')[0];
+  } catch { return ''; }
+  return '';
+};
+
+const formatDate = (d) => {
+  if (!d) return 'N/A';
+  const dt = new Date(d);
+  return isNaN(dt) ? d : dt.toLocaleDateString('vi-VN');
+};
+
+const parseApiError = (err) => {
+  const d = err?.response?.data;
+  if (!d) return err?.message || 'Lỗi không xác định.';
+
+  if (d.errorCode === 'INVALID_ENUM_VALUE') {
+    const field = d.data?.field || d.field || 'không xác định';
+    const val   = d.data?.rejectedValue ?? d.data?.value ?? '';
+    const allowed = (d.data?.allowedValues || []).join(', ');
+    return `Giá trị "${val}" không hợp lệ cho trường "${field}". Giá trị hợp lệ: ${allowed}.`;
+  }
+  if (d.errorCode === 'VALIDATION_ERROR' && d.data?.fieldErrors) {
+    return d.data.fieldErrors.map(e => `"${e.field}": ${e.message}`).join('\n');
+  }
+  if (d.message) return d.message;
+  return err?.message || 'Lỗi không xác định.';
+};
+
+// ─── Sub-component: Input / Select / Textarea helpers ─────────────────────────
+
+const Field = ({ label, required, error, children }) => (
+  <div className="space-y-1">
+    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">
+      {label}{required && <span className="text-brand-orange ml-0.5">*</span>}
+    </label>
+    {children}
+    {error && <p className="text-red-400 text-[10px] mt-0.5">{error}</p>}
+  </div>
+);
+
+const Input = ({ className = '', ...props }) => (
+  <input
+    className={`w-full bg-brand-dark border border-zinc-800 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:border-brand-orange/40 transition-colors text-zinc-100 ${className}`}
+    {...props}
+  />
+);
+
+const Select = ({ children, className = '', ...props }) => (
+  <select
+    className={`w-full bg-brand-dark border border-zinc-800 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:border-brand-orange/40 transition-colors text-zinc-100 outline-none ${className}`}
+    {...props}
+  >
+    {children}
+  </select>
+);
+
+const Textarea = ({ className = '', ...props }) => (
+  <textarea
+    className={`w-full bg-brand-dark border border-zinc-800 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:border-brand-orange/40 transition-colors text-zinc-100 leading-relaxed ${className}`}
+    {...props}
+  />
+);
+
+// ─── Empty form state ──────────────────────────────────────────────────────────
+
+const emptyForm = () => ({
+  title:          '',
+  originalTitle:  '',
+  durationMinutes:'',
+  ageRating:      'P',
+  showingStartDate: getTodayString(),
+  endDate:        '',
+  country:        '',
+  synopsis:       '',
+  tmdbReleaseDate: '',
+  originalLanguage: '',
+  status:         'UPCOMING',
+});
+
+// ─── Main Component ────────────────────────────────────────────────────────────
+
 export default function AdminMoviePage() {
   const { triggerToast } = useOutletContext() || {};
-  
-  // Data States
-  const [movies, setMovies] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Pagination & Filter States
-  const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [totalElements, setTotalElements] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
 
+  // List state
+  const [movies,        setMovies]        = useState([]);
+  const [genresList,    setGenresList]    = useState([]);
+  const [isLoading,     setIsLoading]     = useState(true);
+  const [currentPage,   setCurrentPage]  = useState(0);
+  const [pageSize,      setPageSize]      = useState(10);
+  const [statusFilter,  setStatusFilter]  = useState('');
+  const [searchTerm,    setSearchTerm]    = useState('');
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages,    setTotalPages]    = useState(0);
+
+  // View state
+  const [isFormOpen,    setIsFormOpen]    = useState(false);
+  const [isDetailOpen,  setIsDetailOpen]  = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState(null);
+  const [isSaving,      setIsSaving]      = useState(false);
+  const [formErrors,    setFormErrors]    = useState({});
+
+  // TMDB autocomplete
+  const [tmdbSearch,       setTmdbSearch]       = useState('');
+  const [tmdbSuggestions,  setTmdbSuggestions]  = useState([]);
+  const [isTmdbSearching,  setIsTmdbSearching]  = useState(false);
+  const [showSuggestions,  setShowSuggestions]  = useState(false);
+  const [isTmdbLoading,    setIsTmdbLoading]    = useState(false);
+
+  // Form field state
+  const [formBasic,      setFormBasic]      = useState(emptyForm());
+  const [selectedGenres, setSelectedGenres] = useState([]); // [{publicId, name}]
+  // tmdbGenres: enriched objects from bundle — [{tmdbId, name, existsInDb, dbPublicId|null}]
+  const [tmdbGenres,     setTmdbGenres]     = useState([]);
+  const [availableBackdrops, setAvailableBackdrops] = useState([]);
+  const [backdropImportCount, setBackdropImportCount] = useState(0);
+
+  // Media
+  const [posterUrl,      setPosterUrl]      = useState('');
+  const [bannerUrls,     setBannerUrls]     = useState(['']); // Array supports multiple banners
+  const [trailerUrl,     setTrailerUrl]     = useState('');
+
+  // Extra TMDB-imported data (display only — not sent to backend yet)
+  const [cast,        setCast]        = useState([]);  // [{name, character, profileImageUrl}]
+  const [directors,   setDirectors]   = useState([]);
+  const [writers,     setWriters]     = useState([]);
+  const [studios,     setStudios]     = useState([]);  // [{name, logoUrl}]
+
+  // Versions
+  const [versions,      setVersions]      = useState([]);
+  const [origVersions,  setOrigVersions]  = useState([]);
+  const [origMedia,     setOrigMedia]     = useState({ poster: null, banners: [], trailer: null });
+
+  // ─── Fetch genres list ───────────────────────────────────────────────────────
+  const fetchGenres = useCallback(async () => {
+    try {
+      const data = await adminGenreService.getAllGenres();
+      let list = data?.data?.content || data?.data || data?.content || data || [];
+      if (!Array.isArray(list)) list = [];
+      setGenresList(list);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchGenres(); }, [fetchGenres]);
+
+  // ─── Fetch movies ────────────────────────────────────────────────────────────
   const fetchMovies = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await getMovies({ 
-        page: currentPage, 
+      const data = await adminMovieService.getMovies({
+        page: currentPage,
         size: pageSize,
         search: searchTerm || undefined,
-        status: statusFilter || undefined
+        status: statusFilter || undefined,
       });
-      
-      let movieList = [];
-      if (data?.content) {
-        movieList = data.content;
-        setTotalElements(data.totalElements || 0);
-        setTotalPages(data.totalPages || 0);
-      } else if (Array.isArray(data)) {
-        movieList = data;
-        setTotalElements(data.length);
-        setTotalPages(Math.ceil(data.length / pageSize));
-      }
-      setMovies(movieList);
+      const content     = data?.data?.content || data?.content || data?.data || data || [];
+      const totalEls    = data?.data?.totalElements ?? data?.totalElements ?? (Array.isArray(content) ? content.length : 0);
+      const totalPgs    = data?.data?.totalPages    ?? data?.totalPages    ?? Math.ceil(totalEls / pageSize);
+      setMovies(Array.isArray(content) ? content : []);
+      setTotalElements(totalEls);
+      setTotalPages(totalPgs);
     } catch {
-      if (triggerToast) triggerToast('Lỗi khi tải danh sách phim', 'error');
+      triggerToast?.('Lỗi khi tải danh sách phim', 'error');
     } finally {
       setIsLoading(false);
     }
   }, [currentPage, pageSize, searchTerm, statusFilter, triggerToast]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchMovies();
-    }, 300);
-    return () => clearTimeout(timer);
+    const t = setTimeout(fetchMovies, 300);
+    return () => clearTimeout(t);
   }, [fetchMovies]);
 
-  // Handlers for filters (reset page to 0 on change)
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-    setCurrentPage(0);
-  };
+  // ─── TMDB autocomplete ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!tmdbSearch.trim()) { setTmdbSuggestions([]); return; }
+    
+    const abortController = new AbortController();
 
-  const handleStatusChange = (e) => {
-    setStatusFilter(e.target.value);
-    setCurrentPage(0);
-  };
+    const t = setTimeout(async () => {
+      setIsTmdbSearching(true);
+      try {
+        const res = await adminMovieService.searchTmdbSuggestions(tmdbSearch, abortController.signal);
+        setTmdbSuggestions(Array.isArray(res?.data) ? res.data : []);
+      } catch (err) {
+        if (err?.name !== 'CanceledError' && err?.message !== 'canceled') {
+          setTmdbSuggestions([]);
+        }
+      } finally {
+        setIsTmdbSearching(false);
+      }
+    }, 400);
 
-  const handlePageSizeChange = (e) => {
-    setPageSize(Number(e.target.value));
-    setCurrentPage(0);
-  };
+    return () => {
+      clearTimeout(t);
+      abortController.abort();
+    };
+  }, [tmdbSearch]);
 
-  const handleOpenAdd = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (triggerToast) triggerToast('Chức năng thêm phim mới đang được nâng cấp cùng backend API', 'error');
-  }, [triggerToast]);
+  // ─── Select a TMDB suggestion → auto-fill form ───────────────────────────────
+  const handleSelectTmdb = async (tmdbId) => {
+    setShowSuggestions(false);
+    setTmdbSearch('');
+    setIsTmdbLoading(true);
+    try {
+      const res = await adminMovieService.getTmdbMovieBundle(tmdbId);
+      if (!res?.success || !res?.data) {
+        triggerToast?.('Không lấy được dữ liệu từ TMDB', 'error');
+        return;
+      }
+      const bundle = res.data;
+      const mv = bundle.movie || {};
 
-  const handleAction = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (triggerToast) triggerToast('Chức năng chỉnh sửa đang được nâng cấp', 'error');
-  }, [triggerToast]);
+      // Fetch backdrops from TMDB API
+      let backdrops = [];
+      try {
+        const imagesRes = await adminMovieService.getTmdbMovieImages(tmdbId);
+        backdrops = Array.isArray(imagesRes?.data?.backdrops) ? imagesRes.data.backdrops : [];
+      } catch (err) {
+        console.warn('Failed to fetch TMDB movie backdrops:', err);
+      }
+      setAvailableBackdrops(backdrops);
+      setBackdropImportCount(backdrops.length);
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const d = new Date(dateString);
-    if (isNaN(d)) return dateString;
-    return d.toLocaleDateString('vi-VN');
-  };
+      // ── Basic fields ──
+      const runtime = extractRuntime(bundle);
+      const certification = bundle.releaseInfo?.preferredRelease?.certification || '';
+      setFormBasic({
+        title:            mv.title || '',
+        originalTitle:    mv.originalTitle || '',
+        durationMinutes:  runtime ? String(runtime) : '',
+        ageRating:        mapTmdbCert(certification),
+        showingStartDate: mv.releaseDate || getTodayString(),
+        endDate:          '',
+        country:          extractCountry(bundle),
+        synopsis:         mv.overview || '',
+        tmdbReleaseDate:  mv.releaseDate || '',   // original TMDB release date (read-only)
+        originalLanguage: (mv.originalLanguage || '').toUpperCase(),
+        status:           'UPCOMING',
+      });
 
-  return (
-    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in" data-testid="admin-movie-page">
-      <div className="flex flex-col border-b border-zinc-800 pb-4">
-        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">DANH SÁCH BỘ PHIM</h1>
-      </div>
+      // ── Media: use robust extraction ──
+      const posterSrc   = extractPosterUrl(bundle);
+      const backdropSrc = extractBackdropUrl(bundle);
+      const trailerSrc  = extractTrailerUrl(bundle);
+      setPosterUrl(posterSrc);
       
-      {/* Filters and Controls */}
-      <div className="flex flex-col lg:flex-row gap-4 justify-between items-center w-full bg-brand-gray/60 border border-zinc-800/50 p-4 rounded-2xl backdrop-blur-md">
-        {/* Search - Left Side */}
-        <div className="relative w-full lg:w-80">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-500">
-            <Search className="w-4 h-4" />
-          </span>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={handleSearchChange}
-            placeholder="Tìm kiếm tên phim..."
-            className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-brand-orange/40 focus:ring-0 rounded-xl py-2.5 pl-9 pr-4 text-xs transition-colors"
-          />
+      if (backdrops.length > 0) {
+        setBannerUrls(backdrops.map(b => b.url || ''));
+      } else {
+        setBannerUrls(backdropSrc ? [backdropSrc] : ['']);
+      }
+      setTrailerUrl(trailerSrc);
+
+      // ── Genres: compute existsInDb flag against current genresList ──
+      const rawGenres = Array.isArray(bundle.genres) ? bundle.genres : [];
+      const enrichedGenres = rawGenres.map(tg => {
+        const found = genresList.find(g => g.name && tg.name && g.name.toLowerCase() === tg.name.toLowerCase());
+        return {
+          tmdbId:     tg.tmdbId || tg.tmdbGenreId,
+          name:       tg.name,
+          existsInDb: !!found,
+          dbPublicId: found?.publicId || null,
+        };
+      });
+      setTmdbGenres(enrichedGenres);
+      // Pre-select genres that already exist in the DB
+      const matched = enrichedGenres
+        .filter(tg => tg.existsInDb)
+        .map(tg => ({ publicId: tg.dbPublicId, name: tg.name }));
+      setSelectedGenres(matched);
+
+      // ── Credits ──
+      const cred = bundle.credits || {};
+      setCast(Array.isArray(cred.mainCast) ? cred.mainCast.slice(0, 12) : []);
+      setDirectors(Array.isArray(cred.directors) ? cred.directors : []);
+      setWriters(Array.isArray(cred.writers) ? cred.writers : []);
+
+      // ── Production companies ──
+      setStudios(Array.isArray(mv.productionCompanies) ? mv.productionCompanies : []);
+
+      // ── Suggest a default screening version based on original language ──
+      const audioLang = (mv.originalLanguage || 'EN').toUpperCase();
+      setVersions([{
+        versionName:     `2D Vietsub`,
+        format:          '2D',
+        audioLanguage:   audioLang,
+        subtitleLanguage:'VI',
+        dubLanguage:     'NONE',
+        status:          'ACTIVE',
+      }]);
+
+      triggerToast?.(`Đã import dữ liệu: ${mv.title || ''} (${runtime} phút)`);
+    } catch (err) {
+      triggerToast?.(parseApiError(err), 'error');
+    } finally {
+      setIsTmdbLoading(false);
+    }
+  };
+
+  // ─── Open Add form ────────────────────────────────────────────────────────────
+  const handleOpenAdd = () => {
+    setSelectedMovie(null);
+    setFormBasic(emptyForm());
+    setSelectedGenres([]);
+    setTmdbGenres([]);
+    setPosterUrl('');
+    setBannerUrls(['']);
+    setTrailerUrl('');
+    setCast([]);
+    setDirectors([]);
+    setWriters([]);
+    setStudios([]);
+    setVersions([]);
+    setOrigVersions([]);
+    setOrigMedia({ poster: null, banners: [], trailer: null });
+    setFormErrors({});
+    setAvailableBackdrops([]);
+    setBackdropImportCount(0);
+    setIsFormOpen(true);
+  };
+
+  // ─── Open Edit form ───────────────────────────────────────────────────────────
+  const handleOpenEdit = async (movie) => {
+    setIsLoading(true);
+    setSelectedMovie(movie);
+    try {
+      const [mediaRes, verRes] = await Promise.all([
+        adminMovieService.getMovieMedia(movie.publicId),
+        adminMovieService.getMovieVersions(movie.publicId),
+      ]);
+      const mediaList = mediaRes?.data || [];
+      const versionList = verRes?.data || [];
+
+      const poster  = mediaList.find(m => m.mediaType === 'POSTER' && m.isPrimary) || mediaList.find(m => m.mediaType === 'POSTER') || null;
+      const banners = mediaList.filter(m => m.mediaType === 'BANNER');
+      const trailer = mediaList.find(m => m.mediaType === 'TRAILER') || null;
+
+      setOrigMedia({ poster, banners, trailer });
+      setPosterUrl(poster?.url || '');
+      setBannerUrls(banners.length ? banners.map(b => b.url) : ['']);
+      setTrailerUrl(trailer?.url || '');
+
+      setVersions(versionList.map(v => ({
+        ...v,
+        format: FORMAT_MAP_FROM_API[v.format] || v.format
+      })));
+      setOrigVersions(versionList.map(v => ({
+        ...v,
+        format: FORMAT_MAP_FROM_API[v.format] || v.format
+      })));
+
+      const movieGenreIds = [];
+      if (Array.isArray(movie.genres)) {
+        movie.genres.forEach(gName => {
+          const match = genresList.find(g => g.name?.toLowerCase() === gName.toLowerCase());
+          if (match) movieGenreIds.push({ publicId: match.publicId, name: match.name });
+        });
+      }
+      setSelectedGenres(movieGenreIds);
+      setTmdbGenres([]);
+      setCast([]);
+      setDirectors([]);
+      setWriters([]);
+      setStudios([]);
+
+      setFormBasic({
+        title:           movie.title || '',
+        originalTitle:   movie.originalTitle || '',
+        durationMinutes: movie.durationMinutes || '',
+        ageRating:       movie.ageRating || 'P',
+        showingStartDate:movie.releaseDate || '',
+        endDate:         movie.endDate || '',
+        country:         movie.country || '',
+        synopsis:        movie.synopsis || '',
+        tmdbReleaseDate: '',
+        originalLanguage:'',
+        status:          movie.status || 'UPCOMING',
+      });
+      setAvailableBackdrops([]);
+      setBackdropImportCount(0);
+      setFormErrors({});
+      setIsFormOpen(true);
+    } catch (err) {
+      triggerToast?.(parseApiError(err), 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ─── Open Detail view ─────────────────────────────────────────────────────────
+  const handleOpenDetail = (movie) => {
+    setSelectedMovie(movie);
+    setIsDetailOpen(true);
+  };
+
+  // ─── Versions helpers ─────────────────────────────────────────────────────────
+  const addVersion = () => setVersions(v => [...v, {
+    versionName:'', format:'2D', audioLanguage:'EN', subtitleLanguage:'VI', dubLanguage:'NONE', status:'ACTIVE',
+  }]);
+  const updateVersion = (i, field, val) => setVersions(v => v.map((ver, idx) => idx === i ? { ...ver, [field]: val } : ver));
+  const removeVersion = (i) => setVersions(v => v.filter((_, idx) => idx !== i));
+
+  // ─── Banner helpers ───────────────────────────────────────────────────────────
+  const addBanner = () => setBannerUrls(b => [...b, '']);
+  const updateBanner = (i, val) => setBannerUrls(b => b.map((url, idx) => idx === i ? val : url));
+  const removeBanner = (i) => setBannerUrls(b => b.filter((_, idx) => idx !== i));
+
+  // ─── Genre helpers ────────────────────────────────────────────────────────────
+  const toggleGenre = (g) => {
+    setSelectedGenres(prev => {
+      const exists = prev.some(s => s.publicId === g.publicId);
+      return exists ? prev.filter(s => s.publicId !== g.publicId) : [...prev, g];
+    });
+  };
+
+  // ─── Validate form ────────────────────────────────────────────────────────────
+  const validateForm = () => {
+    const errs = {};
+    if (!formBasic.title.trim())              errs.title           = 'Tên phim không được để trống.';
+    if (!formBasic.durationMinutes || Number(formBasic.durationMinutes) <= 0)
+                                              errs.durationMinutes = 'Thời lượng phải là số dương.';
+    if (!formBasic.ageRating || !AGE_RATINGS.includes(formBasic.ageRating))
+                                              errs.ageRating       = `Độ tuổi phải là một trong: ${AGE_RATINGS.join(', ')}.`;
+    if (isEdit) {
+      if (!formBasic.showingStartDate)          errs.showingStartDate = 'Ngày khởi chiếu bắt buộc phải chọn.';
+      if (formBasic.endDate && new Date(formBasic.endDate) < new Date(formBasic.showingStartDate))
+                                                errs.endDate         = 'Ngày kết thúc không thể trước ngày khởi chiếu.';
+    }
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  // ─── Genre auto-create + assign ───────────────────────────────────────────────
+  const resolveAndAssignGenres = async (moviePublicId) => {
+    // Collect IDs of genres that already exist and are selected
+    let finalIds = selectedGenres
+      .filter(g => g.publicId)
+      .map(g => g.publicId);
+
+    // For TMDB genres that do NOT exist in the DB yet, create them first.
+    // tmdbGenres items: {tmdbId, name, existsInDb, dbPublicId}
+    const toCreate = tmdbGenres.filter(tg => !tg.existsInDb);
+    for (const tg of toCreate) {
+      // Skip if admin manually removed this genre (not in selectedGenres AND it was existsInDb=false)
+      // We always create-and-assign all TMDB "new" genres unless admin explicitly unchecked them.
+      // Since admin sees them as "will be auto-created", they're always included unless they
+      // actively navigate away. (Future: add per-genre remove toggle).
+      try {
+        const created = await adminMovieService.ensureGenreExists(tg.name);
+        if (created?.publicId) {
+          // Newly created
+          if (!finalIds.includes(created.publicId)) finalIds.push(created.publicId);
+        } else {
+          // 409 duplicate — genre was created concurrently. Fetch fresh list to find it.
+          const freshRes = await adminGenreService.getAllGenres();
+          const freshList = freshRes?.data?.content || freshRes?.data || freshRes?.content || freshRes || [];
+          const found = Array.isArray(freshList)
+            ? freshList.find(g => g.name?.toLowerCase() === tg.name?.toLowerCase())
+            : null;
+          if (found?.publicId && !finalIds.includes(found.publicId)) {
+            finalIds.push(found.publicId);
+            setGenresList(prev =>
+              prev.some(g => g.publicId === found.publicId) ? prev : [...prev, found]
+            );
+          }
+        }
+      } catch { /* skip on error */ }
+    }
+
+    if (finalIds.length > 0) {
+      await adminMovieService.assignGenres(moviePublicId, finalIds);
+    }
+  };
+
+  // ─── Save (Create / Update) ───────────────────────────────────────────────────
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setIsSaving(true);
+    try {
+      // Build backend-safe request — TYPES MATTER:
+      const moviePayload = {
+        title:          formBasic.title?.trim() || '',
+        originalTitle:  formBasic.originalTitle?.trim() || null,
+        durationMinutes:Number(formBasic.durationMinutes), // Must be Integer, NOT string
+        ageRating:      formBasic.ageRating,               // Must match enum exactly: P|K|T13|T16|T18
+        releaseDate:    formBasic.showingStartDate || getTodayString(), // Backend field name = releaseDate
+        endDate:        formBasic.endDate || null,
+        country:        formBasic.country?.trim() || null,
+        synopsis:       formBasic.synopsis?.trim() || null,
+        status:         formBasic.status || 'UPCOMING',
+      };
+
+      if (selectedMovie) {
+        // ── Update ──────────────────────────────────────────────────────────────
+        const publicId = selectedMovie.publicId;
+        await adminMovieService.updateMovie(publicId, moviePayload);
+        await resolveAndAssignGenres(publicId);
+
+        // Media diffs
+        await reconcileMedia(publicId, origMedia);
+
+        // Version diffs
+        const versionsToDelete = origVersions.filter(ov => !versions.some(v => v.publicId === ov.publicId));
+        for (const ov of versionsToDelete) await adminMovieService.deleteMovieVersion(ov.publicId);
+        for (const v of versions) {
+          if (v.publicId) {
+            const orig = origVersions.find(ov => ov.publicId === v.publicId);
+            if (orig && JSON.stringify(orig) !== JSON.stringify(v)) {
+              await adminMovieService.updateMovieVersion(v.publicId, buildVersionPayload(v));
+            }
+          } else {
+            await adminMovieService.createMovieVersion(publicId, buildVersionPayload(v));
+          }
+        }
+
+        triggerToast?.('Cập nhật phim thành công!');
+      } else {
+        // ── Create ──────────────────────────────────────────────────────────────
+        const res = await adminMovieService.createMovie(moviePayload);
+        const publicId = res?.data?.publicId || res?.publicId;
+        if (!publicId) throw new Error('Không nhận được mã phim từ server. Vui lòng kiểm tra lại.');
+
+        await resolveAndAssignGenres(publicId);
+        await createAllMedia(publicId);
+        for (const v of versions) {
+          await adminMovieService.createMovieVersion(publicId, buildVersionPayload(v));
+        }
+
+        // Auto-assign active status after creation via frontend transition
+        let targetStatus = 'UPCOMING';
+        const todayStr = getTodayString();
+        const releaseDate = formBasic.showingStartDate || todayStr;
+        if (releaseDate < todayStr) {
+          targetStatus = 'NOW_SHOWING';
+        }
+        await adminMovieService.updateMovieStatus(publicId, targetStatus);
+
+        triggerToast?.('Thêm phim mới thành công!');
+      }
+
+      setIsFormOpen(false);
+      fetchMovies();
+    } catch (err) {
+      const msg = parseApiError(err);
+      triggerToast?.(msg, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const buildVersionPayload = (v) => ({
+    versionName:     v.versionName,
+    format:          FORMAT_MAP_TO_API[v.format] || v.format,
+    audioLanguage:   v.audioLanguage || null,
+    subtitleLanguage:v.subtitleLanguage || null,
+    dubLanguage:     v.dubLanguage || null,
+    status:          v.status || 'ACTIVE',
+  });
+
+  const createAllMedia = async (publicId) => {
+    if (posterUrl?.trim()) {
+      await adminMovieService.createMovieMedia(publicId, { mediaType: 'POSTER', url: posterUrl, title: 'Poster', isPrimary: true, displayOrder: 0, status: 'ACTIVE' });
+    }
+    for (let i = 0; i < bannerUrls.length; i++) {
+      const b = bannerUrls[i];
+      if (b?.trim()) {
+        await adminMovieService.createMovieMedia(publicId, { mediaType: 'BANNER', url: b, title: `Banner ${i + 1}`, isPrimary: i === 0, displayOrder: i, status: 'ACTIVE' });
+      }
+    }
+    if (trailerUrl?.trim()) {
+      await adminMovieService.createMovieMedia(publicId, { mediaType: 'TRAILER', url: trailerUrl, title: 'Trailer', isPrimary: false, displayOrder: 0, status: 'ACTIVE' });
+    }
+  };
+
+  const reconcileMedia = async (publicId, orig) => {
+    // Poster
+    if (posterUrl?.trim()) {
+      if (orig.poster) {
+        if (orig.poster.url !== posterUrl) await adminMovieService.updateMovieMedia(orig.poster.publicId, { mediaType: 'POSTER', url: posterUrl, title: 'Poster', isPrimary: true, displayOrder: 0, status: 'ACTIVE' });
+      } else {
+        await adminMovieService.createMovieMedia(publicId, { mediaType: 'POSTER', url: posterUrl, title: 'Poster', isPrimary: true, displayOrder: 0, status: 'ACTIVE' });
+      }
+    } else if (orig.poster) {
+      await adminMovieService.deleteMovieMedia(orig.poster.publicId);
+    }
+
+    // Banners: simple approach — delete all old, recreate
+    for (const ob of orig.banners) await adminMovieService.deleteMovieMedia(ob.publicId);
+    for (let i = 0; i < bannerUrls.length; i++) {
+      const b = bannerUrls[i];
+      if (b?.trim()) await adminMovieService.createMovieMedia(publicId, { mediaType: 'BANNER', url: b, title: `Banner ${i + 1}`, isPrimary: i === 0, displayOrder: i, status: 'ACTIVE' });
+    }
+
+    // Trailer
+    if (trailerUrl?.trim()) {
+      if (orig.trailer) {
+        if (orig.trailer.url !== trailerUrl) await adminMovieService.updateMovieMedia(orig.trailer.publicId, { mediaType: 'TRAILER', url: trailerUrl, title: 'Trailer', isPrimary: false, displayOrder: 0, status: 'ACTIVE' });
+      } else {
+        await adminMovieService.createMovieMedia(publicId, { mediaType: 'TRAILER', url: trailerUrl, title: 'Trailer', isPrimary: false, displayOrder: 0, status: 'ACTIVE' });
+      }
+    } else if (orig.trailer) {
+      await adminMovieService.deleteMovieMedia(orig.trailer.publicId);
+    }
+  };
+
+  const handleDelete = async (publicId, title) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)) return;
+    try {
+      await adminMovieService.deleteMovie(publicId);
+      triggerToast?.('Đã xóa phim thành công!');
+      fetchMovies();
+    } catch (err) {
+      triggerToast?.(parseApiError(err), 'error');
+    }
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // RENDER: Detail Modal
+  // ═══════════════════════════════════════════════════════════════════════════════
+  if (isDetailOpen && selectedMovie) {
+    const mv = selectedMovie;
+    return (
+      <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-white space-y-6 animate-fade-in">
+        <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsDetailOpen(false)} className="p-2 text-zinc-400 hover:text-white bg-brand-gray border border-zinc-800/80 rounded-xl transition-all cursor-pointer">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">CHI TIẾT PHIM</h1>
+          </div>
+          <button onClick={() => { setIsDetailOpen(false); handleOpenEdit(mv); }}
+            className="flex items-center gap-2 text-xs font-black bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange border border-brand-orange/20 px-4 py-2.5 rounded-xl transition-all cursor-pointer">
+            <Pencil className="w-3.5 h-3.5" />
+            <span>CHỈNH SỬA</span>
+          </button>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="flex flex-col items-center gap-6 bg-brand-gray/30 border border-zinc-850 p-6 rounded-2xl">
+            <div className="w-52 h-76 bg-neutral-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800 flex-shrink-0">
+              {mv.primaryPoster
+                ? <img src={mv.primaryPoster} alt={mv.title} className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600"><ImageIcon className="w-10 h-10 mb-2" /><span className="text-[10px]">Chưa có poster</span></div>
+              }
+            </div>
+            <div className="w-full space-y-3 text-xs border-t border-zinc-800/60 pt-4">
+              {[
+                ['Độ tuổi',   mv.ageRating,                         true],
+                ['Thời lượng',mv.durationMinutes ? `${mv.durationMinutes} phút` : 'N/A'],
+                ['Khởi chiếu',formatDate(mv.releaseDate)],
+                mv.endDate && ['Kết thúc', formatDate(mv.endDate)],
+                ['Quốc gia',  mv.country || 'N/A'],
+                ['Trạng thái',STATUS_LABELS[mv.status] || mv.status, false, mv.status],
+              ].filter(Boolean).map(([label, val, isRating, statusKey]) => (
+                <div key={label} className="flex justify-between items-center gap-2">
+                  <span className="text-zinc-500 font-bold uppercase tracking-wider">{label}</span>
+                  {statusKey
+                    ? <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase ${STATUS_COLORS[statusKey] || ''}`}>{val}</span>
+                    : isRating
+                    ? <span className="bg-brand-orange/15 text-brand-orange font-bold px-2 py-0.5 rounded text-[10px] border border-brand-orange/20">{val}</span>
+                    : <span className="text-zinc-200 font-semibold text-right">{val}</span>
+                  }
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-2 space-y-5">
+            <div>
+              <h2 className="text-2xl font-black">{mv.title}</h2>
+              {mv.originalTitle && <p className="text-sm text-zinc-400 italic mt-1">Tên gốc: {mv.originalTitle}</p>}
+            </div>
+            {Array.isArray(mv.genres) && mv.genres.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {mv.genres.map(g => <span key={g} className="bg-zinc-800 text-zinc-300 text-xs px-3 py-1 rounded-full font-semibold">{g}</span>)}
+              </div>
+            )}
+            <div className="bg-brand-gray/10 border border-zinc-850 p-4 rounded-2xl space-y-2">
+              <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Nội dung tóm tắt</h4>
+              <p className="text-zinc-300 text-sm leading-relaxed">{mv.synopsis || 'Chưa có tóm tắt.'}</p>
+            </div>
+            {mv.primaryPoster && (
+              <div className="bg-brand-gray/10 border border-zinc-850 p-4 rounded-2xl space-y-2">
+                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Banner / Backdrop</h4>
+                <img src={mv.primaryPoster.replace('/w500/', '/w1280/')} alt="Backdrop" className="w-full h-36 object-cover rounded-xl border border-zinc-800" onError={e => e.target.style.display='none'} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // RENDER: Add / Edit Form
+  // ═══════════════════════════════════════════════════════════════════════════════
+  if (isFormOpen) {
+    const isEdit = !!selectedMovie;
+    return (
+      <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-zinc-100 space-y-5 animate-fade-in">
+        {/* Header */}
+        <div className="flex justify-between items-center border-b border-zinc-800 pb-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsFormOpen(false)} className="p-2 text-zinc-400 hover:text-white bg-brand-gray border border-zinc-800/80 rounded-xl transition-all cursor-pointer">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">
+              {isEdit ? 'CẬP NHẬT PHIM' : 'THÊM PHIM MỚI'}
+            </h1>
+          </div>
         </div>
 
-        {/* Filters and Action - Right Side */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-          {/* Status Filter */}
-          <div className="relative w-full sm:w-40 md:w-48">
-            <select
-              value={statusFilter}
-              onChange={handleStatusChange}
-              className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 focus:border-brand-orange/40 focus:ring-0 rounded-xl py-2.5 px-4 text-xs transition-colors cursor-pointer outline-none"
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="NOW_SHOWING">Đang Chiếu</option>
-              <option value="UPCOMING">Sắp Chiếu</option>
-              <option value="ENDED">Ngừng Chiếu</option>
-              <option value="INACTIVE">Không Hoạt Động</option>
-            </select>
+        {/* TMDB Import (only on Add) */}
+        {!isEdit && (
+          <div className="relative w-full max-w-2xl bg-brand-gray/60 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-lg flex-shrink-0">
+            <label className="text-brand-orange text-[10px] font-black uppercase tracking-widest block">
+              TÌM KIẾM & IMPORT DỮ LIỆU TỪ TMDB
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+              <input
+                type="text"
+                value={tmdbSearch}
+                onChange={e => { setTmdbSearch(e.target.value); setShowSuggestions(true); }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Nhập tên phim để tự động điền dữ liệu (vd: Inception, Avengers...)"
+                className="w-full bg-brand-dark border border-zinc-800 focus:border-brand-orange/50 rounded-xl py-3 pl-10 pr-4 text-xs transition-all text-zinc-100 placeholder-zinc-500 outline-none"
+              />
+              {(isTmdbSearching || isTmdbLoading) && (
+                <div className="absolute right-3.5 top-3.5">
+                  <div className="w-4 h-4 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            {showSuggestions && tmdbSuggestions.length > 0 && (
+              <div className="absolute left-5 right-5 top-full mt-1 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-zinc-800 max-h-64 overflow-y-auto">
+                {tmdbSuggestions.map(s => (
+                  <button key={s.tmdbId} type="button" onMouseDown={() => handleSelectTmdb(s.tmdbId)}
+                    className="w-full flex items-center gap-3.5 p-3 hover:bg-zinc-800 transition-colors text-left">
+                    <div className="w-8 h-12 bg-neutral-900 rounded flex-shrink-0 overflow-hidden">
+                      {s.posterThumbnailUrl
+                        ? <img src={s.posterThumbnailUrl} alt={s.title} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center text-zinc-700"><ImageIcon className="w-4 h-4" /></div>
+                      }
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-zinc-200">{s.title}</p>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">{s.releaseYear || ''}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Form body */}
+        <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-16">
+          {/* ── Left 2 cols ── */}
+          <div className="lg:col-span-2 space-y-6">
+
+            {/* ── Basic Info ── */}
+            <FormSection icon={<Film className="w-4 h-4 text-brand-orange" />} title="Thông Tin Cơ Bản">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Tên phim" required error={formErrors.title}>
+                  <Input value={formBasic.title} onChange={e => setFormBasic(p => ({ ...p, title: e.target.value }))} />
+                </Field>
+                <Field label="Tên gốc (Nguyên bản)">
+                  <Input value={formBasic.originalTitle} onChange={e => setFormBasic(p => ({ ...p, originalTitle: e.target.value }))} />
+                </Field>
+                <Field label="Thời lượng (phút)" required error={formErrors.durationMinutes}>
+                  <Input type="number" min="1" value={formBasic.durationMinutes} onChange={e => setFormBasic(p => ({ ...p, durationMinutes: e.target.value }))} />
+                </Field>
+                <Field label="Quốc gia sản xuất">
+                  <Input value={formBasic.country} onChange={e => setFormBasic(p => ({ ...p, country: e.target.value }))} placeholder="Vd: United States of America" />
+                </Field>
+                <Field label="Giới hạn độ tuổi" required error={formErrors.ageRating}>
+                  <Select value={formBasic.ageRating} onChange={e => setFormBasic(p => ({ ...p, ageRating: e.target.value }))}>
+                    {AGE_RATINGS.map(r => <option key={r} value={r}>{AGE_RATING_LABELS[r]}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Ngôn ngữ gốc">
+                  <Input value={formBasic.originalLanguage} onChange={e => setFormBasic(p => ({ ...p, originalLanguage: e.target.value }))} placeholder="Vd: EN, VI, JA" />
+                </Field>
+                {isEdit && (
+                  <Field label="Trạng thái">
+                    <Select value={formBasic.status} onChange={e => setFormBasic(p => ({ ...p, status: e.target.value }))}>
+                      {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
+              </div>
+
+              {/* Dates section */}
+              {isEdit && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                  {formBasic.tmdbReleaseDate && (
+                    <Field label="Ngày phát hành gốc (TMDB)">
+                      <div className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-400 flex items-center gap-2">
+                        <Info className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />
+                        <span>{formatDate(formBasic.tmdbReleaseDate)}</span>
+                      </div>
+                    </Field>
+                  )}
+                  <Field label="Ngày khởi chiếu (tại rạp)" required error={formErrors.showingStartDate}>
+                    <Input type="date" value={formBasic.showingStartDate} onChange={e => setFormBasic(p => ({ ...p, showingStartDate: e.target.value }))} />
+                  </Field>
+                  <Field label="Ngày ngừng chiếu" error={formErrors.endDate}>
+                    <Input type="date" value={formBasic.endDate} onChange={e => setFormBasic(p => ({ ...p, endDate: e.target.value }))} />
+                  </Field>
+                </div>
+              )}
+
+              <Field label="Nội dung tóm tắt">
+                <Textarea rows={5} value={formBasic.synopsis} onChange={e => setFormBasic(p => ({ ...p, synopsis: e.target.value }))} />
+              </Field>
+
+              {/* Status info banner */}
+              {!isEdit && (
+                <div className="flex items-center gap-2 bg-blue-950/30 border border-blue-800/30 rounded-xl p-3 text-[11px] text-blue-300">
+                  <Info className="w-4 h-4 flex-shrink-0 text-blue-400" />
+                  <span>Phim mới tạo sẽ có trạng thái hoạt động (ACTIVE) mặc định. Dùng tính năng cập nhật để thay đổi trạng thái sau.</span>
+                </div>
+              )}
+            </FormSection>
+
+            {/* ── Genres ── */}
+            <FormSection icon={<LayoutList className="w-4 h-4 text-brand-orange" />} title="Thể Loại Phim">
+
+              {/* ── TMDB Genres block — always visible when tmdbGenres has data ── */}
+              {tmdbGenres.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-orange inline-block" />
+                    Thể loại từ TMDB
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {tmdbGenres.map(tg => (
+                      <div
+                        key={tg.tmdbId ?? tg.name}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold select-none ${
+                          tg.existsInDb
+                            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'   // Already in DB
+                            : 'bg-amber-500/10  border-amber-500/25  text-amber-300'         // Will be auto-created
+                        }`}
+                      >
+                        {tg.existsInDb
+                          ? <Check className="w-3 h-3 flex-shrink-0" />
+                          : <Plus  className="w-3 h-3 flex-shrink-0" />
+                        }
+                        <span>{tg.name}</span>
+                        {!tg.existsInDb && (
+                          <span className="text-[9px] font-black bg-amber-400/20 text-amber-200 px-1 py-0.5 rounded uppercase ml-0.5">Tự tạo</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-zinc-600 leading-relaxed">
+                    <span className="text-emerald-400">Xanh lá</span> = đã có trong hệ thống và sẽ được gán. &nbsp;
+                    <span className="text-amber-300">Cam</span> = chưa có, hệ thống sẽ tự động tạo và gán khi bạn nhấn Lưu.
+                  </p>
+                </div>
+              )}
+
+              {/* ── DB genre checklist — all genres from DB for manual selection ── */}
+              {genresList.length > 0 && (
+                <div className="space-y-2">
+                  {tmdbGenres.length > 0 && (
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Chọn thêm thể loại</p>
+                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {genresList.map(g => {
+                      const checked = selectedGenres.some(s => s.publicId === g.publicId);
+                      // Highlight genres that came from TMDB and are already checked
+                      const fromTmdb = tmdbGenres.some(tg => tg.existsInDb && tg.dbPublicId === g.publicId);
+                      return (
+                        <label key={g.publicId}
+                          className={`flex items-center gap-2 p-2.5 border rounded-xl cursor-pointer transition-all select-none text-xs ${
+                            checked && fromTmdb
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                              : checked
+                              ? 'border-brand-orange/30 bg-brand-orange/10 text-brand-orange'
+                              : 'border-zinc-800 bg-brand-dark text-zinc-400 hover:text-zinc-200'
+                          }`}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleGenre(g)} className="hidden" />
+                          {checked ? <Check className="w-3.5 h-3.5 flex-shrink-0" /> : <div className="w-3.5 h-3.5 border border-zinc-700 rounded-sm flex-shrink-0" />}
+                          <span className="truncate">{g.name}</span>
+                          {fromTmdb && checked && <span className="text-[9px] text-emerald-500 ml-auto flex-shrink-0">TMDB</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {genresList.length === 0 && tmdbGenres.length === 0 && (
+                <p className="text-zinc-500 text-xs py-4 text-center">Chưa có thể loại nào trong hệ thống. Import từ TMDB hoặc tạo thể loại trước.</p>
+              )}
+            </FormSection>
+
+            {/* ── Credits (display only, from TMDB) ── */}
+            {(directors.length > 0 || cast.length > 0 || studios.length > 0) && (
+              <FormSection icon={<Users className="w-4 h-4 text-brand-orange" />} title="Đoàn Phim (từ TMDB – chỉ xem)">
+                {directors.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Đạo diễn</p>
+                    <div className="flex flex-wrap gap-2">
+                      {directors.map(d => {
+                        const imgUrl = d.profileImageUrl || d.profileImage || DEFAULT_AVATAR;
+                        return (
+                          <div key={d.tmdbId || d.name} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
+                            <img src={imgUrl} alt={d.name} className="w-6 h-6 rounded-full object-cover" onError={e => { e.target.src = DEFAULT_AVATAR; }} />
+                            <span className="text-xs font-semibold text-zinc-200">{d.name}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {writers.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Biên kịch</p>
+                    <div className="flex flex-wrap gap-2">
+                      {writers.map(w => {
+                        const imgUrl = w.profileImageUrl || w.profileImage || DEFAULT_AVATAR;
+                        return (
+                          <div key={w.tmdbId || w.name} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
+                            <img src={imgUrl} alt={w.name} className="w-6 h-6 rounded-full object-cover" onError={e => { e.target.src = DEFAULT_AVATAR; }} />
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold text-zinc-200">{w.name}</span>
+                              {w.job && <span className="text-[10px] text-zinc-500 ml-1">({w.job})</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {cast.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Diễn viên chính</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {cast.map(c => {
+                        const imgUrl = c.profileImageUrl || c.profileImage || DEFAULT_AVATAR;
+                        return (
+                          <div key={c.tmdbId || c.name} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">
+                            <img src={imgUrl} alt={c.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" onError={e => { e.target.src = DEFAULT_AVATAR; }} />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-zinc-200 truncate">{c.name}</p>
+                              {c.character && <p className="text-[10px] text-zinc-500 truncate">{c.character}</p>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </FormSection>
+            )}
+
+            {/* ── Production Companies ── */}
+            {studios.length > 0 && (
+              <FormSection icon={<Building2 className="w-4 h-4 text-brand-orange" />} title="Công ty Sản xuất (từ TMDB – chỉ xem)">
+                <div className="flex flex-wrap gap-3">
+                  {studios.map(s => (
+                    <div key={s.id || s.name} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">
+                      {s.logoUrl && <img src={s.logoUrl} alt={s.name} className="h-6 max-w-[80px] object-contain" onError={e => e.target.style.display='none'} />}
+                      <span className="text-xs font-semibold text-zinc-200">{s.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </FormSection>
+            )}
+
+            {/* ── Versions ── */}
+            <FormSection icon={<Film className="w-4 h-4 text-brand-orange" />} title="Phiên Bản Chiếu"
+              headerAction={
+                <button type="button" onClick={addVersion} className="text-[10px] font-black text-brand-orange hover:opacity-80 uppercase flex items-center gap-1">
+                  <Plus className="w-3.5 h-3.5" />THÊM PHIÊN BẢN
+                </button>
+              }>
+              {versions.length === 0
+                ? <p className="text-zinc-500 text-xs py-4 text-center italic">Chưa có phiên bản nào. Click "THÊM PHIÊN BẢN" để cấu hình.</p>
+                : versions.map((ver, vIdx) => (
+                  <div key={vIdx} className="relative p-4 bg-brand-dark border border-zinc-800 rounded-xl mb-3 last:mb-0">
+                    <button type="button" onClick={() => removeVersion(vIdx)} className="absolute top-3 right-3 text-zinc-600 hover:text-red-400 transition-colors">
+                      <Trash className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pr-6">
+                      {[
+                        ['Tên phiên bản', 'versionName', 'text', {placeholder:'Vd: 2D Vietsub'}],
+                        ['Định dạng',     'format',      'select', {opts:['2D','3D','IMAX','4DX','SCREENX']}],
+                        ['Ngôn ngữ thoại','audioLanguage','text',  {placeholder:'EN, VI, JA'}],
+                        ['Phụ đề',        'subtitleLanguage','text',{placeholder:'VI, NONE'}],
+                        ['Lồng tiếng',    'dubLanguage', 'text',   {placeholder:'VI, NONE'}],
+                        ['Trạng thái',    'status',      'select', {opts:['ACTIVE','INACTIVE']}],
+                      ].map(([lbl, field, type, opts]) => (
+                        <div key={field} className="space-y-1">
+                          <p className="text-[9px] font-black uppercase text-zinc-500">{lbl}</p>
+                          {type === 'select'
+                            ? <select value={ver[field] || ''} onChange={e => updateVersion(vIdx, field, e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg py-1.5 px-2 text-xs text-zinc-100 outline-none">
+                                {opts.opts.map(o => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            : <input type="text" value={ver[field] || ''} onChange={e => updateVersion(vIdx, field, e.target.value)}
+                                placeholder={opts.placeholder || ''}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg py-1.5 px-2 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/30" />
+                          }
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              }
+            </FormSection>
           </div>
 
-          {/* Page Size Filter */}
-          <div className="relative w-full sm:w-32 md:w-36">
-            <select
-              value={pageSize}
-              onChange={handlePageSizeChange}
-              className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 focus:border-brand-orange/40 focus:ring-0 rounded-xl py-2.5 px-4 text-xs transition-colors cursor-pointer outline-none"
-            >
-              <option value={5}>5/trang</option>
-              <option value={10}>10/trang</option>
-              <option value={20}>20/trang</option>
-              <option value={50}>50/trang</option>
-            </select>
-          </div>
+          {/* ── Right column: Media ── */}
+          <div className="space-y-5">
+            <div className="bg-brand-gray/60 border border-zinc-800/50 rounded-2xl p-5 space-y-5 sticky top-0">
+              <h3 className="text-xs font-black text-white uppercase tracking-wider border-b border-zinc-800 pb-2">Media</h3>
 
-          <button
-            type="button"
-            onClick={handleOpenAdd}
-            className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            <span>THÊM PHIM</span>
+              {/* Poster */}
+              <div className="space-y-2">
+                <label className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Poster URL</label>
+                <input type="text" value={posterUrl} onChange={e => setPosterUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full bg-brand-dark border border-zinc-800 rounded-xl py-2 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/40" />
+                <div className="w-full h-48 bg-neutral-900 border border-zinc-800/80 rounded-xl overflow-hidden flex items-center justify-center">
+                  {posterUrl?.trim()
+                    ? <img src={posterUrl} alt="Poster preview" className="w-full h-full object-contain" />
+                    : <div className="text-zinc-600 flex flex-col items-center gap-1"><ImageIcon className="w-7 h-7" /><span className="text-[10px]">Chưa có Poster</span></div>
+                  }
+                </div>
+              </div>
+
+              {/* Banners (multiple) */}
+              <div className="space-y-3">
+                {availableBackdrops.length > 0 ? (
+                  <div className="space-y-2">
+                    <label className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">
+                      Số lượng Banner/Backdrop import (Tối đa: {availableBackdrops.length})
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={availableBackdrops.length}
+                      value={backdropImportCount}
+                      onChange={e => {
+                        const count = Math.max(0, Math.min(availableBackdrops.length, Number(e.target.value)));
+                        setBackdropImportCount(count);
+                        setBannerUrls(availableBackdrops.slice(0, count).map(b => b.url || ''));
+                      }}
+                      className="w-full bg-brand-dark border border-zinc-800 rounded-xl py-2 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/40 outline-none"
+                    />
+                    
+                    {/* Backdrop Grid Preview */}
+                    <div className="grid grid-cols-2 gap-2 mt-2 max-h-60 overflow-y-auto pr-1">
+                      {bannerUrls.map((url, idx) => (
+                        <div key={idx} className="relative group rounded-xl overflow-hidden border border-zinc-850 bg-neutral-900 aspect-video">
+                          {url ? (
+                            <img src={url} alt={`Backdrop ${idx + 1}`} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-700 text-[10px]"><ImageIcon className="w-4 h-4" /></div>
+                          )}
+                          <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded font-black">
+                            #{idx + 1}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-zinc-500 text-[10px] font-black uppercase tracking-wider">Banner / Backdrop</label>
+                      {!isEdit && (
+                        <button type="button" onClick={addBanner} className="text-[9px] font-black text-brand-orange hover:opacity-80 flex items-center gap-0.5">
+                          <Plus className="w-3 h-3" />Thêm Banner
+                        </button>
+                      )}
+                    </div>
+                    {bannerUrls.map((b, bIdx) => (
+                      <div key={bIdx} className="space-y-1.5">
+                        <div className="flex gap-1.5">
+                          <input type="text" value={b} onChange={e => updateBanner(bIdx, e.target.value)}
+                            placeholder="https://..."
+                            className="flex-1 bg-brand-dark border border-zinc-800 rounded-xl py-2 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/40 min-w-0" />
+                          {bannerUrls.length > 1 && (
+                            <button type="button" onClick={() => removeBanner(bIdx)} className="p-2 text-zinc-600 hover:text-red-400 transition-colors">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="w-full h-24 bg-neutral-900 border border-zinc-800/80 rounded-xl overflow-hidden flex items-center justify-center">
+                          {b?.trim()
+                            ? <img src={b} alt={`Banner ${bIdx+1}`} className="w-full h-full object-cover" />
+                            : <div className="text-zinc-700 flex items-center gap-1"><ImageIcon className="w-5 h-5" /><span className="text-[10px]">Banner {bIdx+1}</span></div>
+                          }
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Trailer */}
+              <div className="space-y-2">
+                <label className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">YouTube Trailer URL</label>
+                <input type="text" value={trailerUrl} onChange={e => setTrailerUrl(e.target.value)}
+                  placeholder="https://youtube.com/watch?v=..."
+                  className="w-full bg-brand-dark border border-zinc-800 rounded-xl py-2 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/40" />
+                {getYoutubeEmbedUrl(trailerUrl)
+                  ? <div className="w-full aspect-video rounded-xl overflow-hidden border border-zinc-800">
+                      <iframe src={getYoutubeEmbedUrl(trailerUrl)} title="Trailer" className="w-full h-full" allowFullScreen />
+                    </div>
+                  : <div className="w-full aspect-video bg-neutral-900 border border-zinc-800/80 rounded-xl flex flex-col items-center justify-center text-zinc-600 gap-1.5">
+                      <Play className="w-7 h-7" /><span className="text-[10px]">Chưa có Trailer</span>
+                    </div>
+                }
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsFormOpen(false)}
+                  className="flex-1 border border-zinc-800 bg-brand-gray hover:opacity-90 text-zinc-300 font-bold py-3 rounded-2xl text-xs transition-colors cursor-pointer">
+                  Hủy
+                </button>
+                <button type="submit" disabled={isSaving}
+                  className="flex-1 bg-brand-orange hover:opacity-90 text-zinc-950 font-black py-3 rounded-2xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50">
+                  {isSaving
+                    ? <div className="w-4 h-4 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                    : <><Check className="w-4 h-4" /><span>LƯU LẠI</span></>
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // RENDER: Movie List
+  // ═══════════════════════════════════════════════════════════════════════════════
+  return (
+    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-white space-y-6 animate-fade-in" data-testid="admin-movie-page">
+      <div className="border-b border-zinc-800 pb-4">
+        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">DANH SÁCH BỘ PHIM</h1>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-brand-gray/60 border border-zinc-800/50 p-4 rounded-2xl">
+        <div className="relative w-full lg:w-80">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+          <input type="text" value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+            placeholder="Tìm kiếm tên phim..."
+            className="w-full bg-brand-dark border border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-brand-orange/40 rounded-xl py-2.5 pl-9 pr-4 text-xs outline-none transition-colors" />
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+          <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(0); }}
+            className="w-full sm:w-48 bg-brand-dark border border-zinc-800 text-zinc-100 focus:border-brand-orange/40 rounded-xl py-2.5 px-4 text-xs outline-none cursor-pointer">
+            <option value="">Tất cả trạng thái</option>
+            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}
+            className="w-full sm:w-32 bg-brand-dark border border-zinc-800 text-zinc-100 focus:border-brand-orange/40 rounded-xl py-2.5 px-4 text-xs outline-none cursor-pointer">
+            {[5, 10, 20, 50].map(n => <option key={n} value={n}>{n}/trang</option>)}
+          </select>
+          <button type="button" onClick={handleOpenAdd}
+            className="bg-brand-orange hover:opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center">
+            <Plus className="w-4 h-4" />THÊM PHIM
           </button>
         </div>
       </div>
 
-      {/* Main Table Area */}
+      {/* Table */}
       {isLoading ? (
         <SkeletonTable rows={pageSize} columns={7} />
       ) : (
-        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden w-full shadow-xl flex flex-col">
+        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-neutral-900/50 border-b border-neutral-800 text-[10px] font-black text-neutral-400 uppercase tracking-wider">
-                  <th className="py-4 px-6 w-16 text-center">STT</th>
-                  <th className="py-4 px-6 w-24 text-center">ẢNH POSTER</th>
-                  <th className="py-4 px-6">TÊN PHIM</th>
-                  <th className="py-4 px-6 w-32 text-center">THỜI LƯỢNG</th>
-                  <th className="py-4 px-6 w-40 text-center">NGÀY KHỞI CHIẾU</th>
-                  <th className="py-4 px-6 w-32 text-center">TRẠNG THÁI</th>
-                  <th className="py-4 px-6 w-32 text-right">THAO TÁC</th>
+                  <th className="py-4 px-5 w-12 text-center">STT</th>
+                  <th className="py-4 px-5 w-16 text-center">POSTER</th>
+                  <th className="py-4 px-5">TÊN PHIM</th>
+                  <th className="py-4 px-5 w-32 text-center">THỜI LƯỢNG</th>
+                  <th className="py-4 px-5 w-36 text-center">KHỞI CHIẾU</th>
+                  <th className="py-4 px-5 w-32 text-center">TRẠNG THÁI</th>
+                  <th className="py-4 px-5 w-28 text-right">THAO TÁC</th>
                 </tr>
               </thead>
               <tbody>
-                {movies.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="py-12 text-center text-neutral-500 text-sm font-semibold">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <LayoutList className="w-8 h-8 text-neutral-700" />
-                        <span>Không tìm thấy phim nào phù hợp.</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  movies.map((movie, index) => (
-                    <tr key={movie.id} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors group">
-                      <td className="py-4 px-6 text-center">
-                        <span className="text-xs font-black text-neutral-400">
-                          {((currentPage * pageSize) + index + 1).toString().padStart(2, '0')}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        <div className="w-10 h-14 bg-neutral-800 rounded flex items-center justify-center overflow-hidden mx-auto shadow-md">
-                          {movie.posterUrl ? (
-                            <img 
-                              src={movie.posterUrl} 
-                              alt={movie.title} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                              }}
-                            />
-                          ) : null}
-                          <div className={`w-full h-full flex flex-col items-center justify-center text-neutral-600 bg-neutral-800 ${movie.posterUrl ? 'hidden' : 'flex'}`}>
-                            <ImageIcon className="w-4 h-4" />
-                          </div>
+                {movies.length === 0
+                  ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-neutral-500">
+                        <div className="flex flex-col items-center gap-2">
+                          <LayoutList className="w-10 h-10 text-neutral-700" />
+                          <span className="text-sm">Không tìm thấy phim nào.</span>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-zinc-200 group-hover:text-amber-400 transition-colors truncate max-w-[200px] lg:max-w-xs">
-                            {movie.title}
+                    </tr>
+                  )
+                  : movies.map((movie, idx) => (
+                    <tr key={movie.publicId || idx} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
+                      <td className="py-4 px-5 text-center">
+                        <span className="text-xs font-black text-neutral-500">{(currentPage * pageSize + idx + 1).toString().padStart(2, '0')}</span>
+                      </td>
+                      <td className="py-4 px-5">
+                        <div className="w-9 h-13 bg-neutral-800 rounded overflow-hidden mx-auto">
+                          {movie.primaryPoster
+                            ? <img src={movie.primaryPoster} alt={movie.title} className="w-full h-full object-cover" onError={e => { e.target.style.display='none'; }} />
+                            : <div className="w-full h-full flex items-center justify-center text-neutral-700"><ImageIcon className="w-4 h-4" /></div>
+                          }
+                        </div>
+                      </td>
+                      <td className="py-4 px-5">
+                        <button type="button" onClick={() => handleOpenDetail(movie)}
+                          className="text-sm font-bold text-zinc-200 hover:text-amber-400 transition-colors text-left truncate max-w-[220px] block cursor-pointer">
+                          {movie.title}
+                        </button>
+                        {movie.ageRating && <span className="text-[10px] font-bold text-neutral-500 uppercase">{movie.ageRating}</span>}
+                      </td>
+                      <td className="py-4 px-5 text-center">
+                        <span className="text-xs text-zinc-300">{movie.durationMinutes ? `${movie.durationMinutes} phút` : 'N/A'}</span>
+                      </td>
+                      <td className="py-4 px-5 text-center">
+                        <span className="text-xs text-zinc-300">{formatDate(movie.releaseDate)}</span>
+                      </td>
+                      <td className="py-4 px-5 text-center">
+                        {movie.status && (
+                          <span className={`text-[10px] font-black px-2.5 py-1 rounded-md border uppercase tracking-wider ${STATUS_COLORS[movie.status] || 'text-zinc-400 border-zinc-700'}`}>
+                            {STATUS_LABELS[movie.status] || movie.status}
                           </span>
-                          {movie.ageRating && (
-                            <span className="text-[10px] font-bold text-neutral-500 uppercase mt-0.5">
-                              {movie.ageRating}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        <span className="text-xs font-medium text-zinc-300">
-                          {movie.durationMinutes ? `${movie.durationMinutes} phút` : 'N/A'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        <span className="text-xs font-medium text-zinc-300">
-                          {formatDate(movie.releaseDate)}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        {movie.status === 'NOW_SHOWING' && (
-                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider">Đang Chiếu</span>
-                        )}
-                        {movie.status === 'UPCOMING' && (
-                          <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider">Sắp Chiếu</span>
-                        )}
-                        {movie.status === 'ENDED' && (
-                          <span className="bg-neutral-500/10 text-neutral-400 border border-neutral-500/20 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider">Ngừng Chiếu</span>
-                        )}
-                        {!['NOW_SHOWING', 'UPCOMING', 'ENDED'].includes(movie.status) && (
-                          <span className="bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider">{movie.status || 'N/A'}</span>
                         )}
                       </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={handleAction}
-                            className="p-2 text-neutral-400 hover:text-amber-500 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 rounded-lg transition-all cursor-pointer"
-                            title="Sửa phim (Đang nâng cấp)"
-                          >
+                      <td className="py-4 px-5 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button type="button" onClick={() => handleOpenEdit(movie)}
+                            className="p-2 text-neutral-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-all cursor-pointer" title="Sửa">
                             <Pencil className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={handleAction}
-                            className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-lg transition-all cursor-pointer"
-                            title="Xóa phim (Đang nâng cấp)"
-                          >
+                          <button type="button" onClick={() => handleDelete(movie.publicId, movie.title)}
+                            className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer" title="Xóa">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))
-                )}
+                }
               </tbody>
             </table>
           </div>
 
-          {/* Pagination Footer */}
-          {!isLoading && totalElements > 0 && (
+          {/* Pagination */}
+          {totalElements > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-neutral-800 bg-neutral-900/30 gap-4">
-              <div className="text-xs text-neutral-400">
-                Hiển thị {currentPage * pageSize + 1}-{Math.min((currentPage + 1) * pageSize, totalElements)} trên tổng số {totalElements} bộ phim
-              </div>
+              <span className="text-xs text-neutral-400">
+                Hiển thị {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} / {totalElements} phim
+              </span>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={currentPage === 0}
-                  onClick={() => setCurrentPage(p => p - 1)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
+                <button disabled={currentPage === 0} onClick={() => setCurrentPage(p => p - 1)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   Trước
                 </button>
-                
-                <div className="flex items-center gap-1 px-2">
-                  {/* Simplified Pagination Window logic for robust UX */}
-                  {Array.from({ length: totalPages }).map((_, i) => {
-                    // Logic to show a max of 5 pages (e.g. 1 2 3 4 5)
-                    if (
-                      i === 0 || 
-                      i === totalPages - 1 || 
-                      (i >= currentPage - 1 && i <= currentPage + 1)
-                    ) {
-                      return (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setCurrentPage(i)}
-                          className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg transition-colors ${
-                            currentPage === i 
-                              ? 'bg-amber-500 text-black' 
-                              : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
-                          }`}
-                        >
-                          {i + 1}
-                        </button>
-                      );
-                    }
-                    if (i === currentPage - 2 || i === currentPage + 2) {
-                      return <span key={i} className="text-neutral-500 text-xs px-1">...</span>;
-                    }
-                    return null;
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let page;
+                    if (totalPages <= 7) page = i;
+                    else if (currentPage < 4) page = i;
+                    else if (currentPage > totalPages - 5) page = totalPages - 7 + i;
+                    else page = currentPage - 3 + i;
+                    return (
+                      <button key={page} onClick={() => setCurrentPage(page)}
+                        className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg transition-colors ${
+                          currentPage === page ? 'bg-amber-500 text-black' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                        }`}>
+                        {page + 1}
+                      </button>
+                    );
                   })}
                 </div>
-
-                <button
-                  type="button"
-                  disabled={currentPage === totalPages - 1 || totalPages === 0}
-                  onClick={() => setCurrentPage(p => p + 1)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
+                <button disabled={currentPage >= totalPages - 1 || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   Sau
                 </button>
               </div>
@@ -331,6 +1447,21 @@ export default function AdminMoviePage() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── FormSection helper component ─────────────────────────────────────────────
+function FormSection({ icon, title, children, headerAction }) {
+  return (
+    <div className="bg-brand-gray/60 border border-zinc-800/50 rounded-2xl p-5 space-y-4">
+      <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+        <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+          {icon}<span>{title}</span>
+        </h3>
+        {headerAction}
+      </div>
+      {children}
     </div>
   );
 }
