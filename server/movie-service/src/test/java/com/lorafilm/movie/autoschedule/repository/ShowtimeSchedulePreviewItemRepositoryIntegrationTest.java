@@ -20,11 +20,24 @@ import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
+
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.test.context.TestPropertySource;
+import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewTestFactory;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.showtime.domain.entity.Showtime;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -36,8 +49,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @org.springframework.context.annotation.Import(com.lorafilm.movie.common.config.AuditConfig.class)
-@DataJpaTest(properties = {"spring.autoconfigure.exclude=org.springframework.boot.testcontainers.service.connection.ServiceConnectionAutoConfiguration"})
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@TestPropertySource(properties = {
+    "spring.datasource.url=jdbc:mysql://127.0.0.1:3307/movie_db_test?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true",
+    "spring.datasource.username=root",
+    "spring.datasource.password=12345678",
+    "spring.datasource.driverClassName=com.mysql.cj.jdbc.Driver",
+    "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect",
+    "spring.jpa.hibernate.ddl-auto=update"
+})
 public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
 
     @Autowired
@@ -54,6 +76,9 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
 
     @Autowired
     private MovieRepository movieRepository;
+
+    @Autowired
+    private ShowtimeRepository showtimeRepository;
 
     @Autowired
     private MovieVersionRepository movieVersionRepository;
@@ -108,14 +133,14 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
         movieVersion.setPublicId(UUID.randomUUID().toString());
         movieVersion = movieVersionRepository.saveAndFlush(movieVersion);
 
-        preview = new ShowtimeSchedulePreview();
+        preview = ShowtimeSchedulePreviewTestFactory.createPreview();
         preview.setPublicId(UUID.randomUUID().toString());
         preview.setCinema(cinema);
         preview.setScheduleFrom(LocalDate.now());
         preview.setScheduleTo(LocalDate.now().plusDays(7));
         preview.setTimezoneSnapshot("Asia/Ho_Chi_Minh");
         preview.setStrategy(AutoScheduleStrategy.BALANCED);
-        preview.setStrategyVersion("1.0");
+        preview.setStrategyVersion("BALANCED_V1");
         preview.setApplyMode(SchedulePreviewApplyMode.ALL_OR_NOTHING);
         preview.setStatus(SchedulePreviewStatus.GENERATING);
         preview.setSlotGranularityMinutes(15);
@@ -127,12 +152,12 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
         preview.setExpiresAt(Instant.now().plusSeconds(3600));
         preview.setGeneratedBy(1001L);
         preview.setGenerateIdempotencyKey(UUID.randomUUID().toString());
-        preview.setRequestFingerprint("fingerprint");
+        preview.setRequestFingerprint("0".repeat(64));
         preview = previewRepository.saveAndFlush(preview);
     }
 
     private ShowtimeSchedulePreviewItem createValidItem() {
-        ShowtimeSchedulePreviewItem item = new ShowtimeSchedulePreviewItem();
+        ShowtimeSchedulePreviewItem item = ShowtimeSchedulePreviewTestFactory.createItem();
         item.setPublicId(UUID.randomUUID().toString());
         item.setPreview(preview);
         item.setMovie(movie);
@@ -142,7 +167,7 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
         item.setStartTime(Instant.now());
         item.setEndTime(Instant.now().plusSeconds(7200));
         item.setOccupancyEndTime(Instant.now().plusSeconds(8100));
-        item.setScore(85.5);
+        item.setScore(new java.math.BigDecimal("85.500"));
         item.setRankingPosition(1);
         item.setValidationStatus(PreviewItemValidationStatus.VALID);
         item.setSelected(false);
@@ -177,8 +202,15 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
     }
 
     @Test
-    @Disabled("MySQL integration required - H2 doesn't enforce CHECK natively without explicit definition")
     void ITEM_REPO_003_rejectedSelectedItemRejectedByDB() {
+        ShowtimeSchedulePreviewItem item = createValidItem();
+        item.setValidationStatus(PreviewItemValidationStatus.REJECTED);
+        item.setSelected(true); // invalid combo
+        item.setRejectionCode("ERR");
+        
+        assertThrows(DataIntegrityViolationException.class, () -> {
+            itemRepository.saveAndFlush(item);
+        });
     }
 
     @Test
@@ -286,7 +318,7 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
         ShowtimeSchedulePreviewItem i1 = createValidItem();
         itemRepository.saveAndFlush(i1);
 
-        ShowtimeSchedulePreview preview2 = new ShowtimeSchedulePreview();
+        ShowtimeSchedulePreview preview2 = ShowtimeSchedulePreviewTestFactory.createPreview();
         preview2.setPublicId(UUID.randomUUID().toString());
         preview2.setCinema(cinema);
         preview2.setScheduleFrom(LocalDate.now());
@@ -317,7 +349,6 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
     }
 
     @Test
-    @Disabled("MySQL integration required - JSON mapping differs in H2")
     void ITEM_REPO_009_jsonScoreBreakdown() {
         ShowtimeSchedulePreviewItem item = createValidItem();
         String json = "{\"primeTime\": 90, \"utilization\": 80, \"fairness\": 70}";
@@ -339,8 +370,31 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
     }
 
     @Test
-    @Disabled("MySQL integration required")
     void ITEM_REPO_011_createdShowtimeRelation() {
+        Showtime showtime = new Showtime();
+        showtime.setPublicId(UUID.randomUUID().toString());
+        showtime.setMovie(movie);
+        showtime.setMovieVersion(movieVersion);
+        showtime.setCinema(cinema);
+        showtime.setAuditorium(auditorium);
+        showtime.setStartTime(Instant.now().plusSeconds(3600));
+        showtime.setEndTime(Instant.now().plusSeconds(7200));
+        showtime.setStatus(com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.DRAFT);
+        showtime = showtimeRepository.saveAndFlush(showtime);
+
+        ShowtimeSchedulePreviewItem item = createValidItem();
+        item.setCreatedShowtime(showtime);
+        itemRepository.saveAndFlush(item);
+        entityManager.clear();
+
+        ShowtimeSchedulePreviewItem found = itemRepository.findById(item.getId()).orElseThrow();
+        assertThat(found.getCreatedShowtime()).isNotNull();
+        assertThat(found.getCreatedShowtime().getId()).isEqualTo(showtime.getId());
+
+        itemRepository.delete(found);
+        itemRepository.flush();
+
+        assertThat(showtimeRepository.existsById(showtime.getId())).isTrue();
     }
 
     @Test

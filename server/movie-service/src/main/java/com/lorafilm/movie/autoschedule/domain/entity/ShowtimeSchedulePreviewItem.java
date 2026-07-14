@@ -9,11 +9,12 @@ import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import jakarta.persistence.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
 @Table(name = "showtime_schedule_preview_items", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_preview_items_preview_auditorium_start", columnNames = {"preview_id", "auditorium_id", "start_time"})
+    @UniqueConstraint(name = "uk_schedule_preview_item_slot", columnNames = {"preview_id", "auditorium_id", "start_time"})
 })
 public class ShowtimeSchedulePreviewItem {
 
@@ -21,7 +22,7 @@ public class ShowtimeSchedulePreviewItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", nullable = false, unique = true, updatable = false)
+    @Column(name = "public_id", nullable = false, unique = true, updatable = false, length = 36)
     private String publicId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -53,8 +54,8 @@ public class ShowtimeSchedulePreviewItem {
     @Column(name = "occupancy_end_time", nullable = false)
     private Instant occupancyEndTime;
 
-    @Column(name = "score", nullable = false)
-    private Double score;
+    @Column(name = "score", nullable = false, precision = 10, scale = 3)
+    private BigDecimal score;
 
     @Column(name = "score_breakdown_json", columnDefinition = "json")
     private String scoreBreakdownJson;
@@ -63,13 +64,13 @@ public class ShowtimeSchedulePreviewItem {
     private Integer rankingPosition;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "validation_status", nullable = false)
+    @Column(name = "validation_status", nullable = false, length = 30)
     private PreviewItemValidationStatus validationStatus;
 
-    @Column(name = "rejection_code")
+    @Column(name = "rejection_code", length = 100)
     private String rejectionCode;
 
-    @Column(name = "rejection_reason")
+    @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
 
     @Column(name = "selected", nullable = false)
@@ -82,17 +83,17 @@ public class ShowtimeSchedulePreviewItem {
     private Long selectedBy;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "apply_status", nullable = false)
+    @Column(name = "apply_status", nullable = false, length = 30)
     private PreviewItemApplyStatus applyStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_showtime_id")
     private Showtime createdShowtime;
 
-    @Column(name = "apply_error_code")
+    @Column(name = "apply_error_code", length = 100)
     private String applyErrorCode;
 
-    @Column(name = "apply_error_message")
+    @Column(name = "apply_error_message", length = 500)
     private String applyErrorMessage;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
@@ -101,14 +102,10 @@ public class ShowtimeSchedulePreviewItem {
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     private Instant updatedAt;
 
-    public ShowtimeSchedulePreviewItem() {}
+    protected ShowtimeSchedulePreviewItem() {}
 
     public Long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getPublicId() {
@@ -183,11 +180,11 @@ public class ShowtimeSchedulePreviewItem {
         this.occupancyEndTime = occupancyEndTime;
     }
 
-    public Double getScore() {
+    public BigDecimal getScore() {
         return score;
     }
 
-    public void setScore(Double score) {
+    public void setScore(BigDecimal score) {
         this.score = score;
     }
 
@@ -291,15 +288,7 @@ public class ShowtimeSchedulePreviewItem {
         return createdAt;
     }
 
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
     public Instant getUpdatedAt() {
         return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
     }
 }

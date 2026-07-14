@@ -25,9 +25,22 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.test.context.TestPropertySource;
+import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewTestFactory;
+
 @org.springframework.context.annotation.Import(com.lorafilm.movie.common.config.AuditConfig.class)
-@DataJpaTest(properties = {"spring.autoconfigure.exclude=org.springframework.boot.testcontainers.service.connection.ServiceConnectionAutoConfiguration"})
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@TestPropertySource(properties = {
+    "spring.datasource.url=jdbc:mysql://127.0.0.1:3307/movie_db_test?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true",
+    "spring.datasource.username=root",
+    "spring.datasource.password=12345678",
+    "spring.datasource.driverClassName=com.mysql.cj.jdbc.Driver",
+    "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect",
+    "spring.jpa.hibernate.ddl-auto=update"
+})
 public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
 
     @Autowired
@@ -38,6 +51,9 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private Cinema cinema;
 
@@ -56,14 +72,14 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
     }
 
     private ShowtimeSchedulePreview createValidPreview(String publicId, String genKey, String applyKey) {
-        ShowtimeSchedulePreview preview = new ShowtimeSchedulePreview();
+        ShowtimeSchedulePreview preview = ShowtimeSchedulePreviewTestFactory.createPreview();
         preview.setPublicId(publicId);
         preview.setCinema(cinema);
         preview.setScheduleFrom(LocalDate.now());
         preview.setScheduleTo(LocalDate.now().plusDays(7));
         preview.setTimezoneSnapshot("Asia/Ho_Chi_Minh");
         preview.setStrategy(AutoScheduleStrategy.BALANCED);
-        preview.setStrategyVersion("1.0");
+        preview.setStrategyVersion("BALANCED_V1");
         preview.setApplyMode(SchedulePreviewApplyMode.ALL_OR_NOTHING);
         preview.setStatus(SchedulePreviewStatus.GENERATING);
         preview.setSlotGranularityMinutes(15);
@@ -76,7 +92,7 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
         preview.setGeneratedBy(1001L);
         preview.setGenerateIdempotencyKey(genKey);
         preview.setApplyIdempotencyKey(applyKey);
-        preview.setRequestFingerprint("fingerprint");
+        preview.setRequestFingerprint("0".repeat(64));
         return preview;
     }
 
@@ -154,21 +170,82 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
         Long initialVersion = saved.getVersion();
         
         saved.setTotalCandidateCount(10);
+        saved.setValidCandidateCount(7);
+        saved.setRejectedCandidateCount(3);
+        saved.setSelectedCandidateCount(5);
         ShowtimeSchedulePreview updated = previewRepository.saveAndFlush(saved);
         
         assertThat(updated.getVersion()).isGreaterThan(initialVersion);
     }
 
     @Test
-    @Disabled("MySQL integration required")
     void PREVIEW_REPO_007_optimisticStaleUpdate() {
-        // Disabled per prompt logic
+        ShowtimeSchedulePreview preview = createValidPreview(UUID.randomUUID().toString(), "gen-12", null);
+        previewRepository.saveAndFlush(preview);
+        
+        org.springframework.transaction.support.TransactionTemplate txTemplate = 
+            new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        ShowtimeSchedulePreview t1 = txTemplate.execute(status -> previewRepository.findById(preview.getId()).orElseThrow());
+        
+        txTemplate.execute(status -> {
+            ShowtimeSchedulePreview t2 = previewRepository.findById(preview.getId()).orElseThrow();
+            t2.setTotalCandidateCount(20);
+            t2.setValidCandidateCount(15);
+            t2.setRejectedCandidateCount(5);
+            t2.setSelectedCandidateCount(10);
+            return previewRepository.saveAndFlush(t2);
+        });
+
+        assertThrows(org.springframework.orm.ObjectOptimisticLockingFailureException.class, () -> {
+            txTemplate.execute(status -> {
+                t1.setTotalCandidateCount(10);
+                t1.setValidCandidateCount(7);
+                t1.setRejectedCandidateCount(3);
+                t1.setSelectedCandidateCount(5);
+                return previewRepository.saveAndFlush(t1);
+            });
+        });
     }
 
     @Test
-    @Disabled("MySQL integration required")
-    void PREVIEW_REPO_008_pessimisticLockQuery() {
-        // Disabled per prompt logic
+    void PREVIEW_REPO_008_pessimisticLockQuery() throws InterruptedException {
+        ShowtimeSchedulePreview preview = createValidPreview(UUID.randomUUID().toString(), "gen-13", null);
+        previewRepository.saveAndFlush(preview);
+        entityManager.clear();
+        
+        org.springframework.transaction.support.TransactionTemplate txTemplate = 
+            new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        java.util.concurrent.CountDownLatch lockAcquired = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch updateFinished = new java.util.concurrent.CountDownLatch(1);
+
+        Thread thread1 = new Thread(() -> {
+            txTemplate.execute(status -> {
+                previewRepository.findByPublicIdForUpdate(preview.getPublicId());
+                lockAcquired.countDown();
+                try {
+                    updateFinished.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return null;
+            });
+        });
+        
+        thread1.start();
+        lockAcquired.await();
+
+        assertThrows(org.springframework.dao.PessimisticLockingFailureException.class, () -> {
+            txTemplate.execute(status -> {
+                return previewRepository.findByPublicIdForUpdate(preview.getPublicId());
+            });
+        });
+
+        updateFinished.countDown();
+        thread1.join();
     }
 
     @Test
@@ -198,6 +275,6 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
 
         Optional<ShowtimeSchedulePreview> found = previewRepository.findById(preview.getId());
         assertThat(found).isPresent();
-        // Since test context may initialize lazys, just ensuring the test passes for completeness
+        assertThat(org.hibernate.Hibernate.isInitialized(found.get().getCinema())).isFalse();
     }
 }

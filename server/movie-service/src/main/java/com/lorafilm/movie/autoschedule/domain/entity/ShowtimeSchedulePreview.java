@@ -19,7 +19,7 @@ public class ShowtimeSchedulePreview {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", nullable = false, unique = true, updatable = false)
+    @Column(name = "public_id", nullable = false, unique = true, updatable = false, length = 36)
     private String publicId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -32,22 +32,22 @@ public class ShowtimeSchedulePreview {
     @Column(name = "schedule_to", nullable = false)
     private LocalDate scheduleTo;
 
-    @Column(name = "timezone_snapshot", nullable = false)
+    @Column(name = "timezone_snapshot", nullable = false, length = 50)
     private String timezoneSnapshot;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "strategy", nullable = false)
+    @Column(name = "strategy", nullable = false, length = 30)
     private AutoScheduleStrategy strategy;
 
-    @Column(name = "strategy_version", nullable = false)
+    @Column(name = "strategy_version", nullable = false, length = 30)
     private String strategyVersion;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "apply_mode", nullable = false)
+    @Column(name = "apply_mode", nullable = false, length = 30)
     private SchedulePreviewApplyMode applyMode;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false, length = 30)
     private SchedulePreviewStatus status;
 
     @Column(name = "slot_granularity_minutes", nullable = false)
@@ -80,16 +80,16 @@ public class ShowtimeSchedulePreview {
     @Column(name = "applied_by")
     private Long appliedBy;
 
-    @Column(name = "generate_idempotency_key", nullable = false, unique = true)
+    @Column(name = "generate_idempotency_key", nullable = false, unique = true, length = 100)
     private String generateIdempotencyKey;
 
-    @Column(name = "apply_idempotency_key", unique = true)
+    @Column(name = "apply_idempotency_key", unique = true, length = 100)
     private String applyIdempotencyKey;
 
-    @Column(name = "request_fingerprint", nullable = false)
+    @Column(name = "request_fingerprint", nullable = false, length = 64)
     private String requestFingerprint;
 
-    @Column(name = "failure_reason")
+    @Column(name = "failure_reason", length = 500)
     private String failureReason;
 
     @Version
@@ -105,7 +105,7 @@ public class ShowtimeSchedulePreview {
     @OneToMany(mappedBy = "preview", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ShowtimeSchedulePreviewItem> items = new ArrayList<>();
 
-    public ShowtimeSchedulePreview() {}
+    protected ShowtimeSchedulePreview() {}
 
     public void addItem(ShowtimeSchedulePreviewItem item) {
         items.add(item);
@@ -119,15 +119,24 @@ public class ShowtimeSchedulePreview {
     
     // Domain behaviors
     public void markPreviewed() {
+        if (this.status != SchedulePreviewStatus.GENERATING) {
+            throw new IllegalStateException("Preview must be GENERATING to mark as PREVIEWED");
+        }
         this.status = SchedulePreviewStatus.PREVIEWED;
     }
 
     public void markApplying(String applyIdempotencyKey) {
+        if (this.status != SchedulePreviewStatus.PREVIEWED) {
+            throw new IllegalStateException("Preview must be PREVIEWED to mark as APPLYING");
+        }
         this.status = SchedulePreviewStatus.APPLYING;
         this.applyIdempotencyKey = applyIdempotencyKey;
     }
 
     public void markApplied(Long actorId, Instant appliedAt) {
+        if (this.status != SchedulePreviewStatus.APPLYING) {
+            throw new IllegalStateException("Preview must be APPLYING to mark as APPLIED");
+        }
         this.status = SchedulePreviewStatus.APPLIED;
         this.appliedBy = actorId;
         this.appliedAt = appliedAt;
@@ -144,10 +153,6 @@ public class ShowtimeSchedulePreview {
 
     public Long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getPublicId() {
@@ -338,24 +343,12 @@ public class ShowtimeSchedulePreview {
         return version;
     }
 
-    public void setVersion(Long version) {
-        this.version = version;
-    }
-
     public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
     public Instant getUpdatedAt() {
         return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
     }
 
     public List<ShowtimeSchedulePreviewItem> getItems() {
