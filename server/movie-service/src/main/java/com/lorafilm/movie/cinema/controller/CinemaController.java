@@ -35,18 +35,6 @@ public class CinemaController {
         return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaByIdentifier(cinemaIdOrSlug)));
     }
 
-    @GetMapping("/{cinemaPublicId}/media")
-    public ResponseEntity<ApiResponse<List<CinemaDetailDto.CinemaMediaDto>>> getCinemaMedia(
-            @PathVariable String cinemaPublicId) {
-        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaMedia(cinemaPublicId)));
-    }
-
-    @GetMapping("/{cinemaPublicId}/operating-hours")
-    public ResponseEntity<ApiResponse<List<CinemaDetailDto.OperatingHourDto>>> getCinemaOperatingHours(
-            @PathVariable String cinemaPublicId) {
-        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaOperatingHours(cinemaPublicId)));
-    }
-
     @GetMapping("/{cinemaPublicId}/closure-periods")
     public ResponseEntity<ApiResponse<List<CinemaClosurePeriodResponse>>> getCinemaClosurePeriods(
             @PathVariable String cinemaPublicId) {

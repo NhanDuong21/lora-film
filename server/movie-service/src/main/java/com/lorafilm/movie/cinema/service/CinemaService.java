@@ -29,10 +29,6 @@ public interface CinemaService {
     CinemaResponse updateCinemaStatus(String publicId,
             com.lorafilm.movie.cinema.domain.enums.CinemaStatus targetStatus);
 
-    List<CinemaDetailDto.CinemaMediaDto> getCinemaMedia(String cinemaPublicId);
-
-    List<CinemaDetailDto.OperatingHourDto> getCinemaOperatingHours(String cinemaPublicId);
-
     CinemaMediaResponse addCinemaMedia(String cinemaPublicId, CreateCinemaMediaRequest request);
 
     CinemaMediaResponse updateCinemaMedia(String mediaPublicId, UpdateCinemaMediaRequest request);

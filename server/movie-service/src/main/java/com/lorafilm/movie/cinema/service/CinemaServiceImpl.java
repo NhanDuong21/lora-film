@@ -322,44 +322,7 @@ public class CinemaServiceImpl implements CinemaService {
         return detailDto;
     }
 
-    @Override
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<CinemaDetailDto.CinemaMediaDto> getCinemaMedia(String cinemaPublicId) {
-        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
-        List<CinemaMedia> mediaList = cinemaMediaRepository
-                .findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(cinema.getId(), ActiveStatus.ACTIVE);
-        return mediaList.stream().map(m -> {
-            CinemaDetailDto.CinemaMediaDto dto = new CinemaDetailDto.CinemaMediaDto();
-            dto.setPublicId(m.getPublicId());
-            dto.setMediaType(m.getMediaType().name());
-            dto.setUrl(m.getUrl());
-            dto.setTitle(m.getTitle());
-            dto.setIsPrimary(m.getIsPrimary());
-            return dto;
-        }).collect(Collectors.toList());
-    }
-
-    @Override
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<CinemaDetailDto.OperatingHourDto> getCinemaOperatingHours(String cinemaPublicId) {
-        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
-
-        List<CinemaOperatingHour> hours = cinemaOperatingHourRepository
-                .findByCinemaIdOrderByDayOfWeekAsc(cinema.getId());
-        return hours.stream().map(h -> {
-            CinemaDetailDto.OperatingHourDto dto = new CinemaDetailDto.OperatingHourDto();
-            dto.setDayOfWeek(h.getDayOfWeek());
-            dto.setOpenTime(Boolean.TRUE.equals(h.getIsClosed()) ? null
-                    : (h.getOpenTime() != null ? h.getOpenTime().toString() : null));
-            dto.setCloseTime(Boolean.TRUE.equals(h.getIsClosed()) ? null
-                    : (h.getCloseTime() != null ? h.getCloseTime().toString() : null));
-            dto.setIsClosed(h.getIsClosed());
-            return dto;
-        }).collect(Collectors.toList());
-    }
 
     @Override
     @org.springframework.transaction.annotation.Transactional

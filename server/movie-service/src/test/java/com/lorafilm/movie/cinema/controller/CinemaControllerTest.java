@@ -1,9 +1,10 @@
 package com.lorafilm.movie.cinema.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
+import com.lorafilm.movie.cinema.dto.CinemaDto;
+import com.lorafilm.movie.cinema.dto.CinemaClosurePeriodResponse;
 import com.lorafilm.movie.cinema.service.CinemaService;
-import com.lorafilm.movie.common.api.ApiResponse;
+import com.lorafilm.movie.common.dto.PageResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -15,7 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Collections;
 
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -49,36 +51,54 @@ class CinemaControllerTest {
     private org.springframework.data.jpa.mapping.JpaMetamodelMappingContext jpaMappingContext;
 
     @Test
-    void getCinemaMedia_Success() throws Exception {
-        CinemaDetailDto.CinemaMediaDto mediaDto = new CinemaDetailDto.CinemaMediaDto();
-        mediaDto.setPublicId("media-uuid");
-        mediaDto.setUrl("http://example.com/image.jpg");
+    void getCinemas_Success() throws Exception {
+        CinemaDto cinemaDto = new CinemaDto();
+        cinemaDto.setPublicId("cinema-uuid");
+        cinemaDto.setName("Public Cinema");
 
-        when(cinemaService.getCinemaMedia(eq("cinema-uuid")))
-                .thenReturn(Collections.singletonList(mediaDto));
+        PageResponse<CinemaDto> pageResponse = new PageResponse<>(
+                Collections.singletonList(cinemaDto), 0, 10, 1L, 1, true);
 
-        mockMvc.perform(get("/api/cinemas/cinema-uuid/media")
+        when(cinemaService.getCinemas(any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(pageResponse);
+
+        mockMvc.perform(get("/api/cinemas")
+                        .param("city", "HCM")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].publicId").value("media-uuid"));
+                .andExpect(jsonPath("$.data.data[0].publicId").value("cinema-uuid"));
     }
 
     @Test
-    void getCinemaOperatingHours_Success() throws Exception {
-        CinemaDetailDto.OperatingHourDto hourDto = new CinemaDetailDto.OperatingHourDto();
-        hourDto.setDayOfWeek(1);
-        hourDto.setOpenTime("08:00:00");
-        hourDto.setCloseTime("22:00:00");
-        hourDto.setIsClosed(false);
+    void getCinemaDetail_Success() throws Exception {
+        CinemaDetailDto detailDto = new CinemaDetailDto();
+        detailDto.setPublicId("cinema-uuid");
+        detailDto.setName("Public Cinema Detail");
 
-        when(cinemaService.getCinemaOperatingHours(eq("cinema-uuid")))
-                .thenReturn(Collections.singletonList(hourDto));
+        when(cinemaService.getCinemaByIdentifier("cinema-uuid")).thenReturn(detailDto);
 
-        mockMvc.perform(get("/api/cinemas/cinema-uuid/operating-hours")
+        mockMvc.perform(get("/api/cinemas/cinema-uuid")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].dayOfWeek").value(1));
+                .andExpect(jsonPath("$.data.publicId").value("cinema-uuid"))
+                .andExpect(jsonPath("$.data.name").value("Public Cinema Detail"));
+    }
+
+    @Test
+    void getCinemaClosurePeriods_Success() throws Exception {
+        CinemaClosurePeriodResponse closureDto = new CinemaClosurePeriodResponse();
+        closureDto.setId(301L);
+        closureDto.setCinemaPublicId("cinema-uuid");
+
+        when(cinemaService.getCinemaClosurePeriods("cinema-uuid"))
+                .thenReturn(Collections.singletonList(closureDto));
+
+        mockMvc.perform(get("/api/cinemas/cinema-uuid/closure-periods")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].id").value(301));
     }
 }
