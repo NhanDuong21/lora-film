@@ -35,4 +35,6 @@ public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
     boolean existsByCinemaIdAndNameIgnoreCaseAndIdNotAndDeletedAtIsNull(@Param("cinemaId") Long cinemaId, @Param("name") String name, @Param("excludeId") Long excludeId);
 
     List<Auditorium> findByCinemaIdAndStatusAndDeletedAtIsNull(Long cinemaId, AuditoriumStatus status);
+
+    boolean existsByCinemaIdAndDeletedAtIsNull(Long cinemaId);
 }

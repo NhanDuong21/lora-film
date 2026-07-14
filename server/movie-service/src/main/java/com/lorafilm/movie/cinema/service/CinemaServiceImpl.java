@@ -21,6 +21,7 @@ import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
 import com.lorafilm.movie.cinema.repository.CinemaMediaRepository;
 import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
 import com.lorafilm.movie.cinema.domain.entity.CinemaMedia;
@@ -38,6 +39,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -52,6 +54,7 @@ public class CinemaServiceImpl implements CinemaService {
     private final CinemaClosurePeriodRepository cinemaClosurePeriodRepository;
     private final CurrentUserProvider currentUserProvider;
     private final AuditoriumRepository auditoriumRepository;
+    private final ShowtimeRepository showtimeRepository;
     private final CinemaMapper cinemaMapper;
 
     public CinemaServiceImpl(CinemaRepository cinemaRepository,
@@ -60,6 +63,7 @@ public class CinemaServiceImpl implements CinemaService {
             CinemaClosurePeriodRepository cinemaClosurePeriodRepository,
             CurrentUserProvider currentUserProvider,
             AuditoriumRepository auditoriumRepository,
+            ShowtimeRepository showtimeRepository,
             CinemaMapper cinemaMapper) {
         this.cinemaRepository = cinemaRepository;
         this.cinemaOperatingHourRepository = cinemaOperatingHourRepository;
@@ -67,6 +71,7 @@ public class CinemaServiceImpl implements CinemaService {
         this.cinemaClosurePeriodRepository = cinemaClosurePeriodRepository;
         this.currentUserProvider = currentUserProvider;
         this.auditoriumRepository = auditoriumRepository;
+        this.showtimeRepository = showtimeRepository;
         this.cinemaMapper = cinemaMapper;
     }
 
@@ -522,5 +527,171 @@ public class CinemaServiceImpl implements CinemaService {
         period.setUpdatedBy(userId);
         CinemaClosurePeriod savedPeriod = cinemaClosurePeriodRepository.save(period);
         return cinemaMapper.toClosurePeriodResponse(savedPeriod);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public PageResponse<CinemaResponse> getAdminCinemas(String status, String city, String district, String keyword, Boolean showDeleted, int page, int size, String sort) {
+        Specification<Cinema> spec = Specification.where(null);
+
+        if (showDeleted == null || !showDeleted) {
+            spec = spec.and(CinemaSpecification.isNotDeleted());
+        }
+
+        if (status != null && !status.isEmpty()) {
+            try {
+                CinemaStatus parsedStatus = CinemaStatus.valueOf(status.toUpperCase());
+                spec = spec.and(CinemaSpecification.hasStatus(parsedStatus));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid status: " + status);
+            }
+        }
+
+        if (city != null && !city.isEmpty()) {
+            spec = spec.and(CinemaSpecification.hasCity(city));
+        }
+
+        if (district != null && !district.isEmpty()) {
+            spec = spec.and(CinemaSpecification.hasDistrict(district));
+        }
+
+        if (keyword != null && !keyword.isEmpty()) {
+            spec = spec.and(CinemaSpecification.hasKeyword(keyword));
+        }
+
+        Sort sortOrder = parseSort(sort);
+        Pageable pageable = PageRequest.of(page, size, sortOrder);
+        Page<Cinema> cinemaPage = cinemaRepository.findAll(spec, pageable);
+
+        List<CinemaResponse> cinemaResponses = cinemaPage.getContent().stream()
+                .map(cinemaMapper::toResponse)
+                .collect(Collectors.toList());
+
+        return new PageResponse<>(
+                cinemaResponses,
+                cinemaPage.getNumber(),
+                cinemaPage.getSize(),
+                cinemaPage.getTotalElements(),
+                cinemaPage.getTotalPages(),
+                cinemaPage.isLast());
+    }
+
+    private Sort parseSort(String sort) {
+        if (sort == null || sort.trim().isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+        String[] parts = sort.split(",");
+        String property = parts[0].trim();
+        Sort.Direction direction = Sort.Direction.DESC;
+        if (parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim())) {
+            direction = Sort.Direction.ASC;
+        }
+        return Sort.by(direction, property);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public CinemaDetailDto getAdminCinemaDetail(String publicId) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+        return mapToDetailDto(cinema);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteCinema(String publicId) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        if (auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId())) {
+            throw new BusinessException(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS);
+        }
+
+        if (showtimeRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId())) {
+            throw new BusinessException(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY);
+        }
+
+        Long userId = currentUserProvider.getCurrentUserId();
+        cinema.performSoftDelete(userId);
+        cinemaRepository.save(cinema);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteCinemaMedia(String mediaPublicId) {
+        CinemaMedia media = cinemaMediaRepository.findByPublicIdAndDeletedAtIsNull(mediaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema media not found"));
+
+        Cinema cinema = media.getCinema();
+        if (cinema == null || cinema.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Cinema not found");
+        }
+
+        Long userId = currentUserProvider.getCurrentUserId();
+
+        if (Boolean.TRUE.equals(media.getIsPrimary())) {
+            media.setIsPrimary(false);
+        }
+
+        media.performSoftDelete(userId);
+        media.setStatus(ActiveStatus.INACTIVE);
+        cinemaMediaRepository.save(media);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public PageResponse<CinemaClosurePeriodResponse> getAdminCinemaClosurePeriods(String cinemaPublicId, String status, Boolean upcomingOnly, int page, int size) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        Specification<CinemaClosurePeriod> spec = Specification.where(
+                com.lorafilm.movie.cinema.repository.CinemaClosurePeriodSpecification.hasCinemaId(cinema.getId()));
+
+        if (status != null && !status.isEmpty()) {
+            try {
+                ActionStatus parsedStatus = ActionStatus.valueOf(status.toUpperCase());
+                spec = spec.and(com.lorafilm.movie.cinema.repository.CinemaClosurePeriodSpecification.hasStatus(parsedStatus));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid status: " + status);
+            }
+        }
+
+        if (Boolean.TRUE.equals(upcomingOnly)) {
+            spec = spec.and(com.lorafilm.movie.cinema.repository.CinemaClosurePeriodSpecification.isUpcoming());
+        }
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "startTime"));
+        Page<CinemaClosurePeriod> pageResult = cinemaClosurePeriodRepository.findAll(spec, pageable);
+
+        List<CinemaClosurePeriodResponse> responses = pageResult.getContent().stream()
+                .map(cinemaMapper::toClosurePeriodResponse)
+                .collect(Collectors.toList());
+
+        return new PageResponse<>(
+                responses,
+                pageResult.getNumber(),
+                pageResult.getSize(),
+                pageResult.getTotalElements(),
+                pageResult.getTotalPages(),
+                pageResult.isLast());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<CinemaClosurePeriodResponse> getCinemaClosurePeriods(String cinemaPublicId) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+
+        if (cinema.getStatus() != CinemaStatus.ACTIVE) {
+            throw new ResourceNotFoundException("Cinema not found");
+        }
+
+        List<CinemaClosurePeriod> periods = cinemaClosurePeriodRepository
+                .findByCinemaIdAndStatusAndEndTimeAfterOrderByStartTimeAsc(
+                        cinema.getId(), ActionStatus.ACTIVE, Instant.now());
+
+        return periods.stream()
+                .map(cinemaMapper::toClosurePeriodResponse)
+                .collect(Collectors.toList());
     }
 }

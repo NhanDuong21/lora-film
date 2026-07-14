@@ -12,6 +12,7 @@ import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
 import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
@@ -55,6 +56,9 @@ class CinemaServiceImplTest {
 
     @Mock
     private AuditoriumRepository auditoriumRepository;
+
+    @Mock
+    private ShowtimeRepository showtimeRepository;
 
     @Mock
     private CinemaMapper cinemaMapper;
@@ -397,5 +401,124 @@ class CinemaServiceImplTest {
 
         assertEquals(ActionStatus.CANCELLED, period.getStatus());
         verify(cinemaClosurePeriodRepository, times(1)).save(any(CinemaClosurePeriod.class));
+    }
+
+    @Test
+    void getAdminCinemaDetail_shouldReturnDetail_regardlessOfStatus() {
+        Cinema cinema = new Cinema();
+        cinema.setId(1L);
+        cinema.setPublicId("cinema-uuid");
+        cinema.setStatus(CinemaStatus.DRAFT);
+        cinema.setName("Draft Cinema");
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
+        
+        CinemaDto baseDto = new CinemaDto();
+        baseDto.setPublicId("cinema-uuid");
+        baseDto.setName("Draft Cinema");
+        when(cinemaMapper.toDto(cinema)).thenReturn(baseDto);
+
+        CinemaDetailDto detail = cinemaService.getAdminCinemaDetail("cinema-uuid");
+
+        assertNotNull(detail);
+        assertEquals("cinema-uuid", detail.getPublicId());
+        assertEquals("Draft Cinema", detail.getName());
+    }
+
+    @Test
+    void deleteCinema_shouldSoftDelete_whenNoAuditoriumOrShowtime() {
+        Cinema cinema = new Cinema();
+        cinema.setId(1L);
+        cinema.setPublicId("cinema-uuid");
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
+        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(false);
+        when(showtimeRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(false);
+        when(currentUserProvider.getCurrentUserId()).thenReturn(99L);
+
+        cinemaService.deleteCinema("cinema-uuid");
+
+        assertNotNull(cinema.getDeletedAt());
+        assertEquals(99L, cinema.getDeletedBy());
+        verify(cinemaRepository, times(1)).save(cinema);
+    }
+
+    @Test
+    void deleteCinema_shouldThrowException_whenHasAuditoriums() {
+        Cinema cinema = new Cinema();
+        cinema.setId(1L);
+        cinema.setPublicId("cinema-uuid");
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
+        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> cinemaService.deleteCinema("cinema-uuid"));
+        assertEquals(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS, ex.getErrorCode());
+        verify(cinemaRepository, never()).save(any(Cinema.class));
+    }
+
+    @Test
+    void deleteCinema_shouldThrowException_whenHasShowtimes() {
+        Cinema cinema = new Cinema();
+        cinema.setId(1L);
+        cinema.setPublicId("cinema-uuid");
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
+        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(false);
+        when(showtimeRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> cinemaService.deleteCinema("cinema-uuid"));
+        assertEquals(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY, ex.getErrorCode());
+        verify(cinemaRepository, never()).save(any(Cinema.class));
+    }
+
+    @Test
+    void deleteCinemaMedia_shouldSoftDeleteAndResetPrimary() {
+        Cinema cinema = new Cinema();
+        cinema.setId(1L);
+
+        CinemaMedia media = new CinemaMedia();
+        media.setId(2L);
+        media.setPublicId("media-uuid");
+        media.setCinema(cinema);
+        media.setIsPrimary(true);
+
+        when(cinemaMediaRepository.findByPublicIdAndDeletedAtIsNull("media-uuid")).thenReturn(Optional.of(media));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(99L);
+
+        cinemaService.deleteCinemaMedia("media-uuid");
+
+        assertNotNull(media.getDeletedAt());
+        assertEquals(99L, media.getDeletedBy());
+        assertFalse(media.getIsPrimary());
+        assertEquals(ActiveStatus.INACTIVE, media.getStatus());
+        verify(cinemaMediaRepository, times(1)).save(media);
+    }
+
+    @Test
+    void getCinemaClosurePeriods_shouldReturnOnlyActiveFutureClosures() {
+        Cinema cinema = new Cinema();
+        cinema.setId(1L);
+        cinema.setStatus(CinemaStatus.ACTIVE);
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
+        
+        CinemaClosurePeriod activeClosure = new CinemaClosurePeriod();
+        activeClosure.setId(10L);
+        activeClosure.setStatus(ActionStatus.ACTIVE);
+        when(cinemaClosurePeriodRepository.findByCinemaIdAndStatusAndEndTimeAfterOrderByStartTimeAsc(
+                eq(1L), eq(ActionStatus.ACTIVE), any(Instant.class)))
+                .thenReturn(java.util.Collections.singletonList(activeClosure));
+
+        CinemaClosurePeriodResponse response = new CinemaClosurePeriodResponse();
+        response.setId(10L);
+        response.setStatus(ActionStatus.ACTIVE);
+        when(cinemaMapper.toClosurePeriodResponse(activeClosure)).thenReturn(response);
+
+        List<CinemaClosurePeriodResponse> result = cinemaService.getCinemaClosurePeriods("cinema-uuid");
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals(10L, result.get(0).getId());
     }
 }

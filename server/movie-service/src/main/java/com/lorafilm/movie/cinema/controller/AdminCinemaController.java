@@ -19,6 +19,8 @@ import com.lorafilm.movie.cinema.dto.OperatingHourUpdateRequest;
 import com.lorafilm.movie.cinema.dto.OperatingHourResponse;
 import com.lorafilm.movie.cinema.dto.CreateCinemaClosurePeriodRequest;
 import com.lorafilm.movie.cinema.dto.CinemaClosurePeriodResponse;
+import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
+import com.lorafilm.movie.common.dto.PageResponse;
 import java.util.List;
 
 @RestController
@@ -90,6 +92,54 @@ public class AdminCinemaController {
     public ResponseEntity<ApiResponse<CinemaClosurePeriodResponse>> cancelClosurePeriod(
             @PathVariable Long closurePeriodId) {
         CinemaClosurePeriodResponse response = cinemaService.cancelClosurePeriod(closurePeriodId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/cinemas")
+    public ResponseEntity<ApiResponse<PageResponse<CinemaResponse>>> getAdminCinemas(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "false") Boolean showDeleted,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort) {
+        PageResponse<CinemaResponse> response = cinemaService.getAdminCinemas(
+                status, city, district, keyword, showDeleted, page, size, sort);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/cinemas/{cinemaPublicId}")
+    public ResponseEntity<ApiResponse<CinemaDetailDto>> getAdminCinemaDetail(
+            @PathVariable String cinemaPublicId) {
+        CinemaDetailDto response = cinemaService.getAdminCinemaDetail(cinemaPublicId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @DeleteMapping("/cinemas/{cinemaPublicId}")
+    public ResponseEntity<ApiResponse<Void>> deleteCinema(
+            @PathVariable String cinemaPublicId) {
+        cinemaService.deleteCinema(cinemaPublicId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @DeleteMapping("/cinema-media/{mediaPublicId}")
+    public ResponseEntity<ApiResponse<Void>> deleteCinemaMedia(
+            @PathVariable String mediaPublicId) {
+        cinemaService.deleteCinemaMedia(mediaPublicId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/cinemas/{cinemaPublicId}/closure-periods")
+    public ResponseEntity<ApiResponse<PageResponse<CinemaClosurePeriodResponse>>> getAdminCinemaClosurePeriods(
+            @PathVariable String cinemaPublicId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "false") Boolean upcomingOnly,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        PageResponse<CinemaClosurePeriodResponse> response = cinemaService.getAdminCinemaClosurePeriods(
+                cinemaPublicId, status, upcomingOnly, page, size);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }

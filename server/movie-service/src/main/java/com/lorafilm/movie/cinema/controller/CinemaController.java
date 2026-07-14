@@ -2,6 +2,7 @@ package com.lorafilm.movie.cinema.controller;
 
 import com.lorafilm.movie.cinema.dto.CinemaDto;
 import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
+import com.lorafilm.movie.cinema.dto.CinemaClosurePeriodResponse;
 import com.lorafilm.movie.cinema.service.CinemaService;
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
@@ -44,5 +45,11 @@ public class CinemaController {
     public ResponseEntity<ApiResponse<List<CinemaDetailDto.OperatingHourDto>>> getCinemaOperatingHours(
             @PathVariable String cinemaPublicId) {
         return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaOperatingHours(cinemaPublicId)));
+    }
+
+    @GetMapping("/{cinemaPublicId}/closure-periods")
+    public ResponseEntity<ApiResponse<List<CinemaClosurePeriodResponse>>> getCinemaClosurePeriods(
+            @PathVariable String cinemaPublicId) {
+        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaClosurePeriods(cinemaPublicId)));
     }
 }

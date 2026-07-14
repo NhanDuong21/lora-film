@@ -1,7 +1,9 @@
 package com.lorafilm.movie.cinema.repository;
 
 import com.lorafilm.movie.cinema.domain.entity.CinemaClosurePeriod;
+import com.lorafilm.movie.common.enums.ActionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -10,7 +12,7 @@ import java.time.Instant;
 import java.util.List;
 
 @Repository
-public interface CinemaClosurePeriodRepository extends JpaRepository<CinemaClosurePeriod, Long> {
+public interface CinemaClosurePeriodRepository extends JpaRepository<CinemaClosurePeriod, Long>, JpaSpecificationExecutor<CinemaClosurePeriod> {
 
     List<CinemaClosurePeriod> findByCinemaId(Long cinemaId);
 
@@ -21,4 +23,9 @@ public interface CinemaClosurePeriodRepository extends JpaRepository<CinemaClosu
             @Param("cinemaId") Long cinemaId,
             @Param("startTime") Instant startTime,
             @Param("endTime") Instant endTime);
+
+    List<CinemaClosurePeriod> findByCinemaIdAndStatusAndEndTimeAfterOrderByStartTimeAsc(
+            Long cinemaId,
+            ActionStatus status,
+            Instant time);
 }

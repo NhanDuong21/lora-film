@@ -42,4 +42,16 @@ public interface CinemaService {
     CinemaClosurePeriodResponse createClosurePeriod(String cinemaPublicId, CreateCinemaClosurePeriodRequest request);
 
     CinemaClosurePeriodResponse cancelClosurePeriod(Long closurePeriodId);
+
+    PageResponse<CinemaResponse> getAdminCinemas(String status, String city, String district, String keyword, Boolean showDeleted, int page, int size, String sort);
+
+    CinemaDetailDto getAdminCinemaDetail(String publicId);
+
+    void deleteCinema(String publicId);
+
+    void deleteCinemaMedia(String mediaPublicId);
+
+    PageResponse<CinemaClosurePeriodResponse> getAdminCinemaClosurePeriods(String cinemaPublicId, String status, Boolean upcomingOnly, int page, int size);
+
+    List<CinemaClosurePeriodResponse> getCinemaClosurePeriods(String cinemaPublicId);
 }

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
 import com.lorafilm.movie.cinema.domain.enums.CinemaMediaType;
 import com.lorafilm.movie.cinema.dto.*;
-import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.cinema.service.CinemaService;
 import org.junit.jupiter.api.Test;
@@ -16,6 +15,7 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.lorafilm.movie.common.dto.PageResponse;
 import java.time.LocalDate;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -242,5 +243,75 @@ class AdminCinemaControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value(101))
                 .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+    }
+
+    @Test
+    void getAdminCinemas_Success() throws Exception {
+        CinemaResponse cinemaResponse = new CinemaResponse();
+        cinemaResponse.setPublicId("cinema-uuid");
+        cinemaResponse.setName("Admin Cinema");
+        cinemaResponse.setStatus(CinemaStatus.DRAFT);
+
+        PageResponse<CinemaResponse> pageResponse = new PageResponse<>(
+                List.of(cinemaResponse), 0, 10, 1L, 1, true);
+
+        when(cinemaService.getAdminCinemas(any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
+                .thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/cinemas")
+                .param("status", "DRAFT")
+                .param("showDeleted", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data[0].publicId").value("cinema-uuid"))
+                .andExpect(jsonPath("$.data.data[0].status").value("DRAFT"));
+    }
+
+    @Test
+    void getAdminCinemaDetail_Success() throws Exception {
+        CinemaDetailDto responseDto = new CinemaDetailDto();
+        responseDto.setPublicId("cinema-uuid");
+        responseDto.setName("Admin Cinema Detail");
+
+        when(cinemaService.getAdminCinemaDetail("cinema-uuid")).thenReturn(responseDto);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/cinemas/cinema-uuid"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.publicId").value("cinema-uuid"))
+                .andExpect(jsonPath("$.data.name").value("Admin Cinema Detail"));
+    }
+
+    @Test
+    void deleteCinema_Success() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/admin/cinemas/cinema-uuid"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void deleteCinemaMedia_Success() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/admin/cinema-media/media-uuid"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void getAdminCinemaClosurePeriods_Success() throws Exception {
+        CinemaClosurePeriodResponse response = new CinemaClosurePeriodResponse();
+        response.setId(200L);
+        response.setCinemaPublicId("cinema-uuid");
+        response.setStatus(ActionStatus.ACTIVE);
+
+        PageResponse<CinemaClosurePeriodResponse> pageResponse = new PageResponse<>(
+                List.of(response), 0, 10, 1L, 1, true);
+
+        when(cinemaService.getAdminCinemaClosurePeriods(eq("cinema-uuid"), any(), any(), anyInt(), anyInt()))
+                .thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/cinemas/cinema-uuid/closure-periods"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data[0].id").value(200));
     }
 }

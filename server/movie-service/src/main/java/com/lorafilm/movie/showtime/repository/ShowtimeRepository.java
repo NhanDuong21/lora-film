@@ -46,4 +46,6 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             @org.springframework.data.repository.query.Param("startTime") java.time.Instant startTime,
             @org.springframework.data.repository.query.Param("endTime") java.time.Instant endTime,
             @org.springframework.data.repository.query.Param("excludeShowtimeId") Long excludeShowtimeId);
+
+    boolean existsByCinemaIdAndDeletedAtIsNull(Long cinemaId);
 }
