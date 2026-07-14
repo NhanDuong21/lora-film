@@ -53,6 +53,9 @@ public class AdminMovieControllerTest {
     @MockBean
     private AdminMovieService adminMovieService;
 
+    @MockBean
+    private com.lorafilm.movie.movie.service.MovieService movieService;
+
     @Autowired
     private ObjectMapper objectMapper;
 
