@@ -8,12 +8,12 @@ const adminMovieService = {
       resolvedParams.keyword = resolvedParams.search;
       delete resolvedParams.search;
     }
-    const response = await apiClient.get('/api/movies', { params: resolvedParams });
+    const response = await apiClient.get('/api/admin/movies', { params: resolvedParams });
     return response.data;
   },
 
   getMovieById: async (movieId) => {
-    const response = await apiClient.get(`/api/movies/${movieId}`);
+    const response = await apiClient.get(`/api/admin/movies/${movieId}`);
     return response.data;
   },
 

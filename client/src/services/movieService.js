@@ -25,7 +25,7 @@ export const getMovies = async ({
   if (releaseTo !== undefined) params.releaseTo = releaseTo;
   if (sort !== undefined) params.sort = sort;
 
-  const response = await apiClient.get("/api/movies", { params });
+  const response = await apiClient.get("/api/customer/movies", { params });
   return response.data.data;
 };
 
@@ -35,7 +35,7 @@ export const getMovies = async ({
  * @returns {Promise<Object>} The movie detail data object
  */
 export const getMovieById = async (movieId) => {
-  const response = await apiClient.get(`/api/movies/${movieId}`);
+  const response = await apiClient.get(`/api/customer/movies/${movieId}`);
   return response.data.data;
 };
 
@@ -44,7 +44,7 @@ export const getMovieById = async (movieId) => {
  * @returns {Promise<Array>} The genres array
  */
 export const getGenres = async () => {
-  const response = await apiClient.get("/api/genres");
+  const response = await apiClient.get("/api/customer/genres");
   return response.data.data;
 };
 

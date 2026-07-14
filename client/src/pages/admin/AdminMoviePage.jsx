@@ -223,7 +223,7 @@ const emptyForm = () => ({
   synopsis:       '',
   tmdbReleaseDate: '',
   originalLanguage: '',
-  status:         'UPCOMING',
+  status:         'DRAFT',
 });
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -391,13 +391,13 @@ export default function AdminMoviePage() {
         originalTitle:    mv.originalTitle || '',
         durationMinutes:  runtime ? String(runtime) : '',
         ageRating:        mapTmdbCert(certification),
-        showingStartDate: '', // Enter manually
+        showingStartDate: mv.releaseDate || '', // Initialized with TMDB release date, editable by admin
         endDate:          '',
         country:          extractCountry(bundle),
         synopsis:         mv.overview || '',
-        tmdbReleaseDate:  mv.releaseDate || '',   // original TMDB release date (read-only)
+        tmdbReleaseDate:  mv.releaseDate || '',   // original TMDB release date
         originalLanguage: (mv.originalLanguage || '').toUpperCase(),
-        status:           'UPCOMING',
+        status:           'DRAFT',
       });
 
       // ── Media: use robust extraction ──
@@ -704,14 +704,7 @@ export default function AdminMoviePage() {
           await adminMovieService.createMovieVersion(publicId, buildVersionPayload(v));
         }
 
-        // Auto-assign active status after creation via frontend transition
-        let targetStatus = 'UPCOMING';
-        const todayStr = getTodayString();
-        const releaseDate = formBasic.showingStartDate || todayStr;
-        if (releaseDate < todayStr) {
-          targetStatus = 'NOW_SHOWING';
-        }
-        await adminMovieService.updateMovieStatus(publicId, targetStatus);
+
 
         triggerToast?.('Thêm phim mới thành công!');
       }
@@ -956,9 +949,7 @@ export default function AdminMoviePage() {
                     {AGE_RATINGS.map(r => <option key={r} value={r}>{AGE_RATING_LABELS[r]}</option>)}
                   </Select>
                 </Field>
-                <Field label="Ngôn ngữ gốc">
-                  <Input value={formBasic.originalLanguage} onChange={e => setFormBasic(p => ({ ...p, originalLanguage: e.target.value }))} placeholder="Vd: EN, VI, JA" />
-                </Field>
+
                 {isEdit && (
                   <Field label="Trạng thái">
                     <Select value={formBasic.status} onChange={e => setFormBasic(p => ({ ...p, status: e.target.value }))}>
@@ -971,15 +962,7 @@ export default function AdminMoviePage() {
               </div>
 
               {/* Dates section */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                {formBasic.tmdbReleaseDate && (
-                  <Field label="Ngày phát hành gốc (TMDB)">
-                    <div className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-400 flex items-center gap-2">
-                      <Info className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />
-                      <span>{formatDate(formBasic.tmdbReleaseDate)}</span>
-                    </div>
-                  </Field>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <Field label="Ngày khởi chiếu (tại rạp)" required error={formErrors.showingStartDate}>
                   <Input type="date" value={formBasic.showingStartDate} onChange={e => setFormBasic(p => ({ ...p, showingStartDate: e.target.value }))} />
                 </Field>
@@ -1167,9 +1150,9 @@ export default function AdminMoviePage() {
                       {[
                         ['Tên phiên bản', 'versionName', 'text', {placeholder:'Vd: 2D Vietsub'}],
                         ['Định dạng',     'format',      'select', {opts:['2D','3D','IMAX','4DX','SCREENX']}],
-                        ['Ngôn ngữ thoại','audioLanguage','text',  {placeholder:'EN, VI, JA'}],
-                        ['Phụ đề',        'subtitleLanguage','text',{placeholder:'VI, NONE'}],
-                        ['Lồng tiếng',    'dubLanguage', 'text',   {placeholder:'VI, NONE'}],
+                        ['Ngôn ngữ thoại','audioLanguage','select', {opts:['VI','EN','JA','KO','TH','ZH','FR','ES']}],
+                        ['Phụ đề',        'subtitleLanguage','select',{opts:['VI','EN','NONE']}],
+                        ['Lồng tiếng',    'dubLanguage', 'select', {opts:['NONE','VI','EN']}],
                         isEdit && ['Tình trạng (Condition)', 'status', 'select', {opts:['ACTIVE','INACTIVE']}],
                       ].filter(Boolean).map(([lbl, field, type, opts]) => (
                         <div key={field} className="space-y-1">
@@ -1177,7 +1160,9 @@ export default function AdminMoviePage() {
                           {type === 'select'
                             ? <select value={ver[field] || ''} onChange={e => updateVersion(vIdx, field, e.target.value)}
                                 className="w-full bg-zinc-900 border border-zinc-800 rounded-lg py-1.5 px-2 text-xs text-zinc-100 outline-none">
-                                {opts.opts.map(o => <option key={o} value={o}>{o}</option>)}
+                                {Array.from(new Set([...opts.opts, ver[field]].filter(Boolean))).map(o => (
+                                  <option key={o} value={o}>{o === 'NONE' ? 'NONE (Không)' : o}</option>
+                                ))}
                               </select>
                             : <input type="text" value={ver[field] || ''} onChange={e => updateVersion(vIdx, field, e.target.value)}
                                 placeholder={opts.placeholder || ''}

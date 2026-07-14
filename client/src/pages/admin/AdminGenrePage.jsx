@@ -9,7 +9,7 @@ export default function AdminGenrePage({ triggerToast }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGenre, setEditingGenre] = useState(null);
-  const [formData, setFormData] = useState({ genreName: '' });
+  const [formData, setFormData] = useState({ name: '' });
 
   // Fetch Genres
   const fetchGenres = useCallback(async () => {
@@ -41,25 +41,25 @@ export default function AdminGenrePage({ triggerToast }) {
 
   const filteredGenres = useMemo(() => {
     return genres.filter(g => 
-      (g.genreName || '').toLowerCase().includes(searchTerm.toLowerCase())
+      (g.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [genres, searchTerm]);
 
   const handleOpenAdd = useCallback(() => {
     setEditingGenre(null);
-    setFormData({ genreName: '' });
+    setFormData({ name: '' });
     setIsModalOpen(true);
   }, []);
 
   const handleOpenEdit = useCallback((genre) => {
     setEditingGenre(genre);
-    setFormData({ genreName: genre.genreName || '' });
+    setFormData({ name: genre.name || '' });
     setIsModalOpen(true);
   }, []);
 
   const handleSave = useCallback(async (e) => {
     e.preventDefault();
-    if (!formData.genreName.trim()) {
+    if (!formData.name.trim()) {
       if (triggerToast) triggerToast('Tên thể loại không được để trống!', 'error');
       return;
     }
@@ -120,8 +120,8 @@ export default function AdminGenrePage({ triggerToast }) {
               <label className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Tên thể loại</label>
               <input
                 type="text"
-                value={formData.genreName}
-                onChange={(e) => setFormData({ genreName: e.target.value })}
+                value={formData.name}
+                onChange={(e) => setFormData({ name: e.target.value })}
                 placeholder="Ví dụ: Hành động, Viễn tưởng..."
                 className="w-full bg-brand-dark border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/40 focus:ring-0 transition-colors"
                 required
@@ -213,7 +213,7 @@ export default function AdminGenrePage({ triggerToast }) {
                       </td>
                       <td className="py-4 px-6">
                         <span className="text-sm font-bold text-zinc-200 group-hover:text-amber-400 transition-colors" data-testid={`genre-name-${genre.id}`}>
-                          {genre.genreName}
+                          {genre.name}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-right">
