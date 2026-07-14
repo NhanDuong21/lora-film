@@ -19,23 +19,23 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.movie.domain.entity.Movie;
-import com.lorafilm.movie.movie.domain.entity.MovieMedia;
-import com.lorafilm.movie.movie.domain.entity.MovieGenre;
 import com.lorafilm.movie.movie.domain.entity.MovieCredit;
+import com.lorafilm.movie.movie.domain.entity.MovieGenre;
+import com.lorafilm.movie.movie.domain.entity.MovieMedia;
 import com.lorafilm.movie.movie.domain.entity.MovieProductionCompany;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
-import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieDetailDto;
+import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
+import com.lorafilm.movie.movie.repository.MovieCreditRepository;
 import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
-import com.lorafilm.movie.movie.repository.MovieCreditRepository;
 import com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository;
-import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieSpecification;
+import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 
 @Service
 public class MovieServiceImpl implements MovieService {
@@ -69,14 +69,14 @@ public class MovieServiceImpl implements MovieService {
         Specification<Movie> spec = Specification.where(MovieSpecification.isNotDeleted());
 
         if (status != null && !status.isEmpty()) {
-            try {
-                MovieStatus parsedStatus = MovieStatus.valueOf(status.toUpperCase());
-                spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid status: " + status);
+            if (!status.equalsIgnoreCase("ALL")) {
+                try {
+                    MovieStatus parsedStatus = MovieStatus.valueOf(status.toUpperCase());
+                    spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid status: " + status);
+                }
             }
-        } else {
-            spec = spec.and(MovieSpecification.isPubliclyVisible());
         }
 
         if (genreId != null) {
