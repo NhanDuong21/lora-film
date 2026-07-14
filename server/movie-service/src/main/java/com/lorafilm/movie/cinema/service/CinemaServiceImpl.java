@@ -83,7 +83,7 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     public CinemaDetailDto getCinemaBySlug(String slug) {
-        Cinema cinema = cinemaRepository.findBySlugAndDeletedAtIsNull(slug)
+        Cinema cinema = cinemaRepository.findByActiveSlugAndDeletedAtIsNull(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
         if (cinema.getStatus() != CinemaStatus.ACTIVE) {
