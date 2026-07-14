@@ -43,7 +43,7 @@ public class CreateMovieVersionRequest {
     }
 
     public void setVersionName(String versionName) {
-        this.versionName = versionName;
+        this.versionName = versionName != null ? versionName.trim() : null;
     }
 
     public MovieFormat getFormat() {
@@ -59,7 +59,7 @@ public class CreateMovieVersionRequest {
     }
 
     public void setAudioLanguage(String audioLanguage) {
-        this.audioLanguage = audioLanguage;
+        this.audioLanguage = audioLanguage != null ? audioLanguage.trim() : null;
     }
 
     public String getSubtitleLanguage() {
@@ -67,7 +67,7 @@ public class CreateMovieVersionRequest {
     }
 
     public void setSubtitleLanguage(String subtitleLanguage) {
-        this.subtitleLanguage = subtitleLanguage;
+        this.subtitleLanguage = subtitleLanguage != null ? subtitleLanguage.trim() : null;
     }
 
     public String getDubLanguage() {
@@ -75,7 +75,7 @@ public class CreateMovieVersionRequest {
     }
 
     public void setDubLanguage(String dubLanguage) {
-        this.dubLanguage = dubLanguage;
+        this.dubLanguage = dubLanguage != null ? dubLanguage.trim() : null;
     }
 
     public ActiveStatus getStatus() {

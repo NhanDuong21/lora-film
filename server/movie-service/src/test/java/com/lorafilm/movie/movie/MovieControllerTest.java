@@ -85,4 +85,43 @@ class MovieControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("NOW_SHOWING"));
     }
+
+    @Test
+    void getMovies_NowShowing_Success() throws Exception {
+        MovieDto movie = new MovieDto();
+        movie.setPublicId("movie-uuid");
+        movie.setTitle("Test Movie");
+        
+        com.lorafilm.movie.common.dto.PageResponse<MovieDto> pageResponse = new com.lorafilm.movie.common.dto.PageResponse<>(
+                java.util.List.of(movie),
+                0,
+                10,
+                1L,
+                1,
+                true
+        );
+
+        when(movieService.getMovies(eq("NOW_SHOWING"), any(), any(), any(), any(), any(), eq(0), eq(10), eq("releaseDate,desc"))).thenReturn(pageResponse);
+
+        mockMvc.perform(get("/api/movies")
+                        .param("status", "NOW_SHOWING")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data[0].publicId").value("movie-uuid"));
+    }
+
+    @Test
+    void getMovies_InvalidStatus_ThrowsException() throws Exception {
+        when(movieService.getMovies(eq("INVALID_STATUS"), any(), any(), any(), any(), any(), eq(0), eq(10), eq("releaseDate,desc")))
+            .thenThrow(new IllegalArgumentException("Invalid status: INVALID_STATUS"));
+
+        mockMvc.perform(get("/api/movies")
+                        .param("status", "INVALID_STATUS")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
 }
