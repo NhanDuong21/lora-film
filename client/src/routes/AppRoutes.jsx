@@ -36,6 +36,7 @@ import AdminShowtimeView from "../pages/admin/AdminShowtimePage";
 import AdminStaffView from "../pages/admin/AdminStaffPage";
 import AdminConcessionSalesPage from "../pages/admin/AdminConcessionSalesPage";
 import AdminPayrollPage from "../pages/admin/AdminPayrollPage";
+import AdminRoomPage from "../pages/admin/AdminRoomPage";
 
 // Main Layout
 import MainLayout from "../components/layout/MainLayout";
@@ -170,6 +171,7 @@ function AppRoutes() {
                     <Route path="staff" element={<AdminStaffView />} />
                     <Route path="concession-sales" element={<AdminConcessionSalesPage />} />
                     <Route path="payroll" element={<AdminPayrollPage />} />
+                    <Route path="rooms" element={<AdminRoomPage />} />
                 </Route>
             </Routes>
         </BrowserRouter>

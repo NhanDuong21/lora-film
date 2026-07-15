@@ -17,7 +17,8 @@ import {
   Sliders,
   Building,
   Shield,
-  Tags
+  Tags,
+  DoorOpen
 } from 'lucide-react';
 
 
@@ -176,7 +177,14 @@ export default function AdminSidebar({
                     className={getSubLinkClass('clusters')}
                   >
                     <Database className="w-4 h-4 shrink-0" />
-                    <span>Cụm rạp & Phòng chiếu</span>
+                    <span>Cụm rạp</span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('rooms', '#/admin/rooms')}
+                    className={getSubLinkClass('rooms')}
+                  >
+                    <DoorOpen className="w-4 h-4 shrink-0" />
+                    <span>Phòng chiếu</span>
                   </button>
                   <button
                     onClick={() => handleTabClick('showtimes', '#/admin/showtimes')}
