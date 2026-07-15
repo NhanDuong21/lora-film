@@ -56,6 +56,8 @@ public enum ErrorCode {
     SEAT_TYPE_CODE_ALREADY_EXISTS("Seat type code already exists", 400),
     SEAT_TYPE_INACTIVE("Seat type is inactive", 400),
     SEAT_TYPE_IN_USE("Seat type is in use and cannot be deactivated", 409),
+    SEAT_TYPE_INVALID("Seat type is invalid", 400),
+    PRICE_INVALID("Price is invalid", 400),
     INVALID_SEAT_TYPE_STATUS_TRANSITION("Invalid seat type status transition", 400),
     DUPLICATE_SEAT_CODE("Seat code already exists in database", 400),
     DUPLICATE_SEAT_POSITION("Seat position already exists in database", 400),
@@ -76,6 +78,7 @@ public enum ErrorCode {
     SHOWTIME_NOT_FOUND("Showtime not found", 404),
     SHOWTIME_OVERLAP_CONFLICT("Showtime overlaps with an existing schedule", 409),
     SHOWTIME_PRICE_MISSING("Showtime price config is missing", 400),
+    SHOWTIME_PRICE_NOT_EDITABLE("Cannot edit prices for this showtime status", 400),
     INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400),
     
     AUDITORIUM_LAYOUT_NOT_EDITABLE("The seating arrangement cannot be changed while the auditorium is in operation", 409),

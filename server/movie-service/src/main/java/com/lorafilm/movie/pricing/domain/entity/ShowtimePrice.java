@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "showtime_prices")
+@Table(name = "showtime_prices", uniqueConstraints = {@UniqueConstraint(columnNames = {"showtime_id", "seat_type_id"})})
 public class ShowtimePrice {
 
     @Id
@@ -40,7 +40,8 @@ public class ShowtimePrice {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    public ShowtimePrice() {}
+    public ShowtimePrice() {
+    }
 
     public Long getId() {
         return id;

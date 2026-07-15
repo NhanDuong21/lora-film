@@ -45,6 +45,12 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
            "ORDER BY s.positionRow ASC, s.positionColumn ASC")
     List<Seat> findCustomerLayoutByAuditoriumId(@Param("auditoriumId") Long auditoriumId);
 
+    @Query("SELECT DISTINCT st.publicId FROM Seat s JOIN s.seatType st " +
+           "WHERE s.auditorium.id = :auditoriumId " +
+           "AND s.deletedAt IS NULL AND s.status IN ('ACTIVE', 'MAINTENANCE') " +
+           "AND st.deletedAt IS NULL AND st.status = 'ACTIVE'")
+    List<String> findActiveSeatTypePublicIdsByAuditoriumId(@Param("auditoriumId") Long auditoriumId);
+
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"seatType"})
     List<Seat> findByAuditoriumIdAndDeletedAtIsNull(Long auditoriumId);
     
