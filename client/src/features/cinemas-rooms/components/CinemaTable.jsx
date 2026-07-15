@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, MapPin, Trash2, Plus, Phone } from 'lucide-react';
+import { Search, MapPin, Trash2, Plus, Phone, Pencil } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 
 export default function CinemaTable({
@@ -19,7 +19,8 @@ export default function CinemaTable({
   citiesList,
   onDelete,
   onStatusChange,
-  onOpenCreate
+  onOpenCreate,
+  onEdit
 }) {
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
@@ -175,22 +176,15 @@ export default function CinemaTable({
                         </span>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-between gap-3">
                           {renderStatusBadge(cinema.status)}
                           
-                          {/* Quick change dropdown */}
-                          <select
-                            value={cinema.status}
-                            onChange={(e) => onStatusChange(cinema.publicId, e.target.value)}
-                            className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-black rounded-lg py-1 px-1.5 focus:outline-none focus:border-brand-orange/40 cursor-pointer hover:text-white transition-colors"
+                          <button
+                            onClick={() => onEdit(cinema.publicId)}
+                            className="text-[10px] text-orange-500 hover:text-orange-400 font-black uppercase tracking-wider bg-orange-500/5 hover:bg-orange-500/10 border border-orange-500/10 hover:border-orange-500/20 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
                           >
-                            <option value="DRAFT">DRAFT</option>
-                            <option value="ACTIVE">ACTIVE</option>
-                            <option value="MAINTENANCE">MAINTENANCE</option>
-                            <option value="TEMPORARILY_CLOSED">TEMPORARILY CLOSED</option>
-                            <option value="INACTIVE">INACTIVE</option>
-                            <option value="PERMANENTLY_CLOSED">PERMANENTLY CLOSED</option>
-                          </select>
+                            Chỉnh sửa
+                          </button>
                         </div>
                       </td>
                       <td className="py-4 px-6 text-right">

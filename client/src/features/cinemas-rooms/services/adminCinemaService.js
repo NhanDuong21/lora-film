@@ -83,6 +83,12 @@ const adminCinemaService = {
   cancelClosurePeriod: async (closurePeriodId) => {
     const response = await apiClient.put(`/api/admin/closure-periods/${closurePeriodId}/cancel`);
     return response.data;
+  },
+
+  // Delete Cinema Media
+  deleteCinemaMedia: async (mediaPublicId) => {
+    const response = await apiClient.delete(`/api/admin/cinema-media/${mediaPublicId}`);
+    return response.data;
   }
 };
 
