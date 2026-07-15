@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import HeroSection from "@/components/home/HeroSection";
-import MovieSection from "@/components/home/MovieSection";
-import EventSection from "@/components/home/EventSection";
-import BookingStepsSection from "@/components/home/BookingStepsSection";
-import InfoSection from "@/components/home/InfoSection";
+import HeroSection from "@/features/movies-genres/components/home/HeroSection";
+import MovieSection from "@/features/movies-genres/components/home/MovieSection";
+import EventSection from "@/features/movies-genres/components/home/EventSection";
+import BookingStepsSection from "@/features/movies-genres/components/home/BookingStepsSection";
+import InfoSection from "@/features/movies-genres/components/home/InfoSection";
 
 export default function Home() {
     useEffect(() => {

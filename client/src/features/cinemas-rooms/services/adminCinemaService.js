@@ -19,6 +19,12 @@ const adminCinemaService = {
     return response.data;
   },
 
+  // Update a cinema's operating hours
+  updateOperatingHours: async (publicId, operatingHours) => {
+    const response = await apiClient.put(`/api/admin/cinemas/${publicId}/operating-hours`, operatingHours);
+    return response.data;
+  },
+
   // Soft delete a cinema
   deleteCinema: async (publicId) => {
     const response = await apiClient.delete(`/api/admin/cinemas/${publicId}`);
@@ -40,6 +46,42 @@ const adminCinemaService = {
   // Reverse Geocode
   reverseGeocode: async (lat, lon) => {
     const response = await apiClient.get('/api/v1/geocode/reverse', { params: { lat, lon } });
+    return response.data;
+  },
+
+  // Save Cinema Media
+  createCinemaMedia: async (cinemaPublicId, mediaData) => {
+    const response = await apiClient.post(`/api/admin/cinemas/${cinemaPublicId}/media`, mediaData);
+    return response.data;
+  },
+
+  // Get admin cinema detail
+  getAdminCinemaDetail: async (publicId) => {
+    const response = await apiClient.get(`/api/admin/cinemas/${publicId}`);
+    return response.data;
+  },
+
+  // Update cinema details
+  updateCinema: async (publicId, cinemaData) => {
+    const response = await apiClient.put(`/api/admin/cinemas/${publicId}`, cinemaData);
+    return response.data;
+  },
+
+  // Get closure periods
+  getClosurePeriods: async (publicId, params = {}) => {
+    const response = await apiClient.get(`/api/admin/cinemas/${publicId}/closure-periods`, { params });
+    return response.data;
+  },
+
+  // Create closure period
+  createClosurePeriod: async (publicId, closureData) => {
+    const response = await apiClient.post(`/api/admin/cinemas/${publicId}/closure-periods`, closureData);
+    return response.data;
+  },
+
+  // Cancel closure period
+  cancelClosurePeriod: async (closurePeriodId) => {
+    const response = await apiClient.put(`/api/admin/closure-periods/${closurePeriodId}/cancel`);
     return response.data;
   }
 };
