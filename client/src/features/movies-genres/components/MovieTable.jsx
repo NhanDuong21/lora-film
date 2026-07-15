@@ -1,0 +1,216 @@
+import React from 'react';
+import { Search, Plus, LayoutList, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
+import SkeletonTable from '@/components/common/SkeletonTable';
+import { LazyImage } from '@/components/common/ui/uiKit';
+import { formatDate, STATUS_LABELS, STATUS_COLORS } from '@/utils/movieHelpers';
+
+export default function MovieTable({
+  movies = [],
+  isLoading = false,
+  currentPage = 0,
+  setCurrentPage,
+  pageSize = 10,
+  setPageSize,
+  statusFilter = '',
+  setStatusFilter,
+  searchTerm = '',
+  setSearchTerm,
+  totalElements = 0,
+  totalPages = 0,
+  onOpenAdd,
+  onOpenDetail,
+  onOpenEdit,
+  onDelete,
+}) {
+  return (
+    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-white space-y-6 animate-fade-in" data-testid="admin-movie-page">
+      <div className="border-b border-zinc-800 pb-4">
+        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">DANH SÁCH BỘ PHIM</h1>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-zinc-900/60 border border-zinc-800/50 p-4 rounded-2xl">
+        <div className="relative w-full lg:w-80">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+            placeholder="Tìm kiếm tên phim..."
+            className="w-full bg-[#050506] border border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-[#ff7a1a]/40 rounded-xl py-2.5 pl-9 pr-4 text-xs outline-none transition-colors"
+          />
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+          <select
+            value={statusFilter}
+            onChange={e => { setStatusFilter(e.target.value); setCurrentPage(0); }}
+            className="w-full sm:w-48 bg-[#050506] border border-zinc-800 text-zinc-100 focus:border-[#ff7a1a]/40 rounded-xl py-2.5 px-4 text-xs outline-none cursor-pointer"
+          >
+            <option value="">Tất cả trạng thái</option>
+            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <select
+            value={pageSize}
+            onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}
+            className="w-full sm:w-32 bg-[#050506] border border-zinc-800 text-zinc-100 focus:border-[#ff7a1a]/40 rounded-xl py-2.5 px-4 text-xs outline-none cursor-pointer"
+          >
+            {[5, 10, 20, 50].map(n => <option key={n} value={n}>{n}/trang</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={onOpenAdd}
+            className="bg-[#ff7a1a] hover:opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
+          >
+            <Plus className="w-4 h-4" />THÊM PHIM
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <SkeletonTable rows={pageSize} columns={7} />
+      ) : (
+        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse whitespace-nowrap">
+              <thead>
+                <tr className="bg-neutral-900/50 border-b border-neutral-800 text-[10px] font-black text-neutral-400 uppercase tracking-wider">
+                  <th className="py-4 px-5 w-12 text-center">STT</th>
+                  <th className="py-4 px-5 w-16 text-center">POSTER</th>
+                  <th className="py-4 px-5">TÊN PHIM</th>
+                  <th className="py-4 px-5 w-32 text-center">THỜI LƯỢNG</th>
+                  <th className="py-4 px-5 w-36 text-center">KHỞI CHIẾU</th>
+                  <th className="py-4 px-5 w-32 text-center">TRẠNG THÁI</th>
+                  <th className="py-4 px-5 w-28 text-right">THAO TÁC</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movies.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-16 text-center text-neutral-500">
+                      <div className="flex flex-col items-center gap-2">
+                        <LayoutList className="w-10 h-10 text-neutral-700" />
+                        <span className="text-sm">Không tìm thấy phim nào.</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  movies.map((movie, idx) => (
+                    <tr key={movie.publicId || idx} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
+                      <td className="py-4 px-5 text-center">
+                        <span className="text-xs font-black text-neutral-500">{(currentPage * pageSize + idx + 1).toString().padStart(2, '0')}</span>
+                      </td>
+                      <td className="py-4 px-5">
+                        <div className="w-9 h-13 bg-neutral-800 rounded overflow-hidden mx-auto">
+                          {movie.primaryPoster ? (
+                            <LazyImage
+                              src={movie.primaryPoster}
+                              alt={movie.title}
+                              containerClassName="w-full h-full border-none rounded-none bg-transparent"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-neutral-700">
+                              <ImageIcon className="w-4 h-4" />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 px-5">
+                        <button
+                          type="button"
+                          onClick={() => onOpenDetail(movie)}
+                          className="text-sm font-bold text-zinc-200 hover:text-amber-400 transition-colors text-left truncate max-w-[220px] block cursor-pointer"
+                        >
+                          {movie.title}
+                        </button>
+                        {movie.ageRating && <span className="text-[10px] font-bold text-neutral-500 uppercase">{movie.ageRating}</span>}
+                      </td>
+                      <td className="py-4 px-5 text-center">
+                        <span className="text-xs text-zinc-300">{movie.durationMinutes ? `${movie.durationMinutes} phút` : 'N/A'}</span>
+                      </td>
+                      <td className="py-4 px-5 text-center">
+                        <span className="text-xs text-zinc-300">{formatDate(movie.releaseDate)}</span>
+                      </td>
+                      <td className="py-4 px-5 text-center">
+                        {movie.status && (
+                          <span className={`text-[10px] font-black px-2.5 py-1 rounded-md border uppercase tracking-wider ${STATUS_COLORS[movie.status] || 'text-zinc-400 border-zinc-700'}`}>
+                            {STATUS_LABELS[movie.status] || movie.status}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-5 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onOpenEdit(movie)}
+                            className="p-2 text-neutral-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-all cursor-pointer"
+                            title="Sửa"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={movie.status !== 'ENDED' && movie.status !== 'DRAFT'}
+                            onClick={() => onDelete(movie.publicId, movie.title)}
+                            className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-neutral-400 disabled:cursor-not-allowed rounded-lg transition-all cursor-pointer"
+                            title={movie.status === 'ENDED' || movie.status === 'DRAFT' ? "Xóa" : "Chỉ có thể xóa phim ở trạng thái Nháp hoặc Ngừng chiếu"}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalElements > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-neutral-800 bg-neutral-900/30 gap-4">
+              <span className="text-xs text-neutral-400">
+                Hiển thị {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} / {totalElements} phim
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={currentPage === 0}
+                  onClick={() => setCurrentPage(p => p - 1)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Trước
+                </button>
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let page;
+                    if (totalPages <= 7) page = i;
+                    else if (currentPage < 4) page = i;
+                    else if (currentPage > totalPages - 5) page = totalPages - 7 + i;
+                    else page = currentPage - 3 + i;
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg transition-colors ${currentPage === page ? 'bg-amber-500 text-black' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
+                      >
+                        {page + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                  onClick={() => setCurrentPage(p => p + 1)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

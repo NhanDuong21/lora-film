@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getMovies } from "../services/movieService";
+import { getMovies } from "@/features/movies-genres/services/movieService";
 
 /**
  * Custom hook to query movies for a specific status tab on the homepage

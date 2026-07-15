@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Play, X, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
-import { useData } from '../../contexts/DataContext';
-import { useMoviesQuery } from '../../hooks/useHomepageMovies';
+import { useData } from '@/contexts/DataContext';
+import { useMoviesQuery } from '@/hooks/useHomepageMovies';
 import MovieSectionSkeleton from './MovieSectionSkeleton';
 import {
   formatGenres,
@@ -10,7 +10,7 @@ import {
   formatDate,
   getAgeRatingLabel,
   getYoutubeEmbedUrl
-} from '../../utils/formatters';
+} from '@/utils/formatters';
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2318181b'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='24' fill='%2352525b'>LORA FILM</text><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%233f3f46'>Không có ảnh bìa</text></svg>";
 

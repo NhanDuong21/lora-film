@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { 
   ChevronDown, Menu, X, Bell, Star, Search, User, LogOut 
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 
 export default function Header() {
