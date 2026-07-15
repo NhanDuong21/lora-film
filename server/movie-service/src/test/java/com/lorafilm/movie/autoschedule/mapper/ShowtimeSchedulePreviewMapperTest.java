@@ -7,7 +7,7 @@ import com.lorafilm.movie.autoschedule.domain.enums.AutoScheduleStrategy;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewApplyMode;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewItemResponse;
-import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,26 +29,27 @@ class ShowtimeSchedulePreviewMapperTest {
     }
 
     @Test
-    void toResponse_shouldMapCorrectly_whenNull() {
-        ShowtimeSchedulePreviewResponse response = mapper.toResponse(null, Collections.emptyList());
+    void toPageResponse_shouldMapCorrectly_whenNull() {
+        ShowtimeSchedulePreviewPageResponse response = mapper.toPageResponse(null, null);
         assertThat(response).isNull();
     }
 
     @Test
-    void toResponse_shouldMapCorrectly() {
+    void toPageResponse_shouldMapCorrectly() {
         ShowtimeSchedulePreview preview = mock(ShowtimeSchedulePreview.class);
         when(preview.getPublicId()).thenReturn("preview-1");
         when(preview.getStrategy()).thenReturn(AutoScheduleStrategy.BALANCED);
         when(preview.getApplyMode()).thenReturn(SchedulePreviewApplyMode.ALL_OR_NOTHING);
         when(preview.getStatus()).thenReturn(SchedulePreviewStatus.PREVIEWED);
 
-        ShowtimeSchedulePreviewResponse response = mapper.toResponse(preview, Collections.emptyList());
+        org.springframework.data.domain.Page<ShowtimeSchedulePreviewItem> emptyPage = org.springframework.data.domain.Page.empty();
+        ShowtimeSchedulePreviewPageResponse response = mapper.toPageResponse(preview, emptyPage);
 
         assertThat(response).isNotNull();
-        assertThat(response.getPreviewPublicId()).isEqualTo("preview-1");
-        assertThat(response.getStrategy()).isEqualTo(AutoScheduleStrategy.BALANCED);
-        assertThat(response.getStatus()).isEqualTo(SchedulePreviewStatus.PREVIEWED);
-        assertThat(response.getItems()).isEmpty();
+        assertThat(response.getPreview().getPreviewPublicId()).isEqualTo("preview-1");
+        assertThat(response.getPreview().getStrategy()).isEqualTo(AutoScheduleStrategy.BALANCED);
+        assertThat(response.getPreview().getStatus()).isEqualTo(SchedulePreviewStatus.PREVIEWED);
+        assertThat(response.getItems().getContent()).isEmpty();
     }
 
     @Test
@@ -68,14 +69,20 @@ class ShowtimeSchedulePreviewMapperTest {
     }
 
     @Test
-    void toSummary_shouldMapCorrectly() {
+    void toSummaryResponse_shouldMapCorrectly_whenNull() {
+        ShowtimeSchedulePreviewSummaryResponse summary = mapper.toSummaryResponse(null);
+        assertThat(summary).isNull();
+    }
+
+    @Test
+    void toSummaryResponse_shouldMapCorrectly() {
         ShowtimeSchedulePreview preview = mock(ShowtimeSchedulePreview.class);
         when(preview.getTotalCandidateCount()).thenReturn(10);
         when(preview.getValidCandidateCount()).thenReturn(8);
         when(preview.getRejectedCandidateCount()).thenReturn(2);
         when(preview.getSelectedCandidateCount()).thenReturn(6);
 
-        ShowtimeSchedulePreviewSummaryResponse summary = mapper.toSummary(preview);
+        ShowtimeSchedulePreviewSummaryResponse summary = mapper.toSummaryResponse(preview);
 
         assertThat(summary).isNotNull();
         assertThat(summary.getTotalCandidateCount()).isEqualTo(10);

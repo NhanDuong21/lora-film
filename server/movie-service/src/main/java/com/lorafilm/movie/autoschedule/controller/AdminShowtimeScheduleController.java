@@ -1,7 +1,9 @@
 package com.lorafilm.movie.autoschedule.controller;
 
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
-import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import com.lorafilm.movie.autoschedule.service.ShowtimeSchedulePreviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -11,6 +13,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
 @RequestMapping("/api/admin/showtime-schedules")
@@ -41,10 +44,17 @@ public class AdminShowtimeScheduleController {
     })
     @GetMapping("/{previewPublicId}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<ShowtimeSchedulePreviewResponse>> getPreview(
-            @PathVariable String previewPublicId
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<ShowtimeSchedulePreviewPageResponse>> getPreview(
+            @PathVariable String previewPublicId,
+            @Valid @ParameterObject ShowtimeSchedulePreviewItemQuery query
     ) {
-        ShowtimeSchedulePreviewResponse response = service.getPreview(previewPublicId);
+        if (query.getPage() < 0) {
+            throw new com.lorafilm.movie.common.exception.BusinessException(com.lorafilm.movie.common.exception.ErrorCode.VALIDATION_ERROR, "Page must not be less than zero");
+        }
+        if (query.getSize() < 1 || query.getSize() > 100) {
+            throw new com.lorafilm.movie.common.exception.BusinessException(com.lorafilm.movie.common.exception.ErrorCode.VALIDATION_ERROR, "Size must be between 1 and 100");
+        }
+        ShowtimeSchedulePreviewPageResponse response = service.getPreview(previewPublicId, query);
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview retrieved successfully", response));
     }
 
@@ -60,14 +70,14 @@ public class AdminShowtimeScheduleController {
     })
     @PostMapping("/generate-preview")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<ShowtimeSchedulePreviewResponse>> generatePreview(
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<ShowtimeSchedulePreviewSummaryResponse>> generatePreview(
             @Valid @RequestBody com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest request
     ) {
         Long adminUserId = currentUserProvider.getCurrentUserId();
         if (adminUserId == null) {
             throw new com.lorafilm.movie.common.exception.BusinessException(com.lorafilm.movie.common.exception.ErrorCode.CURRENT_USER_NOT_AVAILABLE);
         }
-        ShowtimeSchedulePreviewResponse response = generationService.generatePreview(request, adminUserId);
+        ShowtimeSchedulePreviewSummaryResponse response = generationService.generatePreview(request, adminUserId);
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview generated successfully", response));
     }
 
@@ -82,11 +92,11 @@ public class AdminShowtimeScheduleController {
     })
     @PutMapping("/{previewPublicId}/items")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<ShowtimeSchedulePreviewResponse>> updateSelections(
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<ShowtimeSchedulePreviewSummaryResponse>> updateSelections(
             @PathVariable String previewPublicId,
             @Valid @RequestBody UpdatePreviewItemSelectionsRequest request
     ) {
-        ShowtimeSchedulePreviewResponse response = service.updateSelections(previewPublicId, request);
+        ShowtimeSchedulePreviewSummaryResponse response = service.updateSelections(previewPublicId, request);
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview selections updated successfully", response));
     }
 

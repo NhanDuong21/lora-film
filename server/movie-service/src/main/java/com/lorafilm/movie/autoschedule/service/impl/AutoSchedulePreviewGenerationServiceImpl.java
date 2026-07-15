@@ -4,7 +4,7 @@ import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
-import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewPersistenceMapper;
 import com.lorafilm.movie.autoschedule.model.CandidateGenerationContext;
 import com.lorafilm.movie.autoschedule.model.CandidateScoreResult;
@@ -102,7 +102,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
     }
 
     @Override
-    public ShowtimeSchedulePreviewResponse generatePreview(GenerateShowtimeSchedulePreviewRequest request, Long adminUserId) {
+    public ShowtimeSchedulePreviewSummaryResponse generatePreview(GenerateShowtimeSchedulePreviewRequest request, Long adminUserId) {
         // 1. Normalize and Fingerprint
         NormalizedGeneratePreviewRequest normalizedRequest = normalizer.normalize(request);
         String fingerprint = fingerprintService.generateFingerprint(normalizedRequest);
@@ -143,7 +143,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
                 throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
             }
             log.info("Idempotency replay detected. Returning existing preview: {}", existing.getPublicId());
-            return responseMapper.toResponse(existing, previewItemRepository.findDetailedItemsByPreviewId(existing.getId()));
+            return responseMapper.toSummaryResponse(existing);
         }
 
         // Resolve Auditoriums
@@ -189,7 +189,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
                 if (!existing.getRequestFingerprint().equals(fingerprint)) {
                     throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
                 }
-                return responseMapper.toResponse(existing, previewItemRepository.findDetailedItemsByPreviewId(existing.getId()));
+                return responseMapper.toSummaryResponse(existing);
             }
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "Concurrency issue occurred");
         }
@@ -228,7 +228,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
 
             lifecycleService.persistGeneratedItemsAndMarkPreviewed(preview, candidates);
 
-            return responseMapper.toResponse(preview, previewItemRepository.findDetailedItemsByPreviewId(preview.getId()));
+            return responseMapper.toSummaryResponse(preview);
 
         } catch (Exception e) {
             log.error("Generation failed for preview {}", preview.getPublicId(), e);

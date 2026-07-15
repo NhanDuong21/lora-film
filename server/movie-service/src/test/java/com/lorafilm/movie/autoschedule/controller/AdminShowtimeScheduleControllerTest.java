@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
-import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
 import com.lorafilm.movie.autoschedule.service.ShowtimeSchedulePreviewService;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
@@ -48,11 +49,13 @@ class AdminShowtimeScheduleControllerTest {
     @WithMockUser(roles = "ADMIN")
     void case1_getPreviewSuccess() throws Exception {
         System.out.println("\n========== CASE 1: GET preview thanh cong ==========");
-        ShowtimeSchedulePreviewResponse response = new ShowtimeSchedulePreviewResponse();
-        response.setPreviewPublicId(previewId);
-        response.setStatus(SchedulePreviewStatus.PREVIEWED);
+        ShowtimeSchedulePreviewPageResponse response = new ShowtimeSchedulePreviewPageResponse();
+        ShowtimeSchedulePreviewSummaryResponse summary = new ShowtimeSchedulePreviewSummaryResponse();
+        summary.setPreviewPublicId(previewId);
+        summary.setStatus(SchedulePreviewStatus.PREVIEWED);
+        response.setPreview(summary);
 
-        when(service.getPreview(previewId)).thenReturn(response);
+        when(service.getPreview(eq(previewId), any())).thenReturn(response);
 
         mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
                 .andDo(print());
@@ -70,7 +73,7 @@ class AdminShowtimeScheduleControllerTest {
         request.setExpectedVersion(1L);
         request.setItems(List.of(itemReq));
 
-        ShowtimeSchedulePreviewResponse response = new ShowtimeSchedulePreviewResponse();
+        ShowtimeSchedulePreviewSummaryResponse response = new ShowtimeSchedulePreviewSummaryResponse();
         response.setPreviewPublicId(previewId);
         response.setVersion(2L);
 
@@ -126,11 +129,13 @@ class AdminShowtimeScheduleControllerTest {
     @WithMockUser(roles = "ADMIN")
     void case5_getPreviewExpired() throws Exception {
         System.out.println("\n========== CASE 5: GET preview het han -> status EXPIRED ==========");
-        ShowtimeSchedulePreviewResponse response = new ShowtimeSchedulePreviewResponse();
-        response.setPreviewPublicId(previewId);
-        response.setStatus(SchedulePreviewStatus.EXPIRED);
+        ShowtimeSchedulePreviewPageResponse response = new ShowtimeSchedulePreviewPageResponse();
+        ShowtimeSchedulePreviewSummaryResponse summary = new ShowtimeSchedulePreviewSummaryResponse();
+        summary.setPreviewPublicId(previewId);
+        summary.setStatus(SchedulePreviewStatus.EXPIRED);
+        response.setPreview(summary);
 
-        when(service.getPreview(previewId)).thenReturn(response);
+        when(service.getPreview(eq(previewId), any())).thenReturn(response);
 
         mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
                 .andDo(print());
@@ -149,5 +154,20 @@ class AdminShowtimeScheduleControllerTest {
         System.out.println("\n========== CASE 7: Customer token -> 403 ==========");
         mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
                 .andDo(print());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void case8_invalidPagination_400() throws Exception {
+        System.out.println("\n========== CASE 8: INVALID PAGINATION -> 400 ==========");
+        
+        mockMvc.perform(get("/api/admin/showtime-schedules/{id}?page=-1&size=50", previewId))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/admin/showtime-schedules/{id}?page=0&size=0", previewId))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/admin/showtime-schedules/{id}?page=0&size=101", previewId))
+                .andExpect(status().isBadRequest());
     }
 }

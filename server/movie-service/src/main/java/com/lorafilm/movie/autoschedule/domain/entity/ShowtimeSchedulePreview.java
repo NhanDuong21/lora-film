@@ -380,6 +380,10 @@ public class ShowtimeSchedulePreview {
         return version;
     }
 
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

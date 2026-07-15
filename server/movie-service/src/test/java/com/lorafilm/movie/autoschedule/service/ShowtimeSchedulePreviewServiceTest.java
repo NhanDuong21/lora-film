@@ -6,11 +6,14 @@ import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
-import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.impl.ShowtimeSchedulePreviewServiceImpl;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
@@ -47,6 +50,8 @@ class ShowtimeSchedulePreviewServiceTest {
     private CurrentUserProvider currentUserProvider;
     @Mock
     private com.lorafilm.movie.autoschedule.service.impl.ShowtimeSchedulePreviewExpiryService expiryService;
+    @Mock
+    private EntityManager entityManager;
 
     private Clock clock = Clock.fixed(Instant.parse("2026-07-20T03:00:00Z"), ZoneId.of("UTC"));
 
@@ -63,7 +68,8 @@ class ShowtimeSchedulePreviewServiceTest {
                 mapper,
                 currentUserProvider,
                 expiryService,
-                clock
+                clock,
+                entityManager
         );
 
         java.lang.reflect.Constructor<ShowtimeSchedulePreview> previewConstructor = ShowtimeSchedulePreview.class.getDeclaredConstructor();
@@ -88,10 +94,12 @@ class ShowtimeSchedulePreviewServiceTest {
     @Test
     void getPreview_shouldReturnPreview_whenValid() {
         when(previewRepository.findByPublicId("preview-1")).thenReturn(Optional.of(preview));
-        when(itemRepository.findDetailedItemsByPreviewId(1L)).thenReturn(List.of(item1));
-        when(mapper.toResponse(any(), any())).thenReturn(new ShowtimeSchedulePreviewResponse());
+        org.springframework.data.domain.Page<ShowtimeSchedulePreviewItem> emptyPage = org.springframework.data.domain.Page.empty();
+        when(itemRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(org.springframework.data.domain.Pageable.class))).thenReturn(emptyPage);
+        when(mapper.toPageResponse(any(), any())).thenReturn(new ShowtimeSchedulePreviewPageResponse());
 
-        ShowtimeSchedulePreviewResponse response = service.getPreview("preview-1");
+        com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery query = new com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery();
+        ShowtimeSchedulePreviewPageResponse response = service.getPreview("preview-1", query);
 
         assertThat(response).isNotNull();
         assertThat(preview.getStatus()).isEqualTo(SchedulePreviewStatus.PREVIEWED);
@@ -101,7 +109,8 @@ class ShowtimeSchedulePreviewServiceTest {
     void getPreview_shouldThrowException_whenNotFound() {
         when(previewRepository.findByPublicId("preview-1")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.getPreview("preview-1"))
+        com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery query = new com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery();
+        assertThatThrownBy(() -> service.getPreview("preview-1", query))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND);
@@ -117,7 +126,8 @@ class ShowtimeSchedulePreviewServiceTest {
             return true;
         }).when(expiryService).expireIfNecessary(eq("preview-1"), any(Instant.class));
 
-        service.getPreview("preview-1");
+        com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery query = new com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery();
+        service.getPreview("preview-1", query);
 
         assertThat(preview.getStatus()).isEqualTo(SchedulePreviewStatus.EXPIRED);
     }
@@ -128,7 +138,8 @@ class ShowtimeSchedulePreviewServiceTest {
         preview.setExpiresAt(Instant.parse("2026-07-20T02:00:00Z")); // In the past
         when(previewRepository.findByPublicId("preview-1")).thenReturn(Optional.of(preview));
 
-        service.getPreview("preview-1");
+        com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery query = new com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery();
+        service.getPreview("preview-1", query);
 
         assertThat(preview.getStatus()).isEqualTo(SchedulePreviewStatus.APPLIED);
     }
@@ -160,7 +171,8 @@ class ShowtimeSchedulePreviewServiceTest {
         assertThat(item1.getSelectedBy()).isEqualTo(99L);
         assertThat(item1.getSelectedAt()).isEqualTo(Instant.parse("2026-07-20T03:00:00Z"));
         assertThat(preview.getSelectedCandidateCount()).isEqualTo(5);
-        verify(previewRepository).flush();
+        verify(entityManager).lock(preview, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        verify(previewRepository).saveAndFlush(preview);
     }
 
     @Test

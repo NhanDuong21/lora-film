@@ -4,9 +4,11 @@ import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
 import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
+import com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
-import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
@@ -18,6 +20,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemSpecification;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -35,6 +45,7 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
     private final CurrentUserProvider currentUserProvider;
     private final ShowtimeSchedulePreviewExpiryService expiryService;
     private final Clock clock;
+    private final EntityManager entityManager;
 
     public ShowtimeSchedulePreviewServiceImpl(
             ShowtimeSchedulePreviewRepository previewRepository,
@@ -42,18 +53,20 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
             ShowtimeSchedulePreviewMapper mapper,
             CurrentUserProvider currentUserProvider,
             ShowtimeSchedulePreviewExpiryService expiryService,
-            Clock clock) {
+            Clock clock,
+            EntityManager entityManager) {
         this.previewRepository = previewRepository;
         this.itemRepository = itemRepository;
         this.mapper = mapper;
         this.currentUserProvider = currentUserProvider;
         this.expiryService = expiryService;
         this.clock = clock;
+        this.entityManager = entityManager;
     }
 
     @Override
-    @Transactional
-    public ShowtimeSchedulePreviewResponse getPreview(String previewPublicId) {
+    @Transactional(readOnly = true)
+    public ShowtimeSchedulePreviewPageResponse getPreview(String previewPublicId, ShowtimeSchedulePreviewItemQuery query) {
         log.info("Auto schedule preview retrieved. publicId={}", previewPublicId);
         
         Instant now = Instant.now(clock);
@@ -62,13 +75,51 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
         ShowtimeSchedulePreview preview = previewRepository.findByPublicId(previewPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND));
 
-        List<ShowtimeSchedulePreviewItem> items = itemRepository.findDetailedItemsByPreviewId(preview.getId());
-        return mapper.toResponse(preview, items);
+        Specification<ShowtimeSchedulePreviewItem> spec = ShowtimeSchedulePreviewItemSpecification.filterBy(
+                preview.getId(),
+                query,
+                preview.getTimezoneSnapshot()
+        );
+
+        Sort sort = parseSort(query.getSort());
+        PageRequest pageRequest = PageRequest.of(query.getPage(), query.getSize(), sort);
+
+        Page<ShowtimeSchedulePreviewItem> itemsPage = itemRepository.findAll(spec, pageRequest);
+
+        return mapper.toPageResponse(preview, itemsPage);
+    }
+
+    private Sort parseSort(String sortParam) {
+        if (sortParam == null || sortParam.trim().isEmpty()) {
+            return Sort.by(Sort.Direction.ASC, "rankingPosition", "id");
+        }
+
+        String[] parts = sortParam.split(",");
+        String property = parts[0].trim();
+        Sort.Direction direction = parts.length > 1 && parts[1].trim().equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+
+        List<String> allowedProperties = Arrays.asList("rankingPosition", "startTime", "endTime", "score", "createdAt");
+        if (!allowedProperties.contains(property)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Unsupported sort property: " + property);
+        }
+
+        if ("startTime".equals(property)) {
+            return Sort.by(
+                    new Sort.Order(direction, "startTime"),
+                    new Sort.Order(Sort.Direction.ASC, "rankingPosition"),
+                    new Sort.Order(Sort.Direction.ASC, "id")
+            );
+        }
+
+        return Sort.by(
+                new Sort.Order(direction, property),
+                new Sort.Order(Sort.Direction.ASC, "id")
+        );
     }
 
     @Override
     @Transactional
-    public ShowtimeSchedulePreviewResponse updateSelections(String previewPublicId, UpdatePreviewItemSelectionsRequest request) {
+    public ShowtimeSchedulePreviewSummaryResponse updateSelections(String previewPublicId, UpdatePreviewItemSelectionsRequest request) {
         log.info("Auto schedule selection update requested. previewPublicId={}", previewPublicId);
         Long currentUserId = currentUserProvider.getCurrentUserId();
         if (currentUserId == null) {
@@ -137,12 +188,13 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
             preview.setSelectedCandidateCount(Math.toIntExact(newSelectedCount));
             
             // Explicitly force a flush to capture optimistic lock exceptions if any, before reloading detailed items.
-            previewRepository.flush();
+            // Also, we must increment version so a swap (A=true->false, B=false->true) triggers a version bump
+            entityManager.lock(preview, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+            previewRepository.saveAndFlush(preview);
             log.info("Auto schedule selection updated. previewPublicId={}, changedItemCount={}, newSelectedCount={}", previewPublicId, changedItemCount, newSelectedCount);
         }
 
-        List<ShowtimeSchedulePreviewItem> detailedItems = itemRepository.findDetailedItemsByPreviewId(preview.getId());
-        return mapper.toResponse(preview, detailedItems);
+        return mapper.toSummaryResponse(preview);
     }
 
 }

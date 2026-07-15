@@ -6,8 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewItemResponse;
-import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
+import com.lorafilm.movie.common.api.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,34 +29,24 @@ public class ShowtimeSchedulePreviewMapper {
         this.objectMapper = objectMapper;
     }
 
-    public ShowtimeSchedulePreviewResponse toResponse(ShowtimeSchedulePreview preview, List<ShowtimeSchedulePreviewItem> items) {
+    public ShowtimeSchedulePreviewPageResponse toPageResponse(ShowtimeSchedulePreview preview, org.springframework.data.domain.Page<ShowtimeSchedulePreviewItem> itemsPage) {
         if (preview == null) {
             return null;
         }
 
-        ShowtimeSchedulePreviewResponse response = new ShowtimeSchedulePreviewResponse();
-        response.setPreviewPublicId(preview.getPublicId());
-        response.setVersion(preview.getVersion());
-        response.setCinemaPublicId(preview.getCinema() != null ? preview.getCinema().getPublicId() : null);
-        response.setCinemaName(preview.getCinema() != null ? preview.getCinema().getName() : null);
-        response.setScheduleFrom(preview.getScheduleFrom());
-        response.setScheduleTo(preview.getScheduleTo());
-        response.setTimezoneSnapshot(preview.getTimezoneSnapshot());
-        response.setStrategy(preview.getStrategy());
-        response.setStrategyVersion(preview.getStrategyVersion());
-        response.setApplyMode(preview.getApplyMode());
-        response.setStatus(preview.getStatus());
-        response.setSlotGranularityMinutes(preview.getSlotGranularityMinutes());
-        response.setSummary(toSummary(preview));
-        response.setGeneratedAt(preview.getGeneratedAt());
-        response.setExpiresAt(preview.getExpiresAt());
-        response.setGeneratedBy(preview.getGeneratedBy());
-        response.setAppliedAt(preview.getAppliedAt());
-        response.setAppliedBy(preview.getAppliedBy());
-        response.setFailureReason(preview.getFailureReason());
-        response.setItems(items != null ? items.stream().map(this::toItemResponse).toList() : Collections.emptyList());
+        ShowtimeSchedulePreviewSummaryResponse summary = toSummaryResponse(preview);
         
-        return response;
+        PageResponse<ShowtimeSchedulePreviewItemResponse> pageResponse = new PageResponse<>();
+        if (itemsPage != null) {
+            pageResponse.setContent(itemsPage.getContent().stream().map(this::toItemResponse).toList());
+            pageResponse.setPageNumber(itemsPage.getNumber());
+            pageResponse.setPageSize(itemsPage.getSize());
+            pageResponse.setTotalElements(itemsPage.getTotalElements());
+            pageResponse.setTotalPages(itemsPage.getTotalPages());
+            pageResponse.setLast(itemsPage.isLast());
+        }
+
+        return new ShowtimeSchedulePreviewPageResponse(summary, pageResponse);
     }
 
     public ShowtimeSchedulePreviewItemResponse toItemResponse(ShowtimeSchedulePreviewItem item) {
@@ -100,16 +91,34 @@ public class ShowtimeSchedulePreviewMapper {
         return response;
     }
 
-    public ShowtimeSchedulePreviewSummaryResponse toSummary(ShowtimeSchedulePreview preview) {
+    public ShowtimeSchedulePreviewSummaryResponse toSummaryResponse(ShowtimeSchedulePreview preview) {
         if (preview == null) {
             return null;
         }
         
         ShowtimeSchedulePreviewSummaryResponse summary = new ShowtimeSchedulePreviewSummaryResponse();
+        summary.setPreviewPublicId(preview.getPublicId());
+        summary.setVersion(preview.getVersion());
+        summary.setCinemaPublicId(preview.getCinema() != null ? preview.getCinema().getPublicId() : null);
+        summary.setCinemaName(preview.getCinema() != null ? preview.getCinema().getName() : null);
+        summary.setScheduleFrom(preview.getScheduleFrom());
+        summary.setScheduleTo(preview.getScheduleTo());
+        summary.setTimezoneSnapshot(preview.getTimezoneSnapshot());
+        summary.setStrategy(preview.getStrategy());
+        summary.setStrategyVersion(preview.getStrategyVersion());
+        summary.setApplyMode(preview.getApplyMode());
+        summary.setStatus(preview.getStatus());
+        summary.setSlotGranularityMinutes(preview.getSlotGranularityMinutes());
         summary.setTotalCandidateCount(preview.getTotalCandidateCount());
         summary.setValidCandidateCount(preview.getValidCandidateCount());
         summary.setRejectedCandidateCount(preview.getRejectedCandidateCount());
         summary.setSelectedCandidateCount(preview.getSelectedCandidateCount());
+        summary.setGeneratedAt(preview.getGeneratedAt());
+        summary.setExpiresAt(preview.getExpiresAt());
+        summary.setGeneratedBy(preview.getGeneratedBy());
+        summary.setAppliedAt(preview.getAppliedAt());
+        summary.setAppliedBy(preview.getAppliedBy());
+        summary.setFailureReason(preview.getFailureReason());
         return summary;
     }
 

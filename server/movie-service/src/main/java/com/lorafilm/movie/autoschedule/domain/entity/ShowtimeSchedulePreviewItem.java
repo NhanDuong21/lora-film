@@ -109,7 +109,7 @@ public class ShowtimeSchedulePreviewItem {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    protected ShowtimeSchedulePreviewItem() {}
+    public ShowtimeSchedulePreviewItem() {}
 
     public static ShowtimeSchedulePreviewItem createItem(ShowtimeSchedulePreview preview, com.lorafilm.movie.autoschedule.model.ShowtimeCandidate candidate) {
         ShowtimeSchedulePreviewItem item = new ShowtimeSchedulePreviewItem();

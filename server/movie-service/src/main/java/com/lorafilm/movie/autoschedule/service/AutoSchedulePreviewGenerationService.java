@@ -1,8 +1,8 @@
 package com.lorafilm.movie.autoschedule.service;
 
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
-import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 
 public interface AutoSchedulePreviewGenerationService {
-    ShowtimeSchedulePreviewResponse generatePreview(GenerateShowtimeSchedulePreviewRequest request, Long adminUserId);
+    ShowtimeSchedulePreviewSummaryResponse generatePreview(GenerateShowtimeSchedulePreviewRequest request, Long adminUserId);
 }
