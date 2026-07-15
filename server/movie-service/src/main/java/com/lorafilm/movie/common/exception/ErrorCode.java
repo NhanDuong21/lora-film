@@ -56,6 +56,8 @@ public enum ErrorCode {
     SEAT_TYPE_CODE_ALREADY_EXISTS("Seat type code already exists", 400),
     SEAT_TYPE_INACTIVE("Seat type is inactive", 400),
     SEAT_TYPE_IN_USE("Seat type is in use and cannot be deactivated", 409),
+    SEAT_TYPE_INVALID("Seat type is invalid", 400),
+    PRICE_INVALID("Price is invalid", 400),
     INVALID_SEAT_TYPE_STATUS_TRANSITION("Invalid seat type status transition", 400),
     DUPLICATE_SEAT_CODE("Seat code already exists in database", 400),
     DUPLICATE_SEAT_POSITION("Seat position already exists in database", 400),
@@ -76,6 +78,7 @@ public enum ErrorCode {
     SHOWTIME_NOT_FOUND("Showtime not found", 404),
     SHOWTIME_OVERLAP_CONFLICT("Showtime overlaps with an existing schedule", 409),
     SHOWTIME_PRICE_MISSING("Showtime price config is missing", 400),
+    SHOWTIME_PRICE_NOT_EDITABLE("Cannot edit prices for this showtime status", 400),
     INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400),
     
     AUDITORIUM_LAYOUT_NOT_EDITABLE("The seating arrangement cannot be changed while the auditorium is in operation", 409),
@@ -96,6 +99,36 @@ public enum ErrorCode {
     SHOWTIME_CANNOT_OPEN_AFTER_START("Cannot open showtime for booking after it has started", 400),
     SHOWTIME_CANNOT_FINISH_BEFORE_END("Cannot finish showtime before it ends", 400),
     
+    // --- Auto Scheduling ---
+    AUTO_SCHEDULE_PREVIEW_NOT_FOUND("Auto schedule preview not found", 404),
+    AUTO_SCHEDULE_ITEM_NOT_FOUND("Auto schedule preview item not found", 404),
+    AUTO_SCHEDULE_PREVIEW_NOT_EDITABLE("Auto schedule preview is not editable", 409),
+    AUTO_SCHEDULE_PREVIEW_NOT_APPLICABLE("Auto schedule preview cannot be applied", 409),
+    AUTO_SCHEDULE_PREVIEW_EXPIRED("Auto schedule preview has expired", 409),
+    AUTO_SCHEDULE_PREVIEW_ALREADY_APPLIED("Auto schedule preview has already been applied", 409),
+    AUTO_SCHEDULE_PREVIEW_APPLY_IN_PROGRESS("Auto schedule preview is currently being applied", 409),
+    AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT("Auto schedule preview was modified by another request", 409),
+    IDEMPOTENCY_KEY_REUSED("Idempotency key was reused with a different request", 409),
+    AUTO_SCHEDULE_ITEM_NOT_BELONG_TO_PREVIEW("Preview item does not belong to the preview", 400),
+    AUTO_SCHEDULE_REJECTED_ITEM_CANNOT_BE_SELECTED("Rejected preview item cannot be selected", 400),
+    AUTO_SCHEDULE_DUPLICATE_ITEM_SELECTION("Duplicate preview item found in selection request", 400),
+    
+    AUTO_SCHEDULE_INVALID_DATE_RANGE("Invalid auto schedule date range", 400),
+    AUTO_SCHEDULE_DATE_RANGE_TOO_LARGE("Auto schedule date range exceeds maximum allowed days", 400),
+    AUTO_SCHEDULE_EMPTY_MOVIE_VERSIONS("Auto schedule movie versions cannot be empty after normalization", 400),
+    AUTO_SCHEDULE_EMPTY_AUDITORIUMS("Auto schedule auditoriums cannot be empty after normalization", 400),
+    AUTO_SCHEDULE_UNSUPPORTED_SLOT_GRANULARITY("Unsupported auto schedule slot granularity", 400),
+    AUTO_SCHEDULE_INVALID_PREVIEW_TTL("Invalid auto schedule preview TTL", 400),
+    AUTO_SCHEDULE_TOO_MANY_CANDIDATES("Too many auto schedule candidates generated", 422),
+    AUTO_SCHEDULE_GENERATION_FAILED("Auto schedule generation failed", 500),
+    
+    AUTO_SCHEDULE_NO_SELECTED_ITEMS("No selected items to apply", 400),
+    AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP("Selected items overlap with each other", 409),
+    AUTO_SCHEDULE_APPLY_REVALIDATION_FAILED("One or more selected schedule candidates are no longer valid", 409),
+    AUTO_SCHEDULE_CANDIDATE_CHANGED("Candidate data has changed and is no longer consistent", 409),
+    AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT("Preview data is inconsistent", 409),
+    AUTO_SCHEDULE_APPLY_FAILED("Auto schedule apply failed", 500),
+
     CURRENT_USER_NOT_AVAILABLE("Current user not available", 401),
 
     // --- Cinema Deletion ---

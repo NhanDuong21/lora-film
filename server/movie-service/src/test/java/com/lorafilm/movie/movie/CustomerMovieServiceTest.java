@@ -44,6 +44,9 @@ public class CustomerMovieServiceTest {
     @Mock
     private MovieMapper movieMapper;
 
+    @Mock
+    private com.lorafilm.movie.movie.service.MovieService movieService;
+
     @InjectMocks
     private CustomerMovieService customerMovieService;
 
@@ -95,13 +98,12 @@ public class CustomerMovieServiceTest {
     @Test
     void getMovieDetail_Success() {
         when(movieRepository.findByIdentifierAndDeletedAtIsNull("movie-1")).thenReturn(Optional.of(activeMovie));
-        when(movieGenreRepository.findByMovieId(1L)).thenReturn(Collections.emptyList());
         
-        MovieDto dto = new MovieDto();
-        dto.setPublicId("movie-1");
-        when(movieMapper.toDto(eq(activeMovie), any(), any())).thenReturn(dto);
+        com.lorafilm.movie.movie.dto.MovieDetailDto detailDto = new com.lorafilm.movie.movie.dto.MovieDetailDto();
+        detailDto.setPublicId("movie-1");
+        when(movieService.getMovieByIdentifier("movie-1")).thenReturn(detailDto);
 
-        MovieDto response = customerMovieService.getMovieDetail("movie-1");
+        var response = customerMovieService.getMovieDetail("movie-1");
         assertNotNull(response);
         assertEquals("movie-1", response.getPublicId());
     }

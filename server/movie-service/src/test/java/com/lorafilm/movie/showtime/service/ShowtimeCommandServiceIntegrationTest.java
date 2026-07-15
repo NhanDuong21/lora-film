@@ -71,14 +71,19 @@ class ShowtimeCommandServiceIntegrationTest {
     private Cinema cinema;
     private Auditorium auditorium;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void setUp() {
-        statusHistoryRepository.deleteAll();
-        showtimeRepository.deleteAll();
-        auditoriumRepository.deleteAll();
-        cinemaRepository.deleteAll();
-        movieVersionRepository.deleteAll();
-        movieRepository.deleteAll();
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        jdbcTemplate.execute("TRUNCATE TABLE seats");
+        jdbcTemplate.execute("TRUNCATE TABLE showtime_status_history");
+        jdbcTemplate.execute("TRUNCATE TABLE showtimes");
+        jdbcTemplate.execute("TRUNCATE TABLE auditoriums");
+        jdbcTemplate.execute("TRUNCATE TABLE cinemas");
+        jdbcTemplate.execute("TRUNCATE TABLE movies");
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
 

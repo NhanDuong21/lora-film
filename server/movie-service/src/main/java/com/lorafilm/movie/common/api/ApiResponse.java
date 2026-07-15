@@ -11,6 +11,11 @@ public record ApiResponse<T>(boolean success, String errorCode, String message, 
         return new ApiResponse<>(true, "SUCCESS", "Success", data, java.util.Collections.emptyList());
     }
 
+    // Success with data payload and custom message
+    public static <T> ApiResponse<T> ok(String message, T data) {
+        return new ApiResponse<>(true, "SUCCESS", message, data, java.util.Collections.emptyList());
+    }
+
     // Success without data payload
     public static <T> ApiResponse<T> ok(String message) {
         return new ApiResponse<>(true, "SUCCESS", message, null, java.util.Collections.emptyList());

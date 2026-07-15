@@ -11,26 +11,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Disabled;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
-@Disabled("Blocked by Docker Testcontainers environment issue")
 class MaintenanceWindowIntegrationTest {
 
-    @Container
-    @ServiceConnection
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0.32");
+
 
     @Autowired
     private AuditoriumMaintenanceWindowRepository maintenanceWindowRepository;
@@ -40,21 +32,46 @@ class MaintenanceWindowIntegrationTest {
 
     private Auditorium auditorium;
 
+    @Autowired
+    private com.lorafilm.movie.cinema.repository.CinemaRepository cinemaRepository;
+
+    private com.lorafilm.movie.cinema.domain.entity.Cinema cinema;
+
     @BeforeEach
     void setUp() {
         maintenanceWindowRepository.deleteAll();
         auditoriumRepository.deleteAll();
+        cinemaRepository.deleteAll();
+
+        cinema = new com.lorafilm.movie.cinema.domain.entity.Cinema();
+        cinema.setPublicId(java.util.UUID.randomUUID().toString());
+        cinema.setSlug("cinema-" + System.currentTimeMillis());
+        cinema.setName("Test Cinema");
+        cinema.setCity("Test City");
+        cinema.setAddress("Test Address");
+        cinema.setTimezone("Asia/Ho_Chi_Minh");
+        cinema.setStatus(com.lorafilm.movie.cinema.domain.enums.CinemaStatus.ACTIVE);
+        cinema = cinemaRepository.saveAndFlush(cinema);
 
         auditorium = new Auditorium();
         auditorium.setPublicId("aud-maint-1");
         auditorium.setStatus(AuditoriumStatus.ACTIVE);
         auditorium.setName("Maintenance Test Auditorium");
+        auditorium.setCinema(cinema);
+        auditorium.setCapacity(100);
         auditorium = auditoriumRepository.saveAndFlush(auditorium);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        maintenanceWindowRepository.deleteAll();
+        auditoriumRepository.deleteAll();
+        cinemaRepository.deleteAll();
     }
 
     @Test
     void shouldDetectOverlapProperly() {
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         Instant t1Start = now.plus(1, ChronoUnit.DAYS);
         Instant t1End = t1Start.plus(2, ChronoUnit.HOURS);
 

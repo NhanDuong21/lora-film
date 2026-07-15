@@ -136,7 +136,7 @@ public class AdminMovieControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Genres assigned successfully"));
+                .andExpect(jsonPath("$.message").value("Genres appended successfully"));
     }
 
     @Test

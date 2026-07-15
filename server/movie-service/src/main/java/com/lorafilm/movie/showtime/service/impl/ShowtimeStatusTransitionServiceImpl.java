@@ -10,6 +10,7 @@ import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
 import org.springframework.stereotype.Service;
@@ -26,17 +27,20 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     private final CurrentUserProvider currentUserProvider;
     private final AdminShowtimeMapper adminShowtimeMapper;
     private final Clock clock;
+    private final ShowtimePricingService showtimePricingService;
 
     public ShowtimeStatusTransitionServiceImpl(ShowtimeRepository showtimeRepository,
                                                ShowtimeStatusHistoryService historyService,
                                                CurrentUserProvider currentUserProvider,
                                                AdminShowtimeMapper adminShowtimeMapper,
-                                               Clock clock) {
+                                               Clock clock,
+                                               ShowtimePricingService showtimePricingService) {
         this.showtimeRepository = showtimeRepository;
         this.historyService = historyService;
         this.currentUserProvider = currentUserProvider;
         this.adminShowtimeMapper = adminShowtimeMapper;
         this.clock = clock;
+        this.showtimePricingService = showtimePricingService;
     }
 
     @Override
@@ -116,6 +120,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
             if (!showtime.getStartTime().isAfter(now)) {
                 throw new BusinessException(ErrorCode.SHOWTIME_CANNOT_OPEN_AFTER_START, "Cannot open showtime for booking after it has started");
             }
+            showtimePricingService.validateCompleteness(showtime);
         }
         
         if (current == ShowtimeStatus.CLOSED && target == ShowtimeStatus.FINISHED) {
