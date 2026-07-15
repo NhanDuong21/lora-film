@@ -1588,7 +1588,7 @@ export default function AdminMoviePage() {
 
         {/* TMDB Latest Movies Carousel (only on Add) */}
         {!isEdit && (isLatestMoviesLoading || tmdbLatestMovies.length > 0) && (
-          <div className="relative w-full bg-brand-gray/60 border border-zinc-805 p-5 rounded-2xl shadow-lg flex-shrink-0 group overflow-hidden">
+          <div className="relative w-full bg-gradient-to-br from-zinc-900/40 to-black/20 border border-zinc-800/40 p-6 rounded-3xl shadow-2xl flex-shrink-0 group overflow-hidden">
             <label className="text-brand-orange text-[10px] font-black uppercase tracking-widest block mb-4">
               GỢI Ý PHIM MỚI TỪ TMDB
             </label>
@@ -1672,7 +1672,7 @@ export default function AdminMoviePage() {
 
         {/* TMDB Import (only on Add) */}
         {!isEdit && (
-          <div className="relative w-full bg-brand-gray/60 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-lg flex-shrink-0">
+          <div className="relative w-full bg-gradient-to-br from-zinc-900/40 to-black/20 border border-zinc-800/40 p-6 rounded-3xl space-y-2 shadow-2xl flex-shrink-0">
             <label className="text-brand-orange text-[10px] font-black uppercase tracking-widest block">
               TÌM KIẾM & IMPORT DỮ LIỆU TỪ TMDB
             </label>
@@ -2015,6 +2015,15 @@ export default function AdminMoviePage() {
                   <p className="text-zinc-500 text-xs py-4 text-center italic">Chưa có đạo diễn nào. Nhấp "Thêm Đạo Diễn" để bắt đầu.</p>
                 ) : (
                   <div className="space-y-2">
+                    <div className="hidden sm:flex items-center gap-3 px-4 mb-1.5 text-[9px] font-black text-zinc-500 uppercase tracking-widest select-none">
+                      <div className="w-4 shrink-0" />
+                      <div className="w-7 shrink-0" />
+                      <div className="flex-grow grid grid-cols-2 gap-2">
+                        <div>Tên đạo diễn</div>
+                        <div>URL ảnh đại diện</div>
+                      </div>
+                      <div className="w-7 shrink-0" />
+                    </div>
                     {directors.map((d, idx) => (
                       <div
                         key={idx}
@@ -2078,6 +2087,16 @@ export default function AdminMoviePage() {
                   <p className="text-zinc-500 text-xs py-4 text-center italic">Chưa có diễn viên nào. Nhấp "Thêm Diễn Viên" để bắt đầu.</p>
                 ) : (
                   <div className="space-y-2">
+                    <div className="hidden sm:flex items-center gap-3 px-4 mb-1.5 text-[9px] font-black text-zinc-500 uppercase tracking-widest select-none">
+                      <div className="w-4 shrink-0" />
+                      <div className="w-7 shrink-0" />
+                      <div className="flex-grow grid grid-cols-3 gap-2">
+                        <div>Tên diễn viên</div>
+                        <div>Tên nhân vật / Vai diễn</div>
+                        <div>URL ảnh đại diện</div>
+                      </div>
+                      <div className="w-7 shrink-0" />
+                    </div>
                     {cast.map((c, idx) => (
                       <div
                         key={idx}
@@ -2148,6 +2167,15 @@ export default function AdminMoviePage() {
                   <p className="text-zinc-500 text-xs py-4 text-center italic">Chưa có biên kịch nào. Nhấp "Thêm Biên Kịch" để bắt đầu.</p>
                 ) : (
                   <div className="space-y-2">
+                    <div className="hidden sm:flex items-center gap-3 px-4 mb-1.5 text-[9px] font-black text-zinc-500 uppercase tracking-widest select-none">
+                      <div className="w-4 shrink-0" />
+                      <div className="w-7 shrink-0" />
+                      <div className="flex-grow grid grid-cols-2 gap-2">
+                        <div>Tên biên kịch</div>
+                        <div>URL ảnh đại diện</div>
+                      </div>
+                      <div className="w-7 shrink-0" />
+                    </div>
                     {writers.map((w, idx) => (
                       <div
                         key={idx}
@@ -2211,6 +2239,15 @@ export default function AdminMoviePage() {
                   <p className="text-zinc-500 text-xs py-4 text-center italic">Chưa có nhà sản xuất nào. Nhấp "Thêm Nhà Sản Xuất" để bắt đầu.</p>
                 ) : (
                   <div className="space-y-2">
+                    <div className="hidden sm:flex items-center gap-3 px-4 mb-1.5 text-[9px] font-black text-zinc-500 uppercase tracking-widest select-none">
+                      <div className="w-4 shrink-0" />
+                      <div className="w-7 shrink-0" />
+                      <div className="flex-grow grid grid-cols-2 gap-2">
+                        <div>Tên nhà sản xuất</div>
+                        <div>URL ảnh đại diện</div>
+                      </div>
+                      <div className="w-7 shrink-0" />
+                    </div>
                     {producers.map((p, idx) => (
                       <div
                         key={idx}
