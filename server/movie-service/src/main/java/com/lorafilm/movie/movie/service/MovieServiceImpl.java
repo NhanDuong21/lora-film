@@ -110,7 +110,7 @@ public class MovieServiceImpl implements MovieService {
                 sorting = Sort.by(sortParams[0]).ascending();
             }
         } else {
-            sorting = Sort.by("releaseDate").descending();
+            sorting = Sort.by("createdAt").descending();
         }
         Pageable pageable = PageRequest.of(page, size, sorting);
         Page<Movie> moviePage = movieRepository.findAll(spec, pageable);

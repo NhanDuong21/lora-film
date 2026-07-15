@@ -15,8 +15,9 @@ const STATUS_LIST = [
 ];
 
 const SORT_LIST = [
-  { label: 'Mới Nhất', value: 'releaseDate,desc' },
-  { label: 'Cũ Nhất', value: 'releaseDate,asc' },
+  { label: 'Mới Thêm Vào', value: 'createdAt,desc' },
+  { label: 'Khởi Chiếu Mới Nhất', value: 'releaseDate,desc' },
+  { label: 'Khởi Chiếu Cũ Nhất', value: 'releaseDate,asc' },
   { label: 'Tên A-Z', value: 'title,asc' }
 ];
 
@@ -27,7 +28,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
 
   const [selectedGenre, setSelectedGenre] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState(initialTab);
-  const [selectedSort, setSelectedSort] = useState('releaseDate,desc');
+  const [selectedSort, setSelectedSort] = useState('createdAt,desc');
   
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -85,7 +86,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
   const handleResetFilters = () => {
     setSelectedGenre('ALL');
     setSelectedStatus('ALL');
-    setSelectedSort('releaseDate,desc');
+    setSelectedSort('createdAt,desc');
     setCurrentPage(0);
   };
 

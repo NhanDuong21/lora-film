@@ -33,14 +33,14 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
   // Setup queries for both tabs independently
   const nowShowingQuery = useMoviesQuery({
     status: 'NOW_SHOWING',
-    sort: 'releaseDate,desc',
+    sort: 'createdAt,desc',
     size: 8,
     onDataLoaded: handleDataLoaded
   });
 
   const upcomingQuery = useMoviesQuery({
     status: 'UPCOMING',
-    sort: 'releaseDate,asc',
+    sort: 'createdAt,desc',
     size: 8
   });
 

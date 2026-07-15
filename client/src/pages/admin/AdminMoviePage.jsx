@@ -1978,21 +1978,32 @@ export default function AdminMoviePage() {
           {/* TAB 3: Media & Trailer (Poster, Banners, Trailer) */}
           {activeFormTab === 'media' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-              {/* Poster Section */}
+              {/* Poster Section — NOT draggable, URL-only edit */}
               <div className="space-y-6">
-                <div className="bg-brand-gray/60 border border-zinc-800/50 rounded-2xl p-5 space-y-5">
+                <div className="bg-brand-gray/60 border border-zinc-800/50 rounded-2xl p-5 space-y-5" draggable={false}>
                   <h3 className="text-xs font-black text-white uppercase tracking-wider border-b border-zinc-800 pb-2 flex items-center gap-1.5">
                     <ImageIcon className="w-4.5 h-4.5 text-brand-orange" />
                     <span>Poster phim</span>
+                    <span className="ml-auto text-[9px] font-bold text-zinc-600 normal-case tracking-normal border border-zinc-800 bg-zinc-900 rounded px-1.5 py-0.5">
+                      Chỉ đổi qua URL
+                    </span>
                   </h3>
                   <div className="space-y-2">
                     <label className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Poster URL</label>
                     <input type="text" value={posterUrl} onChange={e => setPosterUrl(e.target.value)}
                       placeholder="https://..."
                       className="w-full bg-brand-dark border border-zinc-800 rounded-xl py-2 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/40" />
-                    <div className="w-full h-72 bg-neutral-900 border border-zinc-800/80 rounded-xl overflow-hidden flex items-center justify-center">
+                    <div
+                      draggable={false}
+                      className="w-full h-72 bg-neutral-900 border border-zinc-800/80 rounded-xl overflow-hidden flex items-center justify-center select-none"
+                    >
                       {posterUrl?.trim() ? (
-                        <img src={posterUrl} alt="Poster preview" className="w-full h-full object-contain" />
+                        <img
+                          src={posterUrl}
+                          alt="Poster preview"
+                          draggable={false}
+                          className="w-full h-full object-contain pointer-events-none"
+                        />
                       ) : (
                         <div className="text-zinc-650 flex flex-col items-center gap-1"><ImageIcon className="w-7 h-7" /><span className="text-[10px]">Chưa có Poster</span></div>
                       )}
@@ -2035,26 +2046,62 @@ export default function AdminMoviePage() {
                     </div>
                   )}
 
-                  {/* Banner List Inputs & Image Previews */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Banner List Inputs & Image Previews — with Drag-and-Drop reordering */}
+                  <div className="space-y-3">
                     {bannerUrls.map((b, bIdx) => (
-                      <div key={bIdx} className="bg-zinc-900 border border-zinc-800/80 p-3 rounded-xl space-y-2">
-                        <div className="flex gap-2">
-                          <input type="text" value={b} onChange={e => updateBanner(bIdx, e.target.value)}
-                            placeholder="URL hình ảnh Banner (https://...)"
-                            className="flex-1 bg-brand-dark border border-zinc-800 rounded-lg py-1 px-2.5 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/30 min-w-0 font-mono" />
-                          {bannerUrls.length > 1 && (
-                            <button type="button" onClick={() => removeBanner(bIdx)} className="p-1.5 text-zinc-550 hover:text-red-400 transition-colors">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+                      <div
+                        key={bIdx}
+                        draggable
+                        onDragStart={() => handleDragStart(bIdx, 'banners')}
+                        onDragOver={handleDragOver}
+                        onDragEnter={() => handleDragEnter(bIdx, 'banners', bannerUrls, setBannerUrls)}
+                        onDragEnd={handleDragEnd}
+                        className={`flex gap-3 bg-zinc-900 border rounded-xl p-3 transition-all duration-200 ${
+                          draggedType === 'banners' && draggedIdx === bIdx
+                            ? 'opacity-40 scale-[0.98] border-brand-orange/40 bg-neutral-950'
+                            : 'border-zinc-800/80'
+                        }`}
+                      >
+                        {/* Drag handle */}
+                        <div className="flex flex-col items-center justify-center gap-1 cursor-grab text-zinc-600 hover:text-zinc-400 pt-1 shrink-0">
+                          <GripVertical className="w-4 h-4" />
+                          {bIdx === 0 && (
+                            <span className="text-[8px] font-black text-brand-orange uppercase tracking-wider">Chính</span>
                           )}
                         </div>
-                        <div className="w-full h-24 bg-zinc-950 border border-zinc-850 rounded-lg overflow-hidden flex items-center justify-center">
+
+                        {/* Preview thumbnail */}
+                        <div className="w-28 h-16 bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
                           {b?.trim() ? (
                             <img src={b} alt={`Banner ${bIdx + 1}`} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="text-zinc-700 flex items-center gap-1"><ImageIcon className="w-4 h-4" /><span className="text-[10px]">Banner {bIdx + 1}</span></div>
+                            <div className="text-zinc-700 flex flex-col items-center gap-0.5">
+                              <ImageIcon className="w-4 h-4" />
+                              <span className="text-[9px]">Banner {bIdx + 1}</span>
+                            </div>
                           )}
+                        </div>
+
+                        {/* URL input + remove */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
+                          <div className="flex items-center gap-1 text-[9px] font-black text-zinc-500 uppercase tracking-wider">
+                            <span>Banner #{bIdx + 1}</span>
+                            {bIdx === 0 && <span className="text-brand-orange">(Banner chính — hiển thị trước)</span>}
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={b}
+                              onChange={e => updateBanner(bIdx, e.target.value)}
+                              placeholder="URL hình ảnh Banner (https://...)"
+                              className="flex-1 bg-brand-dark border border-zinc-800 rounded-lg py-1.5 px-2.5 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/30 min-w-0 font-mono"
+                            />
+                            {bannerUrls.length > 1 && (
+                              <button type="button" onClick={() => removeBanner(bIdx)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors shrink-0">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
