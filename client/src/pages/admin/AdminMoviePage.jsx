@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search, Pencil, Trash2, Plus, LayoutList, Image as ImageIcon, X, Check,
   Eye, Trash, Calendar, Clock, Globe, Film, Play, ArrowLeft, Users, Building2,
@@ -152,6 +152,60 @@ const getYoutubeEmbedUrl = (url) => {
   return '';
 };
 
+const getYoutubeId = (url) => {
+  if (!url) return '';
+  try {
+    if (url.includes('youtube.com/watch')) {
+      return new URLSearchParams(new URL(url).search).get('v') || '';
+    }
+    if (url.includes('youtu.be/')) return url.split('youtu.be/')[1]?.split('?')[0] || '';
+    if (url.includes('youtube.com/embed/')) {
+      const parts = url.split('youtube.com/embed/');
+      if (parts[1]) return parts[1].split('?')[0] || '';
+    }
+  } catch { return ''; }
+  return '';
+};
+
+const LazyImage = ({ src, alt, className = '', containerClassName = '', ...props }) => {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!src) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '100px' });
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, [src]);
+
+  return (
+    <div ref={ref} className={`relative bg-zinc-900 overflow-hidden ${containerClassName}`}>
+      {visible && src ? (
+        <img
+          src={src}
+          alt={alt}
+          className={`w-full h-full object-cover transition-opacity duration-300 opacity-100 ${className}`}
+          loading="lazy"
+          {...props}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-zinc-800 animate-pulse bg-zinc-900">
+          <ImageIcon className="w-5 h-5" />
+        </div>
+      )}
+    </div>
+  );
+};
+
 const formatDate = (d) => {
   if (!d) return 'N/A';
   const dt = new Date(d);
@@ -273,6 +327,13 @@ export default function AdminMoviePage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isTmdbLoading, setIsTmdbLoading] = useState(false);
 
+  // TMDB Latest Movies Recommendation Carousel
+  const [tmdbLatestMovies, setTmdbLatestMovies] = useState([]);
+  const [latestMoviesPageIndex, setLatestMoviesPageIndex] = useState(0);
+  const [isLatestMoviesLoading, setIsLatestMoviesLoading] = useState(false);
+  const [slideOffset, setSlideOffset] = useState(-14.2857);
+  const [isTransitioning, setIsTransitioning] = useState(true);
+  const [slideLock, setSlideLock] = useState(false);
   // Form field state
   const [formBasic, setFormBasic] = useState(emptyForm());
   const [selectedGenres, setSelectedGenres] = useState([]); // [{publicId, name}]
@@ -285,6 +346,19 @@ export default function AdminMoviePage() {
   const [posterUrl, setPosterUrl] = useState('');
   const [bannerUrls, setBannerUrls] = useState(['']); // Array supports multiple banners
   const [trailerUrl, setTrailerUrl] = useState('');
+
+  const [playTrailer, setPlayTrailer] = useState(false);
+  const [playDetailTrailer, setPlayDetailTrailer] = useState(false);
+
+  // Reset playTrailer when trailerUrl changes
+  useEffect(() => {
+    setPlayTrailer(false);
+  }, [trailerUrl]);
+
+  // Reset playDetailTrailer when selectedMovie changes
+  useEffect(() => {
+    setPlayDetailTrailer(false);
+  }, [selectedMovie]);
 
   // Extra TMDB-imported data (display only — not sent to backend yet)
   const [cast, setCast] = useState([]);  // [{name, character, profileImageUrl}]
@@ -309,6 +383,24 @@ export default function AdminMoviePage() {
   }, []);
 
   useEffect(() => { fetchGenres(); }, [fetchGenres]);
+
+  // Fetch latest TMDB movies for recommendation
+  useEffect(() => {
+    const fetchLatestMovies = async () => {
+      setIsLatestMoviesLoading(true);
+      try {
+        const res = await adminMovieService.getLatestTop20(20);
+        if (res?.success && Array.isArray(res.data)) {
+          setTmdbLatestMovies(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch TMDB latest movies:", err);
+      } finally {
+        setIsLatestMoviesLoading(false);
+      }
+    };
+    fetchLatestMovies();
+  }, []);
 
   // ─── Fetch movies ────────────────────────────────────────────────────────────
   const fetchMovies = useCallback(async () => {
@@ -500,6 +592,58 @@ export default function AdminMoviePage() {
     setBackdropImportCount(0);
     setActiveFormTab('basic');
     setIsFormOpen(true);
+  };
+
+  // ─── TMDB latest movies carousel slide handlers ─────────────────────────────
+  const slideRight = () => {
+    if (slideLock || tmdbLatestMovies.length === 0) return;
+    setSlideLock(true);
+    setSlideOffset(-28.5714); // slide track left (show right neighbor)
+    setTimeout(() => {
+      setLatestMoviesPageIndex(prev => (prev + 1) % tmdbLatestMovies.length);
+      setIsTransitioning(false);
+      setSlideOffset(-14.2857);
+      setTimeout(() => {
+        setIsTransitioning(true);
+        setSlideLock(false);
+      }, 30);
+    }, 300);
+  };
+
+  const slideLeft = () => {
+    if (slideLock || tmdbLatestMovies.length === 0) return;
+    setSlideLock(true);
+    setSlideOffset(0); // slide track right (show left neighbor)
+    setTimeout(() => {
+      setLatestMoviesPageIndex(prev => (prev - 1 + tmdbLatestMovies.length) % tmdbLatestMovies.length);
+      setIsTransitioning(false);
+      setSlideOffset(-14.2857);
+      setTimeout(() => {
+        setIsTransitioning(true);
+        setSlideLock(false);
+      }, 30);
+    }, 300);
+  };
+
+  const handleCleanForm = () => {
+    setFormBasic(emptyForm());
+    setSelectedGenres([]);
+    setTmdbGenres([]);
+    setPosterUrl('');
+    setBannerUrls(['']);
+    setTrailerUrl('');
+    setCast([]);
+    setDirectors([]);
+    setWriters([]);
+    setProducers([]);
+    setStudios([]);
+    setVersions([]);
+    setOrigVersions([]);
+    setOrigMedia({ poster: null, banners: [], trailer: null });
+    setFormErrors({});
+    setAvailableBackdrops([]);
+    setBackdropImportCount(0);
+    triggerToast?.('Đã dọn sạch thông tin biểu mẫu phim!', 'info');
   };
 
   // ─── Open Edit form ───────────────────────────────────────────────────────────
@@ -1093,7 +1237,12 @@ export default function AdminMoviePage() {
             {/* Left: Poster */}
             <div className="w-48 md:w-56 h-72 md:h-80 bg-neutral-950 rounded-2xl overflow-hidden shadow-2xl border border-zinc-800 flex-shrink-0 relative group">
               {mv.primaryPoster ? (
-                <img src={mv.primaryPoster} alt={mv.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                <LazyImage
+                  src={mv.primaryPoster}
+                  alt={mv.title}
+                  containerClassName="absolute inset-0 w-full h-full border-none rounded-none"
+                  className="transition-transform duration-500 group-hover:scale-105"
+                />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700">
                   <ImageIcon className="w-10 h-10 mb-2" />
@@ -1164,10 +1313,11 @@ export default function AdminMoviePage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                           {mv.directors.map((d, dIdx) => (
                             <div key={d.publicId || dIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
-                              <img
+                              <LazyImage
                                 src={d.profileImageUrl || DEFAULT_AVATAR}
                                 alt={d.fullName}
-                                className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-zinc-800"
+                                containerClassName="w-9 h-9 rounded-full border border-zinc-800 flex-shrink-0"
+                                className="rounded-full object-cover"
                                 onError={e => { e.target.src = DEFAULT_AVATAR; }}
                               />
                               <div className="min-w-0">
@@ -1186,10 +1336,11 @@ export default function AdminMoviePage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                           {mv.writers.map((w, wIdx) => (
                             <div key={w.publicId || wIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
-                              <img
+                              <LazyImage
                                 src={w.profileImageUrl || DEFAULT_AVATAR}
                                 alt={w.fullName}
-                                className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-zinc-800"
+                                containerClassName="w-9 h-9 rounded-full border border-zinc-800 flex-shrink-0"
+                                className="rounded-full object-cover"
                                 onError={e => { e.target.src = DEFAULT_AVATAR; }}
                               />
                               <div className="min-w-0">
@@ -1208,10 +1359,11 @@ export default function AdminMoviePage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                           {mv.producers.map((p, pIdx) => (
                             <div key={p.publicId || pIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
-                              <img
+                              <LazyImage
                                 src={p.profileImageUrl || DEFAULT_AVATAR}
                                 alt={p.fullName}
-                                className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-zinc-800"
+                                containerClassName="w-9 h-9 rounded-full border border-zinc-800 flex-shrink-0"
+                                className="rounded-full object-cover"
                                 onError={e => { e.target.src = DEFAULT_AVATAR; }}
                               />
                               <div className="min-w-0">
@@ -1230,10 +1382,11 @@ export default function AdminMoviePage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                           {mv.actors.map((a, aIdx) => (
                             <div key={a.publicId || aIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
-                              <img
+                              <LazyImage
                                 src={a.profileImageUrl || DEFAULT_AVATAR}
                                 alt={a.fullName}
-                                className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-zinc-800"
+                                containerClassName="w-9 h-9 rounded-full border border-zinc-800 flex-shrink-0"
+                                className="rounded-full object-cover"
                                 onError={e => { e.target.src = DEFAULT_AVATAR; }}
                               />
                               <div className="min-w-0">
@@ -1259,7 +1412,17 @@ export default function AdminMoviePage() {
                     <div className="flex flex-wrap gap-3">
                       {(mv.productionCompanies && mv.productionCompanies.length > 0 ? mv.productionCompanies : mv.studios).map((c, cIdx) => (
                         <div key={c.publicId || cIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
-                          {c.logoUrl && <img src={c.logoUrl} alt={c.name} className="h-6 max-w-[90px] object-contain filter brightness-95" onError={e => e.target.style.display = 'none'} />}
+                          {c.logoUrl && (
+                            <div className="h-6 max-w-[90px] flex-shrink-0">
+                              <LazyImage
+                                src={c.logoUrl}
+                                alt={c.name}
+                                containerClassName="h-6 max-w-[90px] border-none rounded-none bg-transparent"
+                                className="object-contain filter brightness-95"
+                                onError={e => { e.target.style.display = 'none'; }}
+                              />
+                            </div>
+                          )}
                           <span className="text-xs font-semibold text-zinc-200">{c.name}</span>
                         </div>
                       ))}
@@ -1348,14 +1511,34 @@ export default function AdminMoviePage() {
                     <Play className="w-4 h-4 text-brand-orange animate-pulse" />
                     <span>Trailer phim</span>
                   </h4>
-                  <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-zinc-900 shadow-2xl bg-black">
-                    <iframe
-                      src={embedTrailerUrl}
-                      title={`${mv.title} Official Trailer`}
-                      className="absolute inset-0 w-full h-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
+                  <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-zinc-900 shadow-2xl bg-black group/trailer-detail">
+                    {playDetailTrailer ? (
+                      <iframe
+                        src={`${embedTrailerUrl}?autoplay=1`}
+                        title={`${mv.title} Official Trailer`}
+                        className="absolute inset-0 w-full h-full border-none"
+                        allow="autoplay; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <div 
+                        onClick={() => setPlayDetailTrailer(true)}
+                        className="absolute inset-0 cursor-pointer flex items-center justify-center select-none group/play"
+                      >
+                        <img 
+                          src={`https://img.youtube.com/vi/${getYoutubeId(trailerMedia?.url)}/hqdefault.jpg`} 
+                          alt={`${mv.title} Trailer preview`} 
+                          className="w-full h-full object-cover opacity-70 group-hover/play:opacity-90 transition-opacity duration-300"
+                          onError={(e) => {
+                            e.target.src = "https://img.youtube.com/vi/" + getYoutubeId(trailerMedia?.url) + "/0.jpg";
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/20 group-hover/play:bg-black/10 transition-colors duration-300" />
+                        <div className="absolute w-14 h-14 rounded-full bg-brand-orange/90 group-hover/play:bg-brand-orange text-zinc-950 flex items-center justify-center shadow-2xl transition-all duration-300 group-hover/play:scale-110">
+                          <Play className="w-6 h-6 fill-current ml-1" />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1386,6 +1569,12 @@ export default function AdminMoviePage() {
               className="border border-zinc-800 bg-brand-gray hover:opacity-90 text-zinc-300 font-bold py-2 px-5 rounded-xl text-xs transition-colors cursor-pointer">
               Hủy
             </button>
+            {!isEdit && (
+              <button type="button" onClick={handleCleanForm}
+                className="border border-zinc-805 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 font-bold py-2 px-5 rounded-xl text-xs transition-colors cursor-pointer">
+                Dọn sạch
+              </button>
+            )}
             <button type="button" onClick={handleSave} disabled={isSaving}
               className="bg-brand-orange hover:opacity-90 text-zinc-950 font-black py-2 px-6 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50">
               {isSaving ? (
@@ -1397,9 +1586,93 @@ export default function AdminMoviePage() {
           </div>
         </div>
 
+        {/* TMDB Latest Movies Carousel (only on Add) */}
+        {!isEdit && (isLatestMoviesLoading || tmdbLatestMovies.length > 0) && (
+          <div className="relative w-full bg-brand-gray/60 border border-zinc-805 p-5 rounded-2xl shadow-lg flex-shrink-0 group overflow-hidden">
+            <label className="text-brand-orange text-[10px] font-black uppercase tracking-widest block mb-4">
+              GỢI Ý PHIM MỚI TỪ TMDB
+            </label>
+            <div className="relative px-6">
+              {isLatestMoviesLoading ? (
+                <div className="grid grid-cols-5 gap-3">
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <div key={idx} className="flex flex-col items-center gap-2 animate-pulse w-full">
+                      <div className="w-full aspect-[2/3] bg-zinc-900 border border-zinc-850 rounded-xl" />
+                      <div className="h-3 bg-zinc-900 rounded w-3/4 mt-1" />
+                      <div className="h-3 bg-zinc-900 rounded w-1/2" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {/* Left arrow */}
+                  <button
+                    type="button"
+                    onClick={slideLeft}
+                    className="absolute left-0 top-[40%] -translate-y-1/2 z-10 bg-brand-dark/95 hover:bg-brand-orange hover:text-zinc-950 border border-zinc-800 text-zinc-300 p-2 rounded-full opacity-0 group-hover:opacity-100 -translate-x-3 group-hover:translate-x-0 transition-all duration-300 cursor-pointer shadow-xl"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  {/* Movie Cards Viewport */}
+                  <div className="overflow-hidden">
+                    {/* Sliding Flex Track */}
+                    <div
+                      className={`flex w-[140%] -ml-[20%] ${isTransitioning ? 'transition-transform duration-300 ease-in-out' : ''}`}
+                      style={{ transform: `translateX(${slideOffset}%)` }}
+                    >
+                      {Array.from({ length: 7 }).map((_, i) => {
+                        const offset = i - 1;
+                        const m = tmdbLatestMovies[(latestMoviesPageIndex + offset + tmdbLatestMovies.length) % tmdbLatestMovies.length];
+                        if (!m) return null;
+                        const posterUrl = m.posterPath ? `https://image.tmdb.org/t/p/w185${m.posterPath}` : null;
+                        return (
+                          <div key={`${m.tmdbId}-${i}`} className="w-[14.2857%] flex-shrink-0 px-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectTmdb(m.tmdbId)}
+                              className="flex flex-col items-center gap-2 group/item cursor-pointer text-center bg-transparent border-none p-0 m-0 w-full outline-none focus:outline-none"
+                            >
+                              <div className="w-full aspect-[2/3] bg-zinc-900 border border-zinc-800 group-hover/item:border-brand-orange/50 rounded-xl overflow-hidden shadow-md group-hover/item:shadow-brand-orange/15 group-hover/item:scale-105 transition-all duration-300 relative">
+                                {posterUrl ? (
+                                  <LazyImage
+                                    src={posterUrl}
+                                    alt={m.title}
+                                    containerClassName="absolute inset-0 w-full h-full border-none rounded-none"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-zinc-700">
+                                    <ImageIcon className="w-5 h-5" />
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-bold text-zinc-300 group-hover/item:text-brand-orange line-clamp-2 leading-tight transition-colors w-full h-8 flex items-start justify-center">
+                                {m.title}
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right arrow */}
+                  <button
+                    type="button"
+                    onClick={slideRight}
+                    className="absolute right-0 top-[40%] -translate-y-1/2 z-10 bg-brand-dark/95 hover:bg-brand-orange hover:text-zinc-950 border border-zinc-800 text-zinc-300 p-2 rounded-full opacity-0 group-hover:opacity-100 translate-x-3 group-hover:translate-x-0 transition-all duration-300 cursor-pointer shadow-xl"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* TMDB Import (only on Add) */}
         {!isEdit && (
-          <div className="relative w-full max-w-2xl bg-brand-gray/60 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-lg flex-shrink-0">
+          <div className="relative w-full bg-brand-gray/60 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-lg flex-shrink-0">
             <label className="text-brand-orange text-[10px] font-black uppercase tracking-widest block">
               TÌM KIẾM & IMPORT DỮ LIỆU TỪ TMDB
             </label>
@@ -1426,10 +1699,15 @@ export default function AdminMoviePage() {
                   <button key={s.tmdbId} type="button" onMouseDown={() => handleSelectTmdb(s.tmdbId)}
                     className="w-full flex items-center gap-3.5 p-3 hover:bg-zinc-800 transition-colors text-left">
                     <div className="w-8 h-12 bg-neutral-900 rounded flex-shrink-0 overflow-hidden">
-                      {s.posterThumbnailUrl
-                        ? <img src={s.posterThumbnailUrl} alt={s.title} className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-zinc-700"><ImageIcon className="w-4 h-4" /></div>
-                      }
+                      {s.posterThumbnailUrl ? (
+                        <LazyImage
+                          src={s.posterThumbnailUrl}
+                          alt={s.title}
+                          containerClassName="w-full h-full border-none rounded-none"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-700"><ImageIcon className="w-4 h-4" /></div>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs font-bold text-zinc-200">{s.title}</p>
@@ -1684,7 +1962,13 @@ export default function AdminMoviePage() {
                         </div>
                         <div className="w-8 h-6 bg-zinc-950 border border-zinc-800 rounded flex items-center justify-center overflow-hidden shrink-0">
                           {s.logoUrl ? (
-                            <img src={s.logoUrl} alt="" className="h-full object-contain" onError={e => { e.target.style.display = 'none'; }} />
+                            <LazyImage
+                              src={s.logoUrl}
+                              alt=""
+                              containerClassName="w-full h-full border-none rounded-none bg-transparent"
+                              className="object-contain"
+                              onError={e => { e.target.style.display = 'none'; }}
+                            />
                           ) : (
                             <Building2 className="w-3.5 h-3.5 text-zinc-700" />
                           )}
@@ -1745,10 +2029,11 @@ export default function AdminMoviePage() {
                         <div className="cursor-grab text-zinc-650 hover:text-zinc-400">
                           <GripVertical className="w-4 h-4" />
                         </div>
-                        <img
+                        <LazyImage
                           src={d.profileUrl || d.profileImageUrl || DEFAULT_AVATAR}
                           alt=""
-                          className="w-7 h-7 rounded-full object-cover border border-zinc-800 shrink-0"
+                          containerClassName="w-7 h-7 rounded-full border border-zinc-800 shrink-0"
+                          className="rounded-full object-cover"
                           onError={e => { e.target.src = DEFAULT_AVATAR; }}
                         />
                         <div className="flex-grow grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1807,10 +2092,11 @@ export default function AdminMoviePage() {
                         <div className="cursor-grab text-zinc-650 hover:text-zinc-400">
                           <GripVertical className="w-4 h-4" />
                         </div>
-                        <img
+                        <LazyImage
                           src={c.profileUrl || c.profileImageUrl || DEFAULT_AVATAR}
                           alt=""
-                          className="w-7 h-7 rounded-full object-cover border border-zinc-800 shrink-0"
+                          containerClassName="w-7 h-7 rounded-full border border-zinc-800 shrink-0"
+                          className="rounded-full object-cover"
                           onError={e => { e.target.src = DEFAULT_AVATAR; }}
                         />
                         <div className="flex-grow grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1876,10 +2162,11 @@ export default function AdminMoviePage() {
                         <div className="cursor-grab text-zinc-650 hover:text-zinc-400">
                           <GripVertical className="w-4 h-4" />
                         </div>
-                        <img
+                        <LazyImage
                           src={w.profileUrl || w.profileImageUrl || DEFAULT_AVATAR}
                           alt=""
-                          className="w-7 h-7 rounded-full object-cover border border-zinc-800 shrink-0"
+                          containerClassName="w-7 h-7 rounded-full border border-zinc-800 shrink-0"
+                          className="rounded-full object-cover"
                           onError={e => { e.target.src = DEFAULT_AVATAR; }}
                         />
                         <div className="flex-grow grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1938,10 +2225,11 @@ export default function AdminMoviePage() {
                         <div className="cursor-grab text-zinc-650 hover:text-zinc-400">
                           <GripVertical className="w-4 h-4" />
                         </div>
-                        <img
+                        <LazyImage
                           src={p.profileUrl || p.profileImageUrl || DEFAULT_AVATAR}
                           alt=""
-                          className="w-7 h-7 rounded-full object-cover border border-zinc-800 shrink-0"
+                          containerClassName="w-7 h-7 rounded-full border border-zinc-800 shrink-0"
+                          className="rounded-full object-cover"
                           onError={e => { e.target.src = DEFAULT_AVATAR; }}
                         />
                         <div className="flex-grow grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1998,11 +2286,11 @@ export default function AdminMoviePage() {
                       className="w-full h-72 bg-neutral-900 border border-zinc-800/80 rounded-xl overflow-hidden flex items-center justify-center select-none"
                     >
                       {posterUrl?.trim() ? (
-                        <img
+                        <LazyImage
                           src={posterUrl}
                           alt="Poster preview"
-                          draggable={false}
-                          className="w-full h-full object-contain pointer-events-none"
+                          containerClassName="w-full h-full border-none rounded-none"
+                          className="object-contain"
                         />
                       ) : (
                         <div className="text-zinc-650 flex flex-col items-center gap-1"><ImageIcon className="w-7 h-7" /><span className="text-[10px]">Chưa có Poster</span></div>
@@ -2073,7 +2361,11 @@ export default function AdminMoviePage() {
                         {/* Preview thumbnail */}
                         <div className="w-28 h-16 bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
                           {b?.trim() ? (
-                            <img src={b} alt={`Banner ${bIdx + 1}`} className="w-full h-full object-cover" />
+                            <LazyImage
+                              src={b}
+                              alt={`Banner ${bIdx + 1}`}
+                              containerClassName="w-full h-full border-none rounded-none"
+                            />
                           ) : (
                             <div className="text-zinc-700 flex flex-col items-center gap-0.5">
                               <ImageIcon className="w-4 h-4" />
@@ -2120,8 +2412,29 @@ export default function AdminMoviePage() {
                       placeholder="https://youtube.com/watch?v=..."
                       className="w-full bg-brand-dark border border-zinc-800 rounded-xl py-2 px-3 text-xs text-zinc-100 focus:outline-none focus:border-brand-orange/40" />
                     {getYoutubeEmbedUrl(trailerUrl) ? (
-                      <div className="w-full aspect-video rounded-xl overflow-hidden border border-zinc-800">
-                        <iframe src={getYoutubeEmbedUrl(trailerUrl)} title="Trailer" className="w-full h-full" allowFullScreen />
+                      <div className="w-full aspect-video rounded-xl overflow-hidden border border-zinc-800 relative bg-black group/trailer">
+                        {playTrailer ? (
+                          <iframe src={`${getYoutubeEmbedUrl(trailerUrl)}?autoplay=1`} title="Trailer" className="w-full h-full border-none" allow="autoplay; encrypted-media" allowFullScreen />
+                        ) : (
+                          <div 
+                            onClick={() => setPlayTrailer(true)}
+                            className="w-full h-full cursor-pointer relative flex items-center justify-center select-none group/play"
+                          >
+                            <LazyImage
+                              src={`https://img.youtube.com/vi/${getYoutubeId(trailerUrl)}/hqdefault.jpg`} 
+                              alt="Trailer preview" 
+                              containerClassName="w-full h-full border-none rounded-none"
+                              className="opacity-70 group-hover/play:opacity-90 transition-opacity duration-300"
+                              onError={(e) => {
+                                e.target.src = "https://img.youtube.com/vi/" + getYoutubeId(trailerUrl) + "/0.jpg";
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/20 group-hover/play:bg-black/10 transition-colors duration-300" />
+                            <div className="absolute w-14 h-14 rounded-full bg-brand-orange/90 group-hover/play:bg-brand-orange text-zinc-950 flex items-center justify-center shadow-2xl transition-all duration-300 group-hover/play:scale-110">
+                              <Play className="w-6 h-6 fill-current ml-1" />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="w-full aspect-video bg-neutral-900 border border-zinc-800/80 rounded-xl flex flex-col items-center justify-center text-zinc-650 gap-1.5">
@@ -2210,10 +2523,17 @@ export default function AdminMoviePage() {
                       </td>
                       <td className="py-4 px-5">
                         <div className="w-9 h-13 bg-neutral-800 rounded overflow-hidden mx-auto">
-                          {movie.primaryPoster
-                            ? <img src={movie.primaryPoster} alt={movie.title} className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; }} />
-                            : <div className="w-full h-full flex items-center justify-center text-neutral-700"><ImageIcon className="w-4 h-4" /></div>
-                          }
+                          {movie.primaryPoster ? (
+                            <LazyImage
+                              src={movie.primaryPoster}
+                              alt={movie.title}
+                              containerClassName="w-full h-full border-none rounded-none bg-transparent"
+                              className="object-cover"
+                              onError={e => { e.target.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-neutral-700"><ImageIcon className="w-4 h-4" /></div>
+                          )}
                         </div>
                       </td>
                       <td className="py-4 px-5">

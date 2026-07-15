@@ -170,6 +170,13 @@ const adminMovieService = {
       timeout: 10000
     });
     return response.data;
+  },
+
+  getLatestTop20: async (limit = 20) => {
+    const response = await apiClient.get('/api/tmdb/movies/latest-top20', {
+      params: { limit }
+    });
+    return response.data;
   }
 };
 
