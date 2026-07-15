@@ -379,6 +379,10 @@ public class AdminMovieService {
         if (showtimeRepository.existsByMovieIdAndDeletedAtIsNull(movie.getId())) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Cannot delete movie because it has active showtimes.", null);
         }
+
+        if (movie.getStatus() != MovieStatus.ENDED && movie.getStatus() != MovieStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Cannot delete movie because it is not in Stopped Showing (ENDED) or Draft (DRAFT) status.", null);
+        }
         
         Long userId = 1L;
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();

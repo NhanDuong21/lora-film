@@ -92,13 +92,29 @@ function RoleRoute({ children, allowedRoles }) {
     return children;
 }
 
+// Redirect Admin users away from public/customer routes
+function AdminRedirectGuard({ children }) {
+    const { isAuthenticated, userRole, isInitializing } = useAuth();
+
+    if (isInitializing) {
+        return <PageLoader />;
+    }
+
+    const normalizedRole = userRole ? userRole.replace(/^ROLE_/, "") : "";
+    if (isAuthenticated && normalizedRole === "ADMIN") {
+        return <Navigate to="/admin" replace />;
+    }
+
+    return children;
+}
+
 function AppRoutes() {
     return (
         <BrowserRouter>
             <ScrollToTop />
             <Routes>
                 {/* Public & Customer Routes wrapped in MainLayout */}
-                <Route element={<MainLayout />}>
+                <Route element={<AdminRedirectGuard><MainLayout /></AdminRedirectGuard>}>
                     <Route path="/" element={<Home />} />
                     <Route path="/home" element={<Home />} />
                     <Route path="/login" element={<Login />} />
