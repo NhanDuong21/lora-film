@@ -194,6 +194,20 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ErrorCode.SHOWTIME_SCHEDULING_CONFLICT.name(), ErrorCode.SHOWTIME_SCHEDULING_CONFLICT.getMessage()));
     }
 
+    @ExceptionHandler({
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            jakarta.persistence.OptimisticLockException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingException(Exception ex) {
+        log.error("Auto schedule preview optimistic locking conflict: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail(
+                        ErrorCode.AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT.name(),
+                        ErrorCode.AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT.getMessage()
+                ));
+    }
+
     @ExceptionHandler(org.springframework.dao.DataAccessException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataAccessException(org.springframework.dao.DataAccessException ex) {
         log.error("DataAccessException: {}", ex.getMessage());

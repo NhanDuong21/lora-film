@@ -24,10 +24,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -36,29 +32,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.Disabled;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
-@Disabled("Blocked by Docker Testcontainers environment issue")
 class ShowtimeSchedulingConcurrencyIntegrationTest {
-
-    @Container
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
-            .withDatabaseName("lorafilm_test")
-            .withUsername("test")
-            .withPassword("test");
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
-    }
 
     @Autowired
     private ShowtimeCommandService showtimeCommandService;
@@ -89,13 +70,25 @@ class ShowtimeSchedulingConcurrencyIntegrationTest {
     private Cinema cinema;
     private Auditorium auditorium;
 
+    @Autowired
+    private com.lorafilm.movie.showtime.repository.ShowtimeStatusHistoryRepository showtimeStatusHistoryRepository;
+
+    @Autowired
+    private com.lorafilm.movie.seat.repository.SeatRepository seatRepository;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void setUp() {
-        showtimeRepository.deleteAll();
-        auditoriumRepository.deleteAll();
-        cinemaRepository.deleteAll();
-        movieVersionRepository.deleteAll();
-        movieRepository.deleteAll();
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        jdbcTemplate.execute("TRUNCATE TABLE seats");
+        jdbcTemplate.execute("TRUNCATE TABLE showtime_status_history");
+        jdbcTemplate.execute("TRUNCATE TABLE showtimes");
+        jdbcTemplate.execute("TRUNCATE TABLE auditoriums");
+        jdbcTemplate.execute("TRUNCATE TABLE cinemas");
+        jdbcTemplate.execute("TRUNCATE TABLE movies");
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
 
@@ -110,6 +103,7 @@ class ShowtimeSchedulingConcurrencyIntegrationTest {
         movie.setStatus(MovieStatus.NOW_SHOWING);
         movie.setDurationMinutes(120);
         movie.setReleaseDate(java.time.LocalDate.now().minusDays(1));
+        movie.setEndDate(java.time.LocalDate.now().plusDays(60));
         movie = movieRepository.save(movie);
 
         movieVersion = new MovieVersion();
@@ -147,7 +141,7 @@ class ShowtimeSchedulingConcurrencyIntegrationTest {
         auditorium.setScreenType(com.lorafilm.movie.auditorium.domain.enums.ScreenType.STANDARD);
         auditorium.setSoundType(com.lorafilm.movie.auditorium.domain.enums.SoundType.DOLBY_ATMOS);
         auditorium.setCapacity(100);
-        auditorium.setStatus(AuditoriumStatus.DRAFT);
+        auditorium.setStatus(AuditoriumStatus.ACTIVE);
         auditorium.setCleaningBufferMinutes(15);
         auditorium = auditoriumRepository.save(auditorium);
     }
@@ -177,8 +171,12 @@ class ShowtimeSchedulingConcurrencyIntegrationTest {
                 } catch (BusinessException e) {
                     if (e.getErrorCode().name().contains("CONFLICT") || e.getErrorCode().name().contains("OVERLAP")) {
                         conflictCount.incrementAndGet();
+                    } else {
+                        System.err.println("UNEXPECTED BUSINESS EXCEPTION: " + e.getErrorCode());
+                        e.printStackTrace();
                     }
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    e.printStackTrace();
                 } finally {
                     doneLatch.countDown();
                 }
