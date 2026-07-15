@@ -23,6 +23,7 @@ public enum ErrorCode {
     MOVIE_VERSION_NOT_ACTIVE("Movie version is not active", 400),
     MOVIE_VERSION_NOT_BELONG_TO_MOVIE("Movie version does not belong to the movie", 400),
     INVALID_MOVIE_DURATION("Invalid movie duration", 400),
+    COMPANY_DUPLICATED("Production company name already exists", 409),
 
     // --- Cinema & Auditorium Module ---
     CINEMA_NOT_FOUND("Cinema not found", 404),
@@ -55,6 +56,8 @@ public enum ErrorCode {
     SEAT_TYPE_CODE_ALREADY_EXISTS("Seat type code already exists", 400),
     SEAT_TYPE_INACTIVE("Seat type is inactive", 400),
     SEAT_TYPE_IN_USE("Seat type is in use and cannot be deactivated", 409),
+    SEAT_TYPE_INVALID("Seat type is invalid", 400),
+    PRICE_INVALID("Price is invalid", 400),
     INVALID_SEAT_TYPE_STATUS_TRANSITION("Invalid seat type status transition", 400),
     DUPLICATE_SEAT_CODE("Seat code already exists in database", 400),
     DUPLICATE_SEAT_POSITION("Seat position already exists in database", 400),
@@ -75,6 +78,7 @@ public enum ErrorCode {
     SHOWTIME_NOT_FOUND("Showtime not found", 404),
     SHOWTIME_OVERLAP_CONFLICT("Showtime overlaps with an existing schedule", 409),
     SHOWTIME_PRICE_MISSING("Showtime price config is missing", 400),
+    SHOWTIME_PRICE_NOT_EDITABLE("Cannot edit prices for this showtime status", 400),
     INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400),
     
     AUDITORIUM_LAYOUT_NOT_EDITABLE("The seating arrangement cannot be changed while the auditorium is in operation", 409),
@@ -125,7 +129,11 @@ public enum ErrorCode {
     AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT("Preview data is inconsistent", 409),
     AUTO_SCHEDULE_APPLY_FAILED("Auto schedule apply failed", 500),
 
-    CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
+    CURRENT_USER_NOT_AVAILABLE("Current user not available", 401),
+
+    // --- Cinema Deletion ---
+    CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS("Cinema cannot be deleted because it has auditoriums", 409),
+    CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY("Cinema cannot be deleted because it has showtime history", 409);
 
     private final String message;
     private final int httpStatus;
