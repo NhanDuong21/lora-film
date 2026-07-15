@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Check, Plus, Search, ChevronLeft, ChevronRight, Image as ImageIcon, Play, X, Building2, Users, GripVertical, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Plus, Search, ChevronLeft, ChevronRight, Image as ImageIcon, Play, X, Building2, Users, GripVertical, Trash2, Film, Info, LayoutList } from 'lucide-react';
 import useTmdbSearch from '@/features/movies-genres/hooks/useTmdbSearch';
 import adminMovieService from '@/features/movies-genres/services/adminMovieService';
 import adminGenreService from '@/features/movies-genres/services/adminGenreService';
