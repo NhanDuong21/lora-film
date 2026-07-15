@@ -41,6 +41,8 @@ import AdminStaffView from "@/features/internal-staff/pages/AdminStaffPage";
 import AdminConcessionSalesPage from "@/features/concessions-sales/pages/AdminConcessionSalesPage";
 import AdminPayrollPage from "@/features/internal-staff/pages/AdminPayrollPage";
 import AdminRoomPage from "@/features/cinemas-rooms/pages/AdminRoomPage";
+import AdminRoomCreatePage from "@/features/cinemas-rooms/pages/AdminRoomCreatePage";
+import AdminRoomEditPage from "@/features/cinemas-rooms/pages/AdminRoomEditPage";
 
 // Main Layout
 import MainLayout from "@/components/layout/MainLayout";
@@ -176,6 +178,8 @@ function AppRoutes() {
                     <Route path="concession-sales" element={<AdminConcessionSalesPage />} />
                     <Route path="payroll" element={<AdminPayrollPage />} />
                     <Route path="rooms" element={<AdminRoomPage />} />
+                    <Route path="rooms/create" element={<AdminRoomCreatePage />} />
+                    <Route path="rooms/edit/:roomId" element={<AdminRoomEditPage />} />
                 </Route>
             </Routes>
         </BrowserRouter>

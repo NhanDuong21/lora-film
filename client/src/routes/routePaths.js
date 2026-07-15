@@ -30,5 +30,7 @@ export const routePaths = {
     concessionSales: '/admin/concession-sales',
     payroll: '/admin/payroll',
     rooms: '/admin/rooms',
+    roomCreate: '/admin/rooms/create',
+    roomEdit: '/admin/rooms/edit/:roomId',
   }
 };

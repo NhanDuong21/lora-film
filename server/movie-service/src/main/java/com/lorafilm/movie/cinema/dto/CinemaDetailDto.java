@@ -64,6 +64,7 @@ public class CinemaDetailDto extends CinemaDto {
         private String screenType;
         private String soundType;
         private Integer capacity;
+        private String status;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -75,5 +76,7 @@ public class CinemaDetailDto extends CinemaDto {
         public void setSoundType(String soundType) { this.soundType = soundType; }
         public Integer getCapacity() { return capacity; }
         public void setCapacity(Integer capacity) { this.capacity = capacity; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 }
