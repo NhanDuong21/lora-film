@@ -93,6 +93,17 @@ public class AdminPersonServiceImpl implements AdminPersonService {
         return sb.toString().trim();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PersonDto findByName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        return personRepository.findByFullNameIgnoreCaseAndDeletedAtIsNull(name.trim())
+                .map(this::mapToDto)
+                .orElse(null);
+    }
+
     private PersonDto mapToDto(Person person) {
         PersonDto dto = new PersonDto();
         dto.setPublicId(person.getPublicId());

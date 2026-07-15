@@ -7,7 +7,7 @@ import com.lorafilm.movie.common.enums.ActiveStatus;
 public class ProductionCompanyRequest {
     @NotBlank(message = "Name is required")
     @Size(min = 2, max = 180)
-    @jakarta.validation.constraints.Pattern(regexp = "^[\\p{L}0-9\\s&\\-\\.,']+$", message = "Name contains invalid characters")
+    @jakarta.validation.constraints.Pattern(regexp = "^[^<>]+$", message = "Name contains invalid characters")
     private String name;
 
     @Size(max = 100)

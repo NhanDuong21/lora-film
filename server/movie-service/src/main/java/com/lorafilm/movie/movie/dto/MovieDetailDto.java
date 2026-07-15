@@ -42,6 +42,7 @@ public class MovieDetailDto extends MovieDto {
         private String fullName;
         private String roleType;
         private String characterName;
+        private String profileImageUrl;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -51,12 +52,15 @@ public class MovieDetailDto extends MovieDto {
         public void setRoleType(String roleType) { this.roleType = roleType; }
         public String getCharacterName() { return characterName; }
         public void setCharacterName(String characterName) { this.characterName = characterName; }
+        public String getProfileImageUrl() { return profileImageUrl; }
+        public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
     }
 
     public static class ProductionCompanyDto {
         private String publicId;
         private String name;
         private String role;
+        private String logoUrl;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -64,6 +68,8 @@ public class MovieDetailDto extends MovieDto {
         public void setName(String name) { this.name = name; }
         public String getRole() { return role; }
         public void setRole(String role) { this.role = role; }
+        public String getLogoUrl() { return logoUrl; }
+        public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     }
 
     public static class MovieVersionDto {

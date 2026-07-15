@@ -114,12 +114,14 @@ public class AdminMovieService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Published movie must have at least one genre", null);
         }
 
-        List<Genre> genres = genreRepository.findByPublicIdInAndDeletedAtIsNull(genreIds);
-        if (genres.size() != (genreIds == null ? 0 : genreIds.size())) {
+        List<String> uniqueGenreIds = genreIds == null ? new java.util.ArrayList<>() : genreIds.stream().distinct().collect(Collectors.toList());
+        List<Genre> genres = genreRepository.findByPublicIdInAndDeletedAtIsNull(uniqueGenreIds);
+        if (genres.size() != uniqueGenreIds.size()) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "One or more genres do not exist", null);
         }
 
         movieGenreRepository.deleteByMovieId(movie.getId());
+        movieGenreRepository.flush();
         
         for (Genre genre : genres) {
             MovieGenre movieGenre = new MovieGenre();
@@ -136,8 +138,9 @@ public class AdminMovieService {
         
         if (genreIds == null || genreIds.isEmpty()) return;
 
-        List<Genre> genres = genreRepository.findByPublicIdInAndDeletedAtIsNull(genreIds);
-        if (genres.size() != genreIds.size()) {
+        List<String> uniqueGenreIds = genreIds.stream().distinct().collect(Collectors.toList());
+        List<Genre> genres = genreRepository.findByPublicIdInAndDeletedAtIsNull(uniqueGenreIds);
+        if (genres.size() != uniqueGenreIds.size()) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "One or more genres do not exist", null);
         }
         
@@ -157,10 +160,21 @@ public class AdminMovieService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
         
         movieCreditRepository.deleteByMovieId(movie.getId());
+        movieCreditRepository.flush();
         
         if (requests == null || requests.isEmpty()) return;
         
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        List<com.lorafilm.movie.movie.dto.MovieCreditRequest> uniqueRequests = new java.util.ArrayList<>();
         for (com.lorafilm.movie.movie.dto.MovieCreditRequest req : requests) {
+            if (req == null || req.getPersonPublicId() == null) continue;
+            String key = req.getPersonPublicId() + "_" + req.getRoleType() + "_" + (req.getCharacterName() != null ? req.getCharacterName().trim().toLowerCase() : "");
+            if (seen.add(key)) {
+                uniqueRequests.add(req);
+            }
+        }
+        
+        for (com.lorafilm.movie.movie.dto.MovieCreditRequest req : uniqueRequests) {
             com.lorafilm.movie.movie.domain.entity.Person person = personRepository.findByPublicIdAndDeletedAtIsNull(req.getPersonPublicId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found", null));
             
@@ -182,7 +196,17 @@ public class AdminMovieService {
 
         if (requests == null || requests.isEmpty()) return;
 
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        List<com.lorafilm.movie.movie.dto.MovieCreditRequest> uniqueRequests = new java.util.ArrayList<>();
         for (com.lorafilm.movie.movie.dto.MovieCreditRequest req : requests) {
+            if (req == null || req.getPersonPublicId() == null) continue;
+            String key = req.getPersonPublicId() + "_" + req.getRoleType() + "_" + (req.getCharacterName() != null ? req.getCharacterName().trim().toLowerCase() : "");
+            if (seen.add(key)) {
+                uniqueRequests.add(req);
+            }
+        }
+
+        for (com.lorafilm.movie.movie.dto.MovieCreditRequest req : uniqueRequests) {
             com.lorafilm.movie.movie.domain.entity.Person person = personRepository.findByPublicIdAndDeletedAtIsNull(req.getPersonPublicId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found", null));
 
@@ -207,10 +231,21 @@ public class AdminMovieService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
         
         movieProductionCompanyRepository.deleteByMovieId(movie.getId());
+        movieProductionCompanyRepository.flush();
         
         if (requests == null || requests.isEmpty()) return;
         
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        List<com.lorafilm.movie.movie.dto.MovieCompanyRequest> uniqueRequests = new java.util.ArrayList<>();
         for (com.lorafilm.movie.movie.dto.MovieCompanyRequest req : requests) {
+            if (req == null || req.getCompanyPublicId() == null) continue;
+            String key = req.getCompanyPublicId() + "_" + req.getRole();
+            if (seen.add(key)) {
+                uniqueRequests.add(req);
+            }
+        }
+
+        for (com.lorafilm.movie.movie.dto.MovieCompanyRequest req : uniqueRequests) {
             com.lorafilm.movie.movie.domain.entity.ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(req.getCompanyPublicId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found", null));
             
@@ -230,7 +265,17 @@ public class AdminMovieService {
         
         if (requests == null || requests.isEmpty()) return;
         
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        List<com.lorafilm.movie.movie.dto.MovieCompanyRequest> uniqueRequests = new java.util.ArrayList<>();
         for (com.lorafilm.movie.movie.dto.MovieCompanyRequest req : requests) {
+            if (req == null || req.getCompanyPublicId() == null) continue;
+            String key = req.getCompanyPublicId() + "_" + req.getRole();
+            if (seen.add(key)) {
+                uniqueRequests.add(req);
+            }
+        }
+
+        for (com.lorafilm.movie.movie.dto.MovieCompanyRequest req : uniqueRequests) {
             com.lorafilm.movie.movie.domain.entity.ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(req.getCompanyPublicId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found", null));
             

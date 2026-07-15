@@ -12,7 +12,7 @@ public class MovieCreditRequest {
     private CreditRoleType roleType;
 
     @jakarta.validation.constraints.Size(max = 150, message = "Character name cannot exceed 150 characters")
-    @jakarta.validation.constraints.Pattern(regexp = "^[\\p{L}0-9\\s&\\-\\.,':;!\\?\\(\\)\\/]*$", message = "Character name contains invalid characters")
+    @jakarta.validation.constraints.Pattern(regexp = "^[^<>]*$", message = "Character name contains invalid characters")
     private String characterName;
 
     @jakarta.validation.constraints.Min(value = 0, message = "Display order must be a non-negative number")

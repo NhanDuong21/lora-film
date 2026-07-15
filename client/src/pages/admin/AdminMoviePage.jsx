@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Search, Pencil, Trash2, Plus, LayoutList, Image as ImageIcon, X, Check,
   Eye, Trash, Calendar, Clock, Globe, Film, Play, ArrowLeft, Users, Building2,
-  ChevronDown, AlertCircle, Info
+  ChevronDown, AlertCircle, Info, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import adminMovieService from '../../services/adminMovieService';
 import adminGenreService from '../../services/adminGenreService';
@@ -159,7 +159,7 @@ const formatDate = (d) => {
 };
 
 const parseApiError = (err) => {
-  const d = err?.response?.data;
+  const d = err?.response?.data || err;
   if (!d) return err?.message || 'Lỗi không xác định.';
 
   if (d.errorCode === 'INVALID_ENUM_VALUE') {
@@ -248,6 +248,7 @@ export default function AdminMoviePage() {
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [isSaving,      setIsSaving]      = useState(false);
   const [formErrors,    setFormErrors]    = useState({});
+  const [activeBannerIdx, setActiveBannerIdx] = useState(0);
 
   // TMDB autocomplete
   const [tmdbSearch,       setTmdbSearch]       = useState('');
@@ -273,6 +274,7 @@ export default function AdminMoviePage() {
   const [cast,        setCast]        = useState([]);  // [{name, character, profileImageUrl}]
   const [directors,   setDirectors]   = useState([]);
   const [writers,     setWriters]     = useState([]);
+  const [producers,   setProducers]   = useState([]);
   const [studios,     setStudios]     = useState([]);  // [{name, logoUrl}]
 
   // Versions
@@ -436,6 +438,7 @@ export default function AdminMoviePage() {
       setCast(Array.isArray(cred.mainCast) ? cred.mainCast.slice(0, 12) : []);
       setDirectors(Array.isArray(cred.directors) ? cred.directors : []);
       setWriters(Array.isArray(cred.writers) ? cred.writers : []);
+      setProducers(Array.isArray(cred.producers) ? cred.producers : []);
 
       // ── Production companies ──
       setStudios(Array.isArray(mv.productionCompanies) ? mv.productionCompanies : []);
@@ -471,6 +474,7 @@ export default function AdminMoviePage() {
     setCast([]);
     setDirectors([]);
     setWriters([]);
+    setProducers([]);
     setStudios([]);
     setVersions([]);
     setOrigVersions([]);
@@ -484,12 +488,20 @@ export default function AdminMoviePage() {
   // ─── Open Edit form ───────────────────────────────────────────────────────────
   const handleOpenEdit = async (movie) => {
     setIsLoading(true);
-    setSelectedMovie(movie);
     try {
-      const [mediaRes, verRes] = await Promise.all([
+      const [detailRes, mediaRes, verRes] = await Promise.all([
+        adminMovieService.getMovieById(movie.publicId),
         adminMovieService.getMovieMedia(movie.publicId),
         adminMovieService.getMovieVersions(movie.publicId),
       ]);
+
+      if (!detailRes?.success || !detailRes?.data) {
+        triggerToast?.('Không lấy được chi tiết phim', 'error');
+        return;
+      }
+      const fullMovie = detailRes.data;
+      setSelectedMovie(fullMovie);
+
       const mediaList = mediaRes?.data || [];
       const versionList = verRes?.data || [];
 
@@ -520,10 +532,25 @@ export default function AdminMoviePage() {
       }
       setSelectedGenres(movieGenreIds);
       setTmdbGenres([]);
-      setCast([]);
-      setDirectors([]);
-      setWriters([]);
-      setStudios([]);
+
+      setCast(fullMovie.actors ? fullMovie.actors.map(a => ({
+        name: a.fullName,
+        character: a.characterName,
+        profileUrl: a.profileImageUrl || ''
+      })) : []);
+      setDirectors(fullMovie.directors ? fullMovie.directors.map(d => ({
+        name: d.fullName
+      })) : []);
+      setWriters(fullMovie.writers ? fullMovie.writers.map(w => ({
+        name: w.fullName
+      })) : []);
+      setProducers(fullMovie.producers ? fullMovie.producers.map(p => ({
+        name: p.fullName
+      })) : []);
+      setStudios(fullMovie.productionCompanies ? fullMovie.productionCompanies.map(s => ({
+        name: s.name,
+        logoUrl: s.logoUrl || ''
+      })) : []);
 
       setFormBasic({
         title:           movie.title || '',
@@ -550,9 +577,22 @@ export default function AdminMoviePage() {
   };
 
   // ─── Open Detail view ─────────────────────────────────────────────────────────
-  const handleOpenDetail = (movie) => {
-    setSelectedMovie(movie);
-    setIsDetailOpen(true);
+  const handleOpenDetail = async (movie) => {
+    setIsLoading(true);
+    setActiveBannerIdx(0);
+    try {
+      const res = await adminMovieService.getMovieById(movie.publicId);
+      if (res?.success && res?.data) {
+        setSelectedMovie(res.data);
+        setIsDetailOpen(true);
+      } else {
+        triggerToast?.('Không lấy được chi tiết phim', 'error');
+      }
+    } catch (err) {
+      triggerToast?.(parseApiError(err), 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ─── Versions helpers ─────────────────────────────────────────────────────────
@@ -579,13 +619,16 @@ export default function AdminMoviePage() {
   const validateForm = () => {
     const isEdit = !!selectedMovie;
     const errs = {};
+    const todayStr = getTodayString();
+    const todayDate = new Date(todayStr);
+
     if (!formBasic.title.trim())              errs.title           = 'Tên phim không được để trống.';
     if (!formBasic.durationMinutes || Number(formBasic.durationMinutes) <= 0)
                                               errs.durationMinutes = 'Thời lượng phải là số dương.';
     if (!formBasic.ageRating || !AGE_RATINGS.includes(formBasic.ageRating))
                                               errs.ageRating       = `Độ tuổi phải là một trong: ${AGE_RATINGS.join(', ')}.`;
     
-    // Dates validation applies to both create and edit
+    // Dates validation
     if (!formBasic.showingStartDate) {
       errs.showingStartDate = 'Ngày khởi chiếu bắt buộc phải chọn.';
     }
@@ -593,12 +636,30 @@ export default function AdminMoviePage() {
       errs.endDate = 'Ngày kết thúc không thể trước ngày khởi chiếu.';
     }
 
-    // Ended movie validation
-    if (formBasic.status === 'ENDED') {
+    // Status transition constraints (both Frontend & Backend sync)
+    const status = formBasic.status || 'DRAFT';
+    const startD = formBasic.showingStartDate ? new Date(formBasic.showingStartDate) : null;
+    const endD = formBasic.endDate ? new Date(formBasic.endDate) : null;
+
+    if (status === 'UPCOMING') {
+      if (startD && startD <= todayDate) {
+        errs.showingStartDate = 'Trạng thái Sắp chiếu yêu cầu ngày khởi chiếu ở tương lai (sau hôm nay).';
+      }
+    } else if (status === 'NOW_SHOWING') {
+      if (startD && startD > todayDate) {
+        errs.showingStartDate = 'Trạng thái Đang chiếu yêu cầu ngày khởi chiếu ở quá khứ hoặc hôm nay.';
+      }
+      if (endD && endD < todayDate) {
+        errs.endDate = 'Trạng thái Đang chiếu yêu cầu ngày kết thúc ở tương lai hoặc hôm nay.';
+      }
+      if (selectedGenres.length === 0 && tmdbGenres.length === 0) {
+        errs.genres = 'Phim phải có ít nhất 1 thể loại khi ở trạng thái Đang chiếu.';
+      }
+    } else if (status === 'ENDED') {
       if (!formBasic.endDate) {
-        errs.endDate = 'Ngày kết thúc bắt buộc phải chọn khi ngừng chiếu.';
-      } else if (new Date(formBasic.endDate) >= new Date(getTodayString())) {
-        errs.endDate = 'Ngày kết thúc phải ở quá khứ đối với phim đã ngừng chiếu.';
+        errs.endDate = 'Trạng thái Ngừng chiếu bắt buộc phải chọn ngày kết thúc.';
+      } else if (endD && endD >= todayDate) {
+        errs.endDate = 'Trạng thái Ngừng chiếu yêu cầu ngày kết thúc ở quá khứ (trước hôm nay).';
       }
     }
 
@@ -643,8 +704,117 @@ export default function AdminMoviePage() {
       } catch { /* skip on error */ }
     }
 
-    if (finalIds.length > 0) {
-      await adminMovieService.assignGenres(moviePublicId, finalIds);
+    const uniqueGenreIds = [...new Set(finalIds)];
+    if (uniqueGenreIds.length > 0) {
+      await adminMovieService.assignGenres(moviePublicId, uniqueGenreIds);
+    }
+  };
+
+  const resolveAndAssignCreditsAndCompanies = async (moviePublicId) => {
+    try {
+      const creditRequests = [];
+
+      for (let i = 0; i < cast.length; i++) {
+        const c = cast[i];
+        if (c.name?.trim()) {
+          const person = await adminMovieService.ensurePersonExists(c.name, c.profileUrl);
+          if (person?.publicId) {
+            creditRequests.push({
+              personPublicId: person.publicId,
+              roleType: 'MAIN_ACTOR',
+              characterName: c.character || '',
+              displayOrder: i
+            });
+          }
+        }
+      }
+
+      for (let i = 0; i < directors.length; i++) {
+        const d = directors[i];
+        if (d.name?.trim()) {
+          const person = await adminMovieService.ensurePersonExists(d.name, '');
+          if (person?.publicId) {
+            creditRequests.push({
+              personPublicId: person.publicId,
+              roleType: 'DIRECTOR',
+              characterName: '',
+              displayOrder: i
+            });
+          }
+        }
+      }
+
+      for (let i = 0; i < writers.length; i++) {
+        const w = writers[i];
+        if (w.name?.trim()) {
+          const person = await adminMovieService.ensurePersonExists(w.name, '');
+          if (person?.publicId) {
+            creditRequests.push({
+              personPublicId: person.publicId,
+              roleType: 'WRITER',
+              characterName: '',
+              displayOrder: i
+            });
+          }
+        }
+      }
+
+      for (let i = 0; i < producers.length; i++) {
+        const p = producers[i];
+        if (p.name?.trim()) {
+          const person = await adminMovieService.ensurePersonExists(p.name, '');
+          if (person?.publicId) {
+            creditRequests.push({
+              personPublicId: person.publicId,
+              roleType: 'PRODUCER',
+              characterName: '',
+              displayOrder: i
+            });
+          }
+        }
+      }
+
+      // De-duplicate credits by person, role, and character name
+      const seenCredits = new Set();
+      const uniqueCreditRequests = [];
+      for (const req of creditRequests) {
+        const key = `${req.personPublicId}_${req.roleType}_${(req.characterName || '').trim().toLowerCase()}`;
+        if (!seenCredits.has(key)) {
+          seenCredits.add(key);
+          uniqueCreditRequests.push(req);
+        }
+      }
+
+      await adminMovieService.assignCredits(moviePublicId, uniqueCreditRequests);
+
+      const companyRequests = [];
+      for (const s of studios) {
+        if (s.name?.trim()) {
+          const company = await adminMovieService.ensureProductionCompanyExists(s.name, s.logoUrl);
+          if (company?.publicId) {
+            companyRequests.push({
+              companyPublicId: company.publicId,
+              role: 'PRODUCTION'
+            });
+          }
+        }
+      }
+
+      // De-duplicate production companies by company and role
+      const seenCompanies = new Set();
+      const uniqueCompanyRequests = [];
+      for (const req of companyRequests) {
+        const key = `${req.companyPublicId}_${req.role}`;
+        if (!seenCompanies.has(key)) {
+          seenCompanies.add(key);
+          uniqueCompanyRequests.push(req);
+        }
+      }
+
+      await adminMovieService.assignProductionCompanies(moviePublicId, uniqueCompanyRequests);
+    } catch (err) {
+      console.error("Failed to assign credits/companies:", err);
+      throw err;
     }
   };
 
@@ -673,6 +843,7 @@ export default function AdminMoviePage() {
         const publicId = selectedMovie.publicId;
         await adminMovieService.updateMovie(publicId, moviePayload);
         await resolveAndAssignGenres(publicId);
+        await resolveAndAssignCreditsAndCompanies(publicId);
 
         // Media diffs
         await reconcileMedia(publicId, origMedia);
@@ -699,12 +870,11 @@ export default function AdminMoviePage() {
         if (!publicId) throw new Error('Không nhận được mã phim từ server. Vui lòng kiểm tra lại.');
 
         await resolveAndAssignGenres(publicId);
+        await resolveAndAssignCreditsAndCompanies(publicId);
         await createAllMedia(publicId);
         for (const v of versions) {
           await adminMovieService.createMovieVersion(publicId, buildVersionPayload(v));
         }
-
-
 
         triggerToast?.('Thêm phim mới thành công!');
       }
@@ -712,8 +882,21 @@ export default function AdminMoviePage() {
       setIsFormOpen(false);
       fetchMovies();
     } catch (err) {
-      const msg = parseApiError(err);
-      triggerToast?.(msg, 'error');
+      console.error("Failed to save movie:", err);
+      const d = err?.response?.data || err;
+      if (d && d.errorCode === 'VALIDATION_ERROR' && d.data?.fieldErrors) {
+        const errs = {};
+        d.data.fieldErrors.forEach(e => {
+          let fieldKey = e.field;
+          if (fieldKey === 'releaseDate') fieldKey = 'showingStartDate';
+          errs[fieldKey] = e.message;
+        });
+        setFormErrors(errs);
+        triggerToast?.('Một số thông tin nhập chưa đúng, vui lòng kiểm tra lại.', 'error');
+      } else {
+        const msg = parseApiError(err);
+        triggerToast?.(msg, 'error');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -790,68 +973,339 @@ export default function AdminMoviePage() {
   // ═══════════════════════════════════════════════════════════════════════════════
   if (isDetailOpen && selectedMovie) {
     const mv = selectedMovie;
+    const banners = mv.media ? mv.media.filter(m => m.mediaType === 'BANNER').map(m => m.url) : [];
+    const trailerMedia = mv.media ? mv.media.find(m => m.mediaType === 'TRAILER') : null;
+    const embedTrailerUrl = getYoutubeEmbedUrl(trailerMedia?.url);
+    const hasBackdrop = banners.length > 0;
+    const backdropUrl = hasBackdrop ? banners[activeBannerIdx] : (mv.primaryPoster ? mv.primaryPoster : '');
+
     return (
-      <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-white space-y-6 animate-fade-in">
-        <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsDetailOpen(false)} className="p-2 text-zinc-400 hover:text-white bg-brand-gray border border-zinc-800/80 rounded-xl transition-all cursor-pointer">
+      <div className="flex flex-col flex-1 overflow-auto bg-zinc-950 text-white animate-fade-in pb-12">
+        {/* ── Wide Header Backdrop Banner Section ── */}
+        <div className="relative w-full h-[280px] md:h-[380px] flex-shrink-0 overflow-hidden border-b border-zinc-900 bg-black">
+          {/* Backdrop Image with faded gradient */}
+          {backdropUrl ? (
+            <div className="absolute inset-0">
+              <img
+                src={backdropUrl}
+                alt="Backdrop"
+                className="w-full h-full object-cover opacity-35 blur-[2px] scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/70 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/80 via-transparent to-zinc-950/80" />
+            </div>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 to-zinc-900" />
+          )}
+
+          {/* Navigation & Actions Top Bar */}
+          <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10">
+            <button
+              onClick={() => setIsDetailOpen(false)}
+              className="flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white transition-all cursor-pointer shadow-lg backdrop-blur-md"
+            >
               <ArrowLeft className="w-4 h-4" />
+              <span>DANH SÁCH</span>
             </button>
-            <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">CHI TIẾT PHIM</h1>
+            <button
+              onClick={() => { setIsDetailOpen(false); handleOpenEdit(mv); }}
+              className="flex items-center gap-2 text-xs font-bold bg-brand-orange hover:bg-brand-orange-hover text-white px-5 py-2.5 rounded-xl transition-all cursor-pointer shadow-lg hover:shadow-brand-orange/20"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>CHỈNH SỬA PHIM</span>
+            </button>
           </div>
-          <button onClick={() => { setIsDetailOpen(false); handleOpenEdit(mv); }}
-            className="flex items-center gap-2 text-xs font-black bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange border border-brand-orange/20 px-4 py-2.5 rounded-xl transition-all cursor-pointer">
-            <Pencil className="w-3.5 h-3.5" />
-            <span>CHỈNH SỬA</span>
-          </button>
+
+          {/* Banner Carousel Controls if multiple backdrops */}
+          {banners.length > 1 && (
+            <div className="absolute right-6 bottom-6 flex items-center gap-2 z-10 bg-black/60 border border-zinc-800/80 px-3 py-1.5 rounded-xl backdrop-blur-sm">
+              <button
+                onClick={() => setActiveBannerIdx(prev => (prev === 0 ? banners.length - 1 : prev - 1))}
+                className="p-1 hover:text-brand-orange transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-[10px] font-black text-zinc-300 select-none">
+                ẢNH {activeBannerIdx + 1}/{banners.length}
+              </span>
+              <button
+                onClick={() => setActiveBannerIdx(prev => (prev === banners.length - 1 ? 0 : prev + 1))}
+                className="p-1 hover:text-brand-orange transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Faded bottom shadow cover */}
+          <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="flex flex-col items-center gap-6 bg-brand-gray/30 border border-zinc-850 p-6 rounded-2xl">
-            <div className="w-52 h-76 bg-neutral-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800 flex-shrink-0">
-              {mv.primaryPoster
-                ? <img src={mv.primaryPoster} alt={mv.title} className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600"><ImageIcon className="w-10 h-10 mb-2" /><span className="text-[10px]">Chưa có poster</span></div>
-              }
-            </div>
-            <div className="w-full space-y-3 text-xs border-t border-zinc-800/60 pt-4">
-              {[
-                ['Độ tuổi',   mv.ageRating,                         true],
-                ['Thời lượng',mv.durationMinutes ? `${mv.durationMinutes} phút` : 'N/A'],
-                ['Khởi chiếu',formatDate(mv.releaseDate)],
-                mv.endDate && ['Kết thúc', formatDate(mv.endDate)],
-                ['Quốc gia',  mv.country || 'N/A'],
-                ['Trạng thái',STATUS_LABELS[mv.status] || mv.status, false, mv.status],
-              ].filter(Boolean).map(([label, val, isRating, statusKey]) => (
-                <div key={label} className="flex justify-between items-center gap-2">
-                  <span className="text-zinc-500 font-bold uppercase tracking-wider">{label}</span>
-                  {statusKey
-                    ? <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase ${STATUS_COLORS[statusKey] || ''}`}>{val}</span>
-                    : isRating
-                    ? <span className="bg-brand-orange/15 text-brand-orange font-bold px-2 py-0.5 rounded text-[10px] border border-brand-orange/20">{val}</span>
-                    : <span className="text-zinc-200 font-semibold text-right">{val}</span>
-                  }
+
+        {/* ── Main Details Grid Content ── */}
+        <div className="px-6 md:px-8 -mt-24 md:-mt-36 relative z-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* ── Left Column: Poster + Tech Info Card + Version Pills ── */}
+          <div className="space-y-6">
+            {/* Poster Card */}
+            <div className="flex flex-col items-center">
+              <div className="w-56 h-80 bg-neutral-900 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 flex-shrink-0 group relative">
+                {mv.primaryPoster ? (
+                  <img src={mv.primaryPoster} alt={mv.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600">
+                    <ImageIcon className="w-12 h-12 mb-2 text-zinc-700" />
+                    <span className="text-[10px] uppercase tracking-wider font-bold">Chưa có poster</span>
+                  </div>
+                )}
+                {/* Floating age rating badge */}
+                <div className="absolute top-4 left-4 bg-brand-orange text-white font-black px-2.5 py-1 rounded-xl text-[11px] shadow-lg border border-brand-orange/30">
+                  {mv.ageRating}
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-          <div className="lg:col-span-2 space-y-5">
-            <div>
-              <h2 className="text-2xl font-black">{mv.title}</h2>
-              {mv.originalTitle && <p className="text-sm text-zinc-400 italic mt-1">Tên gốc: {mv.originalTitle}</p>}
+
+            {/* Technical Metadata Card */}
+            <div className="bg-brand-gray/25 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
+              <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                <Info className="w-4 h-4 text-brand-orange" />
+                <span>Thông tin chi tiết</span>
+              </h3>
+              
+              <div className="space-y-3.5 text-xs">
+                <div className="flex justify-between items-center border-b border-zinc-900/60 pb-2.5">
+                  <span className="text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Thời lượng</span>
+                  <span className="text-zinc-200 font-semibold">{mv.durationMinutes ? `${mv.durationMinutes} phút` : 'N/A'}</span>
+                </div>
+                
+                <div className="flex justify-between items-center border-b border-zinc-900/60 pb-2.5">
+                  <span className="text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Khởi chiếu</span>
+                  <span className="text-zinc-200 font-semibold">{formatDate(mv.releaseDate)}</span>
+                </div>
+
+                {mv.endDate && (
+                  <div className="flex justify-between items-center border-b border-zinc-900/60 pb-2.5">
+                    <span className="text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Kết thúc</span>
+                    <span className="text-zinc-200 font-semibold">{formatDate(mv.endDate)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center border-b border-zinc-900/60 pb-2.5">
+                  <span className="text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> Quốc gia</span>
+                  <span className="text-zinc-200 font-semibold">{mv.country || 'N/A'}</span>
+                </div>
+
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5"><Film className="w-3.5 h-3.5" /> Trạng thái</span>
+                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border uppercase shadow-sm ${STATUS_COLORS[mv.status] || ''}`}>
+                    {STATUS_LABELS[mv.status] || mv.status}
+                  </span>
+                </div>
+              </div>
             </div>
-            {Array.isArray(mv.genres) && mv.genres.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {mv.genres.map(g => <span key={g} className="bg-zinc-800 text-zinc-300 text-xs px-3 py-1 rounded-full font-semibold">{g}</span>)}
+
+            {/* Movie Screening Versions Card */}
+            {mv.versions && mv.versions.length > 0 && (
+              <div className="bg-brand-gray/25 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
+                <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                  <LayoutList className="w-4 h-4 text-brand-orange" />
+                  <span>Phiên bản phát hành</span>
+                </h3>
+                <div className="grid grid-cols-1 gap-2.5">
+                  {mv.versions.map((ver, idx) => (
+                    <div key={ver.publicId || idx} className="bg-zinc-900/60 border border-zinc-900 px-3.5 py-2.5 rounded-2xl flex flex-col gap-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-zinc-200">{ver.versionName}</span>
+                        <span className="text-[10px] bg-brand-orange/10 border border-brand-orange/20 text-brand-orange px-1.5 py-0.5 rounded font-black">{ver.format}</span>
+                      </div>
+                      <div className="flex gap-2 text-[10px] text-zinc-400">
+                        <span>Âm thanh: <strong className="text-zinc-300">{ver.audioLanguage}</strong></span>
+                        <span>•</span>
+                        {ver.subtitleLanguage && <span>Phụ đề: <strong className="text-zinc-300">{ver.subtitleLanguage}</strong></span>}
+                        {ver.dubLanguage && ver.dubLanguage !== 'NONE' && (
+                          <>
+                            <span>•</span>
+                            <span>Lồng tiếng: <strong className="text-zinc-300">{ver.dubLanguage}</strong></span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-            <div className="bg-brand-gray/10 border border-zinc-850 p-4 rounded-2xl space-y-2">
-              <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Nội dung tóm tắt</h4>
-              <p className="text-zinc-300 text-sm leading-relaxed">{mv.synopsis || 'Chưa có tóm tắt.'}</p>
+          </div>
+
+          {/* ── Right Column: Title + Synopsis + Trailer + Crew ── */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Movie Main Titles */}
+            <div className="space-y-2">
+              <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white">{mv.title}</h2>
+              {mv.originalTitle && (
+                <p className="text-md text-zinc-400 italic font-medium flex items-center gap-1.5">
+                  <span>Tên gốc:</span>
+                  <span className="text-zinc-300">{mv.originalTitle}</span>
+                </p>
+              )}
             </div>
-            {mv.primaryPoster && (
-              <div className="bg-brand-gray/10 border border-zinc-850 p-4 rounded-2xl space-y-2">
-                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Banner / Backdrop</h4>
-                <img src={mv.primaryPoster.replace('/w500/', '/w1280/')} alt="Backdrop" className="w-full h-36 object-cover rounded-xl border border-zinc-800" onError={e => e.target.style.display='none'} />
+
+            {/* Genres list pills */}
+            {Array.isArray(mv.genres) && mv.genres.length > 0 && (
+              <div className="flex flex-wrap gap-2.5">
+                {mv.genres.map(g => (
+                  <span
+                    key={g}
+                    className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs px-4 py-1.5 rounded-2xl font-bold hover:border-zinc-700 transition-colors"
+                  >
+                    {g}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Synopsis section */}
+            <div className="bg-brand-gray/25 border border-zinc-900 p-5 rounded-3xl space-y-3 shadow-xl">
+              <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Nội dung tóm tắt</h4>
+              <p className="text-zinc-300 text-sm leading-relaxed font-light">{mv.synopsis || 'Chưa có tóm tắt nội dung phim.'}</p>
+            </div>
+
+            {/* embedded Trailer Section */}
+            {embedTrailerUrl && (
+              <div className="bg-brand-gray/25 border border-zinc-900 p-5 rounded-3xl space-y-3.5 shadow-xl">
+                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                  <Play className="w-4 h-4 text-brand-orange animate-pulse" />
+                  <span>Trailer phim</span>
+                </h4>
+                <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-zinc-900 shadow-2xl bg-black">
+                  <iframe
+                    src={embedTrailerUrl}
+                    title={`${mv.title} Official Trailer`}
+                    className="absolute inset-0 w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Credits / Cast & Crew Grid */}
+            {((mv.directors && mv.directors.length > 0) || 
+              (mv.actors && mv.actors.length > 0) || 
+              (mv.writers && mv.writers.length > 0) || 
+              (mv.producers && mv.producers.length > 0)) && (
+              <div className="bg-brand-gray/25 border border-zinc-900 p-5 rounded-3xl space-y-5 shadow-xl">
+                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                  <Users className="w-4 h-4 text-brand-orange" />
+                  <span>Đoàn làm phim</span>
+                </h4>
+                
+                {/* Directors */}
+                {mv.directors && mv.directors.length > 0 && (
+                  <div className="space-y-2.5">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Đạo diễn</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {mv.directors.map((d, dIdx) => (
+                        <div key={d.publicId || dIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
+                          <img
+                            src={d.profileImageUrl || DEFAULT_AVATAR}
+                            alt={d.fullName}
+                            className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-zinc-800"
+                            onError={e => { e.target.src = DEFAULT_AVATAR; }}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-zinc-200 truncate">{d.fullName}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Writers */}
+                {mv.writers && mv.writers.length > 0 && (
+                  <div className="space-y-2.5 mt-4">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Biên kịch</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {mv.writers.map((w, wIdx) => (
+                        <div key={w.publicId || wIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
+                          <img
+                            src={w.profileImageUrl || DEFAULT_AVATAR}
+                            alt={w.fullName}
+                            className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-zinc-800"
+                            onError={e => { e.target.src = DEFAULT_AVATAR; }}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-zinc-200 truncate">{w.fullName}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Producers */}
+                {mv.producers && mv.producers.length > 0 && (
+                  <div className="space-y-2.5 mt-4">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Nhà sản xuất</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {mv.producers.map((p, pIdx) => (
+                        <div key={p.publicId || pIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
+                          <img
+                            src={p.profileImageUrl || DEFAULT_AVATAR}
+                            alt={p.fullName}
+                            className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-zinc-800"
+                            onError={e => { e.target.src = DEFAULT_AVATAR; }}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-zinc-200 truncate">{p.fullName}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actors */}
+                {mv.actors && mv.actors.length > 0 && (
+                  <div className="space-y-2.5 mt-4">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Diễn viên chính</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {mv.actors.map((a, aIdx) => (
+                        <div key={a.publicId || aIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
+                          <img
+                            src={a.profileImageUrl || DEFAULT_AVATAR}
+                            alt={a.fullName}
+                            className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-zinc-800"
+                            onError={e => { e.target.src = DEFAULT_AVATAR; }}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-zinc-200 truncate">{a.fullName}</p>
+                            {a.characterName && <p className="text-[10px] text-zinc-500 truncate mt-0.5">{a.characterName}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Production Companies */}
+            {((mv.productionCompanies && mv.productionCompanies.length > 0) || 
+              (mv.studios && mv.studios.length > 0)) && (
+              <div className="bg-brand-gray/25 border border-zinc-900 p-5 rounded-3xl space-y-4 shadow-xl">
+                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-brand-orange" />
+                  <span>Hãng sản xuất</span>
+                </h4>
+                <div className="flex flex-wrap gap-3">
+                  {(mv.productionCompanies && mv.productionCompanies.length > 0 ? mv.productionCompanies : mv.studios).map((c, cIdx) => (
+                    <div key={c.publicId || cIdx} className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-900/80 rounded-2xl px-4 py-2.5 hover:border-zinc-800 transition-colors">
+                      {c.logoUrl && <img src={c.logoUrl} alt={c.name} className="h-6 max-w-[90px] object-contain filter brightness-95" onError={e => e.target.style.display='none'} />}
+                      <span className="text-xs font-semibold text-zinc-200">{c.name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -951,13 +1405,27 @@ export default function AdminMoviePage() {
                 </Field>
 
                 {isEdit && (
-                  <Field label="Trạng thái">
-                    <Select value={formBasic.status} onChange={e => setFormBasic(p => ({ ...p, status: e.target.value }))}>
-                      {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </Select>
-                  </Field>
+                  <>
+                    <Field label="Trạng thái">
+                      <Select value={formBasic.status} onChange={e => setFormBasic(p => ({ ...p, status: e.target.value }))}>
+                        {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                          <option key={k} value={k}>{v}</option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <div className="col-span-1 md:col-span-2 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 mt-2 space-y-2">
+                      <p className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                        <Info className="w-4 h-4 text-brand-orange" />
+                        <span>Quy định thiết lập trạng thái phim:</span>
+                      </p>
+                      <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc pl-4 leading-relaxed">
+                        <li><strong>Nháp (DRAFT) / Ngừng hoạt động (INACTIVE):</strong> Dùng khi phim đang được biên tập hoặc tạm ẩn. Không ràng buộc ngày chiếu.</li>
+                        <li><strong>Sắp chiếu (UPCOMING):</strong> Ngày khởi chiếu phải ở <strong>tương lai</strong> (sau hôm nay). Phải gán ít nhất 1 thể loại.</li>
+                        <li><strong>Đang chiếu (NOW_SHOWING):</strong> Ngày khởi chiếu ở <strong>quá khứ hoặc hôm nay</strong> và Ngày ngừng chiếu (nếu có) phải ở <strong>tương lai hoặc hôm nay</strong>. Phải có ít nhất 1 thể loại.</li>
+                        <li><strong>Đã chiếu xong (ENDED):</strong> Bắt buộc phải chọn Ngày ngừng chiếu và ngày này phải ở <strong>quá khứ</strong> (trước hôm nay).</li>
+                      </ul>
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -986,6 +1454,12 @@ export default function AdminMoviePage() {
 
             {/* ── Genres ── */}
             <FormSection icon={<LayoutList className="w-4 h-4 text-brand-orange" />} title="Thể Loại Phim">
+              {formErrors.genres && (
+                <div className="text-red-400 text-xs mb-4 bg-red-950/20 border border-red-800/30 rounded-xl p-2.5 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  <span>{formErrors.genres}</span>
+                </div>
+              )}
 
               {/* ── TMDB Genres block — always visible when tmdbGenres has data ── */}
               {tmdbGenres.length > 0 && (
@@ -1059,7 +1533,7 @@ export default function AdminMoviePage() {
             </FormSection>
 
             {/* ── Credits (display only, from TMDB) ── */}
-            {(directors.length > 0 || cast.length > 0 || studios.length > 0) && (
+            {(directors.length > 0 || cast.length > 0 || writers.length > 0 || producers.length > 0 || studios.length > 0) && (
               <FormSection icon={<Users className="w-4 h-4 text-brand-orange" />} title="Đoàn Phim (từ TMDB – chỉ xem)">
                 {directors.length > 0 && (
                   <div className="space-y-2">
@@ -1090,6 +1564,22 @@ export default function AdminMoviePage() {
                               <span className="text-xs font-semibold text-zinc-200">{w.name}</span>
                               {w.job && <span className="text-[10px] text-zinc-500 ml-1">({w.job})</span>}
                             </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {producers.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Nhà sản xuất</p>
+                    <div className="flex flex-wrap gap-2">
+                      {producers.map(p => {
+                        const imgUrl = p.profileUrl || p.profileImageUrl || p.profileImage || DEFAULT_AVATAR;
+                        return (
+                          <div key={p.tmdbId || p.name} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
+                            <img src={imgUrl} alt={p.name} className="w-6 h-6 rounded-full object-cover" onError={e => { e.target.src = DEFAULT_AVATAR; }} />
+                            <span className="text-xs font-semibold text-zinc-200">{p.name}</span>
                           </div>
                         );
                       })}

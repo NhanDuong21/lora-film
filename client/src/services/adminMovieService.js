@@ -58,6 +58,54 @@ const adminMovieService = {
     }
   },
 
+  ensurePersonExists: async (name, profileImageUrl) => {
+    try {
+      const searchRes = await apiClient.get('/api/admin/people/by-name', { params: { name } });
+      if (searchRes.data?.success && searchRes.data?.data) {
+        return searchRes.data.data;
+      }
+    } catch (err) {
+      console.warn("Failed to check if person exists, creating new:", err);
+    }
+    
+    const validUrl = (profileImageUrl && profileImageUrl.startsWith('http')) ? profileImageUrl : null;
+    const response = await apiClient.post('/api/admin/people', {
+      fullName: name,
+      profileImageUrl: validUrl,
+      status: 'ACTIVE'
+    });
+    return response.data?.data;
+  },
+
+  ensureProductionCompanyExists: async (name, logoUrl) => {
+    try {
+      const searchRes = await apiClient.get('/api/admin/production-companies/by-name', { params: { name } });
+      if (searchRes.data?.success && searchRes.data?.data) {
+        return searchRes.data.data;
+      }
+    } catch (err) {
+      console.warn("Failed to check if production company exists, creating new:", err);
+    }
+
+    const validUrl = (logoUrl && logoUrl.startsWith('http')) ? logoUrl : null;
+    const response = await apiClient.post('/api/admin/production-companies', {
+      name: name,
+      logoUrl: validUrl,
+      status: 'ACTIVE'
+    });
+    return response.data?.data;
+  },
+
+  assignCredits: async (publicId, credits) => {
+    const response = await apiClient.put(`/api/admin/movies/${publicId}/credits`, { credits });
+    return response.data;
+  },
+
+  assignProductionCompanies: async (publicId, companies) => {
+    const response = await apiClient.put(`/api/admin/movies/${publicId}/production-companies`, { companies });
+    return response.data;
+  },
+
   // ─── Media Management ──────────────────────────────────────────────────────
   getMovieMedia: async (movieId) => {
     const response = await apiClient.get(`/api/admin/movies/${movieId}/media`);

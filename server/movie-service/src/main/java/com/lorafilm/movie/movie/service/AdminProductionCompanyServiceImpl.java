@@ -93,6 +93,17 @@ public class AdminProductionCompanyServiceImpl implements AdminProductionCompany
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ProductionCompanyDto findByName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        return productionCompanyRepository.findByNameIgnoreCase(name.trim())
+                .map(this::mapToDto)
+                .orElse(null);
+    }
+
     private ProductionCompanyDto mapToDto(ProductionCompany company) {
         ProductionCompanyDto dto = new ProductionCompanyDto();
         dto.setPublicId(company.getPublicId());
