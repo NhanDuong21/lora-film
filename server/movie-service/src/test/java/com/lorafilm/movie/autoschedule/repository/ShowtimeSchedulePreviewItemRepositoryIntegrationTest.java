@@ -290,10 +290,11 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
     }
 
     @Test
-    void ITEM_REPO_007_uniquePreviewAuditoriumStartTime() {
+    void ITEM_REPO_007_uniquePreviewAuditoriumStartTimeMovieVersion() {
         ShowtimeSchedulePreviewItem i1 = createValidItem();
         itemRepository.saveAndFlush(i1);
 
+        // Same preview, auditorium, start_time but DIFFERENT movie_version -> should SUCCEED
         ShowtimeSchedulePreviewItem i2 = createValidItem();
         i2.setStartTime(i1.getStartTime());
         
@@ -308,8 +309,16 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
         
         i2.setMovieVersion(mv2);
 
+        // This should now succeed because movie_version_id is different
+        itemRepository.saveAndFlush(i2);
+
+        // Same preview, auditorium, start_time and SAME movie_version -> should FAIL
+        ShowtimeSchedulePreviewItem i3 = createValidItem();
+        i3.setStartTime(i1.getStartTime());
+        i3.setMovieVersion(i1.getMovieVersion());
+
         assertThrows(DataIntegrityViolationException.class, () -> {
-            itemRepository.saveAndFlush(i2);
+            itemRepository.saveAndFlush(i3);
         });
     }
 

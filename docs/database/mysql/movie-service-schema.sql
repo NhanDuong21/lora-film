@@ -774,7 +774,8 @@ CREATE TABLE showtime_schedule_preview_items (
         UNIQUE (
             preview_id,
             auditorium_id,
-            start_time
+            start_time,
+            movie_version_id
         ),
 
     CONSTRAINT chk_schedule_preview_item_time

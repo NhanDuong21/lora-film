@@ -17,7 +17,7 @@ import java.util.Map;
 
 @Entity
 @Table(name = "showtime_schedule_preview_items", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_schedule_preview_item_slot", columnNames = {"preview_id", "auditorium_id", "start_time"})
+    @UniqueConstraint(name = "uk_schedule_preview_item_slot", columnNames = {"preview_id", "auditorium_id", "start_time", "movie_version_id"})
 })
 @org.hibernate.annotations.Check(constraints = "(validation_status != 'REJECTED' OR selected = false)")
 public class ShowtimeSchedulePreviewItem {
