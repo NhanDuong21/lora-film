@@ -44,4 +44,25 @@ public interface ShowtimeSchedulePreviewRepository extends JpaRepository<Showtim
     Optional<ShowtimeSchedulePreview> findByPublicIdForUpdate(@Param("publicId") String publicId);
 
     List<ShowtimeSchedulePreview> findByStatusAndExpiresAtLessThanEqual(SchedulePreviewStatus status, Instant now);
+
+    @Query("""
+        select p
+        from ShowtimeSchedulePreview p
+        join fetch p.cinema
+        where p.applyIdempotencyKey = :applyIdempotencyKey
+    """)
+    Optional<ShowtimeSchedulePreview> findByApplyIdempotencyKeyDetailed(
+        @Param("applyIdempotencyKey") String applyIdempotencyKey
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select p
+        from ShowtimeSchedulePreview p
+        join fetch p.cinema
+        where p.publicId = :publicId
+    """)
+    Optional<ShowtimeSchedulePreview> findByPublicIdForApply(
+        @Param("publicId") String publicId
+    );
 }

@@ -118,6 +118,13 @@ public enum ErrorCode {
     AUTO_SCHEDULE_TOO_MANY_CANDIDATES("Too many auto schedule candidates generated", 422),
     AUTO_SCHEDULE_GENERATION_FAILED("Auto schedule generation failed", 500),
     
+    AUTO_SCHEDULE_NO_SELECTED_ITEMS("No selected items to apply", 400),
+    AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP("Selected items overlap with each other", 409),
+    AUTO_SCHEDULE_APPLY_REVALIDATION_FAILED("One or more selected schedule candidates are no longer valid", 409),
+    AUTO_SCHEDULE_CANDIDATE_CHANGED("Candidate data has changed and is no longer consistent", 409),
+    AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT("Preview data is inconsistent", 409),
+    AUTO_SCHEDULE_APPLY_FAILED("Auto schedule apply failed", 500),
+
     CURRENT_USER_NOT_AVAILABLE("Current user not available", 401);
 
     private final String message;

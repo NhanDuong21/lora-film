@@ -19,13 +19,16 @@ public class AdminShowtimeScheduleController {
 
     private final ShowtimeSchedulePreviewService service;
     private final com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService;
+    private final com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService applyService;
     private final com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider;
 
     public AdminShowtimeScheduleController(ShowtimeSchedulePreviewService service,
                                            com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService,
+                                           com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService applyService,
                                            com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider) {
         this.service = service;
         this.generationService = generationService;
+        this.applyService = applyService;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -85,5 +88,25 @@ public class AdminShowtimeScheduleController {
     ) {
         ShowtimeSchedulePreviewResponse response = service.updateSelections(previewPublicId, request);
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview selections updated successfully", response));
+    }
+
+    @Operation(summary = "Apply an auto schedule preview", description = "Atomically revalidate selected preview candidates and create real showtimes using ALL_OR_NOTHING semantics.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Applied or idempotently replayed"),
+        @ApiResponse(responseCode = "400", description = "Invalid request or no selected items"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden"),
+        @ApiResponse(responseCode = "404", description = "Preview not found"),
+        @ApiResponse(responseCode = "409", description = "Expired, stale version, invalid state, conflict, idempotency conflict"),
+        @ApiResponse(responseCode = "500", description = "Unexpected apply failure")
+    })
+    @PostMapping("/{previewPublicId}/apply")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<com.lorafilm.movie.autoschedule.dto.response.ApplyShowtimeSchedulePreviewResponse>> applyPreview(
+            @PathVariable String previewPublicId,
+            @Valid @RequestBody com.lorafilm.movie.autoschedule.dto.request.ApplyShowtimeSchedulePreviewRequest request
+    ) {
+        com.lorafilm.movie.autoschedule.dto.response.ApplyShowtimeSchedulePreviewResponse response = applyService.applyPreview(previewPublicId, request);
+        return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview applied successfully", response));
     }
 }

@@ -40,4 +40,24 @@ public interface ShowtimeSchedulePreviewItemRepository extends JpaRepository<Sho
     List<ShowtimeSchedulePreviewItem> findAllByPublicIdIn(java.util.Collection<String> publicIds);
 
     long countByPreviewIdAndSelectedTrueAndValidationStatus(Long previewId, PreviewItemValidationStatus validationStatus);
+
+    @Query("""
+        select i
+        from ShowtimeSchedulePreviewItem i
+        join fetch i.movie
+        join fetch i.movieVersion
+        join fetch i.cinema
+        join fetch i.auditorium
+        where i.preview.id = :previewId
+          and i.selected = true
+          and i.validationStatus = :validStatus
+        order by i.auditorium.id asc,
+                 i.startTime asc,
+                 i.rankingPosition asc,
+                 i.id asc
+    """)
+    List<ShowtimeSchedulePreviewItem> findSelectedItemsForApply(
+        @Param("previewId") Long previewId,
+        @Param("validStatus") PreviewItemValidationStatus validStatus
+    );
 }

@@ -101,10 +101,12 @@ public class ShowtimeSchedulePreviewItem {
     @Column(name = "apply_error_message", length = 500)
     private String applyErrorMessage;
 
-    @Column(name = "created_at", nullable = false, insertable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false, insertable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
     private Instant updatedAt;
 
     protected ShowtimeSchedulePreviewItem() {}

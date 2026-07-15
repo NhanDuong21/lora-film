@@ -38,4 +38,9 @@ public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
             @Param("name") String name, @Param("excludeId") Long excludeId);
 
     List<Auditorium> findByCinemaIdAndStatusAndDeletedAtIsNull(Long cinemaId, AuditoriumStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.QueryHints(@jakarta.persistence.QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+    @Query("select a from Auditorium a where a.id in :ids and a.deletedAt is null order by a.id asc")
+    List<Auditorium> findAllByIdForScheduling(@Param("ids") List<Long> ids);
 }
