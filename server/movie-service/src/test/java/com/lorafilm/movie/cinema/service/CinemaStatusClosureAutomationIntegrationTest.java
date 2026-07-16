@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
+@SuppressWarnings("null")
 class CinemaStatusClosureAutomationIntegrationTest {
 
     @Autowired
@@ -46,8 +47,8 @@ class CinemaStatusClosureAutomationIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        // Do not call cinemaRepository.deleteAll() to avoid foreign key violations with seeded data.
         closurePeriodRepository.deleteAll();
-        cinemaRepository.deleteAll();
 
         cinema = new Cinema();
         cinema.setPublicId(UUID.randomUUID().toString());
@@ -64,24 +65,49 @@ class CinemaStatusClosureAutomationIntegrationTest {
     @AfterEach
     void tearDown() {
         closurePeriodRepository.deleteAll();
-        cinemaRepository.deleteAll();
+        if (cinema != null && cinema.getId() != null) {
+            try {
+                cinemaRepository.delete(cinema);
+                cinemaRepository.flush();
+            } catch (Exception e) {
+                // Ignore if it fails due to constraint
+            }
+        }
     }
 
     @Test
     void testCinemaStatusTransitionsAndCustomerVisibility() {
         Instant now = Instant.now();
 
-        // 1. Initially, cinema is ACTIVE. Retrieve via customer service list and detail.
+        // 1. Verify future closure period does NOT trigger a transition
+        CinemaClosurePeriod futureClosure = new CinemaClosurePeriod();
+        futureClosure.setCinema(cinema);
+        futureClosure.setStartTime(now.plus(1, ChronoUnit.HOURS)); // Starts in 1 hour
+        futureClosure.setEndTime(now.plus(2, ChronoUnit.HOURS));
+        futureClosure.setReason("Scheduled maintenance");
+        futureClosure.setStatus(ActionStatus.ACTIVE);
+        closurePeriodRepository.saveAndFlush(futureClosure);
+
+        // Run scheduler
+        cinemaStatusScheduler.checkAndTransitionCinemaStatuses();
+
+        // Cinema must remain ACTIVE
+        Cinema cinemaAfterFutureSetup = cinemaRepository.findById(cinema.getId()).orElseThrow();
+        assertThat(cinemaAfterFutureSetup.getStatus()).isEqualTo(CinemaStatus.ACTIVE);
+
+        // 2. Initially, cinema is ACTIVE. Retrieve via customer service list and detail.
         PageResponse<CinemaDto> listResult = cinemaService.getCinemas("HCM", null, null, 0, 10);
-        assertThat(listResult.getData()).isNotEmpty();
-        assertThat(listResult.getData().get(0).getPublicId()).isEqualTo(cinema.getPublicId());
-        assertThat(listResult.getData().get(0).getStatus()).isEqualTo("ACTIVE");
+        CinemaDto foundActive = listResult.getData().stream()
+                .filter(c -> c.getPublicId().equals(cinema.getPublicId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(foundActive.getStatus()).isEqualTo("ACTIVE");
 
         CinemaDetailDto detailResult = cinemaService.getCinemaByIdentifier(cinema.getPublicId());
         assertThat(detailResult).isNotNull();
         assertThat(detailResult.getStatus()).isEqualTo("ACTIVE");
 
-        // 2. Add an active closure period that covers "now"
+        // 3. Add an active closure period that covers "now"
         CinemaClosurePeriod activeClosure = new CinemaClosurePeriod();
         activeClosure.setCinema(cinema);
         activeClosure.setStartTime(now.minus(5, ChronoUnit.MINUTES));
@@ -97,11 +123,14 @@ class CinemaStatusClosureAutomationIntegrationTest {
         Cinema updatedCinema = cinemaRepository.findById(cinema.getId()).orElseThrow();
         assertThat(updatedCinema.getStatus()).isEqualTo(CinemaStatus.TEMPORARILY_CLOSED);
 
-        // 3. Verify customer visibility during TEMPORARILY_CLOSED status
+        // 4. Verify customer visibility during TEMPORARILY_CLOSED status
         // A. List API should still return it
         PageResponse<CinemaDto> listResultClosed = cinemaService.getCinemas("HCM", null, null, 0, 10);
-        assertThat(listResultClosed.getData()).isNotEmpty();
-        assertThat(listResultClosed.getData().get(0).getStatus()).isEqualTo("TEMPORARILY_CLOSED");
+        CinemaDto foundClosed = listResultClosed.getData().stream()
+                .filter(c -> c.getPublicId().equals(cinema.getPublicId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(foundClosed.getStatus()).isEqualTo("TEMPORARILY_CLOSED");
 
         // B. Detail API should still return it
         CinemaDetailDto detailResultClosed = cinemaService.getCinemaByIdentifier(cinema.getPublicId());
@@ -111,9 +140,10 @@ class CinemaStatusClosureAutomationIntegrationTest {
         // C. Closure periods API should still allow retrieval
         List<CinemaClosurePeriodResponse> closures = cinemaService.getCinemaClosurePeriods(cinema.getPublicId());
         assertThat(closures).isNotEmpty();
-        assertThat(closures.get(0).getReason()).isEqualTo("Unexpected repair");
+        boolean hasActiveRepairClosure = closures.stream().anyMatch(c -> "Unexpected repair".equals(c.getReason()));
+        assertThat(hasActiveRepairClosure).isTrue();
 
-        // 4. Change closure period to have ended (in the past)
+        // 5. Deactivate or move activeClosure to the past so there are no active closures anymore
         activeClosure.setStartTime(now.minus(10, ChronoUnit.MINUTES));
         activeClosure.setEndTime(now.minus(2, ChronoUnit.MINUTES));
         closurePeriodRepository.saveAndFlush(activeClosure);
@@ -127,7 +157,10 @@ class CinemaStatusClosureAutomationIntegrationTest {
 
         // List API should return it with ACTIVE status
         PageResponse<CinemaDto> listResultRestored = cinemaService.getCinemas("HCM", null, null, 0, 10);
-        assertThat(listResultRestored.getData()).isNotEmpty();
-        assertThat(listResultRestored.getData().get(0).getStatus()).isEqualTo("ACTIVE");
+        CinemaDto foundRestored = listResultRestored.getData().stream()
+                .filter(c -> c.getPublicId().equals(cinema.getPublicId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(foundRestored.getStatus()).isEqualTo("ACTIVE");
     }
 }
