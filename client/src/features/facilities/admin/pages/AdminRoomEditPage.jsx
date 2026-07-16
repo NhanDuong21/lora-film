@@ -14,10 +14,10 @@ import adminRoomService from '@/features/facilities/admin/services/adminRoomServ
 import apiClient from '@/services/apiClient';
 
 // Import modular sub-components
-import RoomForm from '../components/RoomForm';
-import BrushToolbar from '../components/BrushToolbar';
-import StatsPanel from '../components/StatsPanel';
-import SeatGridDesigner from '../components/SeatGridDesigner';
+import RoomForm from '@/features/facilities/admin/components/RoomForm';
+import BrushToolbar from '@/features/facilities/admin/components/BrushToolbar';
+import StatsPanel from '@/features/facilities/admin/components/StatsPanel';
+import SeatGridDesigner from '@/features/facilities/admin/components/SeatGridDesigner';
 
 export default function AdminRoomEditPage() {
   const { triggerToast } = useOutletContext() || {};
