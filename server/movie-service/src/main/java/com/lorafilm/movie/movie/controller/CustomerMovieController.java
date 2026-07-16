@@ -22,10 +22,10 @@ public class CustomerMovieController {
     public ApiResponse<PageResponse<MovieDto>> getMovies(
             @RequestParam String status,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         
-        Pageable pageable = PageRequest.of(page - 1, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "releaseDate"));
+        Pageable pageable = PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "releaseDate"));
         return ApiResponse.ok(customerMovieService.getMoviesByStatus(status, keyword, pageable));
     }
 

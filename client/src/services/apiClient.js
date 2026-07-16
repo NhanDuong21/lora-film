@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getAuthToken, getRefreshToken, setAuthData, clearAuthData } from "../utils/authStorage";
+import { getAuthToken, getRefreshToken, setAuthData, clearAuthData } from "@/utils/authStorage";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
@@ -54,7 +54,7 @@ apiClient.interceptors.response.use(
             originalRequest.url.includes("/api/auth/login") ||
             originalRequest.url.includes("/api/auth/register") ||
             originalRequest.url.includes("/api/auth/verify") ||
-            originalRequest.url.includes("/api/auth/resend-otp") ||
+            originalRequest.url.includes("/api/auth/send-otp") ||
             originalRequest.url.includes("/api/auth/refresh-token")
         );
 
