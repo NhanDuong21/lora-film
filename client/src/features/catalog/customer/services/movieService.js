@@ -19,7 +19,11 @@ export const getMovies = async ({
   if (page !== undefined) params.page = page;
   if (size !== undefined) params.size = size;
   if (search !== undefined) params.search = search;
-  if (status !== undefined) params.status = status;
+  if (status !== undefined) {
+    if (status === 'NOW_SHOWING') params.status = 'now-showing';
+    else if (status === 'UPCOMING') params.status = 'coming-soon';
+    else params.status = status;
+  }
   if (genreId !== undefined) params.genreId = genreId;
   if (releaseFrom !== undefined) params.releaseFrom = releaseFrom;
   if (releaseTo !== undefined) params.releaseTo = releaseTo;
