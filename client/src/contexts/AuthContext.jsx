@@ -9,8 +9,8 @@ import {
   getRefreshToken,
   clearAuthData,
   setAuthData as saveAuthData
-} from '../utils/authStorage';
-import { getUserProfile } from '../services/userService';
+} from '@/utils/authStorage';
+import { getUserProfile } from '@/features/auth/services/userService';
 
 const AuthContext = createContext();
 

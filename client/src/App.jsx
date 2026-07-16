@@ -1,6 +1,6 @@
-import AppRoutes from "./routes/AppRoutes";
-import { AuthProvider } from "./contexts/AuthContext";
-import { DataProvider } from "./contexts/DataContext";
+import AppRoutes from "@/routes/AppRoutes";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { DataProvider } from "@/contexts/DataContext";
 
 function App() {
     return (

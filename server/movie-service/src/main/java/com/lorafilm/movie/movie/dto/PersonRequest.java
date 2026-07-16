@@ -8,11 +8,11 @@ import com.lorafilm.movie.common.enums.ActiveStatus;
 public class PersonRequest {
     @NotBlank(message = "Full name is required")
     @Size(max = 150)
-    @jakarta.validation.constraints.Pattern(regexp = "^[\\p{L}\\s\\-'.]+$", message = "Full name can only contain letters, spaces, hyphens, apostrophes, and dots")
+    @jakarta.validation.constraints.Pattern(regexp = "^[^<>]+$", message = "Full name contains invalid characters")
     private String fullName;
 
     @Size(max = 150)
-    @jakarta.validation.constraints.Pattern(regexp = "^[\\p{L}0-9\\s&\\-\\.,':;!\\?\\(\\)\\/]*$", message = "Stage name contains invalid characters")
+    @jakarta.validation.constraints.Pattern(regexp = "^[^<>]*$", message = "Stage name contains invalid characters")
     private String stageName;
 
     private String biography;

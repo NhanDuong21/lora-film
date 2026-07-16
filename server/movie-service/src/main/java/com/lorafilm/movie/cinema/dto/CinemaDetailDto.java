@@ -7,9 +7,15 @@ public class CinemaDetailDto extends CinemaDto {
     private List<OperatingHourDto> operatingHours;
     private List<CinemaMediaDto> gallery;
     private List<AuditoriumDto> activeAuditoriums;
+    private String status;
+    private String description;
 
     public CinemaDetailDto() {}
 
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
     public List<OperatingHourDto> getOperatingHours() { return operatingHours; }
     public void setOperatingHours(List<OperatingHourDto> operatingHours) { this.operatingHours = operatingHours; }
     public List<CinemaMediaDto> getGallery() { return gallery; }
@@ -58,6 +64,7 @@ public class CinemaDetailDto extends CinemaDto {
         private String screenType;
         private String soundType;
         private Integer capacity;
+        private String status;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -69,5 +76,7 @@ public class CinemaDetailDto extends CinemaDto {
         public void setSoundType(String soundType) { this.soundType = soundType; }
         public Integer getCapacity() { return capacity; }
         public void setCapacity(Integer capacity) { this.capacity = capacity; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 }

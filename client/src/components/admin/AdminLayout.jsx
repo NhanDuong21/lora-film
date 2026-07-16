@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Outlet, useLocation } from 'react-router-dom';
 
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import AdminSidebar from './AdminSidebar';
 
 export default function AdminLayout({ onBackHome }) {

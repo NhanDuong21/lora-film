@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { 
   ChevronDown, Menu, X, Bell, Star, Search, User, LogOut 
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 
 export default function Header() {
@@ -60,7 +60,7 @@ export default function Header() {
       
       {/* LEFT SECTION: Brand Logo & Mua Ve Coupon Stub */}
       <div className="flex items-center gap-6">
-        <Link to="/" className="flex items-center gap-2.5 shrink-0 bg-transparent p-0 m-0 border-none shadow-none outline-none group mr-4 md:mr-6 select-none decoration-none transition-transform duration-200 hover:scale-[1.02]">
+        <Link to={isAuthenticated && (userRole?.replace(/^ROLE_/, '') === 'ADMIN') ? '/admin' : '/'} className="flex items-center gap-2.5 shrink-0 bg-transparent p-0 m-0 border-none shadow-none outline-none group mr-4 md:mr-6 select-none decoration-none transition-transform duration-200 hover:scale-[1.02]">
           <img 
             src="/images/main-logo.png" 
             alt="LoraFilm Mascot" 

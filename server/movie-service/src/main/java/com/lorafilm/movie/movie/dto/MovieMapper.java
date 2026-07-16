@@ -25,6 +25,8 @@ public class MovieMapper {
         dto.setStatus(movie.getStatus());
         dto.setGenres(genres);
         dto.setPrimaryPoster(primaryPosterUrl);
+        dto.setActiveSlug(movie.getActiveSlug());
+        dto.setCountry(movie.getCountry());
         return dto;
     }
 }

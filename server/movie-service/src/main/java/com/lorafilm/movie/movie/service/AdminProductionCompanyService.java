@@ -7,4 +7,5 @@ public interface AdminProductionCompanyService {
     ProductionCompanyDto createProductionCompany(ProductionCompanyRequest request);
     ProductionCompanyDto updateProductionCompany(String publicId, ProductionCompanyRequest request);
     void deleteProductionCompany(String publicId);
+    ProductionCompanyDto findByName(String name);
 }

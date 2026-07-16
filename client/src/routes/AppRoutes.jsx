@@ -1,44 +1,51 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
-import ScrollToTop from "../components/common/ScrollToTop";
+import { useAuth } from "@/contexts/AuthContext";
+import ScrollToTop from "@/components/common/ScrollToTop";
 
-import Home from "../pages/public/Home";
-import Login from "../pages/auth/Login";
-import Register from "../pages/auth/Register";
-import VerifyOtp from "../pages/auth/VerifyOtp";
-import CustomerProfilePage from "../pages/customer/CustomerProfilePage";
+// Centralized route paths
+import { routePaths } from "@/routes/routePaths";
+
+// Feature-based Pages
+import Home from "@/features/movies-genres/pages/Home";
+import Login from "@/features/auth/pages/Login";
+import Register from "@/features/auth/pages/Register";
+import VerifyOtp from "@/features/auth/pages/VerifyOtp";
+import CustomerProfilePage from "@/features/auth/pages/CustomerProfilePage";
 
 // Customer Views
-import MovieDiscoveryView from "../pages/customer/MovieDiscoveryPage";
-import MovieDetailPage from "../pages/customer/MovieDetailPage";
-import CinemaDetailPage from "../pages/customer/CinemaDetailPage";
-import MasterBookingFunnelPage from "../pages/customer/MasterBookingFunnelPage";
-import SeatSelectionPage from "../pages/customer/SeatSelectionPage";
+import MovieDiscoveryView from "@/features/movies-genres/pages/MovieDiscoveryPage";
+import MovieDetailPage from "@/features/movies-genres/pages/MovieDetailPage";
+import CinemaDetailPage from "@/features/cinemas-rooms/pages/CinemaDetailPage";
+import MasterBookingFunnelPage from "@/features/showtimes-pricing/pages/MasterBookingFunnelPage";
+import SeatSelectionPage from "@/features/showtimes-pricing/pages/SeatSelectionPage";
 
 // Employee Views
-import EmployeeLayout from "../components/employee/EmployeeLayout";
-import EmployeeCheckInView from "../pages/employee/EmployeeCheckInPage";
-import EmployeePOSView from "../pages/employee/EmployeePOSPage";
-import EmployeeScheduleView from "../pages/employee/EmployeeSchedulePage";
+import EmployeeLayout from "@/components/employee/EmployeeLayout";
+import EmployeeCheckInView from "@/features/internal-staff/pages/EmployeeCheckInPage";
+import EmployeePOSView from "@/features/concessions-sales/pages/EmployeePOSPage";
+import EmployeeScheduleView from "@/features/internal-staff/pages/EmployeeSchedulePage";
 
 // Admin Views
-import AdminLayout from "../components/admin/AdminLayout";
-import AdminGenrePage from "../pages/admin/AdminGenrePage";
-import AdminDashboardView from "../pages/admin/AdminDashboardPage";
-import AdminMovieView from "../pages/admin/AdminMoviePage";
-import AdminCinemaView from "../pages/admin/AdminCinemaPage";
-import AdminConcessionInventory from "../pages/admin/AdminConcessionInventoryPage";
-import AdminEventView from "../pages/admin/AdminEventPage";
-import AdminFinanceView from "../pages/admin/AdminFinancePage";
-import AdminMembersView from "../pages/admin/AdminMembersPage";
-import AdminSettingsView from "../pages/admin/AdminSettingsPage";
-import AdminShowtimeView from "../pages/admin/AdminShowtimePage";
-import AdminStaffView from "../pages/admin/AdminStaffPage";
-import AdminConcessionSalesPage from "../pages/admin/AdminConcessionSalesPage";
-import AdminPayrollPage from "../pages/admin/AdminPayrollPage";
+import AdminLayout from "@/components/admin/AdminLayout";
+import AdminGenrePage from "@/features/movies-genres/pages/AdminGenrePage";
+import AdminDashboardView from "@/features/internal-staff/pages/AdminDashboardPage";
+import AdminMovieView from "@/features/movies-genres/pages/AdminMoviePage";
+import AdminCinemaView from "@/features/cinemas-rooms/pages/AdminCinemaPage";
+import AdminConcessionInventory from "@/features/concessions-sales/pages/AdminConcessionInventoryPage";
+import AdminEventView from "@/features/internal-staff/pages/AdminEventPage";
+import AdminFinanceView from "@/features/internal-staff/pages/AdminFinancePage";
+import AdminMembersView from "@/features/internal-staff/pages/AdminMembersPage";
+import AdminSettingsView from "@/features/internal-staff/pages/AdminSettingsPage";
+import AdminShowtimeView from "@/features/showtimes-pricing/pages/AdminShowtimePage";
+import AdminStaffView from "@/features/internal-staff/pages/AdminStaffPage";
+import AdminConcessionSalesPage from "@/features/concessions-sales/pages/AdminConcessionSalesPage";
+import AdminPayrollPage from "@/features/internal-staff/pages/AdminPayrollPage";
+import AdminRoomPage from "@/features/cinemas-rooms/pages/AdminRoomPage";
+import AdminRoomCreatePage from "@/features/cinemas-rooms/pages/AdminRoomCreatePage";
+import AdminRoomEditPage from "@/features/cinemas-rooms/pages/AdminRoomEditPage";
 
 // Main Layout
-import MainLayout from "../components/layout/MainLayout";
+import MainLayout from "@/components/layout/MainLayout";
 
 // Simple Loading Spinner for route guards
 function PageLoader() {
@@ -92,39 +99,55 @@ function RoleRoute({ children, allowedRoles }) {
     return children;
 }
 
+// Redirect Admin users away from public/customer routes
+function AdminRedirectGuard({ children }) {
+    const { isAuthenticated, userRole, isInitializing } = useAuth();
+
+    if (isInitializing) {
+        return <PageLoader />;
+    }
+
+    const normalizedRole = userRole ? userRole.replace(/^ROLE_/, "") : "";
+    if (isAuthenticated && normalizedRole === "ADMIN") {
+        return <Navigate to="/admin" replace />;
+    }
+
+    return children;
+}
+
 function AppRoutes() {
     return (
         <BrowserRouter>
             <ScrollToTop />
             <Routes>
                 {/* Public & Customer Routes wrapped in MainLayout */}
-                <Route element={<MainLayout />}>
-                    <Route path="/" element={<Home />} />
+                <Route element={<AdminRedirectGuard><MainLayout /></AdminRedirectGuard>}>
+                    <Route path={routePaths.home} element={<Home />} />
                     <Route path="/home" element={<Home />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route path="/verify-otp" element={<VerifyOtp />} />
+                    <Route path={routePaths.login} element={<Login />} />
+                    <Route path={routePaths.register} element={<Register />} />
+                    <Route path={routePaths.verifyOtp} element={<VerifyOtp />} />
                     
                     {/* Protected Customer Profile */}
-                    <Route path="/profile" element={
+                    <Route path={routePaths.profile} element={
                         <ProtectedRoute>
                             <CustomerProfilePage />
                         </ProtectedRoute>
                     } />
 
                     {/* Customer Routes */}
-                    <Route path="/movies" element={<MovieDiscoveryView />} />
-                    <Route path="/movies/:movieId" element={<MovieDetailPage />} />
+                    <Route path={routePaths.movies} element={<MovieDiscoveryView />} />
+                    <Route path={routePaths.movieDetail} element={<MovieDetailPage />} />
                     <Route path="/movie/:movieId" element={<MovieDetailPage />} />
-                    <Route path="/cinema/:id" element={<CinemaDetailPage />} />
+                    <Route path={routePaths.cinemaDetail} element={<CinemaDetailPage />} />
                     
                     {/* Booking & Seats Protected optionally or open */}
-                    <Route path="/booking" element={<MasterBookingFunnelPage />} />
-                    <Route path="/seat-selection" element={<SeatSelectionPage />} />
+                    <Route path={routePaths.booking} element={<MasterBookingFunnelPage />} />
+                    <Route path={routePaths.seatSelection} element={<SeatSelectionPage />} />
                 </Route>
 
                 {/* Employee Routes */}
-                <Route path="/employee" element={
+                <Route path={routePaths.employee.root} element={
                     <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
                         <EmployeeLayout />
                     </RoleRoute>
@@ -136,7 +159,7 @@ function AppRoutes() {
                 </Route>
 
                 {/* Admin Routes */}
-                <Route path="/admin" element={
+                <Route path={routePaths.admin.root} element={
                     <RoleRoute allowedRoles={["ADMIN"]}>
                         <AdminLayout />
                     </RoleRoute>
@@ -154,6 +177,9 @@ function AppRoutes() {
                     <Route path="staff" element={<AdminStaffView />} />
                     <Route path="concession-sales" element={<AdminConcessionSalesPage />} />
                     <Route path="payroll" element={<AdminPayrollPage />} />
+                    <Route path="rooms" element={<AdminRoomPage />} />
+                    <Route path="rooms/create" element={<AdminRoomCreatePage />} />
+                    <Route path="rooms/edit/:roomId" element={<AdminRoomEditPage />} />
                 </Route>
             </Routes>
         </BrowserRouter>
