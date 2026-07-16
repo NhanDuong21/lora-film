@@ -14,7 +14,7 @@ public class TmdbSyncState {
     @Column(name = "sync_type", nullable = false, unique = true)
     private String syncType;
 
-    @Column(name = "cursor")
+    @Column(name = "`cursor`")
     private String cursor;
 
     @Column(name = "status", nullable = false)

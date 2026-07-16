@@ -20,6 +20,7 @@ CREATE TABLE movies (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     public_id CHAR(36) NOT NULL UNIQUE COMMENT 'Khóa ngoại giao tiếp API (UUID)',
     tmdb_id BIGINT UNIQUE COMMENT 'TMDB ID phục vụ việc tự động đồng bộ',
+    tmdb_last_updated DATETIME COMMENT 'Thời gian cập nhật cuối cùng từ TMDB',
     title VARCHAR(255) NOT NULL,
     original_title VARCHAR(255),
     slug VARCHAR(280) NOT NULL,

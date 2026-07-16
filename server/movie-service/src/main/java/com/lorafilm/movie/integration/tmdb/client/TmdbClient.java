@@ -13,11 +13,11 @@ public class TmdbClient {
         this.properties = properties;
         this.restClient = RestClient.builder()
                 .baseUrl(properties.getBaseUrl())
-                .defaultHeader("Authorization", "Bearer " + properties.getApiKey())
+                .defaultHeader("x-api-key", properties.getApiKey())
                 .build();
     }
 
-    public String fetchMovies(String cursor, int limit) {
+    public String fetchMoviesExport(String cursor, int limit) {
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/tmdb/export")
@@ -25,6 +25,30 @@ public class TmdbClient {
                         .queryParam("limit", limit)
                         .build())
                 .retrieve()
-                .body(String.class); // Simplified for demonstration
+                .body(String.class);
+    }
+
+    public String fetchLatestMovies() {
+        return restClient.get()
+                .uri("/api/tmdb/movies/latest")
+                .retrieve()
+                .body(String.class);
+    }
+
+    public String fetchUpdatedMovies(String lastUpdated) {
+        return restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/tmdb/movies/updated")
+                        .queryParam("lastUpdated", lastUpdated)
+                        .build())
+                .retrieve()
+                .body(String.class);
+    }
+
+    public String fetchMovieDetails(Long tmdbId) {
+        return restClient.get()
+                .uri("/api/tmdb/movies/{tmdbId}", tmdbId)
+                .retrieve()
+                .body(String.class);
     }
 }

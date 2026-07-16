@@ -20,6 +20,9 @@ public class Movie extends BaseAuditableEntity {
     @Column(name = "tmdb_id", unique = true)
     private Long tmdbId;
 
+    @Column(name = "tmdb_last_updated")
+    private java.time.LocalDateTime tmdbLastUpdated;
+
     @Column(name = "title", nullable = false)
     private String title;
 
@@ -79,6 +82,14 @@ public class Movie extends BaseAuditableEntity {
 
     public void setTmdbId(Long tmdbId) {
         this.tmdbId = tmdbId;
+    }
+
+    public java.time.LocalDateTime getTmdbLastUpdated() {
+        return tmdbLastUpdated;
+    }
+
+    public void setTmdbLastUpdated(java.time.LocalDateTime tmdbLastUpdated) {
+        this.tmdbLastUpdated = tmdbLastUpdated;
     }
 
     public String getTitle() {

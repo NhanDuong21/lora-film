@@ -18,11 +18,26 @@ public class TmdbSyncScheduler {
         this.tmdbImportService = tmdbImportService;
     }
 
-    // Runs every hour by default (3600000 ms), configurable via properties if needed
-    @Scheduled(fixedDelayString = "${tmdb.scheduler-interval:3600000}")
-    public void scheduleMovieSync() {
-        log.info("Starting scheduled TMDB movie sync...");
-        tmdbImportService.runSync();
-        log.info("Scheduled TMDB movie sync completed.");
+    // Runs bulk export continuously with a delay (e.g., every 1 hour) to slowly sync the whole catalog
+    @Scheduled(fixedDelayString = "${tmdb.scheduler.bulk-interval:3600000}")
+    public void scheduleBulkSync() {
+        log.info("Starting automated background TMDB Bulk Sync...");
+        tmdbImportService.runBulkSync();
+    }
+
+    // Cron job for latest movies - runs every day at 01:00 AM
+    @Scheduled(cron = "${tmdb.scheduler.latest-cron:0 0 1 * * ?}")
+    public void scheduleDailyLatestSync() {
+        log.info("Starting daily latest TMDB movie sync...");
+        tmdbImportService.runDailyLatestSync();
+        log.info("Daily latest TMDB movie sync completed.");
+    }
+
+    // Cron job for updated movies - runs every day at 02:00 AM
+    @Scheduled(cron = "${tmdb.scheduler.updated-cron:0 0 2 * * ?}")
+    public void scheduleDailyUpdatedSync() {
+        log.info("Starting daily updated TMDB movie sync...");
+        tmdbImportService.runDailyUpdatedSync();
+        log.info("Daily updated TMDB movie sync completed.");
     }
 }
