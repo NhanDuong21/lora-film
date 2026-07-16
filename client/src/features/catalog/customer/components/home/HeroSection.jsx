@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Play, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMoviesQuery } from '@/hooks/useHomepageMovies';
+import { useMoviesQuery } from '@/features/catalog/customer/hooks/useHomepageMovies';
 
 const SHOWTIMES = ["09:30", "13:15", "16:45", "19:30", "22:15"];
 

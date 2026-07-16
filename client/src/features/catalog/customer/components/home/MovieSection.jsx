@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Play, X, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 
-import { useMoviesQuery } from '@/hooks/useHomepageMovies';
+import { useMoviesQuery } from '@/features/catalog/customer/hooks/useHomepageMovies';
 import MovieSectionSkeleton from './MovieSectionSkeleton';
 import {
   formatGenres,

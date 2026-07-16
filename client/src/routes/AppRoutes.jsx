@@ -11,25 +11,15 @@ import { adminFacilitiesRoutes } from "@/features/facilities/admin/routes";
 import { adminSchedulingRoutes } from "@/features/scheduling/admin/routes";
 import { customerBookingRoutes } from "@/features/booking/customer/routes";
 
+import { adminConcessionRoutes } from "@/features/concessions-sales/admin/routes";
+import { employeeConcessionRoutes } from "@/features/concessions-sales/employee/routes";
+import { adminStaffRoutes } from "@/features/internal-staff/admin/routes";
+import { employeeStaffRoutes } from "@/features/internal-staff/employee/routes";
+
 // Layouts
 import MainLayout from "@/components/layout/MainLayout";
 import AdminLayout from "@/components/admin/AdminLayout";
 import EmployeeLayout from "@/components/employee/EmployeeLayout";
-
-// Employee / Other routes that are not in target architecture but exist in codebase
-import EmployeeCheckInView from "@/features/internal-staff/pages/EmployeeCheckInPage";
-import EmployeePOSView from "@/features/concessions-sales/pages/EmployeePOSPage";
-import EmployeeScheduleView from "@/features/internal-staff/pages/EmployeeSchedulePage";
-
-import AdminDashboardView from "@/features/internal-staff/pages/AdminDashboardPage";
-import AdminConcessionInventory from "@/features/concessions-sales/pages/AdminConcessionInventoryPage";
-import AdminEventView from "@/features/internal-staff/pages/AdminEventPage";
-import AdminFinanceView from "@/features/internal-staff/pages/AdminFinancePage";
-import AdminMembersView from "@/features/internal-staff/pages/AdminMembersPage";
-import AdminSettingsView from "@/features/internal-staff/pages/AdminSettingsPage";
-import AdminStaffView from "@/features/internal-staff/pages/AdminStaffPage";
-import AdminConcessionSalesPage from "@/features/concessions-sales/pages/AdminConcessionSalesPage";
-import AdminPayrollPage from "@/features/internal-staff/pages/AdminPayrollPage";
 
 function AppRoutes() {
     return (
@@ -58,10 +48,14 @@ function AppRoutes() {
                         <EmployeeLayout />
                     </RoleRoute>
                 }>
-                    <Route index element={<EmployeePOSView />} />
-                    <Route path="pos" element={<EmployeePOSView />} />
-                    <Route path="checkin" element={<EmployeeCheckInView />} />
-                    <Route path="schedules" element={<EmployeeScheduleView />} />
+                    {employeeConcessionRoutes.map((route, index) => (
+                        route.index ? 
+                            <Route key={`conc-emp-${index}`} index element={route.element} /> : 
+                            <Route key={`conc-emp-${index}`} path={route.path} element={route.element} />
+                    ))}
+                    {employeeStaffRoutes.map((route, index) => (
+                        <Route key={`staff-emp-${index}`} path={route.path} element={route.element} />
+                    ))}
                 </Route>
 
                 {/* Admin Routes */}
@@ -70,7 +64,11 @@ function AppRoutes() {
                         <AdminLayout />
                     </RoleRoute>
                 }>
-                    <Route index element={<AdminDashboardView />} />
+                    {adminStaffRoutes.map((route, index) => (
+                        route.index ? 
+                            <Route key={`staff-adm-${index}`} index element={route.element} /> : 
+                            <Route key={`staff-adm-${index}`} path={route.path} element={route.element} />
+                    ))}
                     {adminCatalogRoutes.map((route, index) => (
                         <Route key={`cat-adm-${index}`} path={route.path} element={route.element} />
                     ))}
@@ -80,16 +78,9 @@ function AppRoutes() {
                     {adminSchedulingRoutes.map((route, index) => (
                         <Route key={`sched-${index}`} path={route.path} element={route.element} />
                     ))}
-                    
-                    {/* Other Admin Routes */}
-                    <Route path="concessions" element={<AdminConcessionInventory />} />
-                    <Route path="events" element={<AdminEventView />} />
-                    <Route path="finance" element={<AdminFinanceView />} />
-                    <Route path="members" element={<AdminMembersView />} />
-                    <Route path="settings" element={<AdminSettingsView />} />
-                    <Route path="staff" element={<AdminStaffView />} />
-                    <Route path="concession-sales" element={<AdminConcessionSalesPage />} />
-                    <Route path="payroll" element={<AdminPayrollPage />} />
+                    {adminConcessionRoutes.map((route, index) => (
+                        <Route key={`conc-adm-${index}`} path={route.path} element={route.element} />
+                    ))}
                 </Route>
             </Routes>
         </BrowserRouter>
