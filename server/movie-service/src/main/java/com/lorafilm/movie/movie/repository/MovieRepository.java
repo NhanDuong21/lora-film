@@ -17,6 +17,7 @@ public interface MovieRepository extends JpaRepository<Movie, Long>, JpaSpecific
     Optional<Movie> findByPublicIdAndDeletedAtIsNull(String publicId);
     Optional<Movie> findBySlugAndDeletedAtIsNull(String slug);
     Optional<Movie> findByTmdbId(Long tmdbId);
+    List<Movie> findByTmdbIdIn(List<Long> tmdbIds);
     
     @Query("SELECT m FROM Movie m WHERE (m.publicId = :identifier OR m.slug = :identifier) AND m.deletedAt IS NULL")
     Optional<Movie> findByIdentifierAndDeletedAtIsNull(@Param("identifier") String identifier);

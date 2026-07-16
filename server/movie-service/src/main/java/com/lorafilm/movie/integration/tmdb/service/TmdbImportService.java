@@ -23,6 +23,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class TmdbImportService {
@@ -72,6 +76,11 @@ public class TmdbImportService {
         }
 
         try {
+            log.info("Triggering TMDB export download on Node.js...");
+            tmdbClient.triggerDownloadExport();
+            // Give it a moment just in case
+            Thread.sleep(2000);
+            
             syncState.setStatus("IN_PROGRESS");
             syncStateRepository.save(syncState);
             
@@ -84,19 +93,21 @@ public class TmdbImportService {
                 TmdbMovieResponse response = objectMapper.readValue(responseBody, TmdbMovieResponse.class);
                 
                 if (response != null && response.getMovies() != null) {
-                    for (TmdbMovieWrapperDto dto : response.getMovies()) {
-                        try {
-                            importMovie(dto);
-                        } catch (Exception e) {
-                            log.error("Failed to import bulk movie TMDB ID {}: {}", dto.getTmdbId(), e.getMessage());
-                        }
+                    try {
+                        importMovies(response.getMovies());
+                    } catch (Exception e) {
+                        log.error("Failed to batch import movies: {}", e.getMessage());
                     }
+                    
                     currentCursor = response.getNextCursor();
                     hasMore = Boolean.TRUE.equals(response.getHasMore());
                     
                     syncState.setCursor(currentCursor);
                     syncState.setLastSyncTime(LocalDateTime.now());
                     syncStateRepository.save(syncState);
+                    
+                    // Sleep to avoid overloading the Node API and TMDB rate limit
+                    Thread.sleep(1000);
                 } else {
                     hasMore = false;
                 }
@@ -124,13 +135,7 @@ public class TmdbImportService {
                     root.get("movies").toString(), 
                     new TypeReference<List<TmdbMovieWrapperDto>>(){}
                 );
-                for (TmdbMovieWrapperDto dto : movies) {
-                    try {
-                        importMovie(dto);
-                    } catch (Exception e) {
-                        log.error("Failed to import latest movie TMDB ID {}: {}", dto.getTmdbId(), e.getMessage());
-                    }
-                }
+                importMovies(movies);
             }
         } catch (Exception e) {
             log.error("Error during TMDB Daily Latest sync", e);
@@ -150,13 +155,7 @@ public class TmdbImportService {
                     root.get("movies").toString(), 
                     new TypeReference<List<TmdbMovieWrapperDto>>(){}
                 );
-                for (TmdbMovieWrapperDto dto : movies) {
-                    try {
-                        importMovie(dto);
-                    } catch (Exception e) {
-                        log.error("Failed to import updated movie TMDB ID {}: {}", dto.getTmdbId(), e.getMessage());
-                    }
-                }
+                importMovies(movies);
             }
         } catch (Exception e) {
             log.error("Error during TMDB Daily Updated sync", e);
@@ -225,6 +224,52 @@ public class TmdbImportService {
             } else {
                 log.debug("SKIP TMDB ID {}: Movie data is up to date.", wrapper.getTmdbId());
             }
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void importMovies(List<TmdbMovieWrapperDto> wrappers) {
+        if (wrappers == null || wrappers.isEmpty()) return;
+
+        List<TmdbMovieWrapperDto> validWrappers = wrappers.stream()
+                .filter(w -> w != null && w.getMovie() != null && "ACCEPT".equalsIgnoreCase(w.getQualityStatus()))
+                .collect(Collectors.toList());
+
+        if (validWrappers.isEmpty()) return;
+
+        List<Long> tmdbIds = validWrappers.stream()
+                .map(TmdbMovieWrapperDto::getTmdbId)
+                .collect(Collectors.toList());
+
+        List<Movie> existingMoviesList = movieRepository.findByTmdbIdIn(tmdbIds);
+        Map<Long, Movie> existingMoviesMap = existingMoviesList.stream()
+                .collect(Collectors.toMap(Movie::getTmdbId, Function.identity()));
+
+        List<Movie> toSave = new ArrayList<>();
+
+        for (TmdbMovieWrapperDto wrapper : validWrappers) {
+            Movie existingMovie = existingMoviesMap.get(wrapper.getTmdbId());
+
+            if (existingMovie == null) {
+                // INSERT flow
+                log.info("Batch INSERT TMDB ID: {}", wrapper.getTmdbId());
+                Movie newMovie = movieMapper.toEntity(wrapper);
+                toSave.add(newMovie);
+            } else {
+                // UPDATE flow
+                if (existingMovie.getTmdbLastUpdated() == null ||
+                   (wrapper.getLastUpdated() != null && wrapper.getLastUpdated().isAfter(existingMovie.getTmdbLastUpdated()))) {
+                    
+                    log.info("Batch UPDATE TMDB ID: {}", wrapper.getTmdbId());
+                    movieMapper.updateEntityFromDto(wrapper, existingMovie);
+                    toSave.add(existingMovie);
+                }
+            }
+        }
+
+        if (!toSave.isEmpty()) {
+            movieRepository.saveAll(toSave);
+            log.info("Batch saved {} movies.", toSave.size());
         }
     }
 }

@@ -28,6 +28,17 @@ public class TmdbClient {
                 .body(String.class);
     }
 
+    public void triggerDownloadExport() {
+        try {
+            restClient.post()
+                    .uri("/api/tmdb/download-export")
+                    .retrieve()
+                    .body(String.class);
+        } catch (Exception e) {
+            // Log and ignore, maybe node job already ran
+        }
+    }
+
     public String fetchLatestMovies() {
         return restClient.get()
                 .uri("/api/tmdb/movies/latest")
