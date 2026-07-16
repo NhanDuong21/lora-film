@@ -54,7 +54,7 @@ apiClient.interceptors.response.use(
             originalRequest.url.includes("/api/auth/login") ||
             originalRequest.url.includes("/api/auth/register") ||
             originalRequest.url.includes("/api/auth/verify") ||
-            originalRequest.url.includes("/api/auth/resend-otp") ||
+            originalRequest.url.includes("/api/auth/send-otp") ||
             originalRequest.url.includes("/api/auth/refresh-token")
         );
 

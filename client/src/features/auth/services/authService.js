@@ -24,7 +24,7 @@ export const login = async (email, password) => {
 };
 
 export const resendOtp = async (email, purpose = "REGISTRATION") => {
-    const response = await apiClient.post(`/api/auth/resend-otp`, {
+    const response = await apiClient.post(`/api/auth/send-otp`, {
         email,
         purpose
     });
