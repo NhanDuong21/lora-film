@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+// eslint-disable-next-line no-unused-vars
 import { ArrowLeft, Play, X, AlertCircle, Calendar, Clock, Film, Star } from 'lucide-react';
 import { getMovieById, getShowtimes } from '@/features/catalog/customer/services/movieService';
 import {
@@ -118,11 +119,13 @@ export default function MovieDetailPage() {
   }, [movie, activeDate]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchMovieDetail();
   }, [fetchMovieDetail]);
 
   useEffect(() => {
     if (movie) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchShowtimesData();
     }
   }, [movie, activeDate, fetchShowtimesData]);

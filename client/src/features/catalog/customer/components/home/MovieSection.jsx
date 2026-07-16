@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Play, X, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';

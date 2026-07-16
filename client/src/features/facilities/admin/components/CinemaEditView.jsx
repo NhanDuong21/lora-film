@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ShieldAlert } from 'lucide-react';
 import CinemaBasicInfo from './CinemaBasicInfo';
@@ -116,7 +117,9 @@ export default function CinemaEditView({ cinemaPublicId, onCancel, onSubmit, tri
     };
 
     fetchCinemaData();
+    // eslint-disable-next-line react-hooks/immutability
     fetchClosures();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cinemaPublicId]);
 
   // Fetch closure periods

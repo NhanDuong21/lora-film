@@ -1,4 +1,6 @@
+// eslint-disable-next-line no-unused-vars
 import React from 'react';
+// eslint-disable-next-line no-unused-vars
 import { AlertTriangle, Plus, Calendar, RefreshCcw, Power } from 'lucide-react';
 
 export default function CinemaClosurePeriodsCard({

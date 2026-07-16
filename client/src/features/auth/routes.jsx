@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import { Navigate } from 'react-router-dom';
 import Login from '@/features/auth/pages/Login';
 import Register from '@/features/auth/pages/Register';

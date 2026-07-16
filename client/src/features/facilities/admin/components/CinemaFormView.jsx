@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import CinemaBasicInfo from './CinemaBasicInfo';

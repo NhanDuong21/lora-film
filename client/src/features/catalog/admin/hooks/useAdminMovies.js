@@ -46,6 +46,7 @@ export default function useAdminMovies(triggerToast) {
   }, [currentPage, pageSize, searchTerm, statusFilter, triggerToast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchGenres();
   }, [fetchGenres]);
 

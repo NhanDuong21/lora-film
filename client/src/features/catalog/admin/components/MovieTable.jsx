@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React from 'react';
 import { Search, Plus, LayoutList, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';

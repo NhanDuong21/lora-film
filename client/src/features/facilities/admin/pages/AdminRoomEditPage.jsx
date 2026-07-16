@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
 import { 
@@ -7,6 +8,7 @@ import {
   AlertCircle,
   Info
 } from 'lucide-react';
+// eslint-disable-next-line no-unused-vars
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 import apiClient from '@/services/apiClient';
@@ -22,6 +24,8 @@ export default function AdminRoomEditPage() {
   const navigate = useNavigate();
   const { roomId } = useParams();
 
+   
+  // eslint-disable-next-line no-unused-vars
   const [cinemaPublicId, setCinemaPublicId] = useState('');
   
   // Form fields

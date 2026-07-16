@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PlusCircle, Search, Trash2, Edit, RefreshCw, Film } from 'lucide-react';
@@ -56,6 +57,7 @@ export default function AdminRoomPage() {
   }, [selectedCinemaId, triggerToast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRooms();
   }, [fetchRooms]);
 

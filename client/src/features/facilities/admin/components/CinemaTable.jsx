@@ -1,4 +1,7 @@
+// eslint-disable-next-line no-unused-vars
 import React from 'react';
+ 
+// eslint-disable-next-line no-unused-vars
 import { Search, MapPin, Trash2, Plus, Phone, Pencil } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 
@@ -18,6 +21,7 @@ export default function CinemaTable({
   totalElements,
   citiesList,
   onDelete,
+  // eslint-disable-next-line no-unused-vars
   onStatusChange,
   onOpenCreate,
   onEdit

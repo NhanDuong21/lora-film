@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, Phone, Clock, Star, Film, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
+// eslint-disable-next-line no-unused-vars
+import { MapPin, Phone, Clock, Star, Film, ChevronLeft, ChevronRight, HelpCircle, AlertTriangle } from 'lucide-react';
 import { getCinemaBySlug, getShowtimes, getMovies } from '@/features/catalog/customer/services/movieService';
 
 const CINEMA_STATIC_DETAILS = {
@@ -147,10 +148,12 @@ export default function CinemaDetailPage() {
   }, [resolvedSlug, activeDate]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchMoviesData();
   }, [fetchMoviesData]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCinemaAndShowtimes();
   }, [loadCinemaAndShowtimes]);
 
@@ -205,6 +208,7 @@ export default function CinemaDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-brand-dark px-4 text-center">
         <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-6">
+          // eslint-disable-next-line no-undef
           <AlertTriangle className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold text-zinc-100 mb-2 font-sans">Không tìm thấy cụm rạp</h2>

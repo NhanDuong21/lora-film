@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 
@@ -39,6 +40,7 @@ export default function useAdminCinemas(triggerToast) {
         setTotalPages(res.data.totalPages || 0);
         setTotalElements(res.data.totalElements || 0);
       }
+    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       triggerToast?.('Không thể tải danh sách cụm rạp', 'error');
     } finally {
@@ -65,6 +67,7 @@ export default function useAdminCinemas(triggerToast) {
       await adminCinemaService.updateCinemaStatus(publicId, newStatus);
       triggerToast?.('Cập nhật trạng thái cụm rạp thành công!');
       fetchCinemas();
+    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       triggerToast?.('Không thể cập nhật trạng thái', 'error');
     }

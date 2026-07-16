@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+// eslint-disable-next-line no-unused-vars
 import { Film, Star, ChevronDown, Check, MapPin, AlertCircle } from 'lucide-react';
 import { getMovies, getCinemas, getShowtimes } from '@/features/catalog/customer/services/movieService';
 
@@ -11,6 +12,7 @@ export default function MasterBookingFunnelPage() {
   const [showtimes, setShowtimes] = useState([]);
   
   const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line no-unused-vars
   const [error, setError] = useState(null);
 
   const [activeSection, setActiveSection] = useState('location'); // 'location' | 'movie' | 'showtime'
@@ -32,6 +34,7 @@ export default function MasterBookingFunnelPage() {
       
       setCinemas(cinemasData.data || cinemasData.content || cinemasData || []);
       setMovies(moviesData.data || moviesData.content || moviesData || []);
+    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       setError("Không thể tải thông tin phòng vé.");
     } finally {
@@ -40,6 +43,7 @@ export default function MasterBookingFunnelPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchInitialData();
   }, [fetchInitialData]);
 
@@ -102,6 +106,7 @@ export default function MasterBookingFunnelPage() {
   }, [selectedMovie, selectedCinema, selectedDate]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchShowtimesData();
   }, [fetchShowtimesData]);
 

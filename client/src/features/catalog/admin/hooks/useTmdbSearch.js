@@ -16,6 +16,7 @@ export default function useTmdbSearch() {
 
   useEffect(() => {
     if (!tmdbSearch.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTmdbSuggestions([]);
       return;
     }

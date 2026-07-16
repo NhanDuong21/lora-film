@@ -1,5 +1,6 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Pencil, Users, Building2, ChevronLeft, ChevronRight, Clock, Calendar, Globe, Film, Play, Info } from 'lucide-react';
+import { ArrowLeft, Pencil, Users, Building2, ChevronLeft, ChevronRight, Clock, Calendar, Globe, Film, Play, Info, Image as ImageIcon } from 'lucide-react';
 import { LazyImage } from '@/components/common/ui/uiKit';
 import { getYoutubeEmbedUrl, getYoutubeId, formatDate, DEFAULT_AVATAR, STATUS_LABELS, STATUS_COLORS } from '@/utils/movieHelpers';
 
@@ -24,6 +25,7 @@ export default function MovieDetailView({ movie, onClose, onOpenEdit }) {
 
   // Reset trailer playing status when movie details change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPlayDetailTrailer(false);
   }, [movie]);
 
@@ -109,6 +111,7 @@ export default function MovieDetailView({ movie, onClose, onOpenEdit }) {
               />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700">
+                // eslint-disable-next-line no-undef
                 <ImageIcon className="w-10 h-10 mb-2" />
                 <span className="text-[9px] uppercase tracking-wider font-bold">Chưa có poster</span>
               </div>

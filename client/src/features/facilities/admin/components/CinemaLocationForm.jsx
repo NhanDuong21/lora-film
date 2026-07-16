@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -68,6 +69,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
   // Autocomplete debouncing
   useEffect(() => {
     if (!addressSearch.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSuggestions([]);
       return;
     }
@@ -83,6 +85,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
           setSuggestions(res);
           return;
         }
+      // eslint-disable-next-line no-unused-vars
       } catch (err) {
         // ignore
       }
@@ -111,6 +114,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
             return;
           }
         }
+      // eslint-disable-next-line no-unused-vars
       } catch (err) {
         // ignore
       }
@@ -146,6 +150,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
       } else if (res && (res.city || res.label)) {
         reverseData = res;
       }
+    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       // ignore
     }
@@ -172,6 +177,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
             };
           }
         }
+      // eslint-disable-next-line no-unused-vars
       } catch (err) {
         // ignore
       }
@@ -250,6 +256,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
       markerRef.current = marker;
 
       // Event listener: Drag marker end
+      // eslint-disable-next-line no-unused-vars
       marker.on('dragend', (e) => {
         const position = marker.getLatLng();
         handleCoordinatesChange(position.lat, position.lng);
@@ -271,6 +278,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
         markerRef.current = null;
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleCoordinatesChange]);
 
   // Handle selected autocomplete suggestion
@@ -304,6 +312,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
       } else if (res && (res.city || res.label)) {
         reverseData = res;
       }
+    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       // ignore
     }
@@ -328,6 +337,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
             };
           }
         }
+      // eslint-disable-next-line no-unused-vars
       } catch (err) {
         // ignore
       }

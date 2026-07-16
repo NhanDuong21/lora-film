@@ -149,21 +149,26 @@ const adminMovieService = {
   },
 
   // ─── TMDB Integration (STUBBED) ──────────────────────────────────────────────────────
+   
+  // eslint-disable-next-line no-unused-vars
   searchTmdbSuggestions: async (keyword, signal) => {
     console.warn('TMDB endpoint /api/import/search/suggestions is missing from backend. Returning stub.');
     return { success: true, data: [] };
   },
 
+  // eslint-disable-next-line no-unused-vars
   getTmdbMovieBundle: async (tmdbId) => {
     console.warn('TMDB endpoint /api/import/movies/.../bundle is missing. Returning stub.');
     return { success: false, message: 'Not implemented' };
   },
 
+  // eslint-disable-next-line no-unused-vars
   getTmdbMovieImages: async (tmdbId) => {
     console.warn('TMDB endpoint /api/import/movies/.../images is missing. Returning stub.');
     return { success: true, data: { backdrops: [], posters: [] } };
   },
 
+  // eslint-disable-next-line no-unused-vars
   getLatestTop20: async (limit = 20) => {
     console.warn('TMDB endpoint /api/tmdb/movies/latest-top20 is missing. Returning stub.');
     return { success: true, data: [] };

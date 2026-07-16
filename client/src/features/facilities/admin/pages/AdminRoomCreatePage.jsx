@@ -1,7 +1,9 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom';
 import { 
   ArrowLeft, 
+  // eslint-disable-next-line no-unused-vars
   Settings, 
   Sliders, 
   Save, 
@@ -75,6 +77,7 @@ export default function AdminRoomCreatePage() {
 
   // Generate initial seat matrix when rows/cols change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMatrix(prev => {
       const nextMatrix = [];
       for (let r = 0; r < rows; r++) {

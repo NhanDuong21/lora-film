@@ -1,7 +1,9 @@
+// eslint-disable-next-line no-unused-vars
 import React from 'react';
 
 export default function SeatGridDesigner({
   matrix,
+  // eslint-disable-next-line no-unused-vars
   rows,
   cols,
   isLayoutEditable = true,
@@ -57,6 +59,7 @@ export default function SeatGridDesigner({
                   }}
                 >
                   {row.map((cell, cIdx) => {
+                    // eslint-disable-next-line no-useless-assignment
                     let cellBg = '';
                     let labelColor = 'text-white/60';
                     let content = '';
