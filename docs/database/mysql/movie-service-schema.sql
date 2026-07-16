@@ -104,7 +104,7 @@ CREATE TABLE movie_genres (
 CREATE TABLE tmdb_sync_state (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     sync_type VARCHAR(50) NOT NULL UNIQUE,
-    cursor VARCHAR(255),
+    `cursor` VARCHAR(255),
     status VARCHAR(50) NOT NULL,
     last_sync_time DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
