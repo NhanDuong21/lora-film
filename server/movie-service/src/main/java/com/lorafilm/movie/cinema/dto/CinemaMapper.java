@@ -21,6 +21,7 @@ public class CinemaMapper {
         dto.setLatitude(cinema.getLatitude());
         dto.setLongitude(cinema.getLongitude());
         dto.setTimezone(cinema.getTimezone());
+        dto.setStatus(cinema.getStatus() != null ? cinema.getStatus().name() : null);
         return dto;
     }
 
