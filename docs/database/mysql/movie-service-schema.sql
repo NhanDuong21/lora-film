@@ -19,6 +19,7 @@
 CREATE TABLE movies (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     public_id CHAR(36) NOT NULL UNIQUE COMMENT 'Khóa ngoại giao tiếp API (UUID)',
+    tmdb_id BIGINT UNIQUE COMMENT 'TMDB ID phục vụ việc tự động đồng bộ',
     title VARCHAR(255) NOT NULL,
     original_title VARCHAR(255),
     slug VARCHAR(280) NOT NULL,
@@ -98,6 +99,16 @@ CREATE TABLE movie_genres (
     PRIMARY KEY (movie_id, genre_id),
     CONSTRAINT fk_movie_genres_movie FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE,
     CONSTRAINT fk_movie_genres_genre FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE tmdb_sync_state (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    sync_type VARCHAR(50) NOT NULL UNIQUE,
+    cursor VARCHAR(255),
+    status VARCHAR(50) NOT NULL,
+    last_sync_time DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- ============================================================

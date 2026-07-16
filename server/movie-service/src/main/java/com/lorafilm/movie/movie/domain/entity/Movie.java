@@ -17,6 +17,9 @@ public class Movie extends BaseAuditableEntity {
     @Column(name = "public_id", updatable = false, unique = true, nullable = false, columnDefinition = "CHAR(36)")
     private String publicId;
 
+    @Column(name = "tmdb_id", unique = true)
+    private Long tmdbId;
+
     @Column(name = "title", nullable = false)
     private String title;
 
@@ -68,6 +71,14 @@ public class Movie extends BaseAuditableEntity {
 
     public void setPublicId(String publicId) {
         this.publicId = publicId;
+    }
+
+    public Long getTmdbId() {
+        return tmdbId;
+    }
+
+    public void setTmdbId(Long tmdbId) {
+        this.tmdbId = tmdbId;
     }
 
     public String getTitle() {
