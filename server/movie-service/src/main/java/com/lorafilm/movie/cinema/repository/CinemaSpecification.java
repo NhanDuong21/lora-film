@@ -13,6 +13,10 @@ public class CinemaSpecification {
         return (root, query, cb) -> cb.equal(root.get("status"), status);
     }
 
+    public static Specification<Cinema> hasStatusIn(java.util.Collection<CinemaStatus> statuses) {
+        return (root, query, cb) -> root.get("status").in(statuses);
+    }
+
     public static Specification<Cinema> hasCity(String city) {
         return (root, query, cb) -> cb.equal(cb.lower(root.get("city")), city.toLowerCase());
     }

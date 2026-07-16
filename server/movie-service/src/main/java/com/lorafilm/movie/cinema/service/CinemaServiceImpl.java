@@ -78,7 +78,7 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     public PageResponse<CinemaDto> getCinemas(String city, String district, String keyword, int page, int size) {
         Specification<Cinema> spec = Specification.where(CinemaSpecification.isNotDeleted())
-                .and(CinemaSpecification.hasStatus(CinemaStatus.ACTIVE));
+                .and(CinemaSpecification.hasStatusIn(List.of(CinemaStatus.ACTIVE, CinemaStatus.TEMPORARILY_CLOSED)));
 
         if (city != null && !city.isEmpty()) {
 
@@ -119,7 +119,7 @@ public class CinemaServiceImpl implements CinemaService {
                 .orElseGet(() -> cinemaRepository.findByActiveSlugAndDeletedAtIsNull(identifier)
                         .orElseThrow(() -> new ResourceNotFoundException("Cinema not found")));
 
-        if (cinema.getStatus() != CinemaStatus.ACTIVE) {
+        if (cinema.getStatus() != CinemaStatus.ACTIVE && cinema.getStatus() != CinemaStatus.TEMPORARILY_CLOSED) {
             throw new ResourceNotFoundException("Cinema not found");
         }
 
@@ -648,7 +648,7 @@ public class CinemaServiceImpl implements CinemaService {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
-        if (cinema.getStatus() != CinemaStatus.ACTIVE) {
+        if (cinema.getStatus() != CinemaStatus.ACTIVE && cinema.getStatus() != CinemaStatus.TEMPORARILY_CLOSED) {
             throw new ResourceNotFoundException("Cinema not found");
         }
 
