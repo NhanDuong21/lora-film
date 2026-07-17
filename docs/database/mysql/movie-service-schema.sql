@@ -104,13 +104,13 @@ CREATE TABLE movie_genres (
 
 CREATE TABLE tmdb_sync_state (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    sync_type VARCHAR(50) NOT NULL UNIQUE,
-    `cursor` VARCHAR(255),
-    status VARCHAR(50) NOT NULL,
-    last_sync_time DATETIME,
+    sync_type VARCHAR(50) NOT NULL UNIQUE COMMENT 'Loại tiến trình đồng bộ (MOVIE, GENRE, PERSON...)',
+    `cursor` VARCHAR(255) COMMENT 'Con trỏ đánh dấu vị trí dữ liệu đã đồng bộ',
+    status VARCHAR(50) NOT NULL COMMENT 'Trạng thái đồng bộ (IDLE, IN_PROGRESS, COMPLETED, FAILED)',
+    last_sync_time DATETIME COMMENT 'Mốc thời gian hoàn thành lần đồng bộ thành công gần nhất',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+) COMMENT 'Quản lý trạng thái đồng bộ dữ liệu từ TMDB';
 
 -- ============================================================
 -- 2. PEOPLE / CREDITS / PRODUCTION
