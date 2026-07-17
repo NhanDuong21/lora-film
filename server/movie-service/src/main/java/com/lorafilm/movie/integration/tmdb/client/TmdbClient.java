@@ -1,8 +1,9 @@
 package com.lorafilm.movie.integration.tmdb.client;
 
-import com.lorafilm.movie.integration.tmdb.config.TmdbProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+
+import com.lorafilm.movie.integration.tmdb.config.TmdbProperties;
 
 @Component
 public class TmdbClient {
