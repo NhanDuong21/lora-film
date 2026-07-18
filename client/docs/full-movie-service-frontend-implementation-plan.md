@@ -50,7 +50,7 @@ Mỗi phase phải:
 
 ## Phase 4 — Integrate Global Location API
 
-- [ ] Address autocomplete
+- [ ] Address autocomplete — BLOCKED: Global Location API requires a secret x-api-key, which is unsafe to store or send from the frontend browser.
 - [ ] Debounce
 - [ ] Abort stale requests
 - [ ] Map address data
