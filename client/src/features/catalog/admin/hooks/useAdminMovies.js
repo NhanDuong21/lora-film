@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminGenreService from '@/features/catalog/admin/services/adminGenreService';
 import { parseApiError } from '@/utils/apiErrorHandler';
+import { normalizePagination } from '@/utils/pagination';
 
 export default function useAdminMovies(triggerToast) {
   const [movies, setMovies] = useState([]);
@@ -32,12 +33,10 @@ export default function useAdminMovies(triggerToast) {
         search: searchTerm || undefined,
         status: statusFilter || 'ALL',
       });
-      const content = data?.data?.data || data?.data?.content || data?.content || data?.data || data || [];
-      const totalEls = data?.data?.totalElements ?? data?.totalElements ?? (Array.isArray(content) ? content.length : 0);
-      const totalPgs = data?.data?.totalPages ?? data?.totalPages ?? Math.ceil(totalEls / pageSize);
-      setMovies(Array.isArray(content) ? content : []);
-      setTotalElements(totalEls);
-      setTotalPages(totalPgs);
+      const normalized = normalizePagination(data?.data || data, pageSize);
+      setMovies(normalized.items);
+      setTotalElements(normalized.totalElements);
+      setTotalPages(normalized.totalPages);
     } catch {
       triggerToast?.('Lỗi khi tải danh sách phim', 'error');
     } finally {

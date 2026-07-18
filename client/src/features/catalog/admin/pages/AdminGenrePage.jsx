@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, Pencil, Trash2, X, Plus, Check, LayoutList } from 'lucide-react';
+import { getErrorMessage } from '@/utils/apiErrorHandler';
 import adminGenreService from '@/features/catalog/admin/services/adminGenreService';
 import SkeletonTable from '@/components/common/SkeletonTable';
 
@@ -28,7 +29,7 @@ export default function AdminGenrePage({ triggerToast }) {
       }
       setGenres(genreList);
     } catch (error) {
-      if (triggerToast) triggerToast(error.response?.data?.message || 'Lỗi khi tải danh sách thể loại', 'error');
+      if (triggerToast) triggerToast(getErrorMessage(error, 'Lỗi khi tải danh sách thể loại'), 'error');
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +75,7 @@ export default function AdminGenrePage({ triggerToast }) {
       setIsModalOpen(false);
       fetchGenres();
     } catch (error) {
-      if (triggerToast) triggerToast(error.response?.data?.message || 'Có lỗi xảy ra', 'error');
+      if (triggerToast) triggerToast(getErrorMessage(error, 'Có lỗi xảy ra'), 'error');
     }
   }, [editingGenre, formData, triggerToast, fetchGenres]);
 
@@ -85,7 +86,7 @@ export default function AdminGenrePage({ triggerToast }) {
         if (triggerToast) triggerToast('Đã xóa thể loại khỏi danh sách!');
         fetchGenres();
       } catch (error) {
-        if (triggerToast) triggerToast(error.response?.data?.message || 'Có lỗi xảy ra khi xóa', 'error');
+        if (triggerToast) triggerToast(getErrorMessage(error, 'Có lỗi xảy ra khi xóa'), 'error');
       }
     }
   }, [triggerToast, fetchGenres]);

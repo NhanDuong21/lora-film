@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { ArrowLeft, Check, Plus, Search, ChevronLeft, ChevronRight, Image as ImageIcon, Play, X, Building2, Users, GripVertical, Trash2, Film, Info, LayoutList } from 'lucide-react';
-import useTmdbSearch from '@/features/catalog/admin/hooks/useTmdbSearch';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminGenreService from '@/features/catalog/admin/services/adminGenreService';
 import { LazyImage, Field, Input, Select, Textarea } from '@/components/common/ui/uiKit';
@@ -14,14 +13,8 @@ import {
   STATUS_LABELS,
   // eslint-disable-next-line no-unused-vars
   STATUS_COLORS,
-  mapTmdbCert,
   FORMAT_MAP_TO_API,
   FORMAT_MAP_FROM_API,
-  extractTrailerUrl,
-  extractPosterUrl,
-  extractBackdropUrl,
-  extractRuntime,
-  extractCountry,
   getYoutubeEmbedUrl,
   getYoutubeId,
   getTodayString,
@@ -78,25 +71,6 @@ export default function MovieFormModal({ selectedMovie, genresList, setGenresLis
   // Drag-and-drop state
   const [draggedIdx, setDraggedIdx] = useState(null);
   const [draggedType, setDraggedType] = useState(null); // 'directors' | 'writers' | 'producers' | 'cast' | 'studios' | 'banners'
-
-  // Hook for TMDB Autocomplete & Carousel
-  const {
-    tmdbSearch,
-    setTmdbSearch,
-    tmdbSuggestions,
-    // eslint-disable-next-line no-unused-vars
-    setTmdbSuggestions,
-    isTmdbSearching,
-    showSuggestions,
-    setShowSuggestions,
-    tmdbLatestMovies,
-    latestMoviesPageIndex,
-    isLatestMoviesLoading,
-    slideOffset,
-    isTransitioning,
-    slideLeft,
-    slideRight
-  } = useTmdbSearch();
 
   // Load edit details or reset form
   useEffect(() => {
@@ -219,116 +193,6 @@ export default function MovieFormModal({ selectedMovie, genresList, setGenresLis
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPlayTrailer(false);
   }, [trailerUrl]);
-
-  // Resolve TMDB Auto-fill
-  const handleSelectTmdb = async (tmdbId) => {
-    setShowSuggestions(false);
-    setTmdbSearch('');
-    setIsLoading(true);
-    try {
-      const res = await adminMovieService.getTmdbMovieBundle(tmdbId);
-      if (!res?.success || !res?.data) {
-        triggerToast?.('Không lấy được dữ liệu từ TMDB', 'error');
-        return;
-      }
-      const bundle = res.data;
-      const mv = bundle.movie || {};
-
-      // Check if movie already exists
-      const searchRes = await adminMovieService.getMovies({ search: mv.title, status: 'ALL' });
-      const existingList = searchRes?.data?.data || searchRes?.data || searchRes?.content || [];
-      const isDuplicate = Array.isArray(existingList) && existingList.some(
-        m => m.title && m.title.toLowerCase().trim() === mv.title.toLowerCase().trim() && m.activeSlug
-      );
-
-      if (isDuplicate) {
-        triggerToast?.('Bộ phim này đã tồn tại trong hệ thống.', 'error');
-        return;
-      }
-
-      // Fetch images
-      let backdrops = [];
-      try {
-        const imagesRes = await adminMovieService.getTmdbMovieImages(tmdbId);
-        backdrops = Array.isArray(imagesRes?.data?.backdrops) ? imagesRes.data.backdrops : [];
-      } catch (err) {
-        console.warn('Failed to fetch TMDB movie backdrops:', err);
-      }
-      setAvailableBackdrops(backdrops);
-      setBackdropImportCount(backdrops.length);
-
-      const runtime = extractRuntime(bundle);
-      const certification = bundle.releaseInfo?.preferredRelease?.certification || '';
-      setFormBasic({
-        title: mv.title || '',
-        originalTitle: mv.originalTitle || '',
-        durationMinutes: runtime ? String(runtime) : '',
-        ageRating: mapTmdbCert(certification),
-        showingStartDate: mv.releaseDate || '',
-        endDate: '',
-        country: extractCountry(bundle),
-        synopsis: mv.overview || '',
-        tmdbReleaseDate: mv.releaseDate || '',
-        originalLanguage: (mv.originalLanguage || '').toUpperCase(),
-        status: 'DRAFT',
-      });
-
-      const posterSrc = extractPosterUrl(bundle);
-      const backdropSrc = extractBackdropUrl(bundle);
-      const trailerSrc = extractTrailerUrl(bundle);
-      setPosterUrl(posterSrc);
-
-      if (backdrops.length > 0) {
-        setBannerUrls(backdrops.map(b => b.url || ''));
-      } else {
-        setBannerUrls(backdropSrc ? [backdropSrc] : ['']);
-      }
-      setTrailerUrl(trailerSrc);
-
-      const rawGenres = Array.isArray(bundle.genres) ? bundle.genres : [];
-      const enrichedGenres = rawGenres.map(tg => {
-        const found = genresList.find(g => g.name && tg.name && g.name.toLowerCase() === tg.name.toLowerCase());
-        return {
-          tmdbId: tg.tmdbId || tg.tmdbGenreId,
-          name: tg.name,
-          existsInDb: !!found,
-          dbPublicId: found?.publicId || null,
-        };
-      });
-      setTmdbGenres(enrichedGenres);
-      const matched = enrichedGenres
-        .filter(tg => tg.existsInDb)
-        .map(tg => ({ publicId: tg.dbPublicId, name: tg.name }));
-      setSelectedGenres(matched);
-
-      const cred = bundle.credits || {};
-      setCast(Array.isArray(cred.mainCast) ? cred.mainCast.slice(0, 12).map(c => ({
-        name: c.name,
-        character: c.character || '',
-        profileUrl: c.profileImageUrl || ''
-      })) : []);
-      setDirectors(Array.isArray(cred.directors) ? cred.directors.map(d => ({ name: d.name, profileUrl: d.profileImageUrl || '' })) : []);
-      setWriters(Array.isArray(cred.writers) ? cred.writers.map(w => ({ name: w.name, profileUrl: w.profileImageUrl || '' })) : []);
-      setProducers(Array.isArray(cred.producers) ? cred.producers.map(p => ({ name: p.name, profileUrl: p.profileImageUrl || '' })) : []);
-      setStudios(Array.isArray(mv.productionCompanies) ? mv.productionCompanies.map(s => ({ name: s.name, logoUrl: s.logoUrl || '' })) : []);
-
-      const audioLang = (mv.originalLanguage || 'EN').toUpperCase();
-      setVersions([{
-        versionName: `2D Vietsub`,
-        format: '2D',
-        audioLanguage: audioLang,
-        subtitleLanguage: 'VI',
-        dubLanguage: 'NONE',
-        status: 'ACTIVE',
-      }]);
-
-      triggerToast?.(`Đã import dữ liệu: ${mv.title || ''} (${runtime} phút)`);
-    } catch (err) {
-      triggerToast?.(parseApiError(err), 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleCleanForm = () => {
     setFormBasic(emptyForm());
@@ -751,133 +615,15 @@ export default function MovieFormModal({ selectedMovie, genresList, setGenresLis
         </div>
       </div>
 
-      {/* TMDB Recommendations Carousel (Add Mode only) */}
-      {!isEdit && (isLatestMoviesLoading || tmdbLatestMovies.length > 0) && (
-        <div className="relative w-full bg-gradient-to-br from-zinc-900/40 to-black/20 border border-zinc-800/40 p-6 rounded-3xl shadow-2xl flex-shrink-0 group overflow-hidden">
-          <label className="text-[#ff7a1a] text-[10px] font-black uppercase tracking-widest block mb-4">
-            GỢI Ý PHIM MỚI TỪ TMDB
-          </label>
-          <div className="relative px-6">
-            {isLatestMoviesLoading ? (
-              <div className="grid grid-cols-5 gap-3">
-                {Array.from({ length: 5 }).map((_, idx) => (
-                  <div key={idx} className="flex flex-col items-center gap-2 animate-pulse w-full">
-                    <div className="w-full aspect-[2/3] bg-zinc-900 border border-zinc-850 rounded-xl" />
-                    <div className="h-3 bg-zinc-900 rounded w-3/4 mt-1" />
-                    <div className="h-3 bg-zinc-900 rounded w-1/2" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={slideLeft}
-                  className="absolute left-0 top-[40%] -translate-y-1/2 z-10 bg-zinc-900/95 hover:bg-[#ff7a1a] hover:text-zinc-950 border border-zinc-800 text-zinc-300 p-2 rounded-full opacity-0 group-hover:opacity-100 -translate-x-3 group-hover:translate-x-0 transition-all duration-300 cursor-pointer shadow-xl"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-
-                <div className="overflow-hidden">
-                  <div
-                    className={`flex w-[140%] -ml-[20%] ${isTransitioning ? 'transition-transform duration-300 ease-in-out' : ''}`}
-                    style={{ transform: `translateX(${slideOffset}%)` }}
-                  >
-                    {Array.from({ length: 7 }).map((_, i) => {
-                      const offset = i - 1;
-                      const m = tmdbLatestMovies[(latestMoviesPageIndex + offset + tmdbLatestMovies.length) % tmdbLatestMovies.length];
-                      if (!m) return null;
-                      const poster = m.posterPath ? `https://image.tmdb.org/t/p/w185${m.posterPath}` : null;
-                      return (
-                        <div key={`${m.tmdbId}-${i}`} className="w-[14.2857%] flex-shrink-0 px-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectTmdb(m.tmdbId)}
-                            className="flex flex-col items-center gap-2 group/item cursor-pointer text-center bg-transparent border-none p-0 m-0 w-full outline-none"
-                          >
-                            <div className="w-full aspect-[2/3] bg-zinc-900 border border-zinc-800 group-hover/item:border-[#ff7a1a]/50 rounded-xl overflow-hidden shadow-md group-hover/item:shadow-brand-orange/15 group-hover/item:scale-105 transition-all duration-300 relative">
-                              {poster ? (
-                                <LazyImage
-                                  src={poster}
-                                  alt={m.title}
-                                  containerClassName="absolute inset-0 w-full h-full border-none rounded-none"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-zinc-700">
-                                  <ImageIcon className="w-5 h-5" />
-                                </div>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-bold text-zinc-300 group-hover/item:text-[#ff7a1a] line-clamp-2 leading-tight transition-colors w-full h-8 flex items-start justify-center">
-                              {m.title}
-                            </span>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={slideRight}
-                  className="absolute right-0 top-[40%] -translate-y-1/2 z-10 bg-zinc-900/95 hover:bg-[#ff7a1a] hover:text-zinc-950 border border-zinc-800 text-zinc-300 p-2 rounded-full opacity-0 group-hover:opacity-100 translate-x-3 group-hover:translate-x-0 transition-all duration-300 cursor-pointer shadow-xl"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TMDB Search Bar (Add Mode only) */}
+{/* TMDB Recommendations Placeholder */}
       {!isEdit && (
-        <div className="relative w-full bg-gradient-to-br from-zinc-900/40 to-black/20 border border-zinc-800/40 p-6 rounded-3xl space-y-2 shadow-2xl flex-shrink-0">
-          <label className="text-[#ff7a1a] text-[10px] font-black uppercase tracking-widest block">
-            TÌM KIẾM & IMPORT DỮ LIỆU TỪ TMDB
+        <div className="relative w-full bg-zinc-900/40 border border-zinc-800/40 p-6 rounded-3xl flex-shrink-0 group overflow-hidden">
+          <label className="text-[#ff7a1a] text-[10px] font-black uppercase tracking-widest block mb-2">
+            ĐỒNG BỘ TMDB
           </label>
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
-            <input
-              type="text"
-              value={tmdbSearch}
-              onChange={e => { setTmdbSearch(e.target.value); setShowSuggestions(true); }}
-              onFocus={() => setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              placeholder="Nhập tên phim để tự động điền dữ liệu (vd: Inception, Avengers...)"
-              className="w-full bg-[#050506] border border-zinc-800 focus:border-[#ff7a1a]/50 rounded-xl py-3 pl-10 pr-4 text-xs transition-all text-zinc-100 placeholder-zinc-500 outline-none"
-            />
-            {(isTmdbSearching || isLoading) && (
-              <div className="absolute right-3.5 top-3.5">
-                <div className="w-4 h-4 border-2 border-[#ff7a1a] border-t-transparent rounded-full animate-spin" />
-              </div>
-            )}
-          </div>
-          {showSuggestions && tmdbSuggestions.length > 0 && (
-            <div className="absolute left-5 right-5 top-full mt-1 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-zinc-800 max-h-64 overflow-y-auto">
-              {tmdbSuggestions.map(s => (
-                <button key={s.tmdbId} type="button" onMouseDown={() => handleSelectTmdb(s.tmdbId)}
-                  className="w-full flex items-center gap-3.5 p-3 hover:bg-zinc-800 transition-colors text-left">
-                  <div className="w-8 h-12 bg-neutral-900 rounded flex-shrink-0 overflow-hidden">
-                    {s.posterThumbnailUrl ? (
-                      <LazyImage
-                        src={s.posterThumbnailUrl}
-                        alt={s.title}
-                        containerClassName="w-full h-full border-none rounded-none"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-700"><ImageIcon className="w-4 h-4" /></div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-zinc-200">{s.title}</p>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">{s.releaseYear || ''}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+          <p className="text-sm text-zinc-400">
+            Dữ liệu phim được hệ thống đồng bộ tự động từ TMDB. Chức năng quản lý đồng bộ sẽ được triển khai ở giai đoạn sau.
+          </p>
         </div>
       )}
 

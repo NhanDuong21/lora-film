@@ -29,14 +29,14 @@ Mỗi phase phải:
 
 ## Phase 2 — Complete Catalog Admin
 
-- [ ] Movie CRUD hardening
-- [ ] Genre management hardening
-- [ ] Movie Versions
-- [ ] Movie Media
-- [ ] People
-- [ ] Credits
-- [ ] Production Companies
-- [ ] Remove obsolete TMDB search mock where appropriate
+- [x] Movie CRUD hardening
+- [x] Genre management hardening
+- [x] Movie Versions
+- [x] Movie Media
+- [x] People
+- [x] Credits
+- [x] Production Companies
+- [x] Remove obsolete TMDB search mock where appropriate
 
 ## Phase 3 — Complete Facilities Admin
 
