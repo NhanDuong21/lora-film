@@ -31,11 +31,11 @@ Mỗi phase phải:
 
 - [x] Movie CRUD hardening
 - [x] Genre management hardening
-- [x] Movie Versions
-- [x] Movie Media
-- [x] People
-- [x] Credits
-- [x] Production Companies
+- [ ] Movie Versions (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
+- [ ] Movie Media (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
+- [ ] People (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
+- [ ] Credits (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
+- [ ] Production Companies (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
 - [x] Remove obsolete TMDB search mock where appropriate
 
 ## Phase 3 — Complete Facilities Admin
