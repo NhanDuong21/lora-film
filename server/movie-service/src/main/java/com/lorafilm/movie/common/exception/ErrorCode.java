@@ -133,7 +133,15 @@ public enum ErrorCode {
 
     // --- Cinema Deletion ---
     CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS("Cinema cannot be deleted because it has auditoriums", 409),
-    CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY("Cinema cannot be deleted because it has showtime history", 409);
+    CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY("Cinema cannot be deleted because it has showtime history", 409),
+
+    // --- Location Integration ---
+    LOCATION_QUERY_INVALID("Location query is invalid", 400),
+    LOCATION_API_RATE_LIMITED("Location API rate limit exceeded", 429),
+    LOCATION_API_TIMEOUT("Location API request timed out", 504),
+    LOCATION_API_UNAVAILABLE("Location API is unavailable", 502),
+    LOCATION_API_RESPONSE_INVALID("Location API response is invalid", 502),
+    LOCATION_API_NOT_CONFIGURED("Location API is not configured", 500);
 
     private final String message;
     private final int httpStatus;

@@ -50,7 +50,18 @@ Mỗi phase phải:
 
 ## Phase 4 — Integrate Global Location API
 
-- [ ] Address autocomplete — BLOCKED: Global Location API requires a secret x-api-key, which is unsafe to store or send from the frontend browser.
+### Phase 4A — Secure Movie Service Proxy
+
+- [x] Server-side Location API client
+- [x] Admin proxy endpoint
+- [x] Secret remains server-side
+- [x] Timeout and error mapping
+- [x] Backend tests
+- [x] Backend build pass
+
+### Phase 4B — Frontend Autocomplete
+
+- [ ] Address autocomplete
 - [ ] Debounce
 - [ ] Abort stale requests
 - [ ] Map address data
