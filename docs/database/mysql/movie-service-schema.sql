@@ -19,6 +19,8 @@
 CREATE TABLE movies (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     public_id CHAR(36) NOT NULL UNIQUE COMMENT 'Khóa ngoại giao tiếp API (UUID)',
+    tmdb_id BIGINT UNIQUE COMMENT 'TMDB ID phục vụ việc tự động đồng bộ',
+    tmdb_last_updated DATETIME COMMENT 'Thời gian cập nhật cuối cùng từ TMDB',
     title VARCHAR(255) NOT NULL,
     original_title VARCHAR(255),
     slug VARCHAR(280) NOT NULL,
@@ -99,6 +101,16 @@ CREATE TABLE movie_genres (
     CONSTRAINT fk_movie_genres_movie FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE,
     CONSTRAINT fk_movie_genres_genre FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE RESTRICT
 );
+
+CREATE TABLE tmdb_sync_state (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    sync_type VARCHAR(50) NOT NULL UNIQUE COMMENT 'Loại tiến trình đồng bộ (MOVIE, GENRE, PERSON...)',
+    `cursor` VARCHAR(255) COMMENT 'Con trỏ đánh dấu vị trí dữ liệu đã đồng bộ',
+    status VARCHAR(50) NOT NULL COMMENT 'Trạng thái đồng bộ (IDLE, IN_PROGRESS, COMPLETED, FAILED)',
+    last_sync_time DATETIME COMMENT 'Mốc thời gian hoàn thành lần đồng bộ thành công gần nhất',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT 'Quản lý trạng thái đồng bộ dữ liệu từ TMDB';
 
 -- ============================================================
 -- 2. PEOPLE / CREDITS / PRODUCTION
