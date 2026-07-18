@@ -35,6 +35,18 @@ const adminRoomService = {
   bulkCreateSeats: async (auditoriumPublicId, seatsData) => {
     const response = await apiClient.post(`/api/admin/auditoriums/${auditoriumPublicId}/seats/bulk`, seatsData);
     return response.data;
+  },
+
+  // Create a maintenance window for an auditorium
+  createMaintenanceWindow: async (auditoriumPublicId, windowData) => {
+    const response = await apiClient.post(`/api/admin/auditoriums/${auditoriumPublicId}/maintenance-windows`, windowData);
+    return response.data;
+  },
+
+  // Cancel a maintenance window
+  cancelMaintenanceWindow: async (maintenanceWindowId) => {
+    const response = await apiClient.put(`/api/admin/maintenance-windows/${maintenanceWindowId}/cancel`);
+    return response.data;
   }
 };
 

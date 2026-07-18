@@ -55,6 +55,12 @@ const adminCinemaService = {
     return response.data;
   },
 
+  // Update Cinema Media
+  updateCinemaMedia: async (mediaPublicId, mediaData) => {
+    const response = await apiClient.put(`/api/admin/cinema-media/${mediaPublicId}`, mediaData);
+    return response.data;
+  },
+
   // Get admin cinema detail
   getAdminCinemaDetail: async (publicId) => {
     const response = await apiClient.get(`/api/admin/cinemas/${publicId}`);

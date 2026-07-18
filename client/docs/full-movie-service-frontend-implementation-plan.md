@@ -40,13 +40,13 @@ Mỗi phase phải:
 
 ## Phase 3 — Complete Facilities Admin
 
-- [ ] Cinema CRUD hardening
-- [ ] Cinema Media
-- [ ] Operating Hours
-- [ ] Closure Periods
-- [ ] Auditorium maintenance
-- [ ] Seat Types
-- [ ] Seat Layout hardening
+- [x] Cinema CRUD hardening
+- [x] Cinema Media
+- [x] Operating Hours
+- [x] Closure Periods
+- [x] Auditorium maintenance
+- [x] Seat Types
+- [x] Seat Layout hardening
 
 ## Phase 4 — Integrate Global Location API
 
