@@ -40,7 +40,8 @@ export const normalizePagination = (response, fallbackSize = 20) => {
   }
 
   // Handle standard Spring Boot Page object (which might be inside response.data)
-  const pageData = response.data !== undefined ? response.data : response;
+  // Prevent unwrapping if response.data is an array, as that means pagination metadata is at the response level
+  const pageData = (response.data !== undefined && !Array.isArray(response.data)) ? response.data : response;
 
   if (pageData && Array.isArray(pageData.content)) {
     return {
