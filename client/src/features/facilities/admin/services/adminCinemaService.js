@@ -31,23 +31,7 @@ const adminCinemaService = {
     return response.data;
   },
 
-  // Geocoding Suggestions
-  suggestAddress: async (keyword) => {
-    const response = await apiClient.get('/api/v1/address/suggest', { params: { q: keyword } });
-    return response.data;
-  },
 
-  // Forward Geocode
-  forwardGeocode: async (address) => {
-    const response = await apiClient.post('/api/v1/geocode', { address });
-    return response.data;
-  },
-
-  // Reverse Geocode
-  reverseGeocode: async (lat, lon) => {
-    const response = await apiClient.get('/api/v1/geocode/reverse', { params: { lat, lon } });
-    return response.data;
-  },
 
   // Save Cinema Media
   createCinemaMedia: async (cinemaPublicId, mediaData) => {

@@ -31,11 +31,11 @@ Mỗi phase phải:
 
 - [x] Movie CRUD hardening
 - [x] Genre management hardening
-- [ ] Movie Versions (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
-- [ ] Movie Media (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
-- [ ] People (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
-- [ ] Credits (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
-- [ ] Production Companies (EXISTING EMBEDDED FLOW ONLY / PARTIAL)
+- [x] Movie Versions — managed in Movie Detail
+- [x] Movie Media — managed in Movie Detail
+- [ ] People — PARTIAL: inline only, missing paginated list API
+- [x] Credits — managed in Movie Detail
+- [ ] Production Companies — PARTIAL: inline assignment, missing paginated list API
 - [x] Remove obsolete TMDB search mock where appropriate
 
 ## Phase 3 — Complete Facilities Admin
@@ -61,12 +61,14 @@ Mỗi phase phải:
 
 ### Phase 4B — Frontend Autocomplete
 
-- [ ] Address autocomplete
-- [ ] Debounce
-- [ ] Abort stale requests
-- [ ] Map address data
-- [ ] Error and empty states
-- [ ] Cinema create/edit integration
+- [x] Address autocomplete
+- [x] Debounce
+- [x] Abort stale requests
+- [x] Map address data
+- [x] Error and empty states
+- [x] Cinema create/edit integration
+- [x] Frontend build pass
+- [x] Frontend lint pass
 
 ## Phase 5 — Manual Showtime Management
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
-import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
+import { CinemaLocationAutocomplete } from '../../components/CinemaLocationAutocomplete';
 
 export default function CinemaOverviewTab({ cinema, onUpdate }) {
   const [formData, setFormData] = useState({
@@ -17,9 +17,6 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [addressSuggestions, setAddressSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
 
   useEffect(() => {
     if (cinema) {
@@ -59,36 +56,15 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
     setIsSubmitting(false);
   };
 
-  // Basic Address Suggestion Debouncer (Phase 4 Ready)
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (formData.address && formData.address.length > 3 && showSuggestions) {
-        setIsSearchingAddress(true);
-        try {
-          const res = await adminCinemaService.suggestAddress(formData.address);
-          if (res?.success && res.data) {
-            setAddressSuggestions(res.data);
-          }
-        } catch (err) {
-          console.error("Failed to suggest address", err);
-        } finally {
-          setIsSearchingAddress(false);
-        }
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [formData.address, showSuggestions]);
-
   const selectAddress = (addr) => {
     setFormData(prev => ({
       ...prev,
-      address: addr.displayName,
+      address: addr.address || addr.label || prev.address,
       city: addr.city || prev.city,
       district: addr.district || prev.district,
-      latitude: addr.lat,
-      longitude: addr.lon
+      latitude: addr.latitude || prev.latitude,
+      longitude: addr.longitude || prev.longitude
     }));
-    setShowSuggestions(false);
   };
 
   return (
@@ -117,38 +93,13 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
               <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
                 Địa Chỉ Chi Tiết <span className="text-brand-coral">*</span>
               </label>
-              <input
-                type="text"
-                name="address"
-                required
+              <CinemaLocationAutocomplete
+                id="address"
                 value={formData.address}
-                onChange={(e) => {
-                  handleChange(e);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors"
+                onChange={(val) => setFormData(prev => ({ ...prev, address: val }))}
+                onSelect={selectAddress}
                 placeholder="Nhập địa chỉ..."
               />
-              {/* Autocomplete Dropdown (Phase 4 Ready) */}
-              {showSuggestions && (addressSuggestions.length > 0 || isSearchingAddress) && (
-                <div className="absolute z-50 mt-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                  {isSearchingAddress ? (
-                    <div className="p-4 text-xs text-zinc-500 text-center">Đang tìm kiếm...</div>
-                  ) : (
-                    addressSuggestions.map((s, i) => (
-                      <div 
-                        key={i} 
-                        onClick={() => selectAddress(s)}
-                        className="p-3 hover:bg-zinc-800 cursor-pointer text-xs text-zinc-300 border-b border-zinc-800 last:border-0"
-                      >
-                        {s.displayName}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
             </div>
 
             <div>
