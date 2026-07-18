@@ -116,6 +116,7 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
                           <Clock className="w-4 h-4 text-zinc-500 hidden md:block" />
                           <input
                             type="time"
+                            max="23:59"
                             value={h.openTime}
                             onChange={(e) => handleChange(h.dayOfWeek, 'openTime', e.target.value)}
                             required={!h.isClosed}
@@ -126,6 +127,7 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
                         <div className="flex items-center gap-2">
                           <input
                             type="time"
+                            max="23:59"
                             value={h.closeTime}
                             onChange={(e) => handleChange(h.dayOfWeek, 'closeTime', e.target.value)}
                             required={!h.isClosed}

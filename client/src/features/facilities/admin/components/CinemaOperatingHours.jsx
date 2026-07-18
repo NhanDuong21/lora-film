@@ -38,6 +38,7 @@ export default function CinemaOperatingHours({ operatingHours, onHoursChange }) 
                 <div className="flex items-center gap-1.5 shrink-0">
                   <input
                     type="time"
+                    max="23:59"
                     value={oh.openTime}
                     onChange={e => onHoursChange(idx, 'openTime', e.target.value)}
                     className="bg-zinc-900 border border-zinc-800 focus:border-orange-500/40 rounded-lg p-1.5 px-1 w-20 text-center text-[10px] text-zinc-100 focus:outline-none shrink-0"
@@ -45,6 +46,7 @@ export default function CinemaOperatingHours({ operatingHours, onHoursChange }) 
                   <span className="text-[9px] text-zinc-600 font-bold uppercase shrink-0">đến</span>
                   <input
                     type="time"
+                    max="23:59"
                     value={oh.closeTime}
                     onChange={e => onHoursChange(idx, 'closeTime', e.target.value)}
                     className="bg-zinc-900 border border-zinc-800 focus:border-orange-500/40 rounded-lg p-1.5 px-1 w-20 text-center text-[10px] text-zinc-100 focus:outline-none shrink-0"

@@ -7,7 +7,7 @@ import { getCinemaBySlug, getShowtimes, getMovies } from '@/features/catalog/cus
 const CINEMA_STATIC_DETAILS = {
   'lora-nguyen-du': {
     hotline: "1900 6017",
-    hours: "08:00 - 24:00",
+    hours: "08:00 - 23:59",
     mapUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.4851772635955!2d106.69342777573617!3d10.774105359235887!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3919485177263595%3A0x1c8b368beeeae3df!2zMTE2IE5ndXnhu4VuIER1LCBC4bq_biBUaMOgbmgsIFF14bqtbiAxLCBUaMOgbmggcGjhu5EgSOG7kyBDaMOtIE1pbmgsIFZpZXRuYW0!5e0!3m2!1svi!2s!4v1717000000000!5m2!1svi!2s",
     banners: [
       "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1200&auto=format&fit=crop&q=80",
@@ -17,7 +17,7 @@ const CINEMA_STATIC_DETAILS = {
   },
   'lora-thao-dien': {
     hotline: "1900 6018",
-    hours: "08:30 - 24:00",
+    hours: "08:30 - 23:59",
     mapUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.203799650058!2d106.75019057573653!3d10.795764058836566!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752613d5089c25%3A0xfcf2d3fb89faef!2zVmluY29tIE1lZ2EgTWFsbCBUaOG6o28gxJBp4buBbg!5e0!3m2!1svi!2s!4v1717000000001!5m2!1svi!2s",
     banners: [
       "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1200&auto=format&fit=crop&q=80",
@@ -27,7 +27,7 @@ const CINEMA_STATIC_DETAILS = {
   },
   'lora-royal-city': {
     hotline: "1900 6019",
-    hours: "09:00 - 24:00",
+    hours: "09:00 - 23:59",
     mapUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.8967431526435!2d105.81299907602517!3d21.000780280642954!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135ac9ad89b6b7d%3A0xbcfad5ffb0f49b14!2zVmluY29tIE1lZ2EgTWFsbCBUaOG6o28gxJBp4buBbg!5e0!3m2!1svi!2s!4v1717000000002!5m2!1svi!2s",
     banners: [
       "https://images.unsplash.com/photo-1513106580091-1d82408b8cd6?w=1200&auto=format&fit=crop&q=80",
