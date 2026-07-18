@@ -1,9 +1,8 @@
 // eslint-disable-next-line no-unused-vars
 import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import useAdminMovies from '@/features/catalog/admin/hooks/useAdminMovies';
 import MovieTable from '@/features/catalog/admin/components/MovieTable';
-import MovieDetailView from '@/features/catalog/customer/components/MovieDetailView';
 import MovieFormModal from '@/features/catalog/admin/components/MovieFormModal';
 
 export default function AdminMoviePage() {
@@ -11,11 +10,12 @@ export default function AdminMoviePage() {
 
   // Orchestrator States
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
 
   // Hook for movie list management
   const adminMovies = useAdminMovies(triggerToast);
+
+  const navigate = useNavigate();
 
   const handleOpenAdd = () => {
     setSelectedMovie(null);
@@ -28,22 +28,8 @@ export default function AdminMoviePage() {
   };
 
   const handleOpenDetail = (movie) => {
-    setSelectedMovie(movie);
-    setIsDetailOpen(true);
+    navigate(`/admin/movies/${movie.publicId}`);
   };
-
-  if (isDetailOpen && selectedMovie) {
-    return (
-      <MovieDetailView
-        movie={selectedMovie}
-        onClose={() => setIsDetailOpen(false)}
-        onOpenEdit={(movie) => {
-          setIsDetailOpen(false);
-          handleOpenEdit(movie);
-        }}
-      />
-    );
-  }
 
   if (isFormOpen) {
     return (
