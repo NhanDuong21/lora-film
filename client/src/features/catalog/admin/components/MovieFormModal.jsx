@@ -49,12 +49,12 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
     if (!selectedMovie) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormBasic(emptyForm());
-       
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormErrors({});
       return;
     }
     // For edit, just populate basic fields
-     
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFormBasic({
       title: selectedMovie.title || '',
       originalTitle: selectedMovie.originalTitle || '',

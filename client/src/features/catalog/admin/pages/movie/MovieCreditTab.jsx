@@ -49,7 +49,7 @@ export default function MovieCreditTab({ movie, onUpdate }) {
         return;
       }
 
-       
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCredits(prev => [...prev, {
         personPublicId: person.publicId,
         publicId: person.publicId, // Display purpose
@@ -68,7 +68,7 @@ export default function MovieCreditTab({ movie, onUpdate }) {
   };
 
   const removeCreditLocal = (localId) => {
-     
+    // eslint-disable-next-line react-hooks/set-state-in-effect
       setCredits(prev => prev.filter(c => c.localId !== localId));
   };
 

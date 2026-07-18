@@ -42,7 +42,7 @@ export default function MovieGenreTab({ movie, onUpdate }) {
   }, [movie]);
 
   const toggleGenre = (id) => {
-     
+    // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(gid => gid !== id) : [...prev, id]
     );

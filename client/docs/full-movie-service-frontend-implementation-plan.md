@@ -44,7 +44,7 @@ Mỗi phase phải:
 - [x] Cinema Media
 - [x] Operating Hours
 - [x] Closure Periods
-- [x] Auditorium maintenance
+- [ ] Auditorium maintenance — PARTIAL: create supported, list endpoint missing
 - [x] Seat Types
 - [x] Seat Layout hardening
 

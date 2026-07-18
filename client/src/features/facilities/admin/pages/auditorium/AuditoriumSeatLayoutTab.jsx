@@ -169,8 +169,15 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
           if (seatTypeCode === 'COUPLE') {
             const indexInCoupleCols = coupleCols.indexOf(c);
             if (indexInCoupleCols !== -1) {
-              const pairIndex = Math.floor(indexInCoupleCols / 2) + 1;
-              pairGroup = `${rowLabel}_P${pairIndex}`;
+              const isEvenIndex = indexInCoupleCols % 2 === 0;
+              const hasPartner = isEvenIndex 
+                  ? indexInCoupleCols + 1 < coupleCols.length 
+                  : indexInCoupleCols - 1 >= 0;
+              
+              if (hasPartner) {
+                const pairIndex = Math.floor(indexInCoupleCols / 2) + 1;
+                pairGroup = `${rowLabel}_P${pairIndex}`;
+              }
             }
           }
 
