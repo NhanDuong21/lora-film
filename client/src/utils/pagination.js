@@ -67,6 +67,19 @@ export const normalizePagination = (response, fallbackSize = 20) => {
     };
   }
 
+  // Handle LoraFilm custom PageResponse format where items are in .data and page is .pageNo
+  if (pageData && Array.isArray(pageData.data)) {
+    return {
+      items: pageData.data,
+      page: pageData.pageNo ?? pageData.page ?? 0,
+      size: pageData.pageSize ?? pageData.size ?? fallbackSize,
+      totalElements: pageData.totalElements ?? pageData.data.length,
+      totalPages: pageData.totalPages ?? 1,
+      first: pageData.first ?? ((pageData.pageNo ?? pageData.page) === 0),
+      last: pageData.last ?? true
+    };
+  }
+
   // Final fallback
   return {
     items: [],
