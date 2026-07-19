@@ -12,6 +12,7 @@ import com.lorafilm.movie.common.enums.ActiveStatus;
 public interface CinemaMediaRepository extends JpaRepository<CinemaMedia, Long> {
     List<CinemaMedia> findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(Long cinemaId, ActiveStatus status);
     java.util.Optional<CinemaMedia> findByPublicIdAndDeletedAtIsNull(String publicId);
+    boolean existsByCinemaIdAndDeletedAtIsNull(Long cinemaId);
     List<CinemaMedia> findByCinemaIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
             Long cinemaId,
             com.lorafilm.movie.cinema.domain.enums.CinemaMediaType mediaType,

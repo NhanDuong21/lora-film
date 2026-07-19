@@ -270,6 +270,16 @@ public class CinemaServiceImpl implements CinemaService {
             if (!hasAuditorium) {
                 throw new BusinessException(ErrorCode.CINEMA_MISSING_AUDITORIUM);
             }
+
+            boolean hasImages = cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId());
+            if (!hasImages) {
+                throw new BusinessException(ErrorCode.CINEMA_MISSING_IMAGES);
+            }
+
+            boolean hasOperatingHours = cinemaOperatingHourRepository.existsByCinemaId(cinema.getId());
+            if (!hasOperatingHours) {
+                throw new BusinessException(ErrorCode.CINEMA_MISSING_OPERATING_HOURS);
+            }
         }
 
         cinema.setStatus(targetStatus);

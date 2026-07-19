@@ -196,6 +196,8 @@ class CinemaServiceImplTest {
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
         when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
+        when(cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
+        when(cinemaOperatingHourRepository.existsByCinemaId(1L)).thenReturn(true);
         when(cinemaRepository.save(any(Cinema.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CinemaResponse expectedResponse = new CinemaResponse();
@@ -205,7 +207,6 @@ class CinemaServiceImplTest {
 
         CinemaResponse response = cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE);
 
-        assertNotNull(response);
         assertEquals(CinemaStatus.ACTIVE, response.getStatus());
         verify(cinemaRepository, times(1)).save(any(Cinema.class));
     }
@@ -223,6 +224,41 @@ class CinemaServiceImplTest {
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE));
         assertEquals(ErrorCode.CINEMA_MISSING_AUDITORIUM, exception.getErrorCode());
+        verify(cinemaRepository, never()).save(any(Cinema.class));
+    }
+
+    @Test
+    void updateCinemaStatus_shouldThrowException_whenActivatingWithoutImages() {
+        Cinema existingCinema = new Cinema();
+        existingCinema.setId(1L);
+        existingCinema.setPublicId("uuid-123");
+        existingCinema.setStatus(CinemaStatus.DRAFT);
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
+        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
+        when(cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(false);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE));
+        assertEquals(ErrorCode.CINEMA_MISSING_IMAGES, exception.getErrorCode());
+        verify(cinemaRepository, never()).save(any(Cinema.class));
+    }
+
+    @Test
+    void updateCinemaStatus_shouldThrowException_whenActivatingWithoutOperatingHours() {
+        Cinema existingCinema = new Cinema();
+        existingCinema.setId(1L);
+        existingCinema.setPublicId("uuid-123");
+        existingCinema.setStatus(CinemaStatus.DRAFT);
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
+        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
+        when(cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
+        when(cinemaOperatingHourRepository.existsByCinemaId(1L)).thenReturn(false);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE));
+        assertEquals(ErrorCode.CINEMA_MISSING_OPERATING_HOURS, exception.getErrorCode());
         verify(cinemaRepository, never()).save(any(Cinema.class));
     }
 
