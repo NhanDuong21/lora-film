@@ -7,7 +7,8 @@ import {
   Settings, 
   Sliders, 
   Save, 
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
@@ -18,6 +19,7 @@ import RoomForm from '@/features/facilities/admin/components/RoomForm';
 import BrushToolbar from '@/features/facilities/admin/components/BrushToolbar';
 import StatsPanel from '@/features/facilities/admin/components/StatsPanel';
 import SeatGridDesigner from '@/features/facilities/admin/components/SeatGridDesigner';
+import AutoLayoutWizardModal from '@/features/facilities/admin/components/AutoLayoutWizardModal';
 
 export default function AdminRoomCreatePage() {
   const { triggerToast } = useOutletContext() || {};
@@ -43,6 +45,9 @@ export default function AdminRoomCreatePage() {
   const [activeBrush, setActiveBrush] = useState('STANDARD'); 
   const [matrix, setMatrix] = useState([]);
   const [isMouseDown, setIsMouseDown] = useState(false);
+
+  // Auto-Layout Wizard State
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   // Available seat types from DB
   const [dbSeatTypes, setDbSeatTypes] = useState([]);
@@ -80,6 +85,9 @@ export default function AdminRoomCreatePage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMatrix(prev => {
+      // Avoid resetting if dimensions match exactly (e.g. after wizard apply)
+      if (prev.length === rows && prev[0]?.length === cols) return prev;
+      
       const nextMatrix = [];
       for (let r = 0; r < rows; r++) {
         const row = [];
@@ -195,6 +203,13 @@ export default function AdminRoomCreatePage() {
     }
 
     return seededTypes.length > 0 ? seededTypes : currentTypes;
+  };
+
+  // Handle Wizard Apply
+  const handleApplyWizard = (newMatrix, newRows, newCols) => {
+    setRows(newRows);
+    setCols(newCols);
+    setMatrix(newMatrix);
   };
 
   // Submit Handler
@@ -388,6 +403,15 @@ export default function AdminRoomCreatePage() {
         <aside className="w-80 bg-zinc-900 border-r border-zinc-800 p-5 flex flex-col justify-between overflow-y-auto shrink-0 select-none">
           <div className="space-y-6">
             
+            {/* Quick Layout Trigger */}
+            <button 
+              onClick={() => setIsWizardOpen(true)}
+              className="w-full flex items-center justify-center gap-2 bg-zinc-950 border border-brand-orange/40 hover:bg-brand-orange/10 text-brand-orange font-black py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition-all"
+            >
+              <Sparkles className="w-4 h-4" />
+              Sinh sơ đồ tự động
+            </button>
+
             {/* General Info Form */}
             <RoomForm
               roomName={roomName}
@@ -487,6 +511,12 @@ export default function AdminRoomCreatePage() {
           </div>
 
         </main>
+        <AutoLayoutWizardModal 
+          isOpen={isWizardOpen} 
+          onClose={() => setIsWizardOpen(false)} 
+          onApply={handleApplyWizard} 
+          currentSkipIO={skipIO}
+        />
       </div>
     </div>
   );
