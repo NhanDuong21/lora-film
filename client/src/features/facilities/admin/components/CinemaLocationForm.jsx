@@ -72,7 +72,7 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
       
       if (data && data.address) {
         const addressObj = data.address;
-        const city = addressObj.city || addressObj.province || addressObj.state || '';
+        const city = addressObj.city || addressObj.province || addressObj.state || addressObj.municipality || addressObj.town || '';
         const district = addressObj.county || addressObj.district || addressObj.suburb || addressObj.city_district || '';
         const addressText = data.display_name || '';
         const countryCode = addressObj.country_code ? addressObj.country_code.toUpperCase() : null;

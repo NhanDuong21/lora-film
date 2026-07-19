@@ -26,7 +26,7 @@ export const searchLocationSuggestions = async ({ query, limit = 8, signal }) =>
 
     const suggestions = response.data.map((item) => {
       const address = item.address || {};
-      const city = address.city || address.province || address.state || '';
+      const city = address.city || address.province || address.state || address.municipality || address.town || '';
       const district = address.county || address.district || address.suburb || address.city_district || '';
       
       return {
