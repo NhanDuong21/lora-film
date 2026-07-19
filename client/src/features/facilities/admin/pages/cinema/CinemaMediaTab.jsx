@@ -13,7 +13,8 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
     file: null,
     title: '',
     displayOrder: 0,
-    isPrimary: false
+    isPrimary: false,
+    status: 'ACTIVE'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -21,7 +22,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
   const mediaList = cinema?.gallery || [];
 
   const openAddForm = () => {
-    setFormData({ mediaType: 'GALLERY', url: '', file: null, title: '', displayOrder: 0, isPrimary: false });
+    setFormData({ mediaType: 'GALLERY', url: '', file: null, title: '', displayOrder: 0, isPrimary: false, status: 'ACTIVE' });
     setEditingId(null);
     setIsFormOpen(true);
   };
@@ -33,7 +34,8 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
       file: null,
       title: media.title || '',
       displayOrder: media.displayOrder || 0,
-      isPrimary: media.isPrimary || false
+      isPrimary: media.isPrimary || false,
+      status: media.status || 'ACTIVE'
     });
     setEditingId(media.publicId);
     setIsFormOpen(true);
