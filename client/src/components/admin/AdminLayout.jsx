@@ -19,9 +19,11 @@ export default function AdminLayout({ onBackHome }) {
     const path = location.pathname;
     if (path.endsWith('/movies')) return 'movies';
     if (path.endsWith('/genres')) return 'genres';
-    if (path.endsWith('/showtimes')) return 'showtimes';
-    if (path.endsWith('/events')) return 'events-promo';
-    if (path.endsWith('/cinemas')) return 'clusters';
+    if (path.endsWith('/showtimes') || path.includes('/showtimes')) return 'showtimes';
+    if (path.endsWith('/events') || path.includes('/events')) return 'events-promo';
+    if (path.endsWith('/cinemas') || path.includes('/cinemas')) return 'clusters';
+    if (path.endsWith('/rooms') || path.includes('/rooms')) return 'rooms';
+    if (path.endsWith('/seat-types') || path.includes('/seat-types')) return 'seat-types';
     if (path.endsWith('/finance')) return 'tickets';
     if (path.endsWith('/concessions')) return 'concessions';
     if (path.endsWith('/concession-sales')) return 'concession-sales';
