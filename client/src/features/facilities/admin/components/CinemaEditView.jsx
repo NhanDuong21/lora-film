@@ -163,7 +163,11 @@ export default function CinemaEditView({ cinemaPublicId, onCancel, onSubmit, tri
     try {
       await onSubmit(formData, operatingHours, {
         bannerUrl,
-        galleryUrls: galleryUrls.filter(url => url && url.trim().length > 0),
+        galleryUrls: galleryUrls.filter(url => {
+          if (!url) return false;
+          if (typeof url === 'string') return url.trim().length > 0;
+          return true;
+        }),
         mapImageUrl,
         originalMedia
       });

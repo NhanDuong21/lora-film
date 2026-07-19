@@ -26,7 +26,7 @@ export default function ImageCropDialog({ imageUrl, aspectRatio, onCrop, onCance
       <div className="bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col h-[80vh] max-h-[600px]">
         <div className="flex justify-between items-center p-4 border-b border-zinc-900">
           <h3 className="text-sm font-black text-white uppercase tracking-wider">Cắt Ảnh</h3>
-          <button onClick={onCancel} className="text-zinc-500 hover:text-white transition-colors">
+          <button type="button" onClick={onCancel} className="text-zinc-500 hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -59,12 +59,14 @@ export default function ImageCropDialog({ imageUrl, aspectRatio, onCrop, onCance
           </div>
           <div className="flex gap-3">
             <button
+              type="button"
               onClick={onCancel}
               className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors"
             >
               Hủy
             </button>
             <button
+              type="button"
               onClick={createCroppedImage}
               className="flex-1 flex items-center justify-center gap-2 bg-brand-orange hover:bg-opacity-90 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors"
             >
