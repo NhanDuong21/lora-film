@@ -114,6 +114,22 @@ export default function AdminCinemaDetailPage() {
           </button>
         </div>
 
+        {/* Setup Progress Indicator for DRAFT cinemas */}
+        {cinema.status === 'DRAFT' && (
+          <div className="mt-6 bg-zinc-900/50 border border-amber-500/30 rounded-xl p-4 flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest">Tiến Độ Thiết Lập (Bản Nháp)</h3>
+              <span className="text-xs font-bold text-zinc-400">Hoàn thiện để xuất bản</span>
+            </div>
+            <div className="flex gap-2">
+              <div className={`h-1.5 flex-1 rounded-full ${cinema.name ? 'bg-amber-500' : 'bg-zinc-800'}`} title="Thông tin cơ bản"></div>
+              <div className={`h-1.5 flex-1 rounded-full ${cinema.operatingHours?.length > 0 ? 'bg-amber-500' : 'bg-zinc-800'}`} title="Giờ hoạt động"></div>
+              <div className={`h-1.5 flex-1 rounded-full ${cinema.gallery?.length > 0 ? 'bg-amber-500' : 'bg-zinc-800'}`} title="Hình ảnh"></div>
+              <div className={`h-1.5 flex-1 rounded-full ${(cinema.activeAuditoriums?.length > 0) ? 'bg-amber-500' : 'bg-zinc-800'}`} title="Phòng chiếu"></div>
+            </div>
+          </div>
+        )}
+
         {/* Tabs navigation */}
         <div className="flex gap-2 mt-6 overflow-x-auto no-scrollbar">
           {tabs.map(tab => (

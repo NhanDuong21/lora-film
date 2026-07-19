@@ -33,6 +33,23 @@ const adminCinemaService = {
 
 
 
+  // Upload Cinema Media file to Cloudinary via backend
+  uploadCinemaMedia: async (file, type, cinemaPublicId = null) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    if (cinemaPublicId) {
+      formData.append('cinemaPublicId', cinemaPublicId);
+    }
+    
+    const response = await apiClient.post('/api/admin/cinemas/media/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
   // Save Cinema Media
   createCinemaMedia: async (cinemaPublicId, mediaData) => {
     const response = await apiClient.post(`/api/admin/cinemas/${cinemaPublicId}/media`, mediaData);

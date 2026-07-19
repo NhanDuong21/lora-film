@@ -109,7 +109,14 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
               <Film className="w-6 h-6 text-zinc-650" />
             </div>
             <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Không tìm thấy phòng chiếu nào</div>
-            <p className="text-[10px] text-zinc-600 max-w-xs">Nhấn nút "Thêm phòng chiếu mới" để cấu hình phòng chiếu cho rạp này.</p>
+            <p className="text-[10px] text-zinc-600 max-w-xs mb-4">Nhấn nút bên dưới để cấu hình phòng chiếu đầu tiên cho rạp này.</p>
+            <button
+              onClick={() => navigate(`/admin/rooms/create?cinemaId=${cinema?.publicId}`)}
+              className="flex items-center gap-2 bg-brand-coral hover:bg-opacity-95 text-white px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-brand-coral/20 mt-4"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Tạo Phòng Chiếu Đầu Tiên</span>
+            </button>
           </div>
         )}
       </div>

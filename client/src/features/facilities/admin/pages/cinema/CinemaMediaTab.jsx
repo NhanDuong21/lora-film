@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { PlusCircle, Trash2, Image as ImageIcon, Star } from 'lucide-react';
+import adminCinemaService from '../../services/adminCinemaService';
+import CinemaImageUploader from '../../components/CinemaImageUploader';
 
 export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formData, setFormData] = useState({
     mediaType: 'GALLERY',
     url: '',
+    file: null,
     title: '',
     displayOrder: 0,
     isPrimary: false
@@ -16,7 +19,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
   const mediaList = cinema?.gallery || [];
 
   const openAddForm = () => {
-    setFormData({ mediaType: 'GALLERY', url: '', title: '', displayOrder: 0, isPrimary: false });
+    setFormData({ mediaType: 'GALLERY', url: '', file: null, title: '', displayOrder: 0, isPrimary: false });
     setEditingId(null);
     setIsFormOpen(true);
   };
@@ -25,6 +28,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
     setFormData({
       mediaType: media.mediaType,
       url: media.url,
+      file: null,
       title: media.title || '',
       displayOrder: media.displayOrder || 0,
       isPrimary: media.isPrimary || false
@@ -42,11 +46,24 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
     e.preventDefault();
     setIsSubmitting(true);
     let success;
+    let submitData = { ...formData };
     
+    if (formData.file) {
+      try {
+        const uploadRes = await adminCinemaService.uploadCinemaMedia(formData.file, formData.mediaType, cinema.publicId);
+        submitData.url = uploadRes.secureUrl;
+      } catch (err) {
+        console.error("Lỗi upload:", err);
+        setIsSubmitting(false);
+        alert("Upload ảnh thất bại!");
+        return;
+      }
+    }
+
     if (editingId) {
-      success = await onUpdate(editingId, formData);
+      success = await onUpdate(editingId, submitData);
     } else {
-      success = await onAdd(formData);
+      success = await onAdd(submitData);
     }
     
     setIsSubmitting(false);
@@ -147,16 +164,12 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                  URL Hình Ảnh <span className="text-brand-coral">*</span>
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={formData.url}
-                  onChange={(e) => setFormData({...formData, url: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors"
-                  placeholder="https://..."
+                <CinemaImageUploader 
+                  label="Tệp Hình Ảnh"
+                  description="Ảnh sẽ được tự động upload khi lưu"
+                  aspectRatio={formData.mediaType === 'LOGO' ? 1 : 16/9}
+                  value={formData.file || formData.url}
+                  onChange={(val) => setFormData({...formData, file: val})}
                 />
               </div>
 

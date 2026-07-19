@@ -71,11 +71,24 @@ export default function AdminCinemaPage() {
       // Save media items
       const mediaRequests = [];
       
-      if (media.logoUrl && media.logoUrl.trim()) {
+      const uploadAndGetUrl = async (mediaValue, type) => {
+        if (!mediaValue) return null;
+        if (typeof mediaValue === 'string') return mediaValue; // already a URL
+        try {
+          const res = await adminCinemaService.uploadCinemaMedia(mediaValue, type, createdCinema.publicId);
+          return res.secureUrl;
+        } catch (e) {
+          console.error(`Failed to upload ${type}:`, e);
+          return null;
+        }
+      };
+
+      const logoUrl = await uploadAndGetUrl(media.logoUrl, 'LOGO');
+      if (logoUrl) {
         mediaRequests.push(
           adminCinemaService.createCinemaMedia(createdCinema.publicId, {
             mediaType: 'LOGO',
-            url: media.logoUrl,
+            url: logoUrl,
             title: 'Logo',
             displayOrder: 1,
             isPrimary: true
@@ -83,11 +96,12 @@ export default function AdminCinemaPage() {
         );
       }
       
-      if (media.bannerUrl && media.bannerUrl.trim()) {
+      const bannerUrl = await uploadAndGetUrl(media.bannerUrl, 'BANNER');
+      if (bannerUrl) {
         mediaRequests.push(
           adminCinemaService.createCinemaMedia(createdCinema.publicId, {
             mediaType: 'BANNER',
-            url: media.bannerUrl,
+            url: bannerUrl,
             title: 'Banner',
             displayOrder: 1,
             isPrimary: false
@@ -95,11 +109,12 @@ export default function AdminCinemaPage() {
         );
       }
       
-      if (media.mapImageUrl && media.mapImageUrl.trim()) {
+      const mapUrl = await uploadAndGetUrl(media.mapImageUrl, 'MAP');
+      if (mapUrl) {
         mediaRequests.push(
           adminCinemaService.createCinemaMedia(createdCinema.publicId, {
             mediaType: 'MAP',
-            url: media.mapImageUrl,
+            url: mapUrl,
             title: 'Map Layout',
             displayOrder: 1,
             isPrimary: false
@@ -108,19 +123,20 @@ export default function AdminCinemaPage() {
       }
       
       if (Array.isArray(media.galleryUrls)) {
-        media.galleryUrls.forEach((url, index) => {
-          if (url && url.trim()) {
+        for (let i = 0; i < media.galleryUrls.length; i++) {
+          const galleryUrl = await uploadAndGetUrl(media.galleryUrls[i], 'GALLERY');
+          if (galleryUrl) {
             mediaRequests.push(
               adminCinemaService.createCinemaMedia(createdCinema.publicId, {
                 mediaType: 'GALLERY',
-                url: url,
-                title: `Gallery Image ${index + 1}`,
-                displayOrder: index + 1,
+                url: galleryUrl,
+                title: `Gallery Image ${i + 1}`,
+                displayOrder: i + 1,
                 isPrimary: false
               })
             );
           }
-        });
+        }
       }
 
       if (mediaRequests.length > 0) {
