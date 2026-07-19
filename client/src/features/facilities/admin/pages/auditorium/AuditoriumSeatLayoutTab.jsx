@@ -52,15 +52,20 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
 
       let maxRow = 10;
       let maxCol = 12;
+      let isSkippingIO = false;
       if (seats.length > 0) {
         maxRow = Math.max(...seats.map(s => s.positionRow || 1));
         maxCol = Math.max(...seats.map(s => s.positionColumn || 1));
+        
+        // Check if any seat code contains 'I' or 'O' at the start
+        const hasIORow = seats.some(s => s.rowLabel === 'I' || s.rowLabel === 'O');
+        isSkippingIO = maxRow >= 9 && !hasIORow; // if we reached row 9 (I) and it's missing, then skipIO is true
       }
 
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRows(maxRow);
-       
       setCols(maxCol);
+      setSkipIO(isSkippingIO);
 
       const initialMatrix = [];
       for (let r = 0; r < maxRow; r++) {
@@ -359,6 +364,7 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
             matrix={matrix}
             rows={rows}
             cols={cols}
+            skipIO={skipIO}
             isLayoutEditable={isLayoutEditable}
             skipIO={skipIO}
             onCellMouseDown={handleCellMouseDown}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { PlusCircle, Edit, Trash2, Film, Copy } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Film, Copy, CopyPlus } from 'lucide-react';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 
 export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
@@ -58,6 +58,39 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
       setIsCloning(false);
       setCloningRoomId(null);
       setSourceRoomId('');
+    }
+  };
+
+  const handleCloneToNewRoom = async (sourceRoom) => {
+    const shouldClone = triggerConfirm
+      ? await triggerConfirm(`Nhân bản phòng chiếu "${sourceRoom.name}" thành một phòng chiếu mới hoàn toàn với cùng sức chứa và sơ đồ ghế?`)
+      : window.confirm(`Nhân bản phòng chiếu "${sourceRoom.name}" thành một phòng chiếu mới hoàn toàn với cùng sức chứa và sơ đồ ghế?`);
+      
+    if (!shouldClone) return;
+
+    try {
+      const roomPayload = {
+        name: sourceRoom.name + ' (Copy)',
+        screenType: sourceRoom.screenType,
+        soundType: sourceRoom.soundType,
+        capacity: 0,
+        cleaningBufferMinutes: sourceRoom.cleaningBufferMinutes || 15
+      };
+
+      const auditoriumRes = await adminRoomService.createAuditorium(cinema.publicId, roomPayload);
+      if (!auditoriumRes?.success || !auditoriumRes.data) {
+        throw new Error(auditoriumRes?.message || 'Không thể tạo phòng chiếu mới');
+      }
+
+      const newRoomId = auditoriumRes.data.publicId;
+
+      await adminRoomService.cloneAuditoriumLayout(cinema.publicId, newRoomId, sourceRoom.publicId);
+      
+      triggerToast?.(`Đã nhân bản thành công phòng "${sourceRoom.name}"!`);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to clone room to new room:', err);
+      triggerToast?.('Lỗi: ' + (err.response?.data?.message || err.message || 'Không thể nhân bản sơ đồ'), 'error');
     }
   };
 
@@ -162,6 +195,13 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
                             )}
                           </div>
                         )}
+                        <button
+                          onClick={() => handleCloneToNewRoom(room)}
+                          className="p-2 bg-zinc-950 border border-zinc-800 hover:border-blue-500/50 text-zinc-400 hover:text-blue-500 rounded-xl transition-all mr-1"
+                          title="Nhân bản thành phòng mới (Clone)"
+                        >
+                          <CopyPlus className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => navigate(`/admin/rooms/edit/${room.publicId}`)}
                           className="p-2 bg-zinc-950 border border-zinc-800 hover:border-amber-500/50 text-zinc-400 hover:text-amber-500 rounded-xl transition-all"

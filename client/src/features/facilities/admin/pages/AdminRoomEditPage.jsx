@@ -39,6 +39,7 @@ export default function AdminRoomEditPage() {
   // Seating grid dimensions
   const [rows, setRows] = useState(10);
   const [cols, setCols] = useState(12);
+  const [skipIO, setSkipIO] = useState(false);
 
   // Brush and seat matrix state
   const [activeBrush, setActiveBrush] = useState('STANDARD'); 
@@ -88,13 +89,19 @@ export default function AdminRoomEditPage() {
 
           let maxRow = 10;
           let maxCol = 12;
+          let isSkippingIO = false;
           if (seats.length > 0) {
             maxRow = Math.max(...seats.map(s => s.positionRow || 1));
             maxCol = Math.max(...seats.map(s => s.positionColumn || 1));
+            
+            // Check if any seat code contains 'I' or 'O' at the start
+            const hasIORow = seats.some(s => s.rowLabel === 'I' || s.rowLabel === 'O');
+            isSkippingIO = maxRow >= 9 && !hasIORow; // if we reached row 9 (I) and it's missing, then skipIO is true
           }
 
           setRows(maxRow);
           setCols(maxCol);
+          setSkipIO(isSkippingIO);
 
           // Populate grid matrix
           const initialMatrix = [];
@@ -262,8 +269,22 @@ export default function AdminRoomEditPage() {
       if (isLayoutEditable) {
         const seatsList = [];
 
+        const calculateRowLabel = (rIdx, skip) => {
+          let letterCode = 65; // 'A'
+          for (let i = 0; i < rIdx; i++) {
+            letterCode++;
+            if (skip && (letterCode === 73 || letterCode === 79)) {
+              letterCode++;
+            }
+          }
+          if (skip && (letterCode === 73 || letterCode === 79)) {
+              letterCode++;
+          }
+          return String.fromCharCode(letterCode);
+        };
+
         for (let r = 0; r < rows; r++) {
-          const rowLabel = String.fromCharCode(65 + r);
+          const rowLabel = calculateRowLabel(r, skipIO);
           let seatNumber = 1;
 
           // Group couple seats
@@ -515,6 +536,20 @@ export default function AdminRoomEditPage() {
                     className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-orange"
                   />
                 </div>
+
+                {/* Skip I/O Selector */}
+                <div className="pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-zinc-400 hover:text-white transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={skipIO}
+                      disabled={!isLayoutEditable}
+                      onChange={(e) => setSkipIO(e.target.checked)}
+                      className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-brand-orange focus:ring-brand-orange/50 focus:ring-offset-zinc-950 disabled:opacity-50"
+                    />
+                    <span>Bỏ qua ký tự dễ gây nhầm lẫn (I, O)</span>
+                  </label>
+                </div>
               </div>
             )}
           </div>
@@ -551,6 +586,7 @@ export default function AdminRoomEditPage() {
             matrix={matrix}
             rows={rows}
             cols={cols}
+            skipIO={skipIO}
             isLayoutEditable={isLayoutEditable}
             onCellMouseDown={handleCellMouseDown}
             onCellMouseEnter={handleCellMouseEnter}

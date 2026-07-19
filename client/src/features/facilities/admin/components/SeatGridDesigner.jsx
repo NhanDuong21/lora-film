@@ -51,26 +51,28 @@ export default function SeatGridDesigner({
       {/* Visual Interactive Seating Grid Box */}
       <div className="bg-zinc-900/30 border border-zinc-900/80 p-8 rounded-3xl max-w-full shadow-2xl relative">
         
-        {/* Column Headers Numerical Indexes */}
-        <div className="flex mb-3">
-          <div className="w-8 shrink-0"></div>
-          <div 
-            className="grid gap-2 text-center text-[10px] font-black text-zinc-500"
-            style={{ 
-              gridTemplateColumns: `repeat(${cols}, minmax(36px, 1fr))`,
-              width: `${cols * 44}px`
-            }}
-          >
-            {Array.from({ length: cols }).map((_, idx) => (
-              <div key={idx} className="w-9">{idx + 1}</div>
-            ))}
+        {/* Container cho lưới ghế để có thể căn giữa */}
+        <div className="flex flex-col items-center overflow-x-auto pb-4">
+          {/* Column Headers Numerical Indexes */}
+          <div className="flex mb-3 w-max">
+            <div className="w-8 shrink-0"></div>
+            <div 
+              className="grid gap-2 text-center text-[10px] font-black text-zinc-500"
+              style={{ 
+                gridTemplateColumns: `repeat(${cols}, minmax(36px, 1fr))`,
+                width: `${cols * 44}px`
+              }}
+            >
+              {Array.from({ length: cols }).map((_, idx) => (
+                <div key={idx} className="w-9">{idx + 1}</div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Rows & Cells */}
-        <div className="space-y-2">
-          {matrix.map((row, rIdx) => {
-            const rowLetter = calculateRowLabel(rIdx, skipIO);
+          {/* Rows & Cells */}
+          <div className="space-y-2 w-max">
+            {matrix.map((row, rIdx) => {
+              const rowLetter = calculateRowLabel(rIdx, skipIO);
             return (
               <div key={rIdx} className="flex items-center">
                 
@@ -134,6 +136,7 @@ export default function SeatGridDesigner({
               </div>
             );
           })}
+          </div>
         </div>
       </div>
     </div>
