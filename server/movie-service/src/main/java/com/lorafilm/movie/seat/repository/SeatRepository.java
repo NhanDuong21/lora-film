@@ -13,6 +13,10 @@ import java.util.Optional;
 public interface SeatRepository extends JpaRepository<Seat, Long> {
     Optional<Seat> findByPublicIdAndDeletedAtIsNull(String publicId);
     
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM Seat s WHERE s.auditorium.id = :auditoriumId")
+    void deleteByAuditoriumId(@Param("auditoriumId") Long auditoriumId);
+    
     @Query("SELECT COUNT(s) FROM Seat s WHERE s.auditorium.id = :auditoriumId AND s.deletedAt IS NULL")
     long countByAuditoriumIdAndDeletedAtIsNull(@Param("auditoriumId") Long auditoriumId);
     
