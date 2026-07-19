@@ -3,6 +3,7 @@ package com.lorafilm.movie.auditorium.controller;
 import com.lorafilm.movie.auditorium.dto.AuditoriumResponse;
 import com.lorafilm.movie.auditorium.dto.CreateAuditoriumRequest;
 import com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest;
+import com.lorafilm.movie.auditorium.dto.CloneAuditoriumRequest;
 
 import com.lorafilm.movie.auditorium.service.AuditoriumService;
 import com.lorafilm.movie.common.api.ApiResponse;
@@ -54,6 +55,22 @@ public class AdminAuditoriumController {
             @PathVariable String auditoriumPublicId,
             @Valid @RequestBody UpdateAuditoriumRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(auditoriumService.updateAuditorium(auditoriumPublicId, request)));
+    }
+
+    @Operation(summary = "Clone an auditorium layout")
+    @ApiResponses(value = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not Found")
+    })
+    @PostMapping("/cinemas/{cinemaPublicId}/auditoriums/{auditoriumPublicId}/clone")
+    public ResponseEntity<ApiResponse<AuditoriumResponse>> cloneAuditoriumLayout(
+            @PathVariable String cinemaPublicId,
+            @PathVariable String auditoriumPublicId,
+            @Valid @RequestBody CloneAuditoriumRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(auditoriumService.cloneAuditoriumLayout(cinemaPublicId, auditoriumPublicId, request)));
     }
 
     @Operation(summary = "Delete an auditorium")

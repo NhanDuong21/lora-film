@@ -1,10 +1,15 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, Edit, Trash2, Film } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Film, Copy } from 'lucide-react';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 
 export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
   const navigate = useNavigate();
   const auditoriums = cinema?.activeAuditoriums || [];
+  
+  const [cloningRoomId, setCloningRoomId] = useState(null);
+  const [sourceRoomId, setSourceRoomId] = useState('');
+  const [isCloning, setIsCloning] = useState(false);
 
   const handleDelete = async (publicId, name) => {
     if (window.confirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`)) {
@@ -17,6 +22,26 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
         console.error('Failed to delete room:', err);
         triggerToast?.('Lỗi: ' + (err.response?.data?.message || err.message || 'Không thể xóa phòng chiếu do có ràng buộc dữ liệu'), 'error');
       }
+    }
+  };
+
+  const handleClone = async (targetPublicId) => {
+    if (!sourceRoomId) {
+      triggerToast?.('Vui lòng chọn phòng chiếu nguồn để nhân bản', 'warning');
+      return;
+    }
+    setIsCloning(true);
+    try {
+      await adminRoomService.cloneAuditoriumLayout(cinema.publicId, targetPublicId, sourceRoomId);
+      triggerToast?.('Nhân bản sơ đồ phòng chiếu thành công!');
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to clone room:', err);
+      triggerToast?.('Lỗi: ' + (err.response?.data?.message || err.message || 'Không thể nhân bản sơ đồ'), 'error');
+    } finally {
+      setIsCloning(false);
+      setCloningRoomId(null);
+      setSourceRoomId('');
     }
   };
 
@@ -81,7 +106,46 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
                     <td className="py-4 px-6 text-center text-amber-500 font-bold font-mono">{room.capacity || 0} ghế</td>
                     <td className="py-4 px-6">{getStatusBadge(room.status || 'ACTIVE')}</td>
                     <td className="py-4 px-6 text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 items-center">
+                        {room.status === 'DRAFT' && (!room.capacity || room.capacity === 0) && (
+                          <div className="relative flex items-center">
+                            {cloningRoomId === room.publicId ? (
+                              <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700 p-1 rounded-xl">
+                                <select 
+                                  value={sourceRoomId}
+                                  onChange={(e) => setSourceRoomId(e.target.value)}
+                                  className="bg-zinc-950 text-xs text-zinc-300 border-none outline-none py-1 pl-2 pr-6 rounded-lg appearance-none cursor-pointer"
+                                >
+                                  <option value="">-- Chọn phòng mẫu --</option>
+                                  {auditoriums.filter(r => r.publicId !== room.publicId && r.capacity > 0).map(r => (
+                                    <option key={r.publicId} value={r.publicId}>{r.name} ({r.capacity} ghế)</option>
+                                  ))}
+                                </select>
+                                <button 
+                                  onClick={() => handleClone(room.publicId)}
+                                  disabled={isCloning || !sourceRoomId}
+                                  className="p-1.5 bg-brand-orange text-white rounded-lg hover:bg-opacity-90 disabled:opacity-50"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  onClick={() => setCloningRoomId(null)}
+                                  className="p-1.5 text-zinc-500 hover:text-zinc-300 rounded-lg"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setCloningRoomId(room.publicId)}
+                                className="p-2 bg-zinc-950 border border-zinc-800 hover:border-brand-orange/50 text-zinc-400 hover:text-brand-orange rounded-xl transition-all mr-1"
+                                title="Nhân bản sơ đồ từ phòng khác"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                         <button
                           onClick={() => navigate(`/admin/rooms/edit/${room.publicId}`)}
                           className="p-2 bg-zinc-950 border border-zinc-800 hover:border-amber-500/50 text-zinc-400 hover:text-amber-500 rounded-xl transition-all"

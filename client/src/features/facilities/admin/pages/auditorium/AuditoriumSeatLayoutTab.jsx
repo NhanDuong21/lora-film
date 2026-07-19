@@ -10,6 +10,9 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
   const [rows, setRows] = useState(10);
   const [cols, setCols] = useState(12);
 
+  // Layout features
+  const [skipIO, setSkipIO] = useState(false);
+
   // Brush and seat matrix state
   const [activeBrush, setActiveBrush] = useState('STANDARD'); 
   const [matrix, setMatrix] = useState([]);
@@ -144,9 +147,23 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
         if (matched) typeMapping[code] = matched.publicId;
       });
 
+      const calculateRowLabel = (rIdx, skip) => {
+        let letterCode = 65; // 'A'
+        for (let i = 0; i < rIdx; i++) {
+          letterCode++;
+          if (skip && (letterCode === 73 || letterCode === 79)) { // 'I' is 73, 'O' is 79
+            letterCode++;
+          }
+        }
+        if (skip && (letterCode === 73 || letterCode === 79)) {
+            letterCode++;
+        }
+        return String.fromCharCode(letterCode);
+      };
+
       const seatsList = [];
       for (let r = 0; r < rows; r++) {
-        const rowLabel = String.fromCharCode(65 + r);
+        const rowLabel = calculateRowLabel(r, skipIO);
         let seatNumber = 1;
 
         const coupleCols = [];
@@ -165,23 +182,27 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
             console.warn(`Missing seatType mapping for ${seatTypeCode}`);
           }
 
+          const seatCode = `${rowLabel}${seatNumber}`;
+
           let pairGroup = null;
           if (seatTypeCode === 'COUPLE') {
             const indexInCoupleCols = coupleCols.indexOf(c);
             if (indexInCoupleCols !== -1) {
               const isEvenIndex = indexInCoupleCols % 2 === 0;
-              const hasPartner = isEvenIndex 
-                  ? indexInCoupleCols + 1 < coupleCols.length 
-                  : indexInCoupleCols - 1 >= 0;
+              const partnerIndex = isEvenIndex ? indexInCoupleCols + 1 : indexInCoupleCols - 1;
+              const hasPartner = partnerIndex >= 0 && partnerIndex < coupleCols.length 
+                                 && Math.abs(coupleCols[indexInCoupleCols] - coupleCols[partnerIndex]) === 1;
               
               if (hasPartner) {
-                const pairIndex = Math.floor(indexInCoupleCols / 2) + 1;
-                pairGroup = `${rowLabel}_P${pairIndex}`;
+                if (isEvenIndex) {
+                  pairGroup = `group_${seatCode}_${rowLabel}${seatNumber + 1}`;
+                } else {
+                  pairGroup = `group_${rowLabel}${seatNumber - 1}_${seatCode}`;
+                }
               }
             }
           }
 
-          const seatCode = `${rowLabel}${seatNumber}`;
           seatsList.push({
             seatTypePublicId,
             rowLabel,
@@ -282,6 +303,19 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
                 className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-orange"
               />
             </div>
+            
+            <div className="pt-2 border-t border-zinc-800/50 mt-4 flex items-center justify-between">
+              <span className="text-xs font-bold text-zinc-400">Bỏ qua hàng I, O</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer" 
+                  checked={skipIO}
+                  onChange={(e) => setSkipIO(e.target.checked)}
+                />
+                <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-orange"></div>
+              </label>
+            </div>
           </div>
         )}
         <StatsPanel stats={stats} />
@@ -326,6 +360,7 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
             rows={rows}
             cols={cols}
             isLayoutEditable={isLayoutEditable}
+            skipIO={skipIO}
             onCellMouseDown={handleCellMouseDown}
             onCellMouseEnter={handleCellMouseEnter}
           />

@@ -13,6 +13,7 @@ export default function RoomForm({
   setCleaningBuffer,
   status,
   setStatus,
+  capacity,
   availableStatuses
 }) {
   return (
@@ -73,6 +74,18 @@ export default function RoomForm({
           onChange={(e) => setCleaningBuffer(parseInt(e.target.value) || 0)}
           className="bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none transition-colors"
         />
+      </div>
+
+      {/* Auto-Capacity display (Read-Only) */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+          <span>Tổng số ghế (Sức chứa)</span>
+          <span className="bg-brand-orange/20 text-brand-orange px-1.5 py-0.5 rounded text-[8px] tracking-widest font-black uppercase">TỰ ĐỘNG</span>
+        </label>
+        <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-400 select-none flex justify-between items-center">
+          <span>{capacity} ghế</span>
+          <span className="text-[9px] text-zinc-500 font-medium">Được tính toán tự động từ Sơ đồ ghế</span>
+        </div>
       </div>
 
       {/* Room Status */}

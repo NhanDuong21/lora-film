@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Save } from 'lucide-react';
 import RoomForm from '@/features/facilities/admin/components/RoomForm';
 
@@ -9,6 +9,18 @@ export default function AuditoriumOverviewTab({ auditorium, onUpdate }) {
   const [cleaningBuffer, setCleaningBuffer] = useState(15);
   const [status, setStatus] = useState('DRAFT');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const computedCapacity = useMemo(() => {
+    let capacity = 0;
+    if (auditorium?.rows && Array.isArray(auditorium.rows)) {
+      auditorium.rows.forEach(r => {
+        if (r.seats && Array.isArray(r.seats)) {
+          capacity += r.seats.filter(s => s.status !== 'INACTIVE').length;
+        }
+      });
+    }
+    return capacity;
+  }, [auditorium]);
 
   useEffect(() => {
     if (auditorium) {
@@ -29,21 +41,11 @@ export default function AuditoriumOverviewTab({ auditorium, onUpdate }) {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Compute capacity from active seats if available, or just keep current
-    let capacity = 0;
-    if (auditorium.rows && Array.isArray(auditorium.rows)) {
-      auditorium.rows.forEach(r => {
-        if (r.seats && Array.isArray(r.seats)) {
-          capacity += r.seats.filter(s => s.status !== 'INACTIVE').length;
-        }
-      });
-    }
-
     await onUpdate({
       name: roomName,
       screenType,
       soundType,
-      capacity: capacity,
+      capacity: computedCapacity,
       cleaningBufferMinutes: cleaningBuffer,
       status
     });
@@ -70,6 +72,7 @@ export default function AuditoriumOverviewTab({ auditorium, onUpdate }) {
           setSoundType={setSoundType}
           cleaningBuffer={cleaningBuffer}
           setCleaningBuffer={setCleaningBuffer}
+          capacity={computedCapacity}
           status={status}
           setStatus={setStatus}
           availableStatuses={availableStatuses}

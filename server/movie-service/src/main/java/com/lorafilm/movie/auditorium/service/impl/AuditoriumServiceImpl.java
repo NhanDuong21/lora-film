@@ -11,15 +11,19 @@ import com.lorafilm.movie.auditorium.service.AuditoriumService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
+import com.lorafilm.movie.auditorium.dto.CloneAuditoriumRequest;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class AuditoriumServiceImpl implements AuditoriumService {
@@ -93,7 +97,69 @@ public class AuditoriumServiceImpl implements AuditoriumService {
         return mapToResponse(auditorium);
     }
 
+    @Override
+    @Transactional
+    public AuditoriumResponse cloneAuditoriumLayout(String cinemaPublicId, String targetAuditoriumPublicId, CloneAuditoriumRequest request) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CINEMA_NOT_FOUND));
 
+        if (cinema.getStatus() == CinemaStatus.INACTIVE || cinema.getStatus() == CinemaStatus.PERMANENTLY_CLOSED) {
+            throw new BusinessException(ErrorCode.CINEMA_NOT_CONFIGURABLE);
+        }
+
+        Auditorium targetAuditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate(targetAuditoriumPublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
+
+        if (!targetAuditorium.getCinema().getId().equals(cinema.getId())) {
+            throw new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND);
+        }
+
+        if (targetAuditorium.getStatus() != AuditoriumStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.AUDITORIUM_NOT_CONFIGURABLE);
+        }
+
+        long existingSeatsCount = seatRepository.countByAuditoriumIdAndDeletedAtIsNull(targetAuditorium.getId());
+        if (existingSeatsCount > 0) {
+            // Alternatively we could delete existing seats, but usually clone is for empty auditoriums
+            throw new BusinessException(ErrorCode.CLONE_AUDITORIUM_FAILED, "Cannot clone into an auditorium that already has seats", null);
+        }
+
+        Auditorium sourceAuditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNull(request.sourceAuditoriumPublicId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.CLONE_AUDITORIUM_FAILED, "Source auditorium not found", null));
+
+        if (!sourceAuditorium.getCinema().getId().equals(cinema.getId())) {
+            throw new BusinessException(ErrorCode.CLONE_AUDITORIUM_FAILED, "Source auditorium must be in the same cinema", null);
+        }
+
+        List<Seat> sourceSeats = seatRepository.findByAuditoriumIdAndDeletedAtIsNull(sourceAuditorium.getId());
+        if (sourceSeats.isEmpty()) {
+            throw new BusinessException(ErrorCode.CLONE_AUDITORIUM_FAILED, "Source auditorium has no seats to clone", null);
+        }
+
+        List<Seat> clonedSeats = sourceSeats.stream().map(s -> {
+            Seat clone = new Seat();
+            clone.setPublicId(UUID.randomUUID().toString());
+            clone.setAuditorium(targetAuditorium);
+            clone.setSeatType(s.getSeatType());
+            clone.setRowLabel(s.getRowLabel());
+            clone.setSeatNumber(s.getSeatNumber());
+            clone.setSeatCode(s.getSeatCode());
+            clone.setPositionRow(s.getPositionRow());
+            clone.setPositionColumn(s.getPositionColumn());
+            clone.setPairGroup(s.getPairGroup());
+            clone.setStatus(s.getStatus());
+            return clone;
+        }).collect(Collectors.toList());
+
+        seatRepository.saveAll(clonedSeats);
+
+        // Update capacity
+        int activeCount = (int) clonedSeats.stream().filter(s -> s.getStatus() != com.lorafilm.movie.seat.domain.enums.SeatStatus.INACTIVE).count();
+        targetAuditorium.setCapacity(activeCount);
+        auditoriumRepository.save(targetAuditorium);
+
+        return mapToResponse(targetAuditorium);
+    }
 
     @Override
     @Transactional

@@ -19,6 +19,14 @@ const adminRoomService = {
     return response.data;
   },
 
+  cloneAuditoriumLayout: async (cinemaPublicId, targetAuditoriumPublicId, sourceAuditoriumPublicId) => {
+    const response = await apiClient.post(
+      `/api/admin/cinemas/${cinemaPublicId}/auditoriums/${targetAuditoriumPublicId}/clone`,
+      { sourceAuditoriumPublicId }
+    );
+    return response.data;
+  },
+
   // Update auditorium room details
   updateAuditorium: async (auditoriumPublicId, roomData) => {
     const response = await apiClient.put(`/api/admin/auditoriums/${auditoriumPublicId}`, roomData);
