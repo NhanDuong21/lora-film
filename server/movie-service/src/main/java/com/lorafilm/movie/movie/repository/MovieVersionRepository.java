@@ -15,6 +15,11 @@ import org.springframework.data.repository.query.Param;
 public interface MovieVersionRepository extends JpaRepository<MovieVersion, Long> {
     Optional<MovieVersion> findByPublicIdAndDeletedAtIsNull(String publicId);
     
+    List<MovieVersion> findByPublicIdInAndDeletedAtIsNull(List<String> publicIds);
+    
+    @Query("SELECT mv FROM MovieVersion mv JOIN FETCH mv.movie WHERE mv.publicId IN :publicIds AND mv.deletedAt IS NULL")
+    List<MovieVersion> findByPublicIdInWithMovieAndDeletedAtIsNull(@Param("publicIds") List<String> publicIds);
+    
     List<MovieVersion> findByMovieIdAndDeletedAtIsNull(Long movieId);
     
     List<MovieVersion> findByMovieIdAndStatusAndDeletedAtIsNull(Long movieId, ActiveStatus status);

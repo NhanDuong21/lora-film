@@ -20,6 +20,13 @@ public class AdminPersonController {
         this.adminPersonService = adminPersonService;
     }
 
+    @GetMapping("/by-name")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ApiResponse<PersonDto> findPersonByName(@RequestParam("name") String name) {
+        PersonDto dto = adminPersonService.findByName(name);
+        return ApiResponse.ok(dto);
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<PersonDto> createPerson(@Valid @RequestBody PersonRequest request) {

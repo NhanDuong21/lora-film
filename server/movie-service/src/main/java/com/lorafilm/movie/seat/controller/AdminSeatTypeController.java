@@ -53,4 +53,10 @@ public class AdminSeatTypeController {
             @Valid @RequestBody UpdateSeatTypeRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(seatTypeService.updateSeatType(seatTypePublicId, request)));
     }
+
+    @Operation(summary = "Get all seat types")
+    @GetMapping
+    public ResponseEntity<ApiResponse<java.util.List<SeatTypeResponse>>> getAllSeatTypes() {
+        return ResponseEntity.ok(ApiResponse.ok(seatTypeService.getAllSeatTypes()));
+    }
 }

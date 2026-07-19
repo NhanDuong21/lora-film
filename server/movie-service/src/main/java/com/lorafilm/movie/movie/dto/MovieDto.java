@@ -20,6 +20,8 @@ public class MovieDto {
     private List<String> genres;
     private String primaryPoster;
     private MovieStatus status;
+    private String activeSlug;
+    private String country;
 
     public MovieDto() {
     }
@@ -118,5 +120,21 @@ public class MovieDto {
 
     public void setStatus(MovieStatus status) {
         this.status = status;
+    }
+
+    public String getActiveSlug() {
+        return activeSlug;
+    }
+
+    public void setActiveSlug(String activeSlug) {
+        this.activeSlug = activeSlug;
+    }
+
+    public String getCountry() {
+        return country;
+    }
+
+    public void setCountry(String country) {
+        this.country = country;
     }
 }

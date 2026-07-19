@@ -78,7 +78,7 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     public PageResponse<CinemaDto> getCinemas(String city, String district, String keyword, int page, int size) {
         Specification<Cinema> spec = Specification.where(CinemaSpecification.isNotDeleted())
-                .and(CinemaSpecification.hasStatus(CinemaStatus.ACTIVE));
+                .and(CinemaSpecification.hasStatusIn(List.of(CinemaStatus.ACTIVE, CinemaStatus.TEMPORARILY_CLOSED)));
 
         if (city != null && !city.isEmpty()) {
 
@@ -119,7 +119,7 @@ public class CinemaServiceImpl implements CinemaService {
                 .orElseGet(() -> cinemaRepository.findByActiveSlugAndDeletedAtIsNull(identifier)
                         .orElseThrow(() -> new ResourceNotFoundException("Cinema not found")));
 
-        if (cinema.getStatus() != CinemaStatus.ACTIVE) {
+        if (cinema.getStatus() != CinemaStatus.ACTIVE && cinema.getStatus() != CinemaStatus.TEMPORARILY_CLOSED) {
             throw new ResourceNotFoundException("Cinema not found");
         }
 
@@ -283,6 +283,8 @@ public class CinemaServiceImpl implements CinemaService {
         detailDto.setLatitude(baseDto.getLatitude());
         detailDto.setLongitude(baseDto.getLongitude());
         detailDto.setTimezone(baseDto.getTimezone());
+        detailDto.setStatus(cinema.getStatus() != null ? cinema.getStatus().name() : null);
+        detailDto.setDescription(cinema.getDescription());
 
         List<CinemaOperatingHour> operatingHours = cinemaOperatingHourRepository.findByCinemaId(cinema.getId());
         detailDto.setOperatingHours(operatingHours.stream().map(h -> {
@@ -308,7 +310,7 @@ public class CinemaServiceImpl implements CinemaService {
             return dto;
         }).collect(Collectors.toList()));
 
-        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndStatusAndDeletedAtIsNull(cinema.getId(), AuditoriumStatus.ACTIVE);
+        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndDeletedAtIsNull(cinema.getId());
         detailDto.setActiveAuditoriums(auditoriums.stream().map(a -> {
             CinemaDetailDto.AuditoriumDto dto = new CinemaDetailDto.AuditoriumDto();
             dto.setPublicId(a.getPublicId());
@@ -316,6 +318,7 @@ public class CinemaServiceImpl implements CinemaService {
             dto.setScreenType(a.getScreenType() != null ? a.getScreenType().name() : null);
             dto.setSoundType(a.getSoundType() != null ? a.getSoundType().name() : null);
             dto.setCapacity(a.getCapacity());
+            dto.setStatus(a.getStatus() != null ? a.getStatus().name() : null);
             return dto;
         }).collect(Collectors.toList()));
 
@@ -645,7 +648,7 @@ public class CinemaServiceImpl implements CinemaService {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
-        if (cinema.getStatus() != CinemaStatus.ACTIVE) {
+        if (cinema.getStatus() != CinemaStatus.ACTIVE && cinema.getStatus() != CinemaStatus.TEMPORARILY_CLOSED) {
             throw new ResourceNotFoundException("Cinema not found");
         }
 

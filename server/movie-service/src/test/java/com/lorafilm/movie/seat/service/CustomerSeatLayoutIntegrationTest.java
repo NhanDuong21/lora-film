@@ -17,25 +17,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Disabled;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
-@Disabled("Blocked by Docker Testcontainers environment issue")
 public class CustomerSeatLayoutIntegrationTest {
 
-    @Container
-    @ServiceConnection
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0.32");
+
 
     @Autowired
     private SeatLayoutQueryService queryService;
@@ -53,16 +45,39 @@ public class CustomerSeatLayoutIntegrationTest {
     private SeatType activeType;
     private SeatType inactiveType;
 
+    @Autowired
+    private com.lorafilm.movie.cinema.repository.CinemaRepository cinemaRepository;
+
+    private com.lorafilm.movie.cinema.domain.entity.Cinema cinema;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void setUp() {
-        seatRepository.deleteAll();
-        auditoriumRepository.deleteAll();
-        seatTypeRepository.deleteAll();
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        jdbcTemplate.execute("TRUNCATE TABLE seats");
+        jdbcTemplate.execute("TRUNCATE TABLE seat_types");
+        jdbcTemplate.execute("TRUNCATE TABLE auditoriums");
+        jdbcTemplate.execute("TRUNCATE TABLE cinemas");
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
+
+        cinema = new com.lorafilm.movie.cinema.domain.entity.Cinema();
+        cinema.setPublicId(java.util.UUID.randomUUID().toString());
+        cinema.setSlug("cinema-" + System.currentTimeMillis());
+        cinema.setName("Test Cinema");
+        cinema.setCity("Test City");
+        cinema.setAddress("Test Address");
+        cinema.setTimezone("Asia/Ho_Chi_Minh");
+        cinema.setStatus(com.lorafilm.movie.cinema.domain.enums.CinemaStatus.ACTIVE);
+        cinema = cinemaRepository.saveAndFlush(cinema);
 
         auditorium = new Auditorium();
         auditorium.setPublicId("aud-layout-1");
         auditorium.setStatus(AuditoriumStatus.ACTIVE);
         auditorium.setName("Layout Auditorium");
+        auditorium.setCapacity(100);
+        auditorium.setCinema(cinema);
         auditorium = auditoriumRepository.saveAndFlush(auditorium);
 
         activeType = new SeatType();

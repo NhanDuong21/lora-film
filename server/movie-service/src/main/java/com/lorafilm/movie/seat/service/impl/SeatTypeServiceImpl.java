@@ -60,6 +60,15 @@ public class SeatTypeServiceImpl implements SeatTypeService {
         return mapToResponse(seatType);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<SeatTypeResponse> getAllSeatTypes() {
+        return seatTypeRepository.findAll().stream()
+                .filter(t -> t.getDeletedAt() == null)
+                .map(this::mapToResponse)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
 
 
     private void validateStatusTransition(ActiveStatus current, ActiveStatus target, SeatType seatType) {

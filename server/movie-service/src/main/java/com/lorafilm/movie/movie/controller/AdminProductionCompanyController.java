@@ -20,6 +20,13 @@ public class AdminProductionCompanyController {
         this.adminProductionCompanyService = adminProductionCompanyService;
     }
 
+    @GetMapping("/by-name")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ApiResponse<ProductionCompanyDto> findProductionCompanyByName(@RequestParam("name") String name) {
+        ProductionCompanyDto dto = adminProductionCompanyService.findByName(name);
+        return ApiResponse.ok(dto);
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<ProductionCompanyDto> createProductionCompany(@Valid @RequestBody ProductionCompanyRequest request) {

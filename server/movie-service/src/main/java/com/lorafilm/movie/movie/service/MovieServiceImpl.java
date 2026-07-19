@@ -110,7 +110,7 @@ public class MovieServiceImpl implements MovieService {
                 sorting = Sort.by(sortParams[0]).ascending();
             }
         } else {
-            sorting = Sort.by("releaseDate").descending();
+            sorting = Sort.by("createdAt").descending();
         }
         Pageable pageable = PageRequest.of(page, size, sorting);
         Page<Movie> moviePage = movieRepository.findAll(spec, pageable);
@@ -234,6 +234,8 @@ public class MovieServiceImpl implements MovieService {
         detailDto.setGenres(baseDto.getGenres());
         detailDto.setPrimaryPoster(baseDto.getPrimaryPoster());
         detailDto.setStatus(baseDto.getStatus());
+        detailDto.setActiveSlug(baseDto.getActiveSlug());
+        detailDto.setCountry(baseDto.getCountry());
 
         List<MovieCredit> credits = movieCreditRepository.findByMovieIdAndDeletedAtIsNullOrderByDisplayOrderAsc(movie.getId());
         
@@ -245,9 +247,10 @@ public class MovieServiceImpl implements MovieService {
                 p.setFullName(c.getPerson().getFullName());
                 p.setRoleType(c.getRoleType().name());
                 p.setCharacterName(c.getCharacterName());
+                p.setProfileImageUrl(c.getPerson().getProfileImageUrl());
                 return p;
             }).collect(Collectors.toList());
-
+ 
         List<MovieDetailDto.PersonDto> actors = credits.stream()
             .filter(c -> c.getRoleType() == com.lorafilm.movie.movie.domain.enums.CreditRoleType.MAIN_ACTOR ||
                          c.getRoleType() == com.lorafilm.movie.movie.domain.enums.CreditRoleType.SUPPORTING_ACTOR ||
@@ -258,9 +261,10 @@ public class MovieServiceImpl implements MovieService {
                 p.setFullName(c.getPerson().getFullName());
                 p.setRoleType(c.getRoleType().name());
                 p.setCharacterName(c.getCharacterName());
+                p.setProfileImageUrl(c.getPerson().getProfileImageUrl());
                 return p;
             }).collect(Collectors.toList());
-
+ 
         List<MovieDetailDto.PersonDto> writers = credits.stream()
             .filter(c -> c.getRoleType() == com.lorafilm.movie.movie.domain.enums.CreditRoleType.WRITER)
             .map(c -> {
@@ -269,9 +273,10 @@ public class MovieServiceImpl implements MovieService {
                 p.setFullName(c.getPerson().getFullName());
                 p.setRoleType(c.getRoleType().name());
                 p.setCharacterName(c.getCharacterName());
+                p.setProfileImageUrl(c.getPerson().getProfileImageUrl());
                 return p;
             }).collect(Collectors.toList());
-
+ 
         List<MovieDetailDto.PersonDto> producers = credits.stream()
             .filter(c -> c.getRoleType() == com.lorafilm.movie.movie.domain.enums.CreditRoleType.PRODUCER)
             .map(c -> {
@@ -280,16 +285,17 @@ public class MovieServiceImpl implements MovieService {
                 p.setFullName(c.getPerson().getFullName());
                 p.setRoleType(c.getRoleType().name());
                 p.setCharacterName(c.getCharacterName());
+                p.setProfileImageUrl(c.getPerson().getProfileImageUrl());
                 return p;
             }).collect(Collectors.toList());
-
+ 
         detailDto.setDirectors(directors);
         detailDto.setActors(actors);
         detailDto.setWriters(writers);
         detailDto.setProducers(producers);
-
+ 
         List<MovieProductionCompany> companies = movieProductionCompanyRepository.findByMovieId(movie.getId());
-        
+         
         List<MovieDetailDto.ProductionCompanyDto> productionCompanies = companies.stream()
             .filter(c -> c.getRole() == com.lorafilm.movie.movie.domain.enums.CompanyRoleType.PRODUCTION)
             .map(c -> {
@@ -297,9 +303,10 @@ public class MovieServiceImpl implements MovieService {
                 p.setPublicId(c.getProductionCompany().getPublicId());
                 p.setName(c.getProductionCompany().getName());
                 p.setRole(c.getRole().name());
+                p.setLogoUrl(c.getProductionCompany().getLogoUrl());
                 return p;
             }).collect(Collectors.toList());
-
+ 
         List<MovieDetailDto.ProductionCompanyDto> distributors = companies.stream()
             .filter(c -> c.getRole() == com.lorafilm.movie.movie.domain.enums.CompanyRoleType.DISTRIBUTOR)
             .map(c -> {
@@ -307,9 +314,10 @@ public class MovieServiceImpl implements MovieService {
                 p.setPublicId(c.getProductionCompany().getPublicId());
                 p.setName(c.getProductionCompany().getName());
                 p.setRole(c.getRole().name());
+                p.setLogoUrl(c.getProductionCompany().getLogoUrl());
                 return p;
             }).collect(Collectors.toList());
-
+ 
         List<MovieDetailDto.ProductionCompanyDto> studios = companies.stream()
             .filter(c -> c.getRole() == com.lorafilm.movie.movie.domain.enums.CompanyRoleType.STUDIO)
             .map(c -> {
@@ -317,6 +325,7 @@ public class MovieServiceImpl implements MovieService {
                 p.setPublicId(c.getProductionCompany().getPublicId());
                 p.setName(c.getProductionCompany().getName());
                 p.setRole(c.getRole().name());
+                p.setLogoUrl(c.getProductionCompany().getLogoUrl());
                 return p;
             }).collect(Collectors.toList());
 

@@ -13,6 +13,7 @@ public class CinemaDto {
     private BigDecimal latitude;
     private BigDecimal longitude;
     private String timezone;
+    private String status;
 
     public CinemaDto() {}
 
@@ -36,4 +37,6 @@ public class CinemaDto {
     public void setLongitude(BigDecimal longitude) { this.longitude = longitude; }
     public String getTimezone() { return timezone; }
     public void setTimezone(String timezone) { this.timezone = timezone; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 }

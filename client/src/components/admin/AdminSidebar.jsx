@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Film, 
@@ -13,12 +13,14 @@ import {
   LogOut, 
   ChevronDown,
   TrendingUp,
-  Building,
   Coins,
-  Shield,
   Sliders,
-  Tags
+  Building,
+  Shield,
+  Tags,
+  DoorOpen
 } from 'lucide-react';
+
 
 export default function AdminSidebar({ 
   activeTab, 
@@ -77,7 +79,7 @@ export default function AdminSidebar({
       <div>
         {/* Brand Top Header */}
         <div className="px-6 py-6 border-b border-zinc-800/60 flex items-center justify-between shrink-0">
-          <a href="#/" className="flex items-center gap-2.5 bg-transparent p-0 m-0 shadow-none border-none select-none decoration-none group">
+          <Link to="/admin" className="flex items-center gap-2.5 bg-transparent p-0 m-0 shadow-none border-none select-none decoration-none group">
             <img 
               src="/images/main-logo.png" 
               alt="LoraFilm Icon" 
@@ -86,7 +88,7 @@ export default function AdminSidebar({
             <span className="text-lg md:text-xl font-black tracking-tight text-white font-sans leading-none">
               Lora<span className="text-amber-500 font-black ml-0.5">Film</span>
             </span>
-          </a>
+          </Link>
           <span className="bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider select-none">
             {isAccountantOnly ? 'Finance' : 'Admin'}
           </span>
@@ -175,7 +177,14 @@ export default function AdminSidebar({
                     className={getSubLinkClass('clusters')}
                   >
                     <Database className="w-4 h-4 shrink-0" />
-                    <span>Cụm rạp & Phòng chiếu</span>
+                    <span>Cụm rạp</span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('rooms', '#/admin/rooms')}
+                    className={getSubLinkClass('rooms')}
+                  >
+                    <DoorOpen className="w-4 h-4 shrink-0" />
+                    <span>Phòng chiếu</span>
                   </button>
                   <button
                     onClick={() => handleTabClick('showtimes', '#/admin/showtimes')}

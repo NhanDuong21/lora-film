@@ -10,10 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
@@ -25,17 +21,13 @@ import com.lorafilm.movie.seat.dto.BulkSeatItemRequest;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 
-import org.junit.jupiter.api.Disabled;
 
 @SpringBootTest
-@Testcontainers
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
-@Disabled("Blocked by Docker Testcontainers environment issue")
 public class BulkSeatAtomicityIntegrationTest {
 
-    @Container
-    @ServiceConnection
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0.32");
+
 
     @Autowired
     private SeatService seatService;
@@ -52,19 +44,44 @@ public class BulkSeatAtomicityIntegrationTest {
     private String auditoriumPublicId;
     private String seatTypePublicId;
 
+    @Autowired
+    private com.lorafilm.movie.cinema.repository.CinemaRepository cinemaRepository;
+
+    private com.lorafilm.movie.cinema.domain.entity.Cinema cinema;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void setUp() {
-        seatRepository.deleteAll();
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        jdbcTemplate.execute("TRUNCATE TABLE seats");
+        jdbcTemplate.execute("TRUNCATE TABLE seat_types");
+        jdbcTemplate.execute("TRUNCATE TABLE auditoriums");
+        jdbcTemplate.execute("TRUNCATE TABLE cinemas");
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
         
+        cinema = new com.lorafilm.movie.cinema.domain.entity.Cinema();
+        cinema.setPublicId(java.util.UUID.randomUUID().toString());
+        cinema.setSlug("cinema-" + System.currentTimeMillis());
+        cinema.setName("Test Cinema");
+        cinema.setCity("Test City");
+        cinema.setAddress("Test Address");
+        cinema.setTimezone("Asia/Ho_Chi_Minh");
+        cinema.setStatus(com.lorafilm.movie.cinema.domain.enums.CinemaStatus.ACTIVE);
+        cinema = cinemaRepository.saveAndFlush(cinema);
+
         Auditorium auditorium = new Auditorium();
-        auditorium.setPublicId("aud-atomicity-1");
+        auditorium.setPublicId(java.util.UUID.randomUUID().toString());
         auditorium.setStatus(AuditoriumStatus.DRAFT);
         auditorium.setName("Test Atomicity");
+        auditorium.setCapacity(100);
+        auditorium.setCinema(cinema);
         auditorium = auditoriumRepository.saveAndFlush(auditorium);
         auditoriumPublicId = auditorium.getPublicId();
 
         SeatType seatType = new SeatType();
-        seatType.setPublicId("type-atomicity-1");
+        seatType.setPublicId(java.util.UUID.randomUUID().toString());
         seatType.setStatus(ActiveStatus.ACTIVE);
         seatType.setCode(SeatTypeCode.STANDARD);
         seatType.setName("Standard Atomicity");

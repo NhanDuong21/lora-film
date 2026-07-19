@@ -16,6 +16,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import com.lorafilm.movie.common.security.JwtProvider;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -39,6 +40,9 @@ public class AdminShowtimePricingControllerTest {
 
     @MockBean
     private ShowtimePricingService showtimePricingService;
+
+    @MockBean
+    private JwtProvider jwtProvider;
 
     @Autowired
     private ObjectMapper objectMapper;

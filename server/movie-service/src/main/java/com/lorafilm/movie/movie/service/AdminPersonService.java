@@ -7,4 +7,5 @@ public interface AdminPersonService {
     PersonDto createPerson(PersonRequest request);
     PersonDto updatePerson(String publicId, PersonRequest request);
     void deletePerson(String publicId);
+    PersonDto findByName(String name);
 }

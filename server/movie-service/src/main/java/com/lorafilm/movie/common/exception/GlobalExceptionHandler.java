@@ -172,6 +172,21 @@ public class GlobalExceptionHandler {
             if (rootMsg.contains("uk_seats_auditorium_position")) {
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ErrorCode.DUPLICATE_SEAT_POSITION.name(), ErrorCode.DUPLICATE_SEAT_POSITION.getMessage()));
             }
+            if (rootMsg.contains("uk_movies_active_slug")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail("MOVIE_TITLE_DUPLICATED", "Tên phim này đã tồn tại trong hệ thống (trùng tiêu đề)"));
+            }
+            if (rootMsg.contains("uk_movie_version_unique")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail("MOVIE_VERSION_DUPLICATED", "Phiên bản phim với định dạng và ngôn ngữ này đã tồn tại"));
+            }
+            if (rootMsg.contains("uk_movie_credit_unique")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail("MOVIE_CREDIT_DUPLICATED", "Nhân sự này đã được gán vai trò này trong phim"));
+            }
+            if (rootMsg.contains("uk_production_companies_name")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail("COMPANY_DUPLICATED", "Tên công ty sản xuất này đã tồn tại"));
+            }
+            if (rootMsg.contains("movie_production_companies") && (rootMsg.contains("PRIMARY") || rootMsg.contains("Duplicate entry"))) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail("MOVIE_COMPANY_DUPLICATED", "Công ty sản xuất này đã được gán cho phim với vai trò này"));
+            }
         }
         
         return ResponseEntity
@@ -192,6 +207,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.fail(ErrorCode.SHOWTIME_SCHEDULING_CONFLICT.name(), ErrorCode.SHOWTIME_SCHEDULING_CONFLICT.getMessage()));
+    }
+
+    @ExceptionHandler({
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            jakarta.persistence.OptimisticLockException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingException(Exception ex) {
+        log.error("Auto schedule preview optimistic locking conflict: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail(
+                        ErrorCode.AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT.name(),
+                        ErrorCode.AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT.getMessage()
+                ));
     }
 
     @ExceptionHandler(org.springframework.dao.DataAccessException.class)

@@ -68,7 +68,7 @@ class ShowtimeValidationServiceImplTest {
         movie.setId(1L);
         movie.setStatus(MovieStatus.NOW_SHOWING);
         movie.setReleaseDate(LocalDate.now().minusDays(5));
-        movie.setEndDate(LocalDate.now().plusDays(5));
+        movie.setEndDate(LocalDate.now().plusDays(30));
         movie.setDurationMinutes(120);
 
         movieVersion = new MovieVersion();
