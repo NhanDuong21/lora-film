@@ -14,6 +14,7 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
   const [windows, setWindows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [cancelingId, setCancelingId] = useState(null);
 
   const fetchWindows = useCallback(async () => {
     if (!roomId) return;
@@ -44,16 +45,24 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
     setIsFormOpen(false);
   };
 
-  const handleCancelWindow = async (id) => {
-    if (!window.confirm("Bạn có chắc chắn muốn hủy lịch bảo trì này không?")) return;
+  const confirmCancel = (id) => {
+    setCancelingId(id);
+  };
+
+  const handleCancelWindow = async () => {
+    if (!cancelingId) return;
+    setIsSubmitting(true);
     try {
-      const res = await adminRoomService.cancelMaintenanceWindow(id);
+      const res = await adminRoomService.cancelMaintenanceWindow(cancelingId);
       if (res?.success) {
         triggerToast?.('Hủy lịch bảo trì thành công!');
         fetchWindows();
       }
     } catch (err) {
       triggerToast?.(err.response?.data?.message || err.message || 'Hủy lịch thất bại', 'error');
+    } finally {
+      setIsSubmitting(false);
+      setCancelingId(null);
     }
   };
 
@@ -140,7 +149,7 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
                       <td className="py-4 px-6 text-right">
                         {w.status === 'ACTIVE' && (
                           <button
-                            onClick={() => handleCancelWindow(w.id)}
+                            onClick={() => confirmCancel(w.id)}
                             className="p-2 bg-zinc-950 border border-zinc-800 hover:border-red-500/50 text-zinc-400 hover:text-red-500 rounded-xl transition-all"
                             title="Hủy lịch"
                           >
@@ -221,6 +230,35 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {cancelingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-sm shadow-2xl p-6 text-center space-y-4">
+            <div className="w-16 h-16 mx-auto bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center mb-2">
+              <AlertTriangle className="w-8 h-8 text-red-500" />
+            </div>
+            <h2 className="text-lg font-black uppercase text-zinc-50">Xác Nhận Hủy Lịch</h2>
+            <p className="text-sm text-zinc-400">
+              Bạn có chắc chắn muốn hủy lịch bảo trì (ID: {cancelingId}) này không? Hành động này không thể hoàn tác.
+            </p>
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setCancelingId(null)}
+                className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold py-2.5 rounded-xl uppercase tracking-wider text-xs transition-colors"
+              >
+                Không
+              </button>
+              <button
+                onClick={handleCancelWindow}
+                disabled={isSubmitting}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
+              >
+                {isSubmitting ? 'Đang Hủy...' : 'Có, Hủy Ngay'}
+              </button>
+            </div>
           </div>
         </div>
       )}
