@@ -19,6 +19,32 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lorafilm.movie.movie.repository.GenreRepository;
+import com.lorafilm.movie.movie.repository.MovieGenreRepository;
+import com.lorafilm.movie.movie.repository.PersonRepository;
+import com.lorafilm.movie.movie.repository.MovieCreditRepository;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
+import com.lorafilm.movie.movie.repository.MovieTranslationRepository;
+import com.lorafilm.movie.movie.repository.ProductionCompanyRepository;
+import com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository;
+import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.movie.domain.entity.Genre;
+import com.lorafilm.movie.movie.domain.entity.MovieGenre;
+import com.lorafilm.movie.movie.domain.entity.MovieGenreId;
+import com.lorafilm.movie.movie.domain.entity.Person;
+import com.lorafilm.movie.movie.domain.entity.MovieCredit;
+import com.lorafilm.movie.movie.domain.entity.MovieMedia;
+import com.lorafilm.movie.movie.domain.entity.MovieTranslation;
+import com.lorafilm.movie.movie.domain.entity.ProductionCompany;
+import com.lorafilm.movie.movie.domain.entity.MovieProductionCompany;
+import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+import com.lorafilm.movie.movie.domain.enums.CreditRoleType;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbGenreDto;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbPersonDto;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbTrailerDto;
+import com.lorafilm.movie.common.enums.ActiveStatus;
+import java.util.UUID;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -40,16 +66,41 @@ public class TmdbImportService {
     private final TmdbMovieMapper movieMapper;
     private final TmdbSyncStateRepository syncStateRepository;
     private final ObjectMapper objectMapper;
+    private final GenreRepository genreRepository;
+    private final MovieGenreRepository movieGenreRepository;
+    private final PersonRepository personRepository;
+    private final MovieCreditRepository movieCreditRepository;
+    private final MovieMediaRepository movieMediaRepository;
+    private final MovieTranslationRepository movieTranslationRepository;
+    private final ProductionCompanyRepository productionCompanyRepository;
+    private final MovieProductionCompanyRepository movieProductionCompanyRepository;
+    private final MovieVersionRepository movieVersionRepository;
 
     public TmdbImportService(TmdbClient tmdbClient, TmdbProperties properties,
                              MovieRepository movieRepository, TmdbMovieMapper movieMapper,
-                             TmdbSyncStateRepository syncStateRepository, ObjectMapper objectMapper) {
+                             TmdbSyncStateRepository syncStateRepository, ObjectMapper objectMapper,
+                             GenreRepository genreRepository, MovieGenreRepository movieGenreRepository,
+                             PersonRepository personRepository, MovieCreditRepository movieCreditRepository,
+                             MovieMediaRepository movieMediaRepository,
+                             MovieTranslationRepository movieTranslationRepository,
+                             ProductionCompanyRepository productionCompanyRepository,
+                             MovieProductionCompanyRepository movieProductionCompanyRepository,
+                             MovieVersionRepository movieVersionRepository) {
         this.tmdbClient = tmdbClient;
         this.properties = properties;
         this.movieRepository = movieRepository;
         this.movieMapper = movieMapper;
         this.syncStateRepository = syncStateRepository;
         this.objectMapper = objectMapper;
+        this.genreRepository = genreRepository;
+        this.movieGenreRepository = movieGenreRepository;
+        this.personRepository = personRepository;
+        this.movieCreditRepository = movieCreditRepository;
+        this.movieMediaRepository = movieMediaRepository;
+        this.movieTranslationRepository = movieTranslationRepository;
+        this.productionCompanyRepository = productionCompanyRepository;
+        this.movieProductionCompanyRepository = movieProductionCompanyRepository;
+        this.movieVersionRepository = movieVersionRepository;
     }
 
     /**
@@ -208,9 +259,9 @@ public class TmdbImportService {
             // INSERT flow
             log.info("Attempting to insert TMDB ID: {}", wrapper.getTmdbId());
             Movie newMovie = movieMapper.toEntity(wrapper);
-            movieRepository.save(newMovie);
+            newMovie = movieRepository.save(newMovie);
             log.info("INSERTED TMDB Movie ID {}", wrapper.getTmdbId());
-            // TODO: Extract and save Genres, Credits, Media, etc.
+            extractAndSaveRelations(newMovie, wrapper);
         } else {
             // UPDATE flow with timestamp check
             if (existingMovie.getTmdbLastUpdated() == null || 
@@ -218,9 +269,9 @@ public class TmdbImportService {
                 
                 log.info("Attempting to update TMDB ID: {}", wrapper.getTmdbId());
                 movieMapper.updateEntityFromDto(wrapper, existingMovie);
-                movieRepository.save(existingMovie);
+                existingMovie = movieRepository.save(existingMovie);
                 log.info("UPDATED TMDB Movie ID {}", wrapper.getTmdbId());
-                // TODO: Update relations
+                extractAndSaveRelations(existingMovie, wrapper);
             } else {
                 log.debug("SKIP TMDB ID {}: Movie data is up to date.", wrapper.getTmdbId());
             }
@@ -270,6 +321,221 @@ public class TmdbImportService {
         if (!toSave.isEmpty()) {
             movieRepository.saveAll(toSave);
             log.info("Batch saved {} movies.", toSave.size());
+            
+            // Save relations
+            Map<Long, Movie> savedMoviesMap = movieRepository.findByTmdbIdIn(tmdbIds).stream()
+                    .collect(Collectors.toMap(Movie::getTmdbId, Function.identity()));
+            for (TmdbMovieWrapperDto wrapper : validWrappers) {
+                Movie movie = savedMoviesMap.get(wrapper.getTmdbId());
+                if (movie != null) {
+                    extractAndSaveRelations(movie, wrapper);
+                }
+            }
         }
+    }
+
+    private void extractAndSaveRelations(Movie movie, TmdbMovieWrapperDto wrapper) {
+        if (wrapper == null) return;
+        
+        // 1. Genres
+        if (wrapper.getGenres() != null && !wrapper.getGenres().isEmpty()) {
+            movieGenreRepository.deleteByMovieId(movie.getId());
+            for (TmdbGenreDto gDto : wrapper.getGenres()) {
+                if (gDto.getName() == null) continue;
+                String slug = movieMapper.generateSlug(gDto.getName());
+                Genre genre = genreRepository.findBySlugAndDeletedAtIsNull(slug).orElseGet(() -> {
+                    Genre newGenre = new Genre();
+                    newGenre.setPublicId(UUID.randomUUID().toString());
+                    newGenre.setName(gDto.getName());
+                    newGenre.setSlug(slug);
+                    newGenre.setStatus(ActiveStatus.ACTIVE);
+                    return genreRepository.save(newGenre);
+                });
+                
+                MovieGenre mg = new MovieGenre();
+                mg.setMovie(movie);
+                mg.setGenre(genre);
+                movieGenreRepository.save(mg);
+            }
+        }
+        
+        // 2. Credits (Cast and Crew)
+        if (wrapper.getCredits() != null) {
+            movieCreditRepository.deleteByMovieId(movie.getId());
+            
+            // Directors
+            if (wrapper.getCredits().getDirectors() != null) {
+                int order = 1;
+                for (TmdbPersonDto pDto : wrapper.getCredits().getDirectors()) {
+                    savePersonCredit(movie, pDto, CreditRoleType.DIRECTOR, order++);
+                }
+            }
+            
+            // Main Cast
+            if (wrapper.getCredits().getMainCast() != null) {
+                for (TmdbPersonDto pDto : wrapper.getCredits().getMainCast()) {
+                    savePersonCredit(movie, pDto, CreditRoleType.MAIN_ACTOR, pDto.getOrder() != null ? pDto.getOrder() + 1 : 999);
+                }
+            }
+            
+            // Supporting Cast
+            if (wrapper.getCredits().getSupportingCast() != null) {
+                for (TmdbPersonDto pDto : wrapper.getCredits().getSupportingCast()) {
+                    savePersonCredit(movie, pDto, CreditRoleType.SUPPORTING_ACTOR, pDto.getOrder() != null ? pDto.getOrder() + 1 : 999);
+                }
+            }
+            
+            // Writers
+            if (wrapper.getCredits().getWriters() != null) {
+                int order = 1;
+                for (TmdbPersonDto pDto : wrapper.getCredits().getWriters()) {
+                    savePersonCredit(movie, pDto, CreditRoleType.WRITER, order++);
+                }
+            }
+            
+            // Producers
+            if (wrapper.getCredits().getProducers() != null) {
+                int order = 1;
+                for (TmdbPersonDto pDto : wrapper.getCredits().getProducers()) {
+                    savePersonCredit(movie, pDto, CreditRoleType.PRODUCER, order++);
+                }
+            }
+        }
+        
+        // 3. Videos / Media
+        if (wrapper.getVideos() != null && wrapper.getVideos().getPrimaryTrailer() != null) {
+            TmdbTrailerDto trailer = wrapper.getVideos().getPrimaryTrailer();
+            if (trailer.getUrl() != null) {
+                // Check if primary trailer already exists
+                boolean exists = movieMediaRepository.existsPrimaryMedia(movie.getId(), MovieMediaType.TRAILER);
+                if (!exists) {
+                    MovieMedia media = new MovieMedia();
+                    media.setPublicId(UUID.randomUUID().toString());
+                    media.setMovie(movie);
+                    media.setMediaType(MovieMediaType.TRAILER);
+                    media.setUrl(trailer.getUrl());
+                    media.setTitle(trailer.getName() != null ? trailer.getName() : "Official Trailer");
+                    media.setIsPrimary(true);
+                    media.setStatus(ActiveStatus.ACTIVE);
+                    media.setDisplayOrder(1);
+                    movieMediaRepository.save(media);
+                }
+            }
+        }
+        
+        if (wrapper.getMedia() != null) {
+            // Posters
+            if (wrapper.getMedia().getPosters() != null) {
+                int displayOrder = 1;
+                for (com.lorafilm.movie.integration.tmdb.dto.TmdbImageDto img : wrapper.getMedia().getPosters()) {
+                    if (img.getUrl() == null) continue;
+                    boolean isPrimary = wrapper.getMedia().getPrimaryPoster() != null 
+                        && img.getUrl().equals(wrapper.getMedia().getPrimaryPoster().getUrl());
+                        
+                    MovieMedia media = new MovieMedia();
+                    media.setPublicId(UUID.randomUUID().toString());
+                    media.setMovie(movie);
+                    media.setMediaType(MovieMediaType.POSTER);
+                    media.setUrl(img.getUrl());
+                    media.setIsPrimary(isPrimary);
+                    media.setStatus(ActiveStatus.ACTIVE);
+                    media.setDisplayOrder(displayOrder++);
+                    movieMediaRepository.save(media);
+                }
+            }
+
+            // Backdrops (Banners)
+            if (wrapper.getMedia().getBackdrops() != null) {
+                int displayOrder = 1;
+                for (com.lorafilm.movie.integration.tmdb.dto.TmdbImageDto img : wrapper.getMedia().getBackdrops()) {
+                    if (img.getUrl() == null) continue;
+                    boolean isPrimary = wrapper.getMedia().getPrimaryBackdrop() != null 
+                        && img.getUrl().equals(wrapper.getMedia().getPrimaryBackdrop().getUrl());
+                        
+                    MovieMedia media = new MovieMedia();
+                    media.setPublicId(UUID.randomUUID().toString());
+                    media.setMovie(movie);
+                    media.setMediaType(MovieMediaType.BANNER);
+                    media.setUrl(img.getUrl());
+                    media.setIsPrimary(isPrimary);
+                    media.setStatus(ActiveStatus.ACTIVE);
+                    media.setDisplayOrder(displayOrder++);
+                    movieMediaRepository.save(media);
+                }
+            }
+        }
+        
+        // 4. Production Companies
+        if (wrapper.getProductionCompanies() != null && !wrapper.getProductionCompanies().isEmpty()) {
+            movieProductionCompanyRepository.deleteByMovieId(movie.getId());
+            for (com.lorafilm.movie.integration.tmdb.dto.TmdbProductionCompanyDto companyDto : wrapper.getProductionCompanies()) {
+                if (companyDto.getName() == null) continue;
+                
+                ProductionCompany company = productionCompanyRepository.findByNameIgnoreCase(companyDto.getName()).orElseGet(() -> {
+                    ProductionCompany newCompany = new ProductionCompany();
+                    newCompany.setPublicId(UUID.randomUUID().toString());
+                    newCompany.setName(companyDto.getName());
+                    newCompany.setLogoUrl(companyDto.getLogoUrl());
+                    newCompany.setCountry(companyDto.getOriginCountry());
+                    newCompany.setStatus(ActiveStatus.ACTIVE);
+                    return productionCompanyRepository.save(newCompany);
+                });
+                
+                MovieProductionCompany mpc = new MovieProductionCompany();
+                mpc.setMovie(movie);
+                mpc.setProductionCompany(company);
+                // mpc.setRole(...) // Adjust according to enum if needed, usually defaults to PRODUCTION in SQL
+                movieProductionCompanyRepository.save(mpc);
+            }
+        }
+        
+        // 5. Translations
+        if (wrapper.getTranslations() != null && !wrapper.getTranslations().isEmpty()) {
+            movieTranslationRepository.deleteByMovieId(movie.getId());
+            for (com.lorafilm.movie.integration.tmdb.dto.TmdbTranslationDto tDto : wrapper.getTranslations()) {
+                if (tDto.getLanguageCode() == null) continue;
+                MovieTranslation mt = new MovieTranslation();
+                mt.setMovie(movie);
+                mt.setLocale(tDto.getLanguageCode());
+                mt.setTitle(tDto.getTitle() != null ? tDto.getTitle() : movie.getTitle());
+                mt.setSynopsis(tDto.getOverview());
+                movieTranslationRepository.save(mt);
+            }
+        }
+        
+        // 6. Default Movie Version (since TMDB doesn't provide 2D/3D info)
+        if (movieVersionRepository.findByMovieIdAndDeletedAtIsNull(movie.getId()).isEmpty()) {
+            MovieVersion version = new MovieVersion();
+            version.setPublicId(UUID.randomUUID().toString());
+            version.setMovie(movie);
+            version.setVersionName("2D - Phụ đề");
+            version.setFormat(com.lorafilm.movie.movie.domain.enums.MovieFormat.TWO_D);
+            version.setAudioLanguage("EN");
+            version.setSubtitleLanguage("VI");
+            version.setStatus(ActiveStatus.ACTIVE);
+            movieVersionRepository.save(version);
+        }
+    }
+
+    private void savePersonCredit(Movie movie, TmdbPersonDto pDto, CreditRoleType roleType, int displayOrder) {
+        if (pDto.getTmdbPersonId() == null) return;
+        Person person = personRepository.findByTmdbPersonIdAndDeletedAtIsNull(pDto.getTmdbPersonId()).orElseGet(() -> {
+            Person newPerson = new Person();
+            newPerson.setPublicId(UUID.randomUUID().toString());
+            newPerson.setTmdbPersonId(pDto.getTmdbPersonId());
+            newPerson.setFullName(pDto.getOriginalName() != null ? pDto.getOriginalName() : (pDto.getName() != null ? pDto.getName() : "Unknown"));
+            newPerson.setStageName(pDto.getName());
+            newPerson.setProfileImageUrl(pDto.getProfileUrl());
+            newPerson.setStatus(ActiveStatus.ACTIVE);
+            return personRepository.save(newPerson);
+        });
+        
+        MovieCredit credit = new MovieCredit();
+        credit.setMovie(movie);
+        credit.setPerson(person);
+        credit.setRoleType(roleType);
+        credit.setCharacterName(pDto.getCharacter());
+        credit.setDisplayOrder(displayOrder);
+        movieCreditRepository.save(credit);
     }
 }

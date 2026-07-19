@@ -10,4 +10,7 @@ import java.util.Optional;
 public interface PersonRepository extends JpaRepository<Person, Long> {
     Optional<Person> findByPublicIdAndDeletedAtIsNull(String publicId);
     boolean existsByPublicIdAndDeletedAtIsNull(String publicId);
+    Optional<Person> findByFullNameAndDeletedAtIsNull(String fullName);
+    Optional<Person> findByTmdbPersonIdAndDeletedAtIsNull(Long tmdbPersonId);
+    java.util.List<Person> findTop20ByBiographyIsNullAndTmdbPersonIdIsNotNull();
 }

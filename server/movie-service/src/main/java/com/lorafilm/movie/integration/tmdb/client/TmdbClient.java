@@ -2,6 +2,7 @@ package com.lorafilm.movie.integration.tmdb.client;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import java.nio.charset.StandardCharsets;
 
 import com.lorafilm.movie.integration.tmdb.config.TmdbProperties;
 
@@ -19,14 +20,15 @@ public class TmdbClient {
     }
 
     public String fetchMoviesExport(String cursor, int limit) {
-        return restClient.get()
+        byte[] response = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/tmdb/export")
                         .queryParam("cursor", cursor)
                         .queryParam("limit", limit)
                         .build())
                 .retrieve()
-                .body(String.class);
+                .body(byte[].class);
+        return response != null ? new String(response, StandardCharsets.UTF_8) : null;
     }
 
     public void triggerDownloadExport() {
@@ -41,26 +43,37 @@ public class TmdbClient {
     }
 
     public String fetchLatestMovies() {
-        return restClient.get()
+        byte[] response = restClient.get()
                 .uri("/api/tmdb/movies/latest")
                 .retrieve()
-                .body(String.class);
+                .body(byte[].class);
+        return response != null ? new String(response, StandardCharsets.UTF_8) : null;
     }
 
     public String fetchUpdatedMovies(String lastUpdated) {
-        return restClient.get()
+        byte[] response = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/tmdb/movies/updated")
                         .queryParam("lastUpdated", lastUpdated)
                         .build())
                 .retrieve()
-                .body(String.class);
+                .body(byte[].class);
+        return response != null ? new String(response, StandardCharsets.UTF_8) : null;
     }
 
     public String fetchMovieDetails(Long tmdbId) {
-        return restClient.get()
+        byte[] response = restClient.get()
                 .uri("/api/tmdb/movies/{tmdbId}", tmdbId)
                 .retrieve()
-                .body(String.class);
+                .body(byte[].class);
+        return response != null ? new String(response, StandardCharsets.UTF_8) : null;
+    }
+
+    public String fetchPersonDetails(Long tmdbPersonId) {
+        byte[] response = restClient.get()
+                .uri("/api/import/people/{tmdbPersonId}", tmdbPersonId)
+                .retrieve()
+                .body(byte[].class);
+        return response != null ? new String(response, StandardCharsets.UTF_8) : null;
     }
 }
