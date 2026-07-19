@@ -6,7 +6,8 @@ import com.lorafilm.movie.cinema.dto.MediaUploadResponse;
 import com.lorafilm.movie.cinema.service.CloudinaryService;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,9 +16,10 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 
-@Slf4j
 @Service
 public class CloudinaryServiceImpl implements CloudinaryService {
+
+    private static final Logger log = LoggerFactory.getLogger(CloudinaryServiceImpl.class);
 
     private final Cloudinary cloudinary;
     private final String baseFolder;
