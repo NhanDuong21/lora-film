@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, MapPin, Film, Settings2, CheckSquare, Calendar, ChevronDown, ChevronRight, AlertCircle, CalendarDays } from 'lucide-react';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';

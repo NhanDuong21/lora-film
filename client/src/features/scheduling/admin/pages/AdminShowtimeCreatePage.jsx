@@ -1,4 +1,4 @@
-import React from 'react';
+// React is removed
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Calendar, Clock, Loader2, MapPin, Film, Info } from 'lucide-react';
 import useShowtimeForm from '@/features/scheduling/admin/hooks/useShowtimeForm';

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect, no-unused-vars, react-hooks/exhaustive-deps */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';

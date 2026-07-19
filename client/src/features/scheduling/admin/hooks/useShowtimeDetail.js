@@ -13,16 +13,29 @@ export default function useShowtimeDetail(showtimePublicId, { triggerToast }) {
     setIsLoading(true);
     try {
       const [detailRes, historyRes, pricesRes] = await Promise.all([
-        adminShowtimeService.getShowtimeDetail(showtimePublicId).catch(() => null),
-        adminShowtimeService.getStatusHistory(showtimePublicId).catch(() => null),
-        adminShowtimeService.getPrices(showtimePublicId).catch(() => null)
+        adminShowtimeService.getShowtimeDetail(showtimePublicId)
+          .catch(err => ({ success: false, error: err, isDetailError: true })),
+        adminShowtimeService.getStatusHistory(showtimePublicId)
+          .catch(err => ({ success: false, data: [] })),
+        adminShowtimeService.getPrices(showtimePublicId)
+          .catch(err => ({ success: false, data: { prices: [] }, isPricingError: err.response?.status }))
       ]);
       
+      if (detailRes?.isDetailError) {
+          triggerToast?.('Không thể tải chi tiết suất chiếu chính', 'error');
+          return;
+      }
+
       if (detailRes?.success) setShowtime(detailRes.data);
       if (historyRes?.success) setHistory(historyRes.data);
-      if (pricesRes?.success) setPrices(pricesRes.data);
+      if (pricesRes?.success) {
+          setPrices(pricesRes.data);
+      } else if (pricesRes?.isPricingError) {
+          // Pass the status code for conditional rendering
+          setPrices({ errorStatus: pricesRes.isPricingError });
+      }
     } catch (err) {
-      triggerToast?.('Không thể tải chi tiết suất chiếu', 'error');
+      triggerToast?.('Lỗi hệ thống khi tải dữ liệu', 'error');
     } finally {
       setIsLoading(false);
     }

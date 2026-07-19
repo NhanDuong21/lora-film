@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Calendar, MapPin, Clock, Film, RefreshCw, AlertCircle, Edit, DollarSign, History } from 'lucide-react';
 import useShowtimeDetail from '@/features/scheduling/admin/hooks/useShowtimeDetail';

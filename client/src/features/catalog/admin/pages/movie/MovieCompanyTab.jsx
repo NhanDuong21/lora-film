@@ -43,7 +43,7 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
         return;
       }
 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setCompanies(prev => [...prev, {
         companyPublicId: company.publicId,
         publicId: company.publicId,
@@ -60,7 +60,7 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
   };
 
   const removeCompanyLocal = (localId) => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
       setCompanies(prev => prev.filter(c => c.localId !== localId));
   };
 

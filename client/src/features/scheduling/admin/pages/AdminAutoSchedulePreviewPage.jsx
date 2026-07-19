@@ -1,4 +1,4 @@
-import React from 'react';
+// React is removed
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, XCircle, Clock, AlertTriangle, AlertCircle, Info, RefreshCw } from 'lucide-react';
 import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
