@@ -29,8 +29,8 @@ export default function useShowtimeForm({ triggerToast, onSuccess }) {
         setIsLoadingCinemas(true);
         setIsLoadingMovies(true);
         const [cinemaRes, movieRes] = await Promise.all([
-          adminCinemaService.getCinemas({ size: 500, status: 'ACTIVE' }),
-          adminMovieService.getMovies({ size: 1000 })
+          adminCinemaService.getCinemas({ size: 100, status: 'ACTIVE' }),
+          adminMovieService.getMovies({ size: 100 })
         ]);
         
         if (cinemaRes?.success) setCinemas(cinemaRes.data?.data || []);

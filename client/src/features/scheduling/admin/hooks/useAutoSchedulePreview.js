@@ -14,20 +14,44 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
     if (!previewPublicId) return;
     setIsLoading(true);
     try {
-      const res = await adminAutoScheduleService.getPreview(previewPublicId, { size: 500 }); // Try to get all items
-      if (res?.success && res.data) {
-        setPreview(res.data.preview);
-        setExpectedVersion(res.data.preview.version);
-        setItems(res.data.items?.data || []);
+      let page = 0;
+      let allItems = [];
+      let previewData = null;
+      let hasMore = true;
+
+      while (hasMore) {
+        const res = await adminAutoScheduleService.getPreview(previewPublicId, { page, size: 100 });
+        if (res?.success && res.data) {
+          if (!previewData) {
+            previewData = res.data.preview;
+            setExpectedVersion(res.data.preview.version);
+          }
+          const pageData = res.data.items?.content || [];
+          allItems = allItems.concat(pageData);
+          
+          if (!res.data.items || page >= (res.data.items.totalPages - 1) || pageData.length === 0) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (previewData) {
+        setPreview(previewData);
+        setItems(allItems);
         
         // Initialize selected items state
         const initialSelected = new Set();
-        (res.data.items?.data || []).forEach(item => {
+        allItems.forEach(item => {
           if (item.selected) initialSelected.add(item.itemPublicId);
         });
         setSelectedItemIds(initialSelected);
       }
     } catch (err) {
+      console.error(err);
       triggerToast?.('Không thể tải chi tiết bản xem trước', 'error');
     } finally {
       setIsLoading(false);
