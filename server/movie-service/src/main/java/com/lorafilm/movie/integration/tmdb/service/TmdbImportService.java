@@ -363,41 +363,98 @@ public class TmdbImportService {
         if (wrapper.getCredits() != null) {
             movieCreditRepository.deleteByMovieId(movie.getId());
             
-            // Directors
+            class TempCredit {
+                TmdbPersonDto dto;
+                CreditRoleType role;
+                int order;
+                TempCredit(TmdbPersonDto dto, CreditRoleType role, int order) {
+                    this.dto = dto; this.role = role; this.order = order;
+                }
+            }
+            List<TempCredit> tempCredits = new ArrayList<>();
+            
             if (wrapper.getCredits().getDirectors() != null) {
                 int order = 1;
                 for (TmdbPersonDto pDto : wrapper.getCredits().getDirectors()) {
-                    savePersonCredit(movie, pDto, CreditRoleType.DIRECTOR, order++);
+                    tempCredits.add(new TempCredit(pDto, CreditRoleType.DIRECTOR, order++));
                 }
             }
-            
-            // Main Cast
             if (wrapper.getCredits().getMainCast() != null) {
                 for (TmdbPersonDto pDto : wrapper.getCredits().getMainCast()) {
-                    savePersonCredit(movie, pDto, CreditRoleType.MAIN_ACTOR, pDto.getOrder() != null ? pDto.getOrder() + 1 : 999);
+                    tempCredits.add(new TempCredit(pDto, CreditRoleType.MAIN_ACTOR, pDto.getOrder() != null ? pDto.getOrder() + 1 : 999));
                 }
             }
-            
-            // Supporting Cast
             if (wrapper.getCredits().getSupportingCast() != null) {
                 for (TmdbPersonDto pDto : wrapper.getCredits().getSupportingCast()) {
-                    savePersonCredit(movie, pDto, CreditRoleType.SUPPORTING_ACTOR, pDto.getOrder() != null ? pDto.getOrder() + 1 : 999);
+                    tempCredits.add(new TempCredit(pDto, CreditRoleType.SUPPORTING_ACTOR, pDto.getOrder() != null ? pDto.getOrder() + 1 : 999));
                 }
             }
-            
-            // Writers
             if (wrapper.getCredits().getWriters() != null) {
                 int order = 1;
                 for (TmdbPersonDto pDto : wrapper.getCredits().getWriters()) {
-                    savePersonCredit(movie, pDto, CreditRoleType.WRITER, order++);
+                    tempCredits.add(new TempCredit(pDto, CreditRoleType.WRITER, order++));
                 }
             }
-            
-            // Producers
             if (wrapper.getCredits().getProducers() != null) {
                 int order = 1;
                 for (TmdbPersonDto pDto : wrapper.getCredits().getProducers()) {
-                    savePersonCredit(movie, pDto, CreditRoleType.PRODUCER, order++);
+                    tempCredits.add(new TempCredit(pDto, CreditRoleType.PRODUCER, order++));
+                }
+            }
+
+            if (!tempCredits.isEmpty()) {
+                Map<Long, TmdbPersonDto> uniquePersons = new java.util.HashMap<>();
+                for (TempCredit tc : tempCredits) {
+                    if (tc.dto.getTmdbPersonId() != null) {
+                        uniquePersons.put(tc.dto.getTmdbPersonId(), tc.dto);
+                    }
+                }
+                
+                List<Long> personIds = new ArrayList<>(uniquePersons.keySet());
+                Map<Long, Person> personMap = new java.util.HashMap<>();
+                if (!personIds.isEmpty()) {
+                    List<Person> existingPersons = personRepository.findByTmdbPersonIdInAndDeletedAtIsNull(personIds);
+                    for (Person p : existingPersons) {
+                        personMap.put(p.getTmdbPersonId(), p);
+                    }
+                    
+                    List<Person> newPersons = new ArrayList<>();
+                    for (TmdbPersonDto pDto : uniquePersons.values()) {
+                        if (!personMap.containsKey(pDto.getTmdbPersonId())) {
+                            Person newPerson = new Person();
+                            newPerson.setPublicId(UUID.randomUUID().toString());
+                            newPerson.setTmdbPersonId(pDto.getTmdbPersonId());
+                            newPerson.setFullName(pDto.getOriginalName() != null ? pDto.getOriginalName() : (pDto.getName() != null ? pDto.getName() : "Unknown"));
+                            newPerson.setStageName(pDto.getName());
+                            newPerson.setProfileImageUrl(pDto.getProfileUrl());
+                            newPerson.setStatus(ActiveStatus.ACTIVE);
+                            newPersons.add(newPerson);
+                        }
+                    }
+                    if (!newPersons.isEmpty()) {
+                        newPersons = personRepository.saveAll(newPersons);
+                        for (Person p : newPersons) {
+                            personMap.put(p.getTmdbPersonId(), p);
+                        }
+                    }
+                }
+                
+                List<MovieCredit> creditsToSave = new ArrayList<>();
+                for (TempCredit tc : tempCredits) {
+                    if (tc.dto.getTmdbPersonId() == null) continue;
+                    Person p = personMap.get(tc.dto.getTmdbPersonId());
+                    if (p != null) {
+                        MovieCredit credit = new MovieCredit();
+                        credit.setMovie(movie);
+                        credit.setPerson(p);
+                        credit.setRoleType(tc.role);
+                        credit.setCharacterName(tc.dto.getCharacter());
+                        credit.setDisplayOrder(tc.order);
+                        creditsToSave.add(credit);
+                    }
+                }
+                if (!creditsToSave.isEmpty()) {
+                    movieCreditRepository.saveAll(creditsToSave);
                 }
             }
         }
@@ -517,25 +574,4 @@ public class TmdbImportService {
         }
     }
 
-    private void savePersonCredit(Movie movie, TmdbPersonDto pDto, CreditRoleType roleType, int displayOrder) {
-        if (pDto.getTmdbPersonId() == null) return;
-        Person person = personRepository.findByTmdbPersonIdAndDeletedAtIsNull(pDto.getTmdbPersonId()).orElseGet(() -> {
-            Person newPerson = new Person();
-            newPerson.setPublicId(UUID.randomUUID().toString());
-            newPerson.setTmdbPersonId(pDto.getTmdbPersonId());
-            newPerson.setFullName(pDto.getOriginalName() != null ? pDto.getOriginalName() : (pDto.getName() != null ? pDto.getName() : "Unknown"));
-            newPerson.setStageName(pDto.getName());
-            newPerson.setProfileImageUrl(pDto.getProfileUrl());
-            newPerson.setStatus(ActiveStatus.ACTIVE);
-            return personRepository.save(newPerson);
-        });
-        
-        MovieCredit credit = new MovieCredit();
-        credit.setMovie(movie);
-        credit.setPerson(person);
-        credit.setRoleType(roleType);
-        credit.setCharacterName(pDto.getCharacter());
-        credit.setDisplayOrder(displayOrder);
-        movieCreditRepository.save(credit);
-    }
 }
