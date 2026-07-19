@@ -60,7 +60,7 @@ public interface TmdbMovieMapper {
 
     @Named("generateSlug")
     default String generateSlug(String title) {
-        if (title == null) return UUID.randomUUID().toString();
+        if (title == null || title.isBlank()) return "movie-" + UUID.randomUUID().toString().substring(0, 8);
         
         // Loại bỏ dấu tiếng Việt
         String temp = Normalizer.normalize(title, Normalizer.Form.NFD);
@@ -69,7 +69,11 @@ public interface TmdbMovieMapper {
         slug = slug.replaceAll("đ", "d").replaceAll("Đ", "D");
         
         // Thay khoảng trắng thành dấu gạch ngang, sau đó loại bỏ các ký tự đặc biệt
-        return slug.toLowerCase().replaceAll("\\s+", "-").replaceAll("[^a-z0-9-]", "");
+        slug = slug.toLowerCase().replaceAll("\\s+", "-").replaceAll("[^a-z0-9-]", "").replaceAll("-+", "-");
+        if (slug.isBlank() || "-".equals(slug)) {
+            return "movie-" + UUID.randomUUID().toString().substring(0, 8);
+        }
+        return slug;
     }
 
     @Named("extractCountry")
@@ -84,26 +88,71 @@ public interface TmdbMovieMapper {
     @Named("extractOverview")
     default String extractOverview(TmdbMovieWrapperDto wrapper) {
         if (wrapper == null) return null;
+        
+        // 1. Prioritize Vietnamese Overview
         if (wrapper.getTranslations() != null) {
             for (TmdbTranslationDto t : wrapper.getTranslations()) {
-                if (("vi".equalsIgnoreCase(t.getLanguageCode()) || "vi".equalsIgnoreCase(t.getLocale()) || "VN".equalsIgnoreCase(t.getCountryCode())) && t.getOverview() != null && !t.getOverview().trim().isEmpty()) {
-                    return t.getOverview();
+                if (t != null && t.getOverview() != null && !t.getOverview().trim().isEmpty()) {
+                    String lang = t.getLanguageCode() != null ? t.getLanguageCode().toLowerCase() : "";
+                    String loc = t.getLocale() != null ? t.getLocale().toLowerCase() : "";
+                    String country = t.getCountryCode() != null ? t.getCountryCode().toLowerCase() : "";
+                    
+                    if (lang.contains("vi") || loc.contains("vi") || "vn".equals(country)) {
+                        return t.getOverview().trim();
+                    }
+                }
+            }
+            // 2. Fallback to any non-empty overview in translations (e.g., en-US)
+            for (TmdbTranslationDto t : wrapper.getTranslations()) {
+                if (t != null && t.getOverview() != null && !t.getOverview().trim().isEmpty()) {
+                    return t.getOverview().trim();
                 }
             }
         }
-        return wrapper.getMovie() != null ? wrapper.getMovie().getOverview() : null;
+        
+        // 3. Fallback to wrapper.getMovie().getOverview()
+        if (wrapper.getMovie() != null && wrapper.getMovie().getOverview() != null && !wrapper.getMovie().getOverview().trim().isEmpty()) {
+            return wrapper.getMovie().getOverview().trim();
+        }
+        
+        return null;
     }
 
     @Named("extractTitle")
     default String extractTitle(TmdbMovieWrapperDto wrapper) {
         if (wrapper == null) return "Unknown Title";
+        
+        // 1. Prioritize Vietnamese Title
         if (wrapper.getTranslations() != null) {
             for (TmdbTranslationDto t : wrapper.getTranslations()) {
-                if (("vi".equalsIgnoreCase(t.getLanguageCode()) || "vi".equalsIgnoreCase(t.getLocale()) || "VN".equalsIgnoreCase(t.getCountryCode())) && t.getTitle() != null && !t.getTitle().trim().isEmpty()) {
-                    return t.getTitle();
+                if (t != null && t.getTitle() != null && !t.getTitle().trim().isEmpty()) {
+                    String lang = t.getLanguageCode() != null ? t.getLanguageCode().toLowerCase() : "";
+                    String loc = t.getLocale() != null ? t.getLocale().toLowerCase() : "";
+                    String country = t.getCountryCode() != null ? t.getCountryCode().toLowerCase() : "";
+                    
+                    if (lang.contains("vi") || loc.contains("vi") || "vn".equals(country)) {
+                        return t.getTitle().trim();
+                    }
+                }
+            }
+            // 2. Fallback to any non-empty title in translations
+            for (TmdbTranslationDto t : wrapper.getTranslations()) {
+                if (t != null && t.getTitle() != null && !t.getTitle().trim().isEmpty()) {
+                    return t.getTitle().trim();
                 }
             }
         }
-        return (wrapper.getMovie() != null && wrapper.getMovie().getTitle() != null) ? wrapper.getMovie().getTitle() : "Unknown Title";
+        
+        // 3. Fallback to wrapper.getMovie().getTitle() or originalTitle
+        if (wrapper.getMovie() != null) {
+            if (wrapper.getMovie().getTitle() != null && !wrapper.getMovie().getTitle().trim().isEmpty()) {
+                return wrapper.getMovie().getTitle().trim();
+            }
+            if (wrapper.getMovie().getOriginalTitle() != null && !wrapper.getMovie().getOriginalTitle().trim().isEmpty()) {
+                return wrapper.getMovie().getOriginalTitle().trim();
+            }
+        }
+        
+        return "Unknown Title";
     }
 }

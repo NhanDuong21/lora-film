@@ -1,11 +1,13 @@
 package com.lorafilm.movie.integration.tmdb.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TmdbMovieWrapperDto {
     private Long tmdbId;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private LocalDateTime lastUpdated;
     private Integer qualityScore;
     private String qualityStatus;

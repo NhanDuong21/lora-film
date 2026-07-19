@@ -14,5 +14,6 @@ public interface PersonRepository extends JpaRepository<Person, Long> {
     Optional<Person> findByFullNameAndDeletedAtIsNull(String fullName);
     Optional<Person> findByTmdbPersonIdAndDeletedAtIsNull(Long tmdbPersonId);
     java.util.List<Person> findByTmdbPersonIdInAndDeletedAtIsNull(java.util.List<Long> tmdbPersonIds);
+    java.util.List<Person> findByTmdbPersonIdIn(java.util.List<Long> tmdbPersonIds);
     java.util.List<Person> findTop20ByBiographyIsNullAndTmdbPersonIdIsNotNull();
 }

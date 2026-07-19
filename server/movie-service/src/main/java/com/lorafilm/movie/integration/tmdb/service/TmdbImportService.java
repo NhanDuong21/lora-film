@@ -75,6 +75,13 @@ public class TmdbImportService {
     private final ProductionCompanyRepository productionCompanyRepository;
     private final MovieProductionCompanyRepository movieProductionCompanyRepository;
     private final MovieVersionRepository movieVersionRepository;
+    private TmdbImportService self;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    public void setSelf(TmdbImportService self) {
+        this.self = self;
+    }
 
     public TmdbImportService(TmdbClient tmdbClient, TmdbProperties properties,
                              MovieRepository movieRepository, TmdbMovieMapper movieMapper,
@@ -103,11 +110,29 @@ public class TmdbImportService {
         this.movieVersionRepository = movieVersionRepository;
     }
 
+    public void resetBulkSyncState() {
+        TmdbSyncState syncState = syncStateRepository.findBySyncType(SYNC_TYPE_BULK)
+                .orElseGet(() -> {
+                    TmdbSyncState state = new TmdbSyncState();
+                    state.setSyncType(SYNC_TYPE_BULK);
+                    return state;
+                });
+        syncState.setCursor("0");
+        syncState.setStatus("IDLE");
+        syncState.setLastSyncTime(null);
+        syncStateRepository.save(syncState);
+        log.info("TMDB Bulk Sync state reset to cursor 0 and status IDLE.");
+    }
+
     /**
      * Scenario 1: Bulk Export loop
      */
     public void runBulkSync() {
-        if (!properties.isSyncEnabled()) {
+        runBulkSync(false);
+    }
+
+    public void runBulkSync(boolean force) {
+        if (!properties.isSyncEnabled() && !force) {
             log.info("TMDB Bulk Sync is disabled in properties.");
             return;
         }
@@ -121,9 +146,21 @@ public class TmdbImportService {
                     return syncStateRepository.save(state);
                 });
 
-        if ("IN_PROGRESS".equals(syncState.getStatus())) {
-            log.warn("TMDB Bulk sync is already in progress. Skipping.");
-            return;
+        if (force) {
+            log.info("Force flag enabled. Resetting TMDB sync state status to IDLE and cursor to 0.");
+            syncState.setStatus("IDLE");
+            syncState.setCursor("0");
+            syncStateRepository.save(syncState);
+        } else if ("IN_PROGRESS".equals(syncState.getStatus())) {
+            // Check if stuck for more than 5 minutes
+            if (syncState.getLastSyncTime() != null && syncState.getLastSyncTime().isBefore(LocalDateTime.now().minusMinutes(5))) {
+                log.warn("TMDB Bulk Sync was stuck IN_PROGRESS for over 5 minutes. Automatically recovering state to IDLE.");
+                syncState.setStatus("IDLE");
+                syncStateRepository.save(syncState);
+            } else {
+                log.warn("TMDB Bulk sync is already in progress. Skipping.");
+                return;
+            }
         }
 
         try {
@@ -145,9 +182,13 @@ public class TmdbImportService {
                 
                 if (response != null && response.getMovies() != null) {
                     try {
-                        importMovies(response.getMovies());
+                        if (self != null) {
+                            self.importMovies(response.getMovies());
+                        } else {
+                            importMovies(response.getMovies());
+                        }
                     } catch (Exception e) {
-                        log.error("Failed to batch import movies: {}", e.getMessage());
+                        log.error("Failed to batch import movies at cursor {}: {}", currentCursor, e.getMessage(), e);
                     }
                     
                     currentCursor = response.getNextCursor();
@@ -186,7 +227,11 @@ public class TmdbImportService {
                     root.get("movies").toString(), 
                     new TypeReference<List<TmdbMovieWrapperDto>>(){}
                 );
-                importMovies(movies);
+                if (self != null) {
+                    self.importMovies(movies);
+                } else {
+                    importMovies(movies);
+                }
             }
         } catch (Exception e) {
             log.error("Error during TMDB Daily Latest sync", e);
@@ -206,7 +251,11 @@ public class TmdbImportService {
                     root.get("movies").toString(), 
                     new TypeReference<List<TmdbMovieWrapperDto>>(){}
                 );
-                importMovies(movies);
+                if (self != null) {
+                    self.importMovies(movies);
+                } else {
+                    importMovies(movies);
+                }
             }
         } catch (Exception e) {
             log.error("Error during TMDB Daily Updated sync", e);
@@ -228,7 +277,11 @@ public class TmdbImportService {
                     root.get("data").toString(), 
                     TmdbMovieWrapperDto.class
                 );
-                importMovie(dto);
+                if (self != null) {
+                    self.importMovie(dto);
+                } else {
+                    importMovie(dto);
+                }
             }
         } catch (Exception e) {
             log.error("Error importing single movie {}: {}", tmdbId, e.getMessage());
@@ -248,7 +301,7 @@ public class TmdbImportService {
         }
         
         // Quality check based on guide
-        if (!"ACCEPT".equalsIgnoreCase(wrapper.getQualityStatus())) {
+        if (!"ACCEPT".equalsIgnoreCase(wrapper.getQualityStatus()) && !"HOLD".equalsIgnoreCase(wrapper.getQualityStatus())) {
             log.info("SKIP TMDB ID {}: Quality Status is {}", wrapper.getTmdbId(), wrapper.getQualityStatus());
             return;
         }
@@ -263,75 +316,35 @@ public class TmdbImportService {
             log.info("INSERTED TMDB Movie ID {}", wrapper.getTmdbId());
             extractAndSaveRelations(newMovie, wrapper);
         } else {
-            // UPDATE flow with timestamp check
-            if (existingMovie.getTmdbLastUpdated() == null || 
-               (wrapper.getLastUpdated() != null && wrapper.getLastUpdated().isAfter(existingMovie.getTmdbLastUpdated()))) {
-                
-                log.info("Attempting to update TMDB ID: {}", wrapper.getTmdbId());
-                movieMapper.updateEntityFromDto(wrapper, existingMovie);
-                existingMovie = movieRepository.save(existingMovie);
-                log.info("UPDATED TMDB Movie ID {}", wrapper.getTmdbId());
-                extractAndSaveRelations(existingMovie, wrapper);
-            } else {
-                log.debug("SKIP TMDB ID {}: Movie data is up to date.", wrapper.getTmdbId());
+            // UPDATE flow - Always update movie and refresh all relations
+            log.info("Attempting to update TMDB ID: {}", wrapper.getTmdbId());
+            movieMapper.updateEntityFromDto(wrapper, existingMovie);
+            existingMovie = movieRepository.save(existingMovie);
+            log.info("UPDATED TMDB Movie ID {}", wrapper.getTmdbId());
+            extractAndSaveRelations(existingMovie, wrapper);
+        }
+    }
+
+    public void importMovies(List<TmdbMovieWrapperDto> wrappers) {
+        if (wrappers == null || wrappers.isEmpty()) return;
+
+        for (TmdbMovieWrapperDto wrapper : wrappers) {
+            if (wrapper == null || wrapper.getMovie() == null) continue;
+            try {
+                if (self != null) {
+                    self.importMovie(wrapper);
+                } else {
+                    importMovie(wrapper);
+                }
+            } catch (Exception e) {
+                log.error("Failed to import single movie TMDB ID {}: {}", wrapper.getTmdbId(), e.getMessage());
             }
         }
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void importMovies(List<TmdbMovieWrapperDto> wrappers) {
-        if (wrappers == null || wrappers.isEmpty()) return;
-
-        List<TmdbMovieWrapperDto> validWrappers = wrappers.stream()
-                .filter(w -> w != null && w.getMovie() != null && "ACCEPT".equalsIgnoreCase(w.getQualityStatus()))
-                .collect(Collectors.toList());
-
-        if (validWrappers.isEmpty()) return;
-
-        List<Long> tmdbIds = validWrappers.stream()
-                .map(TmdbMovieWrapperDto::getTmdbId)
-                .collect(Collectors.toList());
-
-        List<Movie> existingMoviesList = movieRepository.findByTmdbIdIn(tmdbIds);
-        Map<Long, Movie> existingMoviesMap = existingMoviesList.stream()
-                .collect(Collectors.toMap(Movie::getTmdbId, Function.identity()));
-
-        List<Movie> toSave = new ArrayList<>();
-
-        for (TmdbMovieWrapperDto wrapper : validWrappers) {
-            Movie existingMovie = existingMoviesMap.get(wrapper.getTmdbId());
-
-            if (existingMovie == null) {
-                // INSERT flow
-                log.info("Batch INSERT TMDB ID: {}", wrapper.getTmdbId());
-                Movie newMovie = movieMapper.toEntity(wrapper);
-                toSave.add(newMovie);
-            } else {
-                // UPDATE flow
-                if (existingMovie.getTmdbLastUpdated() == null ||
-                   (wrapper.getLastUpdated() != null && wrapper.getLastUpdated().isAfter(existingMovie.getTmdbLastUpdated()))) {
-                    
-                    log.info("Batch UPDATE TMDB ID: {}", wrapper.getTmdbId());
-                    movieMapper.updateEntityFromDto(wrapper, existingMovie);
-                    toSave.add(existingMovie);
-                }
-            }
-        }
-
-        if (!toSave.isEmpty()) {
-            movieRepository.saveAll(toSave);
-            log.info("Batch saved {} movies.", toSave.size());
-            
-            // Save relations
-            Map<Long, Movie> savedMoviesMap = movieRepository.findByTmdbIdIn(tmdbIds).stream()
-                    .collect(Collectors.toMap(Movie::getTmdbId, Function.identity()));
-            for (TmdbMovieWrapperDto wrapper : validWrappers) {
-                Movie movie = savedMoviesMap.get(wrapper.getTmdbId());
-                if (movie != null) {
-                    extractAndSaveRelations(movie, wrapper);
-                }
-            }
-        }
+    private String safeTruncate(String input, int maxLength) {
+        if (input == null) return null;
+        return input.length() <= maxLength ? input : input.substring(0, maxLength);
     }
 
     private void extractAndSaveRelations(Movie movie, TmdbMovieWrapperDto wrapper) {
@@ -346,7 +359,7 @@ public class TmdbImportService {
                 Genre genre = genreRepository.findBySlugAndDeletedAtIsNull(slug).orElseGet(() -> {
                     Genre newGenre = new Genre();
                     newGenre.setPublicId(UUID.randomUUID().toString());
-                    newGenre.setName(gDto.getName());
+                    newGenre.setName(safeTruncate(gDto.getName(), 255));
                     newGenre.setSlug(slug);
                     newGenre.setStatus(ActiveStatus.ACTIVE);
                     return genreRepository.save(newGenre);
@@ -413,7 +426,7 @@ public class TmdbImportService {
                 List<Long> personIds = new ArrayList<>(uniquePersons.keySet());
                 Map<Long, Person> personMap = new java.util.HashMap<>();
                 if (!personIds.isEmpty()) {
-                    List<Person> existingPersons = personRepository.findByTmdbPersonIdInAndDeletedAtIsNull(personIds);
+                    List<Person> existingPersons = personRepository.findByTmdbPersonIdIn(personIds);
                     for (Person p : existingPersons) {
                         personMap.put(p.getTmdbPersonId(), p);
                     }
@@ -424,9 +437,10 @@ public class TmdbImportService {
                             Person newPerson = new Person();
                             newPerson.setPublicId(UUID.randomUUID().toString());
                             newPerson.setTmdbPersonId(pDto.getTmdbPersonId());
-                            newPerson.setFullName(pDto.getOriginalName() != null ? pDto.getOriginalName() : (pDto.getName() != null ? pDto.getName() : "Unknown"));
-                            newPerson.setStageName(pDto.getName());
-                            newPerson.setProfileImageUrl(pDto.getProfileUrl());
+                            String nameToUse = pDto.getOriginalName() != null ? pDto.getOriginalName() : (pDto.getName() != null ? pDto.getName() : "Unknown");
+                            newPerson.setFullName(safeTruncate(nameToUse, 255));
+                            newPerson.setStageName(safeTruncate(pDto.getName(), 255));
+                            newPerson.setProfileImageUrl(safeTruncate(pDto.getProfileUrl(), 255));
                             newPerson.setStatus(ActiveStatus.ACTIVE);
                             newPersons.add(newPerson);
                         }
@@ -448,7 +462,7 @@ public class TmdbImportService {
                         credit.setMovie(movie);
                         credit.setPerson(p);
                         credit.setRoleType(tc.role);
-                        credit.setCharacterName(tc.dto.getCharacter());
+                        credit.setCharacterName(safeTruncate(tc.dto.getCharacter(), 255));
                         credit.setDisplayOrder(tc.order);
                         creditsToSave.add(credit);
                     }
@@ -459,24 +473,22 @@ public class TmdbImportService {
             }
         }
         
-        // 3. Videos / Media
+        // 3. Videos / Media — xóa cũ trước, insert mới
+        movieMediaRepository.deleteByMovieId(movie.getId());
+
         if (wrapper.getVideos() != null && wrapper.getVideos().getPrimaryTrailer() != null) {
             TmdbTrailerDto trailer = wrapper.getVideos().getPrimaryTrailer();
             if (trailer.getUrl() != null) {
-                // Check if primary trailer already exists
-                boolean exists = movieMediaRepository.existsPrimaryMedia(movie.getId(), MovieMediaType.TRAILER);
-                if (!exists) {
-                    MovieMedia media = new MovieMedia();
-                    media.setPublicId(UUID.randomUUID().toString());
-                    media.setMovie(movie);
-                    media.setMediaType(MovieMediaType.TRAILER);
-                    media.setUrl(trailer.getUrl());
-                    media.setTitle(trailer.getName() != null ? trailer.getName() : "Official Trailer");
-                    media.setIsPrimary(true);
-                    media.setStatus(ActiveStatus.ACTIVE);
-                    media.setDisplayOrder(1);
-                    movieMediaRepository.save(media);
-                }
+                MovieMedia media = new MovieMedia();
+                media.setPublicId(UUID.randomUUID().toString());
+                media.setMovie(movie);
+                media.setMediaType(MovieMediaType.TRAILER);
+                media.setUrl(safeTruncate(trailer.getUrl(), 255));
+                media.setTitle(safeTruncate(trailer.getName() != null ? trailer.getName() : "Official Trailer", 255));
+                media.setIsPrimary(true);
+                media.setStatus(ActiveStatus.ACTIVE);
+                media.setDisplayOrder(1);
+                movieMediaRepository.save(media);
             }
         }
         
@@ -493,7 +505,7 @@ public class TmdbImportService {
                     media.setPublicId(UUID.randomUUID().toString());
                     media.setMovie(movie);
                     media.setMediaType(MovieMediaType.POSTER);
-                    media.setUrl(img.getUrl());
+                    media.setUrl(safeTruncate(img.getUrl(), 255));
                     media.setIsPrimary(isPrimary);
                     media.setStatus(ActiveStatus.ACTIVE);
                     media.setDisplayOrder(displayOrder++);
@@ -513,7 +525,7 @@ public class TmdbImportService {
                     media.setPublicId(UUID.randomUUID().toString());
                     media.setMovie(movie);
                     media.setMediaType(MovieMediaType.BANNER);
-                    media.setUrl(img.getUrl());
+                    media.setUrl(safeTruncate(img.getUrl(), 255));
                     media.setIsPrimary(isPrimary);
                     media.setStatus(ActiveStatus.ACTIVE);
                     media.setDisplayOrder(displayOrder++);
@@ -531,9 +543,9 @@ public class TmdbImportService {
                 ProductionCompany company = productionCompanyRepository.findByNameIgnoreCase(companyDto.getName()).orElseGet(() -> {
                     ProductionCompany newCompany = new ProductionCompany();
                     newCompany.setPublicId(UUID.randomUUID().toString());
-                    newCompany.setName(companyDto.getName());
-                    newCompany.setLogoUrl(companyDto.getLogoUrl());
-                    newCompany.setCountry(companyDto.getOriginCountry());
+                    newCompany.setName(safeTruncate(companyDto.getName(), 255));
+                    newCompany.setLogoUrl(safeTruncate(companyDto.getLogoUrl(), 255));
+                    newCompany.setCountry(safeTruncate(companyDto.getOriginCountry(), 255));
                     newCompany.setStatus(ActiveStatus.ACTIVE);
                     return productionCompanyRepository.save(newCompany);
                 });
@@ -541,23 +553,34 @@ public class TmdbImportService {
                 MovieProductionCompany mpc = new MovieProductionCompany();
                 mpc.setMovie(movie);
                 mpc.setProductionCompany(company);
-                // mpc.setRole(...) // Adjust according to enum if needed, usually defaults to PRODUCTION in SQL
+                mpc.setRole(com.lorafilm.movie.movie.domain.enums.CompanyRoleType.PRODUCTION);
                 movieProductionCompanyRepository.save(mpc);
             }
         }
         
         // 5. Translations
+        movieTranslationRepository.deleteByMovieId(movie.getId());
         if (wrapper.getTranslations() != null && !wrapper.getTranslations().isEmpty()) {
-            movieTranslationRepository.deleteByMovieId(movie.getId());
             for (com.lorafilm.movie.integration.tmdb.dto.TmdbTranslationDto tDto : wrapper.getTranslations()) {
                 if (tDto.getLanguageCode() == null) continue;
                 MovieTranslation mt = new MovieTranslation();
                 mt.setMovie(movie);
-                mt.setLocale(tDto.getLanguageCode());
-                mt.setTitle(tDto.getTitle() != null ? tDto.getTitle() : movie.getTitle());
-                mt.setSynopsis(tDto.getOverview());
+                mt.setLocale(safeTruncate(tDto.getLanguageCode(), 255));
+                mt.setTitle(safeTruncate(tDto.getTitle() != null && !tDto.getTitle().isBlank() ? tDto.getTitle() : movie.getTitle(), 255));
+                mt.setSynopsis(tDto.getOverview() != null && !tDto.getOverview().isBlank() ? tDto.getOverview() : movie.getSynopsis());
                 movieTranslationRepository.save(mt);
             }
+        } else {
+            // Default fallback translation if TMDB provides no translations
+            MovieTranslation defaultTranslation = new MovieTranslation();
+            defaultTranslation.setMovie(movie);
+            String fallbackLocale = (movie.getCountry() != null && !movie.getCountry().isBlank()) 
+                    ? movie.getCountry() 
+                    : "vi-VN";
+            defaultTranslation.setLocale(safeTruncate(fallbackLocale, 255));
+            defaultTranslation.setTitle(movie.getTitle());
+            defaultTranslation.setSynopsis(movie.getSynopsis());
+            movieTranslationRepository.save(defaultTranslation);
         }
         
         // 6. Default Movie Version (since TMDB doesn't provide 2D/3D info)
