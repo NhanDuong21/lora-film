@@ -494,6 +494,7 @@ export default function AdminRoomEditPage() {
               setCleaningBuffer={setCleaningBuffer}
               status={status}
               setStatus={setStatus}
+              capacity={stats.activeSeats}
               availableStatuses={availableStatuses}
             />
 

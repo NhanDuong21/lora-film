@@ -400,6 +400,8 @@ export default function AdminRoomCreatePage() {
               setCleaningBuffer={setCleaningBuffer}
               status={status}
               setStatus={setStatus}
+              capacity={stats.activeSeats}
+              isCreateMode={true}
               availableStatuses={availableStatuses}
             />
 
