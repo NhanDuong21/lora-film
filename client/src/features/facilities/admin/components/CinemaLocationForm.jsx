@@ -152,22 +152,16 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
       ...prev,
       latitude: lat,
       longitude: lon,
-      address: s.label || prev.address,
-      city: s.city || prev.city || ''
+      city: s.city || '',
+      district: s.district || '',
+      timezone: getTimezoneByCountryCode(s.countryCode, lon),
+      address: s.address || s.label || ''
     }));
 
     if (mapRef.current && markerRef.current) {
       markerRef.current.setLatLng([lat, lon]);
       mapRef.current.setView([lat, lon], 16);
     }
-
-    setFormData(prev => ({
-      ...prev,
-      city: s.city || prev.city || '',
-      district: s.district || prev.district || '',
-      timezone: getTimezoneByCountryCode(s.countryCode, lon),
-      address: s.address || s.label || prev.address
-    }));
   };
 
   return (
