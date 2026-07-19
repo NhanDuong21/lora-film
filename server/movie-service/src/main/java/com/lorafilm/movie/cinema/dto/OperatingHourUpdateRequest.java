@@ -12,8 +12,8 @@ public class OperatingHourUpdateRequest {
     @Max(value = 7, message = "Day of week must be between 1 and 7")
     private Integer dayOfWeek;
 
-    private LocalTime openTime;
-    private LocalTime closeTime;
+    private String openTime;
+    private String closeTime;
 
     @NotNull(message = "isClosed must be specified")
     private Boolean isClosed;
@@ -29,19 +29,19 @@ public class OperatingHourUpdateRequest {
         this.dayOfWeek = dayOfWeek;
     }
 
-    public LocalTime getOpenTime() {
+    public String getOpenTime() {
         return openTime;
     }
 
-    public void setOpenTime(LocalTime openTime) {
+    public void setOpenTime(String openTime) {
         this.openTime = openTime;
     }
 
-    public LocalTime getCloseTime() {
+    public String getCloseTime() {
         return closeTime;
     }
 
-    public void setCloseTime(LocalTime closeTime) {
+    public void setCloseTime(String closeTime) {
         this.closeTime = closeTime;
     }
 

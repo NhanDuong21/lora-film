@@ -404,12 +404,15 @@ public class CinemaServiceImpl implements CinemaService {
             if (!days.add(req.getDayOfWeek())) {
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Duplicate day of week: " + req.getDayOfWeek());
             }
+            LocalTime parsedOpenTime = parseAndValidateTime(req.getOpenTime());
+            LocalTime parsedCloseTime = parseAndValidateTime(req.getCloseTime());
+
             if (Boolean.FALSE.equals(req.getIsClosed())) {
-                if (req.getOpenTime() == null || req.getCloseTime() == null) {
+                if (parsedOpenTime == null || parsedCloseTime == null) {
                     throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                             "Open time and close time must not be null for open days");
                 }
-                if (!req.getOpenTime().isBefore(req.getCloseTime())) {
+                if (!parsedOpenTime.isBefore(parsedCloseTime)) {
                     throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Open time must be before close time");
                 }
             }
@@ -429,8 +432,10 @@ public class CinemaServiceImpl implements CinemaService {
                 hour.setDayOfWeek(req.getDayOfWeek());
                 hour.setCreatedBy(userId);
             }
-            hour.setOpenTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(0, 0) : req.getOpenTime());
-            hour.setCloseTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(23, 59) : req.getCloseTime());
+            LocalTime parsedOpen = parseAndValidateTime(req.getOpenTime());
+            LocalTime parsedClose = parseAndValidateTime(req.getCloseTime());
+            hour.setOpenTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(0, 0) : parsedOpen);
+            hour.setCloseTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(23, 59, 59) : parsedClose);
             hour.setIsClosed(req.getIsClosed());
             hour.setUpdatedBy(userId);
             toSave.add(hour);
@@ -659,5 +664,19 @@ public class CinemaServiceImpl implements CinemaService {
         return periods.stream()
                 .map(cinemaMapper::toClosurePeriodResponse)
                 .collect(Collectors.toList());
+    }
+
+    private LocalTime parseAndValidateTime(String timeStr) {
+        if (timeStr == null || timeStr.trim().isEmpty()) {
+            return null;
+        }
+        if ("24:00".equals(timeStr) || "24:00:00".equals(timeStr)) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATING_HOURS);
+        }
+        try {
+            return LocalTime.parse(timeStr);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATING_HOURS);
+        }
     }
 }

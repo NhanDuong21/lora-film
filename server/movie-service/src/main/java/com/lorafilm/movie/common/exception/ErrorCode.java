@@ -30,6 +30,7 @@ public enum ErrorCode {
     CINEMA_NOT_CONFIGURABLE("Cinema is not in a configurable state", 400),
     CINEMA_NOT_ACTIVE("Cinema is not active", 400),
     INVALID_CINEMA_TIMEZONE("Invalid cinema timezone", 400),
+    INVALID_OPERATING_HOURS("Operating hour must be between 00:00 and 23:59", 400),
     AUDITORIUM_NOT_FOUND("Auditorium not found", 404),
     AUDITORIUM_NOT_ACTIVE("Auditorium is not active", 400),
     AUDITORIUM_NOT_BELONG_TO_CINEMA("Auditorium does not belong to the cinema", 400),

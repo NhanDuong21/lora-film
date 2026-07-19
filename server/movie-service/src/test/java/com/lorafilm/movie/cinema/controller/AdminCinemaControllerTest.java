@@ -6,6 +6,8 @@ import com.lorafilm.movie.cinema.domain.enums.CinemaMediaType;
 import com.lorafilm.movie.cinema.dto.*;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.cinema.service.CinemaService;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -177,8 +179,8 @@ class AdminCinemaControllerTest {
             OperatingHourUpdateRequest req = new OperatingHourUpdateRequest();
             req.setDayOfWeek(i);
             req.setIsClosed(false);
-            req.setOpenTime(LocalTime.of(8, 0));
-            req.setCloseTime(LocalTime.of(22, 0));
+            req.setOpenTime("08:00");
+            req.setCloseTime("22:00");
             requests.add(req);
         }
 
@@ -206,12 +208,15 @@ class AdminCinemaControllerTest {
     void updateOperatingHours_RejectInvalidTime2400() throws Exception {
         String jsonPayload = "[{\"dayOfWeek\":1,\"isClosed\":false,\"openTime\":\"08:00\",\"closeTime\":\"24:00\"}]";
 
+        when(cinemaService.updateOperatingHours(eq("cinema-uuid"), anyList()))
+                .thenThrow(new BusinessException(ErrorCode.INVALID_OPERATING_HOURS));
+
         mockMvc.perform(put("/api/admin/cinemas/cinema-uuid/operating-hours")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(jsonPayload))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("INVALID_DATE_TIME_FORMAT"));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_OPERATING_HOURS"));
     }
 
     @Test
@@ -221,8 +226,8 @@ class AdminCinemaControllerTest {
             OperatingHourUpdateRequest req = new OperatingHourUpdateRequest();
             req.setDayOfWeek(i);
             req.setIsClosed(false);
-            req.setOpenTime(LocalTime.of(0, 0, 0));
-            req.setCloseTime(LocalTime.of(23, 59, 59));
+            req.setOpenTime("00:00:00");
+            req.setCloseTime("23:59:59");
             requests.add(req);
         }
 

@@ -42,7 +42,7 @@ Mỗi phase phải:
 
 - [x] Cinema CRUD hardening
 - [x] Cinema Media
-- [x] Operating Hours
+- [x] Operating Hours — source/test fixed, runtime verification pending
 - [x] Closure Periods
 - [ ] Auditorium maintenance — PARTIAL: create supported, list endpoint missing
 - [x] Seat Types

@@ -305,8 +305,8 @@ class CinemaServiceImplTest {
             OperatingHourUpdateRequest req = new OperatingHourUpdateRequest();
             req.setDayOfWeek(i);
             req.setIsClosed(false);
-            req.setOpenTime(LocalTime.of(8, 0));
-            req.setCloseTime(LocalTime.of(22, 0));
+            req.setOpenTime("08:00");
+            req.setCloseTime("22:00");
             requests.add(req);
         }
 
@@ -337,8 +337,8 @@ class CinemaServiceImplTest {
         OperatingHourUpdateRequest req7 = new OperatingHourUpdateRequest();
         req7.setDayOfWeek(7);
         req7.setIsClosed(false);
-        req7.setOpenTime(LocalTime.of(22, 0));
-        req7.setCloseTime(LocalTime.of(8, 0));
+        req7.setOpenTime("22:00");
+        req7.setCloseTime("08:00");
         requests.add(req7);
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));

@@ -11,6 +11,14 @@ const DAYS_OF_WEEK = [
   { id: 7, name: 'Chủ Nhật', code: 'CN' },
 ];
 
+const normalizeTimeForApi = (value) => {
+  if (!value) return null;
+  if (value === "24:00" || value === "24:00:00") {
+    return "23:59:59";
+  }
+  return value.length === 5 ? `${value}:00` : value;
+};
+
 export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast }) {
   const [hours, setHours] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,8 +70,8 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
     // Format payload
     const payload = hours.map(h => ({
       dayOfWeek: h.dayOfWeek,
-      openTime: h.isClosed ? null : (h.openTime.length === 5 ? `${h.openTime}:00` : h.openTime),
-      closeTime: h.isClosed ? null : (h.closeTime.length === 5 ? `${h.closeTime}:00` : h.closeTime),
+      openTime: h.isClosed ? null : normalizeTimeForApi(h.openTime),
+      closeTime: h.isClosed ? null : normalizeTimeForApi(h.closeTime),
       isClosed: h.isClosed
     }));
     

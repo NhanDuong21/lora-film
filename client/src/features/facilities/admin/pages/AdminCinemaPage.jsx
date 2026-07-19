@@ -43,14 +43,22 @@ export default function AdminCinemaPage() {
       description: formData.description || null
     });
 
+    const normalizeTimeForApi = (value) => {
+      if (!value) return null;
+      if (value === "24:00" || value === "24:00:00") {
+        return "23:59:59";
+      }
+      return value.length === 5 ? `${value}:00` : value;
+    };
+
     if (res?.success && res?.data) {
       const createdCinema = res.data;
       
       // Save operating hours
       const operatingHoursPayload = operatingHours.map(oh => ({
         dayOfWeek: oh.dayOfWeek,
-        openTime: oh.isClosed ? null : (oh.openTime.length === 5 ? `${oh.openTime}:00` : oh.openTime),
-        closeTime: oh.isClosed ? null : (oh.closeTime.length === 5 ? `${oh.closeTime}:00` : oh.closeTime),
+        openTime: oh.isClosed ? null : normalizeTimeForApi(oh.openTime),
+        closeTime: oh.isClosed ? null : normalizeTimeForApi(oh.closeTime),
         isClosed: oh.isClosed
       }));
 
