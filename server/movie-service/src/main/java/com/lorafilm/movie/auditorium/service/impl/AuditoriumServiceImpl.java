@@ -118,10 +118,12 @@ public class AuditoriumServiceImpl implements AuditoriumService {
             throw new BusinessException(ErrorCode.AUDITORIUM_NOT_CONFIGURABLE);
         }
 
-        long existingSeatsCount = seatRepository.countByAuditoriumIdAndDeletedAtIsNull(targetAuditorium.getId());
-        if (existingSeatsCount > 0) {
-            // Alternatively we could delete existing seats, but usually clone is for empty auditoriums
-            throw new BusinessException(ErrorCode.CLONE_AUDITORIUM_FAILED, "Cannot clone into an auditorium that already has seats", null);
+        List<Seat> existingSeats = seatRepository.findByAuditoriumIdAndDeletedAtIsNull(targetAuditorium.getId());
+        if (!existingSeats.isEmpty()) {
+            for (Seat s : existingSeats) {
+                s.performSoftDelete(currentUserProvider.getCurrentUserId());
+            }
+            seatRepository.saveAll(existingSeats);
         }
 
         Auditorium sourceAuditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNull(request.sourceAuditoriumPublicId())

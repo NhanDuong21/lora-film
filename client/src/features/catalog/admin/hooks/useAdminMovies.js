@@ -4,7 +4,7 @@ import adminGenreService from '@/features/catalog/admin/services/adminGenreServi
 import { parseApiError } from '@/utils/apiErrorHandler';
 import { normalizePagination } from '@/utils/pagination';
 
-export default function useAdminMovies(triggerToast) {
+export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
   const [movies, setMovies] = useState([]);
   const [genresList, setGenresList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +55,11 @@ export default function useAdminMovies(triggerToast) {
   }, [fetchMovies]);
 
   const handleDelete = async (publicId, title) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)) return;
+    const shouldDelete = triggerConfirm 
+      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)
+      : window.confirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`);
+      
+    if (!shouldDelete) return;
     try {
       await adminMovieService.deleteMovie(publicId);
       triggerToast?.('Đã xóa phim thành công!');

@@ -16,7 +16,7 @@ const DEFAULT_NEW_VERSION = {
 
 export default function MovieVersionTab({ movie }) {
   const { versions, isLoading, error, isSubmitting, reload, addVersion, removeVersion } = useMovieVersions(movie.publicId);
-  const { triggerToast } = useOutletContext();
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const [newVer, setNewVer] = useState(DEFAULT_NEW_VERSION);
   const [showAdd, setShowAdd] = useState(false);
 
@@ -44,7 +44,12 @@ export default function MovieVersionTab({ movie }) {
   };
 
   const handleRemove = async (id) => {
-    if (!window.confirm('Xóa phiên bản này?')) return;
+    const shouldRemove = triggerConfirm 
+      ? await triggerConfirm('Xóa phiên bản này?')
+      : window.confirm('Xóa phiên bản này?');
+      
+    if (!shouldRemove) return;
+    
     const res = await removeVersion(id);
     if (res.success) {
       triggerToast('Đã xóa phiên bản');

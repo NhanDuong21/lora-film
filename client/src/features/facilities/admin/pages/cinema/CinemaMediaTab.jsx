@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { PlusCircle, Trash2, Image as ImageIcon, Star } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
 import adminCinemaService from '../../services/adminCinemaService';
 import CinemaImageUploader from '../../components/CinemaImageUploader';
 
 export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formData, setFormData] = useState({
     mediaType: 'GALLERY',
@@ -55,7 +57,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
       } catch (err) {
         console.error("Lỗi upload:", err);
         setIsSubmitting(false);
-        alert("Upload ảnh thất bại!");
+        triggerToast?.("Upload ảnh thất bại!", "error");
         return;
       }
     }
@@ -73,7 +75,11 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
   };
 
   const handleDelete = async (mediaId, title) => {
-    if (window.confirm(`Bạn có chắc muốn xóa phương tiện "${title || 'Không tên'}"?`)) {
+    const shouldDelete = triggerConfirm
+      ? await triggerConfirm(`Bạn có chắc muốn xóa phương tiện "${title || 'Không tên'}"?`)
+      : window.confirm(`Bạn có chắc muốn xóa phương tiện "${title || 'Không tên'}"?`);
+      
+    if (shouldDelete) {
       await onDelete(mediaId);
     }
   };

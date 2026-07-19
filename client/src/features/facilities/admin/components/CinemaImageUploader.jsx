@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { UploadCloud, Image as ImageIcon, Trash2 } from 'lucide-react';
 import ImageCropDialog from './ImageCropDialog';
+import { useOutletContext } from 'react-router-dom';
 
 export default function CinemaImageUploader({ 
   label, 
@@ -10,6 +11,7 @@ export default function CinemaImageUploader({
   aspectRatio = 1, // 1 for Logo, 16/9 for Banner
   required = false
 }) {
+  const { triggerToast } = useOutletContext() || {};
   const fileInputRef = useRef(null);
   const [selectedImageStr, setSelectedImageStr] = useState(null);
   const [showCropDialog, setShowCropDialog] = useState(false);
@@ -23,7 +25,8 @@ export default function CinemaImageUploader({
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('Vui lòng chọn file hình ảnh hợp lệ.');
+        if (triggerToast) triggerToast('Vui lòng chọn file hình ảnh hợp lệ.', 'error');
+        else alert('Vui lòng chọn file hình ảnh hợp lệ.');
         return;
       }
       const reader = new FileReader();

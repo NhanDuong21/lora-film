@@ -16,7 +16,7 @@ const DEFAULT_NEW_MEDIA = {
 
 export default function MovieMediaTab({ movie }) {
   const { mediaList, isLoading, error, isSubmitting, reload, addMedia, removeMedia } = useMovieMedia(movie.publicId);
-  const { triggerToast } = useOutletContext();
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const [newMedia, setNewMedia] = useState(DEFAULT_NEW_MEDIA);
   const [showAdd, setShowAdd] = useState(false);
   const [playVideo, setPlayVideo] = useState(null);
@@ -37,7 +37,12 @@ export default function MovieMediaTab({ movie }) {
   };
 
   const handleRemove = async (id) => {
-    if (!window.confirm('Xóa hình ảnh/video này?')) return;
+    const shouldRemove = triggerConfirm 
+      ? await triggerConfirm('Xóa hình ảnh/video này?')
+      : window.confirm('Xóa hình ảnh/video này?');
+      
+    if (!shouldRemove) return;
+    
     const res = await removeMedia(id);
     if (res.success) {
       triggerToast('Đã xóa media');

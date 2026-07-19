@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { UploadCloud, X } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
 
 export default function CinemaGalleryUploader({ 
   label, 
@@ -8,13 +9,15 @@ export default function CinemaGalleryUploader({
   onChange, 
   maxFiles = 25 
 }) {
+  const { triggerToast } = useOutletContext() || {};
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFiles = (newFiles) => {
     const validImageFiles = Array.from(newFiles).filter(file => file.type.startsWith('image/'));
     if (validImageFiles.length !== newFiles.length) {
-      alert('Một số file không phải là hình ảnh và đã bị bỏ qua.');
+      if (triggerToast) triggerToast('Một số file không phải là hình ảnh và đã bị bỏ qua.', 'warning');
+      else alert('Một số file không phải là hình ảnh và đã bị bỏ qua.');
     }
 
     // Filter duplicates by name and size (rudimentary check)

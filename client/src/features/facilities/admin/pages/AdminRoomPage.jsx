@@ -6,7 +6,7 @@ import adminCinemaService from '@/features/facilities/admin/services/adminCinema
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 
 export default function AdminRoomPage() {
-  const { triggerToast } = useOutletContext() || {};
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const navigate = useNavigate();
 
   const [cinemas, setCinemas] = useState([]);
@@ -63,7 +63,11 @@ export default function AdminRoomPage() {
 
   // Delete handler
   const handleDelete = async (publicId, name) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`)) {
+    const shouldDelete = triggerConfirm
+      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`)
+      : window.confirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`);
+      
+    if (shouldDelete) {
       try {
         await adminRoomService.deleteAuditorium(publicId);
         triggerToast?.(`Đã xóa phòng chiếu "${name}" thành công!`);

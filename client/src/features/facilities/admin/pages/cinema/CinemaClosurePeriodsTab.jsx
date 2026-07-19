@@ -3,8 +3,10 @@ import { PlusCircle, CalendarX2 } from 'lucide-react';
 import useClosurePeriods from '../../hooks/useClosurePeriods';
 import { LoadingState, ErrorState, EmptyState } from '@/components/common/ui/uiKit';
 import { formatDateTime } from '@/utils/formatters';
+import { useOutletContext } from 'react-router-dom';
 
 export default function CinemaClosurePeriodsTab({ cinemaPublicId, triggerToast }) {
+  const { triggerConfirm } = useOutletContext() || {};
   const {
     closurePeriods,
     isLoading,
@@ -58,7 +60,11 @@ export default function CinemaClosurePeriodsTab({ cinemaPublicId, triggerToast }
   };
 
   const handleCancel = async (id) => {
-    if (window.confirm('Bạn có chắc muốn hủy lịch đóng cửa này? Rạp sẽ có thể mở cửa lại trong khoảng thời gian này.')) {
+    const shouldCancel = triggerConfirm
+      ? await triggerConfirm('Bạn có chắc muốn hủy lịch đóng cửa này? Rạp sẽ có thể mở cửa lại trong khoảng thời gian này.')
+      : window.confirm('Bạn có chắc muốn hủy lịch đóng cửa này? Rạp sẽ có thể mở cửa lại trong khoảng thời gian này.');
+      
+    if (shouldCancel) {
       await cancelClosurePeriod(id);
     }
   };

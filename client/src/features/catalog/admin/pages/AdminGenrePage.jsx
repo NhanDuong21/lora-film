@@ -4,7 +4,10 @@ import { getErrorMessage } from '@/utils/apiErrorHandler';
 import adminGenreService from '@/features/catalog/admin/services/adminGenreService';
 import SkeletonTable from '@/components/common/SkeletonTable';
 
-export default function AdminGenrePage({ triggerToast }) {
+import { useOutletContext } from 'react-router-dom';
+
+export default function AdminGenrePage() {
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const [genres, setGenres] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -80,7 +83,11 @@ export default function AdminGenrePage({ triggerToast }) {
   }, [editingGenre, formData, triggerToast, fetchGenres]);
 
   const handleDelete = useCallback(async (id) => {
-    if (confirm('Bạn có chắc chắn muốn xóa thể loại này?')) {
+    const shouldDelete = triggerConfirm 
+      ? await triggerConfirm('Bạn có chắc chắn muốn xóa thể loại này?')
+      : window.confirm('Bạn có chắc chắn muốn xóa thể loại này?');
+      
+    if (shouldDelete) {
       try {
         await adminGenreService.deleteGenre(id);
         if (triggerToast) triggerToast('Đã xóa thể loại khỏi danh sách!');
@@ -89,7 +96,7 @@ export default function AdminGenrePage({ triggerToast }) {
         if (triggerToast) triggerToast(getErrorMessage(error, 'Có lỗi xảy ra khi xóa'), 'error');
       }
     }
-  }, [triggerToast, fetchGenres]);
+  }, [triggerToast, triggerConfirm, fetchGenres]);
 
   // Modal UI matches prototype forms
   if (isModalOpen) {

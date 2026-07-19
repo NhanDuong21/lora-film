@@ -6,14 +6,14 @@ import MovieTable from '@/features/catalog/admin/components/MovieTable';
 import MovieFormModal from '@/features/catalog/admin/components/MovieFormModal';
 
 export default function AdminMoviePage() {
-  const { triggerToast } = useOutletContext() || {};
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
 
   // Orchestrator States
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
 
   // Hook for movie list management
-  const adminMovies = useAdminMovies(triggerToast);
+  const adminMovies = useAdminMovies({ triggerConfirm, triggerToast });
 
   const navigate = useNavigate();
 

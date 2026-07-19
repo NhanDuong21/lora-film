@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PlusCircle, Edit, Trash2, Film, Copy } from 'lucide-react';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 
 export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
+  const { triggerConfirm } = useOutletContext() || {};
   const navigate = useNavigate();
   const auditoriums = cinema?.activeAuditoriums || [];
   
@@ -12,7 +13,11 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
   const [isCloning, setIsCloning] = useState(false);
 
   const handleDelete = async (publicId, name) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`)) {
+    const shouldDelete = triggerConfirm
+      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`)
+      : window.confirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`);
+      
+    if (shouldDelete) {
       try {
         await adminRoomService.deleteAuditorium(publicId);
         triggerToast?.(`Đã xóa phòng chiếu "${name}" thành công!`);
@@ -25,11 +30,22 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
     }
   };
 
-  const handleClone = async (targetPublicId) => {
+  const handleClone = async (targetPublicId, targetName, targetCapacity) => {
     if (!sourceRoomId) {
       triggerToast?.('Vui lòng chọn phòng chiếu nguồn để nhân bản', 'warning');
       return;
     }
+    
+    if (targetCapacity > 0) {
+      const shouldOverwrite = triggerConfirm
+        ? await triggerConfirm(`Phòng chiếu "${targetName}" đang có sẵn ${targetCapacity} ghế. Nếu bạn tiếp tục, sơ đồ hiện tại sẽ bị xóa đè hoàn toàn bởi sơ đồ phòng mẫu. Bạn có chắc chắn?`)
+        : window.confirm(`Phòng chiếu "${targetName}" đang có sẵn ${targetCapacity} ghế. Nếu bạn tiếp tục, sơ đồ hiện tại sẽ bị xóa đè hoàn toàn bởi sơ đồ phòng mẫu. Bạn có chắc chắn?`);
+        
+      if (!shouldOverwrite) {
+        return;
+      }
+    }
+
     setIsCloning(true);
     try {
       await adminRoomService.cloneAuditoriumLayout(cinema.publicId, targetPublicId, sourceRoomId);
@@ -107,7 +123,7 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
                     <td className="py-4 px-6">{getStatusBadge(room.status || 'ACTIVE')}</td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex justify-end gap-2 items-center">
-                        {room.status === 'DRAFT' && (!room.capacity || room.capacity === 0) && (
+                        {room.status === 'DRAFT' && (
                           <div className="relative flex items-center">
                             {cloningRoomId === room.publicId ? (
                               <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700 p-1 rounded-xl">
@@ -122,7 +138,7 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
                                   ))}
                                 </select>
                                 <button 
-                                  onClick={() => handleClone(room.publicId)}
+                                  onClick={() => handleClone(room.publicId, room.name, room.capacity)}
                                   disabled={isCloning || !sourceRoomId}
                                   className="p-1.5 bg-brand-orange text-white rounded-lg hover:bg-opacity-90 disabled:opacity-50"
                                 >

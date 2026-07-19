@@ -2,12 +2,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 
-export default function useAdminCinemas(triggerToast) {
+export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
   const [cinemas, setCinemas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [error, setError] = useState(null);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
@@ -49,17 +50,29 @@ export default function useAdminCinemas(triggerToast) {
   }, [currentPage, pageSize, searchTerm, cityFilter, statusFilter, triggerToast]);
 
   // Handle delete
-  const handleDeleteCinema = useCallback(async (publicId, name) => {
-    if (confirm(`Bạn có chắc chắn muốn xóa cụm rạp "${name}"?`)) {
+  const handleDeleteCinema = async (id, name) => {
+    const shouldDelete = triggerConfirm 
+      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa cụm rạp "${name}"?`)
+      : window.confirm(`Bạn có chắc chắn muốn xóa cụm rạp "${name}"?`);
+
+    if (shouldDelete) {
+      setIsLoading(true);
+      setError(null);
       try {
-        await adminCinemaService.deleteCinema(publicId);
-        triggerToast?.('Đã xóa cụm rạp thành công!');
-        fetchCinemas();
+        await adminCinemaService.deleteAdminCinema(id);
+        setCinemas(cinemas.filter(c => c.publicId !== id));
+        triggerToast?.('Xóa cụm rạp thành công', 'success');
+        return true;
       } catch (err) {
-        triggerToast?.(err.message || 'Lỗi khi xóa cụm rạp', 'error');
+        setError(err.response?.data?.message || err.message || 'Không thể xóa cụm rạp');
+        triggerToast?.(err.response?.data?.message || err.message || 'Không thể xóa cụm rạp', 'error');
+        return false;
+      } finally {
+        setIsLoading(false);
       }
     }
-  }, [fetchCinemas, triggerToast]);
+    return false;
+  };
 
   // Handle status update
   const handleStatusChange = useCallback(async (publicId, newStatus) => {
