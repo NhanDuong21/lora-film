@@ -6,18 +6,23 @@ const adminAutoScheduleService = {
     return response.data;
   },
 
-  getPreview: async (previewPublicId) => {
-    const response = await apiClient.get(`/api/admin/showtime-schedules/previews/${previewPublicId}`);
+  getPreview: async (previewPublicId, params) => {
+    const response = await apiClient.get(`/api/admin/showtime-schedules/${previewPublicId}`, { params });
     return response.data;
   },
 
-  applyPreview: async (previewPublicId) => {
-    const response = await apiClient.post(`/api/admin/showtime-schedules/previews/${previewPublicId}/apply`);
+  updateSelections: async (previewPublicId, data) => {
+    const response = await apiClient.put(`/api/admin/showtime-schedules/${previewPublicId}/items`, data);
+    return response.data;
+  },
+
+  applyPreview: async (previewPublicId, data) => {
+    const response = await apiClient.post(`/api/admin/showtime-schedules/${previewPublicId}/apply`, data);
     return response.data;
   },
 
   getPreviewHistory: async (params) => {
-    const response = await apiClient.get('/api/admin/showtime-schedules/previews', { params });
+    const response = await apiClient.get('/api/admin/showtime-schedules', { params });
     return response.data;
   }
 };
