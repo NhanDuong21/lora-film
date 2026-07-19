@@ -6,7 +6,7 @@ import CinemaFormView from '@/features/facilities/admin/components/CinemaFormVie
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 
 export default function AdminCinemaPage() {
-  const { triggerToast } = useOutletContext() || {};
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const navigate = useNavigate();
   const [view, setView] = useState('list'); // 'list' or 'create'
 
@@ -28,7 +28,7 @@ export default function AdminCinemaPage() {
     fetchCinemas,
     handleDeleteCinema,
     handleStatusChange
-  } = useAdminCinemas(triggerToast);
+  } = useAdminCinemas({ triggerConfirm, triggerToast });
 
   const handleCreateSubmit = async (formData, operatingHours, media) => {
     const res = await adminCinemaService.createCinema({
