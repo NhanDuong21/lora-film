@@ -21,6 +21,8 @@ import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
 import com.lorafilm.movie.cinema.repository.CinemaMediaRepository;
 import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
@@ -54,6 +56,7 @@ public class CinemaServiceImpl implements CinemaService {
     private final CinemaClosurePeriodRepository cinemaClosurePeriodRepository;
     private final CurrentUserProvider currentUserProvider;
     private final AuditoriumRepository auditoriumRepository;
+    private final SeatRepository seatRepository;
     private final ShowtimeRepository showtimeRepository;
     private final CinemaMapper cinemaMapper;
 
@@ -63,6 +66,7 @@ public class CinemaServiceImpl implements CinemaService {
             CinemaClosurePeriodRepository cinemaClosurePeriodRepository,
             CurrentUserProvider currentUserProvider,
             AuditoriumRepository auditoriumRepository,
+            SeatRepository seatRepository,
             ShowtimeRepository showtimeRepository,
             CinemaMapper cinemaMapper) {
         this.cinemaRepository = cinemaRepository;
@@ -71,6 +75,7 @@ public class CinemaServiceImpl implements CinemaService {
         this.cinemaClosurePeriodRepository = cinemaClosurePeriodRepository;
         this.currentUserProvider = currentUserProvider;
         this.auditoriumRepository = auditoriumRepository;
+        this.seatRepository = seatRepository;
         this.showtimeRepository = showtimeRepository;
         this.cinemaMapper = cinemaMapper;
     }
@@ -591,15 +596,23 @@ public class CinemaServiceImpl implements CinemaService {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
-        if (auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId())) {
-            throw new BusinessException(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS);
-        }
-
         if (showtimeRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId())) {
             throw new BusinessException(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY);
         }
 
         Long userId = currentUserProvider.getCurrentUserId();
+        
+        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndDeletedAtIsNull(cinema.getId());
+        for (Auditorium auditorium : auditoriums) {
+            List<Seat> seats = seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditorium.getId());
+            for (Seat seat : seats) {
+                seat.performSoftDelete(userId);
+            }
+            seatRepository.saveAll(seats);
+            auditorium.performSoftDelete(userId);
+        }
+        auditoriumRepository.saveAll(auditoriums);
+
         cinema.performSoftDelete(userId);
         cinemaRepository.save(cinema);
     }

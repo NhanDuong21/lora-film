@@ -173,10 +173,13 @@ public class AuditoriumServiceImpl implements AuditoriumService {
             throw new BusinessException(ErrorCode.AUDITORIUM_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY);
         }
         
-        long activeSeatCount = seatRepository.countByAuditoriumIdAndDeletedAtIsNull(auditorium.getId());
-        if (activeSeatCount > 0) {
-            throw new BusinessException(ErrorCode.AUDITORIUM_HAS_ACTIVE_SEATS);
+        Long userId = currentUserProvider.getCurrentUserId();
+        
+        List<Seat> seats = seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditorium.getId());
+        for (Seat seat : seats) {
+            seat.performSoftDelete(userId);
         }
+        seatRepository.saveAll(seats);
         
         auditorium.performSoftDelete(currentUserProvider.getCurrentUserId());
     }

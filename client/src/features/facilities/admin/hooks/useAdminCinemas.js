@@ -64,8 +64,13 @@ export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
         triggerToast?.('Xóa cụm rạp thành công', 'success');
         return true;
       } catch (err) {
-        setError(err.response?.data?.message || err.message || 'Không thể xóa cụm rạp');
-        triggerToast?.(err.response?.data?.message || err.message || 'Không thể xóa cụm rạp', 'error');
+        const errorMsg = err.response?.data?.message || err.message || 'Không thể xóa cụm rạp';
+        let displayMsg = errorMsg;
+        if (errorMsg.includes('showtime history') || errorMsg.includes('CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY')) {
+            displayMsg = 'Cụm rạp này đã có dữ liệu giao dịch, không thể xóa. Vui lòng chuyển trạng thái sang ĐÓNG CỬA (CLOSED).';
+        }
+        setError(displayMsg);
+        triggerToast?.(displayMsg, 'error');
         return false;
       } finally {
         setIsLoading(false);

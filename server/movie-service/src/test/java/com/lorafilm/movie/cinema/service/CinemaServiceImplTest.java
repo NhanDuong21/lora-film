@@ -12,6 +12,7 @@ import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
 import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
+import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.enums.ActionStatus;
@@ -56,6 +57,9 @@ class CinemaServiceImplTest {
 
     @Mock
     private AuditoriumRepository auditoriumRepository;
+
+    @Mock
+    private SeatRepository seatRepository;
 
     @Mock
     private ShowtimeRepository showtimeRepository;
@@ -497,17 +501,19 @@ class CinemaServiceImplTest {
     }
 
     @Test
-    void deleteCinema_shouldThrowException_whenHasAuditoriums() {
+    void deleteCinema_shouldSoftDelete_whenHasAuditoriums() {
         Cinema cinema = new Cinema();
         cinema.setId(1L);
-        cinema.setPublicId("cinema-uuid");
-
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
-        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
+        when(showtimeRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(false);
+        when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
+        when(auditoriumRepository.findByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(Collections.emptyList());
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> cinemaService.deleteCinema("cinema-uuid"));
-        assertEquals(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS, ex.getErrorCode());
-        verify(cinemaRepository, never()).save(any(Cinema.class));
+        cinemaService.deleteCinema("cinema-uuid");
+
+        assertEquals(1L, cinema.getDeletedBy());
+        assertNotNull(cinema.getDeletedAt());
+        verify(cinemaRepository).save(cinema);
     }
 
     @Test
