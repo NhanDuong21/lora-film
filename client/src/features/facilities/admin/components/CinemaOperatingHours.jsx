@@ -23,7 +23,7 @@ export default function CinemaOperatingHours({ operatingHours, onHoursChange }) 
               onHoursChange(i, 'closeTime', monday.closeTime);
             }
           }}
-          className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-coral border border-zinc-800 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-colors"
+          className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-orange border border-zinc-800 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-colors"
         >
           Áp Dụng T2-T6
         </button>
@@ -39,7 +39,7 @@ export default function CinemaOperatingHours({ operatingHours, onHoursChange }) 
               onHoursChange(i, 'closeTime', monday.closeTime);
             }
           }}
-          className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-coral border border-zinc-800 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-colors"
+          className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-orange border border-zinc-800 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-colors"
         >
           Áp Dụng Tất Cả
         </button>

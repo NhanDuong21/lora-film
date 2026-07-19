@@ -89,33 +89,33 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl p-6">
             <h2 className="text-lg font-black uppercase tracking-wider mb-6 text-zinc-50 flex items-center gap-2">
-              <CalendarX2 className="w-5 h-5 text-brand-coral" />
+              <CalendarX2 className="w-5 h-5 text-brand-orange" />
               Thêm Lịch Bảo Trì
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                    Thời Gian Bắt Đầu <span className="text-brand-coral">*</span>
+                    Thời Gian Bắt Đầu <span className="text-brand-orange">*</span>
                   </label>
                   <input
                     type="datetime-local"
                     required
                     value={formData.startTime}
                     onChange={(e) => setFormData({...formData, startTime: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors text-zinc-200"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors text-zinc-200"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                    Thời Gian Kết Thúc <span className="text-brand-coral">*</span>
+                    Thời Gian Kết Thúc <span className="text-brand-orange">*</span>
                   </label>
                   <input
                     type="datetime-local"
                     required
                     value={formData.endTime}
                     onChange={(e) => setFormData({...formData, endTime: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors text-zinc-200"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors text-zinc-200"
                   />
                 </div>
               </div>
@@ -128,7 +128,7 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
                   type="text"
                   value={formData.reason}
                   onChange={(e) => setFormData({...formData, reason: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors text-zinc-200"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors text-zinc-200"
                 />
               </div>
 
@@ -143,7 +143,7 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-brand-coral hover:bg-opacity-90 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50"
+                  className="flex-1 bg-brand-orange hover:bg-opacity-90 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50"
                 >
                   {isSubmitting ? 'ĐANG LƯU...' : 'LƯU LỊCH BẢO TRÌ'}
                 </button>

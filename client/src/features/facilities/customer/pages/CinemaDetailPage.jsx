@@ -197,7 +197,7 @@ export default function CinemaDetailPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#050506] text-white">
         <div className="flex flex-col items-center gap-4 animate-pulse">
-          <div className="w-12 h-12 border-4 border-brand-coral border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm font-semibold tracking-wider text-zinc-400">Đang tải thông tin rạp...</p>
         </div>
       </div>
@@ -217,7 +217,7 @@ export default function CinemaDetailPage() {
         </p>
         <button
           onClick={() => navigate('/')}
-          className="bg-brand-coral hover:bg-opacity-90 text-white font-bold px-6 py-3 rounded-full transition-all text-xs uppercase tracking-wider"
+          className="bg-brand-orange hover:bg-opacity-90 text-white font-bold px-6 py-3 rounded-full transition-all text-xs uppercase tracking-wider"
         >
           Trở về trang chủ
         </button>
@@ -226,7 +226,7 @@ export default function CinemaDetailPage() {
   }
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-brand-coral selection:text-zinc-950 font-sans font-medium">
+    <div className="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
       
       {/* ❖ TOP BANNER: Carousel */}
       <div className="w-full h-[400px] md:h-[500px] relative overflow-hidden group">
@@ -247,13 +247,13 @@ export default function CinemaDetailPage() {
         {/* Carousel buttons */}
         <button
           onClick={handlePrevSlide}
-          className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-brand-coral border border-zinc-800 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all focus:outline-none cursor-pointer"
+          className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-brand-orange border border-zinc-800 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all focus:outline-none cursor-pointer"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
         <button
           onClick={handleNextSlide}
-          className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-brand-coral border border-zinc-800 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all focus:outline-none cursor-pointer"
+          className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-brand-orange border border-zinc-800 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all focus:outline-none cursor-pointer"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -265,7 +265,7 @@ export default function CinemaDetailPage() {
               key={idx}
               onClick={() => setActiveSlide(idx)}
               className={`h-1.5 rounded-full transition-all duration-350 ${
-                activeSlide === idx ? 'w-6 bg-brand-coral' : 'w-1.5 bg-white/40'
+                activeSlide === idx ? 'w-6 bg-brand-orange' : 'w-1.5 bg-white/40'
               }`}
             />
           ))}
@@ -278,18 +278,18 @@ export default function CinemaDetailPage() {
               {cinema.name}
             </h1>
             <div className="flex items-center gap-2 text-zinc-300 text-xs md:text-sm drop-shadow-md">
-              <MapPin className="w-4 h-4 text-brand-coral shrink-0" />
+              <MapPin className="w-4 h-4 text-brand-orange shrink-0" />
               <span>{cinema.address}</span>
             </div>
           </div>
           <div className="flex items-center gap-6 text-xs md:text-sm text-zinc-300 bg-zinc-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-zinc-800 self-start md:self-auto">
             <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-brand-coral" />
+              <Phone className="w-4 h-4 text-brand-orange" />
               <span>Hotline: <strong>{staticDetails.hotline}</strong></span>
             </div>
             <div className="h-4 w-[1px] bg-zinc-800" />
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-brand-coral" />
+              <Clock className="w-4 h-4 text-brand-orange" />
               <span>{staticDetails.hours}</span>
             </div>
           </div>
@@ -317,7 +317,7 @@ export default function CinemaDetailPage() {
                   onClick={() => setActiveDateIndex(idx)}
                   className={`flex flex-col items-center justify-center min-w-[110px] py-3.5 px-4 rounded-xl border transition-all select-none focus:outline-none cursor-pointer ${
                     isActive 
-                      ? 'bg-brand-coral border-brand-coral text-white shadow-lg shadow-brand-coral/25 scale-[1.02]' 
+                      ? 'bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/25 scale-[1.02]' 
                       : 'bg-zinc-900 border-zinc-850 text-zinc-400 hover:text-white hover:bg-zinc-800'
                   }`}
                 >
@@ -362,12 +362,12 @@ export default function CinemaDetailPage() {
                       <div className="space-y-1">
                         <h3 
                           onClick={() => navigate(`/movie/${movie.slug}`)}
-                          className="text-xs font-black text-white hover:text-brand-coral transition-colors uppercase tracking-wider cursor-pointer line-clamp-1"
+                          className="text-xs font-black text-white hover:text-brand-orange transition-colors uppercase tracking-wider cursor-pointer line-clamp-1"
                         >
                           {movie.title}
                         </h3>
                         <div className="flex items-center gap-2">
-                          <span className="bg-brand-coral/10 border border-brand-coral/30 text-brand-coral text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded">
+                          <span className="bg-brand-orange/10 border border-brand-orange/30 text-brand-orange text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded">
                             {info.ageRating || 'P'}
                           </span>
                           <span className="text-[9px] font-semibold text-zinc-500">
@@ -388,7 +388,7 @@ export default function CinemaDetailPage() {
                                 <button
                                   key={st.showtimePublicId}
                                   onClick={() => navigate(`/seat-selection?showtimeId=${st.showtimePublicId}`)}
-                                  className="bg-zinc-950 border border-zinc-800 hover:bg-brand-coral hover:border-brand-coral hover:text-white transition-all text-[10px] font-black tracking-wider py-1.5 px-2.5 rounded-lg focus:outline-none cursor-pointer"
+                                  className="bg-zinc-950 border border-zinc-800 hover:bg-brand-orange hover:border-brand-orange hover:text-white transition-all text-[10px] font-black tracking-wider py-1.5 px-2.5 rounded-lg focus:outline-none cursor-pointer"
                                 >
                                   {formattedStartTime(st.startTime)}
                                 </button>
@@ -421,7 +421,7 @@ export default function CinemaDetailPage() {
           {/* Ticket Price info list */}
           <div className="space-y-5">
             <div className="flex items-center gap-2 border-b border-zinc-900 pb-3">
-              <Film className="w-5 h-5 text-brand-coral" />
+              <Film className="w-5 h-5 text-brand-orange" />
               <h2 className="text-base md:text-lg font-black uppercase tracking-wider text-white">Bảng Giá Vé Rạp</h2>
             </div>
 
@@ -446,7 +446,7 @@ export default function CinemaDetailPage() {
 
             <div className="bg-zinc-900/40 border border-zinc-850 p-4.5 rounded-2xl space-y-2.5">
               <div className="flex items-center gap-1.5 text-zinc-400 text-[10px] font-black uppercase tracking-wider">
-                <HelpCircle className="w-3.5 h-3.5 text-brand-coral" />
+                <HelpCircle className="w-3.5 h-3.5 text-brand-orange" />
                 <span>Quy định phụ thu & chính sách</span>
               </div>
               <ul className="space-y-2 text-xs text-zinc-400">
@@ -463,7 +463,7 @@ export default function CinemaDetailPage() {
           {/* Location details & Dynamic map */}
           <div className="space-y-5">
             <div className="flex items-center gap-2 border-b border-zinc-900 pb-3">
-              <MapPin className="w-5 h-5 text-brand-coral" />
+              <MapPin className="w-5 h-5 text-brand-orange" />
               <h2 className="text-base md:text-lg font-black uppercase tracking-wider text-white">Vị Trí Cụm Rạp</h2>
             </div>
 

@@ -104,7 +104,7 @@ export default function AdminAuditoriumDetailPage() {
             onClick={fetchAuditorium}
             className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-xs font-bold transition-colors"
           >
-            <RefreshCw className="w-4 h-4 text-brand-coral" />
+            <RefreshCw className="w-4 h-4 text-brand-orange" />
             <span>Tải lại</span>
           </button>
         </div>
@@ -117,7 +117,7 @@ export default function AdminAuditoriumDetailPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-black uppercase tracking-wider transition-all select-none whitespace-nowrap
                 ${activeTab === tab.id 
-                  ? 'bg-zinc-900/50 text-brand-coral border-b-2 border-brand-coral' 
+                  ? 'bg-zinc-900/50 text-brand-orange border-b-2 border-brand-orange' 
                   : 'text-zinc-500 hover:bg-zinc-900/30 hover:text-zinc-300 border-b-2 border-transparent'
                 }
               `}

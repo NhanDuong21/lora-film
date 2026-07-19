@@ -54,7 +54,7 @@ export default function ImageCropDialog({ imageUrl, aspectRatio, onCrop, onCance
               step={0.1}
               aria-labelledby="Zoom"
               onChange={(e) => setZoom(e.target.value)}
-              className="flex-1 accent-brand-coral"
+              className="flex-1 accent-brand-orange"
             />
           </div>
           <div className="flex gap-3">
@@ -66,7 +66,7 @@ export default function ImageCropDialog({ imageUrl, aspectRatio, onCrop, onCance
             </button>
             <button
               onClick={createCroppedImage}
-              className="flex-1 flex items-center justify-center gap-2 bg-brand-coral hover:bg-opacity-90 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 bg-brand-orange hover:bg-opacity-90 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors"
             >
               <Check className="w-4 h-4" />
               Áp Dụng

@@ -78,7 +78,7 @@ export default function AuditoriumOverviewTab({ auditorium, onUpdate }) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex items-center gap-2 bg-brand-coral hover:bg-opacity-90 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors shadow-lg shadow-brand-coral/20 disabled:opacity-50"
+            className="flex items-center gap-2 bg-brand-orange hover:bg-opacity-90 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors shadow-lg shadow-brand-orange/20 disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             {isSubmitting ? 'ĐANG LƯU...' : 'LƯU THAY ĐỔI'}

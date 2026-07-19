@@ -53,14 +53,14 @@ export default function CinemaImageUploader({
   return (
     <div className="flex flex-col gap-2">
       <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-        {label} {required && <span className="text-brand-coral">*</span>}
+        {label} {required && <span className="text-brand-orange">*</span>}
       </label>
       {description && <p className="text-[10px] text-zinc-600 mb-1">{description}</p>}
       
       <div 
         onClick={() => !value && fileInputRef.current?.click()}
         className={`relative flex flex-col items-center justify-center rounded-xl overflow-hidden transition-all border-2 border-dashed
-          ${previewUrl ? 'border-zinc-800' : 'border-zinc-700 hover:border-brand-coral bg-zinc-900 hover:bg-zinc-800 cursor-pointer'}
+          ${previewUrl ? 'border-zinc-800' : 'border-zinc-700 hover:border-brand-orange bg-zinc-900 hover:bg-zinc-800 cursor-pointer'}
           ${aspectRatio === 1 ? 'aspect-square max-w-[200px]' : 'aspect-video w-full'}
         `}
       >

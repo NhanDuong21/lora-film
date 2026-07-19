@@ -257,29 +257,29 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
         {isLayoutEditable && (
           <div className="space-y-4 bg-zinc-900/30 border border-zinc-800 p-5 rounded-2xl">
             <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
-              <Sliders className="w-4 h-4 text-brand-coral" />
+              <Sliders className="w-4 h-4 text-brand-orange" />
               <h3 className="font-bold text-xs text-white uppercase tracking-wider">Kích thước lưới</h3>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold text-zinc-400">
                 <span>Số hàng ghế (Rows)</span>
-                <span className="text-brand-coral font-black">{rows}</span>
+                <span className="text-brand-orange font-black">{rows}</span>
               </div>
               <input 
                 type="range" min="4" max="20" value={rows}
                 onChange={(e) => handleRowsChange(parseInt(e.target.value))}
-                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-coral"
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-orange"
               />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold text-zinc-400">
                 <span>Số cột ghế (Cols)</span>
-                <span className="text-brand-coral font-black">{cols}</span>
+                <span className="text-brand-orange font-black">{cols}</span>
               </div>
               <input 
                 type="range" min="4" max="20" value={cols}
                 onChange={(e) => handleColsChange(parseInt(e.target.value))}
-                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-coral"
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-orange"
               />
             </div>
           </div>
@@ -294,7 +294,7 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
             <button
               onClick={handleSaveLayout}
               disabled={isSubmitting}
-              className="flex items-center gap-2 bg-brand-coral hover:bg-opacity-90 text-white px-6 py-2.5 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors shadow-lg shadow-brand-coral/20 disabled:opacity-50"
+              className="flex items-center gap-2 bg-brand-orange hover:bg-opacity-90 text-white px-6 py-2.5 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors shadow-lg shadow-brand-orange/20 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {isSubmitting ? 'ĐANG LƯU...' : 'LƯU SƠ ĐỒ GHẾ'}
@@ -333,7 +333,7 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
 
         {isLayoutEditable && (
           <div className="absolute bottom-10 flex items-center gap-2 text-zinc-500 text-[10px] uppercase font-bold tracking-wider max-w-lg bg-zinc-900/40 backdrop-blur-md border border-zinc-900 p-4 rounded-xl select-none">
-            <AlertCircle className="w-4 h-4 text-brand-coral shrink-0" />
+            <AlertCircle className="w-4 h-4 text-brand-orange shrink-0" />
             <span>Mẹo: Nhấn chuột xuống và di qua lưới để vẽ hàng ghế/lối đi nhanh hơn.</span>
           </div>
         )}

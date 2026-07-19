@@ -16,7 +16,7 @@ export default function CinemaMediaForm({
   return (
     <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 flex flex-col gap-8">
       <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3">
-        <ImageIcon className="w-4 h-4 text-brand-coral" />
+        <ImageIcon className="w-4 h-4 text-brand-orange" />
         <h2 className="text-sm font-bold uppercase tracking-wider text-white">Hình Ảnh Cụm Rạp (Media)</h2>
       </div>
 

@@ -44,7 +44,7 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
         </div>
         <button
           onClick={() => navigate(`/admin/rooms/create?cinemaId=${cinema?.publicId}`)}
-          className="flex items-center gap-2 bg-brand-coral hover:bg-opacity-95 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-brand-coral/20"
+          className="flex items-center gap-2 bg-brand-orange hover:bg-opacity-95 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-brand-orange/20"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Thêm Phòng Chiếu Mới</span>
@@ -70,8 +70,8 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
                   <tr key={room.publicId} className="hover:bg-zinc-900/10 transition-colors">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-brand-coral/10 flex items-center justify-center border border-brand-coral/20">
-                          <Film className="w-4 h-4 text-brand-coral" />
+                        <div className="w-8 h-8 rounded-lg bg-brand-orange/10 flex items-center justify-center border border-brand-orange/20">
+                          <Film className="w-4 h-4 text-brand-orange" />
                         </div>
                         <span className="font-extrabold text-zinc-200">{room.name}</span>
                       </div>
@@ -112,7 +112,7 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
             <p className="text-[10px] text-zinc-600 max-w-xs mb-4">Nhấn nút bên dưới để cấu hình phòng chiếu đầu tiên cho rạp này.</p>
             <button
               onClick={() => navigate(`/admin/rooms/create?cinemaId=${cinema?.publicId}`)}
-              className="flex items-center gap-2 bg-brand-coral hover:bg-opacity-95 text-white px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-brand-coral/20 mt-4"
+              className="flex items-center gap-2 bg-brand-orange hover:bg-opacity-95 text-white px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-brand-orange/20 mt-4"
             >
               <PlusCircle className="w-4 h-4" />
               <span>Tạo Phòng Chiếu Đầu Tiên</span>

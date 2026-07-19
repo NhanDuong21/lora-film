@@ -123,7 +123,7 @@ export const CinemaLocationAutocomplete = ({
         disabled={disabled}
         className={`w-full px-4 py-2 bg-zinc-800 border ${
           hasError ? 'border-red-500' : 'border-zinc-700'
-        } rounded-lg text-white focus:outline-none focus:border-brand-coral transition-colors`}
+        } rounded-lg text-white focus:outline-none focus:border-brand-orange transition-colors`}
         role="combobox"
         aria-expanded={isOpen}
         aria-controls="location-suggestions"

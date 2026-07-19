@@ -113,7 +113,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
               </div>
               
               {media.isPrimary && (
-                <div className="absolute top-3 left-3 bg-brand-coral text-white text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg flex items-center gap-1 shadow-lg shadow-brand-coral/20">
+                <div className="absolute top-3 left-3 bg-brand-orange text-white text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg flex items-center gap-1 shadow-lg shadow-brand-orange/20">
                   <Star className="w-3 h-3 fill-current" />
                   Ảnh Chính
                 </div>
@@ -181,7 +181,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
                   <select
                     value={formData.mediaType}
                     onChange={(e) => setFormData({...formData, mediaType: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors cursor-pointer"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors cursor-pointer"
                   >
                     <option value="GALLERY">Gallery</option>
                     <option value="BANNER">Banner</option>
@@ -197,7 +197,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
                     type="text"
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors"
                     placeholder="Mặt tiền rạp..."
                   />
                 </div>
@@ -209,7 +209,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
                     type="checkbox"
                     checked={formData.isPrimary}
                     onChange={(e) => setFormData({...formData, isPrimary: e.target.checked})}
-                    className="w-4 h-4 bg-zinc-900 border-zinc-800 rounded accent-brand-coral"
+                    className="w-4 h-4 bg-zinc-900 border-zinc-800 rounded accent-brand-orange"
                   />
                   <span className="text-sm font-bold text-zinc-300">Đặt làm ảnh chính</span>
                 </label>
@@ -226,7 +226,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-brand-coral hover:bg-opacity-90 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50"
+                  className="flex-1 bg-brand-orange hover:bg-opacity-90 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50"
                 >
                   {isSubmitting ? 'ĐANG LƯU...' : 'LƯU PHƯƠNG TIỆN'}
                 </button>

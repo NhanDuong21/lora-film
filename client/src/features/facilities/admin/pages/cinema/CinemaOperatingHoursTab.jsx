@@ -107,21 +107,21 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
       <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
-            <h2 className="text-sm font-black text-brand-coral uppercase tracking-wider mb-2">Giờ Hoạt Động Hàng Tuần</h2>
+            <h2 className="text-sm font-black text-brand-orange uppercase tracking-wider mb-2">Giờ Hoạt Động Hàng Tuần</h2>
             <p className="text-xs text-zinc-500">Thiết lập thời gian mở và đóng cửa cho từng ngày trong tuần.</p>
           </div>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={applyMonToFri}
-              className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-coral border border-zinc-800 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors"
+              className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-orange border border-zinc-800 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors"
             >
               Áp Dụng T2-T6
             </button>
             <button
               type="button"
               onClick={applyMonToAll}
-              className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-coral border border-zinc-800 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors"
+              className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-orange border border-zinc-800 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors"
             >
               Áp Dụng Tất Cả
             </button>
@@ -144,7 +144,7 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
                   <div className="w-full md:w-32 shrink-0">
                     <span className={`text-sm font-black uppercase tracking-widest ${
                       h.dayOfWeek === 7 ? 'text-amber-500' : 
-                      h.dayOfWeek === 6 ? 'text-brand-coral' : 'text-zinc-300'
+                      h.dayOfWeek === 6 ? 'text-brand-orange' : 'text-zinc-300'
                     }`}>
                       {day?.name}
                     </span>
@@ -156,7 +156,7 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
                         type="checkbox"
                         checked={h.isClosed}
                         onChange={(e) => handleChange(h.dayOfWeek, 'isClosed', e.target.checked)}
-                        className="w-4 h-4 bg-zinc-900 border-zinc-700 rounded accent-brand-coral"
+                        className="w-4 h-4 bg-zinc-900 border-zinc-700 rounded accent-brand-orange"
                       />
                       <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Đóng Cửa</span>
                     </div>
@@ -171,7 +171,7 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
                             value={h.openTime}
                             onChange={(e) => handleChange(h.dayOfWeek, 'openTime', e.target.value)}
                             required={!h.isClosed}
-                            className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none focus:border-brand-coral font-mono"
+                            className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none focus:border-brand-orange font-mono"
                           />
                         </div>
                         <span className="text-zinc-600 font-bold">-</span>
@@ -182,7 +182,7 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
                             value={h.closeTime}
                             onChange={(e) => handleChange(h.dayOfWeek, 'closeTime', e.target.value)}
                             required={!h.isClosed}
-                            className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none focus:border-brand-coral font-mono"
+                            className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none focus:border-brand-orange font-mono"
                           />
                         </div>
                       </div>
@@ -197,7 +197,7 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center gap-2 bg-brand-coral hover:bg-opacity-90 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors shadow-lg shadow-brand-coral/20 disabled:opacity-50"
+              className="flex items-center gap-2 bg-brand-orange hover:bg-opacity-90 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors shadow-lg shadow-brand-orange/20 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {isSubmitting ? 'ĐANG LƯU...' : 'LƯU THAY ĐỔI'}

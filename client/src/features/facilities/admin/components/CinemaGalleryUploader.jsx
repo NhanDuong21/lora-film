@@ -75,10 +75,10 @@ export default function CinemaGalleryUploader({
         onDrop={onDrop}
         onClick={() => fileInputRef.current?.click()}
         className={`relative flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed transition-all cursor-pointer
-          ${isDragging ? 'border-brand-coral bg-brand-coral/5' : 'border-zinc-700 hover:border-zinc-500 bg-zinc-900/50 hover:bg-zinc-900'}
+          ${isDragging ? 'border-brand-orange bg-brand-orange/5' : 'border-zinc-700 hover:border-zinc-500 bg-zinc-900/50 hover:bg-zinc-900'}
         `}
       >
-        <UploadCloud className={`w-8 h-8 mb-3 ${isDragging ? 'text-brand-coral' : 'text-zinc-500'}`} />
+        <UploadCloud className={`w-8 h-8 mb-3 ${isDragging ? 'text-brand-orange' : 'text-zinc-500'}`} />
         <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider text-center">
           Kéo thả ảnh vào đây hoặc nhấn để chọn
         </p>

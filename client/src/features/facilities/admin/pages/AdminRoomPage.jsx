@@ -115,7 +115,7 @@ export default function AdminRoomPage() {
             }
             navigate(`/admin/rooms/create?cinemaId=${selectedCinemaId}`);
           }}
-          className="flex items-center justify-center gap-2 bg-brand-coral hover:bg-opacity-95 text-white text-xs font-black py-2.5 px-4 rounded-xl uppercase tracking-wider transition-all self-start md:self-auto shadow-lg shadow-brand-coral/10 hover:shadow-brand-coral/20 border border-brand-coral/10"
+          className="flex items-center justify-center gap-2 bg-brand-orange hover:bg-opacity-95 text-white text-xs font-black py-2.5 px-4 rounded-xl uppercase tracking-wider transition-all self-start md:self-auto shadow-lg shadow-brand-orange/10 hover:shadow-brand-orange/20 border border-brand-orange/10"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Thêm phòng chiếu mới</span>
@@ -130,7 +130,7 @@ export default function AdminRoomPage() {
           <select
             value={selectedCinemaId}
             onChange={(e) => setSelectedCinemaId(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-coral transition-colors cursor-pointer"
+            className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-orange transition-colors cursor-pointer"
           >
             {cinemas.map(c => (
               <option key={c.publicId} value={c.publicId}>{c.name}</option>
@@ -147,7 +147,7 @@ export default function AdminRoomPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-coral transition-colors cursor-pointer"
+            className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-orange transition-colors cursor-pointer"
           >
             <option value="ALL">TẤT CẢ TRẠNG THÁI</option>
             <option value="ACTIVE">ĐANG HOẠT ĐỘNG</option>
@@ -167,7 +167,7 @@ export default function AdminRoomPage() {
               placeholder="Nhập tên phòng chiếu..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-coral transition-colors"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-orange transition-colors"
             />
           </div>
         </div>
@@ -177,7 +177,7 @@ export default function AdminRoomPage() {
       <div className="bg-zinc-900/20 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <RefreshCw className="w-8 h-8 text-brand-coral animate-spin" />
+            <RefreshCw className="w-8 h-8 text-brand-orange animate-spin" />
             <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Đang tải danh sách phòng...</span>
           </div>
         ) : filteredRooms.length > 0 ? (
@@ -198,8 +198,8 @@ export default function AdminRoomPage() {
                   <tr key={room.publicId} className="hover:bg-zinc-900/10 transition-colors">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-brand-coral/10 flex items-center justify-center border border-brand-coral/20">
-                          <Film className="w-4 h-4 text-brand-coral" />
+                        <div className="w-8 h-8 rounded-lg bg-brand-orange/10 flex items-center justify-center border border-brand-orange/20">
+                          <Film className="w-4 h-4 text-brand-orange" />
                         </div>
                         <span className="font-extrabold text-zinc-200">{room.name}</span>
                       </div>

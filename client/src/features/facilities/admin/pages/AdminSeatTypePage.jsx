@@ -77,7 +77,7 @@ export default function AdminSeatTypePage() {
         </div>
         <button
           onClick={openCreateForm}
-          className="flex items-center justify-center gap-2 bg-brand-coral hover:bg-opacity-95 text-white text-xs font-black py-2.5 px-4 rounded-xl uppercase tracking-wider transition-all shadow-lg shadow-brand-coral/10 hover:shadow-brand-coral/20 border border-brand-coral/10"
+          className="flex items-center justify-center gap-2 bg-brand-orange hover:bg-opacity-95 text-white text-xs font-black py-2.5 px-4 rounded-xl uppercase tracking-wider transition-all shadow-lg shadow-brand-orange/10 hover:shadow-brand-orange/20 border border-brand-orange/10"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Thêm Loại Ghế</span>
@@ -92,7 +92,7 @@ export default function AdminSeatTypePage() {
             placeholder="Tìm theo mã hoặc tên..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-coral transition-colors"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-orange transition-colors"
           />
         </div>
       </div>
@@ -119,7 +119,7 @@ export default function AdminSeatTypePage() {
                 <tbody className="divide-y divide-zinc-900/60 text-xs font-semibold">
                   {filteredSeatTypes.map((st) => (
                     <tr key={st.publicId} className="hover:bg-zinc-900/10 transition-colors">
-                      <td className="py-4 px-6 text-brand-coral font-mono">{st.code}</td>
+                      <td className="py-4 px-6 text-brand-orange font-mono">{st.code}</td>
                       <td className="py-4 px-6 font-bold">{st.name}</td>
                       <td className="py-4 px-6 text-zinc-400">{st.description || '-'}</td>
                       <td className="py-4 px-6">
@@ -156,7 +156,7 @@ export default function AdminSeatTypePage() {
                   required
                   value={formData.code}
                   onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-coral outline-none text-white uppercase"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-white uppercase"
                   placeholder="Vd: VIP, STANDARD"
                   disabled={!!editingId}
                 />
@@ -169,7 +169,7 @@ export default function AdminSeatTypePage() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-coral outline-none text-white"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-white"
                   placeholder="Vd: Ghế VIP"
                 />
               </div>
@@ -178,7 +178,7 @@ export default function AdminSeatTypePage() {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-coral outline-none text-white"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-white"
                   rows={2}
                 />
               </div>
@@ -187,7 +187,7 @@ export default function AdminSeatTypePage() {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({...formData, status: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-coral outline-none text-white cursor-pointer"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-white cursor-pointer"
                 >
                   <option value="ACTIVE">Hoạt động</option>
                   <option value="INACTIVE">Ngừng hoạt động</option>
@@ -205,7 +205,7 @@ export default function AdminSeatTypePage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-brand-coral hover:bg-opacity-90 text-white font-bold py-2.5 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50"
+                  className="flex-1 bg-brand-orange hover:bg-opacity-90 text-white font-bold py-2.5 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50"
                 >
                   {isSubmitting ? 'Đang lưu...' : 'Lưu lại'}
                 </button>

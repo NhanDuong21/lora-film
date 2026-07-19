@@ -71,12 +71,12 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
     <div className="max-w-4xl space-y-6 pb-20">
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-6">
-          <h2 className="text-sm font-black text-brand-coral uppercase tracking-wider mb-6">Thông Tin Cơ Bản</h2>
+          <h2 className="text-sm font-black text-brand-orange uppercase tracking-wider mb-6">Thông Tin Cơ Bản</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
               <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                Tên Cụm Rạp <span className="text-brand-coral">*</span>
+                Tên Cụm Rạp <span className="text-brand-orange">*</span>
               </label>
               <input
                 type="text"
@@ -84,14 +84,14 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors"
                 placeholder="Ví dụ: LoraFilm Ho Chi Minh"
               />
             </div>
 
             <div className="md:col-span-2 relative">
               <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                Địa Chỉ Chi Tiết <span className="text-brand-coral">*</span>
+                Địa Chỉ Chi Tiết <span className="text-brand-orange">*</span>
               </label>
               <CinemaLocationAutocomplete
                 id="address"
@@ -104,7 +104,7 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
 
             <div>
               <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                Tỉnh / Thành Phố <span className="text-brand-coral">*</span>
+                Tỉnh / Thành Phố <span className="text-brand-orange">*</span>
               </label>
               <input
                 type="text"
@@ -112,7 +112,7 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 required
                 value={formData.city}
                 onChange={handleChange}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors"
               />
             </div>
 
@@ -125,7 +125,7 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 name="district"
                 value={formData.district}
                 onChange={handleChange}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors"
               />
             </div>
 
@@ -139,7 +139,7 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 name="latitude"
                 value={formData.latitude}
                 onChange={handleChange}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors font-mono"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors font-mono"
               />
             </div>
 
@@ -153,13 +153,13 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 name="longitude"
                 value={formData.longitude}
                 onChange={handleChange}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors font-mono"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors font-mono"
               />
             </div>
             
             <div>
               <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                Múi Giờ <span className="text-brand-coral">*</span>
+                Múi Giờ <span className="text-brand-orange">*</span>
               </label>
               <input
                 type="text"
@@ -167,7 +167,7 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 required
                 value={formData.timezone}
                 onChange={handleChange}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors font-mono"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors font-mono"
                 placeholder="Asia/Ho_Chi_Minh"
               />
             </div>
@@ -181,7 +181,7 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 name="hotline"
                 value={formData.hotline}
                 onChange={handleChange}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors"
               />
             </div>
 
@@ -194,14 +194,14 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 value={formData.description}
                 onChange={handleChange}
                 rows={4}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors"
               />
             </div>
           </div>
         </div>
 
         <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-6">
-          <h2 className="text-sm font-black text-brand-coral uppercase tracking-wider mb-6">Trạng Thái</h2>
+          <h2 className="text-sm font-black text-brand-orange uppercase tracking-wider mb-6">Trạng Thái</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
@@ -211,7 +211,7 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-coral outline-none transition-colors cursor-pointer"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors cursor-pointer"
               >
                 <option value="ACTIVE">Đang Hoạt Động</option>
                 <option value="DRAFT">Bản Nháp (Draft)</option>
@@ -226,7 +226,7 @@ export default function CinemaOverviewTab({ cinema, onUpdate }) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex items-center gap-2 bg-brand-coral hover:bg-opacity-90 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors shadow-lg shadow-brand-coral/20 disabled:opacity-50"
+            className="flex items-center gap-2 bg-brand-orange hover:bg-opacity-90 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors shadow-lg shadow-brand-orange/20 disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             {isSubmitting ? 'ĐANG LƯU...' : 'LƯU THAY ĐỔI'}
