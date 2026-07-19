@@ -55,6 +55,12 @@ const adminRoomService = {
   cancelMaintenanceWindow: async (maintenanceWindowId) => {
     const response = await apiClient.put(`/api/admin/maintenance-windows/${maintenanceWindowId}/cancel`);
     return response.data;
+  },
+
+  // Get all maintenance windows for an auditorium
+  getMaintenanceWindows: async (auditoriumPublicId) => {
+    const response = await apiClient.get(`/api/admin/auditoriums/${auditoriumPublicId}/maintenance-windows`);
+    return response.data;
   }
 };
 

@@ -9,9 +9,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface AuditoriumMaintenanceWindowRepository extends JpaRepository<AuditoriumMaintenanceWindow, Long> {
+    @Query("SELECT mw FROM AuditoriumMaintenanceWindow mw WHERE mw.auditorium.id = :auditoriumId ORDER BY mw.startTime DESC")
+    List<AuditoriumMaintenanceWindow> findByAuditoriumIdOrderByStartTimeDesc(@Param("auditoriumId") Long auditoriumId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT mw FROM AuditoriumMaintenanceWindow mw WHERE mw.id = :id")
     Optional<AuditoriumMaintenanceWindow> findByIdForUpdate(@Param("id") Long id);

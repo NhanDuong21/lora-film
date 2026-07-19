@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { PlusCircle, CalendarX2, Info } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { PlusCircle, CalendarX2, Info, Clock, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
+import { LoadingState, ErrorState, EmptyState } from '@/components/common/ui/uiKit';
 
 export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -10,6 +11,29 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
     reason: 'Phòng chiếu bảo trì thiết bị'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [windows, setWindows] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchWindows = useCallback(async () => {
+    if (!roomId) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await adminRoomService.getMaintenanceWindows(roomId);
+      if (res?.success) {
+        setWindows(res.data);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Không thể tải danh sách bảo trì');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    fetchWindows();
+  }, [fetchWindows]);
 
   const openAddForm = () => {
     setFormData({ startTime: '', endTime: '', reason: 'Phòng chiếu bảo trì thiết bị' });
@@ -18,6 +42,27 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
 
   const closeForm = () => {
     setIsFormOpen(false);
+  };
+
+  const handleCancelWindow = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn hủy lịch bảo trì này không?")) return;
+    try {
+      const res = await adminRoomService.cancelMaintenanceWindow(id);
+      if (res?.success) {
+        triggerToast?.('Hủy lịch bảo trì thành công!');
+        fetchWindows();
+      }
+    } catch (err) {
+      triggerToast?.(err.response?.data?.message || err.message || 'Hủy lịch thất bại', 'error');
+    }
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    return new Intl.DateTimeFormat('vi-VN', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    }).format(new Date(dateStr));
   };
 
   const handleSubmit = async (e) => {
@@ -36,6 +81,7 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
       
       if (res?.success) {
         triggerToast?.('Thêm lịch bảo trì thành công!');
+        fetchWindows();
         closeForm();
       }
     } catch (err) {
@@ -47,19 +93,6 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-4 rounded-2xl flex items-start gap-3 shadow-xl shadow-black/20 select-none">
-        <Info className="w-5 h-5 shrink-0 mt-0.5" />
-        <div className="text-xs space-y-1">
-          <h4 className="font-extrabold uppercase">CONTRACT GAP</h4>
-          <p className="font-semibold text-zinc-300">
-            Backend hiện hỗ trợ tạo khoảng bảo trì nhưng chưa cung cấp API <code>GET /api/admin/auditoriums/&#123;id&#125;/maintenance-windows</code> để tải danh sách. 
-          </p>
-          <p className="font-semibold text-zinc-300">
-            Do đó, danh sách bảo trì chưa thể hiển thị đầy đủ tại đây. Bạn vẫn có thể tạo mới lịch bảo trì, nhưng sau khi tạo sẽ không thể xem lại hoặc hủy từ giao diện này.
-          </p>
-        </div>
-      </div>
-
       <div className="flex justify-between items-center bg-zinc-900/30 border border-zinc-800 p-5 rounded-2xl">
         <div>
           <h2 className="text-sm font-black text-zinc-50 uppercase tracking-wider">LỊCH BẢO TRÌ PHÒNG CHIẾU</h2>
@@ -74,15 +107,54 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
         </button>
       </div>
 
-      <div className="bg-zinc-900/20 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl relative">
-        <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
-          <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-850 flex items-center justify-center">
-            <CalendarX2 className="w-6 h-6 text-zinc-650" />
-          </div>
-          <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest max-w-sm">
-            Danh sách không khả dụng do thiếu API Backend (Contract Gap).
-          </div>
-        </div>
+      <div className="bg-zinc-900/20 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl relative min-h-[300px]">
+        {isLoading && <LoadingState message="Đang tải lịch bảo trì..." />}
+        {!isLoading && error && <ErrorState message={error} onRetry={fetchWindows} />}
+        {!isLoading && !error && windows.length === 0 ? (
+          <EmptyState message="Không có lịch bảo trì nào" actionLabel="Thêm mới" onAction={openAddForm} />
+        ) : (
+          !isLoading && !error && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-900 text-[10px] font-black text-zinc-500 uppercase tracking-wider bg-zinc-950/40">
+                    <th className="py-4 px-6">ID</th>
+                    <th className="py-4 px-6">Bắt Đầu</th>
+                    <th className="py-4 px-6">Kết Thúc</th>
+                    <th className="py-4 px-6">Lý Do</th>
+                    <th className="py-4 px-6">Trạng Thái</th>
+                    <th className="py-4 px-6 text-right">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-900/60 text-xs font-semibold">
+                  {windows.map((w) => (
+                    <tr key={w.id} className="hover:bg-zinc-900/10 transition-colors">
+                      <td className="py-4 px-6 text-zinc-500 font-mono">#{w.id}</td>
+                      <td className="py-4 px-6 text-zinc-300">{formatDate(w.startTime)}</td>
+                      <td className="py-4 px-6 text-zinc-300">{formatDate(w.endTime)}</td>
+                      <td className="py-4 px-6 text-zinc-400">{w.reason}</td>
+                      <td className="py-4 px-6">
+                        {w.status === 'ACTIVE' && <span className="text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded text-[10px]">Đang Áp Dụng</span>}
+                        {w.status === 'CANCELLED' && <span className="text-zinc-500 bg-zinc-500/10 px-2 py-1 rounded text-[10px]">Đã Hủy</span>}
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        {w.status === 'ACTIVE' && (
+                          <button
+                            onClick={() => handleCancelWindow(w.id)}
+                            className="p-2 bg-zinc-950 border border-zinc-800 hover:border-red-500/50 text-zinc-400 hover:text-red-500 rounded-xl transition-all"
+                            title="Hủy lịch"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
       </div>
 
       {isFormOpen && (
