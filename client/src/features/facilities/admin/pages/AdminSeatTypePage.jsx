@@ -31,12 +31,6 @@ export default function AdminSeatTypePage() {
     st.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const openCreateForm = () => {
-    setFormData({ code: '', name: '', description: '', status: 'ACTIVE' });
-    setEditingId(null);
-    setIsFormOpen(true);
-  };
-
   const openEditForm = (st) => {
     setFormData({
       code: st.code,
@@ -59,8 +53,6 @@ export default function AdminSeatTypePage() {
     let success;
     if (editingId) {
       success = await updateSeatType(editingId, formData);
-    } else {
-      success = await createSeatType(formData);
     }
     setIsSubmitting(false);
     if (success) {
@@ -72,16 +64,9 @@ export default function AdminSeatTypePage() {
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 font-sans">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-zinc-900 pb-4 gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-zinc-50">QUẢN LÝ LOẠI GHẾ</h1>
-          <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wider">Thiết lập các loại ghế trong rạp</p>
+          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-zinc-50">CẤU HÌNH LOẠI GHẾ HỆ THỐNG</h1>
+          <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wider">Cấu hình tên, mô tả, trạng thái của các loại ghế cố định</p>
         </div>
-        <button
-          onClick={openCreateForm}
-          className="flex items-center justify-center gap-2 bg-brand-orange hover:bg-opacity-95 text-white text-xs font-black py-2.5 px-4 rounded-xl uppercase tracking-wider transition-all shadow-lg shadow-brand-orange/10 hover:shadow-brand-orange/20 border border-brand-orange/10"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Thêm Loại Ghế</span>
-        </button>
       </div>
 
       <div className="flex items-center bg-zinc-900/20 border border-zinc-900 p-4 rounded-2xl">
@@ -102,7 +87,7 @@ export default function AdminSeatTypePage() {
         {!isLoading && error && <ErrorState message={error} onRetry={fetchSeatTypes} />}
         
         {!isLoading && !error && filteredSeatTypes.length === 0 ? (
-          <EmptyState message="Không tìm thấy loại ghế nào" onAction={openCreateForm} actionLabel="Thêm mới" />
+          <EmptyState message="Không tìm thấy loại ghế nào" />
         ) : (
           !isLoading && !error && (
             <div className="overflow-x-auto">
@@ -147,7 +132,7 @@ export default function AdminSeatTypePage() {
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-zinc-950 border border-zinc-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
-            <h2 className="text-lg font-black uppercase mb-4">{editingId ? 'Cập nhật Loại Ghế' : 'Thêm Loại Ghế'}</h2>
+            <h2 className="text-lg font-black uppercase mb-4">Cập nhật Cấu hình Ghế</h2>
             <form onSubmit={handleFormSubmit} className="space-y-4">
               <div>
                 <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Mã (Code)</label>
@@ -156,11 +141,11 @@ export default function AdminSeatTypePage() {
                   required
                   value={formData.code}
                   onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-white uppercase"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-zinc-500 uppercase cursor-not-allowed"
                   placeholder="Vd: VIP, STANDARD"
-                  disabled={!!editingId}
+                  disabled={true}
                 />
-                {editingId && <p className="text-[10px] text-amber-500 mt-1">Không thể sửa mã sau khi tạo</p>}
+                <p className="text-[10px] text-amber-500 mt-1">Loại ghế hệ thống (Cố định, không thể đổi mã)</p>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Tên hiển thị</label>
