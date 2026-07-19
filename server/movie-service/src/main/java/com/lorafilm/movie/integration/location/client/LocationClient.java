@@ -41,7 +41,8 @@ public class LocationClient {
 
     public UpstreamLocationResponse fetchSuggestions(String query, int limit) {
         if (properties.getKey() == null || properties.getKey().isBlank()) {
-            throw new BusinessException(ErrorCode.LOCATION_API_NOT_CONFIGURED);
+            log.warn("Location API key is not configured. Falling back to Nominatim OpenStreetMap API.");
+            return fetchFromNominatim(query, limit);
         }
         
         try {
@@ -78,5 +79,71 @@ public class LocationClient {
             throw new BusinessException(ErrorCode.LOCATION_API_UNAVAILABLE);
         }
         throw new BusinessException(ErrorCode.LOCATION_API_RESPONSE_INVALID);
+    }
+
+    private UpstreamLocationResponse fetchFromNominatim(String query, int limit) {
+        try {
+            RestClient nominatimClient = RestClient.builder()
+                    .baseUrl("https://nominatim.openstreetmap.org")
+                    .defaultHeader("User-Agent", "LoraFilm-Admin/1.0")
+                    .defaultHeader("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
+                    .build();
+
+            java.util.List<java.util.Map<String, Object>> responseList = nominatimClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/search")
+                            .queryParam("q", query)
+                            .queryParam("format", "json")
+                            .queryParam("addressdetails", "1")
+                            .queryParam("limit", limit)
+                            .build())
+                    .retrieve()
+                    .body(new org.springframework.core.ParameterizedTypeReference<java.util.List<java.util.Map<String, Object>>>() {});
+
+            UpstreamLocationResponse response = new UpstreamLocationResponse();
+            response.setSuccess(true);
+            
+            java.util.List<UpstreamLocationResponse.UpstreamSuggestion> data = new java.util.ArrayList<>();
+            if (responseList != null) {
+                for (java.util.Map<String, Object> item : responseList) {
+                    UpstreamLocationResponse.UpstreamSuggestion suggestion = new UpstreamLocationResponse.UpstreamSuggestion();
+                    suggestion.setId(String.valueOf(item.get("place_id")));
+                    suggestion.setLabel((String) item.get("display_name"));
+                    suggestion.setAddress((String) item.get("display_name"));
+                    
+                    Object latObj = item.get("lat");
+                    Object lonObj = item.get("lon");
+                    if (latObj != null) suggestion.setLatitude(Double.parseDouble(latObj.toString()));
+                    if (lonObj != null) suggestion.setLongitude(Double.parseDouble(lonObj.toString()));
+                    
+                    if (item.containsKey("address") && item.get("address") instanceof java.util.Map) {
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> address = (java.util.Map<String, Object>) item.get("address");
+                        
+                        String city = (String) address.get("city");
+                        if (city == null) city = (String) address.get("province");
+                        if (city == null) city = (String) address.get("state");
+                        suggestion.setCity(city);
+                        
+                        String district = (String) address.get("county");
+                        if (district == null) district = (String) address.get("district");
+                        if (district == null) district = (String) address.get("suburb");
+                        if (district == null) district = (String) address.get("city_district");
+                        suggestion.setDistrict(district);
+                        
+                        suggestion.setCountry((String) address.get("country"));
+                    }
+                    data.add(suggestion);
+                }
+            }
+            response.setData(data);
+            return response;
+        } catch (Exception e) {
+            log.error("Failed to fallback to Nominatim API", e);
+            UpstreamLocationResponse empty = new UpstreamLocationResponse();
+            empty.setSuccess(true);
+            empty.setData(new java.util.ArrayList<>());
+            return empty;
+        }
     }
 }

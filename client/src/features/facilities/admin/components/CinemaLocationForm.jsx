@@ -58,13 +58,40 @@ export default function CinemaLocationForm({ formData, setFormData, formErrors, 
   const handleCoordinatesChange = useCallback(async (lat, lon) => {
     setFormData(prev => ({
       ...prev,
-      latitude: parseFloat(lat.toFixed(7)),
-      longitude: parseFloat(lon.toFixed(7))
+      latitude: lat,
+      longitude: lon
     }));
 
-    // Keep lat/lon but do not overwrite address
-    console.warn('Reverse geocode disabled, keep lat/lon but do not overwrite address');
-    setAddressSearch(`Tọa độ ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`, {
+        headers: {
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
+      });
+      const data = await response.json();
+      
+      if (data && data.address) {
+        const addressObj = data.address;
+        const city = addressObj.city || addressObj.province || addressObj.state || '';
+        const district = addressObj.county || addressObj.district || addressObj.suburb || addressObj.city_district || '';
+        const addressText = data.display_name || '';
+        const countryCode = addressObj.country_code ? addressObj.country_code.toUpperCase() : null;
+
+        setFormData(prev => ({
+          ...prev,
+          city: city,
+          district: district,
+          address: addressText,
+          timezone: getTimezoneByCountryCode(countryCode, lon)
+        }));
+        setAddressSearch(addressText);
+      } else {
+        setAddressSearch(`Tọa độ ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+      }
+    } catch (error) {
+      console.error('Reverse geocode failed:', error);
+      setAddressSearch(`Tọa độ ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+    }
   }, [setFormData, setAddressSearch]);
 
   // Initialize Map
