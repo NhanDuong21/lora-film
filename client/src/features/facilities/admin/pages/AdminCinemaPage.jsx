@@ -83,19 +83,6 @@ export default function AdminCinemaPage() {
         }
       };
 
-      const logoUrl = await uploadAndGetUrl(media.logoUrl, 'LOGO');
-      if (logoUrl) {
-        mediaRequests.push(
-          adminCinemaService.createCinemaMedia(createdCinema.publicId, {
-            mediaType: 'LOGO',
-            url: logoUrl,
-            title: 'Logo',
-            displayOrder: 1,
-            isPrimary: true
-          })
-        );
-      }
-      
       const bannerUrl = await uploadAndGetUrl(media.bannerUrl, 'BANNER');
       if (bannerUrl) {
         mediaRequests.push(

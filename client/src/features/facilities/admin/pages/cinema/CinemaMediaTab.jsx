@@ -173,7 +173,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
                 <CinemaImageUploader 
                   label="Tệp Hình Ảnh"
                   description="Ảnh sẽ được tự động upload khi lưu"
-                  aspectRatio={formData.mediaType === 'LOGO' ? 1 : 16/9}
+                  aspectRatio={16/9}
                   value={formData.file || formData.url}
                   onChange={(val) => setFormData({...formData, file: val})}
                 />
@@ -191,7 +191,6 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
                   >
                     <option value="GALLERY">Gallery</option>
                     <option value="BANNER">Banner</option>
-                    <option value="LOGO">Logo</option>
                     <option value="MAP">Bản Đồ</option>
                   </select>
                 </div>

@@ -3,8 +3,6 @@ import CinemaImageUploader from './CinemaImageUploader';
 import CinemaGalleryUploader from './CinemaGalleryUploader';
 
 export default function CinemaMediaForm({
-  logoUrl,
-  setLogoUrl,
   bannerUrl,
   setBannerUrl,
   galleryUrls,
@@ -20,15 +18,8 @@ export default function CinemaMediaForm({
         <h2 className="text-sm font-bold uppercase tracking-wider text-white">Hình Ảnh Cụm Rạp (Media)</h2>
       </div>
 
-      {/* Main Logo & Banner */}
+      {/* Main Banner */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <CinemaImageUploader 
-          label="Ảnh Logo"
-          description="Khuyên dùng ảnh vuông, nền trong suốt."
-          aspectRatio={1}
-          value={logoUrl}
-          onChange={setLogoUrl}
-        />
         
         <CinemaImageUploader 
           label="Ảnh Banner"
