@@ -265,6 +265,13 @@ public class CinemaServiceImpl implements CinemaService {
                     "Invalid cinema status transition from " + currentStatus + " to " + targetStatus);
         }
 
+        if (targetStatus == CinemaStatus.ACTIVE) {
+            boolean hasAuditorium = auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId());
+            if (!hasAuditorium) {
+                throw new BusinessException(ErrorCode.CINEMA_MISSING_AUDITORIUM);
+            }
+        }
+
         cinema.setStatus(targetStatus);
         Cinema savedCinema = cinemaRepository.save(cinema);
         return cinemaMapper.toResponse(savedCinema);

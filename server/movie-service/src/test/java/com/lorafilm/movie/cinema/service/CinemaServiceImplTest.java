@@ -195,6 +195,7 @@ class CinemaServiceImplTest {
         existingCinema.setStatus(CinemaStatus.DRAFT);
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
+        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
         when(cinemaRepository.save(any(Cinema.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CinemaResponse expectedResponse = new CinemaResponse();
@@ -207,6 +208,22 @@ class CinemaServiceImplTest {
         assertNotNull(response);
         assertEquals(CinemaStatus.ACTIVE, response.getStatus());
         verify(cinemaRepository, times(1)).save(any(Cinema.class));
+    }
+
+    @Test
+    void updateCinemaStatus_shouldThrowException_whenActivatingWithoutAuditoriums() {
+        Cinema existingCinema = new Cinema();
+        existingCinema.setId(1L);
+        existingCinema.setPublicId("uuid-123");
+        existingCinema.setStatus(CinemaStatus.DRAFT);
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
+        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(false);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE));
+        assertEquals(ErrorCode.CINEMA_MISSING_AUDITORIUM, exception.getErrorCode());
+        verify(cinemaRepository, never()).save(any(Cinema.class));
     }
 
     @Test
