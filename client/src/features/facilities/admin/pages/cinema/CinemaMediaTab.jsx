@@ -53,7 +53,7 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
     if (formData.file) {
       try {
         const uploadRes = await adminCinemaService.uploadCinemaMedia(formData.file, formData.mediaType, cinema.publicId);
-        submitData.url = uploadRes.secureUrl;
+        submitData.url = uploadRes.data?.secureUrl || uploadRes.data || uploadRes.secureUrl;
       } catch (err) {
         console.error("Lỗi upload:", err);
         setIsSubmitting(false);

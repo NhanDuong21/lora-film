@@ -71,19 +71,24 @@ export default function AdminCinemaPage() {
       // Save media items
       const mediaRequests = [];
       
-      const uploadAndGetUrl = async (mediaValue, type) => {
-        if (!mediaValue) return null;
-        if (typeof mediaValue === 'string') return mediaValue; // already a URL
+      const uploadAndGetUrl = async (fileOrUrl, type) => {
+        if (!fileOrUrl) return null;
+        if (typeof fileOrUrl === 'string') return fileOrUrl;
         try {
-          const res = await adminCinemaService.uploadCinemaMedia(mediaValue, type, createdCinema.publicId);
-          return res.secureUrl;
+          const res = await adminCinemaService.uploadCinemaMedia(fileOrUrl, type);
+          return res.data?.secureUrl || res.data; // Backend returns ApiResponse with data { secureUrl }
         } catch (e) {
           console.error(`Failed to upload ${type}:`, e);
           return null;
         }
       };
 
-      const bannerUrl = await uploadAndGetUrl(media.bannerUrl, 'BANNER');
+      // Tải lên Banner và Map song song
+      const [bannerUrl, mapUrl] = await Promise.all([
+        uploadAndGetUrl(media.bannerUrl, 'BANNER'),
+        uploadAndGetUrl(media.mapImageUrl, 'MAP')
+      ]);
+
       if (bannerUrl) {
         mediaRequests.push(
           adminCinemaService.createCinemaMedia(createdCinema.publicId, {
@@ -96,7 +101,6 @@ export default function AdminCinemaPage() {
         );
       }
       
-      const mapUrl = await uploadAndGetUrl(media.mapImageUrl, 'MAP');
       if (mapUrl) {
         mediaRequests.push(
           adminCinemaService.createCinemaMedia(createdCinema.publicId, {
@@ -110,20 +114,25 @@ export default function AdminCinemaPage() {
       }
       
       if (Array.isArray(media.galleryUrls)) {
-        for (let i = 0; i < media.galleryUrls.length; i++) {
-          const galleryUrl = await uploadAndGetUrl(media.galleryUrls[i], 'GALLERY');
+        // Tải lên toàn bộ ảnh Gallery song song
+        const galleryPromises = media.galleryUrls.map(async (urlItem, i) => {
+          const galleryUrl = await uploadAndGetUrl(urlItem, 'GALLERY');
           if (galleryUrl) {
-            mediaRequests.push(
-              adminCinemaService.createCinemaMedia(createdCinema.publicId, {
-                mediaType: 'GALLERY',
-                url: galleryUrl,
-                title: `Gallery Image ${i + 1}`,
-                displayOrder: i + 1,
-                isPrimary: false
-              })
-            );
+            return adminCinemaService.createCinemaMedia(createdCinema.publicId, {
+              mediaType: 'GALLERY',
+              url: galleryUrl,
+              title: `Gallery Image ${i + 1}`,
+              displayOrder: i + 1,
+              isPrimary: false
+            });
           }
-        }
+          return null;
+        });
+        
+        const galleryUploadRequests = await Promise.all(galleryPromises);
+        galleryUploadRequests
+          .filter(req => req !== null)
+          .forEach(req => mediaRequests.push(req));
       }
 
       if (mediaRequests.length > 0) {
