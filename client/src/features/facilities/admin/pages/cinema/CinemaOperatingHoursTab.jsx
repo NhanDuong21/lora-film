@@ -50,17 +50,40 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
     }));
   };
 
-  const copyToAll = (sourceDayId) => {
-    const sourceHour = hours.find(h => h.dayOfWeek === sourceDayId);
-    if (!sourceHour) return;
+  const applyMonToFri = () => {
+    const monday = hours.find(h => h.dayOfWeek === 1);
+    if (!monday) return;
     
-    setHours(prev => prev.map(h => ({
-      ...h,
-      openTime: sourceHour.openTime,
-      closeTime: sourceHour.closeTime,
-      isClosed: sourceHour.isClosed
-    })));
-    triggerToast?.('Đã sao chép lịch áp dụng cho tất cả các ngày');
+    setHours(prev => prev.map(h => {
+      if (h.dayOfWeek >= 2 && h.dayOfWeek <= 5) {
+        return {
+          ...h,
+          openTime: monday.openTime,
+          closeTime: monday.closeTime,
+          isClosed: monday.isClosed
+        };
+      }
+      return h;
+    }));
+    triggerToast?.('Đã sao chép lịch Thứ Hai cho T2-T6');
+  };
+
+  const applyMonToAll = () => {
+    const monday = hours.find(h => h.dayOfWeek === 1);
+    if (!monday) return;
+    
+    setHours(prev => prev.map(h => {
+      if (h.dayOfWeek !== 1) {
+        return {
+          ...h,
+          openTime: monday.openTime,
+          closeTime: monday.closeTime,
+          isClosed: monday.isClosed
+        };
+      }
+      return h;
+    }));
+    triggerToast?.('Đã sao chép lịch Thứ Hai cho tất cả các ngày');
   };
 
   const handleSubmit = async (e) => {
@@ -82,8 +105,28 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
   return (
     <div className="max-w-4xl space-y-6 pb-20">
       <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-6">
-        <h2 className="text-sm font-black text-brand-coral uppercase tracking-wider mb-2">Giờ Hoạt Động Hàng Tuần</h2>
-        <p className="text-xs text-zinc-500 mb-6">Thiết lập thời gian mở và đóng cửa cho từng ngày trong tuần.</p>
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h2 className="text-sm font-black text-brand-coral uppercase tracking-wider mb-2">Giờ Hoạt Động Hàng Tuần</h2>
+            <p className="text-xs text-zinc-500">Thiết lập thời gian mở và đóng cửa cho từng ngày trong tuần.</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={applyMonToFri}
+              className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-coral border border-zinc-800 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors"
+            >
+              Áp Dụng T2-T6
+            </button>
+            <button
+              type="button"
+              onClick={applyMonToAll}
+              className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-coral border border-zinc-800 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors"
+            >
+              Áp Dụng Tất Cả
+            </button>
+          </div>
+        </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -144,17 +187,6 @@ export default function CinemaOperatingHoursTab({ cinema, onUpdate, triggerToast
                         </div>
                       </div>
                     )}
-                  </div>
-                  
-                  <div className="w-full md:w-auto shrink-0 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => copyToAll(h.dayOfWeek)}
-                      className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-coral border border-zinc-800 px-3 py-2 rounded-lg font-bold uppercase tracking-wider transition-colors"
-                      title="Áp dụng giờ của ngày này cho tất cả các ngày khác"
-                    >
-                      Áp Dụng Tất Cả
-                    </button>
                   </div>
                 </div>
               );
