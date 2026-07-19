@@ -52,7 +52,7 @@ const AdminAutoSchedulePreviewPage = () => {
 
   const isExpired = preview.status === 'EXPIRED' || new Date(preview.expiresAt) < new Date();
   const isApplied = preview.status === 'APPLIED';
-  const canApply = preview.status === 'GENERATED' && !isExpired;
+  const canApply = preview.status === 'PREVIEWED' && !isExpired;
 
   return (
     <div className="flex flex-col flex-1 bg-zinc-950 text-white min-h-[400px] animate-fade-in">
