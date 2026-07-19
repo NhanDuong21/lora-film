@@ -1,13 +1,64 @@
-import SystemUpdating from '@/components/common/SystemUpdating';
+import { useEffect } from 'react';
+import { useOutletContext, useNavigate } from 'react-router-dom';
+import useAdminShowtimes from '@/features/scheduling/admin/hooks/useAdminShowtimes';
+import ShowtimeTable from '@/features/scheduling/admin/components/ShowtimeTable';
 
 const AdminShowtimePage = () => {
+  const { triggerToast } = useOutletContext() || {};
+  const navigate = useNavigate();
+
+  const {
+    showtimes,
+    isLoading,
+    cinemaSlug,
+    setCinemaSlug,
+    movieSlug,
+    setMovieSlug,
+    date,
+    setDate,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    totalPages,
+    totalElements,
+    fetchShowtimes
+  } = useAdminShowtimes({ triggerToast });
+
+  useEffect(() => {
+    fetchShowtimes();
+  }, [fetchShowtimes]);
+
+  const handleOpenCreate = () => {
+    navigate('/admin/showtimes/create');
+  };
+
+  const handleOpenAutoSchedule = () => {
+    navigate('/admin/showtime-schedules/create');
+  };
+
+  const handleViewDetail = (showtimePublicId) => {
+    navigate(`/admin/showtimes/${showtimePublicId}`);
+  };
+
   return (
-    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6">
-      <div className="flex flex-col border-b border-zinc-800 pb-4">
-        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">DANH SÁCH SUẤT CHIẾU</h1>
-      </div>
-      <SystemUpdating/>
-    </div>
+    <ShowtimeTable
+      showtimes={showtimes}
+      isLoading={isLoading}
+      cinemaSlug={cinemaSlug}
+      setCinemaSlug={setCinemaSlug}
+      movieSlug={movieSlug}
+      setMovieSlug={setMovieSlug}
+      date={date}
+      setDate={setDate}
+      currentPage={currentPage}
+      setCurrentPage={setCurrentPage}
+      pageSize={pageSize}
+      totalPages={totalPages}
+      totalElements={totalElements}
+      onOpenCreate={handleOpenCreate}
+      onOpenAutoSchedule={handleOpenAutoSchedule}
+      onViewDetail={handleViewDetail}
+    />
   );
 };
 
