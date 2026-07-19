@@ -59,7 +59,7 @@ export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
       setIsLoading(true);
       setError(null);
       try {
-        await adminCinemaService.deleteAdminCinema(id);
+        await adminCinemaService.deleteCinema(id);
         setCinemas(cinemas.filter(c => c.publicId !== id));
         triggerToast?.('Xóa cụm rạp thành công', 'success');
         return true;
