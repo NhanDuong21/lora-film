@@ -16,6 +16,9 @@ public class Person extends BaseAuditableEntity {
     @Column(name = "public_id", updatable = false, unique = true, nullable = false, columnDefinition = "CHAR(36)")
     private String publicId;
 
+    @Column(name = "tmdb_id", unique = true)
+    private Long tmdbPersonId;
+
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
@@ -54,6 +57,14 @@ public class Person extends BaseAuditableEntity {
 
     public void setPublicId(String publicId) {
         this.publicId = publicId;
+    }
+
+    public Long getTmdbPersonId() {
+        return tmdbPersonId;
+    }
+
+    public void setTmdbPersonId(Long tmdbPersonId) {
+        this.tmdbPersonId = tmdbPersonId;
     }
 
     public String getFullName() {

@@ -1,7 +1,6 @@
 package com.lorafilm.movie.integration.tmdb.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -13,11 +12,13 @@ public class TmdbMovieDetailsDto {
     private String posterPath;
     private String backdropPath;
     private String releaseDate;
-    private Integer runtime;
+    private Integer runtimeMinutes;
     private Double voteAverage;
     private Integer voteCount;
     private Double popularity;
     private Boolean adult;
+    private String originalLanguage;
+    private List<TmdbCountryDto> countries;
     
     // Getters and Setters
     public Long getTmdbId() { return tmdbId; }
@@ -34,8 +35,8 @@ public class TmdbMovieDetailsDto {
     public void setBackdropPath(String backdropPath) { this.backdropPath = backdropPath; }
     public String getReleaseDate() { return releaseDate; }
     public void setReleaseDate(String releaseDate) { this.releaseDate = releaseDate; }
-    public Integer getRuntime() { return runtime; }
-    public void setRuntime(Integer runtime) { this.runtime = runtime; }
+    public Integer getRuntimeMinutes() { return runtimeMinutes; }
+    public void setRuntimeMinutes(Integer runtimeMinutes) { this.runtimeMinutes = runtimeMinutes; }
     public Double getVoteAverage() { return voteAverage; }
     public void setVoteAverage(Double voteAverage) { this.voteAverage = voteAverage; }
     public Integer getVoteCount() { return voteCount; }
@@ -44,4 +45,8 @@ public class TmdbMovieDetailsDto {
     public void setPopularity(Double popularity) { this.popularity = popularity; }
     public Boolean getAdult() { return adult; }
     public void setAdult(Boolean adult) { this.adult = adult; }
+    public String getOriginalLanguage() { return originalLanguage; }
+    public void setOriginalLanguage(String originalLanguage) { this.originalLanguage = originalLanguage; }
+    public List<TmdbCountryDto> getCountries() { return countries; }
+    public void setCountries(List<TmdbCountryDto> countries) { this.countries = countries; }
 }

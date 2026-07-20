@@ -9,7 +9,7 @@ public class TmdbProperties {
     private String baseUrl;
     private String apiKey;
     private int batchSize = 20;
-    private boolean syncEnabled = false;
+    private boolean syncEnabled = true;
 
     public String getBaseUrl() {
         return baseUrl;

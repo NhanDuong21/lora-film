@@ -119,6 +119,7 @@ CREATE TABLE tmdb_sync_state (
 CREATE TABLE people (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     public_id CHAR(36) NOT NULL UNIQUE,
+    tmdb_id BIGINT UNIQUE COMMENT 'TMDB ID phục vụ việc tự động đồng bộ',
     full_name VARCHAR(150) NOT NULL,
     stage_name VARCHAR(150),
     biography TEXT,

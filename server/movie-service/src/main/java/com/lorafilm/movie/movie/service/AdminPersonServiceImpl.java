@@ -1,15 +1,16 @@
 package com.lorafilm.movie.movie.service;
 
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Person;
 import com.lorafilm.movie.movie.dto.PersonDto;
 import com.lorafilm.movie.movie.dto.PersonRequest;
 import com.lorafilm.movie.movie.repository.PersonRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.UUID;
 
 @Service
 public class AdminPersonServiceImpl implements AdminPersonService {
@@ -99,7 +100,7 @@ public class AdminPersonServiceImpl implements AdminPersonService {
         if (name == null || name.trim().isEmpty()) {
             return null;
         }
-        return personRepository.findByFullNameIgnoreCaseAndDeletedAtIsNull(name.trim())
+        return personRepository.findByFullNameAndDeletedAtIsNull(name.trim())
                 .map(this::mapToDto)
                 .orElse(null);
     }
