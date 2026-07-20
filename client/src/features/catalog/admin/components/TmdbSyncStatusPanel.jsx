@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import adminTmdbService from '@/features/catalog/admin/services/adminTmdbService';
 import { formatDate } from '@/utils/movieHelpers';
@@ -19,6 +19,7 @@ export default function TmdbSyncStatusPanel() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSyncState();
     const interval = setInterval(fetchSyncState, 30000); // Poll every 30s
     return () => clearInterval(interval);

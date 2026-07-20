@@ -4,10 +4,26 @@ const adminMovieService = {
   // ─── Movie CRUD ────────────────────────────────────────────────────────────
   getMovies: async (params) => {
     const resolvedParams = { ...params };
+    
+    // Map search to keyword and trim
     if (resolvedParams.search !== undefined) {
       resolvedParams.keyword = resolvedParams.search;
       delete resolvedParams.search;
     }
+    
+    // Remove empty keyword to prevent sending keyword=
+    if (typeof resolvedParams.keyword === 'string') {
+      resolvedParams.keyword = resolvedParams.keyword.trim();
+      if (!resolvedParams.keyword) {
+        delete resolvedParams.keyword;
+      }
+    }
+    
+    // Remove empty status
+    if (typeof resolvedParams.status === 'string' && !resolvedParams.status.trim()) {
+      delete resolvedParams.status;
+    }
+
     const response = await apiClient.get('/api/admin/movies', { params: resolvedParams });
     return response.data;
   },

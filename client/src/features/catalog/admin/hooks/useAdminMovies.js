@@ -27,12 +27,18 @@ export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
   const fetchMovies = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await adminMovieService.getMovies({
+      const params = {
         page: currentPage,
         size: pageSize,
-        search: searchTerm || undefined,
         status: statusFilter === 'ALL' ? undefined : (statusFilter || 'DRAFT'),
-      });
+      };
+      
+      const keyword = searchTerm?.trim();
+      if (keyword) {
+        params.keyword = keyword;
+      }
+      
+      const data = await adminMovieService.getMovies(params);
       const normalized = normalizePagination(data?.data || data, pageSize);
       setMovies(normalized.items);
       setTotalElements(normalized.totalElements);
