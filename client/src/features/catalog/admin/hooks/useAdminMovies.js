@@ -10,7 +10,7 @@ export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('DRAFT');
   const [searchTerm, setSearchTerm] = useState('');
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -31,7 +31,7 @@ export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
         page: currentPage,
         size: pageSize,
         search: searchTerm || undefined,
-        status: statusFilter || 'ALL',
+        status: statusFilter === 'ALL' ? undefined : (statusFilter || 'DRAFT'),
       });
       const normalized = normalizePagination(data?.data || data, pageSize);
       setMovies(normalized.items);

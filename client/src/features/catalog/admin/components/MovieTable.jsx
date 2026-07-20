@@ -3,7 +3,10 @@ import React from 'react';
 import { Search, Plus, LayoutList, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import { LazyImage } from '@/components/common/ui/uiKit';
-import { formatDate, STATUS_LABELS, STATUS_COLORS } from '@/utils/movieHelpers';
+import { formatDate } from '@/utils/movieHelpers';
+import { ADMIN_MOVIE_STATUS_TABS, getStatusConfig } from '@/features/catalog/admin/config/movieStatusConfig';
+import { getMovieListWarnings } from '@/features/catalog/admin/utils/movieListWarnings';
+import { AlertTriangle } from 'lucide-react';
 
 export default function MovieTable({
   movies = [],
@@ -26,7 +29,33 @@ export default function MovieTable({
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-white space-y-6 animate-fade-in" data-testid="admin-movie-page">
       <div className="border-b border-zinc-800 pb-4">
-        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">DANH SÁCH BỘ PHIM</h1>
+        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">QUẢN LÝ PHIM</h1>
+        <p className="text-sm text-zinc-400 mt-2">
+          Theo dõi, xem xét và quản lý các phim được hệ thống tự động đồng bộ từ TMDB.
+        </p>
+      </div>
+
+      {/* Quick Tabs */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {ADMIN_MOVIE_STATUS_TABS.map((tab) => {
+          const isActive = (statusFilter || 'ALL') === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => {
+                setStatusFilter(tab.value === 'ALL' ? '' : tab.value);
+                setCurrentPage(0);
+              }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                isActive 
+                  ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' 
+                  : 'bg-zinc-900/60 text-zinc-400 border border-transparent hover:bg-zinc-800'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Filters */}
@@ -43,14 +72,6 @@ export default function MovieTable({
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
           <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setCurrentPage(0); }}
-            className="w-full sm:w-48 bg-[#050506] border border-zinc-800 text-zinc-100 focus:border-[#ff7a1a]/40 rounded-xl py-2.5 px-4 text-xs outline-none cursor-pointer"
-          >
-            <option value="">Tất cả trạng thái</option>
-            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-          <select
             value={pageSize}
             onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}
             className="w-full sm:w-32 bg-[#050506] border border-zinc-800 text-zinc-100 focus:border-[#ff7a1a]/40 rounded-xl py-2.5 px-4 text-xs outline-none cursor-pointer"
@@ -60,9 +81,9 @@ export default function MovieTable({
           <button
             type="button"
             onClick={onOpenAdd}
-            className="bg-[#ff7a1a] hover:opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
+            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
           >
-            <Plus className="w-4 h-4" />THÊM PHIM
+            <Plus className="w-4 h-4" />TẠO PHIM THỦ CÔNG
           </button>
         </div>
       </div>
@@ -96,7 +117,10 @@ export default function MovieTable({
                     </td>
                   </tr>
                 ) : (
-                  movies.map((movie, idx) => (
+                  movies.map((movie, idx) => {
+                    const statusCfg = getStatusConfig(movie.status);
+                    const warnings = getMovieListWarnings(movie);
+                    return (
                     <tr key={movie.publicId || idx} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
                       <td className="py-4 px-5 text-center">
                         <span className="text-xs font-black text-neutral-500">{(currentPage * pageSize + idx + 1).toString().padStart(2, '0')}</span>
@@ -123,9 +147,25 @@ export default function MovieTable({
                           onClick={() => onOpenDetail(movie)}
                           className="text-sm font-bold text-zinc-200 hover:text-amber-400 transition-colors text-left truncate max-w-[220px] block cursor-pointer"
                         >
-                          {movie.title}
+                          {movie.title || <span className="italic text-zinc-500">Chưa có tên</span>}
                         </button>
-                        {movie.ageRating && <span className="text-[10px] font-bold text-neutral-500 uppercase">{movie.ageRating}</span>}
+                        {movie.ageRating && <span className="text-[10px] font-bold text-neutral-500 uppercase mt-1 block">[{movie.ageRating}]</span>}
+                        {warnings.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1 cursor-help group relative">
+                            <AlertTriangle className="w-3 h-3 text-yellow-500" />
+                            <span className="text-[10px] text-yellow-500 truncate max-w-[150px]">
+                              {warnings[0].label} {warnings.length > 1 && `· Còn ${warnings.length - 1} cảnh báo`}
+                            </span>
+                            {/* Tooltip for full warnings */}
+                            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-zinc-900 border border-zinc-700 text-zinc-300 text-[10px] p-2 rounded shadow-xl whitespace-normal min-w-[200px] z-50">
+                              <ul className="list-disc pl-4 space-y-1">
+                                {warnings.map((w, i) => (
+                                  <li key={i}>{w.label}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className="py-4 px-5 text-center">
                         <span className="text-xs text-zinc-300">{movie.durationMinutes ? `${movie.durationMinutes} phút` : 'N/A'}</span>
@@ -134,27 +174,34 @@ export default function MovieTable({
                         <span className="text-xs text-zinc-300">{formatDate(movie.releaseDate)}</span>
                       </td>
                       <td className="py-4 px-5 text-center">
-                        {movie.status && (
-                          <span className={`text-[10px] font-black px-2.5 py-1 rounded-md border uppercase tracking-wider ${STATUS_COLORS[movie.status] || 'text-zinc-400 border-zinc-700'}`}>
-                            {STATUS_LABELS[movie.status] || movie.status}
-                          </span>
-                        )}
+                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-md border uppercase tracking-wider ${statusCfg.colorClass}`}>
+                          {statusCfg.label}
+                        </span>
                       </td>
                       <td className="py-4 px-5 text-right">
-                        <div className="flex justify-end gap-1.5">
+                        <div className="flex justify-end items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onOpenDetail(movie)}
+                            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+                          >
+                            {movie.status === 'DRAFT' ? 'Xem xét' : 'Xem chi tiết'}
+                          </button>
+                          
                           <button
                             type="button"
                             onClick={() => onOpenEdit(movie)}
-                            className="p-2 text-neutral-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-all cursor-pointer"
-                            title="Sửa"
+                            className="p-1.5 text-neutral-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-all cursor-pointer"
+                            title="Chỉnh sửa metadata"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
+                          
                           <button
                             type="button"
                             disabled={movie.status !== 'ENDED' && movie.status !== 'DRAFT'}
                             onClick={() => onDelete(movie.publicId, movie.title)}
-                            className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-neutral-400 disabled:cursor-not-allowed rounded-lg transition-all cursor-pointer"
+                            className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-neutral-400 disabled:cursor-not-allowed rounded-lg transition-all cursor-pointer"
                             title={movie.status === 'ENDED' || movie.status === 'DRAFT' ? "Xóa" : "Chỉ có thể xóa phim ở trạng thái Nháp hoặc Ngừng chiếu"}
                           >
                             <Trash2 className="w-4 h-4" />
@@ -162,7 +209,8 @@ export default function MovieTable({
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

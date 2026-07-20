@@ -6,7 +6,6 @@ import { parseApiError } from '@/utils/apiErrorHandler';
 import {
   AGE_RATINGS,
   AGE_RATING_LABELS,
-  STATUS_LABELS,
   getTodayString,
 } from '@/utils/movieHelpers';
 import { useNavigate } from 'react-router-dom';
@@ -20,7 +19,6 @@ const emptyForm = () => ({
   endDate: '',
   country: '',
   synopsis: '',
-  status: 'DRAFT',
 });
 
 // A simplified generic section component
@@ -64,14 +62,11 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
       endDate: selectedMovie.endDate || '',
       country: selectedMovie.country || '',
       synopsis: selectedMovie.synopsis || '',
-      status: selectedMovie.status || 'UPCOMING',
     });
   }, [selectedMovie]);
 
   const validateForm = () => {
     const errs = {};
-    const todayStr = getTodayString();
-    const todayDate = new Date(todayStr);
 
     if (!formBasic.title.trim()) errs.title = 'Tên phim không được để trống.';
     if (!formBasic.durationMinutes || Number(formBasic.durationMinutes) <= 0)
@@ -82,30 +77,10 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
     if (!formBasic.showingStartDate) {
       errs.showingStartDate = 'Ngày khởi chiếu bắt buộc phải chọn.';
     }
-    if (formBasic.endDate && new Date(formBasic.endDate) < new Date(formBasic.showingStartDate)) {
-      errs.endDate = 'Ngày kết thúc không thể trước ngày khởi chiếu.';
-    }
-
-    const status = formBasic.status || 'DRAFT';
-    const startD = formBasic.showingStartDate ? new Date(formBasic.showingStartDate) : null;
-    const endD = formBasic.endDate ? new Date(formBasic.endDate) : null;
-
-    if (status === 'UPCOMING') {
-      if (startD && startD <= todayDate) {
-        errs.showingStartDate = 'Trạng thái Sắp chiếu yêu cầu ngày khởi chiếu ở tương lai (sau hôm nay).';
-      }
-    } else if (status === 'NOW_SHOWING') {
-      if (startD && startD > todayDate) {
-        errs.showingStartDate = 'Trạng thái Đang chiếu yêu cầu ngày khởi chiếu ở quá khứ hoặc hôm nay.';
-      }
-      if (endD && endD < todayDate) {
-        errs.endDate = 'Trạng thái Đang chiếu yêu cầu ngày kết thúc ở tương lai hoặc hôm nay.';
-      }
-    } else if (status === 'ENDED') {
-      if (!formBasic.endDate) {
-        errs.endDate = 'Trạng thái Ngừng chiếu bắt buộc phải chọn ngày kết thúc.';
-      } else if (endD && endD >= todayDate) {
-        errs.endDate = 'Trạng thái Ngừng chiếu yêu cầu ngày kết thúc ở quá khứ (trước hôm nay).';
+    
+    if (formBasic.endDate && formBasic.showingStartDate) {
+      if (new Date(formBasic.endDate) < new Date(formBasic.showingStartDate)) {
+        errs.endDate = 'Ngày kết thúc không thể trước ngày khởi chiếu.';
       }
     }
 
@@ -128,16 +103,18 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
         endDate: formBasic.endDate || null,
         country: formBasic.country?.trim() || null,
         synopsis: formBasic.synopsis?.trim() || null,
-        status: formBasic.status || 'DRAFT',
       };
 
       if (selectedMovie) {
+        // Edit payload should NEVER contain status (prevent lifecycle bypass)
         await adminMovieService.updateMovie(selectedMovie.publicId, moviePayload);
         triggerToast?.('Cập nhật thông tin cơ bản thành công!');
         onRefreshList();
         onClose();
       } else {
-        const res = await adminMovieService.createMovie(moviePayload);
+        // Create payload must default to DRAFT
+        const createPayload = { ...moviePayload, status: 'DRAFT' };
+        const res = await adminMovieService.createMovie(createPayload);
         const publicId = res?.data?.publicId || res?.publicId;
         if (!publicId) throw new Error('Không nhận được mã phim từ server. Vui lòng kiểm tra lại.');
 
@@ -174,7 +151,7 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
             <ArrowLeft className="w-4 h-4" />
           </button>
           <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">
-            {isEdit ? 'CẬP NHẬT THÔNG TIN PHIM' : 'THÊM PHIM MỚI'}
+            {isEdit ? 'CẬP NHẬT THÔNG TIN PHIM' : 'TẠO PHIM THỦ CÔNG'}
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -214,15 +191,7 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
               </Select>
             </Field>
 
-            {isEdit && (
-              <Field label="Trạng thái">
-                <Select value={formBasic.status} onChange={e => setFormBasic(p => ({ ...p, status: e.target.value }))}>
-                  {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </Select>
-              </Field>
-            )}
+
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -241,9 +210,13 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
           </div>
 
           {!isEdit && (
-            <div className="mt-4 flex items-center gap-2 bg-blue-950/30 border border-blue-900/30 rounded-xl p-3 text-[11px] text-blue-300">
-              <Info className="w-4 h-4 flex-shrink-0 text-blue-400" />
-              <span>Phim mới tạo sẽ mặc định ở trạng thái Nháp (DRAFT). Sau khi tạo thành công, bạn sẽ được chuyển sang trang Chi tiết để cập nhật phiên bản, hình ảnh, thể loại và nhân sự.</span>
+            <div className="mt-4 flex items-center gap-2 bg-blue-950/30 border border-blue-900/30 rounded-xl p-3 text-[11px] text-blue-300 leading-relaxed">
+              <Info className="w-5 h-5 flex-shrink-0 text-blue-400" />
+              <span>
+                <strong>Lưu ý:</strong> Phim từ TMDB được hệ thống tự động đồng bộ và tạo ở trạng thái Chờ duyệt.
+                Chỉ sử dụng biểu mẫu này để tạo thủ công cho các nội dung đặc biệt hoặc phim không có trong nguồn đồng bộ.
+                Phim mới tạo sẽ mặc định ở trạng thái Nháp (DRAFT).
+              </span>
             </div>
           )}
         </FormSection>
