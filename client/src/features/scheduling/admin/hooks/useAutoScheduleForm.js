@@ -26,34 +26,58 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
   const [isLoadingCinemas, setIsLoadingCinemas] = useState(false);
   const [isLoadingAuditoriums, setIsLoadingAuditoriums] = useState(false);
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
-  const [loadingVersionsFor, setLoadingVersionsFor] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Validation
   const [errors, setErrors] = useState({});
 
-  // 1. Initial Load: Cinemas and Movies
+  // 1. Initial Load: Cinemas
   useEffect(() => {
     const fetchInitial = async () => {
       try {
         setIsLoadingCinemas(true);
-        setIsLoadingMovies(true);
-        const [cinemaRes, movieRes] = await Promise.all([
-          adminCinemaService.getCinemas({ size: 100, status: 'ACTIVE' }),
-          adminMovieService.getMovies({ size: 100 })
-        ]);
-        
+        const cinemaRes = await adminCinemaService.getCinemas({ size: 100, status: 'ACTIVE' });
         if (cinemaRes?.success) setCinemas(cinemaRes.data?.data || []);
-        if (movieRes?.success) setMovies(movieRes.data?.data || []);
       } catch (err) {
-        triggerToast?.('Không thể tải dữ liệu ban đầu', 'error');
+        triggerToast?.('Không thể tải dữ liệu rạp', 'error');
       } finally {
         setIsLoadingCinemas(false);
-        setIsLoadingMovies(false);
       }
     };
     fetchInitial();
   }, [triggerToast]);
+
+  // 1b. Load Movies when dates change
+  useEffect(() => {
+    const fetchMovies = async () => {
+      setIsLoadingMovies(true);
+      try {
+        const params = {};
+        if (scheduleFrom) params.fromDate = scheduleFrom;
+        if (scheduleTo) params.toDate = scheduleTo;
+        
+        const movieRes = await adminAutoScheduleService.getEligibleMovies(params);
+        if (movieRes?.success) {
+           const moviesData = (movieRes.data || []).map(m => ({
+             ...m,
+             publicId: m.moviePublicId // map for UI compatibility
+           }));
+           setMovies(moviesData);
+           
+           const newVersions = {};
+           moviesData.forEach(m => {
+             newVersions[m.publicId] = m.versions || [];
+           });
+           setVersionsByMovie(newVersions);
+        }
+      } catch (err) {
+        triggerToast?.('Không thể tải dữ liệu phim', 'error');
+      } finally {
+        setIsLoadingMovies(false);
+      }
+    };
+    fetchMovies();
+  }, [scheduleFrom, scheduleTo, triggerToast]);
 
   // 2. On Cinema Change: Load Auditoriums
   useEffect(() => {
@@ -82,22 +106,11 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     fetchAuditoriums();
   }, [selectedCinemaId, triggerToast]);
 
-  // 3. Helper to fetch versions for a movie
+  // 3. Helper to fetch versions for a movie (Now mostly pre-filled by getEligibleMovies)
   const toggleMovieExpansion = useCallback(async (movieId, isExpanded) => {
+    // If versions are already loaded (which they should be now), do nothing
     if (!isExpanded || versionsByMovie[movieId]) return;
-
-    setLoadingVersionsFor(prev => ({ ...prev, [movieId]: true }));
-    try {
-      const res = await adminMovieService.getMovieVersions(movieId);
-      if (res?.success) {
-        setVersionsByMovie(prev => ({ ...prev, [movieId]: res.data || [] }));
-      }
-    } catch (err) {
-      triggerToast?.('Không thể tải định dạng phim', 'error');
-    } finally {
-      setLoadingVersionsFor(prev => ({ ...prev, [movieId]: false }));
-    }
-  }, [versionsByMovie, triggerToast]);
+  }, [versionsByMovie]);
 
   const toggleAuditorium = useCallback((audId) => {
     setSelectedAuditoriumIds(prev => 
@@ -171,7 +184,7 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     previewTtlMinutes, setPreviewTtlMinutes,
     selectedAuditoriumIds, toggleAuditorium,
     selectedMovieVersionIds, toggleVersion,
-    isLoadingCinemas, isLoadingAuditoriums, isLoadingMovies, loadingVersionsFor, isSubmitting,
+    isLoadingCinemas, isLoadingAuditoriums, isLoadingMovies, isSubmitting,
     errors, setErrors,
     toggleMovieExpansion,
     handleSubmit, validate

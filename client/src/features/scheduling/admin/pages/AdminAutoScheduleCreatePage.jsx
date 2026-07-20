@@ -21,7 +21,7 @@ const AdminAutoScheduleCreatePage = () => {
     previewTtlMinutes, setPreviewTtlMinutes,
     selectedAuditoriumIds, toggleAuditorium,
     selectedMovieVersionIds, toggleVersion,
-    isLoadingCinemas, isLoadingAuditoriums, isLoadingMovies, loadingVersionsFor, isSubmitting,
+    isLoadingCinemas, isLoadingAuditoriums, isLoadingMovies, isSubmitting,
     errors, toggleMovieExpansion,
     handleSubmit
   } = useAutoScheduleForm({ triggerToast, onSuccess: handleSuccess });
@@ -260,26 +260,18 @@ const AdminAutoScheduleCreatePage = () => {
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
               {isLoadingMovies ? (
                 <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-500" /></div>
-              ) : filteredMovies.length === 0 ? (
+          ) : filteredMovies.length === 0 ? (
                 <p className="text-zinc-500 text-sm text-center py-8">Không tìm thấy phim phù hợp.</p>
               ) : (
                 filteredMovies.map(movie => {
                   const isExpanded = !!expandedMovies[movie.publicId];
                   const versions = versionsByMovie[movie.publicId] || [];
-                  const isLoadingVersions = loadingVersionsFor[movie.publicId];
                   
                   // Count selected versions for this movie
                   const selectedCount = versions.filter(v => selectedMovieVersionIds.includes(v.publicId)).length;
                   
-                  const isDraft = movie.status === 'DRAFT';
-                  const isBeforeRelease = scheduleTo && movie.releaseDate && scheduleTo < movie.releaseDate;
-                  const hasNoVersions = !isLoadingVersions && versions.length === 0;
-                  const isDisabled = isDraft || isBeforeRelease || hasNoVersions;
-                  
-                  let disableReason = '';
-                  if (isDraft) disableReason = 'DRAFT - CHƯA ĐỦ ĐIỀU KIỆN';
-                  else if (hasNoVersions) disableReason = 'CHƯA CÓ ĐỊNH DẠNG KHẢ DỤNG';
-                  else if (isBeforeRelease) disableReason = 'CHƯA ĐẾN NGÀY CÔNG CHIẾU';
+                  const isDisabled = !movie.eligible;
+                  const disableReasons = movie.reasons || [];
 
                   return (
                     <div key={movie.publicId} className={`border border-zinc-800/70 rounded-xl overflow-hidden bg-zinc-950/50 ${isDisabled ? 'opacity-60 grayscale' : ''}`}>
@@ -294,12 +286,16 @@ const AdminAutoScheduleCreatePage = () => {
                             <ChevronRight className="w-4 h-4 text-zinc-400" />
                           </div>
                           <div className="min-w-0">
-                            <h3 className="font-bold text-white text-sm truncate flex items-center gap-2">
+                            <h3 className="font-bold text-white text-sm truncate flex items-center gap-2 flex-wrap">
                               {movie.title}
-                              {isDisabled && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-black bg-red-500/10 text-red-400 border border-red-500/20 whitespace-nowrap">
-                                  {disableReason}
-                                </span>
+                              {isDisabled && disableReasons.length > 0 && (
+                                <div className="flex gap-1 flex-wrap items-center">
+                                  {disableReasons.map((r, i) => (
+                                    <span key={i} title={r.code} className="text-[9px] px-1.5 py-0.5 rounded font-black bg-red-500/10 text-red-400 border border-red-500/20 whitespace-nowrap">
+                                      {r.message.toUpperCase()}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                             </h3>
                             <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
@@ -326,9 +322,7 @@ const AdminAutoScheduleCreatePage = () => {
                       {/* Versions Content */}
                       {isExpanded && (
                         <div className="border-t border-zinc-800/50 bg-zinc-900/30 p-3 md:p-4">
-                          {isLoadingVersions ? (
-                            <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-zinc-500" /></div>
-                          ) : versions.length === 0 ? (
+                          {versions.length === 0 ? (
                             <p className="text-zinc-500 text-xs text-center py-2">Không có định dạng nào</p>
                           ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

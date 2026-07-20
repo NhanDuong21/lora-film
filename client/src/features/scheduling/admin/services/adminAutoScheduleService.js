@@ -24,6 +24,11 @@ const adminAutoScheduleService = {
   getPreviewHistory: async (params) => {
     const response = await apiClient.get('/api/admin/showtime-schedules', { params });
     return response.data;
+  },
+
+  getEligibleMovies: async (params) => {
+    const response = await apiClient.get('/api/admin/showtime-schedules/eligible-movies', { params });
+    return response.data;
   }
 };
 
