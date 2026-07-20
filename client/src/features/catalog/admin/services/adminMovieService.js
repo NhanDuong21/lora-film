@@ -22,8 +22,15 @@ const adminMovieService = {
     return response.data;
   },
 
-  updateMovie: async (publicId, movieData) => {
-    const response = await apiClient.put(`/api/admin/movies/${publicId}`, movieData);
+  updateMovie: async (publicId, data) => {
+    const response = await apiClient.put(`/api/admin/movies/${publicId}`, data);
+    return response.data;
+  },
+
+  updateMovieStatus: async (publicId, targetStatus) => {
+    const response = await apiClient.put(`/api/admin/movies/${publicId}/status`, null, {
+      params: { status: targetStatus }
+    });
     return response.data;
   },
 
@@ -37,12 +44,6 @@ const adminMovieService = {
     return response.data;
   },
 
-  updateMovieStatus: async (publicId, status) => {
-    const response = await apiClient.put(`/api/admin/movies/${publicId}/status`, null, {
-      params: { status }
-    });
-    return response.data;
-  },
 
   // ─── Genre auto-create ─────────────────────────────────────────────────────
   ensureGenreExists: async (genreName) => {

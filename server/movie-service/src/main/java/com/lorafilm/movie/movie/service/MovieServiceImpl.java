@@ -168,8 +168,7 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
 
-        if (movie.getStatus() == MovieStatus.DRAFT && 
-            (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING || targetStatus == MovieStatus.ENDED)) {
+        if (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING) {
             validatePublishConditions(movie.getId());
         }
 

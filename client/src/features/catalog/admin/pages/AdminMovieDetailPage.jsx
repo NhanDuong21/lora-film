@@ -12,6 +12,7 @@ import MovieCreditTab from './movie/MovieCreditTab';
 import MovieCompanyTab from './movie/MovieCompanyTab';
 import MovieDetailHeader from './movie/MovieDetailHeader';
 import MovieDetailWarnings from './movie/MovieDetailWarnings';
+import MovieLifecycleReviewPanel from '../components/MovieLifecycleReviewPanel';
 
 export default function AdminMovieDetailPage() {
   const { moviePublicId } = useParams();
@@ -33,6 +34,7 @@ export default function AdminMovieDetailPage() {
 
       <AsyncState isLoading={isLoading} error={error} onRetry={reload}>
         <MovieDetailWarnings movie={movie} />
+        <MovieLifecycleReviewPanel movie={movie} onUpdate={reload} />
         
         <div className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl overflow-hidden mt-6">
           <div className="flex overflow-x-auto border-b border-zinc-800 scrollbar-hide">
