@@ -191,6 +191,11 @@ public class MovieServiceImpl implements MovieService {
     public void validatePublishConditions(Long movieId) {
         boolean hasActiveVersion = movieVersionRepository.existsActiveVersion(movieId);
         boolean hasPrimaryPoster = movieMediaRepository.existsPrimaryPoster(movieId);
+        boolean hasGenre = !movieGenreRepository.findByMovieId(movieId).isEmpty();
+        
+        if (!hasGenre) {
+            throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least 1 genre to be published");
+        }
 
         if (!hasActiveVersion && !hasPrimaryPoster) {
             throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least one active version and one primary poster to publish");

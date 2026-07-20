@@ -107,7 +107,6 @@ public class AdminMovieControllerTest {
         request.setDurationMinutes(150);
         request.setAgeRating(AgeRating.T16);
         request.setReleaseDate(LocalDate.now());
-        request.setStatus(MovieStatus.UPCOMING);
 
         MovieDto responseDto = new MovieDto();
         responseDto.setPublicId("public-id");
@@ -160,24 +159,30 @@ public class AdminMovieControllerTest {
     }
 
     @Test
-    void updateMovie_PublishValidationFailed() throws Exception {
-        MovieRequest request = new MovieRequest();
-        request.setTitle("Updated Movie");
-        request.setDurationMinutes(150);
-        request.setAgeRating(AgeRating.T16);
-        request.setReleaseDate(LocalDate.now());
-        request.setStatus(MovieStatus.NOW_SHOWING);
+    void genericUpdate_WithStatusInRawJson_MustNotChangeLifecycle() throws Exception {
+        String rawJson = """
+            {
+                "title": "Updated title",
+                "durationMinutes": 150,
+                "ageRating": "T16",
+                "releaseDate": "2026-07-21",
+                "status": "NOW_SHOWING"
+            }
+        """;
 
-        when(adminMovieService.updateMovie(eq("public-id"), any(MovieRequest.class)))
-                .thenThrow(new com.lorafilm.movie.common.exception.BusinessException(
-                        com.lorafilm.movie.common.exception.ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least 1 genre", null));
+        MovieDto responseDto = new MovieDto();
+        responseDto.setPublicId("public-id");
+        responseDto.setTitle("Updated title");
+        responseDto.setStatus(MovieStatus.DRAFT);
+
+        when(adminMovieService.updateMovie(eq("public-id"), any(MovieRequest.class))).thenReturn(responseDto);
 
         mockMvc.perform(put("/api/admin/movies/{publicId}", "public-id")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("MOVIE_PUBLISH_VALIDATION_FAILED"));
+                        .content(rawJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("DRAFT"));
     }
 
     @Test

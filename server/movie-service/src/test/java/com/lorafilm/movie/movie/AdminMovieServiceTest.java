@@ -70,14 +70,20 @@ public class AdminMovieServiceTest {
     }
 
     @Test
-    void testUpdateMovie_PublishWithoutGenres_ThrowsException() {
-        validRequest.setStatus(MovieStatus.NOW_SHOWING);
+    void testUpdateMovie_ShouldNotChangeStatus() {
+        // generic update payload doesn't contain status anymore
         
         when(movieRepository.findByPublicIdAndDeletedAtIsNull("public-id")).thenReturn(Optional.of(existingMovie));
-        when(movieGenreRepository.findByMovieId(1L)).thenReturn(Collections.emptyList());
+        when(movieRepository.save(any(Movie.class))).thenAnswer(i -> i.getArguments()[0]);
+        com.lorafilm.movie.movie.dto.MovieDto dto = new com.lorafilm.movie.movie.dto.MovieDto();
+        dto.setTitle("Test Movie");
+        dto.setStatus(MovieStatus.DRAFT);
+        when(movieMapper.toDto(any(Movie.class), any(), any())).thenReturn(dto);
+
+        com.lorafilm.movie.movie.dto.MovieDto response = adminMovieService.updateMovie("public-id", validRequest);
         
-        BusinessException exception = assertThrows(BusinessException.class, () -> adminMovieService.updateMovie("public-id", validRequest));
-        assertEquals(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, exception.getErrorCode());
+        assertEquals(MovieStatus.DRAFT, existingMovie.getStatus());
+        assertEquals(MovieStatus.DRAFT, response.getStatus());
     }
 
     @Test
@@ -90,11 +96,17 @@ public class AdminMovieServiceTest {
         when(movieRepository.save(any(Movie.class))).thenReturn(savedMovie);
         com.lorafilm.movie.movie.dto.MovieDto dto = new com.lorafilm.movie.movie.dto.MovieDto();
         dto.setTitle("Test Movie");
+        dto.setStatus(MovieStatus.DRAFT);
         when(movieMapper.toDto(eq(savedMovie), any(), any())).thenReturn(dto);
 
         com.lorafilm.movie.movie.dto.MovieDto response = adminMovieService.createMovie(validRequest);
         
+        org.mockito.ArgumentCaptor<Movie> movieCaptor = org.mockito.ArgumentCaptor.forClass(Movie.class);
+        verify(movieRepository).save(movieCaptor.capture());
+        Movie capturedMovie = movieCaptor.getValue();
+        
         assertNotNull(response);
+        assertEquals(MovieStatus.DRAFT, capturedMovie.getStatus());
         assertEquals("Test Movie", response.getTitle());
     }
 

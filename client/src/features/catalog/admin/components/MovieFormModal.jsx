@@ -112,9 +112,8 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
         onRefreshList();
         onClose();
       } else {
-        // Create payload must default to DRAFT
-        const createPayload = { ...moviePayload, status: 'DRAFT' };
-        const res = await adminMovieService.createMovie(createPayload);
+        // Create payload no longer needs status since backend defaults to DRAFT
+        const res = await adminMovieService.createMovie(moviePayload);
         const publicId = res?.data?.publicId || res?.publicId;
         if (!publicId) throw new Error('Không nhận được mã phim từ server. Vui lòng kiểm tra lại.');
 
