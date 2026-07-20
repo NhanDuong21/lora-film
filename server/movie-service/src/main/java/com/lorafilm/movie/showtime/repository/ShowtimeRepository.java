@@ -67,5 +67,16 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             @org.springframework.data.repository.query.Param("candidateStartMinusBuffer") java.time.Instant candidateStartMinusBuffer,
             @org.springframework.data.repository.query.Param("occupancyEndTime") java.time.Instant occupancyEndTime);
 
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s WHERE s.auditorium.id = :auditoriumId " +
+            "AND s.id != :excludeShowtimeId " +
+            "AND s.deletedAt IS NULL " +
+            "AND s.status != 'CANCELLED' " +
+            "AND s.startTime < :occupancyEndTime AND s.endTime > :candidateStartMinusBuffer")
+    java.util.List<Showtime> findBlockingOverlapsForScheduling(
+            @org.springframework.data.repository.query.Param("auditoriumId") Long auditoriumId,
+            @org.springframework.data.repository.query.Param("candidateStartMinusBuffer") java.time.Instant candidateStartMinusBuffer,
+            @org.springframework.data.repository.query.Param("occupancyEndTime") java.time.Instant occupancyEndTime,
+            @org.springframework.data.repository.query.Param("excludeShowtimeId") Long excludeShowtimeId);
+
     boolean existsByCinemaIdAndDeletedAtIsNull(Long cinemaId);
 }

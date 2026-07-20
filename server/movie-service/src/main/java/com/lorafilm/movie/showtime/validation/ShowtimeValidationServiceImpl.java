@@ -172,13 +172,16 @@ public class ShowtimeValidationServiceImpl implements ShowtimeValidationService 
         }
 
         // 3. Existing Showtimes
+        Instant occupancyEndTime = context.getEndTime().plus(context.getAuditorium().getCleaningBufferMinutes() != null ? context.getAuditorium().getCleaningBufferMinutes() : 0, java.time.temporal.ChronoUnit.MINUTES);
+        Instant candidateStartMinusBuffer = context.getStartTime().minus(context.getAuditorium().getCleaningBufferMinutes() != null ? context.getAuditorium().getCleaningBufferMinutes() : 0, java.time.temporal.ChronoUnit.MINUTES);
+
         List<Showtime> overlappingShowtimes;
         if (context.getExcludeShowtimeId().isPresent()) {
-            overlappingShowtimes = showtimeRepository.findPotentialOverlaps(
-                    context.getAuditorium().getId(), context.getStartTime(), context.getEndTime(), context.getExcludeShowtimeId().get());
+            overlappingShowtimes = showtimeRepository.findBlockingOverlapsForScheduling(
+                    context.getAuditorium().getId(), candidateStartMinusBuffer, occupancyEndTime, context.getExcludeShowtimeId().get());
         } else {
-            overlappingShowtimes = showtimeRepository.findPotentialOverlaps(
-                    context.getAuditorium().getId(), context.getStartTime(), context.getEndTime());
+            overlappingShowtimes = showtimeRepository.findBlockingOverlapsForScheduling(
+                    context.getAuditorium().getId(), candidateStartMinusBuffer, occupancyEndTime);
         }
 
         if (!overlappingShowtimes.isEmpty()) {
