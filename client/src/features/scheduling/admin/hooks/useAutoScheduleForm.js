@@ -58,9 +58,12 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
         
         const movieRes = await adminAutoScheduleService.getEligibleMovies(params);
         if (movieRes?.success) {
-           const moviesData = (movieRes.data || []).map(m => ({
+           const moviesData = (movieRes.data || [])
+             .filter(m => m.eligible)
+             .map(m => ({
              ...m,
-             publicId: m.moviePublicId // map for UI compatibility
+             publicId: m.moviePublicId, // map for UI compatibility
+             versions: (m.versions || []).filter(v => v.status === 'ACTIVE')
            }));
            setMovies(moviesData);
            

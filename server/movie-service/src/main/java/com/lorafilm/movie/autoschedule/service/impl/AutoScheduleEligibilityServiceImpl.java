@@ -33,7 +33,7 @@ public class AutoScheduleEligibilityServiceImpl implements AutoScheduleEligibili
         List<Movie> allMovies = movieRepository.findAll();
         
         return allMovies.stream()
-                .filter(movie -> movie.getDeletedAt() == null)
+                .filter(movie -> movie.getDeletedAt() == null && movie.getStatus() != MovieStatus.DRAFT)
                 .map(movie -> evaluateMovie(movie, fromDate, toDate))
                 .collect(Collectors.toList());
     }

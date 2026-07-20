@@ -191,6 +191,7 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
             // Also, we must increment version so a swap (A=true->false, B=false->true) triggers a version bump
             entityManager.lock(preview, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
             previewRepository.saveAndFlush(preview);
+            entityManager.refresh(preview);
             log.info("Auto schedule selection updated. previewPublicId={}, changedItemCount={}, newSelectedCount={}", previewPublicId, changedItemCount, newSelectedCount);
         }
 
