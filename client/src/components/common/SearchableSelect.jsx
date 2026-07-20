@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Search, X } from 'lucide-react';
 
 export default function SearchableSelect({
@@ -13,17 +14,54 @@ export default function SearchableSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
+  const dropdownRef = useRef(null);
+  const [dropdownStyle, setDropdownStyle] = useState({});
   
   // Close on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      const isOutsideContainer = containerRef.current && !containerRef.current.contains(event.target);
+      const isOutsideDropdown = dropdownRef.current ? !dropdownRef.current.contains(event.target) : true;
+      
+      if (isOutsideContainer && isOutsideDropdown) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Handle portal positioning
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const updatePosition = () => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        const dropdownHeight = 300; // estimated max height
+
+        const shouldFlip = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+        setDropdownStyle({
+          position: 'fixed',
+          top: shouldFlip ? 'auto' : `${rect.bottom + 6}px`,
+          bottom: shouldFlip ? `${window.innerHeight - rect.top + 6}px` : 'auto',
+          left: `${rect.left}px`,
+          width: `${rect.width}px`,
+          zIndex: 50,
+        });
+      };
+
+      updatePosition();
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }
+  }, [isOpen]);
 
   // Filter options
   const filteredOptions = useMemo(() => {
@@ -36,9 +74,10 @@ export default function SearchableSelect({
   }, [options, searchTerm]);
 
   // Find selected option
-  const selectedOption = useMemo(() => 
-    options.find(opt => opt.value === value) || null
-  , [options, value]);
+  const selectedOption = useMemo(() => {
+    if (!value) return null;
+    return options.find(opt => opt.value === value) || null;
+  }, [options, value]);
 
   const handleSelect = (val) => {
     onChange(val);
@@ -82,8 +121,12 @@ export default function SearchableSelect({
       </button>
 
       {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1.5 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in-up">
+      {isOpen && createPortal(
+        <div 
+          ref={dropdownRef}
+          style={dropdownStyle}
+          className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in-up"
+        >
           {/* Search Input */}
           <div className="p-2 border-b border-zinc-800 bg-zinc-900/90 sticky top-0 z-10 backdrop-blur-sm">
             <div className="relative">
@@ -136,7 +179,8 @@ export default function SearchableSelect({
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
