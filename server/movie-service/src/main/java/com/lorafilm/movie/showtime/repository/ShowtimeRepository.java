@@ -79,4 +79,10 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             @org.springframework.data.repository.query.Param("excludeShowtimeId") Long excludeShowtimeId);
 
     boolean existsByCinemaIdAndDeletedAtIsNull(Long cinemaId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(s) FROM Showtime s WHERE s.movie.id = :movieId AND s.deletedAt IS NULL")
+    long countShowtimes(@org.springframework.data.repository.query.Param("movieId") Long movieId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT s.movie.id, COUNT(s) FROM Showtime s WHERE s.movie.id IN :movieIds AND s.deletedAt IS NULL GROUP BY s.movie.id")
+    java.util.List<Object[]> countShowtimesByMovieIds(@org.springframework.data.repository.query.Param("movieIds") java.util.List<Long> movieIds);
 }

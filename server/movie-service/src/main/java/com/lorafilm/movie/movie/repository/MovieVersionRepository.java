@@ -34,4 +34,10 @@ public interface MovieVersionRepository extends JpaRepository<MovieVersion, Long
 
     @Query("SELECT COUNT(v) > 0 FROM MovieVersion v WHERE v.movie.id = :movieId AND v.status = com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE AND v.deletedAt IS NULL")
     boolean existsActiveVersion(@Param("movieId") Long movieId);
+
+    @Query("SELECT COUNT(v) FROM MovieVersion v WHERE v.movie.id = :movieId AND v.status = com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE AND v.deletedAt IS NULL")
+    long countActiveVersions(@Param("movieId") Long movieId);
+
+    @Query("SELECT v.movie.id, COUNT(v) FROM MovieVersion v WHERE v.movie.id IN :movieIds AND v.status = com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE AND v.deletedAt IS NULL GROUP BY v.movie.id")
+    List<Object[]> countActiveVersionsByMovieIds(@Param("movieIds") List<Long> movieIds);
 }

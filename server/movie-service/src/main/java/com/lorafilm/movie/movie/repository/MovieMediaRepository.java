@@ -45,4 +45,13 @@ public interface MovieMediaRepository extends JpaRepository<MovieMedia, Long> {
     @Modifying
     @Query("DELETE FROM MovieMedia m WHERE m.movie.id = :movieId")
     void deleteByMovieId(@Param("movieId") Long movieId);
+
+    @Query("SELECT COUNT(m) FROM MovieMedia m WHERE m.movie.id = :movieId AND m.deletedAt IS NULL")
+    long countMedia(@Param("movieId") Long movieId);
+
+    @Query("SELECT m.movie.id, COUNT(m) FROM MovieMedia m WHERE m.movie.id IN :movieIds AND m.deletedAt IS NULL GROUP BY m.movie.id")
+    List<Object[]> countMediaByMovieIds(@Param("movieIds") List<Long> movieIds);
+
+    @Query("SELECT m.movie.id, COUNT(m) FROM MovieMedia m WHERE m.movie.id IN :movieIds AND m.mediaType = com.lorafilm.movie.movie.domain.enums.MovieMediaType.POSTER AND m.isPrimary = true AND m.status = com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE AND m.deletedAt IS NULL GROUP BY m.movie.id")
+    List<Object[]> countPrimaryPostersByMovieIds(@Param("movieIds") List<Long> movieIds);
 }

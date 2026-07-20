@@ -4,6 +4,7 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import useAdminMovies from '@/features/catalog/admin/hooks/useAdminMovies';
 import MovieTable from '@/features/catalog/admin/components/MovieTable';
 import MovieFormModal from '@/features/catalog/admin/components/MovieFormModal';
+import TmdbSyncStatusPanel from '@/features/catalog/admin/components/TmdbSyncStatusPanel';
 
 export default function AdminMoviePage() {
   const { triggerToast, triggerConfirm } = useOutletContext() || {};
@@ -45,7 +46,11 @@ export default function AdminMoviePage() {
   }
 
   return (
-    <MovieTable
+    <div className="flex flex-col h-full">
+      <div className="px-6 md:px-8 pt-6">
+        <TmdbSyncStatusPanel />
+      </div>
+      <MovieTable
       movies={adminMovies.movies}
       isLoading={adminMovies.isLoading}
       currentPage={adminMovies.currentPage}
@@ -63,5 +68,6 @@ export default function AdminMoviePage() {
       onOpenEdit={handleOpenEdit}
       onDelete={adminMovies.handleDelete}
     />
+    </div>
   );
 }

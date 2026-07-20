@@ -100,6 +100,7 @@ export default function MovieTable({
                   <th className="py-4 px-5 w-12 text-center">STT</th>
                   <th className="py-4 px-5 w-16 text-center">POSTER</th>
                   <th className="py-4 px-5">TÊN PHIM</th>
+                  <th className="py-4 px-5 w-40">DỮ LIỆU</th>
                   <th className="py-4 px-5 w-32 text-center">THỜI LƯỢNG</th>
                   <th className="py-4 px-5 w-36 text-center">KHỞI CHIẾU</th>
                   <th className="py-4 px-5 w-32 text-center">TRẠNG THÁI</th>
@@ -142,14 +143,29 @@ export default function MovieTable({
                         </div>
                       </td>
                       <td className="py-4 px-5">
-                        <button
-                          type="button"
-                          onClick={() => onOpenDetail(movie)}
-                          className="text-sm font-bold text-zinc-200 hover:text-amber-400 transition-colors text-left truncate max-w-[220px] block cursor-pointer"
-                        >
-                          {movie.title || <span className="italic text-zinc-500">Chưa có tên</span>}
-                        </button>
-                        {movie.ageRating && <span className="text-[10px] font-bold text-neutral-500 uppercase mt-1 block">[{movie.ageRating}]</span>}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onOpenDetail(movie)}
+                            className="text-sm font-bold text-zinc-200 hover:text-amber-400 transition-colors text-left truncate max-w-[220px] block cursor-pointer"
+                          >
+                            {movie.title || <span className="italic text-zinc-500">Chưa có tên</span>}
+                          </button>
+                          {movie.source === 'TMDB' && (
+                            <span className="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded uppercase font-bold" title={`Đồng bộ từ TMDB (${movie.tmdbId})\nCập nhật: ${formatDate(movie.tmdbLastUpdated)}`}>TMDB</span>
+                          )}
+                          {movie.source === 'MANUAL' && (
+                            <span className="text-[9px] bg-zinc-700/50 text-zinc-400 border border-zinc-600/50 px-1.5 py-0.5 rounded uppercase font-bold" title="Tạo thủ công">Thủ công</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {movie.ageRating && <span className="text-[10px] font-bold text-neutral-500 uppercase">[{movie.ageRating}]</span>}
+                          {movie.readiness?.classification === 'READY' ? (
+                             <span className="text-[9px] text-green-500 font-medium">● Sẵn sàng</span>
+                          ) : (
+                             <span className="text-[9px] text-red-500 font-medium">● Thiếu thông tin</span>
+                          )}
+                        </div>
                         {warnings.length > 0 && (
                           <div className="flex items-center gap-1 mt-1 cursor-help group relative">
                             <AlertTriangle className="w-3 h-3 text-yellow-500" />
@@ -166,6 +182,22 @@ export default function MovieTable({
                             </div>
                           </div>
                         )}
+                      </td>
+                      <td className="py-4 px-5">
+                        <div className="flex flex-col gap-1 text-[10px] text-zinc-400">
+                          <div className="flex justify-between items-center bg-zinc-900/50 px-2 py-0.5 rounded">
+                            <span>Phiên bản (Active):</span>
+                            <span className="font-bold text-zinc-200">{movie.activeVersionCount || 0}</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-zinc-900/50 px-2 py-0.5 rounded">
+                            <span>Hình ảnh (Media):</span>
+                            <span className="font-bold text-zinc-200">{movie.mediaCount || 0}</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-zinc-900/50 px-2 py-0.5 rounded">
+                            <span>Lịch chiếu:</span>
+                            <span className="font-bold text-zinc-200">{movie.showtimeCount || 0}</span>
+                          </div>
+                        </div>
                       </td>
                       <td className="py-4 px-5 text-center">
                         <span className="text-xs text-zinc-300">{movie.durationMinutes ? `${movie.durationMinutes} phút` : 'N/A'}</span>

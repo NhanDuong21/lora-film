@@ -55,8 +55,14 @@ export default function MovieDetailHeader({ movie }) {
           </div>
           
           <div className="flex flex-col justify-center">
-            <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-3 flex-wrap">
               {movie.title || <span className="italic text-zinc-500 text-lg">Chưa có tên</span>}
+              {movie.source === 'TMDB' && (
+                <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded-md uppercase font-bold tracking-wider" title={`Đồng bộ từ TMDB (${movie.tmdbId})\nCập nhật: ${formatDate(movie.tmdbLastUpdated)}`}>TMDB</span>
+              )}
+              {movie.source === 'MANUAL' && (
+                <span className="text-xs bg-zinc-700/50 text-zinc-400 border border-zinc-600/50 px-2 py-1 rounded-md uppercase font-bold tracking-wider" title="Tạo thủ công">Thủ công</span>
+              )}
               <span className={`text-xs font-black px-2.5 py-1 rounded-md border uppercase tracking-wider ${statusCfg.colorClass}`}>
                 {statusCfg.label}
               </span>
