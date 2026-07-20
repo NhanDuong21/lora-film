@@ -53,13 +53,13 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
         page: currentPage,
         size: pageSize
       };
-      if (cinemaSlug) params.cinemaSlug = cinemaSlug;
-      if (movieSlug) params.movieSlug = movieSlug;
-      if (date) params.date = date;
-      if (status) params.status = status;
-      if (format) params.format = format;
-      if (audioLanguage) params.audioLanguage = audioLanguage;
-      if (subtitleLanguage) params.subtitleLanguage = subtitleLanguage;
+      if (cinemaSlug?.trim()) params.cinemaSlug = cinemaSlug.trim();
+      if (movieSlug?.trim()) params.movieSlug = movieSlug.trim();
+      if (date?.trim()) params.date = date.trim();
+      if (status?.trim() && status !== 'ALL') params.status = status.trim();
+      if (format?.trim()) params.format = format.trim();
+      if (audioLanguage?.trim()) params.audioLanguage = audioLanguage.trim();
+      if (subtitleLanguage?.trim()) params.subtitleLanguage = subtitleLanguage.trim();
 
       const res = await adminShowtimeService.getShowtimes(params);
       if (res?.success && res?.data) {

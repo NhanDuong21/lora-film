@@ -48,9 +48,13 @@ const AdminShowtimePage = () => {
     }
   }, [location.state, setCinemaSlug, setStatus, setDate, triggerToast]);
 
+  const shouldWait = location.state && !locationProcessed.current;
+
   useEffect(() => {
-    fetchShowtimes();
-  }, [fetchShowtimes]);
+    if (!shouldWait) {
+      fetchShowtimes();
+    }
+  }, [fetchShowtimes, shouldWait]);
 
   const handleOpenCreate = () => {
     navigate('/admin/showtimes/create');
