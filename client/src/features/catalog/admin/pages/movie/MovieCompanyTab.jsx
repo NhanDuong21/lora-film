@@ -5,11 +5,7 @@ import { Select, Input } from '@/components/common/ui/uiKit';
 import { Loader2, Save, Plus, Trash2 } from 'lucide-react';
 import { parseApiError } from '@/utils/apiErrorHandler';
 
-const COMPANY_ROLES = [
-  { value: 'PRODUCTION', label: 'Sản xuất' },
-  { value: 'DISTRIBUTOR', label: 'Phân phối' },
-  { value: 'STUDIO', label: 'Studio' }
-];
+import { getCompanyRoleLabel, COMPANY_ROLES } from '@/features/catalog/admin/config/movieCompanyRoleConfig';
 
 export default function MovieCompanyTab({ movie, onUpdate }) {
   const { triggerToast } = useOutletContext();
@@ -17,6 +13,7 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
   const [isSaving, setIsSaving] = useState(false);
   const [newCompany, setNewCompany] = useState({ name: '', role: 'PRODUCTION' });
   const [isAddingCompany, setIsAddingCompany] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (movie) {
@@ -25,8 +22,11 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
         ...(movie.distributors || []).map(c => ({ ...c, role: 'DISTRIBUTOR' })),
         ...(movie.studios || []).map(c => ({ ...c, role: 'STUDIO' }))
       ];
+      const mappedCompanies = allCompanies.map((c, i) => ({ ...c, localId: Date.now() + i }));
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCompanies(allCompanies.map((c, i) => ({ ...c, localId: Date.now() + i })));
+      setCompanies(mappedCompanies);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsDirty(false);
     }
   }, [movie]);
 
@@ -43,14 +43,22 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
         return;
       }
 
-       
-      setCompanies(prev => [...prev, {
-        companyPublicId: company.publicId,
-        publicId: company.publicId,
-        name: company.name,
-        role: newCompany.role,
-        localId: Date.now()
-      }]);
+      setCompanies(prev => {
+        const isDuplicate = prev.some(c => c.companyPublicId === company.publicId && c.role === newCompany.role);
+        if (isDuplicate) {
+          triggerToast('Hãng này đã được gán với vai trò tương tự', 'error');
+          return prev;
+        }
+        const next = [...prev, {
+          companyPublicId: company.publicId,
+          publicId: company.publicId,
+          name: company.name,
+          role: newCompany.role,
+          localId: Date.now()
+        }];
+        setIsDirty(true);
+        return next;
+      });
       setNewCompany({ name: '', role: 'PRODUCTION' });
     } catch (err) {
       triggerToast(parseApiError(err), 'error');
@@ -60,8 +68,11 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
   };
 
   const removeCompanyLocal = (localId) => {
-     
-      setCompanies(prev => prev.filter(c => c.localId !== localId));
+    setCompanies(prev => {
+      const next = prev.filter(c => c.localId !== localId);
+      setIsDirty(true);
+      return next;
+    });
   };
 
   const handleSave = async () => {
@@ -74,6 +85,7 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
       const res = await adminMovieService.assignProductionCompanies(movie.publicId, payload);
       if (res?.success) {
         triggerToast('Cập nhật hãng phim thành công');
+        setIsDirty(false);
         onUpdate?.();
       } else {
         triggerToast('Cập nhật thất bại', 'error');
@@ -91,16 +103,20 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
         <h3 className="text-sm font-semibold text-zinc-100">Hãng phim & Phân phối</h3>
         <button
           onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-2 bg-brand-orange text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-brand-orange/90 transition-colors disabled:opacity-50"
+          disabled={isSaving || !isDirty}
+          title={!isDirty ? 'Chưa có thay đổi' : ''}
+          className="flex items-center gap-2 bg-brand-orange text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-brand-orange/90 transition-all disabled:opacity-40 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed"
         >
           {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-          Lưu danh sách
+          Lưu thay đổi
         </button>
       </div>
 
       <div className="bg-[#050506] border border-zinc-800 rounded-xl p-4 space-y-4">
-        <h4 className="text-xs font-semibold text-zinc-400">Thêm hãng mới</h4>
+        <div>
+          <h4 className="text-xs font-semibold text-zinc-400">Thêm hãng mới</h4>
+          <p className="text-[10px] text-zinc-500 mt-1">Nhập tên hãng. Hệ thống sẽ sử dụng hồ sơ có sẵn nếu trùng khớp, hoặc tạo hồ sơ mới khi chưa tồn tại.</p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <Input 
             label="Tên hãng" 
@@ -113,7 +129,7 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
             value={newCompany.role} 
             onChange={e => setNewCompany(p => ({ ...p, role: e.target.value }))}
           >
-            {COMPANY_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            {Object.entries(COMPANY_ROLES).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
           </Select>
           <button
             onClick={handleAddCompanyLocal}
@@ -139,7 +155,11 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
             {companies.map((c) => (
               <tr key={c.localId} className="hover:bg-zinc-800/20 transition-colors">
                 <td className="px-4 py-3 text-zinc-200">{c.name}</td>
-                <td className="px-4 py-3">{COMPANY_ROLES.find(r => r.value === c.role)?.label || c.role}</td>
+                <td className="px-4 py-3">
+                  <span className="bg-zinc-800/50 px-2 py-1 rounded text-xs">
+                    {getCompanyRoleLabel(c.role)}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => removeCompanyLocal(c.localId)}
@@ -152,8 +172,8 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
             ))}
             {companies.length === 0 && (
               <tr>
-                <td colSpan="3" className="px-4 py-8 text-center text-zinc-500 border-dashed border border-zinc-800/50">
-                  Chưa có hãng nào được thêm.
+                <td colSpan="3" className="px-4 py-12 text-center text-zinc-500 border-dashed border border-zinc-800/50 bg-zinc-900/50">
+                  Chưa có hãng sản xuất hoặc đơn vị phân phối nào được gán.
                 </td>
               </tr>
             )}

@@ -144,7 +144,9 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
   };
 
   return (
-    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-zinc-100 space-y-5 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-[#050506] border border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        <div className="flex flex-col flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-5 text-zinc-100">
       <div className="flex justify-between items-center border-b border-zinc-800 pb-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button type="button" onClick={onClose} className="p-2 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 rounded-xl transition-all cursor-pointer">
@@ -221,6 +223,8 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
           )}
         </FormSection>
       </form>
+        </div>
+      </div>
     </div>
   );
 }

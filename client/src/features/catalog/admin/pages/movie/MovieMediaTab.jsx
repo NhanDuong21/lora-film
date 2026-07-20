@@ -4,6 +4,7 @@ import { useOutletContext } from 'react-router-dom';
 import { AsyncState, Select, Input, LazyImage } from '@/components/common/ui/uiKit';
 import { Plus, Trash2, Loader2, Play } from 'lucide-react';
 import { getYoutubeEmbedUrl } from '@/utils/movieHelpers';
+import { getMediaTypeLabel } from '@/features/catalog/admin/config/movieMediaTypeConfig';
 
 const DEFAULT_NEW_MEDIA = {
   mediaType: 'POSTER',
@@ -123,63 +124,89 @@ export default function MovieMediaTab({ movie }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {mediaList.map(m => {
-            const isVideo = m.mediaType === 'TRAILER' || m.mediaType === 'TEASER';
-            const embedUrl = isVideo ? getYoutubeEmbedUrl(m.url) : null;
-            
-            return (
-              <div key={m.publicId} className="group relative bg-[#0a0a0a] border border-zinc-800 rounded-xl overflow-hidden">
-                <div className="aspect-[16/9] relative bg-zinc-900">
-                  {isVideo ? (
-                    playVideo === m.publicId && embedUrl ? (
-                      <iframe
-                        src={`${embedUrl}?autoplay=1`}
-                        allow="autoplay; encrypted-media"
-                        allowFullScreen
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-black">
-                        <button 
-                          onClick={() => setPlayVideo(m.publicId)}
-                          className="w-12 h-12 bg-brand-orange/20 hover:bg-brand-orange text-brand-orange hover:text-white rounded-full flex items-center justify-center transition-all"
-                        >
-                          <Play size={24} className="ml-1" />
-                        </button>
+        <div className="space-y-8">
+          {Object.entries(
+            mediaList.reduce((acc, m) => {
+              const type = m.mediaType || 'UNKNOWN';
+              if (!acc[type]) acc[type] = [];
+              acc[type].push(m);
+              return acc;
+            }, {})
+          ).map(([type, items]) => (
+            <div key={type} className="space-y-4">
+              <h4 className="text-xs font-black uppercase tracking-widest text-amber-500 border-b border-zinc-800 pb-2">
+                {getMediaTypeLabel(type)}
+              </h4>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+                {items.map(m => {
+                  const isVideo = m.mediaType === 'TRAILER' || m.mediaType === 'TEASER';
+                  const isPoster = m.mediaType === 'POSTER';
+                  const embedUrl = isVideo ? getYoutubeEmbedUrl(m.url) : null;
+                  
+                  return (
+                    <div key={m.publicId} className="group relative bg-[#0a0a0a] border border-zinc-800 rounded-xl overflow-hidden flex flex-col">
+                      <div className={`${isPoster ? 'aspect-[2/3]' : 'aspect-[16/9]'} relative bg-zinc-900`}>
+                        {isVideo ? (
+                          playVideo === m.publicId && embedUrl ? (
+                            <iframe
+                              src={`${embedUrl}?autoplay=1`}
+                              allow="autoplay; encrypted-media"
+                              allowFullScreen
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-black">
+                              <button 
+                                onClick={() => setPlayVideo(m.publicId)}
+                                className="w-12 h-12 bg-brand-orange/20 hover:bg-brand-orange text-brand-orange hover:text-white rounded-full flex items-center justify-center transition-all"
+                              >
+                                <Play size={24} className="ml-1" />
+                              </button>
+                            </div>
+                          )
+                        ) : (
+                          <LazyImage src={m.url} alt={m.title || m.mediaType} className="w-full h-full object-cover" />
+                        )}
+                        <div className="absolute top-2 left-2 flex gap-1">
+                          {m.isPrimary && (
+                            <span className="bg-brand-orange text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase shadow">
+                              Ảnh chính
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    )
-                  ) : (
-                    <LazyImage src={m.url} alt={m.title || m.mediaType} className="w-full h-full object-cover" />
-                  )}
-                  <div className="absolute top-2 left-2 flex gap-1">
-                    <span className="bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                      {m.mediaType}
-                    </span>
-                    {m.isPrimary && (
-                      <span className="bg-brand-orange text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                        Primary
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="p-3 flex items-center justify-between">
-                  <span className="text-xs text-zinc-400 truncate pr-2">{m.title || m.url}</span>
-                  <button
-                    onClick={() => handleRemove(m.publicId)}
-                    disabled={isSubmitting}
-                    className="text-zinc-500 hover:text-red-500 transition-colors disabled:opacity-50"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                      <div className="p-3 flex flex-col gap-2">
+                        <span className="text-xs text-zinc-400 truncate w-full" title={m.title || m.url}>{m.title || 'Không có tiêu đề'}</span>
+                        <div className="flex items-center justify-between">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(m.url);
+                              triggerToast('Đã copy URL');
+                            }}
+                            className="text-[10px] font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
+                          >
+                            Copy URL
+                          </button>
+                          <button
+                            onClick={() => handleRemove(m.publicId)}
+                            disabled={isSubmitting}
+                            className="text-zinc-500 hover:text-red-500 transition-colors disabled:opacity-50"
+                            title="Xóa"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
         {mediaList.length === 0 && !showAdd && (
-          <div className="text-center py-12 border border-zinc-800 border-dashed rounded-xl">
-            <p className="text-sm text-zinc-500">Chưa có media nào.</p>
+          <div className="text-center py-12 border border-zinc-800 border-dashed rounded-xl bg-zinc-900/50">
+            <p className="text-sm text-zinc-500">Chưa có hình ảnh hoặc video cho phim này.</p>
           </div>
         )}
       </AsyncState>

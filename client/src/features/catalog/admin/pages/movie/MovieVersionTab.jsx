@@ -4,6 +4,7 @@ import { useOutletContext } from 'react-router-dom';
 import { AsyncState, Select, Input } from '@/components/common/ui/uiKit';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { FORMAT_MAP_TO_API, FORMAT_MAP_FROM_API } from '@/utils/movieHelpers';
+import { getVersionStatusConfig } from '@/features/catalog/admin/config/movieVersionStatusConfig';
 
 const DEFAULT_NEW_VERSION = {
   versionName: '',
@@ -62,8 +63,8 @@ export default function MovieVersionTab({ movie }) {
     <div className="space-y-6">
       <AsyncState isLoading={isLoading} error={error} onRetry={reload}>
         {versions.length === 0 && !showAdd ? (
-          <div className="text-center py-12 bg-[#050506] rounded-xl border border-zinc-800 border-dashed">
-            <p className="text-sm text-zinc-500 mb-4">Phim chưa có phiên bản nào.</p>
+          <div className="text-center py-12 bg-zinc-900/50 rounded-xl border border-zinc-800 border-dashed">
+            <p className="text-sm text-zinc-500 mb-4">Chưa có phiên bản chiếu nào.<br />Tạo phiên bản đầu tiên để chuẩn bị cho việc lên lịch suất chiếu.</p>
             <button
               onClick={() => setShowAdd(true)}
               className="inline-flex items-center gap-2 bg-brand-orange text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-orange/90 transition-colors"
@@ -135,27 +136,50 @@ export default function MovieVersionTab({ movie }) {
             )}
 
             <div className="grid gap-3">
-              {versions.map(v => (
-                <div key={v.publicId} className="flex items-center justify-between p-4 bg-[#0a0a0a] border border-zinc-800 rounded-xl">
+              {versions.map(v => {
+                const statusCfg = getVersionStatusConfig(v.status);
+                return (
+                <div key={v.publicId} className="flex items-start justify-between p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl">
                   <div>
-                    <h4 className="text-sm font-semibold text-zinc-100">{v.versionName}</h4>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-zinc-500">
-                      <span className="bg-zinc-800 px-2 py-0.5 rounded">{FORMAT_MAP_FROM_API[v.format] || v.format}</span>
-                      <span>•</span>
-                      <span>Audio: {v.audioLanguage}</span>
-                      <span>•</span>
-                      <span>Phụ đề: {v.subtitleLanguage}</span>
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-sm font-semibold text-zinc-100">{v.versionName}</h4>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase border ${statusCfg.colorClass}`}>
+                        {statusCfg.label}
+                      </span>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-zinc-400">
+                      <div>
+                        <span className="text-zinc-600 mr-1">Định dạng:</span>
+                        <span className="font-medium text-zinc-300">{FORMAT_MAP_FROM_API[v.format] || v.format}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-600 mr-1">Âm thanh:</span>
+                        <span className="font-medium text-zinc-300">{v.audioLanguage}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-600 mr-1">Phụ đề:</span>
+                        <span className="font-medium text-zinc-300">{v.subtitleLanguage}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-600 mr-1">Lồng tiếng:</span>
+                        <span className="font-medium text-zinc-300">
+                          {v.dubLanguage && v.dubLanguage !== 'NONE' ? v.dubLanguage : 'Không'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <button
                     onClick={() => handleRemove(v.publicId)}
                     disabled={isSubmitting}
                     className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                    title="Xóa phiên bản"
                   >
                     <Trash2 size={16} />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
