@@ -10,6 +10,7 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
   const [cinemaSlug, setCinemaSlug] = useState('');
   const [movieSlug, setMovieSlug] = useState('');
   const [date, setDate] = useState('');
+  const [status, setStatus] = useState('');
   const [format, setFormat] = useState('');
   const [audioLanguage, setAudioLanguage] = useState('');
   const [subtitleLanguage, setSubtitleLanguage] = useState('');
@@ -30,6 +31,7 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
       if (cinemaSlug) params.cinemaSlug = cinemaSlug;
       if (movieSlug) params.movieSlug = movieSlug;
       if (date) params.date = date;
+      if (status) params.status = status;
       if (format) params.format = format;
       if (audioLanguage) params.audioLanguage = audioLanguage;
       if (subtitleLanguage) params.subtitleLanguage = subtitleLanguage;
@@ -48,7 +50,7 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
     }
   }, [
     currentPage, pageSize, 
-    cinemaSlug, movieSlug, date, 
+    cinemaSlug, movieSlug, date, status,
     format, audioLanguage, subtitleLanguage, 
     triggerToast
   ]);
@@ -59,6 +61,7 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
     cinemaSlug, setCinemaSlug,
     movieSlug, setMovieSlug,
     date, setDate,
+    status, setStatus,
     format, setFormat,
     audioLanguage, setAudioLanguage,
     subtitleLanguage, setSubtitleLanguage,

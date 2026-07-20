@@ -16,6 +16,8 @@ const AdminShowtimePage = () => {
     setMovieSlug,
     date,
     setDate,
+    status,
+    setStatus,
     currentPage,
     setCurrentPage,
     pageSize,
@@ -50,6 +52,8 @@ const AdminShowtimePage = () => {
       setMovieSlug={setMovieSlug}
       date={date}
       setDate={setDate}
+      status={status}
+      setStatus={setStatus}
       currentPage={currentPage}
       setCurrentPage={setCurrentPage}
       pageSize={pageSize}

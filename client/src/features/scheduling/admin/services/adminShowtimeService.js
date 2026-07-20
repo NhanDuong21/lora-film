@@ -2,13 +2,12 @@ import apiClient from '@/services/apiClient';
 
 const adminShowtimeService = {
   getShowtimes: async (params) => {
-    // using the public read endpoint for now since there's no admin list API in the requirement
-    const response = await apiClient.get('/api/showtimes', { params });
+    const response = await apiClient.get('/api/admin/showtimes', { params });
     return response.data;
   },
 
   getShowtimeDetail: async (showtimePublicId) => {
-    const response = await apiClient.get(`/api/showtimes/${showtimePublicId}`);
+    const response = await apiClient.get(`/api/admin/showtimes/${showtimePublicId}`);
     return response.data;
   },
 

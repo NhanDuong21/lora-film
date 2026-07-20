@@ -38,6 +38,18 @@ public class ShowtimeSpecification {
         };
     }
 
+    public static Specification<Showtime> hasMoviePublicId(String moviePublicId) {
+        return (root, query, cb) -> cb.equal(root.get("movie").get("publicId"), moviePublicId);
+    }
+
+    public static Specification<Showtime> hasCinemaPublicId(String cinemaPublicId) {
+        return (root, query, cb) -> cb.equal(root.get("cinema").get("publicId"), cinemaPublicId);
+    }
+
+    public static Specification<Showtime> hasStartTimeBetween(Instant start, Instant end) {
+        return (root, query, cb) -> cb.between(root.get("startTime"), start, end);
+    }
+
     public static Specification<Showtime> hasFormat(com.lorafilm.movie.movie.domain.enums.MovieFormat format) {
         return (root, query, cb) -> cb.equal(root.get("movieVersion").get("format"), format);
     }

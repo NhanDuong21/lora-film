@@ -13,6 +13,8 @@ export default function ShowtimeTable({
   setMovieSlug,
   date,
   setDate,
+  status,
+  setStatus,
   currentPage,
   setCurrentPage,
   pageSize,
@@ -59,13 +61,8 @@ export default function ShowtimeTable({
         <p className="text-zinc-500 text-sm mt-1">Theo dõi, sắp xếp và vận hành lịch chiếu</p>
       </div>
 
-      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex gap-3 text-sm text-blue-400">
-        <AlertCircle className="w-5 h-5 flex-shrink-0" />
-        <p>Lưu ý: API hiện tại chỉ hỗ trợ lọc theo Rạp, Phim và Ngày. Trạng thái mặc định luôn là OPEN FOR BOOKING.</p>
-      </div>
-
       {/* Filter and search bar */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl backdrop-blur-md">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl backdrop-blur-md">
         
         {/* Cinema Filter */}
         <div>
@@ -97,6 +94,22 @@ export default function ShowtimeTable({
             onChange={(e) => { setDate(e.target.value); setCurrentPage(0); }}
             className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-xs transition-colors focus:outline-none"
           />
+        </div>
+
+        {/* Status Filter */}
+        <div>
+          <select
+            value={status}
+            onChange={(e) => { setStatus(e.target.value); setCurrentPage(0); }}
+            className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-xs transition-colors focus:outline-none appearance-none"
+          >
+            <option value="">Tất cả trạng thái</option>
+            <option value="DRAFT">DRAFT (Bản nháp)</option>
+            <option value="OPEN_FOR_BOOKING">OPEN (Đang mở bán)</option>
+            <option value="CLOSED">CLOSED (Đã đóng)</option>
+            <option value="CANCELLED">CANCELLED (Đã hủy)</option>
+            <option value="FINISHED">FINISHED (Đã chiếu xong)</option>
+          </select>
         </div>
       </div>
 
