@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import useAdminShowtimes from '@/features/scheduling/admin/hooks/useAdminShowtimes';
 import ShowtimeTable from '@/features/scheduling/admin/components/ShowtimeTable';
 
@@ -28,6 +28,25 @@ const AdminShowtimePage = () => {
     totalElements,
     fetchShowtimes
   } = useAdminShowtimes({ triggerToast });
+
+  const location = useLocation();
+  const locationProcessed = useRef(false);
+
+  useEffect(() => {
+    if (location.state && !locationProcessed.current) {
+      if (location.state.cinemaSlug) setCinemaSlug(location.state.cinemaSlug);
+      if (location.state.status) setStatus(location.state.status);
+      if (location.state.dateFrom) setDate(location.state.dateFrom);
+      
+      if (location.state.message) {
+        triggerToast?.(location.state.message, 'success');
+      }
+      
+      locationProcessed.current = true;
+      // Clear state to avoid infinite re-triggering if user navigates away and back
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, setCinemaSlug, setStatus, setDate, triggerToast]);
 
   useEffect(() => {
     fetchShowtimes();

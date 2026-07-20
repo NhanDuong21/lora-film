@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, MapPin, Settings2, CalendarDays, ChevronRight, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, MapPin, Settings2, CalendarDays, ChevronRight, AlertCircle, Search } from 'lucide-react';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';
 import SearchableSelect from '@/components/common/SearchableSelect';
 
@@ -27,6 +27,7 @@ const AdminAutoScheduleCreatePage = () => {
   } = useAutoScheduleForm({ triggerToast, onSuccess: handleSuccess });
 
   const [expandedMovies, setExpandedMovies] = useState({});
+  const [movieSearch, setMovieSearch] = useState('');
 
   const handleToggleMovie = (movieId, isDisabled) => {
     if (isDisabled) return;
@@ -40,6 +41,8 @@ const AdminAutoScheduleCreatePage = () => {
     label: c.name,
     subtitle: c.address
   }));
+
+  const filteredMovies = movies.filter(m => m.title.toLowerCase().includes(movieSearch.toLowerCase()));
 
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in">
@@ -123,8 +126,11 @@ const AdminAutoScheduleCreatePage = () => {
                   {errors.scheduleTo && <p className="text-red-500 text-[10px] mt-1">{errors.scheduleTo}</p>}
                 </div>
               </div>
+              <p className="text-[10px] text-zinc-500 italic flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3 h-3" /> Tối đa 14 ngày mỗi lần tạo bản xem trước.
+              </p>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mt-4">
                 <div>
                   <label className="block text-xs font-semibold text-zinc-400 mb-1 flex items-center gap-1">
                     Khoảng cách thử lịch (phút)
@@ -238,15 +244,26 @@ const AdminAutoScheduleCreatePage = () => {
               </span>
             </h2>
 
+            <div className="relative">
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Tìm phim..."
+                value={movieSearch}
+                onChange={(e) => setMovieSearch(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2 pl-9 pr-3 text-sm transition-colors focus:outline-none"
+              />
+            </div>
+
             {errors.versions && <p className="text-red-500 text-[10px] bg-red-500/10 p-2 rounded border border-red-500/20">{errors.versions}</p>}
 
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
               {isLoadingMovies ? (
                 <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-500" /></div>
-              ) : movies.length === 0 ? (
-                <p className="text-zinc-500 text-sm text-center py-8">Không có phim đang chiếu.</p>
+              ) : filteredMovies.length === 0 ? (
+                <p className="text-zinc-500 text-sm text-center py-8">Không tìm thấy phim phù hợp.</p>
               ) : (
-                movies.map(movie => {
+                filteredMovies.map(movie => {
                   const isExpanded = !!expandedMovies[movie.publicId];
                   const versions = versionsByMovie[movie.publicId] || [];
                   const isLoadingVersions = loadingVersionsFor[movie.publicId];
@@ -256,10 +273,12 @@ const AdminAutoScheduleCreatePage = () => {
                   
                   const isDraft = movie.status === 'DRAFT';
                   const isBeforeRelease = scheduleTo && movie.releaseDate && scheduleTo < movie.releaseDate;
-                  const isDisabled = isDraft || isBeforeRelease;
+                  const hasNoVersions = !isLoadingVersions && versions.length === 0;
+                  const isDisabled = isDraft || isBeforeRelease || hasNoVersions;
                   
                   let disableReason = '';
                   if (isDraft) disableReason = 'DRAFT - CHƯA ĐỦ ĐIỀU KIỆN';
+                  else if (hasNoVersions) disableReason = 'CHƯA CÓ ĐỊNH DẠNG KHẢ DỤNG';
                   else if (isBeforeRelease) disableReason = 'CHƯA ĐẾN NGÀY CÔNG CHIẾU';
 
                   return (

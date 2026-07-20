@@ -14,13 +14,42 @@ const formatDate = (dateStr) => {
   return new Date(dateStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+const checkOverlap = (item1, item2) => {
+  const start1 = new Date(item1.startTime).getTime();
+  const end1 = new Date(item1.endTime).getTime();
+  const start2 = new Date(item2.startTime).getTime();
+  const end2 = new Date(item2.endTime).getTime();
+  return start1 < end2 && start2 < end1;
+};
+
+const REJECTION_REASON_MAP = {
+  "SHOWTIME_OUTSIDE_OPERATING_HOURS": "Ngoài giờ hoạt động của cụm rạp",
+  "SHOWTIME_OVERLAPS_EXISTING": "Trùng với suất chiếu hiện có",
+  "MOVIE_NOT_ELIGIBLE": "Phim chưa đủ điều kiện",
+  "AUDITORIUM_UNAVAILABLE": "Phòng chiếu không khả dụng",
+  "NOT_ENOUGH_CLEANING_TIME": "Không đủ thời gian dọn dẹp"
+};
+
+const translateReason = (reason) => {
+  if (!reason) return '';
+  for (const [key, value] of Object.entries(REJECTION_REASON_MAP)) {
+    if (reason.toUpperCase().includes(key)) return value;
+  }
+  return reason;
+};
+
 const AdminAutoSchedulePreviewPage = () => {
   const { id } = useParams();
   const { triggerToast } = useOutletContext() || {};
   const navigate = useNavigate();
 
   const handleSuccess = () => {
-    navigate('/admin/showtimes');
+    navigate('/admin/showtimes', {
+      state: {
+        status: 'DRAFT',
+        message: `Đã tạo ${selectedItemIds.size} suất chiếu ở trạng thái DRAFT.`
+      }
+    });
   };
 
   const {
@@ -33,6 +62,8 @@ const AdminAutoSchedulePreviewPage = () => {
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterAuditorium, setFilterAuditorium] = useState('');
   const [filterReason, setFilterReason] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+  const [showApplyModal, setShowApplyModal] = useState(false);
 
   const rejectionReasons = useMemo(() => {
     if (!items) return {};
@@ -52,6 +83,16 @@ const AdminAutoSchedulePreviewPage = () => {
     return Array.from(auds).sort();
   }, [items]);
 
+  const uniqueDates = useMemo(() => {
+    if (!items) return [];
+    const dates = new Set();
+    items.forEach(item => {
+      const d = new Date(item.startTime);
+      dates.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    });
+    return Array.from(dates).sort();
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     if (!items) return [];
     return items.filter(item => {
@@ -60,9 +101,14 @@ const AdminAutoSchedulePreviewPage = () => {
       const audKey = item.auditoriumName || item.auditoriumPublicId;
       if (filterAuditorium && audKey !== filterAuditorium) return false;
       if (filterReason && item.rejectionReason !== filterReason) return false;
+      if (filterDate) {
+        const d = new Date(item.startTime);
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (dateKey !== filterDate) return false;
+      }
       return true;
     });
-  }, [items, filterStatus, filterAuditorium, filterReason]);
+  }, [items, filterStatus, filterAuditorium, filterReason, filterDate]);
 
   const groupedFilteredItems = useMemo(() => {
     const groups = {};
@@ -150,7 +196,7 @@ const AdminAutoSchedulePreviewPage = () => {
 
           {canApply && (
             <button
-              onClick={handleApply}
+              onClick={() => setShowApplyModal(true)}
               disabled={isApplying || isUpdatingSelection || selectedItemIds.size === 0}
               className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -207,7 +253,7 @@ const AdminAutoSchedulePreviewPage = () => {
               {Object.entries(rejectionReasons).map(([reason, count]) => (
                 <div key={reason} className="bg-zinc-950 border border-zinc-800 px-3 py-2 rounded-xl flex items-center gap-2">
                   <span className="text-red-400 font-black text-sm">{count}</span>
-                  <span className="text-xs text-zinc-300">{reason}</span>
+                  <span className="text-xs text-zinc-300">{translateReason(reason)}</span>
                 </div>
               ))}
             </div>
@@ -237,7 +283,17 @@ const AdminAutoSchedulePreviewPage = () => {
             ))}
           </select>
 
-          {Object.keys(rejectionReasons).length > 0 && (
+          <select 
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+            className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
+          >
+            <option value="">Tất cả Ngày</option>
+            {uniqueDates.map(dateKey => (
+              <option key={dateKey} value={dateKey}>{formatDate(dateKey)}</option>
+            ))}
+          </select>
+
             <select 
               value={filterReason}
               onChange={(e) => setFilterReason(e.target.value)}
@@ -245,10 +301,9 @@ const AdminAutoSchedulePreviewPage = () => {
             >
               <option value="">Tất cả Lý do</option>
               {Object.keys(rejectionReasons).map(reason => (
-                <option key={reason} value={reason}>{reason}</option>
+                <option key={reason} value={reason}>{translateReason(reason)}</option>
               ))}
             </select>
-          )}
         </div>
 
         {/* Timeline View */}
@@ -277,21 +332,7 @@ const AdminAutoSchedulePreviewPage = () => {
                           <thead>
                             <tr className="bg-zinc-950/50 border-b border-zinc-800/80 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                               <th className="py-3 px-5 w-10 text-center">
-                                {canApply && audItems.some(i => i.validationStatus === 'VALID' && i.applyStatus !== 'APPLIED') && (
-                                  <input 
-                                    type="checkbox"
-                                    checked={audItems.every(i => (i.validationStatus !== 'VALID' || i.applyStatus === 'APPLIED') || selectedItemIds.has(i.itemPublicId))}
-                                    onChange={(e) => {
-                                      const isChecked = e.target.checked;
-                                      audItems.forEach(item => {
-                                        if (item.validationStatus === 'VALID' && item.applyStatus !== 'APPLIED' && selectedItemIds.has(item.itemPublicId) !== isChecked) {
-                                          handleToggleSelection(item.itemPublicId, !isChecked);
-                                        }
-                                      });
-                                    }}
-                                    className="w-4 h-4 rounded border-zinc-700 text-brand-orange focus:ring-brand-orange bg-zinc-900 cursor-pointer"
-                                  />
-                                )}
+                                {/* Removed select-all to prevent overlapping selection errors */}
                               </th>
                               <th className="py-3 px-5">THỜI GIAN</th>
                               <th className="py-3 px-5">PHIM & ĐỊNH DẠNG</th>
@@ -305,12 +346,29 @@ const AdminAutoSchedulePreviewPage = () => {
                               const isSelected = selectedItemIds.has(item.itemPublicId);
                               const isItemApplied = item.applyStatus === 'APPLIED';
                               
+                              let isConflicting = false;
+                              let conflictItem = null;
+                              
+                              if (isValid && !isSelected && !isItemApplied) {
+                                for (const selectedId of selectedItemIds) {
+                                  const selectedObj = audItems.find(i => i.itemPublicId === selectedId);
+                                  if (selectedObj && checkOverlap(item, selectedObj)) {
+                                    isConflicting = true;
+                                    conflictItem = selectedObj;
+                                    break;
+                                  }
+                                }
+                              }
+
+                              const isCheckboxDisabled = isUpdatingSelection || isApplying || isConflicting;
+                              
                               return (
                                 <tr 
                                   key={item.itemPublicId}
                                   className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${
                                     isItemApplied ? 'bg-green-500/5' :
                                     !isValid ? 'bg-red-500/5' :
+                                    isConflicting ? 'bg-red-500/10 opacity-75 grayscale' :
                                     isSelected ? 'bg-brand-orange/5' : 'bg-zinc-950'
                                   }`}
                                 >
@@ -320,7 +378,7 @@ const AdminAutoSchedulePreviewPage = () => {
                                         type="checkbox"
                                         checked={isSelected}
                                         onChange={() => handleToggleSelection(item.itemPublicId, isSelected)}
-                                        disabled={isUpdatingSelection || isApplying}
+                                        disabled={isCheckboxDisabled}
                                         className="w-4 h-4 rounded border-zinc-700 text-brand-orange focus:ring-brand-orange bg-zinc-900 cursor-pointer disabled:cursor-not-allowed"
                                       />
                                     )}
@@ -343,6 +401,10 @@ const AdminAutoSchedulePreviewPage = () => {
                                       <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-max">
                                         <CheckCircle2 className="w-3 h-3" /> APPLIED
                                       </span>
+                                    ) : isConflicting ? (
+                                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
+                                        XUNG ĐỘT
+                                      </span>
                                     ) : isValid ? (
                                       <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
                                         HỢP LỆ
@@ -357,7 +419,7 @@ const AdminAutoSchedulePreviewPage = () => {
                                     {!isValid && (
                                       <div className="text-xs text-red-400 flex items-start gap-1">
                                         <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                        <span>{item.rejectionReason}</span>
+                                        <span>{translateReason(item.rejectionReason)}</span>
                                       </div>
                                     )}
                                     {isItemApplied && (
@@ -365,7 +427,12 @@ const AdminAutoSchedulePreviewPage = () => {
                                         Đã được tạo thành lịch chiếu chính thức.
                                       </div>
                                     )}
-                                    {isValid && !isItemApplied && (
+                                    {isConflicting && (
+                                      <div className="text-xs text-red-400 font-bold">
+                                        Xung đột với suất đã chọn: {formatTime(conflictItem.startTime)}-{formatTime(conflictItem.endTime)}
+                                      </div>
+                                    )}
+                                    {isValid && !isItemApplied && !isConflicting && (
                                       <div className="text-xs text-zinc-500">
                                         Đủ điều kiện. {isSelected ? 'Sẽ được áp dụng.' : 'Chưa được chọn.'}
                                       </div>
@@ -391,6 +458,57 @@ const AdminAutoSchedulePreviewPage = () => {
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showApplyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-zinc-800 flex items-center gap-3 text-brand-orange">
+              <AlertCircle className="w-6 h-6" />
+              <h2 className="text-lg font-black uppercase tracking-wider text-white">Xác nhận áp dụng lịch chiếu</h2>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <p className="text-zinc-300">
+                Bạn đang chuẩn bị áp dụng <strong className="text-white">{selectedItemIds.size} suất chiếu</strong> cho cụm rạp <strong className="text-white">{preview.cinemaName}</strong>.
+              </p>
+              
+              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                <ul className="space-y-2 text-sm text-zinc-400">
+                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-500" /> {selectedItemIds.size} ứng viên đã được chọn</li>
+                  <li className="flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-500" /> Từ ngày {formatDate(preview.scheduleFrom)} đến {formatDate(preview.scheduleTo)}</li>
+                </ul>
+              </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl flex items-start gap-2 text-blue-400">
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <p className="text-xs leading-relaxed">
+                  Tất cả các suất chiếu sẽ được tạo ở trạng thái <strong>DRAFT</strong>. Bạn cần chuyển chúng sang trạng thái <strong>OPEN FOR BOOKING</strong> để hệ thống có thể mở bán vé.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-zinc-950/50 border-t border-zinc-800 flex items-center justify-end gap-3">
+              <button 
+                onClick={() => setShowApplyModal(false)}
+                className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                onClick={() => {
+                  setShowApplyModal(false);
+                  handleApply();
+                }}
+                className="px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider bg-brand-orange text-zinc-950 hover:bg-opacity-90 transition-all shadow-lg shadow-brand-orange/10 flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" /> Xác nhận Áp dụng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

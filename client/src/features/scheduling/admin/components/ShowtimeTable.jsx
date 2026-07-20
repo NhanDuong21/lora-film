@@ -1,7 +1,7 @@
 // eslint-disable-next-line no-unused-vars
 import React from 'react';
 // eslint-disable-next-line no-unused-vars
-import { Search, MapPin, Calendar, Clock, Plus, Zap, AlertCircle } from 'lucide-react';
+import { Search, MapPin, Calendar, Clock, Plus, Zap, AlertCircle, RefreshCw } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import SearchableSelect from '@/components/common/SearchableSelect';
 
@@ -70,6 +70,22 @@ export default function ShowtimeTable({
     badge: m.status?.replace('_', ' ')
   }));
 
+  const statusOptions = [
+    { value: 'DRAFT', label: 'DRAFT (Bản nháp)' },
+    { value: 'OPEN_FOR_BOOKING', label: 'OPEN (Đang mở bán)' },
+    { value: 'CLOSED', label: 'CLOSED (Đã đóng)' },
+    { value: 'CANCELLED', label: 'CANCELLED (Đã hủy)' },
+    { value: 'FINISHED', label: 'FINISHED (Đã chiếu xong)' }
+  ];
+
+  const handleClearFilters = () => {
+    setCinemaSlug('');
+    setMovieSlug('');
+    setDate('');
+    setStatus('');
+    setCurrentPage(0);
+  };
+
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in">
       {/* Title Header */}
@@ -114,19 +130,22 @@ export default function ShowtimeTable({
         </div>
 
         {/* Status Filter */}
-        <div>
-          <select
-            value={status}
-            onChange={(e) => { setStatus(e.target.value); setCurrentPage(0); }}
-            className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-xs transition-colors focus:outline-none appearance-none"
+        <div className="flex gap-2">
+          <div className="flex-1 z-10">
+            <SearchableSelect
+              options={statusOptions}
+              value={status}
+              onChange={(val) => { setStatus(val); setCurrentPage(0); }}
+              placeholder="Tất cả trạng thái..."
+            />
+          </div>
+          <button
+            onClick={handleClearFilters}
+            className="p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            title="Xóa bộ lọc"
           >
-            <option value="">Tất cả trạng thái</option>
-            <option value="DRAFT">DRAFT (Bản nháp)</option>
-            <option value="OPEN_FOR_BOOKING">OPEN (Đang mở bán)</option>
-            <option value="CLOSED">CLOSED (Đã đóng)</option>
-            <option value="CANCELLED">CANCELLED (Đã hủy)</option>
-            <option value="FINISHED">FINISHED (Đã chiếu xong)</option>
-          </select>
+            <RefreshCw className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -153,9 +172,9 @@ export default function ShowtimeTable({
         <SkeletonTable rows={5} columns={7} />
       ) : (
         <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden w-full shadow-2xl">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
             <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-zinc-950 shadow-md">
                 <tr className="bg-zinc-900/40 border-b border-zinc-900 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                   <th className="py-4 px-6">BẮT ĐẦU</th>
                   <th className="py-4 px-6">KẾT THÚC</th>
