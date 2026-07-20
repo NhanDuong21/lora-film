@@ -3,6 +3,7 @@ package com.lorafilm.movie.integration.tmdb.mapper;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieWrapperDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbTranslationDto;
 import com.lorafilm.movie.movie.domain.entity.Movie;
+import com.lorafilm.movie.movie.domain.enums.AgeRating;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -16,6 +17,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Mapper(componentModel = "spring",
+        imports = {MovieStatus.class, AgeRating.class, UUID.class},
         unmappedTargetPolicy = ReportingPolicy.IGNORE,
         nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
 public interface TmdbMovieMapper {
@@ -23,14 +25,14 @@ public interface TmdbMovieMapper {
     @Mapping(target = "id", ignore = true) // Database auto-generated ID
     @Mapping(target = "tmdbId", source = "wrapper.tmdbId")
     @Mapping(target = "tmdbLastUpdated", source = "wrapper.lastUpdated")
-    @Mapping(target = "publicId", expression = "java(generatePublicId())")
+    @Mapping(target = "publicId", expression = "java(UUID.randomUUID().toString())")
     @Mapping(target = "title", expression = "java(extractTitle(wrapper))")
     @Mapping(target = "originalTitle", source = "wrapper.movie.originalTitle")
     @Mapping(target = "durationMinutes", expression = "java(wrapper.getMovie() != null && wrapper.getMovie().getRuntimeMinutes() != null && wrapper.getMovie().getRuntimeMinutes() > 0 ? wrapper.getMovie().getRuntimeMinutes() : 1)")
     @Mapping(target = "synopsis", expression = "java(extractOverview(wrapper))")
     @Mapping(target = "country", expression = "java(extractCountry(wrapper))")
-    @Mapping(target = "status", expression = "java(getDefaultStatus())")
-    @Mapping(target = "ageRating", expression = "java(wrapper.getMovie() != null && Boolean.TRUE.equals(wrapper.getMovie().getAdult()) ? com.lorafilm.movie.movie.domain.enums.AgeRating.T18 : com.lorafilm.movie.movie.domain.enums.AgeRating.P)")
+    @Mapping(target = "status", expression = "java(MovieStatus.DRAFT)")
+    @Mapping(target = "ageRating", expression = "java(wrapper.getMovie() != null && Boolean.TRUE.equals(wrapper.getMovie().getAdult()) ? AgeRating.T18 : AgeRating.P)")
     @Mapping(target = "releaseDate", expression = "java(extractReleaseDate(wrapper))")
     @Mapping(target = "slug", expression = "java(generateMovieSlug(extractTitle(wrapper), wrapper.getTmdbId()))")
     @Mapping(target = "activeSlug", expression = "java(generateMovieSlug(extractTitle(wrapper), wrapper.getTmdbId()))")
@@ -121,8 +123,8 @@ public interface TmdbMovieMapper {
     @Named("extractOverview")
     default String extractOverview(TmdbMovieWrapperDto wrapper) {
         if (wrapper == null) return null;
-        
-        // 1. Prioritize Vietnamese Overview
+
+        // 1. Prioritize Vietnamese Overview from translations
         if (wrapper.getTranslations() != null) {
             for (TmdbTranslationDto t : wrapper.getTranslations()) {
                 if (t != null && t.getOverview() != null && !t.getOverview().trim().isEmpty()) {
@@ -135,17 +137,20 @@ public interface TmdbMovieMapper {
                     }
                 }
             }
-            // 2. Fallback to any non-empty overview in translations (e.g., en-US)
+        }
+
+        // 2. Fallback to main movie overview
+        if (wrapper.getMovie() != null && wrapper.getMovie().getOverview() != null && !wrapper.getMovie().getOverview().trim().isEmpty()) {
+            return wrapper.getMovie().getOverview().trim();
+        }
+        
+        // 3. Fallback to any non-empty overview in translations (e.g., English / Original)
+        if (wrapper.getTranslations() != null) {
             for (TmdbTranslationDto t : wrapper.getTranslations()) {
                 if (t != null && t.getOverview() != null && !t.getOverview().trim().isEmpty()) {
                     return t.getOverview().trim();
                 }
             }
-        }
-        
-        // 3. Fallback to wrapper.getMovie().getOverview()
-        if (wrapper.getMovie() != null && wrapper.getMovie().getOverview() != null && !wrapper.getMovie().getOverview().trim().isEmpty()) {
-            return wrapper.getMovie().getOverview().trim();
         }
         
         return null;
@@ -155,7 +160,7 @@ public interface TmdbMovieMapper {
     default String extractTitle(TmdbMovieWrapperDto wrapper) {
         if (wrapper == null) return "Unknown Title";
         
-        // 1. Prioritize Vietnamese Title
+        // 1. Prioritize Vietnamese Title from translations
         if (wrapper.getTranslations() != null) {
             for (TmdbTranslationDto t : wrapper.getTranslations()) {
                 if (t != null && t.getTitle() != null && !t.getTitle().trim().isEmpty()) {
@@ -168,22 +173,25 @@ public interface TmdbMovieMapper {
                     }
                 }
             }
-            // 2. Fallback to any non-empty title in translations
-            for (TmdbTranslationDto t : wrapper.getTranslations()) {
-                if (t != null && t.getTitle() != null && !t.getTitle().trim().isEmpty()) {
-                    return t.getTitle().trim();
-                }
+        }
+
+        // 2. If main movie title differs from originalTitle, Node API fetched a localized Vietnamese title
+        if (wrapper.getMovie() != null && wrapper.getMovie().getTitle() != null && !wrapper.getMovie().getTitle().trim().isEmpty()) {
+            String title = wrapper.getMovie().getTitle().trim();
+            String originalTitle = wrapper.getMovie().getOriginalTitle() != null ? wrapper.getMovie().getOriginalTitle().trim() : "";
+            
+            if (!title.equalsIgnoreCase(originalTitle)) {
+                return title; // Vietnamese localized title
             }
         }
         
-        // 3. Fallback to wrapper.getMovie().getTitle() or originalTitle
-        if (wrapper.getMovie() != null) {
-            if (wrapper.getMovie().getTitle() != null && !wrapper.getMovie().getTitle().trim().isEmpty()) {
-                return wrapper.getMovie().getTitle().trim();
-            }
-            if (wrapper.getMovie().getOriginalTitle() != null && !wrapper.getMovie().getOriginalTitle().trim().isEmpty()) {
-                return wrapper.getMovie().getOriginalTitle().trim();
-            }
+        // 3. Fallback strictly to Original Title (Bản gốc)
+        if (wrapper.getMovie() != null && wrapper.getMovie().getOriginalTitle() != null && !wrapper.getMovie().getOriginalTitle().trim().isEmpty()) {
+            return wrapper.getMovie().getOriginalTitle().trim();
+        }
+
+        if (wrapper.getMovie() != null && wrapper.getMovie().getTitle() != null && !wrapper.getMovie().getTitle().trim().isEmpty()) {
+            return wrapper.getMovie().getTitle().trim();
         }
         
         return "Unknown Title";

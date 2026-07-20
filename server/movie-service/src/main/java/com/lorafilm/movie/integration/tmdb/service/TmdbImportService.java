@@ -174,34 +174,49 @@ public class TmdbImportService {
             
             boolean hasMore = true;
             String currentCursor = syncState.getCursor();
+            int retryCount = 0;
+            int maxRetries = 5;
             
             while (hasMore) {
-                log.info("Fetching TMDB export with cursor {}", currentCursor);
-                String responseBody = tmdbClient.fetchMoviesExport(currentCursor, properties.getBatchSize());
-                TmdbMovieResponse response = objectMapper.readValue(responseBody, TmdbMovieResponse.class);
-                
-                if (response != null && response.getMovies() != null) {
-                    try {
-                        if (self != null) {
-                            self.importMovies(response.getMovies());
-                        } else {
-                            importMovies(response.getMovies());
+                try {
+                    log.info("Fetching TMDB export with cursor {}", currentCursor);
+                    String responseBody = tmdbClient.fetchMoviesExport(currentCursor, properties.getBatchSize());
+                    TmdbMovieResponse response = objectMapper.readValue(responseBody, TmdbMovieResponse.class);
+                    
+                    if (response != null && response.getMovies() != null) {
+                        try {
+                            if (self != null) {
+                                self.importMovies(response.getMovies());
+                            } else {
+                                importMovies(response.getMovies());
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to batch import movies at cursor {}: {}", currentCursor, e.getMessage(), e);
                         }
-                    } catch (Exception e) {
-                        log.error("Failed to batch import movies at cursor {}: {}", currentCursor, e.getMessage(), e);
+                        
+                        currentCursor = response.getNextCursor();
+                        hasMore = Boolean.TRUE.equals(response.getHasMore());
+                        
+                        syncState.setCursor(currentCursor);
+                        syncState.setLastSyncTime(LocalDateTime.now());
+                        syncStateRepository.save(syncState);
+                        
+                        retryCount = 0; // Reset retry count on success
+                        // Sleep to avoid overloading the Node API and TMDB rate limit
+                        Thread.sleep(1000);
+                    } else {
+                        hasMore = false;
                     }
-                    
-                    currentCursor = response.getNextCursor();
-                    hasMore = Boolean.TRUE.equals(response.getHasMore());
-                    
-                    syncState.setCursor(currentCursor);
-                    syncState.setLastSyncTime(LocalDateTime.now());
-                    syncStateRepository.save(syncState);
-                    
-                    // Sleep to avoid overloading the Node API and TMDB rate limit
-                    Thread.sleep(1000);
-                } else {
-                    hasMore = false;
+                } catch (Exception e) {
+                    retryCount++;
+                    if (retryCount <= maxRetries) {
+                        log.warn("Network/Server error fetching export at cursor {} (Attempt {}/{}): {}. Retrying in 5 seconds...", 
+                                currentCursor, retryCount, maxRetries, e.getMessage());
+                        Thread.sleep(5000);
+                    } else {
+                        log.error("Max retries ({}) reached for cursor {}. Stopping bulk sync gracefully.", maxRetries, currentCursor);
+                        throw e;
+                    }
                 }
             }
 
@@ -209,7 +224,7 @@ public class TmdbImportService {
             syncStateRepository.save(syncState);
             log.info("TMDB Bulk Sync completed successfully.");
         } catch (Exception e) {
-            log.error("Error during TMDB Bulk sync process", e);
+            log.error("TMDB Bulk sync process stopped with error: {}", e.getMessage());
             syncState.setStatus("FAILED");
             syncStateRepository.save(syncState);
         }
@@ -306,11 +321,20 @@ public class TmdbImportService {
         }
 
         Movie existingMovie = movieRepository.findByTmdbId(wrapper.getTmdbId()).orElse(null);
+        if (existingMovie == null) {
+            String titleToUse = movieMapper.extractTitle(wrapper);
+            String baseSlug = movieMapper.generateSlug(titleToUse);
+            if (baseSlug != null && !baseSlug.isBlank()) {
+                existingMovie = movieRepository.findBySlugAndDeletedAtIsNull(baseSlug).orElse(null);
+            }
+        }
 
         if (existingMovie == null) {
             // INSERT flow
             log.info("Attempting to insert TMDB ID: {}", wrapper.getTmdbId());
             Movie newMovie = movieMapper.toEntity(wrapper);
+            String baseSlug = movieMapper.generateSlug(newMovie.getTitle());
+            newMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), null));
             newMovie = movieRepository.save(newMovie);
             log.info("INSERTED TMDB Movie ID {}", wrapper.getTmdbId());
             extractAndSaveRelations(newMovie, wrapper);
@@ -318,10 +342,34 @@ public class TmdbImportService {
             // UPDATE flow - Always update movie and refresh all relations
             log.info("Attempting to update TMDB ID: {}", wrapper.getTmdbId());
             movieMapper.updateEntityFromDto(wrapper, existingMovie);
+            String baseSlug = movieMapper.generateSlug(existingMovie.getTitle());
+            existingMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), existingMovie.getId()));
             existingMovie = movieRepository.save(existingMovie);
             log.info("UPDATED TMDB Movie ID {}", wrapper.getTmdbId());
             extractAndSaveRelations(existingMovie, wrapper);
         }
+    }
+
+    private String resolveUniqueMovieSlug(String baseSlug, Long tmdbId, Long existingMovieId) {
+        if (baseSlug == null || baseSlug.isBlank()) {
+            baseSlug = "movie-" + (tmdbId != null ? tmdbId : UUID.randomUUID().toString().substring(0, 8));
+        }
+
+        java.util.Optional<Movie> conflict = movieRepository.findBySlugAndDeletedAtIsNull(baseSlug);
+        if (conflict.isEmpty()) {
+            return baseSlug; // Free slug, no TMDB ID needed
+        }
+
+        Movie found = conflict.get();
+        if (existingMovieId != null && found.getId().equals(existingMovieId)) {
+            return baseSlug; // Belongs to same movie being updated
+        }
+        if (tmdbId != null && tmdbId.equals(found.getTmdbId())) {
+            return baseSlug; // Belongs to same TMDB ID
+        }
+
+        // Slug collision with a DIFFERENT movie -> append TMDB ID
+        return baseSlug + "-" + tmdbId;
     }
 
     public void importMovies(List<TmdbMovieWrapperDto> wrappers) {
@@ -433,24 +481,23 @@ public class TmdbImportService {
                         personMap.put(p.getTmdbPersonId(), p);
                     }
                     
-                    List<Person> newPersons = new ArrayList<>();
                     for (TmdbPersonDto pDto : uniquePersons.values()) {
                         if (!personMap.containsKey(pDto.getTmdbPersonId())) {
-                            Person newPerson = new Person();
-                            newPerson.setPublicId(UUID.randomUUID().toString());
-                            newPerson.setTmdbPersonId(pDto.getTmdbPersonId());
-                            String nameToUse = pDto.getOriginalName() != null ? pDto.getOriginalName() : (pDto.getName() != null ? pDto.getName() : "Unknown");
-                            newPerson.setFullName(safeTruncate(nameToUse, 255));
-                            newPerson.setStageName(safeTruncate(pDto.getName(), 255));
-                            newPerson.setProfileImageUrl(safeTruncate(pDto.getProfileUrl(), 255));
-                            newPerson.setStatus(ActiveStatus.ACTIVE);
-                            newPersons.add(newPerson);
-                        }
-                    }
-                    if (!newPersons.isEmpty()) {
-                        newPersons = personRepository.saveAll(newPersons);
-                        for (Person p : newPersons) {
-                            personMap.put(p.getTmdbPersonId(), p);
+                            try {
+                                Person newPerson = new Person();
+                                newPerson.setPublicId(UUID.randomUUID().toString());
+                                newPerson.setTmdbPersonId(pDto.getTmdbPersonId());
+                                String nameToUse = pDto.getOriginalName() != null ? pDto.getOriginalName() : (pDto.getName() != null ? pDto.getName() : "Unknown");
+                                newPerson.setFullName(safeTruncate(nameToUse, 255));
+                                newPerson.setStageName(safeTruncate(pDto.getName(), 255));
+                                newPerson.setProfileImageUrl(safeTruncate(pDto.getProfileUrl(), 255));
+                                newPerson.setStatus(ActiveStatus.ACTIVE);
+                                Person saved = personRepository.save(newPerson);
+                                personMap.put(saved.getTmdbPersonId(), saved);
+                            } catch (Exception ex) {
+                                personRepository.findByTmdbPersonId(pDto.getTmdbPersonId())
+                                        .ifPresent(p -> personMap.put(p.getTmdbPersonId(), p));
+                            }
                         }
                     }
                 }
@@ -562,25 +609,39 @@ public class TmdbImportService {
         
         // 5. Translations
         movieTranslationRepository.deleteByMovieId(movie.getId());
+        boolean hasVietnameseTranslation = false;
+        java.util.Set<String> processedLocales = new java.util.HashSet<>();
+        
         if (wrapper.getTranslations() != null && !wrapper.getTranslations().isEmpty()) {
             for (com.lorafilm.movie.integration.tmdb.dto.TmdbTranslationDto tDto : wrapper.getTranslations()) {
-                if (tDto.getLanguageCode() == null) continue;
-                MovieTranslation mt = new MovieTranslation();
-                mt.setMovie(movie);
-                mt.setLocale(safeTruncate(tDto.getLanguageCode(), 255));
-                mt.setTitle(safeTruncate(tDto.getTitle() != null && !tDto.getTitle().isBlank() ? tDto.getTitle() : movie.getTitle(), 255));
-                mt.setSynopsis(tDto.getOverview() != null && !tDto.getOverview().isBlank() ? tDto.getOverview() : movie.getSynopsis());
-                movieTranslationRepository.save(mt);
+                String localeStr = (tDto.getLocale() != null && !tDto.getLocale().isBlank()) 
+                        ? tDto.getLocale() 
+                        : tDto.getLanguageCode();
+                if (localeStr == null || localeStr.isBlank()) continue;
+
+                String lang = tDto.getLanguageCode() != null ? tDto.getLanguageCode().toLowerCase() : "";
+                String loc = tDto.getLocale() != null ? tDto.getLocale().toLowerCase() : "";
+                if (lang.contains("vi") || loc.contains("vi")) {
+                    hasVietnameseTranslation = true;
+                }
+
+                if (processedLocales.add(localeStr.toLowerCase())) {
+                    MovieTranslation mt = new MovieTranslation();
+                    mt.setMovie(movie);
+                    mt.setLocale(safeTruncate(localeStr, 255));
+                    mt.setTitle(safeTruncate(tDto.getTitle() != null && !tDto.getTitle().isBlank() ? tDto.getTitle() : movie.getTitle(), 255));
+                    mt.setSynopsis(tDto.getOverview() != null && !tDto.getOverview().isBlank() ? tDto.getOverview() : movie.getSynopsis());
+                    movieTranslationRepository.save(mt);
+                }
             }
-        } else {
-            // Default fallback translation if TMDB provides no translations
+        }
+        
+        // Fallback: If no Vietnamese translation is available in TMDB translations, use original/base movie data as fallback
+        if (!hasVietnameseTranslation && processedLocales.add("vi-vn")) {
             MovieTranslation defaultTranslation = new MovieTranslation();
             defaultTranslation.setMovie(movie);
-            String fallbackLocale = (movie.getCountry() != null && !movie.getCountry().isBlank()) 
-                    ? movie.getCountry() 
-                    : "vi-VN";
-            defaultTranslation.setLocale(safeTruncate(fallbackLocale, 255));
-            defaultTranslation.setTitle(movie.getTitle());
+            defaultTranslation.setLocale("vi-VN");
+            defaultTranslation.setTitle(safeTruncate(movie.getTitle(), 255));
             defaultTranslation.setSynopsis(movie.getSynopsis());
             movieTranslationRepository.save(defaultTranslation);
         }

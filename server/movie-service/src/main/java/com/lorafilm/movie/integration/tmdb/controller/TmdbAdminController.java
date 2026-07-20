@@ -33,7 +33,7 @@ public class TmdbAdminController {
             return ResponseEntity.badRequest().body("Failed to sync movie: " + e.getMessage());
         }
     }
-    
+
     @PostMapping("/sync/bulk/start")
     public ResponseEntity<String> startBulkSync() {
         log.info("[TmdbAdminController] Request to start bulk export sync");
