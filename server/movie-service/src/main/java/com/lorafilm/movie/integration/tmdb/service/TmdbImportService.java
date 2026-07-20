@@ -300,10 +300,9 @@ public class TmdbImportService {
             return;
         }
         
-        // Quality check based on guide
-        if (!"ACCEPT".equalsIgnoreCase(wrapper.getQualityStatus()) && !"HOLD".equalsIgnoreCase(wrapper.getQualityStatus())) {
-            log.info("SKIP TMDB ID {}: Quality Status is {}", wrapper.getTmdbId(), wrapper.getQualityStatus());
-            return;
+        // Import all valid movies received from Node API without skipping
+        if (wrapper.getQualityStatus() != null) {
+            log.info("Processing TMDB ID {}: Quality Status is {}", wrapper.getTmdbId(), wrapper.getQualityStatus());
         }
 
         Movie existingMovie = movieRepository.findByTmdbId(wrapper.getTmdbId()).orElse(null);
@@ -353,6 +352,7 @@ public class TmdbImportService {
         // 1. Genres
         if (wrapper.getGenres() != null && !wrapper.getGenres().isEmpty()) {
             movieGenreRepository.deleteByMovieId(movie.getId());
+            java.util.Set<Long> processedGenreIds = new java.util.HashSet<>();
             for (TmdbGenreDto gDto : wrapper.getGenres()) {
                 if (gDto.getName() == null) continue;
                 String slug = movieMapper.generateSlug(gDto.getName());
@@ -365,10 +365,12 @@ public class TmdbImportService {
                     return genreRepository.save(newGenre);
                 });
                 
-                MovieGenre mg = new MovieGenre();
-                mg.setMovie(movie);
-                mg.setGenre(genre);
-                movieGenreRepository.save(mg);
+                if (processedGenreIds.add(genre.getId())) {
+                    MovieGenre mg = new MovieGenre();
+                    mg.setMovie(movie);
+                    mg.setGenre(genre);
+                    movieGenreRepository.save(mg);
+                }
             }
         }
         

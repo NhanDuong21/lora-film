@@ -31,9 +31,9 @@ public interface TmdbMovieMapper {
     @Mapping(target = "country", expression = "java(extractCountry(wrapper))")
     @Mapping(target = "status", expression = "java(getDefaultStatus())")
     @Mapping(target = "ageRating", expression = "java(wrapper.getMovie() != null && Boolean.TRUE.equals(wrapper.getMovie().getAdult()) ? com.lorafilm.movie.movie.domain.enums.AgeRating.T18 : com.lorafilm.movie.movie.domain.enums.AgeRating.P)")
-    @Mapping(target = "releaseDate", expression = "java(wrapper.getMovie() != null && wrapper.getMovie().getReleaseDate() != null && !wrapper.getMovie().getReleaseDate().isEmpty() ? java.time.LocalDate.parse(wrapper.getMovie().getReleaseDate()) : java.time.LocalDate.now())")
-    @Mapping(target = "slug", expression = "java(generateSlug(extractTitle(wrapper)))")
-    @Mapping(target = "activeSlug", expression = "java(generateSlug(extractTitle(wrapper)))")
+    @Mapping(target = "releaseDate", expression = "java(extractReleaseDate(wrapper))")
+    @Mapping(target = "slug", expression = "java(generateMovieSlug(extractTitle(wrapper), wrapper.getTmdbId()))")
+    @Mapping(target = "activeSlug", expression = "java(generateMovieSlug(extractTitle(wrapper), wrapper.getTmdbId()))")
     Movie toEntity(TmdbMovieWrapperDto wrapper);
 
     @Mapping(target = "id", ignore = true)
@@ -45,7 +45,7 @@ public interface TmdbMovieMapper {
     @Mapping(target = "durationMinutes", expression = "java(wrapper.getMovie() != null && wrapper.getMovie().getRuntimeMinutes() != null && wrapper.getMovie().getRuntimeMinutes() > 0 ? wrapper.getMovie().getRuntimeMinutes() : entity.getDurationMinutes())")
     @Mapping(target = "synopsis", expression = "java(extractOverview(wrapper))")
     @Mapping(target = "country", expression = "java(extractCountry(wrapper) != null ? extractCountry(wrapper) : entity.getCountry())")
-    @Mapping(target = "releaseDate", expression = "java(wrapper.getMovie() != null && wrapper.getMovie().getReleaseDate() != null && !wrapper.getMovie().getReleaseDate().isEmpty() ? java.time.LocalDate.parse(wrapper.getMovie().getReleaseDate()) : entity.getReleaseDate())")
+    @Mapping(target = "releaseDate", expression = "java(wrapper.getMovie() != null && wrapper.getMovie().getReleaseDate() != null && !wrapper.getMovie().getReleaseDate().isEmpty() ? parseReleaseDate(wrapper.getMovie().getReleaseDate(), entity.getReleaseDate()) : entity.getReleaseDate())")
     void updateEntityFromDto(TmdbMovieWrapperDto wrapper, @MappingTarget Movie entity);
 
     @Named("generatePublicId")
@@ -56,6 +56,15 @@ public interface TmdbMovieMapper {
     @Named("getDefaultStatus")
     default MovieStatus getDefaultStatus() {
         return MovieStatus.DRAFT;
+    }
+
+    @Named("generateMovieSlug")
+    default String generateMovieSlug(String title, Long tmdbId) {
+        String baseSlug = generateSlug(title);
+        if (tmdbId != null) {
+            return baseSlug + "-" + tmdbId;
+        }
+        return baseSlug;
     }
 
     @Named("generateSlug")
@@ -74,6 +83,30 @@ public interface TmdbMovieMapper {
             return "movie-" + UUID.randomUUID().toString().substring(0, 8);
         }
         return slug;
+    }
+
+    @Named("extractReleaseDate")
+    default java.time.LocalDate extractReleaseDate(TmdbMovieWrapperDto wrapper) {
+        if (wrapper == null || wrapper.getMovie() == null) return java.time.LocalDate.now();
+        return parseReleaseDate(wrapper.getMovie().getReleaseDate(), java.time.LocalDate.now());
+    }
+
+    @Named("parseReleaseDate")
+    default java.time.LocalDate parseReleaseDate(String releaseDateStr, java.time.LocalDate fallback) {
+        if (releaseDateStr == null || releaseDateStr.isBlank()) {
+            return fallback != null ? fallback : java.time.LocalDate.now();
+        }
+        String trimmed = releaseDateStr.trim();
+        try {
+            return java.time.LocalDate.parse(trimmed);
+        } catch (Exception e) {
+            if (trimmed.matches("^\\d{4}$")) {
+                try {
+                    return java.time.LocalDate.of(Integer.parseInt(trimmed), 1, 1);
+                } catch (Exception ignored) {}
+            }
+            return fallback != null ? fallback : java.time.LocalDate.now();
+        }
     }
 
     @Named("extractCountry")
