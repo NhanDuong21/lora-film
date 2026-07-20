@@ -25,7 +25,6 @@ public class MovieVersion extends BaseAuditableEntity {
     @Column(name = "version_name", nullable = false)
     private String versionName;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "format", nullable = false)
     private MovieFormat format;
 

@@ -34,7 +34,7 @@ public class AdminShowtimeMapper {
             AdminShowtimeResponse.MovieVersionSummary versionSummary = new AdminShowtimeResponse.MovieVersionSummary();
             versionSummary.setPublicId(showtime.getMovieVersion().getPublicId());
             versionSummary.setVersionName(showtime.getMovieVersion().getVersionName());
-            versionSummary.setFormat(showtime.getMovieVersion().getFormat() != null ? showtime.getMovieVersion().getFormat().name() : null);
+            versionSummary.setFormat(showtime.getMovieVersion().getFormat() != null ? showtime.getMovieVersion().getFormat().getValue() : null);
             versionSummary.setAudioLanguage(showtime.getMovieVersion().getAudioLanguage());
             versionSummary.setSubtitleLanguage(showtime.getMovieVersion().getSubtitleLanguage());
             response.setMovieVersion(versionSummary);
@@ -53,7 +53,7 @@ public class AdminShowtimeMapper {
             AdminShowtimeResponse.AuditoriumSummary audSummary = new AdminShowtimeResponse.AuditoriumSummary();
             audSummary.setPublicId(showtime.getAuditorium().getPublicId());
             audSummary.setName(showtime.getAuditorium().getName());
-            audSummary.setScreenType(showtime.getAuditorium().getScreenType() != null ? showtime.getAuditorium().getScreenType().name() : null);
+            audSummary.setScreenType(showtime.getAuditorium().getScreenType() != null ? showtime.getAuditorium().getScreenType().getValue() : null);
             audSummary.setSoundType(showtime.getAuditorium().getSoundType() != null ? showtime.getAuditorium().getSoundType().name() : null);
             audSummary.setCleaningBufferMinutes(showtime.getAuditorium().getCleaningBufferMinutes());
             response.setAuditorium(audSummary);

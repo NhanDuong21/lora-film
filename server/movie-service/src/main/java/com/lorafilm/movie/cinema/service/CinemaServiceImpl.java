@@ -337,7 +337,7 @@ public class CinemaServiceImpl implements CinemaService {
             CinemaDetailDto.AuditoriumDto dto = new CinemaDetailDto.AuditoriumDto();
             dto.setPublicId(a.getPublicId());
             dto.setName(a.getName());
-            dto.setScreenType(a.getScreenType() != null ? a.getScreenType().name() : null);
+            dto.setScreenType(a.getScreenType() != null ? a.getScreenType().getValue() : null);
             dto.setSoundType(a.getSoundType() != null ? a.getSoundType().name() : null);
             dto.setCapacity(a.getCapacity());
             dto.setStatus(a.getStatus() != null ? a.getStatus().name() : null);

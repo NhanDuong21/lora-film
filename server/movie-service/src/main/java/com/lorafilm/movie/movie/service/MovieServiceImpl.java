@@ -338,7 +338,7 @@ public class MovieServiceImpl implements MovieService {
             MovieDetailDto.MovieVersionDto d = new MovieDetailDto.MovieVersionDto();
             d.setPublicId(v.getPublicId());
             d.setVersionName(v.getVersionName());
-            d.setFormat(v.getFormat() != null ? v.getFormat().name() : null);
+            d.setFormat(v.getFormat() != null ? v.getFormat().getValue() : null);
             d.setAudioLanguage(v.getAudioLanguage());
             d.setSubtitleLanguage(v.getSubtitleLanguage());
             d.setDubLanguage(v.getDubLanguage());

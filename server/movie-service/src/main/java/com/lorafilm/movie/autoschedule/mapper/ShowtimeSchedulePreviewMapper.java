@@ -61,7 +61,7 @@ public class ShowtimeSchedulePreviewMapper {
         response.setMovieSlug(item.getMovie() != null ? item.getMovie().getSlug() : null);
         response.setMovieVersionPublicId(item.getMovieVersion() != null ? item.getMovieVersion().getPublicId() : null);
         response.setVersionName(item.getMovieVersion() != null ? item.getMovieVersion().getVersionName() : null);
-        response.setFormat(item.getMovieVersion() != null && item.getMovieVersion().getFormat() != null ? item.getMovieVersion().getFormat().name() : null);
+        response.setFormat(item.getMovieVersion() != null && item.getMovieVersion().getFormat() != null ? item.getMovieVersion().getFormat().getValue() : null);
         response.setAudioLanguage(item.getMovieVersion() != null ? item.getMovieVersion().getAudioLanguage() : null);
         response.setSubtitleLanguage(item.getMovieVersion() != null ? item.getMovieVersion().getSubtitleLanguage() : null);
         response.setDubLanguage(item.getMovieVersion() != null ? item.getMovieVersion().getDubLanguage() : null);
@@ -69,7 +69,7 @@ public class ShowtimeSchedulePreviewMapper {
         response.setCinemaName(item.getCinema() != null ? item.getCinema().getName() : null);
         response.setAuditoriumPublicId(item.getAuditorium() != null ? item.getAuditorium().getPublicId() : null);
         response.setAuditoriumName(item.getAuditorium() != null ? item.getAuditorium().getName() : null);
-        response.setScreenType(item.getAuditorium() != null && item.getAuditorium().getScreenType() != null ? item.getAuditorium().getScreenType().name() : null);
+        response.setScreenType(item.getAuditorium() != null && item.getAuditorium().getScreenType() != null ? item.getAuditorium().getScreenType().getValue() : null);
         response.setSoundType(item.getAuditorium() != null && item.getAuditorium().getSoundType() != null ? item.getAuditorium().getSoundType().name() : null);
         response.setStartTime(item.getStartTime());
         response.setEndTime(item.getEndTime());
