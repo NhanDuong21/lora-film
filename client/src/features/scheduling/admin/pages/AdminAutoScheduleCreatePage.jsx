@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, MapPin, Film, Settings2, CheckSquare, Calendar, ChevronDown, ChevronRight, AlertCircle, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, MapPin, Settings2, CalendarDays, ChevronRight, AlertCircle } from 'lucide-react';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';
+import SearchableSelect from '@/components/common/SearchableSelect';
 
 const AdminAutoScheduleCreatePage = () => {
   const { triggerToast } = useOutletContext() || {};
@@ -27,11 +28,18 @@ const AdminAutoScheduleCreatePage = () => {
 
   const [expandedMovies, setExpandedMovies] = useState({});
 
-  const handleToggleMovie = (movieId) => {
+  const handleToggleMovie = (movieId, isDisabled) => {
+    if (isDisabled) return;
     const isExpanded = !expandedMovies[movieId];
     setExpandedMovies(prev => ({ ...prev, [movieId]: isExpanded }));
     toggleMovieExpansion(movieId, isExpanded);
   };
+
+  const cinemaOptions = cinemas.map(c => ({
+    value: c.publicId,
+    label: c.name,
+    subtitle: c.address
+  }));
 
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in">
@@ -75,19 +83,16 @@ const AdminAutoScheduleCreatePage = () => {
             </h2>
             
             <div className="space-y-4">
-              <div>
+              <div className="z-20 relative">
                 <label className="block text-xs font-semibold text-zinc-400 mb-1">Cụm rạp *</label>
-                <select
+                <SearchableSelect
+                  options={cinemaOptions}
                   value={selectedCinemaId}
-                  onChange={(e) => setSelectedCinemaId(e.target.value)}
+                  onChange={setSelectedCinemaId}
+                  placeholder="Chọn cụm rạp..."
                   disabled={isLoadingCinemas}
-                  className={`w-full bg-zinc-950 border ${errors.cinemaId ? 'border-red-500' : 'border-zinc-800'} text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-sm transition-colors focus:outline-none`}
-                >
-                  <option value="">Chọn cụm rạp</option>
-                  {cinemas.map(c => (
-                    <option key={c.publicId} value={c.publicId}>{c.name}</option>
-                  ))}
-                </select>
+                  error={errors.cinemaId}
+                />
                 {errors.cinemaId && <p className="text-red-500 text-[10px] mt-1">{errors.cinemaId}</p>}
                 {selectedCinema && (
                   <p className="text-zinc-500 text-[10px] mt-1 flex items-center gap-1">
@@ -121,7 +126,15 @@ const AdminAutoScheduleCreatePage = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Độ chia slot (phút)</label>
+                  <label className="block text-xs font-semibold text-zinc-400 mb-1 flex items-center gap-1">
+                    Khoảng cách thử lịch (phút)
+                    <div className="group relative cursor-help">
+                      <AlertCircle className="w-3 h-3 text-zinc-500" />
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 hidden group-hover:block w-48 p-2 bg-zinc-800 text-[10px] text-zinc-300 rounded shadow-xl z-50 text-center">
+                        Hệ thống sẽ thử các mốc bắt đầu cách nhau khoảng thời gian này (vd: 15 phút).
+                      </div>
+                    </div>
+                  </label>
                   <input
                     type="number"
                     min={5} max={60} step={5}
@@ -132,7 +145,9 @@ const AdminAutoScheduleCreatePage = () => {
                   {errors.slotGranularityMinutes && <p className="text-red-500 text-[10px] mt-1">{errors.slotGranularityMinutes}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Hạn xem trước (phút)</label>
+                  <label className="block text-xs font-semibold text-zinc-400 mb-1">
+                    Bản xem trước hết hạn sau (phút)
+                  </label>
                   <input
                     type="number"
                     min={5} max={120} step={5}
@@ -238,21 +253,36 @@ const AdminAutoScheduleCreatePage = () => {
                   
                   // Count selected versions for this movie
                   const selectedCount = versions.filter(v => selectedMovieVersionIds.includes(v.publicId)).length;
+                  
+                  const isDraft = movie.status === 'DRAFT';
+                  const isBeforeRelease = scheduleTo && movie.releaseDate && scheduleTo < movie.releaseDate;
+                  const isDisabled = isDraft || isBeforeRelease;
+                  
+                  let disableReason = '';
+                  if (isDraft) disableReason = 'DRAFT - CHƯA ĐỦ ĐIỀU KIỆN';
+                  else if (isBeforeRelease) disableReason = 'CHƯA ĐẾN NGÀY CÔNG CHIẾU';
 
                   return (
-                    <div key={movie.publicId} className="border border-zinc-800/70 rounded-xl overflow-hidden bg-zinc-950/50">
+                    <div key={movie.publicId} className={`border border-zinc-800/70 rounded-xl overflow-hidden bg-zinc-950/50 ${isDisabled ? 'opacity-60 grayscale' : ''}`}>
                       
                       {/* Movie Header (Accordion toggle) */}
                       <div 
-                        className={`p-3 md:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer transition-colors hover:bg-zinc-800/30 ${isExpanded ? 'bg-zinc-800/20' : ''}`}
-                        onClick={() => handleToggleMovie(movie.publicId)}
+                        className={`p-3 md:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-zinc-800/30'} ${isExpanded ? 'bg-zinc-800/20' : ''}`}
+                        onClick={() => handleToggleMovie(movie.publicId, isDisabled)}
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className={`w-8 h-8 rounded bg-zinc-800 flex items-center justify-center flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
                             <ChevronRight className="w-4 h-4 text-zinc-400" />
                           </div>
                           <div className="min-w-0">
-                            <h3 className="font-bold text-white text-sm truncate">{movie.title}</h3>
+                            <h3 className="font-bold text-white text-sm truncate flex items-center gap-2">
+                              {movie.title}
+                              {isDisabled && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-black bg-red-500/10 text-red-400 border border-red-500/20 whitespace-nowrap">
+                                  {disableReason}
+                                </span>
+                              )}
+                            </h3>
                             <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
                               <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" /> {movie.releaseDate || 'N/A'}</span>
                               <span>• {movie.durationMinutes} phút</span>

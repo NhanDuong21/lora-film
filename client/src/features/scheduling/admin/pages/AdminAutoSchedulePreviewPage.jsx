@@ -1,4 +1,4 @@
-// React is removed
+import { useState, useMemo } from 'react';
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, XCircle, Clock, AlertTriangle, AlertCircle, Info, RefreshCw } from 'lucide-react';
 import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
@@ -24,11 +24,63 @@ const AdminAutoSchedulePreviewPage = () => {
   };
 
   const {
-    preview, groupedItems,
+    preview, items,
     isLoading, isApplying, isUpdatingSelection,
     selectedItemIds, handleToggleSelection,
     handleApply, fetchPreview
   } = useAutoSchedulePreview(id, { triggerToast, onSuccess: handleSuccess });
+
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterAuditorium, setFilterAuditorium] = useState('');
+  const [filterReason, setFilterReason] = useState('');
+
+  const rejectionReasons = useMemo(() => {
+    if (!items) return {};
+    const reasons = {};
+    items.forEach(item => {
+      if (item.validationStatus !== 'VALID' && item.rejectionReason) {
+        reasons[item.rejectionReason] = (reasons[item.rejectionReason] || 0) + 1;
+      }
+    });
+    return reasons;
+  }, [items]);
+
+  const uniqueAuditoriums = useMemo(() => {
+    if (!items) return [];
+    const auds = new Set();
+    items.forEach(item => auds.add(item.auditoriumName || item.auditoriumPublicId));
+    return Array.from(auds).sort();
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    if (!items) return [];
+    return items.filter(item => {
+      if (filterStatus === 'VALID' && item.validationStatus !== 'VALID') return false;
+      if (filterStatus === 'INVALID' && item.validationStatus === 'VALID') return false;
+      const audKey = item.auditoriumName || item.auditoriumPublicId;
+      if (filterAuditorium && audKey !== filterAuditorium) return false;
+      if (filterReason && item.rejectionReason !== filterReason) return false;
+      return true;
+    });
+  }, [items, filterStatus, filterAuditorium, filterReason]);
+
+  const groupedFilteredItems = useMemo(() => {
+    const groups = {};
+    filteredItems.forEach(item => {
+      const d = new Date(item.startTime);
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (!groups[dateKey]) groups[dateKey] = {};
+      const audKey = item.auditoriumName || item.auditoriumPublicId;
+      if (!groups[dateKey][audKey]) groups[dateKey][audKey] = [];
+      groups[dateKey][audKey].push(item);
+    });
+    Object.keys(groups).forEach(dateKey => {
+      Object.keys(groups[dateKey]).forEach(audKey => {
+        groups[dateKey][audKey].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+      });
+    });
+    return groups;
+  }, [filteredItems]);
 
   if (isLoading) {
     return (
@@ -145,9 +197,64 @@ const AdminAutoSchedulePreviewPage = () => {
           </div>
         </div>
 
+        {/* Breakdown of Rejection Reasons */}
+        {Object.keys(rejectionReasons).length > 0 && (
+          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
+            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500" /> Lý do từ chối (Tổng cộng: {preview.rejectedCandidateCount})
+            </h3>
+            <div className="flex flex-wrap gap-3">
+              {Object.entries(rejectionReasons).map(([reason, count]) => (
+                <div key={reason} className="bg-zinc-950 border border-zinc-800 px-3 py-2 rounded-xl flex items-center gap-2">
+                  <span className="text-red-400 font-black text-sm">{count}</span>
+                  <span className="text-xs text-zinc-300">{reason}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl flex flex-wrap gap-4 items-center">
+          <select 
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
+          >
+            <option value="ALL">Tất cả ứng viên</option>
+            <option value="VALID">Chỉ Hợp lệ</option>
+            <option value="INVALID">Chỉ Bị từ chối</option>
+          </select>
+          
+          <select 
+            value={filterAuditorium}
+            onChange={(e) => setFilterAuditorium(e.target.value)}
+            className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
+          >
+            <option value="">Tất cả Phòng chiếu</option>
+            {uniqueAuditoriums.map(aud => (
+              <option key={aud} value={aud}>{aud}</option>
+            ))}
+          </select>
+
+          {Object.keys(rejectionReasons).length > 0 && (
+            <select 
+              value={filterReason}
+              onChange={(e) => setFilterReason(e.target.value)}
+              className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
+            >
+              <option value="">Tất cả Lý do</option>
+              {Object.keys(rejectionReasons).map(reason => (
+                <option key={reason} value={reason}>{reason}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Timeline View */}
         {/* Timeline View */}
         <div className="space-y-10">
-          {Object.keys(groupedItems).sort().map(dateKey => (
+          {Object.keys(groupedFilteredItems).sort().map(dateKey => (
             <div key={dateKey} className="space-y-4">
               <h2 className="text-lg font-black text-white flex items-center gap-3 border-b border-zinc-800 pb-2">
                 <Calendar className="w-5 h-5 text-brand-orange" />
@@ -155,8 +262,8 @@ const AdminAutoSchedulePreviewPage = () => {
               </h2>
 
               <div className="space-y-6">
-                {Object.keys(groupedItems[dateKey]).sort().map(audKey => {
-                  const audItems = groupedItems[dateKey][audKey];
+                {Object.keys(groupedFilteredItems[dateKey]).sort().map(audKey => {
+                  const audItems = groupedFilteredItems[dateKey][audKey];
                   
                   return (
                     <div key={audKey} className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden">
@@ -165,74 +272,110 @@ const AdminAutoSchedulePreviewPage = () => {
                         <span className="text-xs text-zinc-500">{audItems.length} suất chiếu</span>
                       </div>
                       
-                      <div className="p-5 overflow-x-auto custom-scrollbar">
-                        <div className="flex gap-4 min-w-max pb-2">
-                          {audItems.map(item => {
-                            const isValid = item.validationStatus === 'VALID';
-                            const isSelected = selectedItemIds.has(item.itemPublicId);
-                            const isItemApplied = item.applyStatus === 'APPLIED';
-                            
-                            return (
-                              <div 
-                                key={item.itemPublicId}
-                                className={`relative w-[280px] flex-shrink-0 rounded-xl border p-4 transition-all ${
-                                  isItemApplied ? 'border-green-500/30 bg-green-500/5' :
-                                  !isValid ? 'border-red-500/30 bg-red-500/5 opacity-70' :
-                                  isSelected ? 'border-brand-orange bg-brand-orange/10 shadow-[0_0_15px_rgba(255,107,0,0.15)]' : 
-                                  'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
-                                }`}
-                              >
-                                {/* Checkbox for valid/unapplied items */}
-                                {isValid && !isItemApplied && canApply && (
-                                  <div className="absolute top-4 right-4 z-10">
-                                    <input 
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => handleToggleSelection(item.itemPublicId, isSelected)}
-                                      disabled={isUpdatingSelection || isApplying}
-                                      className="w-5 h-5 rounded border-zinc-700 text-brand-orange focus:ring-brand-orange bg-zinc-900 cursor-pointer disabled:cursor-not-allowed"
-                                    />
-                                  </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse whitespace-nowrap">
+                          <thead>
+                            <tr className="bg-zinc-950/50 border-b border-zinc-800/80 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                              <th className="py-3 px-5 w-10 text-center">
+                                {canApply && audItems.some(i => i.validationStatus === 'VALID' && i.applyStatus !== 'APPLIED') && (
+                                  <input 
+                                    type="checkbox"
+                                    checked={audItems.every(i => (i.validationStatus !== 'VALID' || i.applyStatus === 'APPLIED') || selectedItemIds.has(i.itemPublicId))}
+                                    onChange={(e) => {
+                                      const isChecked = e.target.checked;
+                                      audItems.forEach(item => {
+                                        if (item.validationStatus === 'VALID' && item.applyStatus !== 'APPLIED' && selectedItemIds.has(item.itemPublicId) !== isChecked) {
+                                          handleToggleSelection(item.itemPublicId, !isChecked);
+                                        }
+                                      });
+                                    }}
+                                    className="w-4 h-4 rounded border-zinc-700 text-brand-orange focus:ring-brand-orange bg-zinc-900 cursor-pointer"
+                                  />
                                 )}
-
-                                {/* Status Badge */}
-                                <div className="absolute top-4 right-4">
-                                  {isItemApplied && <CheckCircle2 className="w-5 h-5 text-green-500" />}
-                                  {!isValid && <XCircle className="w-5 h-5 text-red-500" title={item.rejectionReason} />}
-                                </div>
-
-                                <div className="pr-8">
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <span className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-xs font-bold tracking-wider">
-                                      {formatTime(item.startTime)} - {formatTime(item.endTime)}
-                                    </span>
-                                  </div>
-
-                                  <h4 className="font-bold text-white text-sm line-clamp-1 mb-1" title={item.movieTitle}>
-                                    {item.movieTitle}
-                                  </h4>
-                                  
-                                  <p className="text-xs text-zinc-400 mb-3 line-clamp-1">
-                                    {item.versionName} • {item.format} • {item.audioLanguage}
-                                  </p>
-
-                                  {!isValid && (
-                                    <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-[10px] text-red-400 flex items-start gap-1.5">
-                                      <Info className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                                      <span>{item.rejectionReason || 'Xung đột lịch chiếu'}</span>
+                              </th>
+                              <th className="py-3 px-5">THỜI GIAN</th>
+                              <th className="py-3 px-5">PHIM & ĐỊNH DẠNG</th>
+                              <th className="py-3 px-5">TRẠNG THÁI</th>
+                              <th className="py-3 px-5">CHI TIẾT</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {audItems.map(item => {
+                              const isValid = item.validationStatus === 'VALID';
+                              const isSelected = selectedItemIds.has(item.itemPublicId);
+                              const isItemApplied = item.applyStatus === 'APPLIED';
+                              
+                              return (
+                                <tr 
+                                  key={item.itemPublicId}
+                                  className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${
+                                    isItemApplied ? 'bg-green-500/5' :
+                                    !isValid ? 'bg-red-500/5' :
+                                    isSelected ? 'bg-brand-orange/5' : 'bg-zinc-950'
+                                  }`}
+                                >
+                                  <td className="py-3 px-5 text-center">
+                                    {isValid && !isItemApplied && canApply && (
+                                      <input 
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => handleToggleSelection(item.itemPublicId, isSelected)}
+                                        disabled={isUpdatingSelection || isApplying}
+                                        className="w-4 h-4 rounded border-zinc-700 text-brand-orange focus:ring-brand-orange bg-zinc-900 cursor-pointer disabled:cursor-not-allowed"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-zinc-200">{formatTime(item.startTime)}</span>
+                                      <span className="text-zinc-500">-</span>
+                                      <span className="font-bold text-zinc-400">{formatTime(item.endTime)}</span>
                                     </div>
-                                  )}
-
-                                  {isItemApplied && (
-                                    <div className="mt-3 text-[10px] text-green-400 font-bold flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3" /> Đã tạo thành công
+                                  </td>
+                                  <td className="py-3 px-5">
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-sm text-white">{item.movieTitle}</span>
+                                      <span className="text-xs text-zinc-400">{item.versionName} • {item.format} • {item.audioLanguage}</span>
                                     </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                                  </td>
+                                  <td className="py-3 px-5">
+                                    {isItemApplied ? (
+                                      <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-max">
+                                        <CheckCircle2 className="w-3 h-3" /> APPLIED
+                                      </span>
+                                    ) : isValid ? (
+                                      <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
+                                        HỢP LỆ
+                                      </span>
+                                    ) : (
+                                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
+                                        TỪ CHỐI
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-5 whitespace-normal min-w-[200px]">
+                                    {!isValid && (
+                                      <div className="text-xs text-red-400 flex items-start gap-1">
+                                        <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                        <span>{item.rejectionReason}</span>
+                                      </div>
+                                    )}
+                                    {isItemApplied && (
+                                      <div className="text-xs text-green-400">
+                                        Đã được tạo thành lịch chiếu chính thức.
+                                      </div>
+                                    )}
+                                    {isValid && !isItemApplied && (
+                                      <div className="text-xs text-zinc-500">
+                                        Đủ điều kiện. {isSelected ? 'Sẽ được áp dụng.' : 'Chưa được chọn.'}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   );
@@ -241,9 +384,9 @@ const AdminAutoSchedulePreviewPage = () => {
             </div>
           ))}
 
-          {Object.keys(groupedItems).length === 0 && (
+          {Object.keys(groupedFilteredItems).length === 0 && (
             <div className="text-center py-20 text-zinc-500">
-              <p>Không có ứng viên suất chiếu nào được tạo.</p>
+              <p>Không có ứng viên suất chiếu nào phù hợp với bộ lọc.</p>
             </div>
           )}
         </div>

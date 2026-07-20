@@ -2,6 +2,7 @@
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Calendar, Clock, Loader2, MapPin, Film, Info } from 'lucide-react';
 import useShowtimeForm from '@/features/scheduling/admin/hooks/useShowtimeForm';
+import SearchableSelect from '@/components/common/SearchableSelect';
 
 const AdminShowtimeCreatePage = () => {
   const { triggerToast } = useOutletContext() || {};
@@ -29,6 +30,40 @@ const AdminShowtimeCreatePage = () => {
     if (!dateObj) return '—';
     return dateObj.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
   };
+
+  const cinemaOptions = cinemas.map(c => ({
+    value: c.publicId,
+    label: c.name,
+    subtitle: c.address
+  }));
+
+  const auditoriumOptions = auditoriums.map(a => ({
+    value: a.publicId,
+    label: a.name,
+    subtitle: `${a.screenType} - ${a.soundType} • ${a.capacity} ghế`
+  }));
+
+  const movieOptions = movies.map(m => {
+    const isDraft = m.status === 'DRAFT';
+    return {
+      value: m.publicId,
+      label: m.title,
+      subtitle: isDraft ? 'DRAFT - Chưa đủ điều kiện' : `${m.durationMinutes} phút • ${m.releaseDate || 'N/A'}`,
+      badge: m.status?.replace('_', ' '),
+      badgeColor: isDraft ? 'text-red-400 border-red-500/20 bg-red-500/10' : 'text-blue-400 border-blue-500/20 bg-blue-500/10',
+      disabled: isDraft
+    };
+  });
+
+  const versionOptions = versions.map(v => {
+    const isInactive = v.status !== 'ACTIVE';
+    return {
+      value: v.publicId,
+      label: v.versionName,
+      subtitle: isInactive ? 'NGỪNG HOẠT ĐỘNG' : `${v.format} - ${v.audioLanguage}`,
+      disabled: isInactive
+    };
+  });
 
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in">
@@ -68,35 +103,29 @@ const AdminShowtimeCreatePage = () => {
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="z-20 relative">
                 <label className="block text-xs font-semibold text-zinc-400 mb-1">Cụm rạp *</label>
-                <select
+                <SearchableSelect
+                  options={cinemaOptions}
                   value={selectedCinemaId}
-                  onChange={(e) => setSelectedCinemaId(e.target.value)}
+                  onChange={setSelectedCinemaId}
+                  placeholder="Chọn cụm rạp..."
                   disabled={isLoadingCinemas}
-                  className={`w-full bg-zinc-950 border ${errors.cinemaId ? 'border-red-500' : 'border-zinc-800'} text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-sm transition-colors focus:outline-none`}
-                >
-                  <option value="">Chọn cụm rạp</option>
-                  {cinemas.map(c => (
-                    <option key={c.publicId} value={c.publicId}>{c.name}</option>
-                  ))}
-                </select>
+                  error={errors.cinemaId}
+                />
                 {errors.cinemaId && <p className="text-red-500 text-xs mt-1">{errors.cinemaId}</p>}
               </div>
 
-              <div>
+              <div className="z-20 relative">
                 <label className="block text-xs font-semibold text-zinc-400 mb-1">Phòng chiếu *</label>
-                <select
+                <SearchableSelect
+                  options={auditoriumOptions}
                   value={selectedAuditoriumId}
-                  onChange={(e) => setSelectedAuditoriumId(e.target.value)}
+                  onChange={setSelectedAuditoriumId}
+                  placeholder={!selectedCinemaId ? 'Vui lòng chọn cụm rạp trước' : 'Chọn phòng chiếu...'}
                   disabled={!selectedCinemaId || auditoriums.length === 0}
-                  className={`w-full bg-zinc-950 border ${errors.auditoriumId ? 'border-red-500' : 'border-zinc-800'} text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-sm transition-colors focus:outline-none`}
-                >
-                  <option value="">Chọn phòng chiếu</option>
-                  {auditoriums.map(a => (
-                    <option key={a.publicId} value={a.publicId}>{a.name} ({a.screenType} - {a.soundType})</option>
-                  ))}
-                </select>
+                  error={errors.auditoriumId}
+                />
                 {errors.auditoriumId && <p className="text-red-500 text-xs mt-1">{errors.auditoriumId}</p>}
                 {selectedCinemaId && auditoriums.length === 0 && (
                   <p className="text-zinc-500 text-xs mt-1">Không có phòng chiếu active.</p>
@@ -112,35 +141,29 @@ const AdminShowtimeCreatePage = () => {
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="z-10 relative">
                 <label className="block text-xs font-semibold text-zinc-400 mb-1">Phim *</label>
-                <select
+                <SearchableSelect
+                  options={movieOptions}
                   value={selectedMovieId}
-                  onChange={(e) => setSelectedMovieId(e.target.value)}
+                  onChange={setSelectedMovieId}
+                  placeholder="Chọn phim..."
                   disabled={isLoadingMovies}
-                  className={`w-full bg-zinc-950 border ${errors.movieId ? 'border-red-500' : 'border-zinc-800'} text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-sm transition-colors focus:outline-none`}
-                >
-                  <option value="">Chọn phim</option>
-                  {movies.map(m => (
-                    <option key={m.publicId} value={m.publicId}>{m.title}</option>
-                  ))}
-                </select>
+                  error={errors.movieId}
+                />
                 {errors.movieId && <p className="text-red-500 text-xs mt-1">{errors.movieId}</p>}
               </div>
 
-              <div>
+              <div className="z-10 relative">
                 <label className="block text-xs font-semibold text-zinc-400 mb-1">Định dạng *</label>
-                <select
+                <SearchableSelect
+                  options={versionOptions}
                   value={selectedVersionId}
-                  onChange={(e) => setSelectedVersionId(e.target.value)}
+                  onChange={setSelectedVersionId}
+                  placeholder={!selectedMovieId ? 'Vui lòng chọn phim trước' : 'Chọn định dạng...'}
                   disabled={!selectedMovieId || versions.length === 0}
-                  className={`w-full bg-zinc-950 border ${errors.versionId ? 'border-red-500' : 'border-zinc-800'} text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-sm transition-colors focus:outline-none`}
-                >
-                  <option value="">Chọn định dạng</option>
-                  {versions.map(v => (
-                    <option key={v.publicId} value={v.publicId}>{v.versionName} ({v.format} - {v.audioLanguage})</option>
-                  ))}
-                </select>
+                  error={errors.versionId}
+                />
                 {errors.versionId && <p className="text-red-500 text-xs mt-1">{errors.versionId}</p>}
               </div>
             </div>

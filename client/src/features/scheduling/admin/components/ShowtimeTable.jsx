@@ -3,10 +3,14 @@ import React from 'react';
 // eslint-disable-next-line no-unused-vars
 import { Search, MapPin, Calendar, Clock, Plus, Zap, AlertCircle } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
+import SearchableSelect from '@/components/common/SearchableSelect';
 
 export default function ShowtimeTable({
   showtimes,
+  cinemas = [],
+  movies = [],
   isLoading,
+  isOptionsLoading,
   cinemaSlug,
   setCinemaSlug,
   movieSlug,
@@ -53,6 +57,19 @@ export default function ShowtimeTable({
     return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const cinemaOptions = cinemas.map(c => ({
+    value: c.slug,
+    label: c.name,
+    subtitle: c.address
+  }));
+
+  const movieOptions = movies.map(m => ({
+    value: m.slug,
+    label: m.title,
+    subtitle: `${m.durationMinutes} phút • ${m.releaseDate || 'N/A'}`,
+    badge: m.status?.replace('_', ' ')
+  }));
+
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in">
       {/* Title Header */}
@@ -65,24 +82,24 @@ export default function ShowtimeTable({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl backdrop-blur-md">
         
         {/* Cinema Filter */}
-        <div>
-          <input
-            type="text"
+        <div className="z-20">
+          <SearchableSelect
+            options={cinemaOptions}
             value={cinemaSlug}
-            onChange={(e) => { setCinemaSlug(e.target.value); setCurrentPage(0); }}
-            placeholder="Mã rạp (vd: lorafilm-quan-1)"
-            className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-xs transition-colors focus:outline-none"
+            onChange={(val) => { setCinemaSlug(val); setCurrentPage(0); }}
+            placeholder="Tất cả cụm rạp..."
+            disabled={isOptionsLoading}
           />
         </div>
 
         {/* Movie Filter */}
-        <div>
-          <input
-            type="text"
+        <div className="z-10">
+          <SearchableSelect
+            options={movieOptions}
             value={movieSlug}
-            onChange={(e) => { setMovieSlug(e.target.value); setCurrentPage(0); }}
-            placeholder="Mã phim (vd: dune-part-two)"
-            className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-xs transition-colors focus:outline-none"
+            onChange={(val) => { setMovieSlug(val); setCurrentPage(0); }}
+            placeholder="Tất cả phim..."
+            disabled={isOptionsLoading}
           />
         </div>
 

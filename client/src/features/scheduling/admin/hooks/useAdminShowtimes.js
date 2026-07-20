@@ -1,10 +1,15 @@
 // eslint-disable-next-line no-unused-vars
 import { useState, useEffect, useCallback } from 'react';
 import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
+import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
+import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 
 export default function useAdminShowtimes({ triggerToast } = {}) {
   const [showtimes, setShowtimes] = useState([]);
+  const [cinemas, setCinemas] = useState([]);
+  const [movies, setMovies] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOptionsLoading, setIsOptionsLoading] = useState(false);
   
   // Filters
   const [cinemaSlug, setCinemaSlug] = useState('');
@@ -20,6 +25,26 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+
+  // Fetch initial options
+  useEffect(() => {
+    const fetchOptions = async () => {
+      setIsOptionsLoading(true);
+      try {
+        const [cinemaRes, movieRes] = await Promise.all([
+          adminCinemaService.getCinemas({ size: 100, status: 'ACTIVE' }),
+          adminMovieService.getMovies({ size: 100 })
+        ]);
+        if (cinemaRes?.success) setCinemas(cinemaRes.data?.data || []);
+        if (movieRes?.success) setMovies(movieRes.data?.data || []);
+      } catch (err) {
+        // ignore
+      } finally {
+        setIsOptionsLoading(false);
+      }
+    };
+    fetchOptions();
+  }, []);
 
   const fetchShowtimes = useCallback(async () => {
     setIsLoading(true);
@@ -57,7 +82,10 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
 
   return {
     showtimes,
+    cinemas,
+    movies,
     isLoading,
+    isOptionsLoading,
     cinemaSlug, setCinemaSlug,
     movieSlug, setMovieSlug,
     date, setDate,

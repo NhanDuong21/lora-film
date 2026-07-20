@@ -9,7 +9,10 @@ const AdminShowtimePage = () => {
 
   const {
     showtimes,
+    cinemas,
+    movies,
     isLoading,
+    isOptionsLoading,
     cinemaSlug,
     setCinemaSlug,
     movieSlug,
@@ -45,7 +48,10 @@ const AdminShowtimePage = () => {
   return (
     <ShowtimeTable
       showtimes={showtimes}
+      cinemas={cinemas}
+      movies={movies}
       isLoading={isLoading}
+      isOptionsLoading={isOptionsLoading}
       cinemaSlug={cinemaSlug}
       setCinemaSlug={setCinemaSlug}
       movieSlug={movieSlug}
