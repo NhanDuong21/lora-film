@@ -312,7 +312,7 @@ public class MovieServiceImpl implements MovieService {
         detailDto.setDistributors(distributors);
         detailDto.setStudios(studios);
 
-        List<MovieVersion> versions = movieVersionRepository.findByMovieIdAndStatusAndDeletedAtIsNull(movie.getId(), ActiveStatus.ACTIVE);
+        List<MovieVersion> versions = movieVersionRepository.findByMovieIdAndDeletedAtIsNull(movie.getId());
         List<MovieDetailDto.MovieVersionDto> versionDtos = versions.stream().map(v -> {
             MovieDetailDto.MovieVersionDto d = new MovieDetailDto.MovieVersionDto();
             d.setPublicId(v.getPublicId());
@@ -321,11 +321,12 @@ public class MovieServiceImpl implements MovieService {
             d.setAudioLanguage(v.getAudioLanguage());
             d.setSubtitleLanguage(v.getSubtitleLanguage());
             d.setDubLanguage(v.getDubLanguage());
+            d.setStatus(v.getStatus() != null ? v.getStatus().name() : null);
             return d;
         }).collect(Collectors.toList());
         detailDto.setVersions(versionDtos);
 
-        List<MovieMedia> media = movieMediaRepository.findByMovieIdAndStatusAndDeletedAtIsNull(movie.getId(), ActiveStatus.ACTIVE);
+        List<MovieMedia> media = movieMediaRepository.findByMovieIdAndDeletedAtIsNull(movie.getId());
         List<MovieDetailDto.MovieMediaDto> mediaDtos = media.stream().map(m -> {
             MovieDetailDto.MovieMediaDto d = new MovieDetailDto.MovieMediaDto();
             d.setPublicId(m.getPublicId());
@@ -333,6 +334,8 @@ public class MovieServiceImpl implements MovieService {
             d.setUrl(m.getUrl());
             d.setTitle(m.getTitle());
             d.setIsPrimary(m.getIsPrimary());
+            d.setDisplayOrder(m.getDisplayOrder());
+            d.setStatus(m.getStatus() != null ? m.getStatus().name() : null);
             return d;
         }).collect(Collectors.toList());
         detailDto.setMedia(mediaDtos);
