@@ -6,6 +6,7 @@ import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.movie.service.MovieServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -14,6 +15,7 @@ import org.mockito.MockitoAnnotations;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@DisplayName("Rule 1: Movie Publish Validation Business Rules")
 class MoviePublishValidationTest {
 
     @Mock
@@ -31,6 +33,7 @@ class MoviePublishValidationTest {
     }
 
     @Test
+    @DisplayName("Should publish successfully when active version and primary poster exist")
     void validatePublishConditions_Success() {
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(true);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(true);
@@ -42,6 +45,7 @@ class MoviePublishValidationTest {
     }
 
     @Test
+    @DisplayName("Should throw exception when active version is missing during publish validation")
     void validatePublishConditions_MissingVersion() {
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(false);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(true);
@@ -56,6 +60,7 @@ class MoviePublishValidationTest {
     }
 
     @Test
+    @DisplayName("Should throw exception when primary poster is missing during publish validation")
     void validatePublishConditions_MissingPoster() {
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(true);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(false);
@@ -70,6 +75,7 @@ class MoviePublishValidationTest {
     }
 
     @Test
+    @DisplayName("Should throw exception when both active version and primary poster are missing")
     void validatePublishConditions_MissingBoth() {
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(false);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(false);
@@ -83,3 +89,4 @@ class MoviePublishValidationTest {
         verify(movieMediaRepository, times(1)).existsPrimaryPoster(1L);
     }
 }
+
