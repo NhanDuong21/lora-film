@@ -1,7 +1,7 @@
 // eslint-disable-next-line no-unused-vars
 import React from 'react';
 // eslint-disable-next-line no-unused-vars
-import { Search, MapPin, Calendar, Clock, Plus, Zap, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, MapPin, Calendar, Clock, Plus, Zap, AlertCircle, RefreshCw, X, Play, Trash2 } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import SearchableSelect from '@/components/common/SearchableSelect';
 
@@ -24,9 +24,17 @@ export default function ShowtimeTable({
   pageSize,
   totalPages,
   totalElements,
+  batchId,
+  source,
+  setBatchId,
+  setSource,
   onOpenCreate,
   onOpenAutoSchedule,
-  onViewDetail
+  onViewDetail,
+  onClearBatch,
+  onTransitionBatch,
+  onDeleteBatch,
+  isBatchActionLoading
 }) {
 
   const renderStatusBadge = (status) => {
@@ -93,6 +101,48 @@ export default function ShowtimeTable({
         <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">QUẢN LÝ SUẤT CHIẾU</h1>
         <p className="text-zinc-500 text-sm mt-1">Theo dõi, sắp xếp và vận hành lịch chiếu</p>
       </div>
+
+      {/* Batch Context Banner */}
+      {batchId && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="bg-blue-500 text-zinc-950 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+                {source || 'AUTO'} BATCH
+              </span>
+              <h3 className="text-blue-400 font-bold">Đang xem các suất chiếu thuộc đợt tự động</h3>
+            </div>
+            <p className="text-xs text-blue-300/70 mt-1 flex items-center gap-2">
+              ID: <code className="bg-zinc-950 px-1.5 py-0.5 rounded text-blue-400 border border-blue-500/20">{batchId}</code>
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onTransitionBatch('OPEN_FOR_BOOKING')}
+              disabled={isBatchActionLoading}
+              className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <Play className="w-3.5 h-3.5" /> Mở bán toàn bộ
+            </button>
+            <button
+              onClick={onDeleteBatch}
+              disabled={isBatchActionLoading}
+              className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Hủy đợt
+            </button>
+            <button
+              onClick={onClearBatch}
+              disabled={isBatchActionLoading}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
+              title="Thoát chế độ xem đợt"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter and search bar */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl backdrop-blur-md">

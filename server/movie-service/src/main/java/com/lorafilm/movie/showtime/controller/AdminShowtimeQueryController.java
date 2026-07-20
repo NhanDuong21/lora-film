@@ -2,6 +2,7 @@ package com.lorafilm.movie.showtime.controller;
 
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.service.AdminShowtimeQueryService;
@@ -37,11 +38,13 @@ public class AdminShowtimeQueryController {
             @RequestParam(required = false) String movieSlug,
             @RequestParam(required = false) ShowtimeStatus status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) ShowtimeSource source,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
         
         PageResponse<AdminShowtimeResponse> response = queryService.getAdminShowtimes(
-                cinemaSlug, movieSlug, status, date, page, size);
+                cinemaSlug, movieSlug, status, date, batchId, source, page, size);
                 
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

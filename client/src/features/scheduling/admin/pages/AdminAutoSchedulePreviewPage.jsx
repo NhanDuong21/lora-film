@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, XCircle, Clock, AlertTriangle, AlertCircle, Info, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, XCircle, Clock, AlertTriangle, AlertCircle, Info, RefreshCw, Wand2, List, LayoutTemplate } from 'lucide-react';
 import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
+import AutoScheduleTimeline from '@/features/scheduling/admin/components/AutoScheduleTimeline';
 
 const formatTime = (isoString) => {
   if (!isoString) return '';
@@ -44,10 +45,9 @@ const AdminAutoSchedulePreviewPage = () => {
   const navigate = useNavigate();
 
   const handleSuccess = () => {
-    navigate('/admin/showtimes', {
+    navigate(`/admin/showtimes?source=AUTO&batchId=${id}&status=DRAFT`, {
       state: {
-        status: 'DRAFT',
-        message: `Đã tạo ${selectedItemIds.size} suất chiếu ở trạng thái DRAFT.`
+        message: `Đã tạo ${selectedItemIds.size} suất chiếu từ bản xem trước.`
       }
     });
   };
@@ -55,7 +55,7 @@ const AdminAutoSchedulePreviewPage = () => {
   const {
     preview, items,
     isLoading, isApplying, isUpdatingSelection,
-    selectedItemIds, handleToggleSelection,
+    selectedItemIds, handleToggleSelection, handleBulkSelection,
     handleApply, fetchPreview
   } = useAutoSchedulePreview(id, { triggerToast, onSuccess: handleSuccess });
 
@@ -64,6 +64,7 @@ const AdminAutoSchedulePreviewPage = () => {
   const [filterReason, setFilterReason] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [viewMode, setViewMode] = useState('timeline'); // 'timeline' or 'table'
 
   const rejectionReasons = useMemo(() => {
     if (!items) return {};
@@ -127,6 +128,38 @@ const AdminAutoSchedulePreviewPage = () => {
     });
     return groups;
   }, [filteredItems]);
+
+  const handleAutoSelectOptimal = () => {
+    if (!items || items.length === 0) return;
+    
+    // We only consider VALID candidates
+    const validCandidates = items.filter(item => item.validationStatus === 'VALID' && item.applyStatus !== 'APPLIED');
+    
+    // Sort by start time (earliest first)
+    validCandidates.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    
+    const newSelectedIds = new Set();
+    const selectedItemsList = [];
+    
+    for (const candidate of validCandidates) {
+      let hasOverlap = false;
+      for (const selectedItem of selectedItemsList) {
+        if ((candidate.auditoriumName || candidate.auditoriumPublicId) === (selectedItem.auditoriumName || selectedItem.auditoriumPublicId)) {
+          if (checkOverlap(candidate, selectedItem)) {
+            hasOverlap = true;
+            break;
+          }
+        }
+      }
+      
+      if (!hasOverlap) {
+        newSelectedIds.add(candidate.itemPublicId);
+        selectedItemsList.push(candidate);
+      }
+    }
+    
+    handleBulkSelection(Array.from(newSelectedIds));
+  };
 
   if (isLoading) {
     return (
@@ -193,6 +226,16 @@ const AdminAutoSchedulePreviewPage = () => {
           >
             <RefreshCw className={`w-4 h-4 ${isUpdatingSelection ? 'animate-spin' : ''}`} />
           </button>
+          
+          {canApply && (
+            <button
+              onClick={handleAutoSelectOptimal}
+              disabled={isApplying || isUpdatingSelection}
+              className="bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Wand2 className="w-4 h-4" /> ĐỀ XUẤT TỐI ƯU
+            </button>
+          )}
 
           {canApply && (
             <button
@@ -260,13 +303,14 @@ const AdminAutoSchedulePreviewPage = () => {
           </div>
         )}
 
-        {/* Filters */}
-        <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl flex flex-wrap gap-4 items-center">
-          <select 
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-          >
+        {/* Filters and View Toggle */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="bg-zinc-900/60 border border-zinc-800 p-2 rounded-2xl flex flex-wrap gap-2 items-center">
+            <select 
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
+            >
             <option value="ALL">Tất cả ứng viên</option>
             <option value="VALID">Chỉ Hợp lệ</option>
             <option value="INVALID">Chỉ Bị từ chối</option>
@@ -304,11 +348,47 @@ const AdminAutoSchedulePreviewPage = () => {
                 <option key={reason} value={reason}>{translateReason(reason)}</option>
               ))}
             </select>
+          </div>
+          
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+            <button
+              onClick={() => setViewMode('timeline')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'timeline' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <LayoutTemplate className="w-4 h-4" /> TIMELINE
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'table' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <List className="w-4 h-4" /> DANH SÁCH
+            </button>
+          </div>
         </div>
 
-        {/* Timeline View */}
-        {/* Timeline View */}
-        <div className="space-y-10">
+        {/* View Mode Content */}
+        {viewMode === 'timeline' ? (
+          <AutoScheduleTimeline 
+            groupedItems={groupedFilteredItems}
+            selectedItemIds={selectedItemIds}
+            handleToggleSelection={handleToggleSelection}
+            isCheckboxDisabledFunc={(isConflicting) => isUpdatingSelection || isApplying || isConflicting}
+            checkOverlapFunc={(item, audItems, currentSelectedIds) => {
+              for (const selectedId of currentSelectedIds) {
+                const selectedObj = audItems.find(i => i.itemPublicId === selectedId);
+                if (selectedObj && checkOverlap(item, selectedObj)) {
+                  return true;
+                }
+              }
+              return false;
+            }}
+          />
+        ) : (
+          <div className="space-y-10">
           {Object.keys(groupedFilteredItems).sort().map(dateKey => (
             <div key={dateKey} className="space-y-4">
               <h2 className="text-lg font-black text-white flex items-center gap-3 border-b border-zinc-800 pb-2">
@@ -457,6 +537,7 @@ const AdminAutoSchedulePreviewPage = () => {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Confirmation Modal */}

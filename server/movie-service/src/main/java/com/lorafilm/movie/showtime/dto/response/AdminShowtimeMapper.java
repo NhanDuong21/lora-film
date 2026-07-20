@@ -17,6 +17,8 @@ public class AdminShowtimeMapper {
         response.setBookingOpenTime(showtime.getBookingOpenTime());
         response.setBookingCloseTime(showtime.getBookingCloseTime());
         response.setCancellationReason(showtime.getCancellationReason());
+        response.setBatchId(showtime.getBatchId());
+        response.setSource(showtime.getSource() != null ? showtime.getSource().name() : null);
         response.setCreatedAt(showtime.getCreatedAt());
         response.setUpdatedAt(showtime.getUpdatedAt());
 

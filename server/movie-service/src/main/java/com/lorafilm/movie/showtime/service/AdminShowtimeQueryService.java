@@ -1,6 +1,7 @@
 package com.lorafilm.movie.showtime.service;
 
 import com.lorafilm.movie.common.dto.PageResponse;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 
@@ -12,6 +13,8 @@ public interface AdminShowtimeQueryService {
             String movieSlug,
             ShowtimeStatus status,
             LocalDate date,
+            String batchId,
+            ShowtimeSource source,
             int page,
             int size
     );

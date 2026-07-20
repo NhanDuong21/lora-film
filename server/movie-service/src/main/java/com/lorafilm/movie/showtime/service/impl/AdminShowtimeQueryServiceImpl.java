@@ -3,6 +3,7 @@ package com.lorafilm.movie.showtime.service.impl;
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
@@ -38,6 +39,8 @@ public class AdminShowtimeQueryServiceImpl implements AdminShowtimeQueryService 
             String movieSlug,
             ShowtimeStatus status,
             LocalDate date,
+            String batchId,
+            ShowtimeSource source,
             int page,
             int size) {
 
@@ -55,6 +58,13 @@ public class AdminShowtimeQueryServiceImpl implements AdminShowtimeQueryService 
         
         if (date != null) {
             spec = spec.and(ShowtimeSpecification.hasDate(date));
+        }
+        
+        if (batchId != null && !batchId.isEmpty()) {
+            spec = spec.and(ShowtimeSpecification.hasBatchId(batchId));
+        }
+        if (source != null) {
+            spec = spec.and(ShowtimeSpecification.hasSource(source));
         }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("startTime").descending());

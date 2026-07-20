@@ -5,4 +5,5 @@ import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 
 public interface ShowtimeStatusTransitionService {
     AdminShowtimeResponse transitionStatus(String showtimePublicId, UpdateShowtimeStatusRequest request);
+    void transitionBatchStatus(String batchId, UpdateShowtimeStatusRequest request);
 }

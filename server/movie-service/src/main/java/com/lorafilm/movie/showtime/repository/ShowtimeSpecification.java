@@ -1,6 +1,7 @@
 package com.lorafilm.movie.showtime.repository;
 
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -60,5 +61,13 @@ public class ShowtimeSpecification {
 
     public static Specification<Showtime> hasSubtitleLanguage(String subtitleLanguage) {
         return (root, query, cb) -> cb.equal(cb.lower(root.get("movieVersion").get("subtitleLanguage")), subtitleLanguage.toLowerCase());
+    }
+
+    public static Specification<Showtime> hasBatchId(String batchId) {
+        return (root, query, cb) -> cb.equal(root.get("batchId"), batchId);
+    }
+
+    public static Specification<Showtime> hasSource(ShowtimeSource source) {
+        return (root, query, cb) -> cb.equal(root.get("source"), source);
     }
 }

@@ -3,6 +3,7 @@ package com.lorafilm.movie.autoschedule.service.impl;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleShowtimeCreationService;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
@@ -28,7 +29,7 @@ public class AutoScheduleShowtimeCreationServiceImpl implements AutoScheduleShow
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<Showtime> createAll(List<ShowtimeSchedulePreviewItem> items, Long actorId) {
+    public List<Showtime> createAll(List<ShowtimeSchedulePreviewItem> items, Long actorId, String batchId) {
         if (items == null || items.isEmpty()) {
             return List.of();
         }
@@ -48,6 +49,8 @@ public class AutoScheduleShowtimeCreationServiceImpl implements AutoScheduleShow
             showtime.setCancellationReason(null);
             showtime.setBookingOpenTime(null);
             showtime.setBookingCloseTime(null);
+            showtime.setBatchId(batchId);
+            showtime.setSource(ShowtimeSource.AUTO);
             
             showtimes.add(showtime);
         }

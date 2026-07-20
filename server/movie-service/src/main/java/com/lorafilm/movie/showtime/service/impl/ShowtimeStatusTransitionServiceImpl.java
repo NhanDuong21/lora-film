@@ -10,6 +10,9 @@ import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimeSpecification;
+import org.springframework.data.jpa.domain.Specification;
+import java.util.List;
 import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
@@ -139,6 +142,26 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
             if (showtime.getBookingCloseTime() == null) {
                 showtime.setBookingCloseTime(now);
             }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void transitionBatchStatus(String batchId, UpdateShowtimeStatusRequest request) {
+        if (batchId == null || batchId.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Batch ID is required");
+        }
+
+        Specification<Showtime> spec = ShowtimeSpecification.hasBatchId(batchId);
+        List<Showtime> showtimes = showtimeRepository.findAll(spec);
+        
+        if (showtimes.isEmpty()) {
+            throw new ResourceNotFoundException("No showtimes found for batch ID: " + batchId);
+        }
+
+        for (Showtime showtime : showtimes) {
+            // Re-use the existing transition logic for each item
+            transitionStatus(showtime.getPublicId(), request);
         }
     }
 }

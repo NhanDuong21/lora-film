@@ -136,7 +136,7 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
         preview.markApplying(applyKey);
 
         // Create showtimes
-        List<Showtime> createdShowtimes = showtimeCreationService.createAll(selectedItems, actorId);
+        List<Showtime> createdShowtimes = showtimeCreationService.createAll(selectedItems, actorId, previewPublicId);
 
         // Update items
         for (int i = 0; i < selectedItems.size(); i++) {

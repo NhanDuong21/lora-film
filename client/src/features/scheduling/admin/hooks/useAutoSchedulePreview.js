@@ -122,6 +122,35 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
     }
   };
 
+  const handleBulkSelection = async (selectedIdsArray) => {
+    // Optimistic UI
+    setSelectedItemIds(new Set(selectedIdsArray));
+
+    setIsUpdatingSelection(true);
+    try {
+      // Map all candidates to selected true/false
+      const payloadItems = items.map(item => ({
+        itemPublicId: item.itemPublicId,
+        selected: selectedIdsArray.includes(item.itemPublicId)
+      }));
+
+      const payload = {
+        expectedVersion,
+        items: payloadItems
+      };
+      const res = await adminAutoScheduleService.updateSelections(previewPublicId, payload);
+      if (res?.success && res.data) {
+        setExpectedVersion(res.data.version);
+        setPreview(res.data);
+      }
+    } catch (err) {
+      triggerToast?.('Lỗi cập nhật đề xuất tối ưu. Đang tải lại dữ liệu.', 'error');
+      fetchPreview();
+    } finally {
+      setIsUpdatingSelection(false);
+    }
+  };
+
   const handleApply = async () => {
     if (selectedItemIds.size === 0) {
       triggerToast?.('Không có suất chiếu nào được chọn', 'error');
@@ -150,7 +179,7 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
   return {
     preview, items, groupedItems,
     isLoading, isApplying, isUpdatingSelection,
-    selectedItemIds, handleToggleSelection,
+    selectedItemIds, handleToggleSelection, handleBulkSelection,
     handleApply, fetchPreview
   };
 }

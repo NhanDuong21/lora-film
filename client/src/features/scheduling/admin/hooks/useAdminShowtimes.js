@@ -19,6 +19,8 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
   const [format, setFormat] = useState('');
   const [audioLanguage, setAudioLanguage] = useState('');
   const [subtitleLanguage, setSubtitleLanguage] = useState('');
+  const [batchId, setBatchId] = useState('');
+  const [source, setSource] = useState('');
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
@@ -60,6 +62,8 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
       if (format?.trim()) params.format = format.trim();
       if (audioLanguage?.trim()) params.audioLanguage = audioLanguage.trim();
       if (subtitleLanguage?.trim()) params.subtitleLanguage = subtitleLanguage.trim();
+      if (batchId?.trim()) params.batchId = batchId.trim();
+      if (source?.trim() && source !== 'ALL') params.source = source.trim();
 
       const res = await adminShowtimeService.getShowtimes(params);
       if (res?.success && res?.data) {
@@ -93,6 +97,8 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
     format, setFormat,
     audioLanguage, setAudioLanguage,
     subtitleLanguage, setSubtitleLanguage,
+    batchId, setBatchId,
+    source, setSource,
     currentPage, setCurrentPage,
     pageSize,
     totalPages,
