@@ -54,7 +54,7 @@ public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApp
             } catch (BusinessException e) {
                 // In ALL_OR_NOTHING, one failure rolls back the whole thing.
                 // We map this to a specific apply failure code.
-                throw new BusinessException(ErrorCode.AUTO_SCHEDULE_APPLY_REVALIDATION_FAILED, "Validation failed for item " + item.getPublicId());
+                throw new BusinessException(ErrorCode.AUTO_SCHEDULE_APPLY_REVALIDATION_FAILED, "Validation failed for item " + item.getPublicId() + ": " + e.getMessage());
             }
         }
     }

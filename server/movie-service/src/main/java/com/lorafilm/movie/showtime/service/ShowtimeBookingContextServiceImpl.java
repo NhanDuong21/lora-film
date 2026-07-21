@@ -139,7 +139,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         ShowtimeMovieVersionDto versionDto = new ShowtimeMovieVersionDto();
         versionDto.setPublicId(showtime.getMovieVersion().getPublicId());
         versionDto.setVersionName(showtime.getMovieVersion().getVersionName());
-        versionDto.setFormat(showtime.getMovieVersion().getFormat() != null ? showtime.getMovieVersion().getFormat().name() : null);
+        versionDto.setFormat(showtime.getMovieVersion().getFormat() != null ? showtime.getMovieVersion().getFormat().getValue() : null);
         versionDto.setAudioLanguage(showtime.getMovieVersion().getAudioLanguage());
         versionDto.setSubtitleLanguage(showtime.getMovieVersion().getSubtitleLanguage());
         response.setMovieVersion(versionDto);
@@ -154,7 +154,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         ShowtimeAuditoriumDto auditoriumDto = new ShowtimeAuditoriumDto();
         auditoriumDto.setPublicId(showtime.getAuditorium().getPublicId());
         auditoriumDto.setName(showtime.getAuditorium().getName());
-        auditoriumDto.setScreenType(showtime.getAuditorium().getScreenType() != null ? showtime.getAuditorium().getScreenType().name() : null);
+        auditoriumDto.setScreenType(showtime.getAuditorium().getScreenType() != null ? showtime.getAuditorium().getScreenType().getValue() : null);
         auditoriumDto.setSoundType(showtime.getAuditorium().getSoundType() != null ? showtime.getAuditorium().getSoundType().name() : null);
         response.setAuditorium(auditoriumDto);
 

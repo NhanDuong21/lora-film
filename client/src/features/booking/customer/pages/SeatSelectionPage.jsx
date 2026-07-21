@@ -179,7 +179,7 @@ export default function SeatSelectionPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#050506] text-white">
         <div className="flex flex-col items-center gap-4 animate-pulse">
-          <div className="w-12 h-12 border-4 border-brand-coral border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm font-semibold tracking-wider text-zinc-400">Đang tải sơ đồ ghế ngồi...</p>
         </div>
       </div>
@@ -198,7 +198,7 @@ export default function SeatSelectionPage() {
         </p>
         <button
           onClick={() => navigate('/movies')}
-          className="bg-brand-coral hover:bg-opacity-90 text-white font-bold px-6 py-3 rounded-full transition-all text-xs uppercase tracking-wider"
+          className="bg-brand-orange hover:bg-opacity-90 text-white font-bold px-6 py-3 rounded-full transition-all text-xs uppercase tracking-wider"
         >
           Quay lại danh sách phim
         </button>
@@ -207,7 +207,7 @@ export default function SeatSelectionPage() {
   }
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-coral selection:text-zinc-950 font-sans font-medium">
+    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
       {/* Toast Warning Popup */}
       {toastMessage && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-2xl flex items-center gap-2 border border-red-500 text-sm">
@@ -227,7 +227,7 @@ export default function SeatSelectionPage() {
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <button
                 onClick={handleBack}
-                className="flex items-center gap-2 text-zinc-400 hover:text-brand-coral transition-colors text-xs font-bold self-start sm:self-auto"
+                className="flex items-center gap-2 text-zinc-400 hover:text-brand-orange transition-colors text-xs font-bold self-start sm:self-auto"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Quay lại phim</span>
@@ -244,7 +244,7 @@ export default function SeatSelectionPage() {
                 </div>
                 <div>
                   <span className="text-zinc-600 font-bold mr-1">Suất chiếu:</span>
-                  <span className="text-brand-coral font-black">{formattedDateTime.time}</span>
+                  <span className="text-brand-orange font-black">{formattedDateTime.time}</span>
                 </div>
                 <div>
                   <span className="text-zinc-600 font-bold mr-1">Ngày:</span>
@@ -258,7 +258,7 @@ export default function SeatSelectionPage() {
               
               {/* Screen Indicator */}
               <div className="w-full max-w-lg mx-auto mb-16 text-center">
-                <div className="h-1.5 bg-gradient-to-r from-transparent via-brand-coral to-transparent shadow-[0_0_20px_rgba(216,129,116,0.9)] rounded-full mb-2"></div>
+                <div className="h-1.5 bg-gradient-to-r from-transparent via-brand-orange to-transparent shadow-[0_0_20px_rgba(216,129,116,0.9)] rounded-full mb-2"></div>
                 <span className="text-zinc-500 text-[10px] tracking-[0.4em] font-black uppercase">MÀN HÌNH CHÍNH / MAIN SCREEN</span>
               </div>
 
@@ -376,7 +376,7 @@ export default function SeatSelectionPage() {
                 />
               </div>
               <div className="space-y-1.5 flex-grow">
-                <span className="inline-block text-[9px] bg-brand-coral/15 text-brand-coral border border-brand-coral/20 px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                <span className="inline-block text-[9px] bg-brand-orange/15 text-brand-orange border border-brand-orange/20 px-2 py-0.5 rounded font-black uppercase tracking-wider">
                   {showtime.movieVersion?.versionName || showtime.movieVersion?.format || '2D Digital'}
                 </span>
                 <h3 className="text-sm font-black text-white line-clamp-2 mt-1 leading-snug">{showtime.movie?.title}</h3>
@@ -400,7 +400,7 @@ export default function SeatSelectionPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Suất chiếu</span>
-                <span className="text-brand-coral font-black text-right">{formattedDateTime.time} | {formattedDateTime.date}</span>
+                <span className="text-brand-orange font-black text-right">{formattedDateTime.time} | {formattedDateTime.date}</span>
               </div>
             </div>
 
@@ -428,7 +428,7 @@ export default function SeatSelectionPage() {
                 <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Tổng tiền</span>
                 <span className="text-[8px] text-zinc-600 block">(Bao gồm VAT)</span>
               </div>
-              <span className="text-lg md:text-xl font-black text-brand-coral">{formatCurrency(totalAmount)}</span>
+              <span className="text-lg md:text-xl font-black text-brand-orange">{formatCurrency(totalAmount)}</span>
             </div>
 
             {/* Action button */}
@@ -437,7 +437,7 @@ export default function SeatSelectionPage() {
               onClick={handleCheckoutSubmit}
               className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-wider shadow-lg transition-all duration-300 transform ${
                 selectedSeats.length > 0
-                  ? 'bg-brand-coral hover:bg-opacity-95 hover:scale-[1.02] text-white shadow-brand-coral/25'
+                  ? 'bg-brand-orange hover:bg-opacity-95 hover:scale-[1.02] text-white shadow-brand-orange/25'
                   : 'bg-zinc-850 text-zinc-550 border border-zinc-800 cursor-not-allowed'
               }`}
             >
@@ -451,7 +451,7 @@ export default function SeatSelectionPage() {
       {showSuccessModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center relative overflow-hidden animate-in zoom-in duration-300">
-            <div className="absolute -top-24 -left-24 w-48 h-48 bg-brand-coral/10 rounded-full filter blur-3xl pointer-events-none"></div>
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-brand-orange/10 rounded-full filter blur-3xl pointer-events-none"></div>
 
             <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
             
@@ -485,13 +485,13 @@ export default function SeatSelectionPage() {
               </div>
               <div className="flex justify-between border-t border-zinc-800 pt-2.5 mt-2.5 items-center">
                 <span className="text-zinc-500 font-bold">Tổng giá trị:</span>
-                <span className="text-brand-coral font-black text-sm">{formatCurrency(totalAmount)}</span>
+                <span className="text-brand-orange font-black text-sm">{formatCurrency(totalAmount)}</span>
               </div>
             </div>
 
             <button
               onClick={() => navigate('/')}
-              className="w-full bg-brand-coral hover:bg-opacity-95 text-white font-black py-4 rounded-xl shadow-lg transition-colors duration-300 uppercase tracking-wider text-xs"
+              className="w-full bg-brand-orange hover:bg-opacity-95 text-white font-black py-4 rounded-xl shadow-lg transition-colors duration-300 uppercase tracking-wider text-xs"
             >
               Quay lại Trang Chủ
             </button>

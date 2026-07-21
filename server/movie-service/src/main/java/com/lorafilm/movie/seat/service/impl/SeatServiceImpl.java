@@ -47,12 +47,15 @@ public class SeatServiceImpl implements SeatService {
             errorData.put("message", "Thay đổi cấu trúc ghế chỉ được phép khi Auditorium ở trạng thái DRAFT.");
             throw new BusinessException(ErrorCode.AUDITORIUM_LAYOUT_NOT_EDITABLE, errorData);
         }
+        
+        // Since the room is in DRAFT status, any layout save is a full replacement.
+        // Wipe existing seats before inserting new ones.
+        seatRepository.deleteByAuditoriumId(auditorium.getId());
 
         List<BulkItemError> errors = new ArrayList<>();
         int totalItems = request.seats().size();
 
-        long activeSeatCount = seatRepository.countByAuditoriumIdAndDeletedAtIsNull(auditorium.getId());
-        if (activeSeatCount + totalItems > auditorium.getCapacity()) {
+        if (totalItems > auditorium.getCapacity()) {
             throw new BusinessException(ErrorCode.SEAT_CAPACITY_EXCEEDED);
         }
 
@@ -63,12 +66,6 @@ public class SeatServiceImpl implements SeatService {
 
         Map<String, SeatType> seatTypeMap = seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(typeIds).stream()
                 .collect(Collectors.toMap(SeatType::getPublicId, t -> t));
-
-        List<com.lorafilm.movie.seat.repository.SeatConflictProjection> existingConflicts = seatRepository
-                .findConflictDataByAuditoriumId(auditorium.getId());
-        Set<String> existingCodes = existingConflicts.stream().map(c -> c.getSeatCode()).collect(Collectors.toSet());
-        Set<String> existingPositions = existingConflicts.stream()
-                .map(c -> c.getPositionRow() + "-" + c.getPositionColumn()).collect(Collectors.toSet());
 
         List<Seat> seatsToSave = new ArrayList<>();
 
@@ -125,17 +122,8 @@ public class SeatServiceImpl implements SeatService {
                 }
             }
 
-            // Database conflicts
-            if (normalizedSeatCode != null && existingCodes.contains(normalizedSeatCode)) {
-                errors.add(new BulkItemError(i, normalizedSeatCode, "seatCode", normalizedSeatCode,
-                        "DUPLICATE_SEAT_CODE", "Seat code already exists in this auditorium"));
-                hasError = true;
-            }
-            if (item.positionRow() > 0 && item.positionColumn() > 0 && existingPositions.contains(posKey)) {
-                errors.add(new BulkItemError(i, normalizedSeatCode, "position", posKey, "DUPLICATE_SEAT_POSITION",
-                        "Seat position already occupied"));
-                hasError = true;
-            }
+            // Database conflicts checks removed since we hard deleted existing seats
+
 
             // Seat Type validation
             if (item.seatTypePublicId() != null && !item.seatTypePublicId().isEmpty()) {

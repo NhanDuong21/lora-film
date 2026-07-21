@@ -1,16 +1,57 @@
-export const parseApiError = (err) => {
-  const d = err?.response?.data || err;
-  if (!d) return err?.message || 'Lỗi không xác định.';
+export const normalizeApiError = (err) => {
+  const responseData = err?.response?.data || err?.data || err;
+  const status = err?.response?.status || responseData?.status || 500;
+  
+  const normalized = {
+    status,
+    code: responseData?.errorCode || responseData?.code || 'UNKNOWN_ERROR',
+    message: responseData?.message || responseData?.errorMessage || err?.message || 'Đã xảy ra lỗi không xác định',
+    fieldErrors: {},
+    raw: err
+  };
 
-  if (d.errorCode === 'INVALID_ENUM_VALUE') {
-    const field = d.data?.field || d.field || 'không xác định';
-    const val = d.data?.rejectedValue ?? d.data?.value ?? '';
-    const allowed = (d.data?.allowedValues || []).join(', ');
-    return `Giá trị "${val}" không hợp lệ cho trường "${field}". Giá trị hợp lệ: ${allowed}.`;
+  // Handle Spring Boot validation fieldErrors if present
+  const rawFieldErrors = responseData?.data?.fieldErrors || responseData?.fieldErrors || [];
+  if (Array.isArray(rawFieldErrors)) {
+    rawFieldErrors.forEach(e => {
+      if (e.field && e.message) {
+        normalized.fieldErrors[e.field] = e.message;
+      }
+    });
   }
-  if (d.errorCode === 'VALIDATION_ERROR' && d.data?.fieldErrors) {
-    return d.data.fieldErrors.map(e => `"${e.field}": ${e.message}`).join('\n');
+
+  // Handle INVALID_ENUM_VALUE specifically if returned by backend
+  if (normalized.code === 'INVALID_ENUM_VALUE') {
+    const field = responseData?.data?.field || responseData?.field || 'không xác định';
+    const val = responseData?.data?.rejectedValue ?? responseData?.data?.value ?? '';
+    const allowed = (responseData?.data?.allowedValues || []).join(', ');
+    normalized.message = `Giá trị "${val}" không hợp lệ cho trường "${field}". Giá trị hợp lệ: ${allowed}.`;
   }
-  if (d.message) return d.message;
-  return err?.message || 'Lỗi không xác định.';
+
+  // Handle Axios Network Error
+  if (err?.code === 'ERR_NETWORK') {
+    normalized.message = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng.';
+  }
+
+  return normalized;
+};
+
+export const getErrorMessage = (err, fallback = 'Lỗi không xác định') => {
+  const normalized = normalizeApiError(err);
+  return normalized.message || fallback;
+};
+
+export const getFieldErrors = (err) => {
+  const normalized = normalizeApiError(err);
+  return normalized.fieldErrors;
+};
+
+export const isConflictError = (err) => {
+  const normalized = normalizeApiError(err);
+  return normalized.status === 409 || normalized.code === 'CONFLICT';
+};
+
+// Keep old parseApiError for backward compatibility during transition
+export const parseApiError = (err) => {
+  return getErrorMessage(err);
 };

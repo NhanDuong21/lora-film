@@ -82,4 +82,27 @@ public class AdminShowtimeController {
         
         return ResponseEntity.ok(new ApiResponse<>(true, "SUCCESS", "Showtime status history retrieved successfully", response, java.util.Collections.emptyList()));
     }
+
+    @PutMapping("/batch/{batchId}/status")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @Operation(summary = "Transition status for a batch of showtimes")
+    public ResponseEntity<ApiResponse<Void>> transitionBatchStatus(
+            @PathVariable String batchId,
+            @Valid @RequestBody UpdateShowtimeStatusRequest request) {
+        
+        transitionService.transitionBatchStatus(batchId, request);
+        
+        return ResponseEntity.ok(new ApiResponse<>(true, "SUCCESS", "Batch status updated successfully", null, java.util.Collections.emptyList()));
+    }
+
+    @DeleteMapping("/batch/{batchId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @Operation(summary = "Delete a batch of DRAFT showtimes")
+    public ResponseEntity<ApiResponse<Void>> deleteBatch(
+            @PathVariable String batchId) {
+        
+        showtimeCommandService.deleteBatch(batchId);
+        
+        return ResponseEntity.ok(new ApiResponse<>(true, "SUCCESS", "Batch deleted successfully", null, java.util.Collections.emptyList()));
+    }
 }

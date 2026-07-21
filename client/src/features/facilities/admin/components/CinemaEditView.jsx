@@ -39,7 +39,6 @@ export default function CinemaEditView({ cinemaPublicId, onCancel, onSubmit, tri
   const [formErrors, setFormErrors] = useState({});
 
   // Media states
-  const [logoUrl, setLogoUrl] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
   const [galleryUrls, setGalleryUrls] = useState(['', '', '', '', '']);
   const [mapImageUrl, setMapImageUrl] = useState('');
@@ -93,12 +92,10 @@ export default function CinemaEditView({ cinemaPublicId, onCancel, onSubmit, tri
           if (Array.isArray(d.gallery)) {
             setOriginalMedia(d.gallery);
 
-            const logoItem = d.gallery.find(m => m.mediaType === 'LOGO');
             const bannerItem = d.gallery.find(m => m.mediaType === 'BANNER');
             const mapItem = d.gallery.find(m => m.mediaType === 'MAP');
             const galleryItems = d.gallery.filter(m => m.mediaType === 'GALLERY');
 
-            setLogoUrl(logoItem?.url || '');
             setBannerUrl(bannerItem?.url || '');
             setMapImageUrl(mapItem?.url || '');
 
@@ -165,9 +162,12 @@ export default function CinemaEditView({ cinemaPublicId, onCancel, onSubmit, tri
     setIsSubmitting(true);
     try {
       await onSubmit(formData, operatingHours, {
-        logoUrl,
         bannerUrl,
-        galleryUrls: galleryUrls.filter(url => url && url.trim().length > 0),
+        galleryUrls: galleryUrls.filter(url => {
+          if (!url) return false;
+          if (typeof url === 'string') return url.trim().length > 0;
+          return true;
+        }),
         mapImageUrl,
         originalMedia
       });
@@ -311,8 +311,6 @@ export default function CinemaEditView({ cinemaPublicId, onCancel, onSubmit, tri
             />
 
             <CinemaMediaForm
-              logoUrl={logoUrl}
-              setLogoUrl={setLogoUrl}
               bannerUrl={bannerUrl}
               setBannerUrl={setBannerUrl}
               galleryUrls={galleryUrls}

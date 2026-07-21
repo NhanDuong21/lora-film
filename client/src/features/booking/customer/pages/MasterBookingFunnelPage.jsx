@@ -171,7 +171,7 @@ export default function MasterBookingFunnelPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#050506] text-white">
         <div className="flex flex-col items-center gap-4 animate-pulse">
-          <div className="w-12 h-12 border-4 border-brand-coral border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm font-semibold tracking-wider text-zinc-400">Đang tải lịch rạp chiếu...</p>
         </div>
       </div>
@@ -179,7 +179,7 @@ export default function MasterBookingFunnelPage() {
   }
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-8 selection:bg-brand-coral selection:text-zinc-950 font-sans font-medium">
+    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-8 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* Header Title */}
@@ -204,7 +204,7 @@ export default function MasterBookingFunnelPage() {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
-                    selectedCinema ? 'bg-emerald-500 text-black' : 'bg-brand-coral text-white'
+                    selectedCinema ? 'bg-emerald-500 text-black' : 'bg-brand-orange text-white'
                   }`}>
                     {selectedCinema ? <Check className="w-3 h-3 stroke-[3]" /> : '1'}
                   </div>
@@ -230,7 +230,7 @@ export default function MasterBookingFunnelPage() {
                           onClick={() => handleSelectRegion(r)}
                           className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
                             selectedRegion?.id === r.id
-                              ? 'bg-brand-coral border-brand-coral text-white shadow-lg shadow-brand-coral/15'
+                              ? 'bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/15'
                               : 'bg-zinc-950 border-zinc-850 text-zinc-400 hover:text-white hover:bg-zinc-800'
                           }`}
                         >
@@ -251,13 +251,13 @@ export default function MasterBookingFunnelPage() {
                             onClick={() => handleSelectCinema(cinemaObj)}
                             className={`p-4 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
                               selectedCinema?.slug === cinemaObj.slug
-                                ? 'bg-brand-coral/10 border-brand-coral shadow-md shadow-brand-coral/5 text-white'
+                                ? 'bg-brand-orange/10 border-brand-orange shadow-md shadow-brand-orange/5 text-white'
                                 : 'bg-zinc-950 border-zinc-850 hover:border-zinc-700 text-zinc-300'
                             }`}
                           >
                             <span className="text-xs font-black uppercase leading-tight">{cinemaObj.name}</span>
                             <span className="text-[9px] text-zinc-500 font-semibold mt-1 flex items-center gap-1">
-                              <MapPin className="w-3 h-3 text-brand-coral shrink-0" />
+                              <MapPin className="w-3 h-3 text-brand-orange shrink-0" />
                               <span className="truncate">{cinemaObj.address}</span>
                             </span>
                           </div>
@@ -280,7 +280,7 @@ export default function MasterBookingFunnelPage() {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
-                    selectedMovie ? 'bg-emerald-500 text-black' : 'bg-brand-coral text-white'
+                    selectedMovie ? 'bg-emerald-500 text-black' : 'bg-brand-orange text-white'
                   }`}>
                     {selectedMovie ? <Check className="w-3 h-3 stroke-[3]" /> : '2'}
                   </div>
@@ -305,7 +305,7 @@ export default function MasterBookingFunnelPage() {
                         onClick={() => handleSelectMovie(movie)}
                         className={`p-3 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${
                           selectedMovie?.publicId === movie.publicId
-                            ? 'bg-brand-coral/10 border-brand-coral shadow-md'
+                            ? 'bg-brand-orange/10 border-brand-orange shadow-md'
                             : 'bg-zinc-950 border-zinc-850 hover:border-zinc-700'
                         }`}
                       >
@@ -340,7 +340,7 @@ export default function MasterBookingFunnelPage() {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
-                    selectedShowtime ? 'bg-emerald-500 text-black' : 'bg-brand-coral text-white'
+                    selectedShowtime ? 'bg-emerald-500 text-black' : 'bg-brand-orange text-white'
                   }`}>
                     {selectedShowtime ? <Check className="w-3 h-3 stroke-[3]" /> : '3'}
                   </div>
@@ -373,7 +373,7 @@ export default function MasterBookingFunnelPage() {
                           }}
                           className={`px-4 py-2 rounded-xl border text-center transition-all cursor-pointer ${
                             selectedDate?.dateStr === dateObj.dateStr
-                              ? 'bg-brand-coral border-brand-coral text-white shadow-lg shadow-brand-coral/10 font-bold'
+                              ? 'bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/10 font-bold'
                               : 'bg-zinc-950 border-zinc-850 text-zinc-400 hover:text-white'
                           }`}
                         >
@@ -396,7 +396,7 @@ export default function MasterBookingFunnelPage() {
                       <div className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl space-y-4">
                         {Object.keys(showtimesByFormat).map((formatLabel) => (
                           <div key={formatLabel} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-1.5">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-brand-coral min-w-[90px]">{formatLabel}</span>
+                            <span className="text-[9px] font-black uppercase tracking-wider text-brand-orange min-w-[90px]">{formatLabel}</span>
                             <div className="flex flex-wrap gap-2">
                               {showtimesByFormat[formatLabel].map((st) => {
                                 const isSelected = selectedShowtime?.showtimePublicId === st.showtimePublicId;
@@ -407,7 +407,7 @@ export default function MasterBookingFunnelPage() {
                                     onClick={() => handleSelectShowtime(st)}
                                     className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider transition-all cursor-pointer ${
                                       isSelected
-                                        ? 'bg-brand-coral text-white shadow-md shadow-brand-coral/10'
+                                        ? 'bg-brand-orange text-white shadow-md shadow-brand-orange/10'
                                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300'
                                     }`}
                                   >
@@ -486,7 +486,7 @@ export default function MasterBookingFunnelPage() {
 
                 <div className="flex justify-between items-center py-1">
                   <span className="text-zinc-500 font-bold">Tổng cộng:</span>
-                  <span className="text-sm font-black text-brand-coral uppercase">0 đ</span>
+                  <span className="text-sm font-black text-brand-orange uppercase">0 đ</span>
                 </div>
 
                 {selectedShowtime && (
@@ -503,7 +503,7 @@ export default function MasterBookingFunnelPage() {
                     disabled={!selectedShowtime}
                     className={`w-full font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 ${
                       selectedShowtime
-                        ? 'bg-brand-coral hover:bg-opacity-95 text-white cursor-pointer shadow-lg shadow-brand-coral/20 active:scale-[0.98]'
+                        ? 'bg-brand-orange hover:bg-opacity-95 text-white cursor-pointer shadow-lg shadow-brand-orange/20 active:scale-[0.98]'
                         : 'bg-zinc-800 text-zinc-500 cursor-not-allowed select-none'
                     }`}
                   >

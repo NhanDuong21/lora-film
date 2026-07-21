@@ -93,13 +93,8 @@ public class AdminMovieService {
         movie.setEndDate(request.getEndDate());
         movie.setCountry(request.getCountry());
         
-        if (request.getStatus() != null && request.getStatus() != movie.getStatus()) {
-            validatePublishStatus(movie.getId(), request.getStatus());
-            movie.setStatus(request.getStatus());
-        }
-        
         validateStatusTimeConstraints(movie.getStatus(), movie.getReleaseDate(), movie.getEndDate());
-
+        
         Movie saved = movieRepository.save(movie);
         return mapToDto(saved);
     }
@@ -295,15 +290,6 @@ public class AdminMovieService {
     private void validateMovieDates(MovieRequest request) {
         if (request.getEndDate() != null && request.getEndDate().isBefore(request.getReleaseDate())) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "End date cannot be before release date", null);
-        }
-    }
-
-    private void validatePublishStatus(Long movieId, MovieStatus newStatus) {
-        if (newStatus == MovieStatus.UPCOMING || newStatus == MovieStatus.NOW_SHOWING) {
-            List<MovieGenre> genres = movieGenreRepository.findByMovieId(movieId);
-            if (genres.isEmpty()) {
-                throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least 1 genre to be published", null);
-            }
         }
     }
 

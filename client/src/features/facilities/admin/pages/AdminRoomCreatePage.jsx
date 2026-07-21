@@ -7,7 +7,8 @@ import {
   Settings, 
   Sliders, 
   Save, 
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
@@ -18,6 +19,7 @@ import RoomForm from '@/features/facilities/admin/components/RoomForm';
 import BrushToolbar from '@/features/facilities/admin/components/BrushToolbar';
 import StatsPanel from '@/features/facilities/admin/components/StatsPanel';
 import SeatGridDesigner from '@/features/facilities/admin/components/SeatGridDesigner';
+import AutoLayoutWizardModal from '@/features/facilities/admin/components/AutoLayoutWizardModal';
 
 export default function AdminRoomCreatePage() {
   const { triggerToast } = useOutletContext() || {};
@@ -37,11 +39,15 @@ export default function AdminRoomCreatePage() {
   // Seating grid dimensions
   const [rows, setRows] = useState(10);
   const [cols, setCols] = useState(12);
+  const [skipIO, setSkipIO] = useState(false);
 
   // Brush and seat matrix state
   const [activeBrush, setActiveBrush] = useState('STANDARD'); 
   const [matrix, setMatrix] = useState([]);
   const [isMouseDown, setIsMouseDown] = useState(false);
+
+  // Auto-Layout Wizard State
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   // Available seat types from DB
   const [dbSeatTypes, setDbSeatTypes] = useState([]);
@@ -79,6 +85,9 @@ export default function AdminRoomCreatePage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMatrix(prev => {
+      // Avoid resetting if dimensions match exactly (e.g. after wizard apply)
+      if (prev.length === rows && prev[0]?.length === cols) return prev;
+      
       const nextMatrix = [];
       for (let r = 0; r < rows; r++) {
         const row = [];
@@ -196,6 +205,13 @@ export default function AdminRoomCreatePage() {
     return seededTypes.length > 0 ? seededTypes : currentTypes;
   };
 
+  // Handle Wizard Apply
+  const handleApplyWizard = (newMatrix, newRows, newCols) => {
+    setRows(newRows);
+    setCols(newCols);
+    setMatrix(newMatrix);
+  };
+
   // Submit Handler
   const handleSave = async () => {
     if (!roomName.trim()) {
@@ -254,8 +270,22 @@ export default function AdminRoomCreatePage() {
       // 3. Format seat layout items
       const seatsList = [];
 
+      const calculateRowLabel = (rIdx, skip) => {
+        let letterCode = 65; // 'A'
+        for (let i = 0; i < rIdx; i++) {
+          letterCode++;
+          if (skip && (letterCode === 73 || letterCode === 79)) {
+            letterCode++;
+          }
+        }
+        if (skip && (letterCode === 73 || letterCode === 79)) {
+            letterCode++;
+        }
+        return String.fromCharCode(letterCode);
+      };
+
       for (let r = 0; r < rows; r++) {
-        const rowLabel = String.fromCharCode(65 + r);
+        const rowLabel = calculateRowLabel(r, skipIO);
         let seatNumber = 1;
 
         // Group couple seats in pairs: list all column indexes containing a COUPLE seat in this row
@@ -373,6 +403,15 @@ export default function AdminRoomCreatePage() {
         <aside className="w-80 bg-zinc-900 border-r border-zinc-800 p-5 flex flex-col justify-between overflow-y-auto shrink-0 select-none">
           <div className="space-y-6">
             
+            {/* Quick Layout Trigger */}
+            <button 
+              onClick={() => setIsWizardOpen(true)}
+              className="w-full flex items-center justify-center gap-2 bg-zinc-950 border border-brand-orange/40 hover:bg-brand-orange/10 text-brand-orange font-black py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition-all"
+            >
+              <Sparkles className="w-4 h-4" />
+              Sinh sơ đồ tự động
+            </button>
+
             {/* General Info Form */}
             <RoomForm
               roomName={roomName}
@@ -385,13 +424,15 @@ export default function AdminRoomCreatePage() {
               setCleaningBuffer={setCleaningBuffer}
               status={status}
               setStatus={setStatus}
+              capacity={stats.activeSeats}
+              isCreateMode={true}
               availableStatuses={availableStatuses}
             />
 
             {/* Grid Dimensions */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
-                <Sliders className="w-4 h-4 text-brand-coral" />
+                <Sliders className="w-4 h-4 text-brand-orange" />
                 <h3 className="font-bold text-xs text-white uppercase tracking-wider">Kích thước lưới</h3>
               </div>
 
@@ -399,7 +440,7 @@ export default function AdminRoomCreatePage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold text-zinc-400">
                   <span>Số hàng ghế (Rows)</span>
-                  <span className="text-brand-coral font-black">{rows}</span>
+                  <span className="text-brand-orange font-black">{rows}</span>
                 </div>
                 <input 
                   type="range"
@@ -407,7 +448,7 @@ export default function AdminRoomCreatePage() {
                   max="20"
                   value={rows}
                   onChange={(e) => setRows(parseInt(e.target.value))}
-                  className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-coral"
+                  className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-orange"
                 />
               </div>
 
@@ -415,7 +456,7 @@ export default function AdminRoomCreatePage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold text-zinc-400">
                   <span>Số cột ghế (Cols)</span>
-                  <span className="text-brand-coral font-black">{cols}</span>
+                  <span className="text-brand-orange font-black">{cols}</span>
                 </div>
                 <input 
                   type="range"
@@ -423,8 +464,21 @@ export default function AdminRoomCreatePage() {
                   max="20"
                   value={cols}
                   onChange={(e) => setCols(parseInt(e.target.value))}
-                  className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-coral"
+                  className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-orange"
                 />
+              </div>
+
+              {/* Skip I/O Selector */}
+              <div className="pt-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-zinc-400 hover:text-white transition-colors">
+                  <input 
+                    type="checkbox" 
+                    checked={skipIO}
+                    onChange={(e) => setSkipIO(e.target.checked)}
+                    className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-brand-orange focus:ring-brand-orange/50 focus:ring-offset-zinc-950"
+                  />
+                  <span>Bỏ qua ký tự dễ gây nhầm lẫn (I, O)</span>
+                </label>
               </div>
             </div>
           </div>
@@ -444,6 +498,7 @@ export default function AdminRoomCreatePage() {
             matrix={matrix}
             rows={rows}
             cols={cols}
+            skipIO={skipIO}
             isLayoutEditable={true}
             onCellMouseDown={handleCellMouseDown}
             onCellMouseEnter={handleCellMouseEnter}
@@ -451,11 +506,17 @@ export default function AdminRoomCreatePage() {
           
           {/* Seating Map Guide */}
           <div className="flex items-center gap-2 mt-8 text-zinc-500 text-[10px] uppercase font-bold tracking-wider max-w-lg bg-zinc-900/20 border border-zinc-900 p-4 rounded-xl select-none">
-            <AlertCircle className="w-4 h-4 text-brand-coral shrink-0" />
+            <AlertCircle className="w-4 h-4 text-brand-orange shrink-0" />
             <span>Mẹo: Nhấn chuột xuống và di (kéo rê chuột) qua lưới để vẽ hàng ghế/lối đi nhanh hơn. Chỉ có ghế ngồi (Thường, VIP, Đôi, Khuyết tật) được lưu vào cơ sở dữ liệu.</span>
           </div>
 
         </main>
+        <AutoLayoutWizardModal 
+          isOpen={isWizardOpen} 
+          onClose={() => setIsWizardOpen(false)} 
+          onApply={handleApplyWizard} 
+          currentSkipIO={skipIO}
+        />
       </div>
     </div>
   );

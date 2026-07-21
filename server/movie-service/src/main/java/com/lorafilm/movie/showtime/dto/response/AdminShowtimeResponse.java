@@ -24,6 +24,8 @@ public class AdminShowtimeResponse {
     private Instant bookingOpenTime;
     private Instant bookingCloseTime;
     private String cancellationReason;
+    private String batchId;
+    private String source;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -60,10 +62,29 @@ public class AdminShowtimeResponse {
     public void setBookingCloseTime(Instant bookingCloseTime) { this.bookingCloseTime = bookingCloseTime; }
 
     public String getCancellationReason() { return cancellationReason; }
-    public void setCancellationReason(String cancellationReason) { this.cancellationReason = cancellationReason; }
+    public void setCancellationReason(String cancellationReason) {
+        this.cancellationReason = cancellationReason;
+    }
 
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public String getBatchId() {
+        return batchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.batchId = batchId;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }

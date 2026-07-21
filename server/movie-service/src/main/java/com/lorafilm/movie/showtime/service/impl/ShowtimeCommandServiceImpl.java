@@ -19,6 +19,8 @@ import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimeSpecification;
+import org.springframework.data.jpa.domain.Specification;
 import com.lorafilm.movie.showtime.service.ShowtimeCommandService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.validation.ShowtimeValidationContext;
@@ -201,5 +203,29 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
                 .endTime(endTime)
                 .excludeShowtimeId(excludedShowtimeId)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void deleteBatch(String batchId) {
+        if (batchId == null || batchId.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Batch ID is required");
+        }
+        
+        Specification<Showtime> spec = ShowtimeSpecification.hasBatchId(batchId);
+        List<Showtime> showtimes = showtimeRepository.findAll(spec);
+        
+        if (showtimes.isEmpty()) {
+            throw new ResourceNotFoundException("No showtimes found for batch ID: " + batchId);
+        }
+        
+        // Ensure all are DRAFT
+        for (Showtime showtime : showtimes) {
+            if (showtime.getStatus() != ShowtimeStatus.DRAFT) {
+                throw new BusinessException(ErrorCode.SHOWTIME_SCHEDULE_NOT_EDITABLE, "Can only delete batch if all showtimes are in DRAFT state. Found status: " + showtime.getStatus());
+            }
+        }
+        
+        showtimeRepository.deleteAll(showtimes);
     }
 }

@@ -6,6 +6,7 @@ import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -54,6 +55,13 @@ public class Showtime extends BaseAuditableEntity {
 
     @Column(name = "cancellation_reason")
     private String cancellationReason;
+
+    @Column(name = "batch_id", length = 36)
+    private String batchId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false)
+    private ShowtimeSource source = ShowtimeSource.MANUAL;
 
     public Showtime() {}
 
@@ -151,5 +159,21 @@ public class Showtime extends BaseAuditableEntity {
 
     public void setCancellationReason(String cancellationReason) {
         this.cancellationReason = cancellationReason;
+    }
+
+    public String getBatchId() {
+        return batchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.batchId = batchId;
+    }
+
+    public ShowtimeSource getSource() {
+        return source;
+    }
+
+    public void setSource(ShowtimeSource source) {
+        this.source = source;
     }
 }

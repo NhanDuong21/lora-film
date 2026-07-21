@@ -22,6 +22,15 @@ public class MovieDto {
     private MovieStatus status;
     private String activeSlug;
     private String country;
+    
+    // Projection fields for Phase 4A
+    private String source;
+    private Long tmdbId;
+    private java.time.LocalDateTime tmdbLastUpdated;
+    private Long activeVersionCount;
+    private Long mediaCount;
+    private Long showtimeCount;
+    private MovieReadinessDto readiness;
 
     public MovieDto() {
     }
@@ -137,4 +146,25 @@ public class MovieDto {
     public void setCountry(String country) {
         this.country = country;
     }
+
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
+
+    public Long getTmdbId() { return tmdbId; }
+    public void setTmdbId(Long tmdbId) { this.tmdbId = tmdbId; }
+
+    public java.time.LocalDateTime getTmdbLastUpdated() { return tmdbLastUpdated; }
+    public void setTmdbLastUpdated(java.time.LocalDateTime tmdbLastUpdated) { this.tmdbLastUpdated = tmdbLastUpdated; }
+
+    public Long getActiveVersionCount() { return activeVersionCount; }
+    public void setActiveVersionCount(Long activeVersionCount) { this.activeVersionCount = activeVersionCount; }
+
+    public Long getMediaCount() { return mediaCount; }
+    public void setMediaCount(Long mediaCount) { this.mediaCount = mediaCount; }
+
+    public Long getShowtimeCount() { return showtimeCount; }
+    public void setShowtimeCount(Long showtimeCount) { this.showtimeCount = showtimeCount; }
+
+    public MovieReadinessDto getReadiness() { return readiness; }
+    public void setReadiness(MovieReadinessDto readiness) { this.readiness = readiness; }
 }

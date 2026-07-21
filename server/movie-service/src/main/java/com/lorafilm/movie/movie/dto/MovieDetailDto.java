@@ -79,6 +79,7 @@ public class MovieDetailDto extends MovieDto {
         private String audioLanguage;
         private String subtitleLanguage;
         private String dubLanguage;
+        private String status;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -92,6 +93,8 @@ public class MovieDetailDto extends MovieDto {
         public void setSubtitleLanguage(String subtitleLanguage) { this.subtitleLanguage = subtitleLanguage; }
         public String getDubLanguage() { return dubLanguage; }
         public void setDubLanguage(String dubLanguage) { this.dubLanguage = dubLanguage; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 
     public static class MovieMediaDto {
@@ -101,6 +104,7 @@ public class MovieDetailDto extends MovieDto {
         private String title;
         private Boolean isPrimary;
         private Integer displayOrder;
+        private String status;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -114,5 +118,7 @@ public class MovieDetailDto extends MovieDto {
         public void setIsPrimary(Boolean isPrimary) { this.isPrimary = isPrimary; }
         public Integer getDisplayOrder() { return displayOrder; }
         public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 }

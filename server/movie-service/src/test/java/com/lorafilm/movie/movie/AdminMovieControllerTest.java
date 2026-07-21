@@ -107,7 +107,6 @@ public class AdminMovieControllerTest {
         request.setDurationMinutes(150);
         request.setAgeRating(AgeRating.T16);
         request.setReleaseDate(LocalDate.now());
-        request.setStatus(MovieStatus.UPCOMING);
 
         MovieDto responseDto = new MovieDto();
         responseDto.setPublicId("public-id");
@@ -160,24 +159,30 @@ public class AdminMovieControllerTest {
     }
 
     @Test
-    void updateMovie_PublishValidationFailed() throws Exception {
-        MovieRequest request = new MovieRequest();
-        request.setTitle("Updated Movie");
-        request.setDurationMinutes(150);
-        request.setAgeRating(AgeRating.T16);
-        request.setReleaseDate(LocalDate.now());
-        request.setStatus(MovieStatus.NOW_SHOWING);
+    void genericUpdate_WithStatusInRawJson_MustNotChangeLifecycle() throws Exception {
+        String rawJson = """
+            {
+                "title": "Updated title",
+                "durationMinutes": 150,
+                "ageRating": "T16",
+                "releaseDate": "2026-07-21",
+                "status": "NOW_SHOWING"
+            }
+        """;
 
-        when(adminMovieService.updateMovie(eq("public-id"), any(MovieRequest.class)))
-                .thenThrow(new com.lorafilm.movie.common.exception.BusinessException(
-                        com.lorafilm.movie.common.exception.ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least 1 genre", null));
+        MovieDto responseDto = new MovieDto();
+        responseDto.setPublicId("public-id");
+        responseDto.setTitle("Updated title");
+        responseDto.setStatus(MovieStatus.DRAFT);
+
+        when(adminMovieService.updateMovie(eq("public-id"), any(MovieRequest.class))).thenReturn(responseDto);
 
         mockMvc.perform(put("/api/admin/movies/{publicId}", "public-id")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("MOVIE_PUBLISH_VALIDATION_FAILED"));
+                        .content(rawJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("DRAFT"));
     }
 
     @Test
@@ -193,5 +198,113 @@ public class AdminMovieControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Genres updated successfully"));
+    }
+
+    @Test
+    void getMovies_Success_ReturnAllIncludingDraft() throws Exception {
+        com.lorafilm.movie.common.dto.PageResponse<MovieDto> pageResponse = new com.lorafilm.movie.common.dto.PageResponse<>();
+        MovieDto draftMovie = new MovieDto();
+        draftMovie.setPublicId("movie-1");
+        draftMovie.setTitle("Draft Movie");
+        draftMovie.setStatus(MovieStatus.DRAFT);
+        pageResponse.setData(List.of(draftMovie));
+        pageResponse.setPageNo(0);
+        pageResponse.setPageSize(10);
+        pageResponse.setTotalElements(1);
+        pageResponse.setTotalPages(1);
+        pageResponse.setLast(true);
+
+        when(movieService.getMovies(null, null, null, null, null, null, 0, 10, "releaseDate,desc"))
+                .thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data[0].publicId").value("movie-1"))
+                .andExpect(jsonPath("$.data.data[0].status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void getMovies_EmptyPage_ReturnsEmptyListNotError() throws Exception {
+        com.lorafilm.movie.common.dto.PageResponse<MovieDto> pageResponse = new com.lorafilm.movie.common.dto.PageResponse<>();
+        pageResponse.setData(List.of());
+        pageResponse.setPageNo(0);
+        pageResponse.setPageSize(10);
+        pageResponse.setTotalElements(0);
+        pageResponse.setTotalPages(0);
+        pageResponse.setLast(true);
+
+        when(movieService.getMovies(null, null, null, null, null, null, 0, 10, "releaseDate,desc"))
+                .thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data").isArray())
+                .andExpect(jsonPath("$.data.data.length()").value(0))
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+    }
+
+    @Test
+    void getMovies_WithStatusFilter() throws Exception {
+        com.lorafilm.movie.common.dto.PageResponse<MovieDto> pageResponse = new com.lorafilm.movie.common.dto.PageResponse<>();
+        MovieDto movie = new MovieDto();
+        movie.setPublicId("movie-2");
+        movie.setTitle("Showing Movie");
+        movie.setStatus(MovieStatus.NOW_SHOWING);
+        pageResponse.setData(List.of(movie));
+        pageResponse.setPageNo(0);
+        pageResponse.setPageSize(10);
+        pageResponse.setTotalElements(1);
+        pageResponse.setTotalPages(1);
+        pageResponse.setLast(true);
+
+        when(movieService.getMovies("NOW_SHOWING", null, null, null, null, null, 0, 10, "releaseDate,desc"))
+                .thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
+                        .param("status", "NOW_SHOWING")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data[0].publicId").value("movie-2"))
+                .andExpect(jsonPath("$.data.data[0].status").value("NOW_SHOWING"));
+    }
+
+    @Test
+    void getMovies_WithKeywordFilter() throws Exception {
+        com.lorafilm.movie.common.dto.PageResponse<MovieDto> pageResponse = new com.lorafilm.movie.common.dto.PageResponse<>();
+        MovieDto movie = new MovieDto();
+        movie.setPublicId("movie-3");
+        movie.setTitle("Batman");
+        movie.setStatus(MovieStatus.NOW_SHOWING);
+        pageResponse.setData(List.of(movie));
+        pageResponse.setPageNo(0);
+        pageResponse.setPageSize(10);
+        pageResponse.setTotalElements(1);
+        pageResponse.setTotalPages(1);
+        pageResponse.setLast(true);
+
+        when(movieService.getMovies(null, null, "Batman", null, null, null, 0, 10, "releaseDate,desc"))
+                .thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
+                        .param("keyword", "Batman")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data[0].publicId").value("movie-3"))
+                .andExpect(jsonPath("$.data.data[0].title").value("Batman"));
     }
 }
