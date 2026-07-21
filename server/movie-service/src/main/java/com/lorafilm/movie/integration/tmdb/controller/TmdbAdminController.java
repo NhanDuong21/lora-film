@@ -1,19 +1,21 @@
 package com.lorafilm.movie.integration.tmdb.controller;
 
-import com.lorafilm.movie.integration.tmdb.service.TmdbImportService;
+import java.util.Optional;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import com.lorafilm.movie.common.api.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.lorafilm.movie.integration.tmdb.repository.TmdbSyncStateRepository;
-import com.lorafilm.movie.integration.tmdb.dto.TmdbSyncStateDto;
+
+import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.integration.tmdb.domain.entity.TmdbSyncState;
-import java.util.Optional;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbSyncStateDto;
+import com.lorafilm.movie.integration.tmdb.repository.TmdbSyncStateRepository;
+import com.lorafilm.movie.integration.tmdb.service.TmdbImportService;
 
 @RestController
 @RequestMapping("/api/admin/tmdb")
@@ -33,7 +35,7 @@ public class TmdbAdminController {
     public ResponseEntity<ApiResponse<TmdbSyncStateDto>> getSyncState() {
         log.info("[TmdbAdminController] Request to get sync state");
         Optional<TmdbSyncState> stateOpt = syncStateRepository.findBySyncType("DAILY_CHANGES");
-        
+
         TmdbSyncStateDto dto = new TmdbSyncStateDto();
         if (stateOpt.isPresent()) {
             TmdbSyncState state = stateOpt.get();
@@ -45,7 +47,7 @@ public class TmdbAdminController {
         } else {
             dto.setStatus("IDLE");
         }
-        
+
         return ResponseEntity.ok(ApiResponse.ok(dto));
     }
 
@@ -73,6 +75,18 @@ public class TmdbAdminController {
             }
         }).start();
         return ResponseEntity.ok(ApiResponse.ok("Bulk sync started in the background"));
+    }
+
+    @PostMapping("/sync/bulk/stop")
+    public ResponseEntity<String> stopBulkSync() {
+        log.info("[TmdbAdminController] Request to stop bulk export sync");
+        tmdbImportService.stopBulkSync();
+        return ResponseEntity.ok("Bulk sync stop signal sent");
+    }
+
+    @GetMapping("/sync/bulk/status")
+    public ResponseEntity<TmdbSyncState> getBulkSyncStatus() {
+        return ResponseEntity.ok(tmdbImportService.getBulkSyncStatus());
     }
 
     @PostMapping("/sync/bulk/reset")
