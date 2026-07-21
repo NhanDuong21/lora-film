@@ -45,6 +45,7 @@ import com.lorafilm.movie.integration.tmdb.dto.TmdbGenreDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbPersonDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbTrailerDto;
 import com.lorafilm.movie.common.enums.ActiveStatus;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.UUID;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -60,6 +61,9 @@ public class TmdbImportService {
 
     private static final Logger log = LoggerFactory.getLogger(TmdbImportService.class);
     private static final String SYNC_TYPE_BULK = "TMDB_BULK_EXPORT";
+
+    private final AtomicBoolean stopRequested = new AtomicBoolean(false);
+    private volatile Thread bulkSyncThread;
 
     private final TmdbClient tmdbClient;
     private final TmdbProperties properties;
@@ -109,6 +113,25 @@ public class TmdbImportService {
         this.productionCompanyRepository = productionCompanyRepository;
         this.movieProductionCompanyRepository = movieProductionCompanyRepository;
         this.movieVersionRepository = movieVersionRepository;
+    }
+
+    public void stopBulkSync() {
+        log.info("Request to stop TMDB Bulk Sync received.");
+        stopRequested.set(true);
+        if (bulkSyncThread != null && bulkSyncThread.isAlive()) {
+            bulkSyncThread.interrupt();
+        }
+    }
+
+    public TmdbSyncState getBulkSyncStatus() {
+        return syncStateRepository.findBySyncType(SYNC_TYPE_BULK)
+                .orElseGet(() -> {
+                    TmdbSyncState state = new TmdbSyncState();
+                    state.setSyncType(SYNC_TYPE_BULK);
+                    state.setStatus("IDLE");
+                    state.setCursor("0");
+                    return state;
+                });
     }
 
     public void resetBulkSyncState() {
@@ -164,6 +187,9 @@ public class TmdbImportService {
             }
         }
 
+        stopRequested.set(false);
+        bulkSyncThread = Thread.currentThread();
+
         try {
             log.info("Triggering TMDB export download on Node.js...");
             tmdbClient.triggerDownloadExport();
@@ -179,6 +205,13 @@ public class TmdbImportService {
             int maxRetries = 5;
             
             while (hasMore) {
+                if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
+                    log.info("TMDB Bulk Sync stopped by user request at cursor {}", currentCursor);
+                    syncState.setStatus("STOPPED");
+                    syncStateRepository.save(syncState);
+                    return;
+                }
+
                 try {
                     log.info("Fetching TMDB export with cursor {}", currentCursor);
                     String responseBody = tmdbClient.fetchMoviesExport(currentCursor, properties.getBatchSize());
@@ -208,7 +241,19 @@ public class TmdbImportService {
                     } else {
                         hasMore = false;
                     }
+                } catch (InterruptedException e) {
+                    log.info("TMDB Bulk Sync interrupted at cursor {}", currentCursor);
+                    syncState.setStatus("STOPPED");
+                    syncStateRepository.save(syncState);
+                    Thread.currentThread().interrupt();
+                    return;
                 } catch (Exception e) {
+                    if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
+                        log.info("TMDB Bulk Sync stopped during exception handling at cursor {}", currentCursor);
+                        syncState.setStatus("STOPPED");
+                        syncStateRepository.save(syncState);
+                        return;
+                    }
                     retryCount++;
                     if (retryCount <= maxRetries) {
                         log.warn("Network/Server error fetching export at cursor {} (Attempt {}/{}): {}. Retrying in 5 seconds...", 
@@ -224,10 +269,17 @@ public class TmdbImportService {
             syncState.setStatus("COMPLETED");
             syncStateRepository.save(syncState);
             log.info("TMDB Bulk Sync completed successfully.");
+        } catch (InterruptedException e) {
+            log.info("TMDB Bulk Sync thread interrupted.");
+            syncState.setStatus("STOPPED");
+            syncStateRepository.save(syncState);
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             log.error("TMDB Bulk sync process stopped with error: {}", e.getMessage());
             syncState.setStatus("FAILED");
             syncStateRepository.save(syncState);
+        } finally {
+            bulkSyncThread = null;
         }
     }
 
