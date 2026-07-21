@@ -1,5 +1,6 @@
 package com.lorafilm.booking.config;
 
+import com.lorafilm.booking.security.principal.UserPrincipal;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
@@ -21,6 +22,9 @@ public class AuditingConfiguration {
                 return Optional.of(SYSTEM_USER_ID);
             }
             Object principal = authentication.getPrincipal();
+            if (principal instanceof UserPrincipal userPrincipal) {
+                return Optional.ofNullable(userPrincipal.getId()).or(() -> Optional.of(SYSTEM_USER_ID));
+            }
             if (principal instanceof Long id) {
                 return Optional.of(id);
             }

@@ -15,7 +15,9 @@ public class OpenApiConfiguration {
 
     @Bean
     public OpenAPI customOpenAPI() {
-        final String securitySchemeName = "bearerAuth";
+        final String bearerSchemeName = "bearerAuth";
+        final String internalTokenSchemeName = "internalTokenAuth";
+
         return new OpenAPI()
                 .info(new Info()
                         .title("Booking Service API")
@@ -28,13 +30,21 @@ public class OpenApiConfiguration {
                         .license(new License()
                                 .name("Apache 2.0")
                                 .url("https://www.apache.org/licenses/LICENSE-2.0")))
-                .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
+                .addSecurityItem(new SecurityRequirement().addList(bearerSchemeName))
+                .addSecurityItem(new SecurityRequirement().addList(internalTokenSchemeName))
                 .components(new Components()
-                        .addSecuritySchemes(securitySchemeName,
+                        .addSecuritySchemes(bearerSchemeName,
                                 new SecurityScheme()
-                                        .name(securitySchemeName)
+                                        .name(bearerSchemeName)
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
-                                        .bearerFormat("JWT")));
+                                        .bearerFormat("JWT")
+                                        .description("JWT Token xác thực từ Auth Service (Authorization: Bearer <token>)"))
+                        .addSecuritySchemes(internalTokenSchemeName,
+                                new SecurityScheme()
+                                        .name("X-Internal-Token")
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                                        .description("Internal Token xác thực giữa các Microservices (Header: X-Internal-Token)")));
     }
 }
