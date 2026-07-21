@@ -30,7 +30,7 @@ export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
       const params = {
         page: currentPage,
         size: pageSize,
-        status: statusFilter === 'ALL' ? undefined : (statusFilter || 'DRAFT'),
+        status: statusFilter || undefined,
       };
       
       const keyword = searchTerm?.trim();
@@ -39,11 +39,14 @@ export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
       }
       
       const data = await adminMovieService.getMovies(params);
+      console.log("API RESPONSE DATA:", data);
       const normalized = normalizePagination(data?.data || data, pageSize);
+      console.log("NORMALIZED:", normalized);
       setMovies(normalized.items);
       setTotalElements(normalized.totalElements);
       setTotalPages(normalized.totalPages);
-    } catch {
+    } catch (error) {
+      console.error("API ERROR:", error);
       triggerToast?.('Lỗi khi tải danh sách phim', 'error');
     } finally {
       setIsLoading(false);
