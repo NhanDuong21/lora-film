@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface SeatReservationRepository extends JpaRepository<SeatReservation, Long>, JpaSpecificationExecutor<SeatReservation> {
@@ -22,6 +25,14 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
     Optional<SeatReservation> findByReservationCode(String reservationCode);
 
     List<SeatReservation> findAllByIdIn(List<Long> ids);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select reservation from SeatReservation reservation where reservation.id in :ids")
+    List<SeatReservation> findAllByIdInForUpdate(@Param("ids") List<Long> ids);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select reservation from SeatReservation reservation where reservation.publicId in :publicIds")
+    List<SeatReservation> findAllByPublicIdInForUpdate(@Param("publicIds") List<String> publicIds);
 
     @Query("""
         SELECT sr FROM SeatReservation sr 

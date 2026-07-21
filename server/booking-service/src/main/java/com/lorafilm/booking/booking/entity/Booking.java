@@ -3,6 +3,7 @@ package com.lorafilm.booking.booking.entity;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.common.entity.FullAuditableEntity;
+import com.lorafilm.booking.common.exception.InvalidBookingStatusException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,6 +12,7 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "bookings")
@@ -103,6 +105,109 @@ public class Booking extends FullAuditableEntity {
     private String note;
 
     public Booking() {
+    }
+
+    public static Booking create(
+            String publicId,
+            String bookingCode,
+            Long userId,
+            Long showtimeId,
+            Long movieId,
+            Long cinemaId,
+            Long auditoriumId,
+            BigDecimal ticketAmount,
+            BigDecimal foodAmount,
+            BigDecimal serviceFee,
+            BigDecimal taxAmount,
+            BigDecimal promotionDiscount,
+            BigDecimal voucherDiscount,
+            String currency,
+            Instant expiresAt,
+            String note) {
+        Booking booking = new Booking();
+        booking.setPublicId(Objects.requireNonNull(publicId, "publicId is required"));
+        booking.bookingCode = requireText(bookingCode, "bookingCode");
+        booking.userId = requirePositive(userId, "userId");
+        booking.showtimeId = requirePositive(showtimeId, "showtimeId");
+        booking.movieId = requirePositive(movieId, "movieId");
+        booking.cinemaId = requirePositive(cinemaId, "cinemaId");
+        booking.auditoriumId = requirePositive(auditoriumId, "auditoriumId");
+        booking.ticketAmount = requireNonNegative(ticketAmount, "ticketAmount");
+        booking.foodAmount = requireNonNegative(foodAmount, "foodAmount");
+        booking.serviceFee = requireNonNegative(serviceFee, "serviceFee");
+        booking.taxAmount = requireNonNegative(taxAmount, "taxAmount");
+        booking.promotionDiscount = requireNonNegative(promotionDiscount, "promotionDiscount");
+        booking.voucherDiscount = requireNonNegative(voucherDiscount, "voucherDiscount");
+        booking.currency = requireText(currency, "currency");
+        booking.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt is required");
+        booking.note = note;
+        booking.bookingStatus = BookingStatus.PENDING_PAYMENT;
+        booking.paymentStatus = PaymentStatus.PENDING;
+        booking.recalculateFinalAmount();
+        return booking;
+    }
+
+    public void changeStatus(BookingStatus targetStatus, Instant changedAt) {
+        Objects.requireNonNull(targetStatus, "targetStatus is required");
+        Objects.requireNonNull(changedAt, "changedAt is required");
+
+        if (!bookingStatus.canTransitionTo(targetStatus)) {
+            throw new InvalidBookingStatusException(
+                    "Cannot change booking status from " + bookingStatus + " to " + targetStatus);
+        }
+        if (targetStatus == BookingStatus.CONFIRMED && !changedAt.isBefore(expiresAt)) {
+            throw new InvalidBookingStatusException("Expired booking cannot be confirmed");
+        }
+        if (targetStatus == BookingStatus.EXPIRED && changedAt.isBefore(expiresAt)) {
+            throw new InvalidBookingStatusException("Booking cannot expire before its payment deadline");
+        }
+
+        bookingStatus = targetStatus;
+        switch (targetStatus) {
+            case CONFIRMED -> confirmedAt = changedAt;
+            case COMPLETED -> completedAt = changedAt;
+            case CANCELLED -> cancelledAt = changedAt;
+            case EXPIRED -> expiredAt = changedAt;
+            case REFUNDED -> refundedAt = changedAt;
+            case PENDING_PAYMENT -> throw new InvalidBookingStatusException(
+                    "Cannot transition a booking back to PENDING_PAYMENT");
+        }
+    }
+
+    public void cancel(String reasonCode, String reasonDetail, Instant cancelledAt) {
+        changeStatus(BookingStatus.CANCELLED, cancelledAt);
+        this.cancelReasonCode = reasonCode;
+        this.cancelReasonDetail = reasonDetail;
+    }
+
+    private void recalculateFinalAmount() {
+        BigDecimal grossAmount = ticketAmount.add(foodAmount).add(serviceFee).add(taxAmount);
+        BigDecimal totalDiscount = promotionDiscount.add(voucherDiscount);
+        finalAmount = grossAmount.subtract(totalDiscount);
+        if (finalAmount.signum() < 0) {
+            throw new IllegalArgumentException("finalAmount cannot be negative");
+        }
+    }
+
+    private static Long requirePositive(Long value, String fieldName) {
+        if (value == null || value <= 0) {
+            throw new IllegalArgumentException(fieldName + " must be positive");
+        }
+        return value;
+    }
+
+    private static BigDecimal requireNonNegative(BigDecimal value, String fieldName) {
+        if (value == null || value.signum() < 0) {
+            throw new IllegalArgumentException(fieldName + " must be non-negative");
+        }
+        return value;
+    }
+
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " is required");
+        }
+        return value;
     }
 
     public String getBookingCode() {
@@ -219,10 +324,6 @@ public class Booking extends FullAuditableEntity {
 
     public BookingStatus getBookingStatus() {
         return bookingStatus;
-    }
-
-    public void setBookingStatus(BookingStatus bookingStatus) {
-        this.bookingStatus = bookingStatus;
     }
 
     public PaymentStatus getPaymentStatus() {
