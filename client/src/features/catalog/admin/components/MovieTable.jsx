@@ -264,22 +264,50 @@ export default function MovieTable({
                   Trước
                 </button>
                 <div className="flex items-center gap-1 px-1">
-                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                    let page;
-                    if (totalPages <= 7) page = i;
-                    else if (currentPage < 4) page = i;
-                    else if (currentPage > totalPages - 5) page = totalPages - 7 + i;
-                    else page = currentPage - 3 + i;
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg transition-colors ${currentPage === page ? 'bg-amber-500 text-black' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
-                      >
-                        {page + 1}
-                      </button>
-                    );
-                  })}
+                  {(() => {
+                    const items = [];
+                    if (totalPages <= 7) {
+                      for (let i = 0; i < totalPages; i++) items.push(i);
+                    } else {
+                      if (currentPage <= 3) {
+                        for (let i = 0; i < 5; i++) items.push(i);
+                        items.push('ellipsis-1');
+                        items.push(totalPages - 1);
+                      } else if (currentPage >= totalPages - 4) {
+                        items.push(0);
+                        items.push('ellipsis-2');
+                        for (let i = totalPages - 5; i < totalPages; i++) items.push(i);
+                      } else {
+                        items.push(0);
+                        items.push('ellipsis-1');
+                        for (let i = currentPage - 1; i <= currentPage + 1; i++) items.push(i);
+                        items.push('ellipsis-2');
+                        items.push(totalPages - 1);
+                      }
+                    }
+                    return items.map((item, i) => {
+                      if (typeof item === 'string' && item.startsWith('ellipsis')) {
+                        return (
+                          <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center text-xs text-neutral-500">
+                            ...
+                          </span>
+                        );
+                      }
+                      return (
+                        <button
+                          key={item}
+                          onClick={() => setCurrentPage(item)}
+                          className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg transition-colors ${
+                            currentPage === item 
+                              ? 'bg-amber-500 text-black' 
+                              : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                          }`}
+                        >
+                          {item + 1}
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
                 <button
                   disabled={currentPage >= totalPages - 1 || totalPages === 0}
