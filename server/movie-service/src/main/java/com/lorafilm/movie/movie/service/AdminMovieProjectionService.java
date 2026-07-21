@@ -73,9 +73,17 @@ public class AdminMovieProjectionService {
                        .add(mg.getGenre().getName());
         });
 
+        Map<Long, String> primaryPosters = new HashMap<>();
+        movieMediaRepository.findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                movieIds, 
+                com.lorafilm.movie.movie.domain.enums.MovieMediaType.POSTER, 
+                com.lorafilm.movie.common.enums.ActiveStatus.ACTIVE
+        ).forEach(m -> primaryPosters.put(m.getMovie().getId(), m.getUrl()));
+
         List<MovieDto> dtos = moviePage.stream().map(movie -> {
             List<String> genres = movieGenres.getOrDefault(movie.getId(), Collections.emptyList());
-            MovieDto dto = movieMapper.toDto(movie, genres, null);
+            String primaryPosterUrl = primaryPosters.get(movie.getId());
+            MovieDto dto = movieMapper.toDto(movie, genres, primaryPosterUrl);
             
             // Enrich fields
             dto.setSource(movie.getTmdbId() != null ? "TMDB" : "MANUAL");

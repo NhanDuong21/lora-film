@@ -26,6 +26,7 @@ export default function MovieTable({
   onOpenEdit,
   onDelete,
 }) {
+  console.log('[MovieDebug] MovieTable props length:', movies?.length);
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-white space-y-6 animate-fade-in" data-testid="admin-movie-page">
       <div className="border-b border-zinc-800 pb-4">
@@ -92,10 +93,10 @@ export default function MovieTable({
       {isLoading ? (
         <SkeletonTable rows={pageSize} columns={7} />
       ) : (
-        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
+        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl shrink-0">
+          <div className="w-full overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-neutral-900">
                 <tr className="bg-neutral-900/50 border-b border-neutral-800 text-[10px] font-black text-neutral-400 uppercase tracking-wider">
                   <th className="py-4 px-5 w-12 text-center">STT</th>
                   <th className="py-4 px-5 w-16 text-center">POSTER</th>
@@ -110,7 +111,7 @@ export default function MovieTable({
               <tbody>
                 {movies.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-16 text-center text-neutral-500">
+                    <td colSpan={8} className="py-16 text-center text-neutral-500">
                       <div className="flex flex-col items-center gap-2">
                         <LayoutList className="w-10 h-10 text-neutral-700" />
                         <span className="text-sm">Không tìm thấy phim nào.</span>
@@ -122,7 +123,7 @@ export default function MovieTable({
                     const statusCfg = getStatusConfig(movie.status);
                     const warnings = getMovieListWarnings(movie);
                     return (
-                    <tr key={movie.publicId || idx} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
+                    <tr key={movie.publicId} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
                       <td className="py-4 px-5 text-center">
                         <span className="text-xs font-black text-neutral-500">{(currentPage * pageSize + idx + 1).toString().padStart(2, '0')}</span>
                       </td>
@@ -263,22 +264,50 @@ export default function MovieTable({
                   Trước
                 </button>
                 <div className="flex items-center gap-1 px-1">
-                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                    let page;
-                    if (totalPages <= 7) page = i;
-                    else if (currentPage < 4) page = i;
-                    else if (currentPage > totalPages - 5) page = totalPages - 7 + i;
-                    else page = currentPage - 3 + i;
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg transition-colors ${currentPage === page ? 'bg-amber-500 text-black' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
-                      >
-                        {page + 1}
-                      </button>
-                    );
-                  })}
+                  {(() => {
+                    const items = [];
+                    if (totalPages <= 7) {
+                      for (let i = 0; i < totalPages; i++) items.push(i);
+                    } else {
+                      if (currentPage <= 3) {
+                        for (let i = 0; i < 5; i++) items.push(i);
+                        items.push('ellipsis-1');
+                        items.push(totalPages - 1);
+                      } else if (currentPage >= totalPages - 4) {
+                        items.push(0);
+                        items.push('ellipsis-2');
+                        for (let i = totalPages - 5; i < totalPages; i++) items.push(i);
+                      } else {
+                        items.push(0);
+                        items.push('ellipsis-1');
+                        for (let i = currentPage - 1; i <= currentPage + 1; i++) items.push(i);
+                        items.push('ellipsis-2');
+                        items.push(totalPages - 1);
+                      }
+                    }
+                    return items.map((item, i) => {
+                      if (typeof item === 'string' && item.startsWith('ellipsis')) {
+                        return (
+                          <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center text-xs text-neutral-500">
+                            ...
+                          </span>
+                        );
+                      }
+                      return (
+                        <button
+                          key={item}
+                          onClick={() => setCurrentPage(item)}
+                          className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg transition-colors ${
+                            currentPage === item 
+                              ? 'bg-amber-500 text-black' 
+                              : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                          }`}
+                        >
+                          {item + 1}
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
                 <button
                   disabled={currentPage >= totalPages - 1 || totalPages === 0}
