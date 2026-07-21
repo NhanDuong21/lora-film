@@ -40,6 +40,7 @@ import com.lorafilm.movie.movie.domain.entity.MovieProductionCompany;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.CreditRoleType;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbGenreDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbPersonDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbTrailerDto;
@@ -315,9 +316,26 @@ public class TmdbImportService {
             return;
         }
         
-        // Import all valid movies received from Node API without skipping
-        if (wrapper.getQualityStatus() != null) {
-            log.info("Processing TMDB ID {}: Quality Status is {}", wrapper.getTmdbId(), wrapper.getQualityStatus());
+        String statusStr = wrapper.getApprovalStatus() != null ? wrapper.getApprovalStatus() : wrapper.getQualityStatus();
+        log.info("Processing TMDB ID {}: Status is {}", wrapper.getTmdbId(), statusStr);
+
+        if ("REJECTED".equalsIgnoreCase(statusStr) || "REJECT".equalsIgnoreCase(statusStr)) {
+            log.info("Skipping REJECTED TMDB Movie ID: {}", wrapper.getTmdbId());
+            return;
+        }
+
+        LocalDate releaseDate = movieMapper.extractReleaseDate(wrapper);
+        MovieStatus targetStatus = MovieStatus.DRAFT;
+
+        if ("AUTO_APPROVED".equalsIgnoreCase(statusStr) || "ACCEPT".equalsIgnoreCase(statusStr)) {
+            // Mọi phim AUTO_APPROVED có ngày chiếu ở tương lai HOẶC phát hành gần đây (trong vòng 90 ngày) đều được đặt là UPCOMING
+            if (releaseDate != null && (releaseDate.isAfter(LocalDate.now()) || releaseDate.isAfter(LocalDate.now().minusDays(90)))) {
+                targetStatus = MovieStatus.UPCOMING;
+            } else {
+                targetStatus = MovieStatus.DRAFT;
+            }
+        } else if ("NEEDS_REVIEW".equalsIgnoreCase(statusStr) || "HOLD".equalsIgnoreCase(statusStr)) {
+            targetStatus = MovieStatus.DRAFT;
         }
 
         Movie existingMovie = movieRepository.findByTmdbId(wrapper.getTmdbId()).orElse(null);
@@ -331,21 +349,23 @@ public class TmdbImportService {
 
         if (existingMovie == null) {
             // INSERT flow
-            log.info("Attempting to insert TMDB ID: {}", wrapper.getTmdbId());
+            log.info("Attempting to insert TMDB ID: {} with status: {}", wrapper.getTmdbId(), targetStatus);
             Movie newMovie = movieMapper.toEntity(wrapper);
+            newMovie.setStatus(targetStatus);
             String baseSlug = movieMapper.generateSlug(newMovie.getTitle());
             newMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), null));
             newMovie = movieRepository.save(newMovie);
-            log.info("INSERTED TMDB Movie ID {}", wrapper.getTmdbId());
+            log.info("INSERTED TMDB Movie ID {} with status: {}", wrapper.getTmdbId(), targetStatus);
             extractAndSaveRelations(newMovie, wrapper);
         } else {
             // UPDATE flow - Always update movie and refresh all relations
-            log.info("Attempting to update TMDB ID: {}", wrapper.getTmdbId());
+            log.info("Attempting to update TMDB ID: {} with status: {}", wrapper.getTmdbId(), targetStatus);
             movieMapper.updateEntityFromDto(wrapper, existingMovie);
+            existingMovie.setStatus(targetStatus);
             String baseSlug = movieMapper.generateSlug(existingMovie.getTitle());
             existingMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), existingMovie.getId()));
             existingMovie = movieRepository.save(existingMovie);
-            log.info("UPDATED TMDB Movie ID {}", wrapper.getTmdbId());
+            log.info("UPDATED TMDB Movie ID {} with status: {}", wrapper.getTmdbId(), targetStatus);
             extractAndSaveRelations(existingMovie, wrapper);
         }
     }
