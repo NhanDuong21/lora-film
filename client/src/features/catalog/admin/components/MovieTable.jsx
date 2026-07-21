@@ -26,6 +26,7 @@ export default function MovieTable({
   onOpenEdit,
   onDelete,
 }) {
+  console.log('[MovieDebug] MovieTable props length:', movies?.length);
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto bg-zinc-950 text-white space-y-6 animate-fade-in" data-testid="admin-movie-page">
       <div className="border-b border-zinc-800 pb-4">
@@ -92,10 +93,10 @@ export default function MovieTable({
       {isLoading ? (
         <SkeletonTable rows={pageSize} columns={7} />
       ) : (
-        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
+        <div className="bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl shrink-0">
+          <div className="w-full overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-neutral-900">
                 <tr className="bg-neutral-900/50 border-b border-neutral-800 text-[10px] font-black text-neutral-400 uppercase tracking-wider">
                   <th className="py-4 px-5 w-12 text-center">STT</th>
                   <th className="py-4 px-5 w-16 text-center">POSTER</th>
@@ -110,7 +111,7 @@ export default function MovieTable({
               <tbody>
                 {movies.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-16 text-center text-neutral-500">
+                    <td colSpan={8} className="py-16 text-center text-neutral-500">
                       <div className="flex flex-col items-center gap-2">
                         <LayoutList className="w-10 h-10 text-neutral-700" />
                         <span className="text-sm">Không tìm thấy phim nào.</span>
@@ -122,7 +123,7 @@ export default function MovieTable({
                     const statusCfg = getStatusConfig(movie.status);
                     const warnings = getMovieListWarnings(movie);
                     return (
-                    <tr key={movie.publicId || idx} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
+                    <tr key={movie.publicId} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
                       <td className="py-4 px-5 text-center">
                         <span className="text-xs font-black text-neutral-500">{(currentPage * pageSize + idx + 1).toString().padStart(2, '0')}</span>
                       </td>
