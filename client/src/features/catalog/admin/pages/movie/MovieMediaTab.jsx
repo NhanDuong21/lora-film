@@ -15,7 +15,7 @@ const DEFAULT_NEW_MEDIA = {
   status: 'ACTIVE'
 };
 
-export default function MovieMediaTab({ movie }) {
+export default function MovieMediaTab({ movie, onUpdate }) {
   const { mediaList, isLoading, error, isSubmitting, reload, addMedia, removeMedia } = useMovieMedia(movie.publicId);
   const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const [newMedia, setNewMedia] = useState(DEFAULT_NEW_MEDIA);
@@ -32,6 +32,7 @@ export default function MovieMediaTab({ movie }) {
       triggerToast('Đã thêm media');
       setNewMedia(DEFAULT_NEW_MEDIA);
       setShowAdd(false);
+      if (onUpdate) onUpdate();
     } else {
       triggerToast(res.error, 'error');
     }
@@ -47,6 +48,7 @@ export default function MovieMediaTab({ movie }) {
     const res = await removeMedia(id);
     if (res.success) {
       triggerToast('Đã xóa media');
+      if (onUpdate) onUpdate();
     } else {
       triggerToast(res.error, 'error');
     }

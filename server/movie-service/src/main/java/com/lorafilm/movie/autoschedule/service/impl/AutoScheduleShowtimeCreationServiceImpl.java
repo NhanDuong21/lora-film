@@ -2,6 +2,12 @@ package com.lorafilm.movie.autoschedule.service.impl;
 
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleShowtimeCreationService;
+import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
@@ -11,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -20,11 +27,20 @@ public class AutoScheduleShowtimeCreationServiceImpl implements AutoScheduleShow
 
     private final ShowtimeRepository showtimeRepository;
     private final ShowtimeStatusHistoryService showtimeStatusHistoryService;
+    private final SeatRepository seatRepository;
+    private final SeatTypeRepository seatTypeRepository;
+    private final ShowtimePriceRepository showtimePriceRepository;
 
     public AutoScheduleShowtimeCreationServiceImpl(ShowtimeRepository showtimeRepository,
-                                                   ShowtimeStatusHistoryService showtimeStatusHistoryService) {
+                                                   ShowtimeStatusHistoryService showtimeStatusHistoryService,
+                                                   SeatRepository seatRepository,
+                                                   SeatTypeRepository seatTypeRepository,
+                                                   ShowtimePriceRepository showtimePriceRepository) {
         this.showtimeRepository = showtimeRepository;
         this.showtimeStatusHistoryService = showtimeStatusHistoryService;
+        this.seatRepository = seatRepository;
+        this.seatTypeRepository = seatTypeRepository;
+        this.showtimePriceRepository = showtimePriceRepository;
     }
 
     @Override
@@ -59,6 +75,8 @@ public class AutoScheduleShowtimeCreationServiceImpl implements AutoScheduleShow
         showtimes = showtimeRepository.saveAll(showtimes);
         showtimeRepository.flush(); // Ensure IDs are generated
 
+        List<ShowtimePrice> defaultPrices = new ArrayList<>();
+
         // Record history and associate back to preview items
         for (int i = 0; i < items.size(); i++) {
             Showtime savedShowtime = showtimes.get(i);
@@ -66,13 +84,31 @@ public class AutoScheduleShowtimeCreationServiceImpl implements AutoScheduleShow
             
             showtimeStatusHistoryService.recordInitialHistory(savedShowtime, actorId);
             
-            // Note: If recordInitialHistory doesn't allow custom reason, we just use the default.
-            // In the codebase it uses "Created" as reason for initial draft.
+            // Generate default prices
+            List<String> requiredSeatTypeIds = seatRepository.findActiveSeatTypePublicIdsByAuditoriumId(savedShowtime.getAuditorium().getId());
+            List<SeatType> seatTypes = seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(requiredSeatTypeIds);
             
-            // Map created showtime back to item (in-memory, handled by JPA later)
-            // But we shouldn't use a setter directly if we are not modifying the item here,
-            // actually we MUST set it so the orchestration can update the item status!
-            // We will let orchestration handle the preview item update, we just return the showtimes.
+            for (SeatType seatType : seatTypes) {
+                ShowtimePrice price = new ShowtimePrice();
+                price.setShowtime(savedShowtime);
+                price.setSeatType(seatType);
+                price.setCurrency("VND");
+                
+                BigDecimal amount;
+                if (seatType.getCode() == SeatTypeCode.VIP) {
+                    amount = new BigDecimal("90000");
+                } else if (seatType.getCode() == SeatTypeCode.COUPLE) {
+                    amount = new BigDecimal("120000");
+                } else {
+                    amount = new BigDecimal("75000");
+                }
+                price.setPrice(amount);
+                defaultPrices.add(price);
+            }
+        }
+
+        if (!defaultPrices.isEmpty()) {
+            showtimePriceRepository.saveAll(defaultPrices);
         }
 
         return showtimes;

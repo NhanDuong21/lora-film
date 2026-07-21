@@ -58,8 +58,8 @@ export default function AdminMovieDetailPage() {
 
           <div className="p-6 overflow-x-hidden">
             {activeTab === 'overview' && <MovieOverviewTab movie={movie} onUpdate={reload} />}
-            {activeTab === 'versions' && <MovieVersionTab movie={movie} />}
-            {activeTab === 'media' && <MovieMediaTab movie={movie} />}
+            {activeTab === 'versions' && <MovieVersionTab movie={movie} onUpdate={reload} />}
+            {activeTab === 'media' && <MovieMediaTab movie={movie} onUpdate={reload} />}
             {activeTab === 'genres' && <MovieGenreTab movie={movie} onUpdate={reload} />}
             {activeTab === 'credits' && <MovieCreditTab movie={movie} onUpdate={reload} />}
             {activeTab === 'companies' && <MovieCompanyTab movie={movie} onUpdate={reload} />}

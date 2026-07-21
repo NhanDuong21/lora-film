@@ -43,17 +43,18 @@ const AdminShowtimeCreatePage = () => {
     subtitle: `${a.screenType} - ${a.soundType} • ${a.capacity} ghế`
   }));
 
-  const movieOptions = movies.map(m => {
-    const isDraft = m.status === 'DRAFT';
-    return {
-      value: m.publicId,
-      label: m.title,
-      subtitle: isDraft ? 'DRAFT - Chưa đủ điều kiện' : `${m.durationMinutes} phút • ${m.releaseDate || 'N/A'}`,
-      badge: m.status?.replace('_', ' '),
-      badgeColor: isDraft ? 'text-red-400 border-red-500/20 bg-red-500/10' : 'text-blue-400 border-blue-500/20 bg-blue-500/10',
-      disabled: isDraft
-    };
-  });
+  const movieOptions = movies
+    .filter(m => m.status !== 'DRAFT')
+    .map(m => {
+      return {
+        value: m.publicId,
+        label: m.title,
+        subtitle: `${m.durationMinutes} phút • ${m.releaseDate || 'N/A'}`,
+        badge: m.status?.replace('_', ' '),
+        badgeColor: 'text-blue-400 border-blue-500/20 bg-blue-500/10',
+        disabled: false
+      };
+    });
 
   const versionOptions = versions.map(v => {
     const isInactive = v.status !== 'ACTIVE';

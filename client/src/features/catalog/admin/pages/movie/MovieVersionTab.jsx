@@ -15,7 +15,7 @@ const DEFAULT_NEW_VERSION = {
   status: 'ACTIVE'
 };
 
-export default function MovieVersionTab({ movie }) {
+export default function MovieVersionTab({ movie, onUpdate }) {
   const { versions, isLoading, error, isSubmitting, reload, addVersion, removeVersion } = useMovieVersions(movie.publicId);
   const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const [newVer, setNewVer] = useState(DEFAULT_NEW_VERSION);
@@ -39,6 +39,7 @@ export default function MovieVersionTab({ movie }) {
       triggerToast('Đã thêm phiên bản mới');
       setNewVer(DEFAULT_NEW_VERSION);
       setShowAdd(false);
+      if (onUpdate) onUpdate();
     } else {
       triggerToast(res.error, 'error');
     }
@@ -54,6 +55,7 @@ export default function MovieVersionTab({ movie }) {
     const res = await removeVersion(id);
     if (res.success) {
       triggerToast('Đã xóa phiên bản');
+      if (onUpdate) onUpdate();
     } else {
       triggerToast(res.error, 'error');
     }

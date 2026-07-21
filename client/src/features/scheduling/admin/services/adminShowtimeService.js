@@ -39,6 +39,16 @@ const adminShowtimeService = {
   updatePrices: async (showtimePublicId, requestData) => {
     const response = await apiClient.put(`/api/admin/showtimes/${showtimePublicId}/prices`, requestData);
     return response.data;
+  },
+
+  transitionBatchStatus: async (batchId, requestData) => {
+    const response = await apiClient.put(`/api/admin/showtimes/batch/${batchId}/status`, requestData);
+    return response.data;
+  },
+
+  deleteBatch: async (batchId) => {
+    const response = await apiClient.delete(`/api/admin/showtimes/batch/${batchId}`);
+    return response.data;
   }
 };
 
