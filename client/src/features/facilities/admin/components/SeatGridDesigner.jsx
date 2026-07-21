@@ -7,9 +7,38 @@ export default function SeatGridDesigner({
   rows,
   cols,
   isLayoutEditable = true,
+  skipIO = false,
   onCellMouseDown,
   onCellMouseEnter
 }) {
+  const getRowLabel = (index, skip) => {
+    let current = 0;
+    let label = '';
+    while (current <= index) {
+      label = String.fromCharCode(65 + (current % 26)) + label;
+      if (skip && (label === 'I' || label === 'O')) {
+        index++; // push the index further to skip this letter
+      }
+      current++;
+    }
+    // Actually this loop logic for multi-character is complex. Since max rows is 20, we can just map it directly.
+    return '';
+  };
+
+  const calculateRowLabel = (rIdx, skip) => {
+    let letterCode = 65; // 'A'
+    for (let i = 0; i < rIdx; i++) {
+      letterCode++;
+      if (skip && (letterCode === 73 || letterCode === 79)) { // 'I' is 73, 'O' is 79
+        letterCode++;
+      }
+    }
+    // Handle skipping if the first letter itself is skipped when rIdx = 0
+    if (skip && (letterCode === 73 || letterCode === 79)) {
+        letterCode++;
+    }
+    return String.fromCharCode(letterCode);
+  };
   return (
     <div className="flex flex-col items-center select-none">
       
@@ -22,26 +51,28 @@ export default function SeatGridDesigner({
       {/* Visual Interactive Seating Grid Box */}
       <div className="bg-zinc-900/30 border border-zinc-900/80 p-8 rounded-3xl max-w-full shadow-2xl relative">
         
-        {/* Column Headers Numerical Indexes */}
-        <div className="flex mb-3">
-          <div className="w-8 shrink-0"></div>
-          <div 
-            className="grid gap-2 text-center text-[10px] font-black text-zinc-500"
-            style={{ 
-              gridTemplateColumns: `repeat(${cols}, minmax(36px, 1fr))`,
-              width: `${cols * 44}px`
-            }}
-          >
-            {Array.from({ length: cols }).map((_, idx) => (
-              <div key={idx} className="w-9">{idx + 1}</div>
-            ))}
+        {/* Container cho lưới ghế để có thể căn giữa */}
+        <div className="flex flex-col items-center overflow-x-auto pb-4">
+          {/* Column Headers Numerical Indexes */}
+          <div className="flex mb-3 w-max">
+            <div className="w-8 shrink-0"></div>
+            <div 
+              className="grid gap-2 text-center text-[10px] font-black text-zinc-500"
+              style={{ 
+                gridTemplateColumns: `repeat(${cols}, minmax(36px, 1fr))`,
+                width: `${cols * 44}px`
+              }}
+            >
+              {Array.from({ length: cols }).map((_, idx) => (
+                <div key={idx} className="w-9">{idx + 1}</div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Rows & Cells */}
-        <div className="space-y-2">
-          {matrix.map((row, rIdx) => {
-            const rowLetter = String.fromCharCode(65 + rIdx); // A, B, C...
+          {/* Rows & Cells */}
+          <div className="space-y-2 w-max">
+            {matrix.map((row, rIdx) => {
+              const rowLetter = calculateRowLabel(rIdx, skipIO);
             return (
               <div key={rIdx} className="flex items-center">
                 
@@ -105,6 +136,7 @@ export default function SeatGridDesigner({
               </div>
             );
           })}
+          </div>
         </div>
       </div>
     </div>

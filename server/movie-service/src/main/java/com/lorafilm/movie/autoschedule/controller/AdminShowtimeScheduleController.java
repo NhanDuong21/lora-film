@@ -24,15 +24,18 @@ public class AdminShowtimeScheduleController {
     private final com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService;
     private final com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService applyService;
     private final com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider;
+    private final com.lorafilm.movie.autoschedule.service.AutoScheduleEligibilityService eligibilityService;
 
     public AdminShowtimeScheduleController(ShowtimeSchedulePreviewService service,
                                            com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService,
                                            com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService applyService,
-                                           com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider) {
+                                           com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider,
+                                           com.lorafilm.movie.autoschedule.service.AutoScheduleEligibilityService eligibilityService) {
         this.service = service;
         this.generationService = generationService;
         this.applyService = applyService;
         this.currentUserProvider = currentUserProvider;
+        this.eligibilityService = eligibilityService;
     }
 
     @Operation(summary = "Get preview details", description = "Retrieves the persisted auto schedule preview and its candidates.")
@@ -118,5 +121,20 @@ public class AdminShowtimeScheduleController {
     ) {
         com.lorafilm.movie.autoschedule.dto.response.ApplyShowtimeSchedulePreviewResponse response = applyService.applyPreview(previewPublicId, request);
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview applied successfully", response));
+    }
+
+    @Operation(summary = "Get eligible movies", description = "Retrieves the list of eligible movies for auto schedule configuration.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Movies retrieved"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping("/eligible-movies")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<java.util.List<com.lorafilm.movie.autoschedule.dto.response.EligibleMovieResponse>>> getEligibleMovies(
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate toDate
+    ) {
+        return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok(eligibilityService.getEligibleMovies(fromDate, toDate)));
     }
 }

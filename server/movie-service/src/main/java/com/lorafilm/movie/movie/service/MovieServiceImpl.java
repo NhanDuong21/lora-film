@@ -47,6 +47,8 @@ public class MovieServiceImpl implements MovieService {
     private final MovieProductionCompanyRepository movieProductionCompanyRepository;
     private final MovieVersionRepository movieVersionRepository;
     private final MovieMapper movieMapper;
+    private final MovieReadinessEvaluator readinessEvaluator;
+    private final AdminMovieProjectionService projectionService;
 
     public MovieServiceImpl(MovieRepository movieRepository,
             MovieGenreRepository movieGenreRepository,
@@ -54,7 +56,9 @@ public class MovieServiceImpl implements MovieService {
             MovieCreditRepository movieCreditRepository,
             MovieProductionCompanyRepository movieProductionCompanyRepository,
             MovieVersionRepository movieVersionRepository,
-            MovieMapper movieMapper) {
+            MovieMapper movieMapper,
+            MovieReadinessEvaluator readinessEvaluator,
+            AdminMovieProjectionService projectionService) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMediaRepository = movieMediaRepository;
@@ -62,6 +66,8 @@ public class MovieServiceImpl implements MovieService {
         this.movieProductionCompanyRepository = movieProductionCompanyRepository;
         this.movieVersionRepository = movieVersionRepository;
         this.movieMapper = movieMapper;
+        this.readinessEvaluator = readinessEvaluator;
+        this.projectionService = projectionService;
     }
 
     @Override
@@ -115,39 +121,7 @@ public class MovieServiceImpl implements MovieService {
         Pageable pageable = PageRequest.of(page, size, sorting);
         Page<Movie> moviePage = movieRepository.findAll(spec, pageable);
 
-        List<Long> movieIds = moviePage.getContent().stream()
-                .map(Movie::getId)
-                .collect(Collectors.toList());
-
-        List<MovieGenre> allGenres = movieIds.isEmpty() ? List.of() : movieGenreRepository.findByMovieIdIn(movieIds);
-        List<MovieMedia> allPrimaryPosters = movieIds.isEmpty() ? List.of() : movieMediaRepository.findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(movieIds, MovieMediaType.POSTER, ActiveStatus.ACTIVE);
-
-        Map<Long, List<String>> genresMap = allGenres.stream()
-                .collect(Collectors.groupingBy(
-                        mg -> mg.getMovie().getId(),
-                        Collectors.mapping(mg -> mg.getGenre().getName(), Collectors.toList())
-                ));
-
-        Map<Long, String> postersMap = allPrimaryPosters.stream()
-                .collect(Collectors.toMap(
-                        mm -> mm.getMovie().getId(),
-                        MovieMedia::getUrl,
-                        (url1, url2) -> url1
-                ));
-
-        List<MovieDto> movieDtos = moviePage.getContent().stream().map(movie -> {
-            List<String> genres = genresMap.getOrDefault(movie.getId(), List.of());
-            String posterUrl = postersMap.get(movie.getId());
-            return movieMapper.toDto(movie, genres, posterUrl);
-        }).collect(Collectors.toList());
-
-        return new PageResponse<>(
-                movieDtos,
-                moviePage.getNumber(),
-                moviePage.getSize(),
-                moviePage.getTotalElements(),
-                moviePage.getTotalPages(),
-                moviePage.isLast());
+        return projectionService.enrichMovies(moviePage);
     }
 
     @Override
@@ -159,7 +133,8 @@ public class MovieServiceImpl implements MovieService {
         }
         Movie movie = movieOpt.orElseThrow(() -> new ResourceNotFoundException("Movie not found"));
 
-        return mapToDetailDto(movie);
+        MovieDetailDto detailDto = mapToDetailDto(movie);
+        return projectionService.enrichMovieDetail(movie, detailDto);
     }
 
     @Override
@@ -168,8 +143,7 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
 
-        if (movie.getStatus() == MovieStatus.DRAFT && 
-            (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING || targetStatus == MovieStatus.ENDED)) {
+        if (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING) {
             validatePublishConditions(movie.getId());
         }
 
@@ -191,6 +165,11 @@ public class MovieServiceImpl implements MovieService {
     public void validatePublishConditions(Long movieId) {
         boolean hasActiveVersion = movieVersionRepository.existsActiveVersion(movieId);
         boolean hasPrimaryPoster = movieMediaRepository.existsPrimaryPoster(movieId);
+        boolean hasGenre = !movieGenreRepository.findByMovieId(movieId).isEmpty();
+        
+        if (!hasGenre) {
+            throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least 1 genre to be published");
+        }
 
         if (!hasActiveVersion && !hasPrimaryPoster) {
             throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least one active version and one primary poster to publish");
@@ -333,20 +312,21 @@ public class MovieServiceImpl implements MovieService {
         detailDto.setDistributors(distributors);
         detailDto.setStudios(studios);
 
-        List<MovieVersion> versions = movieVersionRepository.findByMovieIdAndStatusAndDeletedAtIsNull(movie.getId(), ActiveStatus.ACTIVE);
+        List<MovieVersion> versions = movieVersionRepository.findByMovieIdAndDeletedAtIsNull(movie.getId());
         List<MovieDetailDto.MovieVersionDto> versionDtos = versions.stream().map(v -> {
             MovieDetailDto.MovieVersionDto d = new MovieDetailDto.MovieVersionDto();
             d.setPublicId(v.getPublicId());
             d.setVersionName(v.getVersionName());
-            d.setFormat(v.getFormat() != null ? v.getFormat().name() : null);
+            d.setFormat(v.getFormat() != null ? v.getFormat().getValue() : null);
             d.setAudioLanguage(v.getAudioLanguage());
             d.setSubtitleLanguage(v.getSubtitleLanguage());
             d.setDubLanguage(v.getDubLanguage());
+            d.setStatus(v.getStatus() != null ? v.getStatus().name() : null);
             return d;
         }).collect(Collectors.toList());
         detailDto.setVersions(versionDtos);
 
-        List<MovieMedia> media = movieMediaRepository.findByMovieIdAndStatusAndDeletedAtIsNull(movie.getId(), ActiveStatus.ACTIVE);
+        List<MovieMedia> media = movieMediaRepository.findByMovieIdAndDeletedAtIsNull(movie.getId());
         List<MovieDetailDto.MovieMediaDto> mediaDtos = media.stream().map(m -> {
             MovieDetailDto.MovieMediaDto d = new MovieDetailDto.MovieMediaDto();
             d.setPublicId(m.getPublicId());
@@ -354,6 +334,8 @@ public class MovieServiceImpl implements MovieService {
             d.setUrl(m.getUrl());
             d.setTitle(m.getTitle());
             d.setIsPrimary(m.getIsPrimary());
+            d.setDisplayOrder(m.getDisplayOrder());
+            d.setStatus(m.getStatus() != null ? m.getStatus().name() : null);
             return d;
         }).collect(Collectors.toList());
         detailDto.setMedia(mediaDtos);

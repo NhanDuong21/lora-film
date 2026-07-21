@@ -35,7 +35,6 @@ export default function CinemaFormView({ onCancel, onSubmit, triggerToast }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Media states
-  const [logoUrl, setLogoUrl] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
   const [galleryUrls, setGalleryUrls] = useState(['', '', '', '', '']); // Default 5 images
   const [mapImageUrl, setMapImageUrl] = useState('');
@@ -71,9 +70,12 @@ export default function CinemaFormView({ onCancel, onSubmit, triggerToast }) {
     setIsSubmitting(true);
     try {
       await onSubmit(formData, operatingHours, {
-        logoUrl,
         bannerUrl,
-        galleryUrls: galleryUrls.filter(url => url && url.trim().length > 0),
+        galleryUrls: galleryUrls.filter(url => {
+          if (!url) return false;
+          if (typeof url === 'string') return url.trim().length > 0;
+          return true;
+        }),
         mapImageUrl
       });
     } catch (err) {
@@ -125,8 +127,6 @@ export default function CinemaFormView({ onCancel, onSubmit, triggerToast }) {
             />
 
             <CinemaMediaForm
-              logoUrl={logoUrl}
-              setLogoUrl={setLogoUrl}
               bannerUrl={bannerUrl}
               setBannerUrl={setBannerUrl}
               galleryUrls={galleryUrls}

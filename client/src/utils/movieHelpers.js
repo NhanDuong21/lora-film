@@ -158,5 +158,9 @@ export const getYoutubeId = (url) => {
 export const formatDate = (d) => {
   if (!d) return 'N/A';
   const dt = new Date(d);
-  return isNaN(dt) ? d : dt.toLocaleDateString('vi-VN');
+  if (isNaN(dt)) return d;
+  const day = String(dt.getDate()).padStart(2, '0');
+  const month = String(dt.getMonth() + 1).padStart(2, '0');
+  const year = dt.getFullYear();
+  return `${day}/${month}/${year}`;
 };

@@ -111,7 +111,7 @@ class ShowtimeValidationServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(auditoriumMaintenanceRepository.existsOverlap(eq(auditorium.getId()), any(), any(), any()))
                 .thenReturn(false);
-        when(showtimeRepository.findPotentialOverlaps(eq(auditorium.getId()), any(), any()))
+        when(showtimeRepository.findBlockingOverlapsForScheduling(eq(auditorium.getId()), any(), any()))
                 .thenReturn(Collections.emptyList());
 
         assertDoesNotThrow(() -> showtimeValidationService.validateScheduling(context));
@@ -194,7 +194,7 @@ class ShowtimeValidationServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(auditoriumMaintenanceRepository.existsOverlap(eq(auditorium.getId()), any(), any(), any()))
                 .thenReturn(false);
-        when(showtimeRepository.findPotentialOverlaps(eq(auditorium.getId()), any(), any()))
+        when(showtimeRepository.findBlockingOverlapsForScheduling(eq(auditorium.getId()), any(), any()))
                 .thenReturn(Collections.emptyList());
 
         Integer[] validDurations = { 1, 29, 30, 138 };
@@ -246,7 +246,7 @@ class ShowtimeValidationServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(auditoriumMaintenanceRepository.existsOverlap(eq(auditorium.getId()), any(), any(), any()))
                 .thenReturn(false);
-        when(showtimeRepository.findPotentialOverlaps(eq(auditorium.getId()), any(), any()))
+        when(showtimeRepository.findBlockingOverlapsForScheduling(eq(auditorium.getId()), any(), any()))
                 .thenReturn(Collections.emptyList());
 
         assertDoesNotThrow(() -> showtimeValidationService.validateScheduling(ctx));
@@ -332,7 +332,7 @@ class ShowtimeValidationServiceImplTest {
 
         Showtime overlapping = new Showtime();
         overlapping.setId(10L);
-        when(showtimeRepository.findPotentialOverlaps(eq(auditorium.getId()), any(), any()))
+        when(showtimeRepository.findBlockingOverlapsForScheduling(eq(auditorium.getId()), any(), any()))
                 .thenReturn(List.of(overlapping));
 
         BusinessException ex = assertThrows(BusinessException.class,

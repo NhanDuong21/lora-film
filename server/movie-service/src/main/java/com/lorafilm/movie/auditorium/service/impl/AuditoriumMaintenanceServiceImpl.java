@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class AuditoriumMaintenanceServiceImpl implements AuditoriumMaintenanceService {
@@ -90,6 +91,18 @@ public class AuditoriumMaintenanceServiceImpl implements AuditoriumMaintenanceSe
         window.setStatus(ActionStatus.CANCELLED);
         window.setUpdatedBy(currentUserProvider.getCurrentUserId());
         return mapToResponse(window);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MaintenanceWindowResponse> getMaintenanceWindows(String auditoriumPublicId) {
+        Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNull(auditoriumPublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
+
+        List<AuditoriumMaintenanceWindow> windows = maintenanceRepository.findByAuditoriumIdOrderByStartTimeDesc(auditorium.getId());
+        return windows.stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
     private MaintenanceWindowResponse mapToResponse(AuditoriumMaintenanceWindow w) {

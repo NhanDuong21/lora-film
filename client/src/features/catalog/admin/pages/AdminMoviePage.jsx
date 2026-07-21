@@ -1,21 +1,22 @@
 // eslint-disable-next-line no-unused-vars
 import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import useAdminMovies from '@/features/catalog/admin/hooks/useAdminMovies';
 import MovieTable from '@/features/catalog/admin/components/MovieTable';
-import MovieDetailView from '@/features/catalog/customer/components/MovieDetailView';
 import MovieFormModal from '@/features/catalog/admin/components/MovieFormModal';
+import TmdbSyncStatusPanel from '@/features/catalog/admin/components/TmdbSyncStatusPanel';
 
 export default function AdminMoviePage() {
-  const { triggerToast } = useOutletContext() || {};
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
 
   // Orchestrator States
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
 
   // Hook for movie list management
-  const adminMovies = useAdminMovies(triggerToast);
+  const adminMovies = useAdminMovies({ triggerConfirm, triggerToast });
+
+  const navigate = useNavigate();
 
   const handleOpenAdd = () => {
     setSelectedMovie(null);
@@ -28,22 +29,8 @@ export default function AdminMoviePage() {
   };
 
   const handleOpenDetail = (movie) => {
-    setSelectedMovie(movie);
-    setIsDetailOpen(true);
+    navigate(`/admin/movies/${movie.publicId}`);
   };
-
-  if (isDetailOpen && selectedMovie) {
-    return (
-      <MovieDetailView
-        movie={selectedMovie}
-        onClose={() => setIsDetailOpen(false)}
-        onOpenEdit={(movie) => {
-          setIsDetailOpen(false);
-          handleOpenEdit(movie);
-        }}
-      />
-    );
-  }
 
   if (isFormOpen) {
     return (
@@ -59,7 +46,11 @@ export default function AdminMoviePage() {
   }
 
   return (
-    <MovieTable
+    <div className="flex flex-col h-full">
+      <div className="px-6 md:px-8 pt-6">
+        <TmdbSyncStatusPanel />
+      </div>
+      <MovieTable
       movies={adminMovies.movies}
       isLoading={adminMovies.isLoading}
       currentPage={adminMovies.currentPage}
@@ -77,5 +68,6 @@ export default function AdminMoviePage() {
       onOpenEdit={handleOpenEdit}
       onDelete={adminMovies.handleDelete}
     />
+    </div>
   );
 }

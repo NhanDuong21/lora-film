@@ -2,14 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminGenreService from '@/features/catalog/admin/services/adminGenreService';
 import { parseApiError } from '@/utils/apiErrorHandler';
+import { normalizePagination } from '@/utils/pagination';
 
-export default function useAdminMovies(triggerToast) {
+export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
   const [movies, setMovies] = useState([]);
   const [genresList, setGenresList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('DRAFT');
   const [searchTerm, setSearchTerm] = useState('');
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -26,19 +27,26 @@ export default function useAdminMovies(triggerToast) {
   const fetchMovies = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await adminMovieService.getMovies({
+      const params = {
         page: currentPage,
         size: pageSize,
-        search: searchTerm || undefined,
-        status: statusFilter || 'ALL',
-      });
-      const content = data?.data?.data || data?.data?.content || data?.content || data?.data || data || [];
-      const totalEls = data?.data?.totalElements ?? data?.totalElements ?? (Array.isArray(content) ? content.length : 0);
-      const totalPgs = data?.data?.totalPages ?? data?.totalPages ?? Math.ceil(totalEls / pageSize);
-      setMovies(Array.isArray(content) ? content : []);
-      setTotalElements(totalEls);
-      setTotalPages(totalPgs);
-    } catch {
+        status: statusFilter || undefined,
+      };
+      
+      const keyword = searchTerm?.trim();
+      if (keyword) {
+        params.keyword = keyword;
+      }
+      
+      const data = await adminMovieService.getMovies(params);
+      console.log("API RESPONSE DATA:", data);
+      const normalized = normalizePagination(data?.data || data, pageSize);
+      console.log("NORMALIZED:", normalized);
+      setMovies(normalized.items);
+      setTotalElements(normalized.totalElements);
+      setTotalPages(normalized.totalPages);
+    } catch (error) {
+      console.error("API ERROR:", error);
       triggerToast?.('Lỗi khi tải danh sách phim', 'error');
     } finally {
       setIsLoading(false);
@@ -56,7 +64,11 @@ export default function useAdminMovies(triggerToast) {
   }, [fetchMovies]);
 
   const handleDelete = async (publicId, title) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)) return;
+    const shouldDelete = triggerConfirm 
+      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)
+      : window.confirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`);
+      
+    if (!shouldDelete) return;
     try {
       await adminMovieService.deleteMovie(publicId);
       triggerToast?.('Đã xóa phim thành công!');

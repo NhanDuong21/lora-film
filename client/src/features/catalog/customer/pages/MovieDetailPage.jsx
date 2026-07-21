@@ -209,7 +209,7 @@ export default function MovieDetailPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-brand-dark text-zinc-100 selection:bg-brand-coral selection:text-zinc-950 font-sans font-medium">
+    <div className="flex flex-col min-h-screen bg-brand-dark text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
       {/* Cinematic Ambient Backdrop */}
       {movie && (
         <div className="absolute top-0 left-0 w-full h-[520px] md:h-[600px] overflow-hidden z-0 pointer-events-none select-none">
@@ -233,7 +233,7 @@ export default function MovieDetailPage() {
             <div className="pb-6 border-b border-zinc-900 mb-8">
               <button
                 onClick={handleBack}
-                className="flex items-center gap-2 bg-black/40 hover:bg-brand-coral/25 text-white border border-white/10 hover:border-brand-coral font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
+                className="flex items-center gap-2 bg-black/40 hover:bg-brand-orange/25 text-white border border-white/10 hover:border-brand-orange font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Quay lại</span>
@@ -259,7 +259,7 @@ export default function MovieDetailPage() {
                 {error !== "MOVIE_NOT_FOUND" && (
                   <button
                     onClick={fetchMovieDetail}
-                    className="bg-brand-coral hover:bg-opacity-90 text-white font-bold px-5 py-2 rounded-full text-xs transition-all duration-300 cursor-pointer"
+                    className="bg-brand-orange hover:bg-opacity-90 text-white font-bold px-5 py-2 rounded-full text-xs transition-all duration-300 cursor-pointer"
                   >
                     Thử lại
                   </button>
@@ -280,7 +280,7 @@ export default function MovieDetailPage() {
             <div className="pb-6 border-b border-zinc-900/40 mb-8 flex justify-between items-center">
               <button
                 onClick={handleBack}
-                className="flex items-center gap-2 bg-black/40 hover:bg-brand-coral/25 text-white border border-white/10 hover:border-brand-coral font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
+                className="flex items-center gap-2 bg-black/40 hover:bg-brand-orange/25 text-white border border-white/10 hover:border-brand-orange font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Quay lại</span>
@@ -306,7 +306,7 @@ export default function MovieDetailPage() {
                       onClick={() => setActiveTrailerUrl(getYoutubeEmbedUrl(trailerUrl))}
                       className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                     >
-                      <div className="w-14 h-14 rounded-full bg-brand-coral flex items-center justify-center text-white shadow-lg shadow-brand-coral/30 scale-90 group-hover:scale-100 transition-transform duration-300">
+                      <div className="w-14 h-14 rounded-full bg-brand-orange flex items-center justify-center text-white shadow-lg shadow-brand-orange/30 scale-90 group-hover:scale-100 transition-transform duration-300">
                         <Play className="w-6 h-6 fill-current ml-1" />
                       </div>
                     </button>
@@ -345,11 +345,11 @@ export default function MovieDetailPage() {
                 {/* Meta details list */}
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-400 font-semibold mb-6">
                   <div className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-brand-coral" />
+                    <Clock className="w-4 h-4 text-brand-orange" />
                     <span>{formatDuration(movie.durationMinutes)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-brand-coral" />
+                    <Calendar className="w-4 h-4 text-brand-orange" />
                     <span>Khởi chiếu: {formatDate(movie.releaseDate)}</span>
                   </div>
                 </div>
@@ -379,9 +379,9 @@ export default function MovieDetailPage() {
                   {trailerUrl && (
                     <button
                       onClick={() => setActiveTrailerUrl(getYoutubeEmbedUrl(trailerUrl))}
-                      className="group flex items-center gap-2 bg-transparent border border-white hover:border-brand-coral hover:text-brand-coral text-white font-bold px-6 py-3.5 rounded-full transition-all duration-300 cursor-pointer text-xs uppercase tracking-wider"
+                      className="group flex items-center gap-2 bg-transparent border border-white hover:border-brand-orange hover:text-brand-orange text-white font-bold px-6 py-3.5 rounded-full transition-all duration-300 cursor-pointer text-xs uppercase tracking-wider"
                     >
-                      <Play className="w-4 h-4 fill-current group-hover:text-brand-coral" />
+                      <Play className="w-4 h-4 fill-current group-hover:text-brand-orange" />
                       Xem Trailer
                     </button>
                   )}
@@ -404,7 +404,7 @@ export default function MovieDetailPage() {
                       onClick={() => setSelectedDateIndex(idx)}
                       className={`flex flex-col items-center justify-center px-5 py-3 rounded-2xl min-w-[90px] border transition-all duration-300 shrink-0 cursor-pointer ${
                         selectedDateIndex === idx
-                          ? 'bg-brand-coral border-brand-coral text-white font-bold scale-105 shadow-lg shadow-brand-coral/20'
+                          ? 'bg-brand-orange border-brand-orange text-white font-bold scale-105 shadow-lg shadow-brand-orange/20'
                           : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
                       }`}
                     >
@@ -417,7 +417,7 @@ export default function MovieDetailPage() {
                 {/* Accordions Grouped by Cinema */}
                 {loadingShowtimes ? (
                   <div className="flex justify-center items-center py-12">
-                    <div className="w-8 h-8 border-2 border-brand-coral border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-8 h-8 border-2 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 ) : Object.keys(showtimesByCinema).length > 0 ? (
                   <div className="space-y-6">
@@ -426,14 +426,14 @@ export default function MovieDetailPage() {
                         key={cIdx}
                         className="bg-zinc-950/40 border border-zinc-850 rounded-2xl p-5 md:p-6"
                       >
-                        <h3 className="text-sm md:text-base font-bold text-white mb-4 border-l-2 border-brand-coral pl-3 uppercase tracking-wider">
+                        <h3 className="text-sm md:text-base font-bold text-white mb-4 border-l-2 border-brand-orange pl-3 uppercase tracking-wider">
                           {cinemaName}
                         </h3>
 
                         <div className="space-y-4">
                           {Object.keys(showtimesByCinema[cinemaName]).map((formatLabel, fIdx) => (
                             <div key={fIdx} className="flex flex-col sm:flex-row sm:items-center gap-4 py-2 border-b border-zinc-900/60 last:border-0">
-                              <span className="text-[10px] font-black text-brand-coral uppercase tracking-widest shrink-0 w-24">
+                              <span className="text-[10px] font-black text-brand-orange uppercase tracking-widest shrink-0 w-24">
                                 {formatLabel}
                               </span>
                               
@@ -442,7 +442,7 @@ export default function MovieDetailPage() {
                                   <button
                                     key={st.showtimePublicId}
                                     onClick={() => navigate(`/seat-selection?showtimeId=${st.showtimePublicId}`)}
-                                    className="bg-zinc-900 hover:bg-brand-coral text-zinc-300 hover:text-white border border-zinc-800 hover:border-brand-coral text-xs md:text-sm font-semibold py-2px px-4 py-2 rounded-xl transition-all duration-300 cursor-pointer"
+                                    className="bg-zinc-900 hover:bg-brand-orange text-zinc-300 hover:text-white border border-zinc-800 hover:border-brand-orange text-xs md:text-sm font-semibold py-2px px-4 py-2 rounded-xl transition-all duration-300 cursor-pointer"
                                   >
                                     {formattedStartTime(st.startTime)}
                                   </button>

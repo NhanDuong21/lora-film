@@ -139,3 +139,60 @@ export const getYoutubeEmbedUrl = (url) => {
   return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
 };
 
+/**
+ * Format ISO datetime string to display datetime
+ * @param {string} dateString - ISO string (e.g. '2026-06-28T15:30:00Z')
+ * @returns {string} Formatted string (e.g. '15:30 28/06/2026')
+ */
+export const formatDateTime = (dateString) => {
+  if (!dateString) return "Đang cập nhật";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes} ${day}/${month}/${year}`;
+  } catch {
+    return dateString;
+  }
+};
+
+/**
+ * Convert API timestamp to HTML datetime-local input value
+ * @param {string} dateString - ISO string
+ * @returns {string} 'YYYY-MM-DDTHH:mm' format
+ */
+export const toDateTimeLocalValue = (dateString) => {
+  if (!dateString) return "";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+    
+    // Convert to local time string matching 'YYYY-MM-DDTHH:mm'
+    const offset = date.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(date - offset)).toISOString().slice(0, 16);
+    return localISOTime;
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * Convert HTML datetime-local input value to API ISO string
+ * @param {string} localValue - 'YYYY-MM-DDTHH:mm' format
+ * @returns {string} ISO string
+ */
+export const fromDateTimeLocalValue = (localValue) => {
+  if (!localValue) return null;
+  try {
+    const date = new Date(localValue);
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString();
+  } catch {
+    return null;
+  }
+};
+

@@ -31,27 +31,34 @@ const adminCinemaService = {
     return response.data;
   },
 
-  // Geocoding Suggestions
-  suggestAddress: async (keyword) => {
-    const response = await apiClient.get('/api/v1/address/suggest', { params: { q: keyword } });
-    return response.data;
-  },
 
-  // Forward Geocode
-  forwardGeocode: async (address) => {
-    const response = await apiClient.post('/api/v1/geocode', { address });
-    return response.data;
-  },
 
-  // Reverse Geocode
-  reverseGeocode: async (lat, lon) => {
-    const response = await apiClient.get('/api/v1/geocode/reverse', { params: { lat, lon } });
+  // Upload Cinema Media file to Cloudinary via backend
+  uploadCinemaMedia: async (file, type, cinemaPublicId = null) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    if (cinemaPublicId) {
+      formData.append('cinemaPublicId', cinemaPublicId);
+    }
+    
+    const response = await apiClient.post('/api/admin/cinemas/media/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 
   // Save Cinema Media
   createCinemaMedia: async (cinemaPublicId, mediaData) => {
     const response = await apiClient.post(`/api/admin/cinemas/${cinemaPublicId}/media`, mediaData);
+    return response.data;
+  },
+
+  // Update Cinema Media
+  updateCinemaMedia: async (mediaPublicId, mediaData) => {
+    const response = await apiClient.put(`/api/admin/cinema-media/${mediaPublicId}`, mediaData);
     return response.data;
   },
 

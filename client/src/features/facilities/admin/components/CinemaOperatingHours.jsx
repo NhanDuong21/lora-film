@@ -10,6 +10,41 @@ export default function CinemaOperatingHours({ operatingHours, onHoursChange }) 
         <h2 className="text-sm font-bold uppercase tracking-wider text-white">Giờ Hoạt Động (Theo Thứ)</h2>
       </div>
 
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            const monday = operatingHours[0];
+            if (!monday) return;
+            // Apply Monday to Mon-Fri (index 0 to 4)
+            for (let i = 1; i <= 4; i++) {
+              onHoursChange(i, 'isClosed', monday.isClosed);
+              onHoursChange(i, 'openTime', monday.openTime);
+              onHoursChange(i, 'closeTime', monday.closeTime);
+            }
+          }}
+          className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-orange border border-zinc-800 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-colors"
+        >
+          Áp Dụng T2-T6
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const monday = operatingHours[0];
+            if (!monday) return;
+            // Apply Monday to all (index 1 to 6)
+            for (let i = 1; i <= 6; i++) {
+              onHoursChange(i, 'isClosed', monday.isClosed);
+              onHoursChange(i, 'openTime', monday.openTime);
+              onHoursChange(i, 'closeTime', monday.closeTime);
+            }
+          }}
+          className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-orange border border-zinc-800 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-colors"
+        >
+          Áp Dụng Tất Cả
+        </button>
+      </div>
+
       <div className="flex flex-col gap-3">
         {[
           'Thứ Hai',
@@ -38,15 +73,23 @@ export default function CinemaOperatingHours({ operatingHours, onHoursChange }) 
                 <div className="flex items-center gap-1.5 shrink-0">
                   <input
                     type="time"
-                    value={oh.openTime}
-                    onChange={e => onHoursChange(idx, 'openTime', e.target.value)}
+                    max="23:59"
+                    value={oh.openTime || ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      onHoursChange(idx, 'openTime', val);
+                    }}
                     className="bg-zinc-900 border border-zinc-800 focus:border-orange-500/40 rounded-lg p-1.5 px-1 w-20 text-center text-[10px] text-zinc-100 focus:outline-none shrink-0"
                   />
                   <span className="text-[9px] text-zinc-600 font-bold uppercase shrink-0">đến</span>
                   <input
                     type="time"
-                    value={oh.closeTime}
-                    onChange={e => onHoursChange(idx, 'closeTime', e.target.value)}
+                    max="23:59"
+                    value={oh.closeTime || ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      onHoursChange(idx, 'closeTime', val);
+                    }}
                     className="bg-zinc-900 border border-zinc-800 focus:border-orange-500/40 rounded-lg p-1.5 px-1 w-20 text-center text-[10px] text-zinc-100 focus:outline-none shrink-0"
                   />
                 </div>

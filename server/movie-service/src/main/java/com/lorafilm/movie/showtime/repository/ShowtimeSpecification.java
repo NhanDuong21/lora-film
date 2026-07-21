@@ -1,6 +1,7 @@
 package com.lorafilm.movie.showtime.repository;
 
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -38,6 +39,18 @@ public class ShowtimeSpecification {
         };
     }
 
+    public static Specification<Showtime> hasMoviePublicId(String moviePublicId) {
+        return (root, query, cb) -> cb.equal(root.get("movie").get("publicId"), moviePublicId);
+    }
+
+    public static Specification<Showtime> hasCinemaPublicId(String cinemaPublicId) {
+        return (root, query, cb) -> cb.equal(root.get("cinema").get("publicId"), cinemaPublicId);
+    }
+
+    public static Specification<Showtime> hasStartTimeBetween(Instant start, Instant end) {
+        return (root, query, cb) -> cb.between(root.get("startTime"), start, end);
+    }
+
     public static Specification<Showtime> hasFormat(com.lorafilm.movie.movie.domain.enums.MovieFormat format) {
         return (root, query, cb) -> cb.equal(root.get("movieVersion").get("format"), format);
     }
@@ -48,5 +61,13 @@ public class ShowtimeSpecification {
 
     public static Specification<Showtime> hasSubtitleLanguage(String subtitleLanguage) {
         return (root, query, cb) -> cb.equal(cb.lower(root.get("movieVersion").get("subtitleLanguage")), subtitleLanguage.toLowerCase());
+    }
+
+    public static Specification<Showtime> hasBatchId(String batchId) {
+        return (root, query, cb) -> cb.equal(root.get("batchId"), batchId);
+    }
+
+    public static Specification<Showtime> hasSource(ShowtimeSource source) {
+        return (root, query, cb) -> cb.equal(root.get("source"), source);
     }
 }

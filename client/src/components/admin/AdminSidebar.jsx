@@ -18,7 +18,8 @@ import {
   Building,
   Shield,
   Tags,
-  DoorOpen
+  DoorOpen,
+  Armchair
 } from 'lucide-react';
 
 
@@ -185,6 +186,13 @@ export default function AdminSidebar({
                   >
                     <DoorOpen className="w-4 h-4 shrink-0" />
                     <span>Phòng chiếu</span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('seat-types', '#/admin/seat-types')}
+                    className={getSubLinkClass('seat-types')}
+                  >
+                    <Armchair className="w-4 h-4 shrink-0" />
+                    <span>Loại ghế</span>
                   </button>
                   <button
                     onClick={() => handleTabClick('showtimes', '#/admin/showtimes')}

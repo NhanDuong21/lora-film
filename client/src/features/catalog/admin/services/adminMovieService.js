@@ -4,10 +4,26 @@ const adminMovieService = {
   // ─── Movie CRUD ────────────────────────────────────────────────────────────
   getMovies: async (params) => {
     const resolvedParams = { ...params };
+    
+    // Map search to keyword and trim
     if (resolvedParams.search !== undefined) {
       resolvedParams.keyword = resolvedParams.search;
       delete resolvedParams.search;
     }
+    
+    // Remove empty keyword to prevent sending keyword=
+    if (typeof resolvedParams.keyword === 'string') {
+      resolvedParams.keyword = resolvedParams.keyword.trim();
+      if (!resolvedParams.keyword) {
+        delete resolvedParams.keyword;
+      }
+    }
+    
+    // Remove empty status
+    if (typeof resolvedParams.status === 'string' && !resolvedParams.status.trim()) {
+      delete resolvedParams.status;
+    }
+
     const response = await apiClient.get('/api/admin/movies', { params: resolvedParams });
     return response.data;
   },
@@ -22,8 +38,15 @@ const adminMovieService = {
     return response.data;
   },
 
-  updateMovie: async (publicId, movieData) => {
-    const response = await apiClient.put(`/api/admin/movies/${publicId}`, movieData);
+  updateMovie: async (publicId, data) => {
+    const response = await apiClient.put(`/api/admin/movies/${publicId}`, data);
+    return response.data;
+  },
+
+  updateMovieStatus: async (publicId, targetStatus) => {
+    const response = await apiClient.put(`/api/admin/movies/${publicId}/status`, null, {
+      params: { status: targetStatus }
+    });
     return response.data;
   },
 
@@ -37,12 +60,6 @@ const adminMovieService = {
     return response.data;
   },
 
-  updateMovieStatus: async (publicId, status) => {
-    const response = await apiClient.put(`/api/admin/movies/${publicId}/status`, null, {
-      params: { status }
-    });
-    return response.data;
-  },
 
   // ─── Genre auto-create ─────────────────────────────────────────────────────
   ensureGenreExists: async (genreName) => {
@@ -148,31 +165,9 @@ const adminMovieService = {
     return response.data;
   },
 
-  // ─── TMDB Integration (STUBBED) ──────────────────────────────────────────────────────
-   
-  // eslint-disable-next-line no-unused-vars
-  searchTmdbSuggestions: async (keyword, signal) => {
-    console.warn('TMDB endpoint /api/import/search/suggestions is missing from backend. Returning stub.');
-    return { success: true, data: [] };
-  },
-
-  // eslint-disable-next-line no-unused-vars
-  getTmdbMovieBundle: async (tmdbId) => {
-    console.warn('TMDB endpoint /api/import/movies/.../bundle is missing. Returning stub.');
-    return { success: false, message: 'Not implemented' };
-  },
-
-  // eslint-disable-next-line no-unused-vars
-  getTmdbMovieImages: async (tmdbId) => {
-    console.warn('TMDB endpoint /api/import/movies/.../images is missing. Returning stub.');
-    return { success: true, data: { backdrops: [], posters: [] } };
-  },
-
-  // eslint-disable-next-line no-unused-vars
-  getLatestTop20: async (limit = 20) => {
-    console.warn('TMDB endpoint /api/tmdb/movies/latest-top20 is missing. Returning stub.');
-    return { success: true, data: [] };
-  }
+  // ─── TMDB Integration (DEPRECATED/REMOVED) ─────────────────────────────────
+  // Methods related to manual TMDB import flow were removed in Phase 1 
+  // because the confirmed business flow uses auto-sync DRAFT review.
 };
 
 export default adminMovieService;

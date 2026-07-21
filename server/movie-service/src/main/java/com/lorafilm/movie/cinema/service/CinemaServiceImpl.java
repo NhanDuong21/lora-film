@@ -21,6 +21,8 @@ import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
 import com.lorafilm.movie.cinema.repository.CinemaMediaRepository;
 import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
@@ -54,6 +56,7 @@ public class CinemaServiceImpl implements CinemaService {
     private final CinemaClosurePeriodRepository cinemaClosurePeriodRepository;
     private final CurrentUserProvider currentUserProvider;
     private final AuditoriumRepository auditoriumRepository;
+    private final SeatRepository seatRepository;
     private final ShowtimeRepository showtimeRepository;
     private final CinemaMapper cinemaMapper;
 
@@ -63,6 +66,7 @@ public class CinemaServiceImpl implements CinemaService {
             CinemaClosurePeriodRepository cinemaClosurePeriodRepository,
             CurrentUserProvider currentUserProvider,
             AuditoriumRepository auditoriumRepository,
+            SeatRepository seatRepository,
             ShowtimeRepository showtimeRepository,
             CinemaMapper cinemaMapper) {
         this.cinemaRepository = cinemaRepository;
@@ -71,6 +75,7 @@ public class CinemaServiceImpl implements CinemaService {
         this.cinemaClosurePeriodRepository = cinemaClosurePeriodRepository;
         this.currentUserProvider = currentUserProvider;
         this.auditoriumRepository = auditoriumRepository;
+        this.seatRepository = seatRepository;
         this.showtimeRepository = showtimeRepository;
         this.cinemaMapper = cinemaMapper;
     }
@@ -265,6 +270,23 @@ public class CinemaServiceImpl implements CinemaService {
                     "Invalid cinema status transition from " + currentStatus + " to " + targetStatus);
         }
 
+        if (targetStatus == CinemaStatus.ACTIVE) {
+            boolean hasAuditorium = auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId());
+            if (!hasAuditorium) {
+                throw new BusinessException(ErrorCode.CINEMA_MISSING_AUDITORIUM);
+            }
+
+            boolean hasImages = cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId());
+            if (!hasImages) {
+                throw new BusinessException(ErrorCode.CINEMA_MISSING_IMAGES);
+            }
+
+            boolean hasOperatingHours = cinemaOperatingHourRepository.existsByCinemaId(cinema.getId());
+            if (!hasOperatingHours) {
+                throw new BusinessException(ErrorCode.CINEMA_MISSING_OPERATING_HOURS);
+            }
+        }
+
         cinema.setStatus(targetStatus);
         Cinema savedCinema = cinemaRepository.save(cinema);
         return cinemaMapper.toResponse(savedCinema);
@@ -315,7 +337,7 @@ public class CinemaServiceImpl implements CinemaService {
             CinemaDetailDto.AuditoriumDto dto = new CinemaDetailDto.AuditoriumDto();
             dto.setPublicId(a.getPublicId());
             dto.setName(a.getName());
-            dto.setScreenType(a.getScreenType() != null ? a.getScreenType().name() : null);
+            dto.setScreenType(a.getScreenType() != null ? a.getScreenType().getValue() : null);
             dto.setSoundType(a.getSoundType() != null ? a.getSoundType().name() : null);
             dto.setCapacity(a.getCapacity());
             dto.setStatus(a.getStatus() != null ? a.getStatus().name() : null);
@@ -404,12 +426,15 @@ public class CinemaServiceImpl implements CinemaService {
             if (!days.add(req.getDayOfWeek())) {
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Duplicate day of week: " + req.getDayOfWeek());
             }
+            LocalTime parsedOpenTime = parseAndValidateTime(req.getOpenTime());
+            LocalTime parsedCloseTime = parseAndValidateTime(req.getCloseTime());
+
             if (Boolean.FALSE.equals(req.getIsClosed())) {
-                if (req.getOpenTime() == null || req.getCloseTime() == null) {
+                if (parsedOpenTime == null || parsedCloseTime == null) {
                     throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                             "Open time and close time must not be null for open days");
                 }
-                if (!req.getOpenTime().isBefore(req.getCloseTime())) {
+                if (!parsedOpenTime.isBefore(parsedCloseTime)) {
                     throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Open time must be before close time");
                 }
             }
@@ -429,8 +454,10 @@ public class CinemaServiceImpl implements CinemaService {
                 hour.setDayOfWeek(req.getDayOfWeek());
                 hour.setCreatedBy(userId);
             }
-            hour.setOpenTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(0, 0) : req.getOpenTime());
-            hour.setCloseTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(23, 59) : req.getCloseTime());
+            LocalTime parsedOpen = parseAndValidateTime(req.getOpenTime());
+            LocalTime parsedClose = parseAndValidateTime(req.getCloseTime());
+            hour.setOpenTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(0, 0) : parsedOpen);
+            hour.setCloseTime(Boolean.TRUE.equals(req.getIsClosed()) ? LocalTime.of(23, 59, 59) : parsedClose);
             hour.setIsClosed(req.getIsClosed());
             hour.setUpdatedBy(userId);
             toSave.add(hour);
@@ -569,15 +596,23 @@ public class CinemaServiceImpl implements CinemaService {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
-        if (auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId())) {
-            throw new BusinessException(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS);
-        }
-
         if (showtimeRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId())) {
             throw new BusinessException(ErrorCode.CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY);
         }
 
         Long userId = currentUserProvider.getCurrentUserId();
+        
+        List<Auditorium> auditoriums = auditoriumRepository.findByCinemaIdAndDeletedAtIsNull(cinema.getId());
+        for (Auditorium auditorium : auditoriums) {
+            List<Seat> seats = seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditorium.getId());
+            for (Seat seat : seats) {
+                seat.performSoftDelete(userId);
+            }
+            seatRepository.saveAll(seats);
+            auditorium.performSoftDelete(userId);
+        }
+        auditoriumRepository.saveAll(auditoriums);
+
         cinema.performSoftDelete(userId);
         cinemaRepository.save(cinema);
     }
@@ -659,5 +694,19 @@ public class CinemaServiceImpl implements CinemaService {
         return periods.stream()
                 .map(cinemaMapper::toClosurePeriodResponse)
                 .collect(Collectors.toList());
+    }
+
+    private LocalTime parseAndValidateTime(String timeStr) {
+        if (timeStr == null || timeStr.trim().isEmpty()) {
+            return null;
+        }
+        if ("24:00".equals(timeStr) || "24:00:00".equals(timeStr)) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATING_HOURS);
+        }
+        try {
+            return LocalTime.parse(timeStr);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATING_HOURS);
+        }
     }
 }

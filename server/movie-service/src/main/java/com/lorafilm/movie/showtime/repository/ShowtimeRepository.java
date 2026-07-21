@@ -67,5 +67,22 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             @org.springframework.data.repository.query.Param("candidateStartMinusBuffer") java.time.Instant candidateStartMinusBuffer,
             @org.springframework.data.repository.query.Param("occupancyEndTime") java.time.Instant occupancyEndTime);
 
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s WHERE s.auditorium.id = :auditoriumId " +
+            "AND s.id != :excludeShowtimeId " +
+            "AND s.deletedAt IS NULL " +
+            "AND s.status != 'CANCELLED' " +
+            "AND s.startTime < :occupancyEndTime AND s.endTime > :candidateStartMinusBuffer")
+    java.util.List<Showtime> findBlockingOverlapsForScheduling(
+            @org.springframework.data.repository.query.Param("auditoriumId") Long auditoriumId,
+            @org.springframework.data.repository.query.Param("candidateStartMinusBuffer") java.time.Instant candidateStartMinusBuffer,
+            @org.springframework.data.repository.query.Param("occupancyEndTime") java.time.Instant occupancyEndTime,
+            @org.springframework.data.repository.query.Param("excludeShowtimeId") Long excludeShowtimeId);
+
     boolean existsByCinemaIdAndDeletedAtIsNull(Long cinemaId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(s) FROM Showtime s WHERE s.movie.id = :movieId AND s.deletedAt IS NULL")
+    long countShowtimes(@org.springframework.data.repository.query.Param("movieId") Long movieId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT s.movie.id, COUNT(s) FROM Showtime s WHERE s.movie.id IN :movieIds AND s.deletedAt IS NULL GROUP BY s.movie.id")
+    java.util.List<Object[]> countShowtimesByMovieIds(@org.springframework.data.repository.query.Param("movieIds") java.util.List<Long> movieIds);
 }

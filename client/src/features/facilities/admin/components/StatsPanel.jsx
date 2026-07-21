@@ -25,7 +25,7 @@ export default function StatsPanel({ stats }) {
         </div>
         <div className="flex justify-between border-t border-zinc-900 pt-1.5 mt-1.5 font-bold">
           <span className="text-zinc-300">Tổng ghế hoạt động:</span>
-          <span className="text-brand-coral">{stats.activeSeats} ghế</span>
+          <span className="text-brand-orange">{stats.activeSeats} ghế</span>
         </div>
       </div>
     </div>

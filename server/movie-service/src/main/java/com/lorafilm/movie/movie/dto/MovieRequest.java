@@ -25,7 +25,6 @@ public class MovieRequest {
     private LocalDate releaseDate;
     private LocalDate endDate;
     private String country;
-    private MovieStatus status;
     private String synopsis;
 
     public MovieRequest() {}
@@ -45,6 +44,4 @@ public class MovieRequest {
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
     public String getCountry() { return country; }
     public void setCountry(String country) { this.country = country != null ? country.trim() : null; }
-    public MovieStatus getStatus() { return status; }
-    public void setStatus(MovieStatus status) { this.status = status; }
 }

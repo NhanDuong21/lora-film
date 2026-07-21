@@ -29,7 +29,11 @@ public enum ErrorCode {
     CINEMA_NOT_FOUND("Cinema not found", 404),
     CINEMA_NOT_CONFIGURABLE("Cinema is not in a configurable state", 400),
     CINEMA_NOT_ACTIVE("Cinema is not active", 400),
+    CINEMA_MISSING_AUDITORIUM("Cannot activate cinema without any auditoriums", 400),
+    CINEMA_MISSING_IMAGES("Cannot activate cinema without any images", 400),
+    CINEMA_MISSING_OPERATING_HOURS("Cannot activate cinema without operating hours", 400),
     INVALID_CINEMA_TIMEZONE("Invalid cinema timezone", 400),
+    INVALID_OPERATING_HOURS("Operating hour must be between 00:00 and 23:59", 400),
     AUDITORIUM_NOT_FOUND("Auditorium not found", 404),
     AUDITORIUM_NOT_ACTIVE("Auditorium is not active", 400),
     AUDITORIUM_NOT_BELONG_TO_CINEMA("Auditorium does not belong to the cinema", 400),
@@ -40,8 +44,10 @@ public enum ErrorCode {
     AUDITORIUM_CAPACITY_BELOW_CURRENT_SEAT_COUNT("Auditorium capacity cannot be lower than current active seats", 400),
     INVALID_CLEANING_BUFFER("Invalid cleaning buffer", 400),
     INVALID_AUDITORIUM_STATUS_TRANSITION("Invalid auditorium status transition", 400),
+    AUDITORIUM_NOT_CONFIGURABLE("Auditorium is not in a configurable state", 400),
     AUDITORIUM_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY("Auditorium cannot be deleted because it has showtime history", 409),
     AUDITORIUM_HAS_ACTIVE_SEATS("Auditorium cannot be deleted because it has active seats", 409),
+    CLONE_AUDITORIUM_FAILED("Failed to clone auditorium layout", 400),
     MAINTENANCE_WINDOW_NOT_FOUND("Maintenance window not found", 404),
     INVALID_MAINTENANCE_TIME_RANGE("Invalid maintenance time range", 400),
     MAINTENANCE_WINDOW_OVERLAPS("Maintenance window overlaps with an existing schedule", 409),
@@ -133,7 +139,15 @@ public enum ErrorCode {
 
     // --- Cinema Deletion ---
     CINEMA_CANNOT_BE_DELETED_HAS_AUDITORIUMS("Cinema cannot be deleted because it has auditoriums", 409),
-    CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY("Cinema cannot be deleted because it has showtime history", 409);
+    CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY("Cinema cannot be deleted because it has showtime history", 409),
+
+    // --- Location Integration ---
+    LOCATION_QUERY_INVALID("Location query is invalid", 400),
+    LOCATION_API_RATE_LIMITED("Location API rate limit exceeded", 429),
+    LOCATION_API_TIMEOUT("Location API request timed out", 504),
+    LOCATION_API_UNAVAILABLE("Location API is unavailable", 502),
+    LOCATION_API_RESPONSE_INVALID("Location API response is invalid", 502),
+    LOCATION_API_NOT_CONFIGURED("Location API is not configured", 500);
 
     private final String message;
     private final int httpStatus;

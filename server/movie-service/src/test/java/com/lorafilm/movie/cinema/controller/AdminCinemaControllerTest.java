@@ -6,6 +6,8 @@ import com.lorafilm.movie.cinema.domain.enums.CinemaMediaType;
 import com.lorafilm.movie.cinema.dto.*;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.cinema.service.CinemaService;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -177,8 +179,8 @@ class AdminCinemaControllerTest {
             OperatingHourUpdateRequest req = new OperatingHourUpdateRequest();
             req.setDayOfWeek(i);
             req.setIsClosed(false);
-            req.setOpenTime(LocalTime.of(8, 0));
-            req.setCloseTime(LocalTime.of(22, 0));
+            req.setOpenTime("08:00");
+            req.setCloseTime("22:00");
             requests.add(req);
         }
 
@@ -199,8 +201,84 @@ class AdminCinemaControllerTest {
                 .content(objectMapper.writeValueAsString(requests)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data.length()").value(7));
+    }
+
+    @Test
+    void updateOperatingHours_RejectInvalidTime2400() throws Exception {
+        String jsonPayload = "[{\"dayOfWeek\":1,\"isClosed\":false,\"openTime\":\"08:00\",\"closeTime\":\"24:00\"}]";
+
+        when(cinemaService.updateOperatingHours(eq("cinema-uuid"), anyList()))
+                .thenThrow(new BusinessException(ErrorCode.INVALID_OPERATING_HOURS));
+
+        mockMvc.perform(put("/api/admin/cinemas/cinema-uuid/operating-hours")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonPayload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("INVALID_OPERATING_HOURS"));
+    }
+
+    @Test
+    void updateOperatingHours_Success_235959() throws Exception {
+        List<OperatingHourUpdateRequest> requests = new ArrayList<>();
+        for (int i = 1; i <= 7; i++) {
+            OperatingHourUpdateRequest req = new OperatingHourUpdateRequest();
+            req.setDayOfWeek(i);
+            req.setIsClosed(false);
+            req.setOpenTime("00:00:00");
+            req.setCloseTime("23:59:59");
+            requests.add(req);
+        }
+
+        List<OperatingHourResponse> responses = new ArrayList<>();
+        for (int i = 1; i <= 7; i++) {
+            OperatingHourResponse resp = new OperatingHourResponse();
+            resp.setDayOfWeek(i);
+            resp.setIsClosed(false);
+            resp.setOpenTime(LocalTime.of(0, 0, 0));
+            resp.setCloseTime(LocalTime.of(23, 59, 59));
+            responses.add(resp);
+        }
+
+        when(cinemaService.updateOperatingHours(eq("cinema-uuid"), anyList())).thenReturn(responses);
+
+        mockMvc.perform(put("/api/admin/cinemas/cinema-uuid/operating-hours")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(requests)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void updateOperatingHours_ClosedDay_NullTimes_Success() throws Exception {
+        List<OperatingHourUpdateRequest> requests = new ArrayList<>();
+        for (int i = 1; i <= 7; i++) {
+            OperatingHourUpdateRequest req = new OperatingHourUpdateRequest();
+            req.setDayOfWeek(i);
+            req.setIsClosed(true);
+            req.setOpenTime(null);
+            req.setCloseTime(null);
+            requests.add(req);
+        }
+
+        List<OperatingHourResponse> responses = new ArrayList<>();
+        for (int i = 1; i <= 7; i++) {
+            OperatingHourResponse resp = new OperatingHourResponse();
+            resp.setDayOfWeek(i);
+            resp.setIsClosed(true);
+            resp.setOpenTime(null);
+            resp.setCloseTime(null);
+            responses.add(resp);
+        }
+
+        when(cinemaService.updateOperatingHours(eq("cinema-uuid"), anyList())).thenReturn(responses);
+
+        mockMvc.perform(put("/api/admin/cinemas/cinema-uuid/operating-hours")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(requests)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
     }
 
     @Test

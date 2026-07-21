@@ -32,6 +32,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -126,8 +127,7 @@ class AutoSchedulePreviewApplyServiceImplTest {
         when(itemRepository.findSelectedItemsForApply(1L, PreviewItemValidationStatus.VALID))
                 .thenReturn(List.of(item));
 
-        Showtime createdShowtime = new Showtime();
-        when(showtimeCreationService.createAll(List.of(item), actorId)).thenReturn(List.of(createdShowtime));
+        when(showtimeCreationService.createAll(any(), anyLong(), anyString())).thenReturn(Arrays.asList(new Showtime(), new Showtime()));
         when(itemRepository.findDetailedItemsByPreviewId(1L)).thenReturn(List.of(item));
 
         ApplyShowtimeSchedulePreviewResponse responseDto = new ApplyShowtimeSchedulePreviewResponse();

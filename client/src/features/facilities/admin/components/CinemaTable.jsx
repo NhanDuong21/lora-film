@@ -66,7 +66,7 @@ export default function CinemaTable({
       </div>
 
       {/* Filter and search bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-zinc-900/60 border border-zinc-850 p-4 rounded-2xl backdrop-blur-md">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl backdrop-blur-md">
         {/* Search by Keyword */}
         <div className="relative md:col-span-2">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-500">

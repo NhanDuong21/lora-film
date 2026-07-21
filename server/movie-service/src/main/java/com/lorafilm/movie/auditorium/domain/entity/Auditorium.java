@@ -36,7 +36,6 @@ public class Auditorium extends BaseAuditableEntity {
     @Column(name = "name", nullable = false, length = 80)
     private String name;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "screen_type", nullable = false, length = 30)
     private ScreenType screenType = ScreenType.STANDARD;
 

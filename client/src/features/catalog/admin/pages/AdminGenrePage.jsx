@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, Pencil, Trash2, X, Plus, Check, LayoutList } from 'lucide-react';
+import { getErrorMessage } from '@/utils/apiErrorHandler';
 import adminGenreService from '@/features/catalog/admin/services/adminGenreService';
 import SkeletonTable from '@/components/common/SkeletonTable';
 
-export default function AdminGenrePage({ triggerToast }) {
+import { useOutletContext } from 'react-router-dom';
+
+export default function AdminGenrePage() {
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const [genres, setGenres] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,7 +32,7 @@ export default function AdminGenrePage({ triggerToast }) {
       }
       setGenres(genreList);
     } catch (error) {
-      if (triggerToast) triggerToast(error.response?.data?.message || 'Lỗi khi tải danh sách thể loại', 'error');
+      if (triggerToast) triggerToast(getErrorMessage(error, 'Lỗi khi tải danh sách thể loại'), 'error');
     } finally {
       setIsLoading(false);
     }
@@ -74,21 +78,25 @@ export default function AdminGenrePage({ triggerToast }) {
       setIsModalOpen(false);
       fetchGenres();
     } catch (error) {
-      if (triggerToast) triggerToast(error.response?.data?.message || 'Có lỗi xảy ra', 'error');
+      if (triggerToast) triggerToast(getErrorMessage(error, 'Có lỗi xảy ra'), 'error');
     }
   }, [editingGenre, formData, triggerToast, fetchGenres]);
 
   const handleDelete = useCallback(async (id) => {
-    if (confirm('Bạn có chắc chắn muốn xóa thể loại này?')) {
+    const shouldDelete = triggerConfirm 
+      ? await triggerConfirm('Bạn có chắc chắn muốn xóa thể loại này?')
+      : window.confirm('Bạn có chắc chắn muốn xóa thể loại này?');
+      
+    if (shouldDelete) {
       try {
         await adminGenreService.deleteGenre(id);
         if (triggerToast) triggerToast('Đã xóa thể loại khỏi danh sách!');
         fetchGenres();
       } catch (error) {
-        if (triggerToast) triggerToast(error.response?.data?.message || 'Có lỗi xảy ra khi xóa', 'error');
+        if (triggerToast) triggerToast(getErrorMessage(error, 'Có lỗi xảy ra khi xóa'), 'error');
       }
     }
-  }, [triggerToast, fetchGenres]);
+  }, [triggerToast, triggerConfirm, fetchGenres]);
 
   // Modal UI matches prototype forms
   if (isModalOpen) {

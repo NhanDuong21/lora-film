@@ -482,6 +482,8 @@ CREATE TABLE showtimes (
     booking_close_time TIMESTAMP NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, OPEN_FOR_BOOKING, CLOSED, CANCELLED, FINISHED',
     cancellation_reason VARCHAR(255) NULL,
+    batch_id VARCHAR(36) NULL COMMENT 'ID của đợt tạo (nếu tự động xếp lịch)',
+    source VARCHAR(30) NOT NULL DEFAULT 'MANUAL' COMMENT 'Nguồn tạo: MANUAL, AUTO',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_by BIGINT NULL,
@@ -513,6 +515,7 @@ CREATE TABLE showtimes (
         start_time
     ),
     INDEX idx_showtimes_public_id (public_id),
+    INDEX idx_showtimes_batch_id (batch_id),
     INDEX idx_showtimes_deleted_at (deleted_at)
 );
 
