@@ -1,6 +1,6 @@
 package com.lorafilm.booking.security.evaluator;
 
-import com.lorafilm.booking.domain.repository.BookingRepository;
+import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.security.constant.RoleConstants;
 import com.lorafilm.booking.security.principal.UserPrincipal;
 import org.springframework.security.core.Authentication;

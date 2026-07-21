@@ -2,6 +2,7 @@ package com.lorafilm.booking.security.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.common.response.ApiResponse;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,12 +13,21 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 @Component
 public class InternalTokenFilter extends OncePerRequestFilter {
 
-    @Value("${app.internal-token:secret-internal-token}")
+    @Value("${app.internal-token}")
     private String internalToken;
+
+    @PostConstruct
+    public void init() {
+        if (internalToken == null || internalToken.isBlank()) {
+            throw new IllegalStateException("CRITICAL SECURITY FAILURE: 'app.internal-token' configuration is missing! Must configure APP_INTERNAL_TOKEN environment variable.");
+        }
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -44,7 +54,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
                 mapper.findAndRegisterModules();
                 mapper.writeValue(response.getOutputStream(), apiResponse);
                 return;
-            } else if (!tokenHeader.equals(internalToken)) {
+            } else if (!isConstantTimeEquals(tokenHeader, internalToken)) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setCharacterEncoding("UTF-8");
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -58,5 +68,14 @@ public class InternalTokenFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isConstantTimeEquals(String tokenA, String tokenB) {
+        if (tokenA == null || tokenB == null) {
+            return false;
+        }
+        byte[] aBytes = tokenA.getBytes(StandardCharsets.UTF_8);
+        byte[] bBytes = tokenB.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(aBytes, bBytes);
     }
 }
