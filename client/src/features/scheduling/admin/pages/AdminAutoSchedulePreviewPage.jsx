@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, XCircle, Clock, AlertTriangle, AlertCircle, Info, RefreshCw, Wand2, List, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, Clock, AlertTriangle, AlertCircle, Info, RefreshCw, Wand2, List, LayoutTemplate } from 'lucide-react';
 import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
 import AutoScheduleTimeline from '@/features/scheduling/admin/components/AutoScheduleTimeline';
 

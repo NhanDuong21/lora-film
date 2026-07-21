@@ -37,6 +37,7 @@ const AdminShowtimePage = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const locationProcessed = useRef(false);
+  const [isReady, setIsReady] = useState(false);
   const [isBatchActionLoading, setIsBatchActionLoading] = useState(false);
 
   useEffect(() => {
@@ -63,16 +64,15 @@ const AdminShowtimePage = () => {
       }
       
       locationProcessed.current = true;
+      setIsReady(true);
     }
   }, [location.state, searchParams, setCinemaSlug, setStatus, setDate, setBatchId, setSource, triggerToast]);
 
-  const shouldWait = !locationProcessed.current;
-
   useEffect(() => {
-    if (!shouldWait) {
+    if (isReady) {
       fetchShowtimes();
     }
-  }, [fetchShowtimes, shouldWait]);
+  }, [fetchShowtimes, isReady]);
 
   const handleOpenCreate = () => {
     navigate('/admin/showtimes/create');

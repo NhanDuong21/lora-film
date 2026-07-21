@@ -3,34 +3,38 @@ package com.lorafilm.movie.integration.tmdb.dto;
 import java.time.LocalDateTime;
 
 public class TmdbSyncStateDto {
-    private String status;
+    private String syncType;
+    private String persistedStatus;
+    private String displayStatus;
     private String cursor;
-    private LocalDateTime startedAt;
-    private LocalDateTime lastCompletedAt;
-    private LocalDateTime lastSuccessAt;
-    private LocalDateTime lastFailureAt;
-    private String lastError;
+    private LocalDateTime lastSuccessfulSyncAt;
+    private LocalDateTime stateUpdatedAt;
+    private boolean stale;
+    private int staleThresholdSeconds;
 
     public TmdbSyncStateDto() {}
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public String getSyncType() { return syncType; }
+    public void setSyncType(String syncType) { this.syncType = syncType; }
+
+    public String getPersistedStatus() { return persistedStatus; }
+    public void setPersistedStatus(String persistedStatus) { this.persistedStatus = persistedStatus; }
+
+    public String getDisplayStatus() { return displayStatus; }
+    public void setDisplayStatus(String displayStatus) { this.displayStatus = displayStatus; }
 
     public String getCursor() { return cursor; }
     public void setCursor(String cursor) { this.cursor = cursor; }
 
-    public LocalDateTime getStartedAt() { return startedAt; }
-    public void setStartedAt(LocalDateTime startedAt) { this.startedAt = startedAt; }
+    public LocalDateTime getLastSuccessfulSyncAt() { return lastSuccessfulSyncAt; }
+    public void setLastSuccessfulSyncAt(LocalDateTime lastSuccessfulSyncAt) { this.lastSuccessfulSyncAt = lastSuccessfulSyncAt; }
 
-    public LocalDateTime getLastCompletedAt() { return lastCompletedAt; }
-    public void setLastCompletedAt(LocalDateTime lastCompletedAt) { this.lastCompletedAt = lastCompletedAt; }
+    public LocalDateTime getStateUpdatedAt() { return stateUpdatedAt; }
+    public void setStateUpdatedAt(LocalDateTime stateUpdatedAt) { this.stateUpdatedAt = stateUpdatedAt; }
 
-    public LocalDateTime getLastSuccessAt() { return lastSuccessAt; }
-    public void setLastSuccessAt(LocalDateTime lastSuccessAt) { this.lastSuccessAt = lastSuccessAt; }
+    public boolean isStale() { return stale; }
+    public void setStale(boolean stale) { this.stale = stale; }
 
-    public LocalDateTime getLastFailureAt() { return lastFailureAt; }
-    public void setLastFailureAt(LocalDateTime lastFailureAt) { this.lastFailureAt = lastFailureAt; }
-
-    public String getLastError() { return lastError; }
-    public void setLastError(String lastError) { this.lastError = lastError; }
+    public int getStaleThresholdSeconds() { return staleThresholdSeconds; }
+    public void setStaleThresholdSeconds(int staleThresholdSeconds) { this.staleThresholdSeconds = staleThresholdSeconds; }
 }

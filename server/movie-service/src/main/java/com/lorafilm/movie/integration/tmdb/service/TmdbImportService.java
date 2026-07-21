@@ -176,9 +176,10 @@ public class TmdbImportService {
             syncState.setCursor("0");
             syncStateRepository.save(syncState);
         } else if ("IN_PROGRESS".equals(syncState.getStatus())) {
-            // Check if stuck for more than 5 minutes
-            if (syncState.getLastSyncTime() != null && syncState.getLastSyncTime().isBefore(LocalDateTime.now().minusMinutes(5))) {
-                log.warn("TMDB Bulk Sync was stuck IN_PROGRESS for over 5 minutes. Automatically recovering state to IDLE.");
+            // Check if stuck based on threshold
+            LocalDateTime thresholdTime = LocalDateTime.now().minusSeconds(properties.getSyncStaleThresholdSeconds());
+            if (syncState.getUpdatedAt() != null && syncState.getUpdatedAt().isBefore(thresholdTime)) {
+                log.warn("TMDB Bulk Sync was stuck IN_PROGRESS for over {} seconds. Automatically recovering state to IDLE.", properties.getSyncStaleThresholdSeconds());
                 syncState.setStatus("IDLE");
                 syncStateRepository.save(syncState);
             } else {
@@ -207,7 +208,7 @@ public class TmdbImportService {
             while (hasMore) {
                 if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
                     log.info("TMDB Bulk Sync stopped by user request at cursor {}", currentCursor);
-                    syncState.setStatus("STOPPED");
+                    syncState.setStatus("IDLE");
                     syncStateRepository.save(syncState);
                     return;
                 }
@@ -231,8 +232,8 @@ public class TmdbImportService {
                         currentCursor = response.getNextCursor();
                         hasMore = Boolean.TRUE.equals(response.getHasMore());
                         
+                        
                         syncState.setCursor(currentCursor);
-                        syncState.setLastSyncTime(LocalDateTime.now());
                         syncStateRepository.save(syncState);
                         
                         retryCount = 0; // Reset retry count on success
@@ -243,14 +244,14 @@ public class TmdbImportService {
                     }
                 } catch (InterruptedException e) {
                     log.info("TMDB Bulk Sync interrupted at cursor {}", currentCursor);
-                    syncState.setStatus("STOPPED");
+                    syncState.setStatus("IDLE");
                     syncStateRepository.save(syncState);
                     Thread.currentThread().interrupt();
                     return;
                 } catch (Exception e) {
                     if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
                         log.info("TMDB Bulk Sync stopped during exception handling at cursor {}", currentCursor);
-                        syncState.setStatus("STOPPED");
+                        syncState.setStatus("IDLE");
                         syncStateRepository.save(syncState);
                         return;
                     }
@@ -267,11 +268,12 @@ public class TmdbImportService {
             }
 
             syncState.setStatus("COMPLETED");
+            syncState.setLastSyncTime(LocalDateTime.now());
             syncStateRepository.save(syncState);
             log.info("TMDB Bulk Sync completed successfully.");
         } catch (InterruptedException e) {
             log.info("TMDB Bulk Sync thread interrupted.");
-            syncState.setStatus("STOPPED");
+            syncState.setStatus("IDLE");
             syncStateRepository.save(syncState);
             Thread.currentThread().interrupt();
         } catch (Exception e) {

@@ -11,6 +11,8 @@ public class TmdbProperties {
     private int batchSize = 20;
     private boolean syncEnabled = true;
 
+    private int syncStaleThresholdSeconds = 300; // default 5 minutes
+
     public String getBaseUrl() {
         return baseUrl;
     }
@@ -41,5 +43,13 @@ public class TmdbProperties {
 
     public void setSyncEnabled(boolean syncEnabled) {
         this.syncEnabled = syncEnabled;
+    }
+
+    public int getSyncStaleThresholdSeconds() {
+        return syncStaleThresholdSeconds;
+    }
+
+    public void setSyncStaleThresholdSeconds(int syncStaleThresholdSeconds) {
+        this.syncStaleThresholdSeconds = syncStaleThresholdSeconds;
     }
 }
