@@ -10,6 +10,9 @@ import com.lorafilm.movie.showtime.dto.ShowtimeMovieVersionDto;
 
 public class BookingContextResponse {
     private BookingContextShowtimeDto showtime;
+    private Long movieId;
+    private Long cinemaId;
+    private Long auditoriumId;
     private ShowtimeMovieDto movie;
     private ShowtimeMovieVersionDto movieVersion;
     private ShowtimeCinemaDto cinema;
@@ -26,6 +29,30 @@ public class BookingContextResponse {
 
     public void setShowtime(BookingContextShowtimeDto showtime) {
         this.showtime = showtime;
+    }
+
+    public Long getMovieId() {
+        return movieId;
+    }
+
+    public void setMovieId(Long movieId) {
+        this.movieId = movieId;
+    }
+
+    public Long getCinemaId() {
+        return cinemaId;
+    }
+
+    public void setCinemaId(Long cinemaId) {
+        this.cinemaId = cinemaId;
+    }
+
+    public Long getAuditoriumId() {
+        return auditoriumId;
+    }
+
+    public void setAuditoriumId(Long auditoriumId) {
+        this.auditoriumId = auditoriumId;
     }
 
     public ShowtimeMovieDto getMovie() {

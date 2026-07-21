@@ -119,6 +119,9 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         }
 
         BookingContextResponse response = new BookingContextResponse();
+        response.setMovieId(showtime.getMovie().getId());
+        response.setCinemaId(showtime.getCinema().getId());
+        response.setAuditoriumId(showtime.getAuditorium().getId());
 
         BookingContextShowtimeDto showtimeDto = new BookingContextShowtimeDto();
         showtimeDto.setId(showtime.getId());

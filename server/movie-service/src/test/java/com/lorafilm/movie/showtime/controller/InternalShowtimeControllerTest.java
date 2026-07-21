@@ -69,6 +69,9 @@ class InternalShowtimeControllerTest {
         BookingContextShowtimeDto showtimeDto = new BookingContextShowtimeDto();
         showtimeDto.setId(10L);
         response.setShowtime(showtimeDto);
+        response.setMovieId(1L);
+        response.setCinemaId(2L);
+        response.setAuditoriumId(3L);
 
         BookingContextPricingDto pricingDto = new BookingContextPricingDto();
         pricingDto.setTotalAmount(new java.math.BigDecimal("200000"));
@@ -83,6 +86,9 @@ class InternalShowtimeControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.showtime.id").value(10))
+                .andExpect(jsonPath("$.data.movieId").value(1))
+                .andExpect(jsonPath("$.data.cinemaId").value(2))
+                .andExpect(jsonPath("$.data.auditoriumId").value(3))
                 .andExpect(jsonPath("$.data.pricing.totalAmount").value(200000));
     }
 
