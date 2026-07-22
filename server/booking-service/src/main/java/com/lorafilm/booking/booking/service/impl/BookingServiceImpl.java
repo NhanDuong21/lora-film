@@ -14,6 +14,7 @@ import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingSpecification;
 import com.lorafilm.booking.booking.service.BookingService;
 import com.lorafilm.booking.common.constant.BookingConstants;
+import com.lorafilm.booking.food.service.FoodOrderService;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.exception.ForbiddenException;
@@ -55,6 +56,7 @@ public class BookingServiceImpl implements BookingService {
     private final SecurityContextService securityContextService;
     private final BookingCodeGenerator bookingCodeGenerator;
     private final BookingMapper bookingMapper;
+    private final FoodOrderService foodOrderService;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -63,7 +65,8 @@ public class BookingServiceImpl implements BookingService {
             ShowtimeClient showtimeClient,
             SecurityContextService securityContextService,
             BookingCodeGenerator bookingCodeGenerator,
-            BookingMapper bookingMapper) {
+            BookingMapper bookingMapper,
+            FoodOrderService foodOrderService) {
         this.bookingRepository = bookingRepository;
         this.reservationRepository = reservationRepository;
         this.reservationService = reservationService;
@@ -71,6 +74,7 @@ public class BookingServiceImpl implements BookingService {
         this.securityContextService = securityContextService;
         this.bookingCodeGenerator = bookingCodeGenerator;
         this.bookingMapper = bookingMapper;
+        this.foodOrderService = foodOrderService;
     }
 
     @Override
@@ -201,6 +205,10 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = getBooking(publicId);
         booking.changeStatus(targetStatus, Instant.now());
         Booking saved = bookingRepository.save(booking);
+        
+        // Sync status with Food Order
+        foodOrderService.updateOrderStatusBasedOnBooking(saved.getId(), targetStatus);
+        
         if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED || targetStatus == BookingStatus.REFUNDED) {
             reservationService.handleBookingStatusChange(saved.getId(), targetStatus, "Booking status changed to " + targetStatus);
         }

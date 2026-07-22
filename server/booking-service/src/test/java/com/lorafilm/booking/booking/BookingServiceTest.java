@@ -12,6 +12,7 @@ import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.service.impl.BookingServiceImpl;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.util.BookingCodeGenerator;
+import com.lorafilm.booking.food.service.FoodOrderService;
 import com.lorafilm.booking.reservation.dto.ConvertReservationRequest;
 import com.lorafilm.booking.reservation.entity.SeatReservation;
 import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -56,6 +58,11 @@ class BookingServiceTest {
     private SecurityContextService securityContextService;
     @Mock
     private BookingCodeGenerator bookingCodeGenerator;
+    @Mock
+    private FoodOrderService foodOrderService;
+
+    @Spy
+    private BookingMapper bookingMapper = new BookingMapper();
 
     private BookingServiceImpl bookingService;
 
@@ -68,7 +75,8 @@ class BookingServiceTest {
                 showtimeClient,
                 securityContextService,
                 bookingCodeGenerator,
-                new BookingMapper());
+                bookingMapper,
+                foodOrderService);
     }
 
     @Test

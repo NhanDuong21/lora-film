@@ -14,7 +14,6 @@ import com.lorafilm.booking.food.mapper.FoodMapper;
 import com.lorafilm.booking.food.repository.FoodOrderItemRepository;
 import com.lorafilm.booking.food.repository.FoodOrderRepository;
 import com.lorafilm.booking.food.service.FoodOrderService;
-import com.lorafilm.booking.food.event.FoodOrderTotalUpdatedEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,7 +61,7 @@ public class FoodOrderServiceImpl implements FoodOrderService {
         foodOrder.setBookingId(bookingId);
         foodOrder.setStatus(FoodOrderStatus.PENDING);
 
-        FoodOrder saved = saveAndPublishEvent(foodOrder);
+        FoodOrder saved = foodOrderRepository.save(foodOrder);
         return FoodMapper.INSTANCE.toFoodOrderResponse(saved);
     }
 
@@ -115,7 +114,7 @@ public class FoodOrderServiceImpl implements FoodOrderService {
         }
 
         recalculateOrderTotals(foodOrder);
-        FoodOrder saved = saveAndPublishEvent(foodOrder);
+        FoodOrder saved = foodOrderRepository.save(foodOrder);
         return FoodMapper.INSTANCE.toFoodOrderResponse(saved);
     }
 
@@ -136,7 +135,7 @@ public class FoodOrderServiceImpl implements FoodOrderService {
         calculateItemTotals(item);
 
         recalculateOrderTotals(foodOrder);
-        FoodOrder saved = saveAndPublishEvent(foodOrder);
+        FoodOrder saved = foodOrderRepository.save(foodOrder);
         return FoodMapper.INSTANCE.toFoodOrderResponse(saved);
     }
 
@@ -154,7 +153,35 @@ public class FoodOrderServiceImpl implements FoodOrderService {
         }
 
         recalculateOrderTotals(foodOrder);
-        saveAndPublishEvent(foodOrder);
+        foodOrderRepository.save(foodOrder);
+    }
+
+    @Override
+    @Transactional
+    public void updateOrderStatusBasedOnBooking(Long bookingId, com.lorafilm.booking.booking.enums.BookingStatus bookingStatus) {
+        Optional<FoodOrder> orderOpt = foodOrderRepository.findByBookingId(bookingId);
+        if (orderOpt.isEmpty()) {
+            return;
+        }
+        FoodOrder foodOrder = orderOpt.get();
+
+        switch (bookingStatus) {
+            case CONFIRMED:
+                foodOrder.setStatus(FoodOrderStatus.CONFIRMED);
+                break;
+            case CANCELLED:
+            case EXPIRED:
+                foodOrder.setStatus(FoodOrderStatus.CANCELLED);
+                break;
+            case REFUNDED:
+                foodOrder.setStatus(FoodOrderStatus.REFUNDED);
+                break;
+            default:
+                // No action needed for PENDING_PAYMENT
+                break;
+        }
+        
+        foodOrderRepository.save(foodOrder);
     }
 
     private void calculateItemTotals(FoodOrderItem item) {
@@ -184,18 +211,5 @@ public class FoodOrderServiceImpl implements FoodOrderService {
         if (foodOrder.getStatus() != FoodOrderStatus.PENDING) {
             throw new BusinessException("ORDER_NOT_MODIFIABLE", "Food order cannot be modified at this stage");
         }
-    }
-
-    private FoodOrder saveAndPublishEvent(FoodOrder foodOrder) {
-        FoodOrder savedOrder = foodOrderRepository.save(foodOrder);
-        
-        FoodOrderTotalUpdatedEvent event = new FoodOrderTotalUpdatedEvent(
-                savedOrder.getBookingId().toString(),
-                savedOrder.getPublicId(),
-                savedOrder.getFinalAmount()
-        );
-        // outboxEventPublisher.createEvent("FoodOrder", savedOrder.getPublicId(), event);
-        
-        return savedOrder;
     }
 }

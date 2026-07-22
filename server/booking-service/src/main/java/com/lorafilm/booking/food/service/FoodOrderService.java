@@ -19,4 +19,6 @@ public interface FoodOrderService {
     void removeFoodItem(String foodOrderPublicId, Long itemId);
 
     FoodOrderResponse createOrGetFoodOrder(Long bookingId);
+
+    void updateOrderStatusBasedOnBooking(Long bookingId, com.lorafilm.booking.booking.enums.BookingStatus bookingStatus);
 }
