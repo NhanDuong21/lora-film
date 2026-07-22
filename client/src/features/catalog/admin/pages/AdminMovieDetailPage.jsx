@@ -37,12 +37,12 @@ export default function AdminMovieDetailPage() {
 
       <AsyncState isLoading={isLoading} error={error} onRetry={reload}>
         <TmdbMovieReviewPanel movie={movie} {...tmdbReview} onRetry={tmdbReview.reload} />
-        <MovieDetailWarnings movie={movie} />
         <MovieLifecycleReviewPanel
           movie={movie}
           tmdbReview={tmdbReview.review}
           onUpdate={() => Promise.all([reload(), tmdbReview.reload()])}
         />
+        <MovieDetailWarnings movie={movie} />
         
         <div className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl overflow-hidden mt-6">
           <div className="flex overflow-x-auto border-b border-zinc-800 scrollbar-hide">

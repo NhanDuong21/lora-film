@@ -89,7 +89,7 @@ export default function AdminMoviePage() {
                 : 'border-sky-500/20 bg-sky-500/5 text-sky-400 hover:bg-sky-500/10'
             }`}
           >
-            <Cloud className="h-4 w-4" /> Hàng chờ TMDB
+            <Cloud className="h-4 w-4" /> TMDB Review Queue
           </button>
           {ADMIN_MOVIE_STATUS_TABS.map(tab => (
             <button

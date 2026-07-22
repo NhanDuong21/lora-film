@@ -89,7 +89,7 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate 
 
   return (
     <>
-      <div className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl overflow-hidden mt-6">
+      <div id="movie-lifecycle-actions" className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl overflow-hidden mt-6">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-brand-orange/10 flex items-center justify-center text-brand-orange">
