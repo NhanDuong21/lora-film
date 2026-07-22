@@ -64,10 +64,8 @@ public class SeatReservationServiceTest {
     
     private final ReservationProperties reservationProperties = new ReservationProperties(300L);
     
-    @Mock
-    private SeatReservationMapper seatReservationMapper;
-    @Mock
-    private ObjectMapper objectMapper;
+    private final SeatReservationMapper seatReservationMapper = new SeatReservationMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
     @Mock
     private com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient;
 
