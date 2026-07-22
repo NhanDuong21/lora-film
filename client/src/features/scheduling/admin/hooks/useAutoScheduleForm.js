@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect, no-unused-vars */
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
-import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminAutoScheduleService from '@/features/scheduling/admin/services/adminAutoScheduleService';
 import { getAutoScheduleError } from '@/features/scheduling/admin/utils/autoScheduleErrors';
 import {
@@ -20,48 +19,59 @@ const mapFieldErrors = (fieldErrors = {}) => ({
 });
 
 export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
-  // Step 1: Scope State
   const [selectedCinemaId, setSelectedCinemaId] = useState('');
   const [scheduleFrom, setScheduleFrom] = useState('');
   const [scheduleTo, setScheduleTo] = useState('');
   const [slotGranularityMinutes, setSlotGranularityMinutes] = useState(15);
   const [previewTtlMinutes, setPreviewTtlMinutes] = useState(60);
 
-  // Step 2: Auditoriums State
   const [auditoriums, setAuditoriums] = useState([]);
   const [selectedAuditoriumIds, setSelectedAuditoriumIds] = useState([]);
-
-  // Step 3: Movies & Versions State
   const [movies, setMovies] = useState([]);
   const [versionsByMovie, setVersionsByMovie] = useState({});
   const [selectedMovieVersionIds, setSelectedMovieVersionIds] = useState([]);
+  const [selectionNotice, setSelectionNotice] = useState('');
 
-  // Data Loading State
   const [cinemas, setCinemas] = useState([]);
   const [isLoadingCinemas, setIsLoadingCinemas] = useState(false);
   const [isLoadingAuditoriums, setIsLoadingAuditoriums] = useState(false);
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Validation
+  const [movieLoadError, setMovieLoadError] = useState('');
   const [errors, setErrors] = useState({});
-  const idempotencyRef = useRef({ fingerprint: '', key: '' });
 
-  const selectedCinema = useMemo(() => cinemas.find(c => c.publicId === selectedCinemaId), [cinemas, selectedCinemaId]);
+  const idempotencyRef = useRef({ fingerprint: '', key: '' });
+  const movieRequestSequence = useRef(0);
+  const auditoriumRequestSequence = useRef(0);
+
+  const selectedCinema = useMemo(
+    () => cinemas.find(cinema => cinema.publicId === selectedCinemaId),
+    [cinemas, selectedCinemaId],
+  );
   const dateRangeInfo = useMemo(() => validateAutoScheduleDateRange({
     scheduleFrom,
     scheduleTo,
     cinemaTimezone: selectedCinema?.timezone,
   }), [scheduleFrom, scheduleTo, selectedCinema?.timezone]);
 
-  // 1. Initial Load: Cinemas
+  const selectedVersions = useMemo(() => {
+    const selectedIds = new Set(selectedMovieVersionIds);
+    return movies.flatMap(movie => (versionsByMovie[movie.publicId] || [])
+      .filter(version => selectedIds.has(version.publicId))
+      .map(version => ({
+        ...version,
+        moviePublicId: movie.publicId,
+        movieTitle: movie.title,
+      })));
+  }, [movies, selectedMovieVersionIds, versionsByMovie]);
+
   useEffect(() => {
     const fetchInitial = async () => {
+      setIsLoadingCinemas(true);
       try {
-        setIsLoadingCinemas(true);
         const cinemaRes = await adminCinemaService.getCinemas({ size: 100, status: 'ACTIVE' });
         if (cinemaRes?.success) setCinemas(cinemaRes.data?.data || []);
-      } catch (err) {
+      } catch {
         triggerToast?.('Không thể tải dữ liệu rạp', 'error');
       } finally {
         setIsLoadingCinemas(false);
@@ -70,98 +80,158 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     fetchInitial();
   }, [triggerToast]);
 
-  // 1b. Load Movies when dates change
   useEffect(() => {
+    const requestId = ++movieRequestSequence.current;
     const fetchMovies = async () => {
       setIsLoadingMovies(true);
+      setMovieLoadError('');
       try {
         const params = {};
         if (scheduleFrom) params.fromDate = scheduleFrom;
         if (scheduleTo) params.toDate = scheduleTo;
-        
         const movieRes = await adminAutoScheduleService.getEligibleMovies(params);
-        if (movieRes?.success) {
-           const moviesData = (movieRes.data || [])
-             .filter(m => m.eligible)
-             .map(m => ({
-             ...m,
-             publicId: m.moviePublicId, // map for UI compatibility
-             versions: (m.versions || []).filter(v => v.status === 'ACTIVE')
-           }));
-           setMovies(moviesData);
-           
-           const newVersions = {};
-           moviesData.forEach(m => {
-             newVersions[m.publicId] = m.versions || [];
-           });
-           setVersionsByMovie(newVersions);
-        }
-      } catch (err) {
+        if (requestId !== movieRequestSequence.current) return;
+        if (!movieRes?.success) return;
+
+        const moviesData = (movieRes.data || []).map(movie => ({
+          ...movie,
+          publicId: movie.moviePublicId,
+          versions: movie.versions || [],
+        }));
+        const nextVersionsByMovie = {};
+        const selectableVersionIds = new Set();
+        moviesData.forEach(movie => {
+          nextVersionsByMovie[movie.publicId] = movie.versions;
+          if (movie.eligible) {
+            movie.versions
+              .filter(version => version.status === 'ACTIVE')
+              .forEach(version => selectableVersionIds.add(version.publicId));
+          }
+        });
+
+        setMovies(moviesData);
+        setVersionsByMovie(nextVersionsByMovie);
+        setSelectedMovieVersionIds(previous => {
+          const next = previous.filter(versionId => selectableVersionIds.has(versionId));
+          const removedCount = previous.length - next.length;
+          if (removedCount > 0) {
+            setSelectionNotice(`Đã bỏ ${removedCount} định dạng không còn đủ điều kiện trong khoảng ngày mới.`);
+          }
+          return next;
+        });
+      } catch {
+        if (requestId !== movieRequestSequence.current) return;
+        setMovieLoadError('Không thể xác minh điều kiện phim cho khoảng ngày đã chọn.');
         triggerToast?.('Không thể tải dữ liệu phim', 'error');
       } finally {
-        setIsLoadingMovies(false);
+        if (requestId === movieRequestSequence.current) setIsLoadingMovies(false);
       }
     };
     fetchMovies();
   }, [scheduleFrom, scheduleTo, triggerToast]);
 
-  // 2. On Cinema Change: Load Auditoriums
   useEffect(() => {
-    if (!selectedCinemaId) {
-      setAuditoriums([]);
-      setSelectedAuditoriumIds([]);
-      return;
-    }
+    const requestId = ++auditoriumRequestSequence.current;
+    setAuditoriums([]);
+    setSelectedAuditoriumIds(previous => {
+      if (previous.length > 0) {
+        setSelectionNotice('Đã xóa lựa chọn phòng chiếu vì cụm rạp đã thay đổi.');
+      }
+      return [];
+    });
+    if (!selectedCinemaId) return;
+
     const fetchAuditoriums = async () => {
       setIsLoadingAuditoriums(true);
       try {
-        const res = await adminCinemaService.getAdminCinemaDetail(selectedCinemaId);
-        if (res?.success) {
-          // Keep all auditoriums, we will disable inactive ones in UI
-          const allAuds = res.data?.activeAuditoriums || [];
-          setAuditoriums(allAuds);
-          // Auto-select active ones by default
-          setSelectedAuditoriumIds(allAuds.filter(a => a.status === 'ACTIVE').map(a => a.publicId));
+        const response = await adminCinemaService.getAdminCinemaDetail(selectedCinemaId);
+        if (requestId === auditoriumRequestSequence.current && response?.success) {
+          setAuditoriums(response.data?.activeAuditoriums || []);
         }
-      } catch (err) {
+      } catch {
+        if (requestId !== auditoriumRequestSequence.current) return;
         triggerToast?.('Không thể tải phòng chiếu', 'error');
       } finally {
-        setIsLoadingAuditoriums(false);
+        if (requestId === auditoriumRequestSequence.current) setIsLoadingAuditoriums(false);
       }
     };
     fetchAuditoriums();
   }, [selectedCinemaId, triggerToast]);
 
-  // 3. Helper to fetch versions for a movie (Now mostly pre-filled by getEligibleMovies)
-  const toggleMovieExpansion = useCallback(async (movieId, isExpanded) => {
-    // If versions are already loaded (which they should be now), do nothing
-    if (!isExpanded || versionsByMovie[movieId]) return;
-  }, [versionsByMovie]);
+  const toggleMovieExpansion = useCallback(() => {}, []);
 
-  const toggleAuditorium = useCallback((audId) => {
-    setSelectedAuditoriumIds(prev => 
-      prev.includes(audId) ? prev.filter(id => id !== audId) : [...prev, audId]
-    );
+  const toggleAuditorium = useCallback(auditoriumId => {
+    setSelectedAuditoriumIds(previous => previous.includes(auditoriumId)
+      ? previous.filter(id => id !== auditoriumId)
+      : [...previous, auditoriumId]);
   }, []);
 
-  const toggleVersion = useCallback((versionId) => {
-    setSelectedMovieVersionIds(prev => 
-      prev.includes(versionId) ? prev.filter(id => id !== versionId) : [...prev, versionId]
-    );
+  const selectAllActiveAuditoriums = useCallback(() => {
+    setSelectedAuditoriumIds(auditoriums
+      .filter(auditorium => auditorium.status === 'ACTIVE')
+      .map(auditorium => auditorium.publicId));
+  }, [auditoriums]);
+
+  const clearAuditoriums = useCallback(() => setSelectedAuditoriumIds([]), []);
+
+  const toggleVersion = useCallback(versionId => {
+    setSelectedMovieVersionIds(previous => previous.includes(versionId)
+      ? previous.filter(id => id !== versionId)
+      : [...previous, versionId]);
   }, []);
+
+  const readinessIssues = useMemo(() => {
+    const issues = [];
+    if (!selectedCinemaId) issues.push('Chọn cụm rạp.');
+    Object.values(dateRangeInfo.errors || {}).forEach(message => issues.push(message));
+    if (selectedAuditoriumIds.length === 0) issues.push('Chọn ít nhất một phòng chiếu.');
+    if (selectedMovieVersionIds.length === 0) issues.push('Chọn ít nhất một định dạng phim.');
+    if (movieLoadError) issues.push(movieLoadError);
+    if (Number(slotGranularityMinutes) < 5 || Number(slotGranularityMinutes) > 60) {
+      issues.push('Khoảng cách thử lịch phải từ 5 đến 60 phút.');
+    }
+    if (Number(previewTtlMinutes) < 5 || Number(previewTtlMinutes) > 120) {
+      issues.push('Thời hạn bản xem trước phải từ 5 đến 120 phút.');
+    }
+    return [...new Set(issues)];
+  }, [
+    dateRangeInfo.errors,
+    movieLoadError,
+    previewTtlMinutes,
+    selectedAuditoriumIds.length,
+    selectedCinemaId,
+    selectedMovieVersionIds.length,
+    slotGranularityMinutes,
+  ]);
+
+  const isReady = readinessIssues.length === 0
+    && !isLoadingAuditoriums
+    && !isLoadingMovies
+    && !isSubmitting;
 
   const validate = useCallback(() => {
     const newErrors = { ...dateRangeInfo.errors };
     if (!selectedCinemaId) newErrors.cinemaId = 'Vui lòng chọn cụm rạp';
     if (selectedAuditoriumIds.length === 0) newErrors.auditoriums = 'Vui lòng chọn ít nhất một phòng chiếu';
     if (selectedMovieVersionIds.length === 0) newErrors.versions = 'Vui lòng chọn ít nhất một định dạng phim';
-    
-    if (slotGranularityMinutes < 5 || slotGranularityMinutes > 60) newErrors.slotGranularityMinutes = 'Giá trị từ 5 đến 60';
-    if (previewTtlMinutes < 5 || previewTtlMinutes > 120) newErrors.previewTtlMinutes = 'Giá trị từ 5 đến 120';
-
+    if (movieLoadError) newErrors.eligibility = movieLoadError;
+    if (Number(slotGranularityMinutes) < 5 || Number(slotGranularityMinutes) > 60) {
+      newErrors.slotGranularityMinutes = 'Giá trị từ 5 đến 60';
+    }
+    if (Number(previewTtlMinutes) < 5 || Number(previewTtlMinutes) > 120) {
+      newErrors.previewTtlMinutes = 'Giá trị từ 5 đến 120';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [dateRangeInfo.errors, selectedCinemaId, selectedAuditoriumIds, selectedMovieVersionIds, slotGranularityMinutes, previewTtlMinutes]);
+  }, [
+    dateRangeInfo.errors,
+    movieLoadError,
+    previewTtlMinutes,
+    selectedAuditoriumIds,
+    selectedCinemaId,
+    selectedMovieVersionIds,
+    slotGranularityMinutes,
+  ]);
 
   const handleSubmit = useCallback(async () => {
     if (!validate()) return false;
@@ -171,30 +241,29 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
       scheduleTo,
       movieVersionPublicIds: selectedMovieVersionIds,
       auditoriumPublicIds: selectedAuditoriumIds,
-      slotGranularityMinutes: parseInt(slotGranularityMinutes),
-      previewTtlMinutes: parseInt(previewTtlMinutes),
+      slotGranularityMinutes: Number.parseInt(slotGranularityMinutes, 10),
+      previewTtlMinutes: Number.parseInt(previewTtlMinutes, 10),
     };
     const fingerprint = buildAutoScheduleRequestFingerprint(request);
     if (idempotencyRef.current.fingerprint !== fingerprint) {
       idempotencyRef.current = { fingerprint, key: createUuid() };
     }
+
     setIsSubmitting(true);
     try {
-      const payload = {
+      const response = await adminAutoScheduleService.generatePreview({
         ...request,
         idempotencyKey: idempotencyRef.current.key,
-      };
-
-      const res = await adminAutoScheduleService.generatePreview(payload);
-      if (res?.success) {
+      });
+      if (response?.success) {
         idempotencyRef.current = { fingerprint: '', key: '' };
         triggerToast?.('Tạo bản xem trước thành công', 'success');
-        if (onSuccess) onSuccess(res.data?.previewPublicId);
+        onSuccess?.(response.data?.previewPublicId);
         return true;
       }
       return false;
-    } catch (err) {
-      const normalized = getAutoScheduleError(err);
+    } catch (error) {
+      const normalized = getAutoScheduleError(error);
       setErrors(previous => ({ ...previous, ...mapFieldErrors(normalized.fieldErrors) }));
       triggerToast?.(normalized.message, 'error');
       return false;
@@ -202,23 +271,54 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
       setIsSubmitting(false);
     }
   }, [
-    selectedCinemaId, scheduleFrom, scheduleTo, selectedAuditoriumIds, selectedMovieVersionIds,
-    slotGranularityMinutes, previewTtlMinutes, validate, triggerToast, onSuccess
+    onSuccess,
+    previewTtlMinutes,
+    scheduleFrom,
+    scheduleTo,
+    selectedAuditoriumIds,
+    selectedCinemaId,
+    selectedMovieVersionIds,
+    slotGranularityMinutes,
+    triggerToast,
+    validate,
   ]);
 
   return {
-    cinemas, movies, auditoriums, versionsByMovie,
-    selectedCinemaId, setSelectedCinemaId, selectedCinema,
-    scheduleFrom, setScheduleFrom,
-    scheduleTo, setScheduleTo,
-    slotGranularityMinutes, setSlotGranularityMinutes,
-    previewTtlMinutes, setPreviewTtlMinutes,
-    selectedAuditoriumIds, toggleAuditorium,
-    selectedMovieVersionIds, toggleVersion,
-    isLoadingCinemas, isLoadingAuditoriums, isLoadingMovies, isSubmitting,
-    errors, setErrors,
+    cinemas,
+    movies,
+    auditoriums,
+    versionsByMovie,
+    selectedCinemaId,
+    setSelectedCinemaId,
+    selectedCinema,
+    scheduleFrom,
+    setScheduleFrom,
+    scheduleTo,
+    setScheduleTo,
+    slotGranularityMinutes,
+    setSlotGranularityMinutes,
+    previewTtlMinutes,
+    setPreviewTtlMinutes,
+    selectedAuditoriumIds,
+    toggleAuditorium,
+    selectAllActiveAuditoriums,
+    clearAuditoriums,
+    selectedMovieVersionIds,
+    selectedVersions,
+    toggleVersion,
+    isLoadingCinemas,
+    isLoadingAuditoriums,
+    isLoadingMovies,
+    isSubmitting,
+    errors,
+    setErrors,
+    readinessIssues,
+    isReady,
+    selectionNotice,
+    movieLoadError,
     dateRangeInfo,
     toggleMovieExpansion,
-    handleSubmit, validate
+    handleSubmit,
+    validate,
   };
 }

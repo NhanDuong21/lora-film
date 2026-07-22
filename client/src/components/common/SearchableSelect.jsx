@@ -1,186 +1,266 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search, X } from 'lucide-react';
 
+const firstEnabledIndex = options => options.findIndex(option => !option.disabled);
+
 export default function SearchableSelect({
-  options = [], // { value, label, subtitle, badge, badgeColor, disabled }
+  options = [],
   value,
   onChange,
   placeholder = 'Chọn một mục...',
   disabled = false,
   error = null,
-  className = ''
+  className = '',
+  id,
+  ariaLabel,
+  ariaLabelledBy,
+  ariaDescribedBy,
+  ariaInvalid,
 }) {
+  const generatedId = useId();
+  const inputId = id || `searchable-select-${generatedId}`;
+  const listboxId = `${inputId}-listbox`;
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef(null);
   const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
+  const optionRefs = useRef([]);
   const [dropdownStyle, setDropdownStyle] = useState({});
-  
-  // Close on outside click
+
+  const selectedOption = useMemo(
+    () => options.find(option => option.value === value) || null,
+    [options, value],
+  );
+
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm) return options;
+    const lower = searchTerm.toLocaleLowerCase('vi');
+    return options.filter(option =>
+      option.label?.toLocaleLowerCase('vi').includes(lower)
+      || option.subtitle?.toLocaleLowerCase('vi').includes(lower),
+    );
+  }, [options, searchTerm]);
+
+  const closeDropdown = () => {
+    setIsOpen(false);
+    setSearchTerm('');
+    setActiveIndex(-1);
+  };
+
+  const openDropdown = () => {
+    if (disabled) return;
+    setIsOpen(true);
+    setSearchTerm('');
+    const selectedIndex = filteredOptions.findIndex(option => option.value === value && !option.disabled);
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : firstEnabledIndex(filteredOptions));
+  };
+
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      const isOutsideContainer = containerRef.current && !containerRef.current.contains(event.target);
-      const isOutsideDropdown = dropdownRef.current ? !dropdownRef.current.contains(event.target) : true;
-      
-      if (isOutsideContainer && isOutsideDropdown) {
-        setIsOpen(false);
-      }
+    const handleClickOutside = event => {
+      const outsideContainer = containerRef.current && !containerRef.current.contains(event.target);
+      const outsideDropdown = !dropdownRef.current || !dropdownRef.current.contains(event.target);
+      if (outsideContainer && outsideDropdown) closeDropdown();
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle portal positioning
   useEffect(() => {
-    if (isOpen && containerRef.current) {
-      const updatePosition = () => {
-        if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const spaceAbove = rect.top;
-        const dropdownHeight = 300; // estimated max height
+    if (!isOpen || !containerRef.current) return undefined;
 
-        const shouldFlip = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+    const updatePosition = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const shouldFlip = spaceBelow < 300 && spaceAbove > spaceBelow;
+      setDropdownStyle({
+        position: 'fixed',
+        top: shouldFlip ? 'auto' : `${rect.bottom + 6}px`,
+        bottom: shouldFlip ? `${window.innerHeight - rect.top + 6}px` : 'auto',
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        zIndex: 50,
+      });
+    };
 
-        setDropdownStyle({
-          position: 'fixed',
-          top: shouldFlip ? 'auto' : `${rect.bottom + 6}px`,
-          bottom: shouldFlip ? `${window.innerHeight - rect.top + 6}px` : 'auto',
-          left: `${rect.left}px`,
-          width: `${rect.width}px`,
-          zIndex: 50,
-        });
-      };
-
-      updatePosition();
-      window.addEventListener('scroll', updatePosition, true);
-      window.addEventListener('resize', updatePosition);
-      return () => {
-        window.removeEventListener('scroll', updatePosition, true);
-        window.removeEventListener('resize', updatePosition);
-      };
-    }
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
   }, [isOpen]);
 
-  // Filter options
-  const filteredOptions = useMemo(() => {
-    if (!searchTerm) return options;
-    const lower = searchTerm.toLowerCase();
-    return options.filter(opt => 
-      opt.label?.toLowerCase().includes(lower) || 
-      opt.subtitle?.toLowerCase().includes(lower)
-    );
-  }, [options, searchTerm]);
+  useEffect(() => {
+    if (isOpen && activeIndex >= 0) {
+      optionRefs.current[activeIndex]?.scrollIntoView?.({ block: 'nearest' });
+    }
+  }, [activeIndex, isOpen]);
 
-  // Find selected option
-  const selectedOption = useMemo(() => {
-    if (!value) return null;
-    return options.find(opt => opt.value === value) || null;
-  }, [options, value]);
-
-  const handleSelect = (val) => {
-    onChange(val);
-    setIsOpen(false);
-    setSearchTerm('');
+  const moveActive = direction => {
+    if (filteredOptions.length === 0) return;
+    let next = activeIndex;
+    for (let checked = 0; checked < filteredOptions.length; checked += 1) {
+      next = (next + direction + filteredOptions.length) % filteredOptions.length;
+      if (!filteredOptions[next].disabled) {
+        setActiveIndex(next);
+        return;
+      }
+    }
   };
 
-  const handleClear = (e) => {
-    e.stopPropagation();
-    onChange('');
-    setSearchTerm('');
+  const handleSelect = option => {
+    if (option.disabled) return;
+    onChange(option.value);
+    closeDropdown();
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
+
+  const handleKeyDown = event => {
+    if (disabled) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!isOpen) {
+        openDropdown();
+      } else {
+        moveActive(event.key === 'ArrowDown' ? 1 : -1);
+      }
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (!isOpen) openDropdown();
+      else if (activeIndex >= 0) handleSelect(filteredOptions[activeIndex]);
+      return;
+    }
+    if (event.key === 'Escape' && isOpen) {
+      event.preventDefault();
+      closeDropdown();
+    }
+    if (event.key === 'Tab' && isOpen) closeDropdown();
+  };
+
+  const handleSearch = event => {
+    const nextTerm = event.target.value;
+    if (!isOpen) setIsOpen(true);
+    setSearchTerm(nextTerm);
+    const nextOptions = !nextTerm
+      ? options
+      : options.filter(option => {
+          const lower = nextTerm.toLocaleLowerCase('vi');
+          return option.label?.toLocaleLowerCase('vi').includes(lower)
+            || option.subtitle?.toLocaleLowerCase('vi').includes(lower);
+        });
+    setActiveIndex(firstEnabledIndex(nextOptions));
+  };
+
+  const activeOptionId = isOpen && activeIndex >= 0
+    ? `${listboxId}-option-${activeIndex}`
+    : undefined;
+  const displayValue = isOpen ? searchTerm : (selectedOption?.label || '');
 
   return (
     <div className={`relative w-full ${className}`} ref={containerRef}>
-      {/* Trigger Button */}
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between text-left px-3 py-2 bg-zinc-950 border ${error ? 'border-red-500' : 'border-zinc-800'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-zinc-700 cursor-pointer'} text-zinc-300 rounded-xl text-sm transition-colors focus:outline-none`}
-      >
-        <div className="flex-1 min-w-0 truncate pr-2">
-          {selectedOption ? (
-            <span className="text-white font-medium">{selectedOption.label}</span>
-          ) : (
-            <span className="text-zinc-500">{placeholder}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          id={inputId}
+          role="combobox"
+          type="text"
+          autoComplete="off"
+          disabled={disabled}
+          value={displayValue}
+          placeholder={placeholder}
+          aria-label={ariaLabel || (!ariaLabelledBy ? placeholder : undefined)}
+          aria-labelledby={ariaLabelledBy}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid ?? Boolean(error)}
+          aria-autocomplete="list"
+          aria-expanded={isOpen}
+          aria-controls={listboxId}
+          aria-activedescendant={activeOptionId}
+          onClick={() => (isOpen ? undefined : openDropdown())}
+          onChange={handleSearch}
+          onKeyDown={handleKeyDown}
+          className={`min-h-11 w-full rounded-xl border bg-zinc-950 py-2 pl-3 pr-16 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-500 focus:ring-2 focus:ring-brand-orange/60 ${error ? 'border-red-500' : 'border-zinc-800 hover:border-zinc-700'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+        />
+        <div className="absolute inset-y-0 right-2 flex items-center gap-1">
           {selectedOption && !disabled && (
-            <div 
-              onClick={handleClear}
-              className="p-1 hover:bg-zinc-800 rounded-md transition-colors"
+            <button
+              type="button"
+              aria-label={`Xóa lựa chọn ${selectedOption.label}`}
+              onClick={() => {
+                onChange('');
+                closeDropdown();
+                inputRef.current?.focus();
+              }}
+              className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-brand-orange/60"
             >
-              <X className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300" />
-            </div>
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
           )}
-          <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
         </div>
-      </button>
+      </div>
 
-      {/* Dropdown Menu */}
       {isOpen && createPortal(
-        <div 
+        <div
           ref={dropdownRef}
           style={dropdownStyle}
-          className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in-up"
+          className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl shadow-black/50"
         >
-          {/* Search Input */}
-          <div className="p-2 border-b border-zinc-800 bg-zinc-900/90 sticky top-0 z-10 backdrop-blur-sm">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-              <input
-                type="text"
-                autoFocus
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Tìm kiếm..."
-                className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-950 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-brand-orange/50 transition-colors"
-              />
-            </div>
+          <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2 text-xs text-zinc-500">
+            <Search className="h-3.5 w-3.5" aria-hidden="true" />
+            Nhập để tìm kiếm
           </div>
-
-          {/* Options List */}
-          <div className="max-h-60 overflow-y-auto custom-scrollbar p-1.5">
+          <div id={listboxId} role="listbox" aria-label={ariaLabel || placeholder} className="max-h-60 overflow-y-auto p-1.5 custom-scrollbar">
             {filteredOptions.length === 0 ? (
-              <div className="p-3 text-center text-xs text-zinc-500">
-                Không tìm thấy kết quả.
-              </div>
-            ) : (
-              filteredOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  disabled={opt.disabled}
-                  onClick={() => handleSelect(opt.value)}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between gap-3 ${
-                    opt.disabled ? 'opacity-50 cursor-not-allowed bg-zinc-950 text-zinc-500' :
-                    value === opt.value ? 'bg-brand-orange/10 text-brand-orange' : 'hover:bg-zinc-800 text-zinc-300'
-                  }`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-sm truncate font-medium ${opt.disabled ? 'text-zinc-500' : value === opt.value ? 'text-brand-orange' : 'text-zinc-200'}`}>
-                      {opt.label}
-                    </div>
-                    {opt.subtitle && (
-                      <div className={`text-[10px] truncate mt-0.5 ${opt.disabled ? 'text-zinc-600' : 'text-zinc-500'}`}>
-                        {opt.subtitle}
-                      </div>
-                    )}
-                  </div>
-                  {opt.badge && (
-                    <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider uppercase border opacity-70 ${opt.badgeColor || 'border-current'}`}>
-                      {opt.badge}
-                    </span>
-                  )}
-                </button>
-              ))
-            )}
+              <div className="p-3 text-center text-xs text-zinc-500">Không tìm thấy kết quả.</div>
+            ) : filteredOptions.map((option, index) => (
+              <button
+                ref={element => { optionRefs.current[index] = element; }}
+                id={`${listboxId}-option-${index}`}
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={value === option.value}
+                aria-disabled={Boolean(option.disabled)}
+                disabled={option.disabled}
+                onMouseMove={() => !option.disabled && setActiveIndex(index)}
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => handleSelect(option)}
+                className={`flex w-full min-h-11 items-center justify-between gap-3 rounded-lg px-3 py-2 text-left outline-none transition-colors ${
+                  option.disabled
+                    ? 'cursor-not-allowed bg-zinc-950 text-zinc-500 opacity-50'
+                    : activeIndex === index
+                      ? 'bg-zinc-800 text-white ring-1 ring-brand-orange/40'
+                      : value === option.value
+                        ? 'bg-brand-orange/10 text-brand-orange'
+                        : 'text-zinc-300 hover:bg-zinc-800'
+                }`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate text-sm font-medium ${value === option.value ? 'text-brand-orange' : 'text-zinc-200'}`}>
+                    {option.label}
+                  </span>
+                  {option.subtitle && <span className="mt-0.5 block truncate text-[10px] text-zinc-500">{option.subtitle}</span>}
+                </span>
+                {option.badge && (
+                  <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider opacity-80 ${option.badgeColor || 'border-current'}`}>
+                    {option.badge}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>,
-        document.body
+        document.body,
       )}
     </div>
   );

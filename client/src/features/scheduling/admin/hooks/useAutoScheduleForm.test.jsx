@@ -40,14 +40,51 @@ describe('useAutoScheduleForm', () => {
     await waitFor(() => expect(result.current.cinemas).toHaveLength(1));
     act(() => result.current.setSelectedCinemaId('cinema-1'));
     await waitFor(() => expect(result.current.auditoriums).toHaveLength(1));
-    await waitFor(() => expect(result.current.selectedAuditoriumIds).toEqual(['auditorium-1']));
+    expect(result.current.selectedAuditoriumIds).toEqual([]);
+    act(() => result.current.selectAllActiveAuditoriums());
     await waitFor(() => expect(result.current.movies).toHaveLength(1));
     act(() => {
       result.current.setScheduleFrom('2099-08-22');
       result.current.setScheduleTo(scheduleTo);
       result.current.toggleVersion('version-1');
     });
+    await waitFor(() => expect(result.current.selectedAuditoriumIds).toEqual(['auditorium-1']));
   };
+
+  it('starts rooms empty and supports select-all and clear actions', async () => {
+    const { result } = renderHook(() => useAutoScheduleForm({}));
+    await waitFor(() => expect(result.current.cinemas).toHaveLength(1));
+    act(() => result.current.setSelectedCinemaId('cinema-1'));
+    await waitFor(() => expect(result.current.auditoriums).toHaveLength(1));
+
+    expect(result.current.selectedAuditoriumIds).toEqual([]);
+    act(() => result.current.selectAllActiveAuditoriums());
+    expect(result.current.selectedAuditoriumIds).toEqual(['auditorium-1']);
+    act(() => result.current.clearAuditoriums());
+    expect(result.current.selectedAuditoriumIds).toEqual([]);
+  });
+
+  it('retains ineligible movies and removes stale selected versions after date changes', async () => {
+    const { result } = renderHook(() => useAutoScheduleForm({}));
+    await waitFor(() => expect(result.current.movies).toHaveLength(1));
+    act(() => result.current.toggleVersion('version-1'));
+    expect(result.current.selectedMovieVersionIds).toEqual(['version-1']);
+
+    adminAutoScheduleService.getEligibleMovies.mockResolvedValue({
+      success: true,
+      data: [{
+        ...eligibleMovie,
+        eligible: false,
+        reasons: [{ code: 'OUTSIDE_RELEASE_WINDOW', message: 'Ngoài thời gian phát hành' }],
+      }],
+    });
+    act(() => result.current.setScheduleFrom('2099-08-23'));
+
+    await waitFor(() => expect(result.current.movies[0].eligible).toBe(false));
+    expect(result.current.movies[0].reasons[0].message).toBe('Ngoài thời gian phát hành');
+    expect(result.current.selectedMovieVersionIds).toEqual([]);
+    expect(result.current.selectionNotice).toContain('Đã bỏ 1 định dạng');
+  });
 
   it('blocks an eight-day request before calling the backend', async () => {
     const { result } = renderHook(() => useAutoScheduleForm({}));
@@ -57,6 +94,18 @@ describe('useAutoScheduleForm', () => {
     expect(result.current.scheduleTo).toBe('2099-08-29');
     expect(result.current.dateRangeInfo.suggestedScheduleTo).toBe('2099-08-28');
     expect(adminAutoScheduleService.generatePreview).not.toHaveBeenCalled();
+  });
+
+  it('exposes a complete readiness summary for a valid configuration', async () => {
+    const { result } = renderHook(() => useAutoScheduleForm({}));
+    await configure(result);
+    await waitFor(() => expect(result.current.isLoadingMovies).toBe(false));
+
+    expect(result.current.readinessIssues).toEqual([]);
+    expect(result.current.isReady).toBe(true);
+    expect(result.current.selectedVersions).toEqual([
+      expect.objectContaining({ publicId: 'version-1', movieTitle: 'Phim thử nghiệm' }),
+    ]);
   });
 
   it('reuses the idempotency key for an unchanged failed retry', async () => {
