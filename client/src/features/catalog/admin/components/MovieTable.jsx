@@ -188,12 +188,12 @@ export default function MovieTable({
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex flex-col gap-1 text-[10px] text-zinc-400">
-                      <div className="flex items-center justify-between rounded bg-zinc-900/60 px-2 py-0.5"><span>Phiên bản active</span><strong className="text-zinc-200">{movie.activeVersionCount || 0}</strong></div>
-                      <div className="flex items-center justify-between rounded bg-zinc-900/60 px-2 py-0.5"><span>Media</span><strong className="text-zinc-200">{movie.mediaCount || 0}</strong></div>
+                      <div className="flex items-center justify-between rounded bg-zinc-900/60 px-2 py-0.5"><span>Phiên bản hoạt động</span><strong className="text-zinc-200">{movie.activeVersionCount || 0}</strong></div>
+                      <div className="flex items-center justify-between rounded bg-zinc-900/60 px-2 py-0.5"><span>Hình ảnh/Video</span><strong className="text-zinc-200">{movie.mediaCount || 0}</strong></div>
                       <div className="flex items-center justify-between rounded bg-zinc-900/60 px-2 py-0.5"><span>Lịch chiếu</span><strong className="text-zinc-200">{movie.showtimeCount || 0}</strong></div>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-center text-xs text-zinc-300">{movie.durationMinutes ? `${movie.durationMinutes} phút` : 'N/A'}</td>
+                  <td className="px-5 py-4 text-center text-xs text-zinc-300">{movie.durationMinutes ? `${movie.durationMinutes} phút` : 'Chưa có'}</td>
                   <td className="px-5 py-4 text-center text-xs text-zinc-300">{formatDate(movie.releaseDate)}</td>
                   <td className="px-5 py-4 text-center">
                     <span className={`rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${statusConfig.colorClass}`}>{statusConfig.label}</span>
@@ -203,7 +203,7 @@ export default function MovieTable({
                       <button type="button" onClick={() => onOpenDetail(movie)} className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-200 hover:bg-zinc-700">
                         {movie.status === 'DRAFT' ? 'Xem xét' : 'Chi tiết'}
                       </button>
-                      <button type="button" onClick={() => onOpenEdit(movie)} className="rounded-lg p-1.5 text-neutral-400 hover:bg-amber-500/10 hover:text-amber-500" title="Chỉnh sửa metadata"><Pencil className="h-4 w-4" /></button>
+                      <button type="button" onClick={() => onOpenEdit(movie)} className="rounded-lg p-1.5 text-neutral-400 hover:bg-amber-500/10 hover:text-amber-500" title="Chỉnh sửa thông tin phim"><Pencil className="h-4 w-4" /></button>
                       <button
                         type="button"
                         disabled={movie.status !== 'ENDED' && movie.status !== 'DRAFT'}

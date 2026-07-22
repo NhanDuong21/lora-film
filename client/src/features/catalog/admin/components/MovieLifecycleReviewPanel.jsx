@@ -104,11 +104,11 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate 
           {isDraft && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <div className="space-y-4">
-                <h4 className="text-sm font-medium text-zinc-300">Điều kiện bắt buộc (Backend xác thực)</h4>
+                <h4 className="text-sm font-medium text-zinc-300">Điều kiện bắt buộc (Máy chủ xác thực)</h4>
                 <div className="space-y-2">
                   {renderChecklistItem('Có thể loại', checklist.hasGenre)}
                   {renderChecklistItem('Có phiên bản đang hoạt động', checklist.hasActiveVersion)}
-                  {renderChecklistItem('Có media poster chính đang hoạt động', checklist.hasPrimaryPoster)}
+                  {renderChecklistItem('Có poster chính đang hoạt động', checklist.hasPrimaryPoster)}
                 </div>
               </div>
 
@@ -158,7 +158,7 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate 
                   }
                   if (movie.source === 'TMDB' && currentStatus === 'DRAFT' && tmdbReview?.canApprove === false) {
                     isDisabled = true;
-                    disableReason = tmdbReview.approvalBlockers?.[0] || 'Backend xác định phim chưa đủ điều kiện duyệt.';
+                    disableReason = tmdbReview.approvalBlockers?.[0] || 'Máy chủ xác định phim chưa đủ điều kiện duyệt.';
                   }
                 }
                 

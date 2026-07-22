@@ -4,6 +4,9 @@ import { getMovieReadinessView } from '../../utils/movieReadiness';
 export default function MovieDetailWarnings({ movie }) {
   if (!movie) return null;
 
+  // DRAFT readiness is already presented by the backend-driven lifecycle checklist.
+  if (movie.status === 'DRAFT') return null;
+
   const readiness = getMovieReadinessView(movie);
 
   if (readiness.healthStatus === 'UNKNOWN') {

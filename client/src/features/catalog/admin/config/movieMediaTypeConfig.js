@@ -1,11 +1,11 @@
 export const MEDIA_TYPES = {
   POSTER: 'Poster',
-  BACKDROP: 'Backdrop',
-  BANNER: 'Banner',
-  TRAILER: 'Trailer',
-  TEASER: 'Teaser',
-  STILL_IMAGE: 'Still Image',
-  BEHIND_THE_SCENES: 'Behind The Scenes'
+  BACKDROP: 'Ảnh nền',
+  BANNER: 'Ảnh bìa / Phông nền',
+  TRAILER: 'Video giới thiệu',
+  TEASER: 'Video giới thiệu ngắn',
+  STILL_IMAGE: 'Ảnh tĩnh',
+  BEHIND_THE_SCENES: 'Hậu trường'
 };
 
 export const getMediaTypeLabel = (type) => {

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { RefreshCw, CheckCircle, Clock, AlertTriangle, Play, HelpCircle } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import adminTmdbService from '@/features/catalog/admin/services/adminTmdbService';
 import { formatDate } from '@/utils/movieHelpers';
 
@@ -46,6 +46,7 @@ export default function TmdbSyncStatusPanel() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSyncState();
   }, [fetchSyncState]);
 
@@ -98,8 +99,8 @@ export default function TmdbSyncStatusPanel() {
       case 'NO_DATA':
         return {
           icon: <HelpCircle className="w-6 h-6 text-zinc-500" />,
-          title: 'TMDB BULK IMPORT',
-          desc: 'Chưa có dữ liệu đồng bộ\nChưa có tiến trình nhập danh mục phim nào được ghi nhận.\nTrong môi trường phát triển, hãy chạy TMDB Integration API và bật bulk importer của Movie Service.',
+          title: 'NHẬP PHIM TMDB HÀNG LOẠT',
+          desc: 'Chưa có dữ liệu đồng bộ\nChưa có tiến trình nhập danh mục phim nào được ghi nhận.\nTrong môi trường phát triển, hãy chạy API tích hợp TMDB và bật tiến trình nhập hàng loạt của Dịch vụ phim.',
           bgColor: 'bg-zinc-800',
         };
       case 'IDLE':
@@ -127,21 +128,21 @@ export default function TmdbSyncStatusPanel() {
         return {
           icon: <AlertTriangle className="w-6 h-6 text-red-500" />,
           title: 'Đồng bộ thất bại',
-          desc: 'Không có lỗi chi tiết trong sync-state hiện tại.\nHãy kiểm tra log Movie Service.',
+          desc: 'Không có lỗi chi tiết trong trạng thái đồng bộ hiện tại.\nHãy kiểm tra nhật ký Dịch vụ phim.',
           bgColor: 'bg-red-500/10 border-red-500/20',
         };
       case 'STALE':
         return {
           icon: <AlertTriangle className="w-6 h-6 text-orange-500" />,
           title: 'Tiến trình có thể đã bị gián đoạn',
-          desc: 'Không nhận được cập nhật trạng thái trong hơn 5 phút.\nHãy kiểm tra Movie Service bulk importer và TMDB Integration API đang chạy local.',
+          desc: 'Không nhận được cập nhật trạng thái trong hơn 5 phút.\nHãy kiểm tra tiến trình nhập hàng loạt của Dịch vụ phim và API tích hợp TMDB trong môi trường nội bộ.',
           bgColor: 'bg-orange-500/10 border-orange-500/20',
         };
       default:
         return {
           icon: <HelpCircle className="w-6 h-6 text-zinc-500" />,
           title: 'Trạng thái không được hỗ trợ',
-          desc: `Raw status: ${persistedStatus}`,
+          desc: `Trạng thái gốc: ${persistedStatus}`,
           bgColor: 'bg-zinc-800',
         };
     }
@@ -169,7 +170,7 @@ export default function TmdbSyncStatusPanel() {
               <>
                 {(displayStatus === 'IDLE' || displayStatus === 'RUNNING' || displayStatus === 'SUCCESS') && (
                   <div>
-                    <span className="text-zinc-500">Checkpoint {displayStatus === 'SUCCESS' ? 'cuối' : 'hiện tại'}: </span>
+                    <span className="text-zinc-500">Mốc tiến trình {displayStatus === 'SUCCESS' ? 'cuối' : 'hiện tại'}: </span>
                     <strong className="text-zinc-300">{cursor || '0'}</strong>
                   </div>
                 )}

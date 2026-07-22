@@ -114,11 +114,11 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400"><Cloud size={20} /></div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 id="tmdb-review-title" className="font-semibold text-white">TMDB Import Review</h2>
+              <h2 id="tmdb-review-title" className="font-semibold text-white">Rà soát dữ liệu TMDB</h2>
               <StatusBadge config={panelStatusConfig} fallback={review?.reviewStatus || 'Không có dữ liệu'} />
             </div>
             <p className="mt-1 max-w-3xl text-sm leading-5 text-zinc-400">
-              So sánh dữ liệu đang lưu với dữ liệu provider hiện tại. Kết quả chỉ dùng để hỗ trợ rà soát và không tự động ghi đè phim.
+              So sánh dữ liệu đang lưu với dữ liệu TMDB hiện tại. Kết quả chỉ dùng để hỗ trợ rà soát và không tự động ghi đè thông tin phim.
             </p>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
               <span>Nguồn: <strong className="font-medium text-sky-300">{review?.source || 'TMDB'}</strong></span>
@@ -141,7 +141,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
         <div className="flex items-start gap-3 p-6 text-sm text-zinc-400" role="status">
           <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
           <div>
-            <p>Đang tải dữ liệu TMDB review...</p>
+            <p>Đang tải dữ liệu rà soát TMDB...</p>
             <p className="mt-1 text-xs text-zinc-500">So sánh này mang tính tham khảo; thao tác lifecycle vẫn dựa trên dữ liệu phim đã lưu.</p>
           </div>
         </div>
@@ -153,7 +153,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
             <p className="font-semibold">{review ? 'Không thể cập nhật dữ liệu so sánh TMDB' : 'Không thể tải dữ liệu so sánh TMDB'}</p>
             <p className="mt-0.5 text-xs text-red-200/80">{error.message}</p>
             <p className="mt-1 text-xs leading-5 text-zinc-400">
-              Dữ liệu phim đã lưu vẫn khả dụng. Việc duyệt phim vẫn dựa trên dữ liệu đã lưu và được backend kiểm tra lại.
+              Dữ liệu phim đã lưu vẫn khả dụng. Việc duyệt phim vẫn dựa trên dữ liệu đã lưu và được máy chủ kiểm tra lại.
             </p>
             {error.technicalDetail && (
               <details className="mt-1 text-[11px] text-zinc-500">
@@ -168,18 +168,18 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
 
       {hasRequested && !isLoading && !error && !review && (
         <div className="p-6 text-sm text-zinc-500">
-          <p>Không có dữ liệu TMDB review.</p>
+          <p>Không có dữ liệu rà soát TMDB.</p>
           <p className="mt-1 text-xs">Dữ liệu phim đã lưu và các thao tác lifecycle vẫn hoạt động độc lập.</p>
         </div>
       )}
 
       {review && (
         <div className="space-y-6 p-5 md:p-6" aria-live="polite">
-          {isRefreshing && <p className="text-xs text-sky-300" role="status">Đang cập nhật dữ liệu provider; nội dung hiện tại vẫn được giữ lại.</p>}
+          {isRefreshing && <p className="text-xs text-sky-300" role="status">Đang cập nhật dữ liệu TMDB; nội dung hiện tại vẫn được giữ lại.</p>}
 
           <div className="grid overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 sm:grid-cols-3 sm:divide-x sm:divide-zinc-800">
             <div className="border-b border-zinc-800 p-4 sm:border-b-0">
-              <p className="text-[11px] uppercase tracking-wide text-zinc-500">Dữ liệu provider</p>
+              <p className="text-[11px] uppercase tracking-wide text-zinc-500">Dữ liệu từ TMDB</p>
               <p className={`mt-1 text-sm font-semibold ${review.hasProviderChanges ? 'text-amber-300' : 'text-emerald-300'}`}>
                 {review.hasProviderChanges ? 'Có thay đổi' : 'Không thay đổi'}
               </p>
@@ -189,7 +189,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
               <p className="mt-1 text-xs leading-5 text-zinc-300">{formatTimestamp(review.appliedTmdbLastUpdated)}</p>
             </div>
             <div className="p-4">
-              <p className="text-[11px] uppercase tracking-wide text-zinc-500">Provider cập nhật</p>
+              <p className="text-[11px] uppercase tracking-wide text-zinc-500">TMDB cập nhật</p>
               <p className="mt-1 text-xs leading-5 text-zinc-300">{formatTimestamp(review.providerLastUpdated)}</p>
             </div>
           </div>
@@ -199,7 +199,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Database className="h-4 w-4 text-zinc-400" />
-                  <h3 id="tmdb-health-title" className="text-sm font-semibold text-white">Movie Health</h3>
+                  <h3 id="tmdb-health-title" className="text-sm font-semibold text-white">Tình trạng dữ liệu phim</h3>
                 </div>
                 <StatusBadge config={healthStatusConfig} fallback={readiness?.healthStatus || 'Không xác định'} />
               </div>
@@ -208,7 +208,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
                 <IssueList title="Thông tin cần kiểm tra" issues={warnings} tone="warning" />
                 {!blockers.length && !warnings.length && (
                   <div className="flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-200">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" /> Backend không trả về blocker hoặc warning.
+                    <CheckCircle2 className="h-4 w-4 shrink-0" /> Máy chủ không trả về điều kiện chặn hoặc cảnh báo.
                   </div>
                 )}
               </div>
@@ -217,13 +217,13 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
             <section className="rounded-xl border border-zinc-800 bg-zinc-950 p-4" aria-labelledby="tmdb-approval-title">
               <div className="flex items-center gap-2">
                 {review.canApprove ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <ShieldAlert className="h-4 w-4 text-red-400" />}
-                <h3 id="tmdb-approval-title" className="text-sm font-semibold text-white">Approval</h3>
+                <h3 id="tmdb-approval-title" className="text-sm font-semibold text-white">Điều kiện duyệt phim</h3>
               </div>
               <p className={`mt-3 text-sm font-semibold ${review.canApprove ? 'text-emerald-300' : 'text-red-300'}`}>
                 {review.canApprove ? 'Đủ điều kiện phê duyệt' : 'Chưa thể phê duyệt'}
               </p>
               <p className="mt-1 text-xs leading-5 text-zinc-500">
-                Quyết định này đến từ backend. Khi xác nhận, lifecycle và readiness sẽ được kiểm tra lại trước khi lưu.
+                Kết quả này do máy chủ xác định. Khi xác nhận, vòng đời và tình trạng dữ liệu sẽ được kiểm tra lại trước khi lưu.
               </p>
               {approvalBlockers.length > 0 && (
                 <ul className="mt-3 space-y-1.5 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs leading-5 text-red-200">
@@ -231,7 +231,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
                 </ul>
               )}
               {!review.canApprove && approvalBlockers.length === 0 && (
-                <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3 text-xs text-zinc-400">Trạng thái review hiện tại không cho phép thao tác phê duyệt.</p>
+                <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3 text-xs text-zinc-400">Trạng thái rà soát hiện tại chưa cho phép duyệt phim.</p>
               )}
             </section>
           </div>
@@ -239,14 +239,14 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
           <section aria-labelledby="tmdb-scalar-title">
             <div className="mb-3 flex items-center gap-2">
               {review.hasProviderChanges ? <AlertTriangle className="h-4 w-4 text-amber-400" /> : <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
-              <h3 id="tmdb-scalar-title" className="text-sm font-semibold text-white">So sánh metadata</h3>
+              <h3 id="tmdb-scalar-title" className="text-sm font-semibold text-white">So sánh thông tin phim</h3>
             </div>
             {scalarDiffs.length ? (
               <div className="overflow-x-auto rounded-xl border border-zinc-800">
                 <table className="min-w-[680px] divide-y divide-zinc-800 text-left">
-                  <caption className="sr-only">So sánh trường metadata hiện tại và dữ liệu TMDB</caption>
+                  <caption className="sr-only">So sánh thông tin phim đang lưu và dữ liệu từ TMDB</caption>
                   <thead className="bg-zinc-900 text-[11px] uppercase tracking-wide text-zinc-500">
-                    <tr><th className="px-4 py-3">Trường</th><th className="px-4 py-3">Đang lưu</th><th className="px-4 py-3">TMDB hiện tại</th></tr>
+                    <tr><th className="px-4 py-3">Trường</th><th className="px-4 py-3">Dữ liệu đang lưu</th><th className="px-4 py-3">Dữ liệu từ TMDB</th></tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/70">
                     {scalarDiffs.map(diff => (
@@ -263,12 +263,12 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
                 </table>
               </div>
             ) : (
-              <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-500">Backend không trả về trường metadata để so sánh.</p>
+              <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-500">Máy chủ không trả về thông tin phim để so sánh.</p>
             )}
           </section>
 
           <section aria-labelledby="tmdb-relations-title">
-            <h3 id="tmdb-relations-title" className="mb-3 text-sm font-semibold text-white">So sánh quan hệ và media</h3>
+            <h3 id="tmdb-relations-title" className="mb-3 text-sm font-semibold text-white">So sánh quan hệ và hình ảnh/video</h3>
             {collectionDiffs.length ? (
               <div className="space-y-3">
                 {collectionDiffs.map(diff => {
@@ -289,13 +289,13 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
                         </span>
                       </summary>
                       <div className="mt-4 grid gap-4 border-t border-zinc-800 pt-4 md:grid-cols-2">
-                        <CollectionValues title="Đang lưu" items={currentValues} emptyLabel="Không có dữ liệu đang lưu" />
-                        <CollectionValues title="TMDB hiện tại" items={providerValues} emptyLabel="Provider không trả về dữ liệu" />
+                        <CollectionValues title="Dữ liệu đang lưu" items={currentValues} emptyLabel="Không có dữ liệu đang lưu" />
+                        <CollectionValues title="Dữ liệu từ TMDB" items={providerValues} emptyLabel="TMDB không trả về dữ liệu" />
                       </div>
                       {diff.changed && (
                         <div className="mt-4 grid gap-3 border-t border-zinc-800 pt-4 md:grid-cols-2">
-                          <CollectionValues title="Provider bổ sung" items={added} emptyLabel="Không có mục bổ sung" />
-                          <CollectionValues title="Không còn trên provider" items={removed} emptyLabel="Không có mục bị loại" />
+                          <CollectionValues title="Bổ sung từ TMDB" items={added} emptyLabel="Không có mục bổ sung" />
+                          <CollectionValues title="Không còn trên TMDB" items={removed} emptyLabel="Không có mục bị loại bỏ" />
                         </div>
                       )}
                     </details>
@@ -303,7 +303,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
                 })}
               </div>
             ) : (
-              <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-500">Backend không trả về dữ liệu quan hệ để so sánh.</p>
+              <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-500">Máy chủ không trả về dữ liệu quan hệ để so sánh.</p>
             )}
           </section>
         </div>
