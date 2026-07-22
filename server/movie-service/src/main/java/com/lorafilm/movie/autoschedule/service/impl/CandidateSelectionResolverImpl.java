@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class CandidateSelectionResolverImpl implements CandidateSelectionResolver {
@@ -20,8 +19,8 @@ public class CandidateSelectionResolverImpl implements CandidateSelectionResolve
                 Comparator.comparing((ShowtimeCandidate c) -> c.getValidationStatus() == PreviewItemValidationStatus.VALID ? 0 : 1)
                         .thenComparing(c -> c.getScore() != null ? c.getScore() : java.math.BigDecimal.ZERO, Comparator.reverseOrder())
                         .thenComparing(ShowtimeCandidate::getStartTime)
-                        .thenComparing(c -> c.getAuditorium().getPublicId())
-                        .thenComparing(c -> c.getMovieVersion().getPublicId())
+                        .thenComparing(ShowtimeCandidate::getAuditoriumPublicId)
+                        .thenComparing(ShowtimeCandidate::getMovieVersionPublicId)
                         .thenComparing(c -> c.getRejectionCode() != null ? c.getRejectionCode() : "")
         );
 
@@ -33,18 +32,17 @@ public class CandidateSelectionResolverImpl implements CandidateSelectionResolve
         }
 
         // 2. Greedy Overlap Resolver
-        List<ShowtimeCandidate> validCandidates = candidates.stream()
-                .filter(c -> c.getValidationStatus() == PreviewItemValidationStatus.VALID)
-                .collect(Collectors.toList());
-
         List<ShowtimeCandidate> selectedCandidates = new ArrayList<>();
 
-        for (ShowtimeCandidate candidate : validCandidates) {
+        for (ShowtimeCandidate candidate : candidates) {
+            if (candidate.getValidationStatus() != PreviewItemValidationStatus.VALID) {
+                continue;
+            }
             boolean hasOverlap = false;
 
             // Check overlap against already selected candidates
             for (ShowtimeCandidate selected : selectedCandidates) {
-                if (selected.getAuditorium().getId().equals(candidate.getAuditorium().getId())) {
+                if (selected.getAuditoriumId().equals(candidate.getAuditoriumId())) {
                     // Check occupancy overlap: A.start < B.occupancyEnd AND A.occupancyEnd > B.start
                     if (candidate.getStartTime().isBefore(selected.getOccupancyEndTime()) &&
                             candidate.getOccupancyEndTime().isAfter(selected.getStartTime())) {

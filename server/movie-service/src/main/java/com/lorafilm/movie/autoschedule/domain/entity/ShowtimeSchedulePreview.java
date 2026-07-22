@@ -3,6 +3,7 @@ package com.lorafilm.movie.autoschedule.domain.entity;
 import com.lorafilm.movie.autoschedule.domain.enums.AutoScheduleStrategy;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewApplyMode;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import jakarta.persistence.*;
 
@@ -125,7 +126,7 @@ public class ShowtimeSchedulePreview {
         preview.setScheduleTo(scheduleTo);
         preview.setTimezoneSnapshot(cinema.getTimezone());
         preview.setStrategy(AutoScheduleStrategy.BALANCED);
-        preview.setStrategyVersion("BALANCED_V1");
+        preview.setStrategyVersion(AutoScheduleStrategyVersions.CURRENT);
         preview.setApplyMode(SchedulePreviewApplyMode.ALL_OR_NOTHING);
         preview.setStatus(SchedulePreviewStatus.GENERATING);
         preview.setSlotGranularityMinutes(slotGranularityMinutes);

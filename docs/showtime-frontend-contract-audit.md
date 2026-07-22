@@ -1,55 +1,72 @@
 # Showtime Frontend Contract Audit
 
-## 1. Confirmed Contracts
+This audit reflects the current controller, DTO, service, and frontend route source. Backend API contracts and browser routes are listed separately.
 
-| Method | Endpoint | Request Schema | Response Schema | Confirmed |
-|---|---|---|---|---|
-| POST | `/api/admin/showtimes` | `CreateShowtimeRequest` | `AdminShowtimeResponse` | Yes |
-| PUT | `/api/admin/showtimes/{showtimePublicId}` | `UpdateShowtimeRequest` | `AdminShowtimeResponse` | Yes |
-| PUT | `/api/admin/showtimes/{showtimePublicId}/status` | `UpdateShowtimeStatusRequest` | `AdminShowtimeResponse` | Yes |
-| GET | `/api/admin/showtimes/{showtimePublicId}/status-history` | - | `List<ShowtimeStatusHistoryResponse>` | Yes |
-| GET | `/api/admin/showtimes/{showtimeId}/prices` | - | `ShowtimePricesResponse` | Yes |
-| PUT | `/api/admin/showtimes/{showtimeId}/prices` | `UpdateShowtimePricesRequest` | `ShowtimePricesResponse` | Yes |
-| POST | `/api/admin/showtime-schedules/generate-preview` | `GenerateShowtimeSchedulePreviewRequest` | `ShowtimeSchedulePreviewSummaryResponse` | Yes |
-| GET | `/api/admin/showtime-schedules/{previewPublicId}` | Query: page, size | `ShowtimeSchedulePreviewPageResponse` | Yes |
-| PUT | `/api/admin/showtime-schedules/{previewPublicId}/items` | `UpdatePreviewItemSelectionsRequest` | `ShowtimeSchedulePreviewSummaryResponse` | Yes |
-| POST | `/api/admin/showtime-schedules/{previewPublicId}/apply` | `ApplyShowtimeSchedulePreviewRequest` | `ApplyShowtimeSchedulePreviewResponse` | Yes |
+## 1. Confirmed Backend API Contracts
 
-## 2. Missing Contracts
+| Method | Endpoint | Request or query | Response data |
+|---|---|---|---|
+| GET | `/api/admin/showtimes` | Optional `cinemaSlug`, `movieSlug`, `status`, `date`, `batchId`, `source`; `page`, `size` | `PageResponse<AdminShowtimeResponse>` |
+| GET | `/api/admin/showtimes/{showtimePublicId}` | - | `AdminShowtimeResponse` |
+| POST | `/api/admin/showtimes` | `CreateShowtimeRequest` | `AdminShowtimeResponse` |
+| PUT | `/api/admin/showtimes/{showtimePublicId}` | `UpdateShowtimeRequest` | `AdminShowtimeResponse` |
+| PUT | `/api/admin/showtimes/{showtimePublicId}/status` | `UpdateShowtimeStatusRequest` | `AdminShowtimeResponse` |
+| GET | `/api/admin/showtimes/{showtimePublicId}/status-history` | - | `List<ShowtimeStatusHistoryResponse>` |
+| GET | `/api/admin/showtimes/{showtimeId}/prices` | `{showtimeId}` is semantically the Showtime public ID | `ShowtimePricesResponse` |
+| PUT | `/api/admin/showtimes/{showtimeId}/prices` | `{showtimeId}` is semantically the Showtime public ID; `UpdateShowtimePricesRequest` | `ShowtimePricesResponse` |
+| POST | `/api/admin/showtime-schedules/generate-preview` | `GenerateShowtimeSchedulePreviewRequest` | `ShowtimeSchedulePreviewSummaryResponse` |
+| GET | `/api/admin/showtime-schedules/{previewPublicId}` | `page`, `size`, and preview-item filters | `ShowtimeSchedulePreviewPageResponse` |
+| PUT | `/api/admin/showtime-schedules/{previewPublicId}/items` | `UpdatePreviewItemSelectionsRequest` | `ShowtimeSchedulePreviewSummaryResponse` |
+| POST | `/api/admin/showtime-schedules/{previewPublicId}/apply` | `ApplyShowtimeSchedulePreviewRequest` | `ApplyShowtimeSchedulePreviewResponse` |
+| GET | `/api/admin/showtime-schedules/eligible-movies` | Optional `fromDate`, `toDate` | `List<EligibleMovieResponse>` |
 
-1. **Admin Showtime List API**: There is no `GET /api/admin/showtimes` endpoint with filters for all statuses (DRAFT, OPEN_FOR_BOOKING, CANCELLED, etc.), cinema, auditorium, movie, date range. The `GET /api/showtimes` is customer-facing and only returns `OPEN_FOR_BOOKING`.
-2. **Admin Auto-Schedule History API**: There is no `GET /api/admin/showtime-schedules` endpoint to list previously generated previews.
+`GET /api/admin/showtimes` is implemented by `AdminShowtimeQueryController`; it is not a missing contract.
+
+## 2. Confirmed Backend Contract Gap
+
+There is no root `GET /api/admin/showtime-schedules` controller method for preview history. `AdminShowtimeScheduleController` provides preview detail, generation, selection update, apply, and eligible-movie endpoints only. The frontend service currently declares `getPreviewHistory`, but no registered frontend page calls it and no backend endpoint serves it.
 
 ## 3. Identifier Mapping
 
-- **Showtimes**: `showtimePublicId` (UUID string) is used in create response, update, status update, and history. The pricing endpoint uses `{showtimeId}` in path but the schema suggests it expects `String`, likely the `showtimePublicId`.
-- **Movies**: `moviePublicId`
-- **Movie Versions**: `movieVersionPublicId`
-- **Cinemas**: `cinemaPublicId`
-- **Auditoriums**: `auditoriumPublicId`
-- **Previews**: `previewPublicId`
+- Showtimes use `showtimePublicId` in query, command, status, and history endpoints.
+- The pricing controller names its path variable `{showtimeId}`, but `ShowtimePricingServiceImpl` passes that string to `ShowtimeRepository.findByPublicIdAndDeletedAtIsNull`; callers must supply the Showtime public ID, not the internal numeric ID.
+- Movies use `moviePublicId`.
+- Movie versions use `movieVersionPublicId`.
+- Cinemas use `cinemaPublicId`.
+- Auditoriums use `auditoriumPublicId`.
+- Schedule previews use `previewPublicId`.
 
-## 4. Datetime/Timezone Mapping
+## 4. Datetime and Timezone Mapping
 
-- `startTime` in requests (`CreateShowtimeRequest`) and responses is an `Instant`. The backend expects UTC format (e.g. `2026-07-20T19:30:00Z`).
-- The `endTime` is not sent in `CreateShowtimeRequest`; the backend calculates it from movie duration only, so it is the film end.
-- The auditorium occupancy interval is `[startTime, endTime + cleaningBuffer)`. Existing-showtime, cinema-closure, and auditorium-maintenance conflicts use this occupancy interval; operating hours use `[startTime, endTime)`.
-- Movie release and end dates are interpreted as cinema-local calendar dates. Scheduling is start-based: a film may finish after the end-date boundary when it starts before the next local midnight.
-- `CinemaSummary` includes a `timezone` (e.g., `Asia/Ho_Chi_Minh`). The frontend MUST use this timezone to display dates/times in the browser, rather than relying on the user's local timezone.
+- `startTime` in `CreateShowtimeRequest` and Showtime responses is an `Instant`; API values use UTC timestamps such as `2026-07-20T19:30:00Z`.
+- `endTime` is calculated by the backend from movie duration and represents film end.
+- Candidate occupancy is `[startTime, endTime + cleaningBuffer)`. Existing-Showtime, cinema-closure, and maintenance conflicts use occupancy; operating-hour containment uses `[startTime, endTime)`.
+- Movie release and end dates are cinema-local calendar dates. Release validation is start-based.
+- `GET /api/admin/cinemas` returns `PageResponse<CinemaResponse>` and `CinemaResponse.timezone`; this is the value read by the manual and auto-schedule create pages through `selectedCinema.timezone`.
+- `GET /api/admin/cinemas/{cinemaPublicId}` returns `CinemaDetailDto`, which inherits `timezone` from `CinemaDto`.
+- Admin Showtime list/detail responses expose `AdminShowtimeResponse.CinemaSummary.timezone`.
+- Preview generation returns `ShowtimeSchedulePreviewSummaryResponse.timezoneSnapshot`. Preview detail returns the same summary under `ShowtimeSchedulePreviewPageResponse.preview.timezoneSnapshot`. This snapshot, rather than the browser timezone, is the authoritative timezone for preview item display and grouping.
 
-## 5. Auto-Schedule Generation Errors
+## 5. Phase S2 Auto-Schedule Contract
 
-- `AUTO_SCHEDULE_TOO_MANY_CANDIDATES` returns HTTP 422 when generation attempts candidate 10,001. Exactly 10,000 candidates are allowed.
-- Known domain errors retain their own HTTP status and code. Unexpected generation failures return `AUTO_SCHEDULE_GENERATION_FAILED` with HTTP 500.
+- New previews use `BALANCED_V1_S2`.
+- The candidate universe contains unique `(auditoriumId, movieVersionId, startTime)` slots whose film end fits inside an operating window. Cleaning may finish after closing.
+- Film-end-after-close slots and duplicate keys are not materialized or persisted. Release and operational conflicts remain persisted `REJECTED` items.
+- `totalCandidateCount` is the fit-only unique universe and equals persisted item count. `validCandidateCount + rejectedCandidateCount = totalCandidateCount`.
+- Exactly 10,000 candidates are accepted. Discovery of unique key 10,001 stops before candidate materialization and returns `AUTO_SCHEDULE_TOO_MANY_CANDIDATES` with HTTP 422.
+- A legacy `BALANCED_V1` preview is fingerprinted using its stored strategy version. Same-request replay returns it unchanged; changed-request reuse returns `IDEMPOTENCY_KEY_REUSED`; replays never regenerate legacy items.
+- The REST response envelope and frontend request/response DTO shapes are unchanged by S2.
 
-## 6. Route Proposal
+## 6. Implemented Frontend Routes
 
-- `/admin/showtimes` - Showtime list/calendar view
-- `/admin/showtimes/create` - Manual create showtime
-- `/admin/showtimes/:showtimePublicId` - Showtime details, pricing, history
-- `/admin/showtime-schedules/create` - Wizard for auto schedule preview configuration
-- `/admin/showtime-schedules/:previewPublicId` - Auto schedule preview summary and item selection
+These routes are registered under the admin layout by `client/src/features/scheduling/admin/routes.jsx`; they are implemented routes, not proposals.
 
-## 7. First Blocker
+| Browser route | Component | Status |
+|---|---|---|
+| `/admin/showtimes` | `AdminShowtimePage` | Implemented |
+| `/admin/showtimes/create` | `AdminShowtimeCreatePage` | Implemented |
+| `/admin/showtimes/:id` | `AdminShowtimeDetailPage` | Implemented; `id` carries `showtimePublicId` |
+| `/admin/showtime-schedules/create` | `AdminAutoScheduleCreatePage` | Implemented |
+| `/admin/showtime-schedules/:id` | `AdminAutoSchedulePreviewPage` | Implemented; `id` carries `previewPublicId` |
 
-**Admin Showtime List API Missing**: The `/api/admin/showtimes` endpoint does not exist. We cannot build Phase 1 (Showtime Management Foundation) without a backend contract to retrieve the list of showtimes with all statuses.
+There is no registered preview-history route corresponding to root `/admin/showtime-schedules`.

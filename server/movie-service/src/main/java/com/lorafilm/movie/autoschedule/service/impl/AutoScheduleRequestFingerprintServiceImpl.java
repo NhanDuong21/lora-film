@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleRequestFingerprintService;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +23,11 @@ public class AutoScheduleRequestFingerprintServiceImpl implements AutoScheduleRe
 
     @Override
     public String generateFingerprint(NormalizedGeneratePreviewRequest request) {
+        return generateFingerprint(request, AutoScheduleStrategyVersions.CURRENT);
+    }
+
+    @Override
+    public String generateFingerprint(NormalizedGeneratePreviewRequest request, String strategyVersion) {
         try {
             // Build canonical JSON node manually to ensure consistent property order
             ObjectNode root = objectMapper.createObjectNode();
@@ -41,7 +47,7 @@ public class AutoScheduleRequestFingerprintServiceImpl implements AutoScheduleRe
             root.put("scheduleTo", request.getScheduleTo().toString());
             root.put("slotGranularityMinutes", request.getSlotGranularityMinutes());
             root.put("strategy", "BALANCED");
-            root.put("strategyVersion", "BALANCED_V1");
+            root.put("strategyVersion", strategyVersion);
 
             // Convert to string and hash
             String canonicalJson = objectMapper.writeValueAsString(root);

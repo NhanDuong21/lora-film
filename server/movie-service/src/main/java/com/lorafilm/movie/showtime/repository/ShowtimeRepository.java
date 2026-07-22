@@ -58,6 +58,18 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             @org.springframework.data.repository.query.Param("fromTime") java.time.Instant fromTime,
             @org.springframework.data.repository.query.Param("toTime") java.time.Instant toTime);
 
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s JOIN FETCH s.auditorium " +
+            "WHERE s.auditorium.id IN :auditoriumIds " +
+            "AND s.deletedAt IS NULL " +
+            "AND s.status != 'CANCELLED' " +
+            "AND s.startTime < :upperStartExclusive " +
+            "AND s.endTime > :lowerEndExclusive " +
+            "ORDER BY s.auditorium.id ASC, s.startTime ASC")
+    java.util.List<Showtime> findBlockingFactsForAutoSchedule(
+            @org.springframework.data.repository.query.Param("auditoriumIds") java.util.List<Long> auditoriumIds,
+            @org.springframework.data.repository.query.Param("lowerEndExclusive") java.time.Instant lowerEndExclusive,
+            @org.springframework.data.repository.query.Param("upperStartExclusive") java.time.Instant upperStartExclusive);
+
     @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s WHERE s.auditorium.id = :auditoriumId " +
             "AND s.deletedAt IS NULL " +
             "AND s.status != 'CANCELLED' " +

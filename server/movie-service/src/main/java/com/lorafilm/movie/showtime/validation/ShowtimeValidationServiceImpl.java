@@ -28,17 +28,20 @@ public class ShowtimeValidationServiceImpl implements ShowtimeValidationService 
     private final AuditoriumMaintenanceWindowRepository auditoriumMaintenanceRepository;
     private final CinemaOperatingHourRepository cinemaOperatingHourRepository;
     private final MovieShowtimeEligibilityPolicy movieEligibilityPolicy;
+    private final ShowtimeSchedulingRules schedulingRules;
 
     public ShowtimeValidationServiceImpl(ShowtimeRepository showtimeRepository,
                                          CinemaClosurePeriodRepository cinemaClosureRepository,
                                          AuditoriumMaintenanceWindowRepository auditoriumMaintenanceRepository,
                                          CinemaOperatingHourRepository cinemaOperatingHourRepository,
-                                         MovieShowtimeEligibilityPolicy movieEligibilityPolicy) {
+                                         MovieShowtimeEligibilityPolicy movieEligibilityPolicy,
+                                         ShowtimeSchedulingRules schedulingRules) {
         this.showtimeRepository = showtimeRepository;
         this.cinemaClosureRepository = cinemaClosureRepository;
         this.auditoriumMaintenanceRepository = auditoriumMaintenanceRepository;
         this.cinemaOperatingHourRepository = cinemaOperatingHourRepository;
         this.movieEligibilityPolicy = movieEligibilityPolicy;
+        this.schedulingRules = schedulingRules;
     }
 
     @Override
@@ -48,46 +51,26 @@ public class ShowtimeValidationServiceImpl implements ShowtimeValidationService 
         }
 
         movieEligibilityPolicy.validateMovieAndVersion(context.getMovie(), context.getMovieVersion());
-        validateCinemaAndAuditorium(context.getCinema(), context.getAuditorium());
+        schedulingRules.validateCinemaAndAuditorium(
+                new ShowtimeSchedulingRules.CinemaFacts(
+                        context.getCinema() == null ? null : context.getCinema().getId(),
+                        context.getCinema() != null,
+                        context.getCinema() != null && context.getCinema().getDeletedAt() != null,
+                        context.getCinema() == null ? null : context.getCinema().getStatus()),
+                new ShowtimeSchedulingRules.AuditoriumFacts(
+                        context.getAuditorium() == null ? null : context.getAuditorium().getId(),
+                        context.getAuditorium() != null,
+                        context.getAuditorium() != null && context.getAuditorium().getDeletedAt() != null,
+                        context.getAuditorium() == null ? null : context.getAuditorium().getStatus(),
+                        context.getAuditorium() == null || context.getAuditorium().getCinema() == null
+                                ? null : context.getAuditorium().getCinema().getId()));
         ZoneId cinemaZone = resolveCinemaZone(context.getCinema());
-        validateTimeAndDuration(context);
+        schedulingRules.validateTimeAndDuration(
+                context.getStartTime(), context.getEndTime(),
+                context.getAuditorium().getCleaningBufferMinutes());
         movieEligibilityPolicy.validateReleaseWindow(context.getMovie(), context.getStartTime(), cinemaZone);
         validateOperatingHours(context.getStartTime(), context.getEndTime(), context.getCinema(), cinemaZone);
         validateOverlaps(context);
-    }
-
-    private void validateCinemaAndAuditorium(Cinema cinema, Auditorium auditorium) {
-        if (cinema == null || cinema.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.CINEMA_NOT_FOUND);
-        }
-        if (cinema.getStatus() != com.lorafilm.movie.cinema.domain.enums.CinemaStatus.ACTIVE) {
-            throw new BusinessException(ErrorCode.CINEMA_NOT_ACTIVE, "Cinema must be ACTIVE");
-        }
-        
-        if (auditorium == null || auditorium.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND);
-        }
-
-        if (auditorium.getStatus() != com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE) {
-            throw new BusinessException(ErrorCode.AUDITORIUM_NOT_ACTIVE, "Auditorium must be ACTIVE");
-        }
-        
-        if (auditorium.getCinema() == null
-                || auditorium.getCinema().getId() == null
-                || !auditorium.getCinema().getId().equals(cinema.getId())) {
-            throw new BusinessException(ErrorCode.AUDITORIUM_NOT_BELONG_TO_CINEMA, "Auditorium does not belong to cinema");
-        }
-    }
-
-    private void validateTimeAndDuration(ShowtimeValidationContext context) {
-        if (context.getStartTime() == null || context.getEndTime() == null || !context.getEndTime().isAfter(context.getStartTime())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Showtime end time must be after start time");
-        }
-
-        Integer cleaningBuffer = context.getAuditorium().getCleaningBufferMinutes();
-        if (cleaningBuffer == null || cleaningBuffer < 0) {
-            throw new BusinessException(ErrorCode.INVALID_CLEANING_BUFFER);
-        }
     }
 
     private ZoneId resolveCinemaZone(Cinema cinema) {
@@ -152,16 +135,12 @@ public class ShowtimeValidationServiceImpl implements ShowtimeValidationService 
         // 1. Cinema Closure
         List<CinemaClosurePeriod> closures = cinemaClosureRepository.findOverlappingClosures(
                 context.getCinema().getId(), context.getStartTime(), occupancyEndTime);
-        if (!closures.isEmpty()) {
-            throw new BusinessException(ErrorCode.SHOWTIME_OVERLAPS_CINEMA_CLOSURE, "Showtime overlaps with cinema closure");
-        }
+        schedulingRules.validateNoClosure(!closures.isEmpty());
 
         // 2. Auditorium Maintenance
         boolean hasMaintenance = auditoriumMaintenanceRepository.existsOverlap(
                 context.getAuditorium().getId(), com.lorafilm.movie.common.enums.ActionStatus.ACTIVE, context.getStartTime(), occupancyEndTime);
-        if (hasMaintenance) {
-            throw new BusinessException(ErrorCode.SHOWTIME_OVERLAPS_AUDITORIUM_MAINTENANCE, "Showtime overlaps with auditorium maintenance");
-        }
+        schedulingRules.validateNoMaintenance(hasMaintenance);
 
         // 3. Existing Showtimes
         Instant candidateStartMinusBuffer = context.getStartTime().minus(context.getCleaningBufferMinutes(), java.time.temporal.ChronoUnit.MINUTES);
@@ -175,8 +154,6 @@ public class ShowtimeValidationServiceImpl implements ShowtimeValidationService 
                     context.getAuditorium().getId(), candidateStartMinusBuffer, occupancyEndTime);
         }
 
-        if (!overlappingShowtimes.isEmpty()) {
-            throw new BusinessException(ErrorCode.SHOWTIME_OVERLAP_CONFLICT, "Showtime overlaps with an existing showtime");
-        }
+        schedulingRules.validateNoShowtimeConflict(!overlappingShowtimes.isEmpty());
     }
 }

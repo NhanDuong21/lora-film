@@ -1,122 +1,87 @@
 package com.lorafilm.movie.autoschedule.service.impl;
 
-import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
-import com.lorafilm.movie.autoschedule.model.CandidateGenerationContext;
-import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
+import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
+import com.lorafilm.movie.autoschedule.domain.enums.AutoScheduleStrategy;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleGenerationContext;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
+import com.lorafilm.movie.autoschedule.model.ImmutableIntervalIndex;
 import com.lorafilm.movie.autoschedule.model.OperatingWindow;
 import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
-import com.lorafilm.movie.autoschedule.service.CinemaOperatingWindowResolver;
-import com.lorafilm.movie.cinema.domain.entity.Cinema;
-import com.lorafilm.movie.common.exception.BusinessException;
-import com.lorafilm.movie.common.exception.ErrorCode;
-import com.lorafilm.movie.movie.domain.entity.Movie;
-import com.lorafilm.movie.movie.domain.entity.MovieVersion;
-import org.junit.jupiter.api.BeforeEach;
+import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
+import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class ShowtimeCandidateGeneratorImplTest {
 
-    @Mock
-    private CinemaOperatingWindowResolver windowResolver;
-
-    @InjectMocks
-    private ShowtimeCandidateGeneratorImpl generator;
-
-    @BeforeEach
-    void setUp() {
-    }
+    private final ShowtimeCandidateGeneratorImpl generator =
+            new ShowtimeCandidateGeneratorImpl(new UniqueCandidateSlotTraversalImpl());
 
     @Test
-    void generate_createsCandidatesBasedOnGranularity() {
-        Cinema cinema = new Cinema();
-        Auditorium aud = new Auditorium();
-        aud.setCleaningBufferMinutes(15);
-        
-        Movie movie = new Movie();
-        movie.setDurationMinutes(90);
-        MovieVersion mv = new MovieVersion();
-        mv.setMovie(movie);
-
-        NormalizedGeneratePreviewRequest req = new NormalizedGeneratePreviewRequest(
-                "cinema-1", LocalDate.now(), LocalDate.now(), List.of(), List.of(),
-                30, 60, "key"
-        );
-
-        CandidateGenerationContext ctx = new CandidateGenerationContext(req, cinema, List.of(aud), List.of(mv));
-
-        Instant winStart = Instant.parse("2023-10-01T08:00:00Z");
-        Instant winEnd = Instant.parse("2023-10-01T10:00:00Z"); // 2 hours window
-        
-        when(windowResolver.resolve(any(), any(), any())).thenReturn(List.of(new OperatingWindow(winStart, winEnd)));
-
-        List<ShowtimeCandidate> candidates = generator.generate(ctx);
-
-        // Granularity is 30 mins. Window is 2 hours (120 mins).
-        // Slots: 08:00, 08:30, 09:00, 09:30, 10:00
-        // So 5 candidates.
-        assertEquals(5, candidates.size());
-        
-        ShowtimeCandidate first = candidates.get(0);
-        assertEquals(winStart, first.getStartTime());
-        assertEquals(winStart.plus(90, ChronoUnit.MINUTES), first.getEndTime());
-        assertEquals(winStart.plus(105, ChronoUnit.MINUTES), first.getOccupancyEndTime());
-        
-        ShowtimeCandidate second = candidates.get(1);
-        assertEquals(winStart.plus(30, ChronoUnit.MINUTES), second.getStartTime());
-    }
-
-    @Test
-    void generate_acceptsExactlyTenThousandCandidates() {
-        CandidateGenerationContext context = candidateLimitContext(9_999);
+    void generateOnlyCreatesStartsWhoseFilmEndsInsideWindow() {
+        Instant open = Instant.parse("2026-07-22T08:00:00Z");
+        AutoScheduleGenerationContext context = context(
+                30, 90, 15, List.of(new OperatingWindow(LocalDate.of(2026, 7, 22),
+                        open, open.plus(2, ChronoUnit.HOURS))));
 
         List<ShowtimeCandidate> candidates = generator.generate(context);
 
-        assertEquals(10_000, candidates.size());
+        assertEquals(2, candidates.size());
+        assertEquals(open, candidates.get(0).getStartTime());
+        assertEquals(open.plus(90, ChronoUnit.MINUTES), candidates.get(0).getEndTime());
+        assertEquals(open.plus(105, ChronoUnit.MINUTES), candidates.get(0).getOccupancyEndTime());
+        assertEquals(open.plus(30, ChronoUnit.MINUTES), candidates.get(1).getStartTime());
     }
 
     @Test
-    void generate_rejectsCandidateTenThousandAndOneWithSpecificError() {
-        CandidateGenerationContext context = candidateLimitContext(10_000);
+    void closingEqualityIsIncludedAndCleaningMayFinishAfterClose() {
+        Instant open = Instant.parse("2026-07-22T08:00:00Z");
+        AutoScheduleGenerationContext context = context(
+                15, 60, 25, List.of(new OperatingWindow(LocalDate.of(2026, 7, 22),
+                        open, open.plus(60, ChronoUnit.MINUTES))));
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> generator.generate(context));
+        List<ShowtimeCandidate> candidates = generator.generate(context);
 
-        assertEquals(ErrorCode.AUTO_SCHEDULE_TOO_MANY_CANDIDATES, ex.getErrorCode());
+        assertEquals(1, candidates.size());
+        assertEquals(open.plus(60, ChronoUnit.MINUTES), candidates.get(0).getEndTime());
+        assertEquals(open.plus(85, ChronoUnit.MINUTES), candidates.get(0).getOccupancyEndTime());
     }
 
-    private CandidateGenerationContext candidateLimitContext(long inclusiveWindowMinutes) {
-        Cinema cinema = new Cinema();
-        Auditorium auditorium = new Auditorium();
-        auditorium.setCleaningBufferMinutes(0);
-
-        Movie movie = new Movie();
-        movie.setDurationMinutes(1);
-        MovieVersion version = new MovieVersion();
-        version.setMovie(movie);
-
-        NormalizedGeneratePreviewRequest request = new NormalizedGeneratePreviewRequest(
-                "cinema-1", LocalDate.now(), LocalDate.now(), List.of(), List.of(),
-                1, 60, "candidate-limit-key");
-        CandidateGenerationContext context = new CandidateGenerationContext(
-                request, cinema, List.of(auditorium), List.of(version));
-
-        Instant windowStart = Instant.parse("2026-07-22T00:00:00Z");
-        when(windowResolver.resolve(any(), any(), any())).thenReturn(List.of(
-                new OperatingWindow(windowStart, windowStart.plus(inclusiveWindowMinutes, ChronoUnit.MINUTES))));
-        return context;
+    static AutoScheduleGenerationContext context(int granularity,
+                                                 int duration,
+                                                 int cleaningBuffer,
+                                                 List<OperatingWindow> windows) {
+        AutoScheduleGenerationContext.CinemaSnapshot cinema =
+                new AutoScheduleGenerationContext.CinemaSnapshot(
+                        1L, "cinema", "Cinema", ZoneId.of("UTC"), CinemaStatus.ACTIVE, false);
+        AutoScheduleGenerationContext.AuditoriumSnapshot auditorium =
+                new AutoScheduleGenerationContext.AuditoriumSnapshot(
+                        2L, "auditorium", 1L, "Room", 100, cleaningBuffer,
+                        AuditoriumStatus.ACTIVE, false);
+        AutoScheduleGenerationContext.MovieSnapshot movie =
+                new AutoScheduleGenerationContext.MovieSnapshot(
+                        3L, "movie", "Movie", duration, null, null,
+                        MovieStatus.NOW_SHOWING, false);
+        AutoScheduleGenerationContext.MovieVersionSnapshot version =
+                new AutoScheduleGenerationContext.MovieVersionSnapshot(
+                        4L, "version", 3L, ActiveStatus.ACTIVE, false, movie);
+        Instant planningStart = windows.isEmpty() ? null : windows.get(0).getOpenInstant();
+        Instant planningEnd = windows.isEmpty() ? null : windows.get(windows.size() - 1).getCloseInstant();
+        return new AutoScheduleGenerationContext(
+                cinema, LocalDate.of(2026, 7, 22), LocalDate.of(2026, 7, 22),
+                granularity, 10_000, AutoScheduleStrategy.BALANCED,
+                AutoScheduleStrategyVersions.CURRENT, List.of(auditorium), List.of(version), windows,
+                Set.of(3), ImmutableIntervalIndex.empty(), Map.of(), Map.of(), Map.of(),
+                planningStart, planningEnd);
     }
 }

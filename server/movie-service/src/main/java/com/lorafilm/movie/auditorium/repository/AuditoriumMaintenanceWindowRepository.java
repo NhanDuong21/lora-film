@@ -42,4 +42,16 @@ public interface AuditoriumMaintenanceWindowRepository extends JpaRepository<Aud
                                                            @Param("activeStatus") ActionStatus activeStatus,
                                                            @Param("startTime") Instant startTime,
                                                            @Param("endTime") Instant endTime);
+
+    @Query("SELECT mw FROM AuditoriumMaintenanceWindow mw JOIN FETCH mw.auditorium " +
+           "WHERE mw.auditorium.id IN :auditoriumIds " +
+           "AND mw.status = :activeStatus " +
+           "AND mw.startTime < :endTime " +
+           "AND mw.endTime > :startTime " +
+           "ORDER BY mw.auditorium.id ASC, mw.startTime ASC")
+    List<AuditoriumMaintenanceWindow> findActiveOverlapsForAutoSchedule(
+            @Param("auditoriumIds") List<Long> auditoriumIds,
+            @Param("activeStatus") ActionStatus activeStatus,
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime);
 }

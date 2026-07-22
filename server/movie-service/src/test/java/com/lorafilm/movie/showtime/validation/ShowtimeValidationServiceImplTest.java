@@ -53,6 +53,8 @@ class ShowtimeValidationServiceImplTest {
     private CinemaOperatingHourRepository cinemaOperatingHourRepository;
     @Spy
     private MovieShowtimeEligibilityPolicy movieEligibilityPolicy = new MovieShowtimeEligibilityPolicy();
+    @Spy
+    private ShowtimeSchedulingRules schedulingRules = new ShowtimeSchedulingRules();
 
     @InjectMocks
     private ShowtimeValidationServiceImpl showtimeValidationService;

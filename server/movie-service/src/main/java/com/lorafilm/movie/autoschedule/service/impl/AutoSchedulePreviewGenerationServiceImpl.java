@@ -5,22 +5,20 @@ import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
-import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewPersistenceMapper;
-import com.lorafilm.movie.autoschedule.model.CandidateGenerationContext;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleGenerationContext;
 import com.lorafilm.movie.autoschedule.model.CandidateScoreResult;
 import com.lorafilm.movie.autoschedule.model.CandidateScoringContext;
 import com.lorafilm.movie.autoschedule.model.CandidateValidationResult;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
-import com.lorafilm.movie.autoschedule.model.OperatingWindow;
 import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
-import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerateRequestNormalizer;
+import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationContextLoader;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleRequestFingerprintService;
 import com.lorafilm.movie.autoschedule.service.BalancedCandidateScoringService;
+import com.lorafilm.movie.autoschedule.service.CandidateCountEstimator;
 import com.lorafilm.movie.autoschedule.service.CandidateSelectionResolver;
-import com.lorafilm.movie.autoschedule.service.CinemaOperatingWindowResolver;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateGenerator;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateValidationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -29,8 +27,6 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
-import com.lorafilm.movie.showtime.domain.entity.Showtime;
-import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,9 +36,12 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePreviewGenerationService {
@@ -51,55 +50,48 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
 
     private final AutoScheduleGenerateRequestNormalizer normalizer;
     private final AutoScheduleRequestFingerprintService fingerprintService;
+    private final AutoScheduleGenerationContextLoader contextLoader;
+    private final CandidateCountEstimator candidateCountEstimator;
     private final ShowtimeCandidateGenerator generator;
     private final ShowtimeCandidateValidationService validationService;
     private final BalancedCandidateScoringService scoringService;
     private final CandidateSelectionResolver selectionResolver;
     private final ShowtimeSchedulePreviewLifecycleService lifecycleService;
-    private final CinemaOperatingWindowResolver windowResolver;
-
     private final CinemaRepository cinemaRepository;
     private final AuditoriumRepository auditoriumRepository;
     private final MovieVersionRepository movieVersionRepository;
     private final ShowtimeSchedulePreviewRepository previewRepository;
-    private final ShowtimeSchedulePreviewItemRepository previewItemRepository;
-    private final ShowtimeRepository showtimeRepository;
-    private final ShowtimeSchedulePreviewPersistenceMapper mapper;
     private final com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper responseMapper;
     private final MovieShowtimeEligibilityPolicy movieEligibilityPolicy;
 
     public AutoSchedulePreviewGenerationServiceImpl(AutoScheduleGenerateRequestNormalizer normalizer,
                                                     AutoScheduleRequestFingerprintService fingerprintService,
+                                                    AutoScheduleGenerationContextLoader contextLoader,
+                                                    CandidateCountEstimator candidateCountEstimator,
                                                     ShowtimeCandidateGenerator generator,
                                                     ShowtimeCandidateValidationService validationService,
                                                     BalancedCandidateScoringService scoringService,
                                                     CandidateSelectionResolver selectionResolver,
                                                     ShowtimeSchedulePreviewLifecycleService lifecycleService,
-                                                    CinemaOperatingWindowResolver windowResolver,
                                                     CinemaRepository cinemaRepository,
                                                     AuditoriumRepository auditoriumRepository,
                                                     MovieVersionRepository movieVersionRepository,
                                                     ShowtimeSchedulePreviewRepository previewRepository,
-                                                    ShowtimeSchedulePreviewItemRepository previewItemRepository,
-                                                    ShowtimeRepository showtimeRepository,
-                                                    ShowtimeSchedulePreviewPersistenceMapper mapper,
                                                     com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper responseMapper,
                                                     MovieShowtimeEligibilityPolicy movieEligibilityPolicy) {
         this.normalizer = normalizer;
         this.fingerprintService = fingerprintService;
+        this.contextLoader = contextLoader;
+        this.candidateCountEstimator = candidateCountEstimator;
         this.generator = generator;
         this.validationService = validationService;
         this.scoringService = scoringService;
         this.selectionResolver = selectionResolver;
         this.lifecycleService = lifecycleService;
-        this.windowResolver = windowResolver;
         this.cinemaRepository = cinemaRepository;
         this.auditoriumRepository = auditoriumRepository;
         this.movieVersionRepository = movieVersionRepository;
         this.previewRepository = previewRepository;
-        this.previewItemRepository = previewItemRepository;
-        this.showtimeRepository = showtimeRepository;
-        this.mapper = mapper;
         this.responseMapper = responseMapper;
         this.movieEligibilityPolicy = movieEligibilityPolicy;
     }
@@ -142,7 +134,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
         Optional<ShowtimeSchedulePreview> existingOpt = previewRepository.findByGenerateIdempotencyKey(normalizedRequest.getIdempotencyKey());
         if (existingOpt.isPresent()) {
             ShowtimeSchedulePreview existing = existingOpt.get();
-            if (!existing.getRequestFingerprint().equals(fingerprint)) {
+            if (!matchesStoredFingerprint(normalizedRequest, existing)) {
                 throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
             }
             log.info("Idempotency replay detected. Returning existing preview: {}", existing.getPublicId());
@@ -157,6 +149,9 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
         for (Auditorium aud : auditoriums) {
             if (aud.getStatus() != com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE) {
                 throw new BusinessException(ErrorCode.AUDITORIUM_NOT_ACTIVE);
+            }
+            if (aud.getCleaningBufferMinutes() == null || aud.getCleaningBufferMinutes() < 0) {
+                throw new BusinessException(ErrorCode.INVALID_CLEANING_BUFFER);
             }
             if (!aud.getCinema().getId().equals(cinema.getId())) {
                 throw new BusinessException(ErrorCode.AUDITORIUM_NOT_BELONG_TO_CINEMA);
@@ -181,7 +176,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
             existingOpt = previewRepository.findByGenerateIdempotencyKeyWithCinema(normalizedRequest.getIdempotencyKey());
             if (existingOpt.isPresent()) {
                 ShowtimeSchedulePreview existing = existingOpt.get();
-                if (!existing.getRequestFingerprint().equals(fingerprint)) {
+                if (!matchesStoredFingerprint(normalizedRequest, existing)) {
                     throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
                 }
                 return responseMapper.toSummaryResponse(existing);
@@ -190,22 +185,14 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
         }
 
         try {
-            CandidateGenerationContext context = new CandidateGenerationContext(normalizedRequest, cinema, auditoriums, movieVersions);
-            List<ShowtimeCandidate> candidates = generator.generate(context);
+            AutoScheduleGenerationContext context = contextLoader.load(
+                    normalizedRequest, cinema, auditoriums, movieVersions);
+            int estimatedCandidateCount = candidateCountEstimator.estimate(context);
+            List<ShowtimeCandidate> candidates = new ArrayList<>(estimatedCandidateCount);
+            CandidateScoringContext scoringContext = new CandidateScoringContext(context);
 
-            List<OperatingWindow> operatingWindows = windowResolver.resolve(cinema, normalizedRequest.getScheduleFrom(), normalizedRequest.getScheduleTo());
-            
-            // For continuity bonus, we need existing real showtimes within this period
-            Instant searchStart = operatingWindows.isEmpty() ? Instant.now() : operatingWindows.get(0).getOpenInstant();
-            Instant searchEnd = operatingWindows.isEmpty() ? Instant.now() : operatingWindows.get(operatingWindows.size() - 1).getCloseInstant();
-            
-            List<Long> auditoriumIds = auditoriums.stream().map(Auditorium::getId).collect(Collectors.toList());
-            List<Showtime> existingShowtimes = showtimeRepository.findByAuditoriumIdInAndStartTimeBetween(auditoriumIds, searchStart, searchEnd);
-
-            CandidateScoringContext scoringContext = new CandidateScoringContext(cinema, operatingWindows, existingShowtimes);
-
-            for (ShowtimeCandidate candidate : candidates) {
-                CandidateValidationResult valResult = validationService.validate(candidate);
+            long generatedCandidateCount = generator.generate(context, candidate -> {
+                CandidateValidationResult valResult = validationService.validate(candidate, context);
                 if (valResult.isValid()) {
                     candidate.setValidationStatus(com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus.VALID);
                 } else {
@@ -217,9 +204,16 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
                 CandidateScoreResult scoreResult = scoringService.score(candidate, scoringContext);
                 candidate.setScore(scoreResult.getScore());
                 candidate.setScoreBreakdown(scoreResult.getScoreBreakdown());
+                candidates.add(candidate);
+            });
+
+            if (generatedCandidateCount != estimatedCandidateCount
+                    || candidates.size() != estimatedCandidateCount) {
+                throw new IllegalStateException("Candidate estimation and generation diverged");
             }
 
             selectionResolver.resolveDefaultSelection(candidates);
+            attachPersistenceReferences(candidates, cinema, auditoriums, movieVersions);
 
             lifecycleService.persistGeneratedItemsAndMarkPreviewed(preview, candidates);
 
@@ -233,6 +227,34 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
             log.error("Generation failed for preview {}", preview.getPublicId(), e);
             markPreviewFailedSafely(preview.getId(), sanitizeFailureReason(e));
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_GENERATION_FAILED);
+        }
+    }
+
+    private boolean matchesStoredFingerprint(NormalizedGeneratePreviewRequest request,
+                                             ShowtimeSchedulePreview existing) {
+        String expected = fingerprintService.generateFingerprint(request, existing.getStrategyVersion());
+        return Objects.equals(existing.getRequestFingerprint(), expected);
+    }
+
+    private void attachPersistenceReferences(List<ShowtimeCandidate> candidates,
+                                             Cinema cinema,
+                                             List<Auditorium> auditoriums,
+                                             List<MovieVersion> movieVersions) {
+        Map<Long, Auditorium> auditoriumsById = new HashMap<>();
+        auditoriums.forEach(auditorium -> auditoriumsById.put(auditorium.getId(), auditorium));
+        Map<Long, MovieVersion> versionsById = new HashMap<>();
+        movieVersions.forEach(version -> versionsById.put(version.getId(), version));
+
+        for (ShowtimeCandidate candidate : candidates) {
+            Auditorium auditorium = auditoriumsById.get(candidate.getAuditoriumSnapshot().id());
+            MovieVersion version = versionsById.get(candidate.getMovieVersionSnapshot().id());
+            if (auditorium == null || version == null) {
+                throw new IllegalStateException("Candidate snapshot no longer matches loaded scheduling facts");
+            }
+            candidate.setCinema(cinema);
+            candidate.setAuditorium(auditorium);
+            candidate.setMovieVersion(version);
+            candidate.setMovie(version.getMovie());
         }
     }
 

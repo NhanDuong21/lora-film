@@ -6,15 +6,15 @@ import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper;
-import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewPersistenceMapper;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleGenerationContext;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
-import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerateRequestNormalizer;
+import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationContextLoader;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleRequestFingerprintService;
 import com.lorafilm.movie.autoschedule.service.BalancedCandidateScoringService;
+import com.lorafilm.movie.autoschedule.service.CandidateCountEstimator;
 import com.lorafilm.movie.autoschedule.service.CandidateSelectionResolver;
-import com.lorafilm.movie.autoschedule.service.CinemaOperatingWindowResolver;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateGenerator;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateValidationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -27,7 +27,6 @@ import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,19 +56,18 @@ class AutoSchedulePreviewGenerationServiceImplTest {
 
     @Mock private AutoScheduleGenerateRequestNormalizer normalizer;
     @Mock private AutoScheduleRequestFingerprintService fingerprintService;
+    @Mock private AutoScheduleGenerationContextLoader contextLoader;
+    @Mock private CandidateCountEstimator candidateCountEstimator;
+    @Mock private AutoScheduleGenerationContext generationContext;
     @Mock private ShowtimeCandidateGenerator generator;
     @Mock private ShowtimeCandidateValidationService validationService;
     @Mock private BalancedCandidateScoringService scoringService;
     @Mock private CandidateSelectionResolver selectionResolver;
     @Mock private ShowtimeSchedulePreviewLifecycleService lifecycleService;
-    @Mock private CinemaOperatingWindowResolver windowResolver;
     @Mock private CinemaRepository cinemaRepository;
     @Mock private AuditoriumRepository auditoriumRepository;
     @Mock private MovieVersionRepository movieVersionRepository;
     @Mock private ShowtimeSchedulePreviewRepository previewRepository;
-    @Mock private ShowtimeSchedulePreviewItemRepository previewItemRepository;
-    @Mock private ShowtimeRepository showtimeRepository;
-    @Mock private ShowtimeSchedulePreviewPersistenceMapper persistenceMapper;
     @Mock private ShowtimeSchedulePreviewMapper responseMapper;
     @Mock private MovieShowtimeEligibilityPolicy eligibilityPolicy;
 
@@ -118,18 +118,20 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         when(fingerprintService.generateFingerprint(normalized)).thenReturn("fingerprint");
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema")).thenReturn(Optional.of(cinema));
         when(previewRepository.findByGenerateIdempotencyKey("generation-key")).thenReturn(Optional.empty());
-        when(auditoriumRepository.findByPublicIdInAndDeletedAtIsNull(List.of("auditorium")))
+        lenient().when(auditoriumRepository.findByPublicIdInAndDeletedAtIsNull(List.of("auditorium")))
                 .thenReturn(List.of(auditorium));
-        when(movieVersionRepository.findByPublicIdInWithMovieAndDeletedAtIsNull(List.of("version")))
+        lenient().when(movieVersionRepository.findByPublicIdInWithMovieAndDeletedAtIsNull(List.of("version")))
                 .thenReturn(List.of(version));
-        when(lifecycleService.createGeneratingPreview(normalized, cinema, "fingerprint", 10L))
+        lenient().when(lifecycleService.createGeneratingPreview(normalized, cinema, "fingerprint", 10L))
                 .thenReturn(preview);
+        lenient().when(contextLoader.load(normalized, cinema, List.of(auditorium), List.of(version)))
+                .thenReturn(generationContext);
     }
 
     @Test
     void knownCandidateLimitErrorIsNotWrappedAndPreviewIsMarkedFailed() {
         BusinessException limitError = new BusinessException(ErrorCode.AUTO_SCHEDULE_TOO_MANY_CANDIDATES);
-        when(generator.generate(any())).thenThrow(limitError);
+        when(candidateCountEstimator.estimate(generationContext)).thenThrow(limitError);
 
         BusinessException thrown = assertThrows(BusinessException.class,
                 () -> service.generatePreview(request, 10L));
@@ -140,12 +142,52 @@ class AutoSchedulePreviewGenerationServiceImplTest {
 
     @Test
     void unexpectedGenerationFailureIsWrappedAndPreviewIsMarkedFailed() {
-        when(generator.generate(any())).thenThrow(new IllegalStateException("database unavailable"));
+        when(candidateCountEstimator.estimate(generationContext))
+                .thenThrow(new IllegalStateException("database unavailable"));
 
         BusinessException thrown = assertThrows(BusinessException.class,
                 () -> service.generatePreview(request, 10L));
 
         assertEquals(ErrorCode.AUTO_SCHEDULE_GENERATION_FAILED, thrown.getErrorCode());
         verify(lifecycleService).markPreviewFailed(anyLong(), any());
+    }
+
+    @Test
+    void legacySameRequestReplayReturnsExistingPreviewWithoutRegenerationOrMutation() {
+        preview.setStrategyVersion("BALANCED_V1");
+        preview.setRequestFingerprint("legacy-fingerprint");
+        preview.setTotalCandidateCount(7);
+        when(previewRepository.findByGenerateIdempotencyKey("generation-key"))
+                .thenReturn(Optional.of(preview));
+        when(fingerprintService.generateFingerprint(any(), org.mockito.ArgumentMatchers.eq("BALANCED_V1")))
+                .thenReturn("legacy-fingerprint");
+
+        service.generatePreview(request, 10L);
+
+        assertEquals("BALANCED_V1", preview.getStrategyVersion());
+        assertEquals("legacy-fingerprint", preview.getRequestFingerprint());
+        assertEquals(7, preview.getTotalCandidateCount());
+        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(generator, never()).generate(any(), any());
+        verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), anyLong());
+    }
+
+    @Test
+    void legacyChangedRequestRejectsKeyReuseWithoutRegenerationOrMutation() {
+        preview.setStrategyVersion("BALANCED_V1");
+        preview.setRequestFingerprint("legacy-fingerprint");
+        when(previewRepository.findByGenerateIdempotencyKey("generation-key"))
+                .thenReturn(Optional.of(preview));
+        when(fingerprintService.generateFingerprint(any(), org.mockito.ArgumentMatchers.eq("BALANCED_V1")))
+                .thenReturn("changed-fingerprint");
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> service.generatePreview(request, 10L));
+
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, thrown.getErrorCode());
+        assertEquals("BALANCED_V1", preview.getStrategyVersion());
+        assertEquals("legacy-fingerprint", preview.getRequestFingerprint());
+        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(generator, never()).generate(any(), any());
     }
 }

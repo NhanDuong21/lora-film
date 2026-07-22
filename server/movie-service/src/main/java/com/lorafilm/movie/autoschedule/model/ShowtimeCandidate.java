@@ -12,6 +12,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ShowtimeCandidate {
+    private AutoScheduleGenerationContext.CinemaSnapshot cinemaSnapshot;
+    private AutoScheduleGenerationContext.AuditoriumSnapshot auditoriumSnapshot;
+    private AutoScheduleGenerationContext.MovieVersionSnapshot movieVersionSnapshot;
+    private OperatingWindow operatingWindow;
+
+    // Persistence-only references. Generation rules and scoring must use snapshots above.
     private Movie movie;
     private MovieVersion movieVersion;
     private Cinema cinema;
@@ -30,6 +36,58 @@ public class ShowtimeCandidate {
 
     private Integer rankingPosition;
     private boolean selected;
+
+    public AutoScheduleGenerationContext.CinemaSnapshot getCinemaSnapshot() {
+        return cinemaSnapshot;
+    }
+
+    public void setCinemaSnapshot(AutoScheduleGenerationContext.CinemaSnapshot cinemaSnapshot) {
+        this.cinemaSnapshot = cinemaSnapshot;
+    }
+
+    public AutoScheduleGenerationContext.AuditoriumSnapshot getAuditoriumSnapshot() {
+        return auditoriumSnapshot;
+    }
+
+    public void setAuditoriumSnapshot(AutoScheduleGenerationContext.AuditoriumSnapshot auditoriumSnapshot) {
+        this.auditoriumSnapshot = auditoriumSnapshot;
+    }
+
+    public AutoScheduleGenerationContext.MovieVersionSnapshot getMovieVersionSnapshot() {
+        return movieVersionSnapshot;
+    }
+
+    public void setMovieVersionSnapshot(AutoScheduleGenerationContext.MovieVersionSnapshot movieVersionSnapshot) {
+        this.movieVersionSnapshot = movieVersionSnapshot;
+    }
+
+    public OperatingWindow getOperatingWindow() {
+        return operatingWindow;
+    }
+
+    public void setOperatingWindow(OperatingWindow operatingWindow) {
+        this.operatingWindow = operatingWindow;
+    }
+
+    public Long getAuditoriumId() {
+        return auditoriumSnapshot != null ? auditoriumSnapshot.id()
+                : auditorium != null ? auditorium.getId() : null;
+    }
+
+    public String getAuditoriumPublicId() {
+        return auditoriumSnapshot != null ? auditoriumSnapshot.publicId()
+                : auditorium != null ? auditorium.getPublicId() : null;
+    }
+
+    public Integer getAuditoriumCapacity() {
+        return auditoriumSnapshot != null ? auditoriumSnapshot.capacity()
+                : auditorium != null ? auditorium.getCapacity() : null;
+    }
+
+    public String getMovieVersionPublicId() {
+        return movieVersionSnapshot != null ? movieVersionSnapshot.publicId()
+                : movieVersion != null ? movieVersion.getPublicId() : null;
+    }
 
     public Movie getMovie() {
         return movie;

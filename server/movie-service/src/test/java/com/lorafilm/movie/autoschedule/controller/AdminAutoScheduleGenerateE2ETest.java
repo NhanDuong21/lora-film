@@ -5,6 +5,13 @@ import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
+import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerateRequestNormalizer;
+import com.lorafilm.movie.autoschedule.service.AutoScheduleRequestFingerprintService;
+import com.lorafilm.movie.cinema.repository.CinemaRepository;
+import com.lorafilm.movie.cinema.scheduler.CinemaStatusScheduler;
+import com.lorafilm.movie.integration.tmdb.scheduler.TmdbPersonSyncScheduler;
+import com.lorafilm.movie.integration.tmdb.scheduler.TmdbSyncScheduler;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -47,6 +55,7 @@ public class AdminAutoScheduleGenerateE2ETest {
         registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
+        registry.add("eureka.client.enabled", () -> "false");
     }
 
     @Autowired
@@ -63,6 +72,24 @@ public class AdminAutoScheduleGenerateE2ETest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private CinemaRepository cinemaRepository;
+
+    @Autowired
+    private AutoScheduleGenerateRequestNormalizer normalizer;
+
+    @Autowired
+    private AutoScheduleRequestFingerprintService fingerprintService;
+
+    @MockBean
+    private TmdbSyncScheduler tmdbSyncScheduler;
+
+    @MockBean
+    private TmdbPersonSyncScheduler tmdbPersonSyncScheduler;
+
+    @MockBean
+    private CinemaStatusScheduler cinemaStatusScheduler;
 
     @BeforeEach
     void setUp() {
@@ -115,7 +142,7 @@ public class AdminAutoScheduleGenerateE2ETest {
         assertTrue(previewOpt.isPresent());
         ShowtimeSchedulePreview p = previewOpt.get();
         assertEquals(SchedulePreviewStatus.PREVIEWED, p.getStatus());
-        assertTrue(p.getTotalCandidateCount() > 0);
+        assertEquals(27, p.getTotalCandidateCount());
         System.out.println("=== DB STATE EVIDENCE ===");
         System.out.println("PREVIEW ROW: ID=" + p.getId() + 
             ", PublicID=" + p.getPublicId() + 
@@ -138,7 +165,7 @@ public class AdminAutoScheduleGenerateE2ETest {
         // Validate Preview Invariants
         assertEquals(p.getTotalCandidateCount(), p.getValidCandidateCount() + p.getRejectedCandidateCount());
         assertTrue(p.getSelectedCandidateCount() <= p.getValidCandidateCount());
-        assertEquals("BALANCED_V1", p.getStrategyVersion());
+        assertEquals(AutoScheduleStrategyVersions.CURRENT, p.getStrategyVersion());
         assertEquals("ALL_OR_NOTHING", p.getApplyMode().name());
         assertNotNull(p.getRequestFingerprint());
         assertEquals(64, p.getRequestFingerprint().length());
@@ -147,6 +174,9 @@ public class AdminAutoScheduleGenerateE2ETest {
 
             
         List<ShowtimeSchedulePreviewItem> items = itemRepository.findAll();
+        assertEquals(27, items.size());
+        assertEquals(27, p.getValidCandidateCount());
+        assertEquals(0, p.getRejectedCandidateCount());
         for (ShowtimeSchedulePreviewItem item : items) {
             System.out.println("ITEM ROW: PublicID=" + item.getPublicId() + 
                 ", ValidationStatus=" + item.getValidationStatus() + 
@@ -239,5 +269,80 @@ public class AdminAutoScheduleGenerateE2ETest {
                 .andDo(print())
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_KEY_REUSED"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN", username = "1")
+    void legacyV1ReplayIsVersionAwareImmutableAndNewKeyCreatesS2() throws Exception {
+        GenerateShowtimeSchedulePreviewRequest legacyRequest = requestWithKey("legacy-" + UUID.randomUUID());
+        var normalized = normalizer.normalize(legacyRequest);
+        String legacyFingerprint = fingerprintService.generateFingerprint(
+                normalized, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1);
+        var cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull("c-gen-1").orElseThrow();
+        ShowtimeSchedulePreview legacy = ShowtimeSchedulePreview.createGenerating(
+                cinema, normalized.getScheduleFrom(), normalized.getScheduleTo(),
+                normalized.getSlotGranularityMinutes(), normalized.getPreviewTtlMinutes(),
+                normalized.getIdempotencyKey(), legacyFingerprint, 1L,
+                java.time.Instant.parse("2026-01-01T00:00:00Z"));
+        legacy.setStrategyVersion(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1);
+        legacy.setStatus(SchedulePreviewStatus.PREVIEWED);
+        legacy.setTotalCandidateCount(7);
+        legacy.setValidCandidateCount(5);
+        legacy.setRejectedCandidateCount(2);
+        legacy.setSelectedCandidateCount(3);
+        legacy = previewRepository.saveAndFlush(legacy);
+
+        Long legacyId = legacy.getId();
+        Long legacyEntityVersion = legacy.getVersion();
+        String legacyPublicId = legacy.getPublicId();
+        java.time.Instant legacyGeneratedAt = legacy.getGeneratedAt();
+
+        mockMvc.perform(post("/api/admin/showtime-schedules/generate-preview")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(legacyRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previewPublicId").value(legacyPublicId));
+
+        GenerateShowtimeSchedulePreviewRequest changed = requestWithKey(legacyRequest.getIdempotencyKey());
+        changed.setSlotGranularityMinutes(15);
+        mockMvc.perform(post("/api/admin/showtime-schedules/generate-preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(changed)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_KEY_REUSED"));
+
+        GenerateShowtimeSchedulePreviewRequest newRequest = requestWithKey("s2-" + UUID.randomUUID());
+        mockMvc.perform(post("/api/admin/showtime-schedules/generate-preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(newRequest)))
+                .andExpect(status().isOk());
+        ShowtimeSchedulePreview created = previewRepository
+                .findByGenerateIdempotencyKey(newRequest.getIdempotencyKey()).orElseThrow();
+        assertEquals(AutoScheduleStrategyVersions.CURRENT, created.getStrategyVersion());
+
+        ShowtimeSchedulePreview unchanged = previewRepository.findById(legacyId).orElseThrow();
+        assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1, unchanged.getStrategyVersion());
+        assertEquals(legacyFingerprint, unchanged.getRequestFingerprint());
+        assertEquals(legacyEntityVersion, unchanged.getVersion());
+        assertEquals(legacyGeneratedAt, unchanged.getGeneratedAt());
+        assertEquals(7, unchanged.getTotalCandidateCount());
+        assertEquals(5, unchanged.getValidCandidateCount());
+        assertEquals(2, unchanged.getRejectedCandidateCount());
+        assertEquals(3, unchanged.getSelectedCandidateCount());
+        assertTrue(itemRepository.findAllByPreviewIdOrderByRankingPositionAscIdAsc(legacyId).isEmpty(),
+                "legacy replay must not regenerate old preview items");
+    }
+
+    private GenerateShowtimeSchedulePreviewRequest requestWithKey(String idempotencyKey) {
+        GenerateShowtimeSchedulePreviewRequest request = new GenerateShowtimeSchedulePreviewRequest();
+        request.setCinemaPublicId("c-gen-1");
+        request.setScheduleFrom(LocalDate.now());
+        request.setScheduleTo(LocalDate.now());
+        request.setAuditoriumPublicIds(List.of("a-gen-1"));
+        request.setMovieVersionPublicIds(List.of("mv-gen-1"));
+        request.setSlotGranularityMinutes(30);
+        request.setPreviewTtlMinutes(60);
+        request.setIdempotencyKey(idempotencyKey);
+        return request;
     }
 }
