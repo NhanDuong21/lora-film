@@ -56,6 +56,39 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
         Pageable pageable
     );
 
+    @Query("""
+        SELECT COUNT(sr) FROM SeatReservation sr 
+        WHERE sr.userId = :userId 
+          AND sr.showtimeId = :showtimeId 
+          AND sr.status = 'HELD' 
+          AND sr.expiresAt > :now
+    """)
+    long countActiveHeldSeatsByUserAndShowtime(
+        @Param("userId") Long userId,
+        @Param("showtimeId") Long showtimeId,
+        @Param("now") Instant now
+    );
+
+    @Query("""
+        SELECT sr FROM SeatReservation sr 
+        WHERE sr.showtimeId = :showtimeId 
+          AND (sr.status = 'BOOKED' OR (sr.status = 'HELD' AND sr.expiresAt > :now))
+    """)
+    List<SeatReservation> findAllActiveReservationsByShowtimeId(
+        @Param("showtimeId") Long showtimeId,
+        @Param("now") Instant now
+    );
+
+    @Query("""
+        SELECT DISTINCT bt.seatId FROM BookingTicket bt 
+        JOIN bt.booking b 
+        WHERE b.showtimeId = :showtimeId 
+          AND b.bookingStatus IN (com.lorafilm.booking.booking.enums.BookingStatus.PENDING_PAYMENT, com.lorafilm.booking.booking.enums.BookingStatus.CONFIRMED, com.lorafilm.booking.booking.enums.BookingStatus.COMPLETED)
+    """)
+    List<Long> findSoldSeatIdsFromBookingsByShowtimeId(
+        @Param("showtimeId") Long showtimeId
+    );
+
     Page<SeatReservation> findAllByUserId(Long userId, Pageable pageable);
 
     Page<SeatReservation> findAllByUserIdAndStatus(Long userId, SeatReservationStatus status, Pageable pageable);

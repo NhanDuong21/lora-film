@@ -29,4 +29,8 @@ public interface SeatReservationService {
     Page<SeatReservationResponse> findReservationsByUser(Long userId, SeatReservationStatus status, Long showtimeId, Pageable pageable);
 
     SeatAvailabilityResponse checkAvailability(Long showtimeId, List<Long> seatIds);
+
+    com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse getOccupiedSeatsByShowtime(String showtimeIdentifier);
+
+    com.lorafilm.booking.reservation.dto.ExtendReservationResponse extendReservation(String publicId, Long userId);
 }

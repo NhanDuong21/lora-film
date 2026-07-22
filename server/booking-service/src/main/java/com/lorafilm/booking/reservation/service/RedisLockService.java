@@ -4,9 +4,9 @@ import java.util.List;
 
 public interface RedisLockService {
 
-    boolean acquireHoldLocks(List<Long> seatIds, String lockOwner, long ttlSeconds);
+    boolean acquireHoldLocks(Long showtimeId, List<Long> seatIds, String lockOwner, long ttlSeconds);
 
-    void releaseLocks(List<Long> seatIds, String lockOwner);
+    void releaseLocks(Long showtimeId, List<Long> seatIds, String lockOwner);
 
     boolean acquireSingleLock(String lockKey, String lockOwner, long ttlSeconds);
 
