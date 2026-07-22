@@ -60,4 +60,31 @@ public class BookingSecurityEvaluator {
                 .map(booking -> currentUserId.equals(booking.getUserId()))
                 .orElse(false);
     }
+
+    public boolean isOwner(String publicId) {
+        if (publicId == null || publicId.isBlank()) {
+            return false;
+        }
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals(RoleConstants.ROLE_ADMIN)
+                        || a.getAuthority().equals(RoleConstants.ADMIN));
+        if (isAdmin) {
+            return true;
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof UserPrincipal userPrincipal) || userPrincipal.getId() == null) {
+            return false;
+        }
+
+        return bookingRepository.findByPublicId(publicId)
+                .map(booking -> userPrincipal.getId().equals(booking.getUserId()))
+                .orElse(false);
+    }
 }
