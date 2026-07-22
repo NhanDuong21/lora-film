@@ -3,19 +3,22 @@ package com.lorafilm.booking.food.mapper;
 import com.lorafilm.booking.food.dto.response.FoodItemResponse;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
 import com.lorafilm.booking.food.dto.response.FoodSummaryResponse;
-import com.lorafilm.booking.food.entity.BookingFoodItem;
-import com.lorafilm.booking.food.entity.BookingFoodOrder;
+import com.lorafilm.booking.food.entity.FoodOrderItem;
+import com.lorafilm.booking.food.entity.FoodOrder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
-@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
+import org.mapstruct.factory.Mappers;
+
+@Mapper(unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface FoodMapper {
 
-    @Mapping(target = "bookingId", source = "booking.publicId")
-    FoodOrderResponse toFoodOrderResponse(BookingFoodOrder order);
+    FoodMapper INSTANCE = Mappers.getMapper(FoodMapper.class);
 
-    FoodItemResponse toFoodItemResponse(BookingFoodItem item);
+    FoodOrderResponse toFoodOrderResponse(FoodOrder order);
 
-    FoodSummaryResponse toFoodSummaryResponse(BookingFoodOrder order);
+    FoodItemResponse toFoodItemResponse(FoodOrderItem item);
+
+    FoodSummaryResponse toFoodSummaryResponse(FoodOrder order);
 }

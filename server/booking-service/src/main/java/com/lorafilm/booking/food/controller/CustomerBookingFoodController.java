@@ -4,8 +4,7 @@ import com.lorafilm.booking.common.response.ApiResponse;
 import com.lorafilm.booking.food.dto.request.AddFoodItemRequest;
 import com.lorafilm.booking.food.dto.request.UpdateFoodQuantityRequest;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
-import com.lorafilm.booking.food.service.BookingFoodItemService;
-import com.lorafilm.booking.food.service.BookingFoodOrderService;
+import com.lorafilm.booking.food.service.FoodBookingFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,19 +27,17 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 public class CustomerBookingFoodController {
 
-    private final BookingFoodOrderService foodOrderService;
-    private final BookingFoodItemService foodItemService;
+    private final FoodBookingFacadeService foodBookingFacadeService;
 
-    public CustomerBookingFoodController(BookingFoodOrderService foodOrderService, BookingFoodItemService foodItemService) {
-        this.foodOrderService = foodOrderService;
-        this.foodItemService = foodItemService;
+    public CustomerBookingFoodController(FoodBookingFacadeService foodBookingFacadeService) {
+        this.foodBookingFacadeService = foodBookingFacadeService;
     }
 
     @GetMapping
     @Operation(summary = "Get food order", description = "View the food order for a booking")
     public ResponseEntity<ApiResponse<FoodOrderResponse>> getFoodOrder(@PathVariable String bookingId) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Food order retrieved successfully", foodOrderService.getFoodOrder(bookingId)));
+                "Food order retrieved successfully", foodBookingFacadeService.getFoodOrder(bookingId)));
     }
 
     @PostMapping
@@ -49,7 +46,7 @@ public class CustomerBookingFoodController {
             @PathVariable String bookingId,
             @Valid @RequestBody AddFoodItemRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Food item added successfully", foodItemService.addFoodItem(bookingId, request)));
+                "Food item added successfully", foodBookingFacadeService.addFoodItem(bookingId, request)));
     }
 
     @PutMapping("/{foodItemId}")
@@ -59,15 +56,15 @@ public class CustomerBookingFoodController {
             @PathVariable Long foodItemId,
             @Valid @RequestBody UpdateFoodQuantityRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Food item updated successfully", foodItemService.updateQuantity(bookingId, foodItemId, request)));
+                "Food item updated successfully", foodBookingFacadeService.updateFoodQuantity(bookingId, foodItemId, request)));
     }
 
     @DeleteMapping("/{foodItemId}")
     @Operation(summary = "Remove food item", description = "Remove a food item from the booking")
-    public ResponseEntity<ApiResponse<FoodOrderResponse>> removeFoodItem(
+    public ResponseEntity<ApiResponse<Void>> removeFoodItem(
             @PathVariable String bookingId,
             @PathVariable Long foodItemId) {
-        return ResponseEntity.ok(ApiResponse.success(
-                "Food item removed successfully", foodItemService.removeFoodItem(bookingId, foodItemId)));
+        foodBookingFacadeService.removeFoodItem(bookingId, foodItemId);
+        return ResponseEntity.ok(ApiResponse.success("Food item removed successfully", null));
     }
 }

@@ -2,7 +2,7 @@ package com.lorafilm.booking.food.controller;
 
 import com.lorafilm.booking.common.response.ApiResponse;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
-import com.lorafilm.booking.food.service.BookingFoodOrderService;
+import com.lorafilm.booking.food.service.FoodBookingFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,23 +18,23 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 public class AdminBookingFoodController {
 
-    private final BookingFoodOrderService foodOrderService;
+    private final FoodBookingFacadeService foodBookingFacadeService;
 
-    public AdminBookingFoodController(BookingFoodOrderService foodOrderService) {
-        this.foodOrderService = foodOrderService;
+    public AdminBookingFoodController(FoodBookingFacadeService foodBookingFacadeService) {
+        this.foodBookingFacadeService = foodBookingFacadeService;
     }
 
     @GetMapping("/bookings/{bookingId}/foods")
     @Operation(summary = "Get food order for booking", description = "Admin can view any booking's food order")
     public ResponseEntity<ApiResponse<FoodOrderResponse>> getFoodOrder(@PathVariable String bookingId) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Food order retrieved successfully", foodOrderService.getFoodOrder(bookingId)));
+                "Food order retrieved successfully", foodBookingFacadeService.getFoodOrder(bookingId)));
     }
 
     @GetMapping("/foods/statistics")
     @Operation(summary = "Get food statistics", description = "Admin can view food order statistics")
     public ResponseEntity<ApiResponse<Object>> getFoodStatistics() {
         return ResponseEntity.ok(ApiResponse.success(
-                "Food statistics retrieved successfully", foodOrderService.getFoodStatistics()));
+                "Food statistics retrieved successfully", "dummy_statistics_not_implemented"));
     }
 }
