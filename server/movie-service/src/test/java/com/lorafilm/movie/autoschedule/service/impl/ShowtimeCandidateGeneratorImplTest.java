@@ -41,6 +41,8 @@ class ShowtimeCandidateGeneratorImplTest {
         assertEquals(open.plus(90, ChronoUnit.MINUTES), candidates.get(0).getEndTime());
         assertEquals(open.plus(105, ChronoUnit.MINUTES), candidates.get(0).getOccupancyEndTime());
         assertEquals(open.plus(30, ChronoUnit.MINUTES), candidates.get(1).getStartTime());
+        assertEquals(LocalDate.of(2026, 7, 22),
+                candidates.get(0).getOperatingWindow().getServiceDate());
     }
 
     @Test
@@ -55,6 +57,40 @@ class ShowtimeCandidateGeneratorImplTest {
         assertEquals(1, candidates.size());
         assertEquals(open.plus(60, ChronoUnit.MINUTES), candidates.get(0).getEndTime());
         assertEquals(open.plus(85, ChronoUnit.MINUTES), candidates.get(0).getOccupancyEndTime());
+    }
+
+    @Test
+    void afterMidnightCandidateRetainsPriorOperatingServiceDate() {
+        LocalDate serviceDate = LocalDate.of(2026, 7, 24);
+        Instant open = Instant.parse("2026-07-24T20:00:00Z");
+        AutoScheduleGenerationContext context = context(
+                30, 60, 0, List.of(new OperatingWindow(
+                        serviceDate, open, Instant.parse("2026-07-25T02:00:00Z"))));
+
+        ShowtimeCandidate afterMidnight = generator.generate(context).stream()
+                .filter(candidate -> candidate.getStartTime().equals(
+                        Instant.parse("2026-07-25T00:30:00Z")))
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(serviceDate, afterMidnight.getOperatingWindow().getServiceDate());
+    }
+
+    @Test
+    void candidatesFromMultipleWindowsOnSameServiceDateRetainThatDate() {
+        LocalDate serviceDate = LocalDate.of(2026, 7, 24);
+        Instant morning = Instant.parse("2026-07-24T08:00:00Z");
+        Instant evening = Instant.parse("2026-07-24T20:00:00Z");
+        AutoScheduleGenerationContext context = context(
+                60, 60, 0, List.of(
+                        new OperatingWindow(serviceDate, morning, morning.plus(2, ChronoUnit.HOURS)),
+                        new OperatingWindow(serviceDate, evening, evening.plus(2, ChronoUnit.HOURS))));
+
+        List<ShowtimeCandidate> candidates = generator.generate(context);
+
+        assertEquals(4, candidates.size());
+        candidates.forEach(candidate -> assertEquals(
+                serviceDate, candidate.getOperatingWindow().getServiceDate()));
     }
 
     static AutoScheduleGenerationContext context(int granularity,

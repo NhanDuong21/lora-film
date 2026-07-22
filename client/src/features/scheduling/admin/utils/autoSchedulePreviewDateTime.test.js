@@ -4,13 +4,17 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  compareServiceDateKeys,
   FALLBACK_PREVIEW_TIMEZONE,
   formatCinemaTime,
   formatPreviewDateKey,
+  formatServiceDateKey,
   getCinemaDateKey,
   getCinemaTimeParts,
+  getServiceDateKey,
   getTimelineRange,
   resolveCinemaTimezone,
+  UNKNOWN_SERVICE_DATE_KEY,
 } from './autoSchedulePreviewDateTime';
 
 describe('auto schedule preview cinema time', () => {
@@ -78,5 +82,25 @@ describe('auto schedule preview cinema time', () => {
 
     expect(runWithTimezone('UTC')).toBe(runWithTimezone('America/Los_Angeles'));
     expect(runWithTimezone('UTC')).toBe(runWithTimezone('Asia/Tokyo'));
+  });
+
+  it('treats authoritative service dates as plain calendar strings', () => {
+    expect(getServiceDateKey('2026-07-24')).toBe('2026-07-24');
+    expect(getServiceDateKey('2026-02-29')).toBe(UNKNOWN_SERVICE_DATE_KEY);
+    expect(getServiceDateKey(null)).toBe(UNKNOWN_SERVICE_DATE_KEY);
+    expect(formatServiceDateKey('2026-07-24')).toBe('24/07/2026');
+    expect(formatServiceDateKey('2026-07-24', { weekday: true }))
+      .toBe('Thứ sáu, 24/07/2026');
+    expect(formatServiceDateKey(UNKNOWN_SERVICE_DATE_KEY))
+      .toBe('Không xác định ngày vận hành');
+    expect([
+      UNKNOWN_SERVICE_DATE_KEY,
+      '2026-07-25',
+      '2026-07-24',
+    ].sort(compareServiceDateKeys)).toEqual([
+      '2026-07-24',
+      '2026-07-25',
+      UNKNOWN_SERVICE_DATE_KEY,
+    ]);
   });
 });

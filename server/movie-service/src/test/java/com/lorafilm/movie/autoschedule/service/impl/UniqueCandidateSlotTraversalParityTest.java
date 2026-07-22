@@ -87,11 +87,11 @@ class UniqueCandidateSlotTraversalParityTest {
     }
 
     @Test
-    void overlappingWindowsAreDeduplicatedAndEarliestWindowOwnsSlot() {
+    void overlappingWindowsAcrossServiceDatesAreDeduplicatedAndEarliestServiceDateOwnsSlot() {
         Instant base = Instant.parse("2026-07-22T08:00:00Z");
         OperatingWindow earliest = new OperatingWindow(LocalDate.of(2026, 7, 22),
                 base, base.plus(4, ChronoUnit.HOURS));
-        OperatingWindow overlapping = new OperatingWindow(LocalDate.of(2026, 7, 22),
+        OperatingWindow overlapping = new OperatingWindow(LocalDate.of(2026, 7, 23),
                 base.plus(1, ChronoUnit.HOURS), base.plus(3, ChronoUnit.HOURS));
         AutoScheduleGenerationContext context = context(ZoneId.of("UTC"), 30, 10_000,
                 List.of(overlapping, earliest), 1, List.of(60), 0);

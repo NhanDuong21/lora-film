@@ -4,13 +4,16 @@ import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, Clock, AlertT
 import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
 import AutoScheduleTimeline from '@/features/scheduling/admin/components/AutoScheduleTimeline';
 import {
+  compareServiceDateKeys,
   formatCinemaDateTime,
   formatCinemaTime,
   formatCinemaTimeRange,
   formatPreviewDateKey,
+  formatServiceDateKey,
   getCinemaDateKey,
-  INVALID_PREVIEW_DATE_KEY,
+  getServiceDateKey,
   resolveCinemaTimezone,
+  UNKNOWN_SERVICE_DATE_KEY,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 import {
   buildQuickNonOverlappingSelection,
@@ -100,10 +103,10 @@ const AdminAutoSchedulePreviewPage = () => {
     if (!items) return [];
     const dates = new Set();
     items.forEach(item => {
-      dates.add(getCinemaDateKey(item.startTime, effectiveTimezone) || INVALID_PREVIEW_DATE_KEY);
+      dates.add(getServiceDateKey(item.serviceDate));
     });
-    return Array.from(dates).sort();
-  }, [items, effectiveTimezone]);
+    return Array.from(dates).sort(compareServiceDateKeys);
+  }, [items]);
 
   const filteredItems = useMemo(() => {
     if (!items) return [];
@@ -114,17 +117,17 @@ const AdminAutoSchedulePreviewPage = () => {
       if (filterAuditorium && audKey !== filterAuditorium) return false;
       if (filterReason && item.rejectionReason !== filterReason) return false;
       if (filterDate) {
-        const dateKey = getCinemaDateKey(item.startTime, effectiveTimezone) || INVALID_PREVIEW_DATE_KEY;
+        const dateKey = getServiceDateKey(item.serviceDate);
         if (dateKey !== filterDate) return false;
       }
       return true;
     });
-  }, [items, filterStatus, filterAuditorium, filterReason, filterDate, effectiveTimezone]);
+  }, [items, filterStatus, filterAuditorium, filterReason, filterDate]);
 
   const groupedFilteredItems = useMemo(() => {
     const groups = {};
     filteredItems.forEach(item => {
-      const dateKey = getCinemaDateKey(item.startTime, effectiveTimezone) || INVALID_PREVIEW_DATE_KEY;
+      const dateKey = getServiceDateKey(item.serviceDate);
       if (!groups[dateKey]) groups[dateKey] = {};
       const audKey = item.auditoriumName || item.auditoriumPublicId;
       if (!groups[dateKey][audKey]) groups[dateKey][audKey] = [];
@@ -136,7 +139,25 @@ const AdminAutoSchedulePreviewPage = () => {
       });
     });
     return groups;
-  }, [filteredItems, effectiveTimezone]);
+  }, [filteredItems]);
+
+  const knownTimelineGroups = useMemo(
+    () => Object.fromEntries(
+      Object.entries(groupedFilteredItems)
+        .filter(([dateKey]) => dateKey !== UNKNOWN_SERVICE_DATE_KEY),
+    ),
+    [groupedFilteredItems],
+  );
+  const unknownServiceDateCount = useMemo(
+    () => items.filter(item => getServiceDateKey(item.serviceDate) === UNKNOWN_SERVICE_DATE_KEY).length,
+    [items],
+  );
+  const filteredUnknownServiceDateCount = useMemo(
+    () => filteredItems.filter(
+      item => getServiceDateKey(item.serviceDate) === UNKNOWN_SERVICE_DATE_KEY,
+    ).length,
+    [filteredItems],
+  );
 
   const handleQuickNonOverlappingSelection = () => {
     if (!items || items.length === 0) return;
@@ -245,6 +266,27 @@ const AdminAutoSchedulePreviewPage = () => {
           </div>
         )}
 
+        {unknownServiceDateCount > 0 && (
+          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-4 rounded-xl flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-bold text-sm">Không xác định ngày vận hành</h3>
+              <p className="text-xs mt-1 opacity-80">
+                {unknownServiceDateCount} ứng viên lịch sử không lưu ngày vận hành. Dữ liệu vẫn được giữ nguyên và hiển thị đầy đủ trong chế độ Danh sách.
+              </p>
+            </div>
+            {viewMode === 'timeline' && filteredUnknownServiceDateCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className="text-xs font-bold hover:underline whitespace-nowrap"
+              >
+                Xem danh sách
+              </button>
+            )}
+          </div>
+        )}
+
         {malformedItems.length > 0 && (
           <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-4 rounded-xl flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -338,7 +380,7 @@ const AdminAutoSchedulePreviewPage = () => {
           >
             <option value="">Tất cả Ngày</option>
             {uniqueDates.map(dateKey => (
-              <option key={dateKey} value={dateKey}>{formatPreviewDateKey(dateKey)}</option>
+              <option key={dateKey} value={dateKey}>{formatServiceDateKey(dateKey)}</option>
             ))}
           </select>
 
@@ -377,7 +419,7 @@ const AdminAutoSchedulePreviewPage = () => {
         {/* View Mode Content */}
         {viewMode === 'timeline' ? (
           <AutoScheduleTimeline 
-            groupedItems={groupedFilteredItems}
+            groupedItems={knownTimelineGroups}
             selectedItemIds={selectedItemIds}
             selectedItemsIndex={selectedItemsIndex}
             handleToggleSelection={handleToggleSelection}
@@ -386,11 +428,16 @@ const AdminAutoSchedulePreviewPage = () => {
           />
         ) : (
           <div className="space-y-10">
-          {Object.keys(groupedFilteredItems).sort().map(dateKey => (
+          {Object.keys(groupedFilteredItems).sort(compareServiceDateKeys).map(dateKey => (
             <div key={dateKey} className="space-y-4">
               <h2 className="text-lg font-black text-white flex items-center gap-3 border-b border-zinc-800 pb-2">
                 <Calendar className="w-5 h-5 text-brand-orange" />
-                {formatPreviewDateKey(dateKey)}
+                {formatServiceDateKey(dateKey)}
+                {dateKey === UNKNOWN_SERVICE_DATE_KEY && (
+                  <span className="text-[10px] uppercase tracking-wider text-amber-400 border border-amber-500/30 rounded px-2 py-0.5">
+                    Dữ liệu lịch sử
+                  </span>
+                )}
               </h2>
 
               <div className="space-y-6">

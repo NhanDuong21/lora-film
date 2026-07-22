@@ -157,6 +157,9 @@ public class ShowtimeSchedulePreviewPaginationIntegrationTest {
             item.setStartTime(Instant.parse("2023-10-01T10:00:00Z").plus(i, ChronoUnit.HOURS));
             item.setEndTime(item.getStartTime().plus(2, ChronoUnit.HOURS));
             item.setOccupancyEndTime(item.getEndTime().plus(15, ChronoUnit.MINUTES));
+            if (i % 2 == 0) {
+                item.setServiceDate(LocalDate.of(2023, 10, 1).plusDays(i / 24));
+            }
             item.setMovie(movie);
             item.setMovieVersion(movieVersion);
             item.setCinema(cinema);
@@ -202,6 +205,8 @@ public class ShowtimeSchedulePreviewPaginationIntegrationTest {
         assertThat(page1.getNumber()).isEqualTo(0);
         assertThat(page1.isFirst()).isTrue();
         assertThat(page1.isLast()).isFalse();
+        assertThat(page1.getContent()).anyMatch(item -> item.getServiceDate() != null);
+        assertThat(page1.getContent()).anyMatch(item -> item.getServiceDate() == null);
 
         // Page 2 (size 50) - verify different content
         Page<ShowtimeSchedulePreviewItem> page2 = itemRepository.findAll(spec, PageRequest.of(1, 50));
@@ -235,6 +240,9 @@ public class ShowtimeSchedulePreviewPaginationIntegrationTest {
         Page<ShowtimeSchedulePreviewItem> result = itemRepository.findAll(spec, PageRequest.of(0, 10, sort));
         
         // 7 items (i=0 to 6)
+        assertThat(result.getTotalElements()).isEqualTo(7);
+        assertThat(result.getContent()).anyMatch(item -> item.getServiceDate() != null);
+        assertThat(result.getContent()).anyMatch(item -> item.getServiceDate() == null);
         assertThat(result.getContent().get(0).getRankingPosition()).isEqualTo(7); // Because DESC sort and rank was i+1
         assertThat(result.getContent().get(6).getRankingPosition()).isEqualTo(1);
     }

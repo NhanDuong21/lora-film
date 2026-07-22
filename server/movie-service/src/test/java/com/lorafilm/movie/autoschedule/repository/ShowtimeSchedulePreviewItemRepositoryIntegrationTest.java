@@ -178,6 +178,7 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
     @Test
     void ITEM_REPO_001_persistValidItem() {
         ShowtimeSchedulePreviewItem item = createValidItem();
+        item.setServiceDate(LocalDate.of(2026, 7, 24));
         item.setSelected(true);
         itemRepository.saveAndFlush(item);
         entityManager.clear();
@@ -185,6 +186,7 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getPublicId()).isNotNull();
+        assertThat(saved.getServiceDate()).isEqualTo(LocalDate.of(2026, 7, 24));
         assertThat(saved.getCreatedAt()).isNotNull();
         assertThat(saved.getUpdatedAt()).isNotNull();
     }
@@ -458,5 +460,17 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
         assertThat(fetched.getMovieVersion().getId()).isEqualTo(movieVersion.getId());
         assertThat(fetched.getCinema().getId()).isEqualTo(cinema.getId());
         assertThat(fetched.getAuditorium().getId()).isEqualTo(auditorium.getId());
+    }
+
+    @Test
+    void ITEM_REPO_015_legacyServiceDateRemainsNull() {
+        ShowtimeSchedulePreviewItem legacy = createValidItem();
+        legacy.setServiceDate(null);
+        itemRepository.saveAndFlush(legacy);
+        entityManager.clear();
+
+        ShowtimeSchedulePreviewItem saved = itemRepository.findById(legacy.getId()).orElseThrow();
+
+        assertThat(saved.getServiceDate()).isNull();
     }
 }

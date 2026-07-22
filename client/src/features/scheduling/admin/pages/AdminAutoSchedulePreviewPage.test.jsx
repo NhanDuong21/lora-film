@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useAutoSchedulePreview from '../hooks/useAutoSchedulePreview';
 import AdminAutoSchedulePreviewPage from './AdminAutoSchedulePreviewPage';
 
@@ -15,6 +15,7 @@ const candidate = {
   audioLanguage: 'vi',
   auditoriumPublicId: 'aud-1',
   auditoriumName: 'Phòng 1',
+  serviceDate: '2026-07-24',
   startTime: '2026-07-24T10:00:00Z',
   endTime: '2026-07-24T11:00:00Z',
   occupancyEndTime: '2026-07-24T11:15:00Z',
@@ -62,6 +63,8 @@ describe('AdminAutoSchedulePreviewPage manual helper', () => {
     useAutoSchedulePreview.mockReturnValue(hookValue);
   });
 
+  afterEach(() => cleanup());
+
   it('presents the greedy helper as an explicit non-optimizer action', () => {
     renderPage();
 
@@ -91,5 +94,42 @@ describe('AdminAutoSchedulePreviewPage manual helper', () => {
     expect(screen.getByText('Múi giờ bản xem trước không hợp lệ')).toBeInTheDocument();
     expect(screen.getByText('Thiếu dữ liệu chiếm phòng')).toBeInTheDocument();
     expect(screen.getByText(/hiển thị tạm thời theo UTC/)).toBeInTheDocument();
+  });
+
+  it('groups and filters an after-midnight item by authoritative service date', () => {
+    useAutoSchedulePreview.mockReturnValue({
+      ...hookValue,
+      items: [{
+        ...candidate,
+        serviceDate: '2026-07-24',
+        startTime: '2026-07-25T00:30:00Z',
+        endTime: '2026-07-25T01:30:00Z',
+        occupancyEndTime: '2026-07-25T01:45:00Z',
+      }],
+    });
+
+    renderPage();
+
+    expect(screen.getByRole('option', { name: '24/07/2026' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '25/07/2026' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /DANH SÁCH/i }));
+    expect(screen.getByRole('heading', { name: /24\/07\/2026/ })).toBeInTheDocument();
+    expect(screen.getByText('00:30')).toBeInTheDocument();
+  });
+
+  it('keeps legacy items visible and filterable without inventing a timeline date', () => {
+    useAutoSchedulePreview.mockReturnValue({
+      ...hookValue,
+      items: [{ ...candidate, serviceDate: null }],
+    });
+
+    renderPage();
+
+    expect(screen.getByRole('option', { name: 'Không xác định ngày vận hành' }))
+      .toBeInTheDocument();
+    expect(screen.queryByText(candidate.movieTitle)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem danh sách' }));
+    expect(screen.getByText(candidate.movieTitle)).toBeInTheDocument();
+    expect(screen.getByText('Dữ liệu lịch sử')).toBeInTheDocument();
   });
 });

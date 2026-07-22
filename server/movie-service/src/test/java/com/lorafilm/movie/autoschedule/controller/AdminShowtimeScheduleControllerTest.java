@@ -7,6 +7,7 @@ import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionReq
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
+import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewItemResponse;
 import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePreviewHistoryItemResponse;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewHistoryService;
 import com.lorafilm.movie.autoschedule.service.ShowtimeSchedulePreviewService;
@@ -25,10 +26,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.time.Instant;
+import java.time.LocalDate;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -68,6 +71,32 @@ class AdminShowtimeScheduleControllerTest {
 
         mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
                 .andDo(print());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void previewItemsSerializeKnownAndLegacyServiceDates() throws Exception {
+        ShowtimeSchedulePreviewSummaryResponse summary = new ShowtimeSchedulePreviewSummaryResponse();
+        summary.setPreviewPublicId(previewId);
+        summary.setStatus(SchedulePreviewStatus.PREVIEWED);
+
+        ShowtimeSchedulePreviewItemResponse known = new ShowtimeSchedulePreviewItemResponse();
+        known.setItemPublicId("known-item");
+        known.setServiceDate(LocalDate.of(2026, 7, 24));
+        ShowtimeSchedulePreviewItemResponse legacy = new ShowtimeSchedulePreviewItemResponse();
+        legacy.setItemPublicId("legacy-item");
+        legacy.setServiceDate(null);
+
+        ShowtimeSchedulePreviewPageResponse response = new ShowtimeSchedulePreviewPageResponse(
+                summary,
+                new com.lorafilm.movie.common.api.PageResponse<>(
+                        List.of(known, legacy), 0, 2, 2, 1, true));
+        when(service.getPreview(eq(previewId), any())).thenReturn(response);
+
+        mockMvc.perform(get("/api/admin/showtime-schedules/{id}", previewId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.content[0].serviceDate").value("2026-07-24"))
+                .andExpect(jsonPath("$.data.items.content[1].serviceDate").value(nullValue()));
     }
 
     @Test

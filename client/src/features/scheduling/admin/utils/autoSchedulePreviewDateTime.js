@@ -1,10 +1,75 @@
 export const FALLBACK_PREVIEW_TIMEZONE = 'UTC';
 export const INVALID_PREVIEW_DATE_KEY = '__INVALID_PREVIEW_DATE__';
+export const UNKNOWN_SERVICE_DATE_KEY = '__UNKNOWN_SERVICE_DATE__';
+export const UNKNOWN_SERVICE_DATE_LABEL = 'Không xác định ngày vận hành';
 export const TIMELINE_START_HOUR = 8;
 export const TIMELINE_END_HOUR = 24;
 
 const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const formatterCache = new Map();
+const VIETNAMESE_WEEKDAYS = [
+  'Chủ nhật',
+  'Thứ hai',
+  'Thứ ba',
+  'Thứ tư',
+  'Thứ năm',
+  'Thứ sáu',
+  'Thứ bảy',
+];
+
+const isLeapYear = year => year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+
+const daysInMonth = (year, month) => {
+  if (month === 2) return isLeapYear(year) ? 29 : 28;
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+};
+
+const parseCalendarDateKey = (value) => {
+  if (typeof value !== 'string') return null;
+  const match = DATE_KEY_PATTERN.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+    return null;
+  }
+  return { year, month, day, dateKey: value };
+};
+
+const getGregorianWeekday = ({ year, month, day }) => {
+  const daysBeforeMonth = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  const priorYear = year - 1;
+  let elapsedDays = (priorYear * 365)
+    + Math.floor(priorYear / 4)
+    - Math.floor(priorYear / 100)
+    + Math.floor(priorYear / 400)
+    + daysBeforeMonth[month - 1]
+    + day - 1;
+  if (month > 2 && isLeapYear(year)) elapsedDays += 1;
+  return (elapsedDays + 1) % 7;
+};
+
+export const getServiceDateKey = serviceDate =>
+  parseCalendarDateKey(serviceDate)?.dateKey || UNKNOWN_SERVICE_DATE_KEY;
+
+export const compareServiceDateKeys = (first, second) => {
+  if (first === UNKNOWN_SERVICE_DATE_KEY) return second === UNKNOWN_SERVICE_DATE_KEY ? 0 : 1;
+  if (second === UNKNOWN_SERVICE_DATE_KEY) return -1;
+  return first.localeCompare(second);
+};
+
+export const formatServiceDateKey = (dateKey, { weekday = false } = {}) => {
+  if (dateKey === UNKNOWN_SERVICE_DATE_KEY) return UNKNOWN_SERVICE_DATE_LABEL;
+  const parts = parseCalendarDateKey(dateKey);
+  if (!parts) return UNKNOWN_SERVICE_DATE_LABEL;
+
+  const formatted = `${String(parts.day).padStart(2, '0')}/${String(parts.month).padStart(2, '0')}/${String(parts.year).padStart(4, '0')}`;
+  return weekday
+    ? `${VIETNAMESE_WEEKDAYS[getGregorianWeekday(parts)]}, ${formatted}`
+    : formatted;
+};
 
 const toValidDate = (value) => {
   if (!value) return null;

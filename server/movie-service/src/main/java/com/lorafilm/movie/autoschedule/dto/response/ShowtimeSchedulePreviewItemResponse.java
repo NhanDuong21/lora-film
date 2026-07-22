@@ -5,6 +5,7 @@ import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Map;
 
 public class ShowtimeSchedulePreviewItemResponse {
@@ -33,6 +34,7 @@ public class ShowtimeSchedulePreviewItemResponse {
     private Instant startTime;
     private Instant endTime;
     private Instant occupancyEndTime;
+    private LocalDate serviceDate;
 
     private BigDecimal score;
     private Map<String, BigDecimal> scoreBreakdown;
@@ -112,6 +114,9 @@ public class ShowtimeSchedulePreviewItemResponse {
 
     public Instant getOccupancyEndTime() { return occupancyEndTime; }
     public void setOccupancyEndTime(Instant occupancyEndTime) { this.occupancyEndTime = occupancyEndTime; }
+
+    public LocalDate getServiceDate() { return serviceDate; }
+    public void setServiceDate(LocalDate serviceDate) { this.serviceDate = serviceDate; }
 
     public BigDecimal getScore() { return score; }
     public void setScore(BigDecimal score) { this.score = score; }

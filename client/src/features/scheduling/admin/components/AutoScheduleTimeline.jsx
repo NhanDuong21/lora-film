@@ -2,7 +2,8 @@ import { AlertTriangle } from 'lucide-react';
 import {
   formatCinemaTime,
   formatCinemaTimeRange,
-  formatPreviewDateKey,
+  compareServiceDateKeys,
+  formatServiceDateKey,
   getTimelineRange,
   TIMELINE_END_HOUR,
   TIMELINE_START_HOUR,
@@ -28,7 +29,7 @@ const AutoScheduleTimeline = ({
 
   return (
     <div className="space-y-12 w-full max-w-full overflow-x-auto">
-      {Object.keys(groupedItems).sort().map(dateKey => {
+      {Object.keys(groupedItems).sort(compareServiceDateKeys).map(dateKey => {
         const dateItems = Object.values(groupedItems[dateKey]).flat();
         const rangesByItemId = new Map(
           dateItems.map(item => [
@@ -44,7 +45,7 @@ const AutoScheduleTimeline = ({
           <div key={dateKey} className="space-y-6 min-w-[800px]">
             <div className="border-b border-zinc-800 pb-2 sticky left-0">
               <h2 className="text-lg font-black text-white flex items-center gap-3">
-                {formatPreviewDateKey(dateKey, { weekday: true })}
+                {formatServiceDateKey(dateKey, { weekday: true })}
               </h2>
               {outsideRangeCount > 0 && (
                 <p className="mt-2 text-xs text-amber-400 flex items-center gap-1.5">
