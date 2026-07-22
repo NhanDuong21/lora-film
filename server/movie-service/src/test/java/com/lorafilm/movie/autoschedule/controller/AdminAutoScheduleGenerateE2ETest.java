@@ -177,7 +177,13 @@ public class AdminAutoScheduleGenerateE2ETest {
         assertEquals(27, items.size());
         assertEquals(27, p.getValidCandidateCount());
         assertEquals(0, p.getRejectedCandidateCount());
+        assertEquals(p.getSelectedCandidateCount().longValue(),
+                items.stream().filter(item -> Boolean.TRUE.equals(item.getSelected())).count());
+        assertEquals(items.size(), items.stream()
+                .map(ShowtimeSchedulePreviewItem::getRankingPosition).distinct().count());
         for (ShowtimeSchedulePreviewItem item : items) {
+            assertNull(item.getSelectedAt());
+            assertNull(item.getSelectedBy());
             System.out.println("ITEM ROW: PublicID=" + item.getPublicId() + 
                 ", ValidationStatus=" + item.getValidationStatus() + 
                 ", Selected=" + item.getSelected() + 
@@ -273,7 +279,7 @@ public class AdminAutoScheduleGenerateE2ETest {
 
     @Test
     @WithMockUser(roles = "ADMIN", username = "1")
-    void legacyV1ReplayIsVersionAwareImmutableAndNewKeyCreatesS2() throws Exception {
+    void legacyV1AndS2ReplayAreVersionAwareImmutableAndNewKeyCreatesS3() throws Exception {
         GenerateShowtimeSchedulePreviewRequest legacyRequest = requestWithKey("legacy-" + UUID.randomUUID());
         var normalized = normalizer.normalize(legacyRequest);
         String legacyFingerprint = fingerprintService.generateFingerprint(
@@ -311,7 +317,40 @@ public class AdminAutoScheduleGenerateE2ETest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_KEY_REUSED"));
 
-        GenerateShowtimeSchedulePreviewRequest newRequest = requestWithKey("s2-" + UUID.randomUUID());
+        GenerateShowtimeSchedulePreviewRequest s2Request = requestWithKey("legacy-s2-" + UUID.randomUUID());
+        var normalizedS2 = normalizer.normalize(s2Request);
+        String s2Fingerprint = fingerprintService.generateFingerprint(
+                normalizedS2, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2);
+        ShowtimeSchedulePreview s2 = ShowtimeSchedulePreview.createGenerating(
+                cinema, normalizedS2.getScheduleFrom(), normalizedS2.getScheduleTo(),
+                normalizedS2.getSlotGranularityMinutes(), normalizedS2.getPreviewTtlMinutes(),
+                normalizedS2.getIdempotencyKey(), s2Fingerprint, 1L,
+                java.time.Instant.parse("2026-01-02T00:00:00Z"));
+        s2.setStrategyVersion(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2);
+        s2.setStatus(SchedulePreviewStatus.PREVIEWED);
+        s2.setTotalCandidateCount(9);
+        s2.setValidCandidateCount(8);
+        s2.setRejectedCandidateCount(1);
+        s2.setSelectedCandidateCount(4);
+        s2 = previewRepository.saveAndFlush(s2);
+        Long s2Id = s2.getId();
+        Long s2EntityVersion = s2.getVersion();
+
+        mockMvc.perform(post("/api/admin/showtime-schedules/generate-preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(s2Request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previewPublicId").value(s2.getPublicId()));
+
+        GenerateShowtimeSchedulePreviewRequest changedS2 = requestWithKey(s2Request.getIdempotencyKey());
+        changedS2.setSlotGranularityMinutes(15);
+        mockMvc.perform(post("/api/admin/showtime-schedules/generate-preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(changedS2)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_KEY_REUSED"));
+
+        GenerateShowtimeSchedulePreviewRequest newRequest = requestWithKey("s3-" + UUID.randomUUID());
         mockMvc.perform(post("/api/admin/showtime-schedules/generate-preview")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(newRequest)))
@@ -331,6 +370,15 @@ public class AdminAutoScheduleGenerateE2ETest {
         assertEquals(3, unchanged.getSelectedCandidateCount());
         assertTrue(itemRepository.findAllByPreviewIdOrderByRankingPositionAscIdAsc(legacyId).isEmpty(),
                 "legacy replay must not regenerate old preview items");
+
+        ShowtimeSchedulePreview unchangedS2 = previewRepository.findById(s2Id).orElseThrow();
+        assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2, unchangedS2.getStrategyVersion());
+        assertEquals(s2Fingerprint, unchangedS2.getRequestFingerprint());
+        assertEquals(s2EntityVersion, unchangedS2.getVersion());
+        assertEquals(9, unchangedS2.getTotalCandidateCount());
+        assertEquals(4, unchangedS2.getSelectedCandidateCount());
+        assertTrue(itemRepository.findAllByPreviewIdOrderByRankingPositionAscIdAsc(s2Id).isEmpty(),
+                "S2 replay must not regenerate old preview items");
     }
 
     private GenerateShowtimeSchedulePreviewRequest requestWithKey(String idempotencyKey) {

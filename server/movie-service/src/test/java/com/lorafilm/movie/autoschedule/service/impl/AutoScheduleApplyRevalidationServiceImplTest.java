@@ -70,6 +70,25 @@ class AutoScheduleApplyRevalidationServiceImplTest {
         verify(validationService, never()).validateScheduling(org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void validateAll_rejectsOverlappingSelectedItemsBeforeSharedValidation() {
+        ShowtimeValidationService validationService = mock(ShowtimeValidationService.class);
+        AutoScheduleApplyRevalidationServiceImpl service =
+                new AutoScheduleApplyRevalidationServiceImpl(validationService);
+        ShowtimeSchedulePreviewItem first = validItem();
+        ShowtimeSchedulePreviewItem overlapping = validItem();
+        overlapping.setPublicId("overlapping-item");
+        overlapping.setStartTime(Instant.parse("2026-07-22T11:30:00Z"));
+        overlapping.setEndTime(Instant.parse("2026-07-22T13:00:00Z"));
+        overlapping.setOccupancyEndTime(Instant.parse("2026-07-22T13:15:00Z"));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateAll(null, List.of(first, overlapping), Instant.now()));
+
+        assertEquals(ErrorCode.AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP, ex.getErrorCode());
+        verify(validationService, never()).validateScheduling(org.mockito.ArgumentMatchers.any());
+    }
+
     private ShowtimeSchedulePreviewItem validItem() {
         Movie movie = new Movie();
         movie.setDurationMinutes(90);

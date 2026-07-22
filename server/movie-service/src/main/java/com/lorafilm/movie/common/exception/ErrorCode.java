@@ -132,6 +132,7 @@ public enum ErrorCode {
     AUTO_SCHEDULE_INVALID_PREVIEW_TTL("Invalid auto schedule preview TTL", 400),
     AUTO_SCHEDULE_TOO_MANY_CANDIDATES("Too many auto schedule candidates generated", 422),
     AUTO_SCHEDULE_GENERATION_FAILED("Auto schedule generation failed", 500),
+    AUTO_SCHEDULE_SELECTION_INVARIANT_VIOLATION("Optimized auto schedule selection is inconsistent", 500),
     
     AUTO_SCHEDULE_NO_SELECTED_ITEMS("No selected items to apply", 400),
     AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP("Selected items overlap with each other", 409),

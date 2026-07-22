@@ -45,17 +45,30 @@ There is no root `GET /api/admin/showtime-schedules` controller method for previ
 - `GET /api/admin/cinemas` returns `PageResponse<CinemaResponse>` and `CinemaResponse.timezone`; this is the value read by the manual and auto-schedule create pages through `selectedCinema.timezone`.
 - `GET /api/admin/cinemas/{cinemaPublicId}` returns `CinemaDetailDto`, which inherits `timezone` from `CinemaDto`.
 - Admin Showtime list/detail responses expose `AdminShowtimeResponse.CinemaSummary.timezone`.
-- Preview generation returns `ShowtimeSchedulePreviewSummaryResponse.timezoneSnapshot`. Preview detail returns the same summary under `ShowtimeSchedulePreviewPageResponse.preview.timezoneSnapshot`. This snapshot, rather than the browser timezone, is the authoritative timezone for preview item display and grouping.
 
-## 5. Phase S2 Auto-Schedule Contract
+### Backend authoritative timezone contract
 
-- New previews use `BALANCED_V1_S2`.
+- Preview generation returns `ShowtimeSchedulePreviewSummaryResponse.timezoneSnapshot`. Preview detail returns the same summary under `ShowtimeSchedulePreviewPageResponse.preview.timezoneSnapshot`. That snapshot, rather than the browser timezone, is the authoritative cinema timezone for preview clock rendering and cinema-local calendar grouping.
+- Optimizer service-date ownership is a separate backend concept: it comes from the candidate's originating operating window and can differ from the candidate start's calendar date after midnight. `ShowtimeSchedulePreviewItemResponse` does not expose that authoritative service date, so it cannot be reconstructed reliably from `startTime` alone.
+
+### Current preview frontend compliance
+
+- `useAutoSchedulePreview` retains the preview summary, including `timezoneSnapshot`, but `AdminAutoSchedulePreviewPage` and `AutoScheduleTimeline` do not read `preview.timezoneSnapshot`.
+- Preview date grouping and filtering construct `new Date(item.startTime)` and use `getFullYear`, `getMonth`, and `getDate`. Time labels and timeline positioning use `toLocaleTimeString`, `getHours`, and `getMinutes` without a `timeZone` option. The resulting grouping and rendering therefore use the browser's local timezone, not the authoritative snapshot.
+- The frontend does not interpret authoritative service-date ownership. It groups by the browser-local calendar date of `startTime`, so an after-midnight candidate owned by the prior operating service date can appear under the next browser-local date.
+- Manual-selection conflict hints and the page's re-selection helper compare `[startTime, endTime)`, where `endTime` is film end. They do not use the available `occupancyEndTime`, so cleaning-buffer conflicts can be missed in the UI. Backend selection and apply-time validation remain occupancy-authoritative.
+- These are known frontend gaps. Phase S3 does not change frontend source and does not claim current UI compliance with the backend timezone or occupancy contracts.
+
+## 5. Phase S3 Auto-Schedule Contract
+
+- New previews use `BALANCED_V1_S3`; `BALANCED_V1` and `BALANCED_V1_S2` remain immutable replay versions.
 - The candidate universe contains unique `(auditoriumId, movieVersionId, startTime)` slots whose film end fits inside an operating window. Cleaning may finish after closing.
 - Film-end-after-close slots and duplicate keys are not materialized or persisted. Release and operational conflicts remain persisted `REJECTED` items.
 - `totalCandidateCount` is the fit-only unique universe and equals persisted item count. `validCandidateCount + rejectedCandidateCount = totalCandidateCount`.
 - Exactly 10,000 candidates are accepted. Discovery of unique key 10,001 stops before candidate materialization and returns `AUTO_SCHEDULE_TOO_MANY_CANDIDATES` with HTTP 422.
-- A legacy `BALANCED_V1` preview is fingerprinted using its stored strategy version. Same-request replay returns it unchanged; changed-request reuse returns `IDEMPOTENCY_KEY_REUSED`; replays never regenerate legacy items.
-- The REST response envelope and frontend request/response DTO shapes are unchanged by S2.
+- Default selected flags maximize total score with deterministic weighted interval scheduling over occupancy intervals. Global `rankingPosition` remains the S2 score-first display order and is not optimizer decision order.
+- Legacy previews are fingerprinted using their stored supported strategy version. Same-request replay returns them unchanged; changed-request reuse returns `IDEMPOTENCY_KEY_REUSED`; replays never regenerate legacy items.
+- The REST response envelope and frontend request/response DTO shapes are unchanged by S3.
 
 ## 6. Implemented Frontend Routes
 

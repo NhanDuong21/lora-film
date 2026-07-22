@@ -3,6 +3,8 @@ package com.lorafilm.movie.autoschedule.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
 import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -76,11 +78,27 @@ class AutoScheduleRequestFingerprintServiceImplTest {
 
         String legacy = fingerprintService.generateFingerprint(
                 request, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1);
+        String phaseS2 = fingerprintService.generateFingerprint(
+                request, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2);
         String current = fingerprintService.generateFingerprint(request);
 
         assertEquals("3c92d5fc4918d3e99b1d59773c483043c6c4bab8ee362a7a2dd09f20aaa9f0f3", legacy);
         assertEquals(current, fingerprintService.generateFingerprint(
                 request, AutoScheduleStrategyVersions.CURRENT));
         assertNotEquals(legacy, current);
+        assertNotEquals(legacy, phaseS2);
+        assertNotEquals(phaseS2, current);
+    }
+
+    @Test
+    void unknownStrategyVersionFailsSafely() {
+        NormalizedGeneratePreviewRequest request = new NormalizedGeneratePreviewRequest(
+                "cinema-1", LocalDate.of(2023, 1, 1), LocalDate.of(2023, 1, 7),
+                List.of("mv-1"), List.of("aud-1"), 15, 60, "ignored-key");
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> fingerprintService.generateFingerprint(request, "BALANCED_UNKNOWN"));
+
+        assertEquals(ErrorCode.AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT, thrown.getErrorCode());
     }
 }

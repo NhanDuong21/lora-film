@@ -7,6 +7,7 @@ import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper;
 import com.lorafilm.movie.autoschedule.model.AutoScheduleGenerationContext;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerateRequestNormalizer;
@@ -153,6 +154,22 @@ class AutoSchedulePreviewGenerationServiceImplTest {
     }
 
     @Test
+    void selectionInvariantFailureIsPreservedMarksPreviewFailedAndPersistsNoItems() {
+        BusinessException invariantFailure =
+                new BusinessException(ErrorCode.AUTO_SCHEDULE_SELECTION_INVARIANT_VIOLATION);
+        when(candidateCountEstimator.estimate(generationContext)).thenReturn(0);
+        when(generator.generate(any(), any())).thenReturn(0L);
+        doThrow(invariantFailure).when(selectionResolver).resolveDefaultSelection(any());
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> service.generatePreview(request, 10L));
+
+        assertEquals(ErrorCode.AUTO_SCHEDULE_SELECTION_INVARIANT_VIOLATION, thrown.getErrorCode());
+        verify(lifecycleService).markPreviewFailed(anyLong(), any());
+        verify(lifecycleService, never()).persistGeneratedItemsAndMarkPreviewed(any(), any());
+    }
+
+    @Test
     void legacySameRequestReplayReturnsExistingPreviewWithoutRegenerationOrMutation() {
         preview.setStrategyVersion("BALANCED_V1");
         preview.setRequestFingerprint("legacy-fingerprint");
@@ -189,5 +206,65 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         assertEquals("legacy-fingerprint", preview.getRequestFingerprint());
         verify(contextLoader, never()).load(any(), any(), any(), any());
         verify(generator, never()).generate(any(), any());
+    }
+
+    @Test
+    void phaseS2SameRequestReplayReturnsExistingPreviewWithoutRegeneration() {
+        preview.setStrategyVersion(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2);
+        preview.setRequestFingerprint("s2-fingerprint");
+        preview.setSelectedCandidateCount(4);
+        when(previewRepository.findByGenerateIdempotencyKey("generation-key"))
+                .thenReturn(Optional.of(preview));
+        when(fingerprintService.generateFingerprint(
+                any(), org.mockito.ArgumentMatchers.eq(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2)))
+                .thenReturn("s2-fingerprint");
+
+        service.generatePreview(request, 10L);
+
+        assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2, preview.getStrategyVersion());
+        assertEquals(4, preview.getSelectedCandidateCount());
+        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(generator, never()).generate(any(), any());
+    }
+
+    @Test
+    void phaseS2ChangedRequestRejectsKeyReuseWithoutMutation() {
+        preview.setStrategyVersion(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2);
+        preview.setRequestFingerprint("s2-fingerprint");
+        when(previewRepository.findByGenerateIdempotencyKey("generation-key"))
+                .thenReturn(Optional.of(preview));
+        when(fingerprintService.generateFingerprint(
+                any(), org.mockito.ArgumentMatchers.eq(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2)))
+                .thenReturn("changed-fingerprint");
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> service.generatePreview(request, 10L));
+
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, thrown.getErrorCode());
+        assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2, preview.getStrategyVersion());
+        assertEquals("s2-fingerprint", preview.getRequestFingerprint());
+        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(generator, never()).generate(any(), any());
+    }
+
+    @Test
+    void unknownStoredStrategyVersionFailsAsInconsistentWithoutRegeneration() {
+        preview.setStrategyVersion("BALANCED_UNKNOWN");
+        preview.setRequestFingerprint("stored-fingerprint");
+        when(previewRepository.findByGenerateIdempotencyKey("generation-key"))
+                .thenReturn(Optional.of(preview));
+        when(fingerprintService.generateFingerprint(
+                any(), org.mockito.ArgumentMatchers.eq("BALANCED_UNKNOWN")))
+                .thenThrow(new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT));
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> service.generatePreview(request, 10L));
+
+        assertEquals(ErrorCode.AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT, thrown.getErrorCode());
+        assertEquals("BALANCED_UNKNOWN", preview.getStrategyVersion());
+        assertEquals("stored-fingerprint", preview.getRequestFingerprint());
+        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(generator, never()).generate(any(), any());
+        verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), anyLong());
     }
 }
