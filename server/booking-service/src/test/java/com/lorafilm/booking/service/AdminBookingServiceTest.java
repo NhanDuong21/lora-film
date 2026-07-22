@@ -82,6 +82,7 @@ public class AdminBookingServiceTest {
         sampleBooking = new Booking();
         sampleBooking.setId(10L);
         sampleBooking.setBookingCode("BK1001");
+        sampleBooking.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.PENDING_PAYMENT);
     }
 

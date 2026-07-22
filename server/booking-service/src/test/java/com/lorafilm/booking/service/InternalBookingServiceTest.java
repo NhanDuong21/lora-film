@@ -65,6 +65,7 @@ public class InternalBookingServiceTest {
         sampleBooking = new Booking();
         sampleBooking.setId(10L);
         sampleBooking.setBookingCode("BK1001");
+        sampleBooking.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.PENDING_PAYMENT);
     }
 
@@ -84,6 +85,7 @@ public class InternalBookingServiceTest {
 
     @Test
     public void expireBooking_Success() {
+        sampleBooking.setExpiresAt(java.time.Instant.now().minusSeconds(10));
         when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
         when(bookingRepository.save(any())).thenReturn(sampleBooking);
 

@@ -4,7 +4,7 @@ import com.lorafilm.booking.reservation.service.RedisLockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Service;
@@ -17,11 +17,11 @@ public class RedisLockServiceImpl implements RedisLockService {
 
     private static final Logger log = LoggerFactory.getLogger(RedisLockServiceImpl.class);
 
-    private final RedisTemplate<String, String> redisTemplate;
+    private final RedisOperations<String, String> redisTemplate;
     private final DefaultRedisScript<Long> holdScript;
     private final DefaultRedisScript<Long> releaseScript;
 
-    public RedisLockServiceImpl(RedisTemplate<String, String> redisTemplate) {
+    public RedisLockServiceImpl(RedisOperations<String, String> redisTemplate) {
         this.redisTemplate = redisTemplate;
 
         this.holdScript = new DefaultRedisScript<>();

@@ -65,7 +65,8 @@ public class SeatReservationServiceTest {
     private final ReservationProperties reservationProperties = new ReservationProperties(300L);
     
     private final SeatReservationMapper seatReservationMapper = new SeatReservationMapper();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
     @Mock
     private com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient;
 
