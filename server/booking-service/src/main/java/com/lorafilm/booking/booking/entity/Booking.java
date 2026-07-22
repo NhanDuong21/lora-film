@@ -180,7 +180,7 @@ public class Booking extends FullAuditableEntity {
         this.cancelReasonDetail = reasonDetail;
     }
 
-    private void recalculateFinalAmount() {
+    public void recalculateFinalAmount() {
         BigDecimal grossAmount = ticketAmount.add(foodAmount).add(serviceFee).add(taxAmount).setScale(2, java.math.RoundingMode.HALF_UP);
         BigDecimal totalDiscount = promotionDiscount.add(voucherDiscount).setScale(2, java.math.RoundingMode.HALF_UP);
         finalAmount = grossAmount.subtract(totalDiscount).setScale(2, java.math.RoundingMode.HALF_UP);
