@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
-import { parseApiError } from '@/utils/apiErrorHandler';
+import { normalizeApiError } from '@/utils/apiErrorHandler';
 
 const HEALTH_STATUSES = new Set(['READY', 'WARNING', 'BLOCKED']);
+const INVALID_REVIEW_CONTRACT = 'TMDB_REVIEW_INVALID_RESPONSE';
+
+const REVIEW_ERROR_MESSAGES = {
+  PROVIDER_UNAVAILABLE: 'Không thể kết nối tới dịch vụ dữ liệu TMDB.',
+  INVALID_RESPONSE: 'Dữ liệu so sánh TMDB không hợp lệ.',
+  UNKNOWN: 'Không thể tải dữ liệu so sánh TMDB.',
+};
 
 const isStringList = value => Array.isArray(value) && value.every(item => typeof item === 'string');
 const isIssueList = value => Array.isArray(value) && value.every(item => (
@@ -32,6 +39,50 @@ const isCollectionDiff = diff => (
   && typeof diff.changed === 'boolean'
 );
 
+class TmdbReviewContractError extends Error {
+  constructor() {
+    super('Invalid TMDB review response contract');
+    this.name = 'TmdbReviewContractError';
+    this.code = INVALID_REVIEW_CONTRACT;
+  }
+}
+
+const sanitizeErrorCode = value => (
+  typeof value === 'string' ? value.replace(/[^A-Z0-9_.-]/gi, '').slice(0, 80) : ''
+);
+
+const normalizeReviewError = reviewError => {
+  if (reviewError?.code === INVALID_REVIEW_CONTRACT) {
+    return {
+      type: 'INVALID_RESPONSE',
+      message: REVIEW_ERROR_MESSAGES.INVALID_RESPONSE,
+      technicalDetail: `Mã lỗi: ${INVALID_REVIEW_CONTRACT}`,
+    };
+  }
+
+  const normalized = normalizeApiError(reviewError);
+  const responseStatus = reviewError?.response?.status ?? reviewError?.data?.status;
+  const errorCode = sanitizeErrorCode(reviewError?.code || normalized.code);
+  const fingerprint = `${errorCode} ${normalized.message || ''}`.toLowerCase();
+  const isProviderUnavailable = (
+    reviewError?.code === 'ERR_NETWORK'
+    || (Number.isInteger(responseStatus) && responseStatus >= 500)
+    || /tmdb|provider|upstream|gateway|fetch/.test(fingerprint)
+  );
+  const technicalParts = [];
+
+  if (errorCode && errorCode !== 'UNKNOWN_ERROR') technicalParts.push(`Mã lỗi: ${errorCode}`);
+  if (Number.isInteger(responseStatus)) technicalParts.push(`HTTP ${responseStatus}`);
+
+  return {
+    type: isProviderUnavailable ? 'PROVIDER_UNAVAILABLE' : 'UNKNOWN',
+    message: isProviderUnavailable
+      ? REVIEW_ERROR_MESSAGES.PROVIDER_UNAVAILABLE
+      : REVIEW_ERROR_MESSAGES.UNKNOWN,
+    technicalDetail: technicalParts.join(' · '),
+  };
+};
+
 const unwrapTmdbReview = envelope => {
   const review = envelope?.data;
   const readiness = review?.readiness;
@@ -53,7 +104,7 @@ const unwrapTmdbReview = envelope => {
     || !Array.isArray(review.collectionDiffs)
     || !review.collectionDiffs.every(isCollectionDiff)
   ) {
-    throw new Error('Phản hồi TMDB review không đúng định dạng.');
+    throw new TmdbReviewContractError();
   }
   return review;
 };
@@ -62,7 +113,7 @@ export default function useTmdbMovieReview(movie) {
   const [reviewState, setReviewState] = useState({ moviePublicId: null, data: null });
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [hasRequested, setHasRequested] = useState(false);
   const requestSequence = useRef(0);
   const hasLoaded = useRef(false);
@@ -73,7 +124,7 @@ export default function useTmdbMovieReview(movie) {
   const fetchReview = useCallback(async () => {
     if (!moviePublicId) {
       setReviewState({ moviePublicId: null, data: null });
-      setError('');
+      setError(null);
       setHasRequested(false);
       hasLoaded.current = false;
       loadedMovieId.current = null;
@@ -90,7 +141,7 @@ export default function useTmdbMovieReview(movie) {
     setHasRequested(true);
     if (hasLoaded.current) setIsRefreshing(true);
     else setIsLoading(true);
-    setError('');
+    setError(null);
 
     try {
       const envelope = await adminMovieService.getTmdbMovieReview(moviePublicId);
@@ -100,7 +151,7 @@ export default function useTmdbMovieReview(movie) {
         hasLoaded.current = true;
       }
     } catch (reviewError) {
-      if (sequence === requestSequence.current) setError(parseApiError(reviewError));
+      if (sequence === requestSequence.current) setError(normalizeReviewError(reviewError));
     } finally {
       if (sequence === requestSequence.current) {
         setIsLoading(false);

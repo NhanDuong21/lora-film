@@ -21,6 +21,14 @@ const HEALTH_STATUS_CONFIG = {
   BLOCKED: { label: 'Bị chặn', className: 'border-red-500/30 bg-red-500/10 text-red-300' },
 };
 
+const PANEL_STATUS_CONFIG = {
+  LOADING: { label: 'Đang tải', className: 'border-sky-500/30 bg-sky-500/10 text-sky-300' },
+  REFRESHING: { label: 'Đang cập nhật', className: 'border-sky-500/30 bg-sky-500/10 text-sky-300' },
+  UNAVAILABLE: { label: 'Không khả dụng', className: 'border-red-500/30 bg-red-500/10 text-red-300' },
+  STALE: { label: 'Chưa cập nhật', className: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
+  EMPTY: { label: 'Không có dữ liệu', className: 'border-zinc-700 bg-zinc-900 text-zinc-400' },
+};
+
 const asArray = value => (Array.isArray(value) ? value : []);
 
 function formatTimestamp(value) {
@@ -86,6 +94,18 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
   const collectionDiffs = asArray(review?.collectionDiffs);
   const reviewStatusConfig = REVIEW_STATUS_CONFIG[review?.reviewStatus];
   const healthStatusConfig = HEALTH_STATUS_CONFIG[readiness?.healthStatus];
+  const showError = Boolean(error && !isLoading && !isRefreshing);
+  const panelStatusConfig = isRefreshing
+    ? PANEL_STATUS_CONFIG.REFRESHING
+    : isLoading || !hasRequested
+      ? PANEL_STATUS_CONFIG.LOADING
+      : showError && !review
+        ? PANEL_STATUS_CONFIG.UNAVAILABLE
+        : showError && review
+          ? PANEL_STATUS_CONFIG.STALE
+          : review
+            ? reviewStatusConfig
+            : PANEL_STATUS_CONFIG.EMPTY;
 
   return (
     <section id="tmdb-review" className="mt-6 overflow-hidden rounded-2xl border border-sky-500/20 bg-[#0a0a0a]" aria-labelledby="tmdb-review-title">
@@ -95,7 +115,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 id="tmdb-review-title" className="font-semibold text-white">TMDB Import Review</h2>
-              <StatusBadge config={reviewStatusConfig} fallback={review?.reviewStatus || 'Đang tải'} />
+              <StatusBadge config={panelStatusConfig} fallback={review?.reviewStatus || 'Không có dữ liệu'} />
             </div>
             <p className="mt-1 max-w-3xl text-sm leading-5 text-zinc-400">
               So sánh dữ liệu đang lưu với dữ liệu provider hiện tại. Kết quả chỉ dùng để hỗ trợ rà soát và không tự động ghi đè phim.
@@ -113,11 +133,11 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
           className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading || isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {isRefreshing ? 'Đang làm mới' : 'Làm mới'}
+          {isRefreshing ? 'Đang cập nhật' : isLoading ? 'Đang tải' : 'Làm mới'}
         </button>
       </div>
 
-      {(!hasRequested || isLoading) && !review && (
+      {(!hasRequested || isLoading) && !review && !error && (
         <div className="flex items-start gap-3 p-6 text-sm text-zinc-400" role="status">
           <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
           <div>
@@ -127,16 +147,22 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
         </div>
       )}
 
-      {error && (
-        <div className="m-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200 md:m-6" role="alert">
-          <div>
-            <p className="font-semibold">Không thể tải so sánh TMDB</p>
-            <p className="mt-1 text-xs text-red-200/80">{error}</p>
-            <p className="mt-2 max-w-2xl text-xs leading-5 text-zinc-300">
-              Dữ liệu phim đã lưu vẫn khả dụng. Phê duyệt tiếp tục dựa trên readiness và lifecycle của phim đã lưu; backend sẽ kiểm tra lại khi xác nhận.
+      {showError && (
+        <div className="m-4 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/[0.07] px-4 py-3 text-sm text-red-200" role="alert">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">{review ? 'Không thể cập nhật dữ liệu so sánh TMDB' : 'Không thể tải dữ liệu so sánh TMDB'}</p>
+            <p className="mt-0.5 text-xs text-red-200/80">{error.message}</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-400">
+              Dữ liệu phim đã lưu vẫn khả dụng. Việc duyệt phim vẫn dựa trên dữ liệu đã lưu và được backend kiểm tra lại.
             </p>
+            {error.technicalDetail && (
+              <details className="mt-1 text-[11px] text-zinc-500">
+                <summary className="cursor-pointer select-none hover:text-zinc-400">Chi tiết kỹ thuật</summary>
+                <p className="mt-1 font-mono">{error.technicalDetail}</p>
+              </details>
+            )}
           </div>
-          <button type="button" onClick={onRetry} disabled={isLoading || isRefreshing} className="rounded-lg border border-red-400/30 px-3 py-1.5 font-medium disabled:opacity-50">Thử lại</button>
+          <button type="button" onClick={onRetry} disabled={isLoading || isRefreshing} className="shrink-0 rounded-lg border border-red-400/30 px-3 py-1.5 text-xs font-medium hover:bg-red-500/10 disabled:opacity-50">Thử lại</button>
         </div>
       )}
 

@@ -2,11 +2,11 @@ export const MOVIE_TRANSITIONS = {
   DRAFT: [
     {
       target: 'UPCOMING',
-      label: 'Duyệt và chuyển sang Sắp chiếu',
+      label: 'Duyệt phim',
       variant: 'primary',
       requiresPublishChecklist: true,
-      confirmTitle: 'Duyệt phim và chuyển sang Sắp chiếu?',
-      confirmDescription: 'Phim sẽ xuất hiện trong nhóm Sắp chiếu sau khi chuyển trạng thái.'
+      confirmTitle: 'Duyệt phim?',
+      confirmDescription: 'Phim sẽ được chuyển sang trạng thái Sắp chiếu.'
     },
     {
       target: 'INACTIVE',
