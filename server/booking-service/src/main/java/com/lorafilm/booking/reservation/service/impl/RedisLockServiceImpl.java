@@ -61,6 +61,17 @@ public class RedisLockServiceImpl implements RedisLockService {
         redisTemplate.execute(releaseScript, List.of(lockKey), lockOwner);
     }
 
+    @Override
+    public boolean extendLockTtl(Long showtimeId, Long seatId, String lockOwner, long newTtlSeconds) {
+        String key = "seat-lock:" + showtimeId + ":" + seatId;
+        Boolean exists = redisTemplate.hasKey(key);
+        if (Boolean.TRUE.equals(exists)) {
+            return Boolean.TRUE.equals(redisTemplate.expire(key, java.time.Duration.ofSeconds(newTtlSeconds)));
+        } else {
+            return acquireSingleLock(key, lockOwner, newTtlSeconds);
+        }
+    }
+
     private List<String> buildSeatLockKeys(Long showtimeId, List<Long> seatIds) {
         List<String> keys = new ArrayList<>(seatIds.size());
         for (Long seatId : seatIds) {

@@ -33,4 +33,6 @@ public interface SeatReservationService {
     com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse getOccupiedSeatsByShowtime(String showtimeIdentifier);
 
     com.lorafilm.booking.reservation.dto.ExtendReservationResponse extendReservation(String publicId, Long userId);
+
+    void handleBookingStatusChange(Long bookingId, com.lorafilm.booking.booking.enums.BookingStatus targetStatus, String reason);
 }

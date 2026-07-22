@@ -26,6 +26,8 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
 
     List<SeatReservation> findAllByIdIn(List<Long> ids);
 
+    List<SeatReservation> findAllByBookingId(Long bookingId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select reservation from SeatReservation reservation where reservation.id in :ids")
     List<SeatReservation> findAllByIdInForUpdate(@Param("ids") List<Long> ids);

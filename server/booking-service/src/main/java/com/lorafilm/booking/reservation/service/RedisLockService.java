@@ -11,4 +11,6 @@ public interface RedisLockService {
     boolean acquireSingleLock(String lockKey, String lockOwner, long ttlSeconds);
 
     void releaseSingleLock(String lockKey, String lockOwner);
+
+    boolean extendLockTtl(Long showtimeId, Long seatId, String lockOwner, long newTtlSeconds);
 }

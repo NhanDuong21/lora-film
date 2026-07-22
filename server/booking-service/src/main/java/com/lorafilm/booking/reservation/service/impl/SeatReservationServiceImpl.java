@@ -543,8 +543,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         // Refresh Redis lock for key
         long newTtlSeconds = newExpiresAt.getEpochSecond() - now.getEpochSecond();
         if (newTtlSeconds > 0) {
-            String redisLockKey = "seat-lock:" + reservation.getShowtimeId() + ":" + reservation.getSeatId();
-            redisLockService.acquireSingleLock(redisLockKey, reservation.getPublicId(), newTtlSeconds);
+            redisLockService.extendLockTtl(reservation.getShowtimeId(), reservation.getSeatId(), reservation.getPublicId(), newTtlSeconds);
         }
 
         recordAuditLog(userId.toString(), "EXTEND_RESERVATION", "expiresAt", reservation.getExpiresAt().toString(), newExpiresAt.toString());
@@ -556,6 +555,51 @@ public class SeatReservationServiceImpl implements SeatReservationService {
                 newExpiresAt,
                 extensionSeconds
         );
+    }
+
+    @Override
+    @Transactional
+    public void handleBookingStatusChange(Long bookingId, com.lorafilm.booking.booking.enums.BookingStatus targetStatus, String reason) {
+        long startTime = System.currentTimeMillis();
+
+        if (bookingId == null || targetStatus == null) {
+            return;
+        }
+
+        List<SeatReservation> reservations = seatReservationRepository.findAllByBookingId(bookingId);
+        if (reservations.isEmpty()) {
+            return;
+        }
+
+        SeatReservationStatus targetReservationStatus;
+        String auditAction;
+        if (targetStatus == com.lorafilm.booking.booking.enums.BookingStatus.CANCELLED || targetStatus == com.lorafilm.booking.booking.enums.BookingStatus.REFUNDED) {
+            targetReservationStatus = SeatReservationStatus.RELEASED;
+            auditAction = "RELEASE_SEAT_BOOKING_CHANGE";
+        } else if (targetStatus == com.lorafilm.booking.booking.enums.BookingStatus.EXPIRED) {
+            targetReservationStatus = SeatReservationStatus.EXPIRED;
+            auditAction = "EXPIRE_SEAT_BOOKING_CHANGE";
+        } else {
+            return;
+        }
+
+        String expiredReason = reason != null ? reason : ("Booking status changed to " + targetStatus);
+
+        for (SeatReservation reservation : reservations) {
+            if (reservation.getStatus() == SeatReservationStatus.BOOKED) {
+                SeatReservationStatus oldStatus = reservation.getStatus();
+                reservation.setStatus(targetReservationStatus);
+                reservation.setExpiredReason(expiredReason);
+                seatReservationRepository.save(reservation);
+
+                recordAuditLog("SYSTEM", auditAction, "status", oldStatus.name(), targetReservationStatus.name());
+                recordOutboxEvent("SeatReservation", reservation.getId(),
+                        targetReservationStatus == SeatReservationStatus.RELEASED ? "SEAT_RELEASED" : "SEAT_RESERVATION_EXPIRED",
+                        reservation);
+            }
+        }
+
+        recordOperationLog(bookingId, "HANDLE_BOOKING_STATUS_CHANGE", true, (int) (System.currentTimeMillis() - startTime), null, null);
     }
 
     private void recordAuditLog(String actor, String action, String fieldName, String oldValue, String newValue) {

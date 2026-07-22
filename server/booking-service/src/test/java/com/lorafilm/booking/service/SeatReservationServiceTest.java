@@ -299,6 +299,24 @@ public class SeatReservationServiceTest {
         assertNotNull(response);
         assertEquals(publicId, response.getPublicId());
         assertEquals(180L, response.getExtendedSeconds());
-        verify(redisLockService).acquireSingleLock(anyString(), eq(publicId), anyLong());
+        verify(redisLockService).extendLockTtl(eq(1001L), eq(15L), eq(publicId), anyLong());
+    }
+
+    @Test
+    public void handleBookingStatusChange_Cancelled_ReleasesSeats() {
+        Long bookingId = 50L;
+        SeatReservation res = new SeatReservation();
+        res.setId(101L);
+        res.setBookingId(bookingId);
+        res.setStatus(SeatReservationStatus.BOOKED);
+
+        when(seatReservationRepository.findAllByBookingId(bookingId)).thenReturn(List.of(res));
+
+        seatReservationService.handleBookingStatusChange(bookingId, com.lorafilm.booking.booking.enums.BookingStatus.CANCELLED, "User cancelled");
+
+        assertEquals(SeatReservationStatus.RELEASED, res.getStatus());
+        assertEquals("User cancelled", res.getExpiredReason());
+        verify(seatReservationRepository).save(res);
+        verify(outboxEventRepository).save(any());
     }
 }
