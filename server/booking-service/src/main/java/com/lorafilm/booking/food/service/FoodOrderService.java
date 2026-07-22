@@ -12,7 +12,7 @@ public interface FoodOrderService {
 
     FoodOrderResponse createFoodOrder(Long bookingId);
 
-    FoodOrderResponse addFoodItem(String foodOrderPublicId, AddFoodItemRequest request);
+    FoodOrderResponse addFoodItem(String foodOrderPublicId, com.lorafilm.booking.food.client.FoodCatalogItem catalogItem, int quantity);
 
     FoodOrderResponse updateFoodQuantity(String foodOrderPublicId, Long itemId, UpdateFoodQuantityRequest request);
 

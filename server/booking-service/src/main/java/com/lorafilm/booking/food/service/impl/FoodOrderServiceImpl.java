@@ -1,16 +1,21 @@
 package com.lorafilm.booking.food.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.exception.NotFoundException;
 import com.lorafilm.booking.food.client.FoodCatalogClient;
 import com.lorafilm.booking.food.client.FoodCatalogItem;
-import com.lorafilm.booking.food.dto.request.AddFoodItemRequest;
 import com.lorafilm.booking.food.dto.request.UpdateFoodQuantityRequest;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
 import com.lorafilm.booking.food.entity.FoodOrder;
-import com.lorafilm.booking.food.entity.FoodOrderItem;
 import com.lorafilm.booking.food.enums.FoodOrderStatus;
+import com.lorafilm.booking.food.event.FoodOrderConfirmedEvent;
 import com.lorafilm.booking.food.mapper.FoodMapper;
+import com.lorafilm.booking.infrastructure.entity.BookingOutboxEvent;
+import com.lorafilm.booking.infrastructure.enums.OutboxStatus;
+import com.lorafilm.booking.infrastructure.repository.BookingOutboxEventRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.lorafilm.booking.food.repository.FoodOrderItemRepository;
 import com.lorafilm.booking.food.repository.FoodOrderRepository;
 import com.lorafilm.booking.food.service.FoodOrderService;
@@ -25,16 +30,24 @@ import java.util.UUID;
 @Service
 public class FoodOrderServiceImpl implements FoodOrderService {
 
+    private static final Logger log = LoggerFactory.getLogger(FoodOrderServiceImpl.class);
+
     private final FoodOrderRepository foodOrderRepository;
     private final FoodOrderItemRepository foodOrderItemRepository;
     private final FoodCatalogClient foodCatalogClient;
+    private final BookingOutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     public FoodOrderServiceImpl(FoodOrderRepository foodOrderRepository,
                                 FoodOrderItemRepository foodOrderItemRepository,
-                                FoodCatalogClient foodCatalogClient) {
+                                FoodCatalogClient foodCatalogClient,
+                                BookingOutboxEventRepository outboxEventRepository,
+                                ObjectMapper objectMapper) {
         this.foodOrderRepository = foodOrderRepository;
         this.foodOrderItemRepository = foodOrderItemRepository;
         this.foodCatalogClient = foodCatalogClient;
+        this.outboxEventRepository = outboxEventRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -77,43 +90,18 @@ public class FoodOrderServiceImpl implements FoodOrderService {
 
     @Override
     @Transactional
-    public FoodOrderResponse addFoodItem(String foodOrderPublicId, AddFoodItemRequest request) {
+    public FoodOrderResponse addFoodItem(String foodOrderPublicId, FoodCatalogItem catalogItem, int quantity) {
         FoodOrder foodOrder = foodOrderRepository.findByPublicId(foodOrderPublicId)
                 .orElseThrow(() -> new NotFoundException("FoodOrder", "publicId", foodOrderPublicId));
 
         validateOrderModifiable(foodOrder);
 
-        FoodCatalogItem catalogItem = foodCatalogClient.getProductById(request.getProductId())
-                .orElseThrow(() -> new BusinessException("FOOD_NOT_FOUND", "Product not found"));
         if (!catalogItem.isActive()) {
             throw new BusinessException("FOOD_NOT_AVAILABLE", "Product is not available or inactive");
         }
 
-        Optional<FoodOrderItem> existingItemOpt = foodOrder.getItems().stream()
-                .filter(i -> i.getProductId().equals(request.getProductId()))
-                .findFirst();
+        foodOrder.addItem(catalogItem, quantity);
 
-        if (existingItemOpt.isPresent()) {
-            FoodOrderItem existingItem = existingItemOpt.get();
-            existingItem.setQuantity(existingItem.getQuantity() + request.getQuantity());
-            calculateItemTotals(existingItem);
-        } else {
-            FoodOrderItem newItem = new FoodOrderItem();
-            newItem.setFoodOrder(foodOrder);
-            newItem.setProductId(catalogItem.getId());
-            newItem.setProductCode(catalogItem.getCode());
-            newItem.setProductName(catalogItem.getName());
-            newItem.setProductType(catalogItem.getType());
-            newItem.setProductImage(catalogItem.getImageUrl());
-            newItem.setQuantity(request.getQuantity());
-            newItem.setUnitPrice(catalogItem.getPrice());
-            newItem.setDiscountAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-
-            calculateItemTotals(newItem);
-            foodOrder.getItems().add(newItem);
-        }
-
-        recalculateOrderTotals(foodOrder);
         FoodOrder saved = foodOrderRepository.save(foodOrder);
         return FoodMapper.INSTANCE.toFoodOrderResponse(saved);
     }
@@ -125,16 +113,9 @@ public class FoodOrderServiceImpl implements FoodOrderService {
                 .orElseThrow(() -> new NotFoundException("FoodOrder", "publicId", foodOrderPublicId));
 
         validateOrderModifiable(foodOrder);
+        
+        foodOrder.updateItemQuantity(itemId, request.getQuantity());
 
-        FoodOrderItem item = foodOrder.getItems().stream()
-                .filter(i -> i.getId().equals(itemId))
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("FoodOrderItem", "id", itemId.toString()));
-
-        item.setQuantity(request.getQuantity());
-        calculateItemTotals(item);
-
-        recalculateOrderTotals(foodOrder);
         FoodOrder saved = foodOrderRepository.save(foodOrder);
         return FoodMapper.INSTANCE.toFoodOrderResponse(saved);
     }
@@ -152,7 +133,7 @@ public class FoodOrderServiceImpl implements FoodOrderService {
             throw new NotFoundException("FoodOrderItem", "id", itemId.toString());
         }
 
-        recalculateOrderTotals(foodOrder);
+        foodOrder.recalculateTotals();
         foodOrderRepository.save(foodOrder);
     }
 
@@ -168,6 +149,12 @@ public class FoodOrderServiceImpl implements FoodOrderService {
         switch (bookingStatus) {
             case CONFIRMED:
                 foodOrder.setStatus(FoodOrderStatus.CONFIRMED);
+                FoodOrderConfirmedEvent event = new FoodOrderConfirmedEvent(
+                        bookingId.toString(),
+                        foodOrder.getPublicId(),
+                        foodOrder.getFinalAmount()
+                );
+                recordOutboxEvent("FoodOrder", foodOrder.getId(), "FOOD_ORDER_CONFIRMED", event);
                 break;
             case CANCELLED:
             case EXPIRED:
@@ -184,32 +171,27 @@ public class FoodOrderServiceImpl implements FoodOrderService {
         foodOrderRepository.save(foodOrder);
     }
 
-    private void calculateItemTotals(FoodOrderItem item) {
-        BigDecimal qty = new BigDecimal(item.getQuantity());
-        item.setSubtotal(item.getUnitPrice().multiply(qty).setScale(2, RoundingMode.HALF_UP));
-        item.setFinalAmount(item.getSubtotal().subtract(item.getDiscountAmount()).setScale(2, RoundingMode.HALF_UP));
-    }
 
-    private void recalculateOrderTotals(FoodOrder foodOrder) {
-        int totalQty = 0;
-        BigDecimal subtotal = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal discount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-
-        for (FoodOrderItem item : foodOrder.getItems()) {
-            totalQty += item.getQuantity();
-            subtotal = subtotal.add(item.getSubtotal());
-            discount = discount.add(item.getDiscountAmount());
-        }
-
-        foodOrder.setTotalQuantity(totalQty);
-        foodOrder.setSubtotal(subtotal);
-        foodOrder.setDiscountAmount(discount);
-        foodOrder.setFinalAmount(subtotal.subtract(discount).setScale(2, RoundingMode.HALF_UP));
-    }
 
     private void validateOrderModifiable(FoodOrder foodOrder) {
         if (foodOrder.getStatus() != FoodOrderStatus.PENDING) {
             throw new BusinessException("ORDER_NOT_MODIFIABLE", "Food order cannot be modified at this stage");
+        }
+    }
+
+    private void recordOutboxEvent(String aggregateType, Long aggregateId, String eventType, Object payload) {
+        try {
+            BookingOutboxEvent event = new BookingOutboxEvent();
+            event.setEventId(UUID.randomUUID().toString());
+            event.setAggregateType(aggregateType);
+            event.setAggregateId(aggregateId);
+            event.setEventType(eventType);
+            event.setEventVersion(1);
+            event.setPayload(objectMapper.writeValueAsString(payload));
+            event.setStatus(OutboxStatus.PENDING);
+            outboxEventRepository.save(event);
+        } catch (Exception ex) {
+            log.error("Failed to insert outbox event {}: ", eventType, ex);
         }
     }
 }

@@ -142,4 +142,11 @@ public class FoodOrderItem extends BaseEntity {
     public void setFinalAmount(BigDecimal finalAmount) {
         this.finalAmount = finalAmount;
     }
+
+    public void recalculateSubtotal() {
+        if (this.unitPrice != null && this.quantity != null) {
+            this.subtotal = this.unitPrice.multiply(BigDecimal.valueOf(this.quantity));
+            this.finalAmount = this.subtotal.subtract(this.discountAmount != null ? this.discountAmount : BigDecimal.ZERO);
+        }
+    }
 }

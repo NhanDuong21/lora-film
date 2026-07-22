@@ -1,6 +1,7 @@
 package com.lorafilm.booking.food.client;
 
 import com.lorafilm.booking.food.enums.ProductType;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -20,6 +21,7 @@ public class MockFoodCatalogClientImpl implements FoodCatalogClient {
     }
 
     @Override
+    @Cacheable(value = "food_catalog", key = "#productId")
     public Optional<FoodCatalogItem> getProductById(Long productId) {
         return Optional.ofNullable(catalog.get(productId));
     }

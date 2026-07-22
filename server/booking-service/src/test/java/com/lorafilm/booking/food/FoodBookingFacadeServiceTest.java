@@ -3,6 +3,8 @@ package com.lorafilm.booking.food;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.food.client.FoodCatalogClient;
+import com.lorafilm.booking.food.client.FoodCatalogItem;
 import com.lorafilm.booking.food.dto.request.AddFoodItemRequest;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
 import com.lorafilm.booking.food.service.FoodOrderService;
@@ -29,11 +31,14 @@ class FoodBookingFacadeServiceTest {
     @Mock
     private FoodOrderService foodOrderService;
 
+    @Mock
+    private FoodCatalogClient foodCatalogClient;
+
     private FoodBookingFacadeServiceImpl facadeService;
 
     @BeforeEach
     void setUp() {
-        facadeService = new FoodBookingFacadeServiceImpl(bookingRepository, foodOrderService);
+        facadeService = new FoodBookingFacadeServiceImpl(bookingRepository, foodOrderService, foodCatalogClient);
     }
 
     @Test
@@ -55,9 +60,17 @@ class FoodBookingFacadeServiceTest {
         
         FoodOrderResponse updatedOrder = new FoodOrderResponse();
         updatedOrder.setFinalAmount(new java.math.BigDecimal("150000"));
-        when(foodOrderService.addFoodItem(any(), any())).thenReturn(updatedOrder);
 
         AddFoodItemRequest req = new AddFoodItemRequest();
+        req.setProductId(999L);
+        req.setQuantity(2);
+
+        FoodCatalogItem catalogItem = new FoodCatalogItem();
+        catalogItem.setId(999L);
+        when(foodCatalogClient.getProductById(999L)).thenReturn(Optional.of(catalogItem));
+
+        when(foodOrderService.addFoodItem(any(), any(), any(Integer.class))).thenReturn(updatedOrder);
+
         FoodOrderResponse response = facadeService.addFoodItem(bookingPublicId, req);
 
         assertNotNull(response);

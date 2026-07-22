@@ -1,5 +1,6 @@
 package com.lorafilm.booking.food;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.food.client.FoodCatalogClient;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
 import com.lorafilm.booking.food.entity.FoodOrder;
@@ -7,6 +8,7 @@ import com.lorafilm.booking.food.mapper.FoodMapper;
 import com.lorafilm.booking.food.repository.FoodOrderItemRepository;
 import com.lorafilm.booking.food.repository.FoodOrderRepository;
 import com.lorafilm.booking.food.service.impl.FoodOrderServiceImpl;
+import com.lorafilm.booking.infrastructure.repository.BookingOutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,12 +33,18 @@ class FoodOrderServiceTest {
 
     @Mock
     private FoodCatalogClient foodCatalogClient;
-    
+
+    @Mock
+    private BookingOutboxEventRepository outboxEventRepository;
+
+    @Mock
+    private ObjectMapper objectMapper;
+
     private FoodOrderServiceImpl foodOrderService;
 
     @BeforeEach
     void setUp() {
-        foodOrderService = new FoodOrderServiceImpl(foodOrderRepository, foodOrderItemRepository, foodCatalogClient);
+        foodOrderService = new FoodOrderServiceImpl(foodOrderRepository, foodOrderItemRepository, foodCatalogClient, outboxEventRepository, objectMapper);
     }
 
     @Test

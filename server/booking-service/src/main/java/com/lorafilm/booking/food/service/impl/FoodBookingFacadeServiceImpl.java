@@ -5,6 +5,8 @@ import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.exception.NotFoundException;
+import com.lorafilm.booking.food.client.FoodCatalogClient;
+import com.lorafilm.booking.food.client.FoodCatalogItem;
 import com.lorafilm.booking.food.dto.request.AddFoodItemRequest;
 import com.lorafilm.booking.food.dto.request.UpdateFoodQuantityRequest;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
@@ -18,10 +20,12 @@ public class FoodBookingFacadeServiceImpl implements FoodBookingFacadeService {
 
     private final BookingRepository bookingRepository;
     private final FoodOrderService foodOrderService;
+    private final FoodCatalogClient foodCatalogClient;
 
-    public FoodBookingFacadeServiceImpl(BookingRepository bookingRepository, FoodOrderService foodOrderService) {
+    public FoodBookingFacadeServiceImpl(BookingRepository bookingRepository, FoodOrderService foodOrderService, FoodCatalogClient foodCatalogClient) {
         this.bookingRepository = bookingRepository;
         this.foodOrderService = foodOrderService;
+        this.foodCatalogClient = foodCatalogClient;
     }
 
     @Override
@@ -38,12 +42,17 @@ public class FoodBookingFacadeServiceImpl implements FoodBookingFacadeService {
     @Override
     @Transactional
     public FoodOrderResponse addFoodItem(String bookingPublicId, AddFoodItemRequest request) {
+        // Fetch external data BEFORE acquiring the pessimistic lock on the Booking.
+        // This drastically reduces the lock duration and prevents thread starvation during high concurrency.
+        FoodCatalogItem catalogItem = foodCatalogClient.getProductById(request.getProductId())
+                .orElseThrow(() -> new BusinessException("FOOD_NOT_FOUND", "Product not found"));
+
         Booking booking = getBookingForUpdate(bookingPublicId);
         validateBookingStatus(booking);
 
         FoodOrderResponse foodOrder = foodOrderService.createOrGetFoodOrder(booking.getId());
 
-        FoodOrderResponse updatedOrder = foodOrderService.addFoodItem(foodOrder.getPublicId(), request);
+        FoodOrderResponse updatedOrder = foodOrderService.addFoodItem(foodOrder.getPublicId(), catalogItem, request.getQuantity());
         
         updateBookingTotal(booking, updatedOrder);
         return updatedOrder;
