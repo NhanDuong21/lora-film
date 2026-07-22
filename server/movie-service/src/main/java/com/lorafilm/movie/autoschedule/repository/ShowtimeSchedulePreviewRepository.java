@@ -16,7 +16,8 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface ShowtimeSchedulePreviewRepository extends JpaRepository<ShowtimeSchedulePreview, Long> {
+public interface ShowtimeSchedulePreviewRepository extends JpaRepository<ShowtimeSchedulePreview, Long>,
+        ShowtimeSchedulePreviewHistoryRepository {
 
     Optional<ShowtimeSchedulePreview> findByPublicId(String publicId);
 

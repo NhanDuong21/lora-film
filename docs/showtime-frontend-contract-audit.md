@@ -14,6 +14,7 @@ This audit reflects the current controller, DTO, service, and frontend route sou
 | GET | `/api/admin/showtimes/{showtimePublicId}/status-history` | - | `List<ShowtimeStatusHistoryResponse>` |
 | GET | `/api/admin/showtimes/{showtimeId}/prices` | `{showtimeId}` is semantically the Showtime public ID | `ShowtimePricesResponse` |
 | PUT | `/api/admin/showtimes/{showtimeId}/prices` | `{showtimeId}` is semantically the Showtime public ID; `UpdateShowtimePricesRequest` | `ShowtimePricesResponse` |
+| GET | `/api/admin/showtime-schedules` | Optional history filters; zero-based `page`, `size`, allowlisted `sort` | `PageResponse<AutoSchedulePreviewHistoryItemResponse>` |
 | POST | `/api/admin/showtime-schedules/generate-preview` | `GenerateShowtimeSchedulePreviewRequest` | `ShowtimeSchedulePreviewSummaryResponse` |
 | GET | `/api/admin/showtime-schedules/{previewPublicId}` | `page`, `size`, and preview-item filters | `ShowtimeSchedulePreviewPageResponse` |
 | PUT | `/api/admin/showtime-schedules/{previewPublicId}/items` | `UpdatePreviewItemSelectionsRequest` | `ShowtimeSchedulePreviewSummaryResponse` |
@@ -22,9 +23,13 @@ This audit reflects the current controller, DTO, service, and frontend route sou
 
 `GET /api/admin/showtimes` is implemented by `AdminShowtimeQueryController`; it is not a missing contract.
 
-## 2. Confirmed Backend Contract Gap
+## 2. Preview History Contract
 
-There is no root `GET /api/admin/showtime-schedules` controller method for preview history. `AdminShowtimeScheduleController` provides preview detail, generation, selection update, apply, and eligible-movie endpoints only. The frontend service currently declares `getPreviewHistory`, but no registered frontend page calls it and no backend endpoint serves it.
+Root `GET /api/admin/showtime-schedules` is implemented for read-only preview history. It uses the admin-list `PageResponse` shape (`data`, `pageNo`, `pageSize`, `totalElements`, `totalPages`, `last`), while preview detail retains its existing item-page response shape.
+
+The history endpoint accepts `cinemaPublicId`, persisted `status`, `strategyVersion`, schedule overlap bounds, `[createdFrom, createdTo)` instant bounds, `page`, `size`, and one allowlisted sort pair. It returns no preview items, internal IDs, actor IDs, idempotency data, fingerprint, or raw failure reason. `cinemaName` is the current cinema name; `timezoneSnapshot` remains the historical timezone snapshot.
+
+History derives an overdue persisted `PREVIEWED` row to display status `EXPIRED` without saving it. The backend-provided `displayStatus`, `editable`, and `applicable` values are authoritative for the history UI. Detail, edit, expiration normalization, generation, and apply behavior are unchanged.
 
 ## 3. Identifier Mapping
 
@@ -49,6 +54,7 @@ There is no root `GET /api/admin/showtime-schedules` controller method for previ
 ### Backend authoritative timezone contract
 
 - Preview generation returns `ShowtimeSchedulePreviewSummaryResponse.timezoneSnapshot`. Preview detail returns the same summary under `ShowtimeSchedulePreviewPageResponse.preview.timezoneSnapshot`. That snapshot, rather than the browser timezone, is the authoritative cinema timezone for preview clock rendering and cinema-local calendar grouping.
+- Preview history returns the same `timezoneSnapshot` independently from the joined current `cinemaName`. Schedule bounds are plain cinema-local `LocalDate` values; history creation bounds and timestamps are instants.
 - Optimizer service-date ownership is a separate backend concept: it comes from the candidate's originating operating window and can differ from the candidate start's calendar date after midnight. `ShowtimeSchedulePreviewItemResponse` does not expose that authoritative service date, so it cannot be reconstructed reliably from `startTime` alone.
 
 ### Current preview frontend compliance
@@ -80,7 +86,6 @@ These routes are registered under the admin layout by `client/src/features/sched
 | `/admin/showtimes` | `AdminShowtimePage` | Implemented |
 | `/admin/showtimes/create` | `AdminShowtimeCreatePage` | Implemented |
 | `/admin/showtimes/:id` | `AdminShowtimeDetailPage` | Implemented; `id` carries `showtimePublicId` |
+| `/admin/showtime-schedules` | `AdminAutoScheduleHistoryPage` | Implemented; URL-backed filters and pagination |
 | `/admin/showtime-schedules/create` | `AdminAutoScheduleCreatePage` | Implemented |
 | `/admin/showtime-schedules/:id` | `AdminAutoSchedulePreviewPage` | Implemented; `id` carries `previewPublicId` |
-
-There is no registered preview-history route corresponding to root `/admin/showtime-schedules`.
