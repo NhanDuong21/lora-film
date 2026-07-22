@@ -39,19 +39,19 @@ public class AdminBookingController {
         return ResponseEntity.ok(ApiResponse.success("Bookings retrieved successfully", response));
     }
 
-    @GetMapping("/{bookingId}")
-    @Operation(summary = "Get booking detail", description = "Retrieve full booking detail including snapshot, tickets, and status transition history")
-    public ResponseEntity<ApiResponse<BookingDetailResponse>> getBookingDetail(@PathVariable Long bookingId) {
-        BookingDetailResponse detail = adminBookingService.getBookingDetail(bookingId);
+    @GetMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}")
+    @Operation(summary = "Get booking detail", description = "Retrieve full booking detail including snapshot, tickets, and status transition history using public UUID")
+    public ResponseEntity<ApiResponse<BookingDetailResponse>> getBookingDetail(@PathVariable String publicId) {
+        BookingDetailResponse detail = adminBookingService.getBookingDetail(publicId);
         return ResponseEntity.ok(ApiResponse.success("Booking detail retrieved successfully", detail));
     }
 
-    @PutMapping("/{bookingId}/status")
-    @Operation(summary = "Update booking status", description = "Update status of a booking with validation, transition history, audit, operation log, and outbox event")
+    @PutMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/status")
+    @Operation(summary = "Update booking status", description = "Update status of a booking with validation, transition history, audit, operation log, and outbox event using public UUID")
     public ResponseEntity<ApiResponse<BookingAdminResponse>> updateBookingStatus(
-            @PathVariable Long bookingId,
+            @PathVariable String publicId,
             @Valid @RequestBody UpdateBookingStatusRequest request) {
-        BookingAdminResponse updatedBooking = adminBookingService.updateBookingStatus(bookingId, request);
+        BookingAdminResponse updatedBooking = adminBookingService.updateBookingStatus(publicId, request);
         return ResponseEntity.ok(ApiResponse.success("Booking status updated successfully", updatedBooking));
     }
 }

@@ -90,32 +90,33 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public BookingDetailResponse getBookingDetail(Long bookingId) {
-        if (bookingId == null) {
-            throw new BusinessException("INVALID_BOOKING_ID", "Booking ID cannot be null");
+    public BookingDetailResponse getBookingDetail(String publicId) {
+        if (publicId == null || publicId.trim().isEmpty()) {
+            throw new BusinessException("INVALID_BOOKING_ID", "Booking public ID cannot be null or empty");
         }
 
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+        Booking booking = bookingRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
 
         BookingDetailResponse detailResponse = bookingMapper.toAdminDetailResponse(booking);
+        Long dbBookingId = booking.getId();
 
         try {
-            BookingSnapshotDto snapshot = snapshotService.findByBooking(bookingId);
+            BookingSnapshotDto snapshot = snapshotService.findByBooking(dbBookingId);
             detailResponse.setSnapshot(snapshot);
         } catch (BusinessException e) {
             detailResponse.setSnapshot(null);
         }
 
         try {
-            List<BookingTicketDto> tickets = ticketService.findByBooking(bookingId);
+            List<BookingTicketDto> tickets = ticketService.findByBooking(dbBookingId);
             detailResponse.setTickets(tickets);
         } catch (BusinessException e) {
             detailResponse.setTickets(Collections.emptyList());
         }
 
         try {
-            List<BookingStatusHistoryDto> statusHistories = historyService.findByBooking(bookingId);
+            List<BookingStatusHistoryDto> statusHistories = historyService.findByBooking(dbBookingId);
             detailResponse.setStatusHistories(statusHistories);
         } catch (BusinessException e) {
             detailResponse.setStatusHistories(Collections.emptyList());
@@ -126,16 +127,16 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 
     @Override
     @Transactional
-    public BookingAdminResponse updateBookingStatus(Long bookingId, UpdateBookingStatusRequest request) {
-        if (bookingId == null) {
-            throw new BusinessException("INVALID_BOOKING_ID", "Booking ID cannot be null");
+    public BookingAdminResponse updateBookingStatus(String publicId, UpdateBookingStatusRequest request) {
+        if (publicId == null || publicId.trim().isEmpty()) {
+            throw new BusinessException("INVALID_BOOKING_ID", "Booking public ID cannot be null or empty");
         }
         if (request == null || request.getStatus() == null) {
             throw new BusinessException("INVALID_REQUEST", "Target status is required");
         }
 
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+        Booking booking = bookingRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
 
         BookingStatus oldStatus = booking.getBookingStatus();
         BookingStatus newStatus = request.getStatus();

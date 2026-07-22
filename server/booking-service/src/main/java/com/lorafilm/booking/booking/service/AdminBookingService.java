@@ -10,7 +10,7 @@ public interface AdminBookingService {
 
     PagedResponse<BookingAdminResponse> findBookings(BookingFilterRequest filter);
 
-    BookingDetailResponse getBookingDetail(Long bookingId);
+    BookingDetailResponse getBookingDetail(String publicId);
 
-    BookingAdminResponse updateBookingStatus(Long bookingId, UpdateBookingStatusRequest request);
+    BookingAdminResponse updateBookingStatus(String publicId, UpdateBookingStatusRequest request);
 }

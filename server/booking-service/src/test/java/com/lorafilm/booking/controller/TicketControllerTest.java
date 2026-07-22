@@ -2,7 +2,9 @@ package com.lorafilm.booking.controller;
 
 import com.lorafilm.booking.booking.controller.TicketController;
 import com.lorafilm.booking.booking.dto.BookingTicketDto;
+import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.TicketStatus;
+import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.service.BookingTicketService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -29,6 +32,9 @@ public class TicketControllerTest {
 
     @Mock
     private BookingTicketService bookingTicketService;
+
+    @Mock
+    private BookingRepository bookingRepository;
 
     @InjectMocks
     private TicketController ticketController;
@@ -46,9 +52,14 @@ public class TicketControllerTest {
         ticket.setTicketPrice(BigDecimal.valueOf(100000));
         ticket.setStatus(TicketStatus.ACTIVE);
 
+        Booking booking = new Booking();
+        booking.setId(10L);
+        booking.setPublicId("550e8400-e29b-41d4-a716-446655440000");
+
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(booking));
         when(bookingTicketService.findByBooking(10L)).thenReturn(List.of(ticket));
 
-        mockMvc.perform(get("/api/bookings/10/tickets")
+        mockMvc.perform(get("/api/bookings/550e8400-e29b-41d4-a716-446655440000/tickets")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))

@@ -81,6 +81,7 @@ public class AdminBookingServiceTest {
 
         sampleBooking = new Booking();
         sampleBooking.setId(10L);
+        sampleBooking.setPublicId("550e8400-e29b-41d4-a716-446655440000");
         sampleBooking.setBookingCode("BK1001");
         sampleBooking.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.PENDING_PAYMENT);
@@ -104,9 +105,9 @@ public class AdminBookingServiceTest {
 
     @Test
     public void getBookingDetail_Success() {
-        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
 
-        BookingDetailResponse result = adminBookingService.getBookingDetail(10L);
+        BookingDetailResponse result = adminBookingService.getBookingDetail("550e8400-e29b-41d4-a716-446655440000");
 
         assertNotNull(result);
         assertEquals("BK1001", result.getBookingCode());
@@ -116,10 +117,10 @@ public class AdminBookingServiceTest {
     public void updateBookingStatus_Success_FlowExecuted() {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(BookingStatus.CONFIRMED, "Payment done", "ADMIN", "Note");
 
-        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
         when(bookingRepository.save(any())).thenReturn(sampleBooking);
 
-        BookingAdminResponse response = adminBookingService.updateBookingStatus(10L, request);
+        BookingAdminResponse response = adminBookingService.updateBookingStatus("550e8400-e29b-41d4-a716-446655440000", request);
 
         assertNotNull(response);
         verify(historyService).saveHistory(eq(sampleBooking), eq("PENDING_PAYMENT"), eq("CONFIRMED"), eq("Payment done"), eq("ADMIN"), eq("ADMIN"));
@@ -133,19 +134,19 @@ public class AdminBookingServiceTest {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(BookingStatus.CONFIRMED, "Retry", "ADMIN", null);
         ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CANCELLED);
 
-        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
-                adminBookingService.updateBookingStatus(10L, request));
+                adminBookingService.updateBookingStatus("550e8400-e29b-41d4-a716-446655440000", request));
         assertEquals("CANNOT_CONFIRM_CANCELLED", ex.getErrorCode());
     }
 
     @Test
     public void updateBookingStatus_BookingNotFound_ThrowsException() {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(BookingStatus.CONFIRMED, "Reason", "ADMIN", null);
-        when(bookingRepository.findById(99L)).thenReturn(Optional.empty());
+        when(bookingRepository.findByPublicId("99000000-0000-0000-0000-000000000000")).thenReturn(Optional.empty());
 
         assertThrows(BookingNotFoundException.class, () ->
-                adminBookingService.updateBookingStatus(99L, request));
+                adminBookingService.updateBookingStatus("99000000-0000-0000-0000-000000000000", request));
     }
 }

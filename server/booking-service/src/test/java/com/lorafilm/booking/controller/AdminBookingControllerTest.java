@@ -69,11 +69,12 @@ public class AdminBookingControllerTest {
     public void getBookingDetail_Success_Returns200() throws Exception {
         BookingDetailResponse detail = new BookingDetailResponse();
         detail.setId(10L);
+        detail.setPublicId("550e8400-e29b-41d4-a716-446655440000");
         detail.setBookingCode("BK1001");
 
-        when(adminBookingService.getBookingDetail(10L)).thenReturn(detail);
+        when(adminBookingService.getBookingDetail("550e8400-e29b-41d4-a716-446655440000")).thenReturn(detail);
 
-        mockMvc.perform(get("/api/admin/bookings/10")
+        mockMvc.perform(get("/api/admin/bookings/550e8400-e29b-41d4-a716-446655440000")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -85,12 +86,13 @@ public class AdminBookingControllerTest {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(BookingStatus.CONFIRMED, "Paid", "ADMIN", "Updated");
         BookingAdminResponse response = new BookingAdminResponse();
         response.setId(10L);
+        response.setPublicId("550e8400-e29b-41d4-a716-446655440000");
         response.setBookingCode("BK1001");
         response.setBookingStatus(BookingStatus.CONFIRMED);
 
-        when(adminBookingService.updateBookingStatus(eq(10L), any())).thenReturn(response);
+        when(adminBookingService.updateBookingStatus(eq("550e8400-e29b-41d4-a716-446655440000"), any())).thenReturn(response);
 
-        mockMvc.perform(put("/api/admin/bookings/10/status")
+        mockMvc.perform(put("/api/admin/bookings/550e8400-e29b-41d4-a716-446655440000/status")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())

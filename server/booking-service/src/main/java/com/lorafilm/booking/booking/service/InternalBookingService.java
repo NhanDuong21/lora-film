@@ -4,11 +4,11 @@ import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 
 public interface InternalBookingService {
 
-    BookingAdminResponse confirmBooking(Long bookingId);
+    BookingAdminResponse confirmBooking(String publicId);
 
-    BookingAdminResponse expireBooking(Long bookingId);
+    BookingAdminResponse expireBooking(String publicId);
 
-    BookingAdminResponse refundBooking(Long bookingId);
+    BookingAdminResponse refundBooking(String publicId);
 
     BookingAdminResponse getBookingByCode(String bookingCode);
 }

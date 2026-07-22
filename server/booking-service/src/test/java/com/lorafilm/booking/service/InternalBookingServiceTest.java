@@ -64,6 +64,7 @@ public class InternalBookingServiceTest {
 
         sampleBooking = new Booking();
         sampleBooking.setId(10L);
+        sampleBooking.setPublicId("550e8400-e29b-41d4-a716-446655440000");
         sampleBooking.setBookingCode("BK1001");
         sampleBooking.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.PENDING_PAYMENT);
@@ -71,10 +72,10 @@ public class InternalBookingServiceTest {
 
     @Test
     public void confirmBooking_Success() {
-        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
         when(bookingRepository.save(any())).thenReturn(sampleBooking);
 
-        BookingAdminResponse result = internalBookingService.confirmBooking(10L);
+        BookingAdminResponse result = internalBookingService.confirmBooking("550e8400-e29b-41d4-a716-446655440000");
 
         assertNotNull(result);
         verify(historyService).saveHistory(eq(sampleBooking), eq("PENDING_PAYMENT"), eq("CONFIRMED"), any(), eq("INTERNAL_SERVICE"), eq("SYSTEM"));
@@ -86,10 +87,10 @@ public class InternalBookingServiceTest {
     @Test
     public void expireBooking_Success() {
         sampleBooking.setExpiresAt(java.time.Instant.now().minusSeconds(10));
-        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
         when(bookingRepository.save(any())).thenReturn(sampleBooking);
 
-        BookingAdminResponse result = internalBookingService.expireBooking(10L);
+        BookingAdminResponse result = internalBookingService.expireBooking("550e8400-e29b-41d4-a716-446655440000");
 
         assertNotNull(result);
         verify(outboxService).createOutboxEvent(eq("BOOKING"), eq(10L), eq("BOOKING_EXPIRED"), eq(sampleBooking));
@@ -99,10 +100,10 @@ public class InternalBookingServiceTest {
     public void refundBooking_Success() {
         ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CONFIRMED);
 
-        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
         when(bookingRepository.save(any())).thenReturn(sampleBooking);
 
-        BookingAdminResponse result = internalBookingService.refundBooking(10L);
+        BookingAdminResponse result = internalBookingService.refundBooking("550e8400-e29b-41d4-a716-446655440000");
 
         assertNotNull(result);
         verify(outboxService).createOutboxEvent(eq("BOOKING"), eq(10L), eq("BOOKING_REFUNDED"), eq(sampleBooking));

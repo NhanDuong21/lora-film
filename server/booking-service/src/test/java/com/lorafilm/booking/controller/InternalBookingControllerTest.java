@@ -42,12 +42,13 @@ public class InternalBookingControllerTest {
     public void confirmBooking_Success_Returns200() throws Exception {
         BookingAdminResponse response = new BookingAdminResponse();
         response.setId(10L);
+        response.setPublicId("550e8400-e29b-41d4-a716-446655440000");
         response.setBookingCode("BK1001");
         response.setBookingStatus(BookingStatus.CONFIRMED);
 
-        when(internalBookingService.confirmBooking(10L)).thenReturn(response);
+        when(internalBookingService.confirmBooking("550e8400-e29b-41d4-a716-446655440000")).thenReturn(response);
 
-        mockMvc.perform(post("/internal/bookings/10/confirm")
+        mockMvc.perform(post("/internal/bookings/550e8400-e29b-41d4-a716-446655440000/confirm")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -58,12 +59,13 @@ public class InternalBookingControllerTest {
     public void expireBooking_Success_Returns200() throws Exception {
         BookingAdminResponse response = new BookingAdminResponse();
         response.setId(10L);
+        response.setPublicId("550e8400-e29b-41d4-a716-446655440000");
         response.setBookingCode("BK1001");
         response.setBookingStatus(BookingStatus.EXPIRED);
 
-        when(internalBookingService.expireBooking(10L)).thenReturn(response);
+        when(internalBookingService.expireBooking("550e8400-e29b-41d4-a716-446655440000")).thenReturn(response);
 
-        mockMvc.perform(post("/internal/bookings/10/expire")
+        mockMvc.perform(post("/internal/bookings/550e8400-e29b-41d4-a716-446655440000/expire")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -74,12 +76,13 @@ public class InternalBookingControllerTest {
     public void refundBooking_Success_Returns200() throws Exception {
         BookingAdminResponse response = new BookingAdminResponse();
         response.setId(10L);
+        response.setPublicId("550e8400-e29b-41d4-a716-446655440000");
         response.setBookingCode("BK1001");
         response.setBookingStatus(BookingStatus.REFUNDED);
 
-        when(internalBookingService.refundBooking(10L)).thenReturn(response);
+        when(internalBookingService.refundBooking("550e8400-e29b-41d4-a716-446655440000")).thenReturn(response);
 
-        mockMvc.perform(post("/internal/bookings/10/refund")
+        mockMvc.perform(post("/internal/bookings/550e8400-e29b-41d4-a716-446655440000/refund")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))

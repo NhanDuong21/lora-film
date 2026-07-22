@@ -48,20 +48,20 @@ public class InternalBookingServiceImpl implements InternalBookingService {
 
     @Override
     @Transactional
-    public BookingAdminResponse confirmBooking(Long bookingId) {
-        return processStatusChange(bookingId, BookingStatus.CONFIRMED, PaymentStatus.SUCCESS, "CONFIRM_BOOKING", "Internal Payment Confirmation");
+    public BookingAdminResponse confirmBooking(String publicId) {
+        return processStatusChange(publicId, BookingStatus.CONFIRMED, PaymentStatus.SUCCESS, "CONFIRM_BOOKING", "Internal Payment Confirmation");
     }
 
     @Override
     @Transactional
-    public BookingAdminResponse expireBooking(Long bookingId) {
-        return processStatusChange(bookingId, BookingStatus.EXPIRED, PaymentStatus.FAILED, "EXPIRE_BOOKING", "Internal Timeout Expiration");
+    public BookingAdminResponse expireBooking(String publicId) {
+        return processStatusChange(publicId, BookingStatus.EXPIRED, PaymentStatus.FAILED, "EXPIRE_BOOKING", "Internal Timeout Expiration");
     }
 
     @Override
     @Transactional
-    public BookingAdminResponse refundBooking(Long bookingId) {
-        return processStatusChange(bookingId, BookingStatus.REFUNDED, PaymentStatus.REFUNDED, "REFUND_BOOKING", "Internal Booking Refund");
+    public BookingAdminResponse refundBooking(String publicId) {
+        return processStatusChange(publicId, BookingStatus.REFUNDED, PaymentStatus.REFUNDED, "REFUND_BOOKING", "Internal Booking Refund");
     }
 
     @Override
@@ -77,13 +77,13 @@ public class InternalBookingServiceImpl implements InternalBookingService {
         return bookingMapper.toAdminResponse(booking);
     }
 
-    private BookingAdminResponse processStatusChange(Long bookingId, BookingStatus targetStatus, PaymentStatus targetPaymentStatus, String operationType, String reason) {
-        if (bookingId == null) {
-            throw new BusinessException("INVALID_BOOKING_ID", "Booking ID cannot be null");
+    private BookingAdminResponse processStatusChange(String publicId, BookingStatus targetStatus, PaymentStatus targetPaymentStatus, String operationType, String reason) {
+        if (publicId == null || publicId.trim().isEmpty()) {
+            throw new BusinessException("INVALID_BOOKING_ID", "Booking public ID cannot be null or empty");
         }
 
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+        Booking booking = bookingRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
 
         BookingStatus oldStatus = booking.getBookingStatus();
         statusTransitionService.validateTransition(oldStatus, targetStatus);
