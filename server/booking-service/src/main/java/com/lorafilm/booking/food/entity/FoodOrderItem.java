@@ -15,11 +15,11 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "booking_food_items")
-public class BookingFoodItem extends BaseEntity {
+public class FoodOrderItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "food_order_id", nullable = false)
-    private BookingFoodOrder foodOrder;
+    private FoodOrder foodOrder;
 
     @Column(name = "product_id", nullable = false)
     private Long productId;
@@ -52,17 +52,14 @@ public class BookingFoodItem extends BaseEntity {
     @Column(name = "final_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal finalAmount;
 
-    @Column(name = "snapshot_json", columnDefinition = "JSON")
-    private String snapshotJson;
-
-    public BookingFoodItem() {
+    public FoodOrderItem() {
     }
 
-    public BookingFoodOrder getFoodOrder() {
+    public FoodOrder getFoodOrder() {
         return foodOrder;
     }
 
-    public void setFoodOrder(BookingFoodOrder foodOrder) {
+    public void setFoodOrder(FoodOrder foodOrder) {
         this.foodOrder = foodOrder;
     }
 
@@ -144,24 +141,5 @@ public class BookingFoodItem extends BaseEntity {
 
     public void setFinalAmount(BigDecimal finalAmount) {
         this.finalAmount = finalAmount;
-    }
-
-    @Column(name = "currency", length = 10, nullable = false)
-    private String currency = "VND";
-
-    public String getSnapshotJson() {
-        return snapshotJson;
-    }
-
-    public void setSnapshotJson(String snapshotJson) {
-        this.snapshotJson = snapshotJson;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public void setCurrency(String currency) {
-        this.currency = currency;
     }
 }

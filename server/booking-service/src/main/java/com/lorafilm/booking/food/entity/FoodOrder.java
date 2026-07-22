@@ -1,38 +1,35 @@
 package com.lorafilm.booking.food.entity;
 
-import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.common.entity.BaseEntity;
 import com.lorafilm.booking.food.enums.FoodOrderStatus;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.OneToMany;
 
 @Entity
 @Table(name = "booking_food_orders")
-public class BookingFoodOrder extends BaseEntity {
+public class FoodOrder extends BaseEntity {
 
     @Column(name = "public_id", length = 36, nullable = false, unique = true)
     private String publicId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id", nullable = false)
-    private Booking booking;
+    // Cross-aggregate reference to Booking (nullable for standalone kiosk orders)
+    @Column(name = "booking_id", nullable = false)
+    private Long bookingId;
 
     @OneToMany(mappedBy = "foodOrder", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<BookingFoodItem> items = new ArrayList<>();
+    private List<FoodOrderItem> items = new ArrayList<>();
 
     @Column(name = "total_quantity", nullable = false)
     private Integer totalQuantity = 0;
@@ -54,7 +51,7 @@ public class BookingFoodOrder extends BaseEntity {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    public BookingFoodOrder() {
+    public FoodOrder() {
     }
 
     public String getPublicId() {
@@ -65,12 +62,20 @@ public class BookingFoodOrder extends BaseEntity {
         this.publicId = publicId;
     }
 
-    public Booking getBooking() {
-        return booking;
+    public Long getBookingId() {
+        return bookingId;
     }
 
-    public void setBooking(Booking booking) {
-        this.booking = booking;
+    public void setBookingId(Long bookingId) {
+        this.bookingId = bookingId;
+    }
+
+    public List<FoodOrderItem> getItems() {
+        return items;
+    }
+
+    public void setItems(List<FoodOrderItem> items) {
+        this.items = items;
     }
 
     public Integer getTotalQuantity() {
@@ -119,13 +124,5 @@ public class BookingFoodOrder extends BaseEntity {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
-    }
-
-    public List<BookingFoodItem> getItems() {
-        return items;
-    }
-
-    public void setItems(List<BookingFoodItem> items) {
-        this.items = items;
     }
 }
