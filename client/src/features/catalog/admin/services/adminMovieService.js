@@ -28,6 +28,11 @@ const adminMovieService = {
     return response.data;
   },
 
+  getMovieSummary: async () => {
+    const response = await apiClient.get('/api/admin/movies/summary');
+    return response.data;
+  },
+
   getMovieById: async (movieId) => {
     const response = await apiClient.get(`/api/admin/movies/${movieId}`);
     return response.data;

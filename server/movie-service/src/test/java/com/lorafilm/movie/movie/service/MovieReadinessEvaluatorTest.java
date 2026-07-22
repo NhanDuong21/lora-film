@@ -7,6 +7,7 @@ import com.lorafilm.movie.movie.dto.MovieReadinessDto;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,6 +67,43 @@ class MovieReadinessEvaluatorTest {
         assertEquals(1, readiness.getBlockers().size());
         assertEquals(MovieReadinessEvaluator.NO_GENRE, readiness.getBlockers().getFirst().getCode());
         assertThrows(BusinessException.class, () -> evaluator.validatePublishConditions(facts));
+    }
+
+    @Test
+    void returnsWarningForNullDurationEvenThoughPersistenceCurrentlyRequiresIt() {
+        MovieHealthFacts facts = new MovieHealthFacts(
+                true,
+                true,
+                true,
+                "Canonical Movie",
+                LocalDate.of(2026, 1, 1),
+                AgeRating.P,
+                null);
+
+        MovieReadinessDto readiness = evaluator.evaluate(facts);
+
+        assertEquals(MovieHealthStatus.WARNING, readiness.getHealthStatus());
+        assertEquals(MovieReadinessEvaluator.INVALID_DURATION, readiness.getWarnings().getFirst().getCode());
+    }
+
+    @Test
+    void returnsWarningsForNullReleaseDateAndAgeRating() {
+        MovieHealthFacts facts = new MovieHealthFacts(
+                true,
+                true,
+                true,
+                "Canonical Movie",
+                null,
+                null,
+                120);
+
+        MovieReadinessDto readiness = evaluator.evaluate(facts);
+
+        assertEquals(MovieHealthStatus.WARNING, readiness.getHealthStatus());
+        assertEquals(List.of(
+                        MovieReadinessEvaluator.MISSING_RELEASE_DATE,
+                        MovieReadinessEvaluator.MISSING_AGE_RATING),
+                readiness.getWarnings().stream().map(issue -> issue.getCode()).toList());
     }
 
     private MovieHealthFacts healthyFacts() {

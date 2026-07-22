@@ -1,17 +1,19 @@
 import { ArrowLeft, Image as ImageIcon } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getStatusConfig } from '@/features/catalog/admin/config/movieStatusConfig';
 import { LazyImage } from '@/components/common/ui/uiKit';
 import { formatDate, AGE_RATING_LABELS } from '@/utils/movieHelpers';
 
 export default function MovieDetailHeader({ movie }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnToList = () => navigate(`/admin/movies${location.search}`);
   
   if (!movie) {
     return (
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate('/admin/movies')}
+          onClick={returnToList}
           className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors"
           aria-label="Quay lại danh sách"
         >
@@ -30,7 +32,7 @@ export default function MovieDetailHeader({ movie }) {
     <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
       <div className="flex items-start gap-4">
         <button
-          onClick={() => navigate('/admin/movies')}
+          onClick={returnToList}
           className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors shrink-0 mt-1"
           aria-label="Quay lại danh sách"
         >
