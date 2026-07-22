@@ -62,7 +62,7 @@ public class InternalBookingController {
         return ResponseEntity.ok(ApiResponse.success("Booking retrieved successfully", response));
     }
 
-    @PostMapping("/{publicId:[a-fA-F0-9\\-]+}/confirm")
+    @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/confirm")
     @Operation(summary = "Confirm a pending booking using public UUID")
     public ResponseEntity<ApiResponse<BookingResponse>> confirmBooking(
             @PathVariable
@@ -74,7 +74,7 @@ public class InternalBookingController {
                 "Booking confirmed successfully", bookingService.confirmBooking(publicId)));
     }
 
-    @PostMapping("/{publicId:[a-fA-F0-9\\-]+}/expire")
+    @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/expire")
     @Operation(summary = "Expire a booking after its payment deadline using public UUID")
     public ResponseEntity<ApiResponse<BookingResponse>> expireBooking(
             @PathVariable
@@ -86,7 +86,7 @@ public class InternalBookingController {
                 "Booking expired successfully", bookingService.expireBooking(publicId)));
     }
 
-    @PostMapping("/{publicId:[a-fA-F0-9\\-]+}/refund")
+    @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/refund")
     @Operation(summary = "Mark a confirmed booking as refunded using public UUID")
     public ResponseEntity<ApiResponse<BookingResponse>> refundBooking(
             @PathVariable
