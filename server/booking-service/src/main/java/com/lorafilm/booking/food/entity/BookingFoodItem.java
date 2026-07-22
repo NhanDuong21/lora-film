@@ -146,11 +146,22 @@ public class BookingFoodItem extends BaseEntity {
         this.finalAmount = finalAmount;
     }
 
+    @Column(name = "currency", length = 10, nullable = false)
+    private String currency = "VND";
+
     public String getSnapshotJson() {
         return snapshotJson;
     }
 
     public void setSnapshotJson(String snapshotJson) {
         this.snapshotJson = snapshotJson;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
     }
 }

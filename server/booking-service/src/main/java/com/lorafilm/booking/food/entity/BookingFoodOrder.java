@@ -15,6 +15,10 @@ import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.OneToMany;
 
 @Entity
 @Table(name = "booking_food_orders")
@@ -26,6 +30,9 @@ public class BookingFoodOrder extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false)
     private Booking booking;
+
+    @OneToMany(mappedBy = "foodOrder", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<BookingFoodItem> items = new ArrayList<>();
 
     @Column(name = "total_quantity", nullable = false)
     private Integer totalQuantity = 0;
@@ -112,5 +119,13 @@ public class BookingFoodOrder extends BaseEntity {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public List<BookingFoodItem> getItems() {
+        return items;
+    }
+
+    public void setItems(List<BookingFoodItem> items) {
+        this.items = items;
     }
 }
