@@ -158,6 +158,7 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
 
         SeatLayoutDto layout = new SeatLayoutDto();
         layout.setShowtimePublicId(showtime.getPublicId());
+        layout.setShowtimeId(showtime.getId());
 
         ShowtimeMovieDto movieDto = new ShowtimeMovieDto();
         movieDto.setPublicId(showtime.getMovie().getPublicId());

@@ -67,6 +67,8 @@ public class SeatReservationServiceTest {
     private SeatReservationMapper seatReservationMapper;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient;
 
     @InjectMocks
     private SeatReservationServiceImpl seatReservationService;
@@ -81,7 +83,7 @@ public class SeatReservationServiceTest {
         Long userId = 100L;
         HoldSeatRequest request = new HoldSeatRequest(1001L, List.of(15L, 16L));
 
-        when(redisLockService.acquireHoldLocks(anyList(), anyString(), anyLong())).thenReturn(true);
+        when(redisLockService.acquireHoldLocks(eq(1001L), anyList(), anyString(), anyLong())).thenReturn(true);
         when(seatReservationRepository.findActiveReservations(eq(1001L), anyList(), any())).thenReturn(List.of());
         when(seatReservationRepository.findSoldSeatIdsFromBookings(eq(1001L), anyList())).thenReturn(List.of());
 
@@ -105,7 +107,7 @@ public class SeatReservationServiceTest {
 
         assertNotNull(response);
         assertEquals(2, response.getReservationIds().size());
-        verify(redisLockService).acquireHoldLocks(anyList(), anyString(), eq(300L));
+        verify(redisLockService).acquireHoldLocks(eq(1001L), anyList(), anyString(), eq(300L));
         verify(outboxEventRepository, times(2)).save(any());
     }
 
@@ -114,7 +116,7 @@ public class SeatReservationServiceTest {
         Long userId = 100L;
         HoldSeatRequest request = new HoldSeatRequest(1001L, List.of(15L));
 
-        when(redisLockService.acquireHoldLocks(anyList(), anyString(), anyLong())).thenReturn(false);
+        when(redisLockService.acquireHoldLocks(eq(1001L), anyList(), anyString(), anyLong())).thenReturn(false);
 
         SeatReservationException ex = assertThrows(SeatReservationException.class, () ->
                 seatReservationService.holdSeats(userId, request));
@@ -128,7 +130,7 @@ public class SeatReservationServiceTest {
         Long userId = 100L;
         HoldSeatRequest request = new HoldSeatRequest(1001L, List.of(15L));
 
-        when(redisLockService.acquireHoldLocks(anyList(), anyString(), anyLong())).thenReturn(true);
+        when(redisLockService.acquireHoldLocks(eq(1001L), anyList(), anyString(), anyLong())).thenReturn(true);
 
         SeatReservation existing = new SeatReservation();
         existing.setSeatId(15L);
@@ -138,7 +140,7 @@ public class SeatReservationServiceTest {
                 seatReservationService.holdSeats(userId, request));
 
         assertEquals("SEAT_003", ex.getErrorCode());
-        verify(redisLockService).releaseLocks(anyList(), anyString());
+        verify(redisLockService).releaseLocks(eq(1001L), anyList(), anyString());
     }
 
     @Test
@@ -158,7 +160,7 @@ public class SeatReservationServiceTest {
         seatReservationService.releaseSeats(userId, request);
 
         assertEquals(SeatReservationStatus.RELEASED, res.getStatus());
-        verify(redisLockService).releaseLocks(anyList(), eq("*"));
+        verify(redisLockService).releaseLocks(eq(1001L), anyList(), eq("*"));
         verify(outboxEventRepository).save(any());
     }
 
@@ -197,7 +199,7 @@ public class SeatReservationServiceTest {
         seatReservationService.convertReservations(request);
 
         assertEquals(SeatReservationStatus.BOOKED, res.getStatus());
-        verify(redisLockService).releaseLocks(anyList(), eq("*"));
+        verify(redisLockService).releaseLocks(eq(1001L), anyList(), eq("*"));
         verify(outboxEventRepository).save(any());
     }
 
@@ -232,5 +234,89 @@ public class SeatReservationServiceTest {
         assertEquals(2, response.getUnavailableSeats().size());
         assertTrue(response.getUnavailableSeats().contains(15L));
         assertTrue(response.getUnavailableSeats().contains(16L));
+    }
+
+    @Test
+    public void getOccupiedSeatsByShowtime_Success() {
+        Long showtimeId = 1001L;
+        SeatReservation activeRes = new SeatReservation();
+        activeRes.setSeatId(15L);
+        activeRes.setSeatLabel("A1");
+        activeRes.setStatus(SeatReservationStatus.HELD);
+        activeRes.setExpiresAt(Instant.now().plusSeconds(300));
+
+        when(seatReservationRepository.findAllActiveReservationsByShowtimeId(eq(showtimeId), any())).thenReturn(List.of(activeRes));
+        when(seatReservationRepository.findSoldSeatIdsFromBookingsByShowtimeId(eq(showtimeId))).thenReturn(List.of(16L));
+
+        com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse response = seatReservationService.getOccupiedSeatsByShowtime("1001");
+
+        assertNotNull(response);
+        assertEquals(2, response.getTotalOccupied());
+        assertEquals(2, response.getOccupiedSeats().size());
+    }
+
+    @Test
+    public void getOccupiedSeatsByShowtime_WithPublicId_Success() {
+        String showtimePublicId = "46d15faf-84ca-11f1-89f5-22158c0adccb";
+        Long showtimeId = 1001L;
+
+        com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse layout = new com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse();
+        layout.setShowtimeId(showtimeId);
+        layout.setShowtimePublicId(showtimePublicId);
+
+        when(movieServiceClient.getShowtimeSeatLayoutByPublicId(showtimePublicId)).thenReturn(layout);
+        when(seatReservationRepository.findAllActiveReservationsByShowtimeId(eq(showtimeId), any())).thenReturn(List.of());
+        when(seatReservationRepository.findSoldSeatIdsFromBookingsByShowtimeId(eq(showtimeId))).thenReturn(List.of());
+
+        com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse response = seatReservationService.getOccupiedSeatsByShowtime(showtimePublicId);
+
+        assertNotNull(response);
+        assertEquals(showtimePublicId, response.getShowtimeIdentifier());
+        assertEquals(0, response.getTotalOccupied());
+    }
+
+    @Test
+    public void extendReservation_Success() {
+        String publicId = "pub-123";
+        Long userId = 100L;
+        Instant now = Instant.now();
+
+        SeatReservation res = new SeatReservation();
+        res.setPublicId(publicId);
+        res.setReservationCode("RES-12345");
+        res.setUserId(userId);
+        res.setShowtimeId(1001L);
+        res.setSeatId(15L);
+        res.setStatus(SeatReservationStatus.HELD);
+        res.setReservedAt(now.minusSeconds(100));
+        res.setExpiresAt(now.plusSeconds(200));
+
+        when(seatReservationRepository.findByPublicId(publicId)).thenReturn(Optional.of(res));
+        when(seatReservationRepository.save(any())).thenReturn(res);
+
+        com.lorafilm.booking.reservation.dto.ExtendReservationResponse response = seatReservationService.extendReservation(publicId, userId);
+
+        assertNotNull(response);
+        assertEquals(publicId, response.getPublicId());
+        assertEquals(180L, response.getExtendedSeconds());
+        verify(redisLockService).extendLockTtl(eq(1001L), eq(15L), eq(publicId), anyLong());
+    }
+
+    @Test
+    public void handleBookingStatusChange_Cancelled_ReleasesSeats() {
+        Long bookingId = 50L;
+        SeatReservation res = new SeatReservation();
+        res.setId(101L);
+        res.setBookingId(bookingId);
+        res.setStatus(SeatReservationStatus.BOOKED);
+
+        when(seatReservationRepository.findAllByBookingId(bookingId)).thenReturn(List.of(res));
+
+        seatReservationService.handleBookingStatusChange(bookingId, com.lorafilm.booking.booking.enums.BookingStatus.CANCELLED, "User cancelled");
+
+        assertEquals(SeatReservationStatus.RELEASED, res.getStatus());
+        assertEquals("User cancelled", res.getExpiredReason());
+        verify(seatReservationRepository).save(res);
+        verify(outboxEventRepository).save(any());
     }
 }

@@ -103,4 +103,29 @@ public class SeatReservationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    public void getOccupiedSeatsByShowtime_Success_Returns200() throws Exception {
+        com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse response = new com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse("1001", List.of());
+
+        when(seatReservationService.getOccupiedSeatsByShowtime("1001")).thenReturn(response);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/seat-reservations/showtime/1001/occupied-seats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.showtimeIdentifier").value("1001"));
+    }
+
+    @Test
+    public void extendReservation_Success_Returns200() throws Exception {
+        com.lorafilm.booking.reservation.dto.ExtendReservationResponse response = new com.lorafilm.booking.reservation.dto.ExtendReservationResponse(
+                "pub-123", "RES-12345", Instant.now().plusSeconds(480), 180L);
+
+        when(securityContextService.getCurrentUserId()).thenReturn(100L);
+        when(seatReservationService.extendReservation("pub-123", 100L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/seat-reservations/pub-123/extend"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicId").value("pub-123"))
+                .andExpect(jsonPath("$.extendedSeconds").value(180));
+    }
 }

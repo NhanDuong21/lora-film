@@ -124,7 +124,9 @@ public class BookingServiceImpl implements BookingService {
                 : request.getReasonCode().trim();
         String reasonDetail = request == null ? null : request.getReasonDetail();
         booking.cancel(reasonCode, reasonDetail, Instant.now());
-        return bookingMapper.toResponse(bookingRepository.save(booking));
+        Booking saved = bookingRepository.save(booking);
+        reservationService.handleBookingStatusChange(saved.getId(), BookingStatus.CANCELLED, reasonDetail != null ? reasonDetail : reasonCode);
+        return bookingMapper.toResponse(saved);
     }
 
     @Override
@@ -198,7 +200,11 @@ public class BookingServiceImpl implements BookingService {
     private BookingResponse changeStatusInternal(String publicId, BookingStatus targetStatus) {
         Booking booking = getBooking(publicId);
         booking.changeStatus(targetStatus, Instant.now());
-        return bookingMapper.toResponse(bookingRepository.save(booking));
+        Booking saved = bookingRepository.save(booking);
+        if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED || targetStatus == BookingStatus.REFUNDED) {
+            reservationService.handleBookingStatusChange(saved.getId(), targetStatus, "Booking status changed to " + targetStatus);
+        }
+        return bookingMapper.toResponse(saved);
     }
 
     private ValidatedCreateRequest validateCreateRequest(CreateBookingRequest request) {

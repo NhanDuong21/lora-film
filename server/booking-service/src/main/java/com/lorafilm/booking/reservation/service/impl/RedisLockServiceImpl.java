@@ -34,8 +34,8 @@ public class RedisLockServiceImpl implements RedisLockService {
     }
 
     @Override
-    public boolean acquireHoldLocks(List<Long> seatIds, String lockOwner, long ttlSeconds) {
-        List<String> keys = buildSeatLockKeys(seatIds);
+    public boolean acquireHoldLocks(Long showtimeId, List<Long> seatIds, String lockOwner, long ttlSeconds) {
+        List<String> keys = buildSeatLockKeys(showtimeId, seatIds);
         Long result = redisTemplate.execute(holdScript, keys, lockOwner, String.valueOf(ttlSeconds));
         boolean success = result != null && result == 1L;
         if (!success) {
@@ -45,8 +45,8 @@ public class RedisLockServiceImpl implements RedisLockService {
     }
 
     @Override
-    public void releaseLocks(List<Long> seatIds, String lockOwner) {
-        List<String> keys = buildSeatLockKeys(seatIds);
+    public void releaseLocks(Long showtimeId, List<Long> seatIds, String lockOwner) {
+        List<String> keys = buildSeatLockKeys(showtimeId, seatIds);
         redisTemplate.execute(releaseScript, keys, lockOwner);
     }
 
@@ -61,10 +61,21 @@ public class RedisLockServiceImpl implements RedisLockService {
         redisTemplate.execute(releaseScript, List.of(lockKey), lockOwner);
     }
 
-    private List<String> buildSeatLockKeys(List<Long> seatIds) {
+    @Override
+    public boolean extendLockTtl(Long showtimeId, Long seatId, String lockOwner, long newTtlSeconds) {
+        String key = "seat-lock:" + showtimeId + ":" + seatId;
+        Boolean exists = redisTemplate.hasKey(key);
+        if (Boolean.TRUE.equals(exists)) {
+            return Boolean.TRUE.equals(redisTemplate.expire(key, java.time.Duration.ofSeconds(newTtlSeconds)));
+        } else {
+            return acquireSingleLock(key, lockOwner, newTtlSeconds);
+        }
+    }
+
+    private List<String> buildSeatLockKeys(Long showtimeId, List<Long> seatIds) {
         List<String> keys = new ArrayList<>(seatIds.size());
         for (Long seatId : seatIds) {
-            keys.add("seat-lock:" + seatId);
+            keys.add("seat-lock:" + showtimeId + ":" + seatId);
         }
         return keys;
     }
