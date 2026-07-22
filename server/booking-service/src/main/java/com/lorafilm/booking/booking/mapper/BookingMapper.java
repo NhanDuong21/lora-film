@@ -37,7 +37,7 @@ public class BookingMapper {
         return response;
     }
 
-    public com.lorafilm.booking.booking.dto.BookingDetailResponse toDetailResponse(Booking booking) {
+    public com.lorafilm.booking.booking.dto.BookingDetailResponse toAdminDetailResponse(Booking booking) {
         if (booking == null) {
             return null;
         }
@@ -106,7 +106,7 @@ public class BookingMapper {
                 booking.getCreatedAt());
     }
 
-    public com.lorafilm.booking.booking.dto.response.BookingDetailResponse toCustomerDetailResponse(Booking booking) {
+    public com.lorafilm.booking.booking.dto.response.BookingDetailResponse toDetailResponse(Booking booking) {
         if (booking == null) {
             return null;
         }

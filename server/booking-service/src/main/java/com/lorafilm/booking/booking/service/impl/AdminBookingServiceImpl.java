@@ -98,7 +98,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
-        BookingDetailResponse detailResponse = bookingMapper.toDetailResponse(booking);
+        BookingDetailResponse detailResponse = bookingMapper.toAdminDetailResponse(booking);
 
         try {
             BookingSnapshotDto snapshot = snapshotService.findByBooking(bookingId);
@@ -142,21 +142,11 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 
         statusTransitionService.validateTransition(oldStatus, newStatus);
 
-        booking.setBookingStatus(newStatus);
         Instant now = Instant.now();
-        if (newStatus == BookingStatus.CONFIRMED) {
-            booking.setConfirmedAt(now);
-        } else if (newStatus == BookingStatus.CANCELLED) {
-            booking.setCancelledAt(now);
-            if (request.getReason() != null) {
-                booking.setCancelReasonDetail(request.getReason());
-            }
-        } else if (newStatus == BookingStatus.EXPIRED) {
-            booking.setExpiredAt(now);
-        } else if (newStatus == BookingStatus.REFUNDED) {
-            booking.setRefundedAt(now);
-        } else if (newStatus == BookingStatus.COMPLETED) {
-            booking.setCompletedAt(now);
+        if (newStatus == BookingStatus.CANCELLED) {
+            booking.cancel("ADMIN_CANCEL", request.getReason(), now);
+        } else {
+            booking.changeStatus(newStatus, now);
         }
 
         if (request.getNote() != null) {

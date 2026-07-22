@@ -61,8 +61,9 @@ public class SeatReservationServiceTest {
     private BookingRepository bookingRepository;
     @Mock
     private RedisLockService redisLockService;
-    @Mock
-    private ReservationProperties reservationProperties;
+    
+    private final ReservationProperties reservationProperties = new ReservationProperties(300L);
+    
     @Mock
     private SeatReservationMapper seatReservationMapper;
     @Mock
@@ -70,12 +71,22 @@ public class SeatReservationServiceTest {
     @Mock
     private com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient;
 
-    @InjectMocks
     private SeatReservationServiceImpl seatReservationService;
 
     @BeforeEach
     public void setUp() {
-        lenient().when(reservationProperties.getReservationTimeout()).thenReturn(300L);
+        seatReservationService = new SeatReservationServiceImpl(
+                seatReservationRepository,
+                auditLogRepository,
+                operationLogRepository,
+                outboxEventRepository,
+                bookingRepository,
+                redisLockService,
+                reservationProperties,
+                seatReservationMapper,
+                objectMapper,
+                movieServiceClient
+        );
     }
 
     @Test

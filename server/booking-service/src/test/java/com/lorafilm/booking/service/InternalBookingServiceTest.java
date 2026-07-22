@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 
@@ -64,7 +65,7 @@ public class InternalBookingServiceTest {
         sampleBooking = new Booking();
         sampleBooking.setId(10L);
         sampleBooking.setBookingCode("BK1001");
-        sampleBooking.setBookingStatus(BookingStatus.PENDING_PAYMENT);
+        ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.PENDING_PAYMENT);
     }
 
     @Test
@@ -94,7 +95,7 @@ public class InternalBookingServiceTest {
 
     @Test
     public void refundBooking_Success() {
-        sampleBooking.setBookingStatus(BookingStatus.CONFIRMED);
+        ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CONFIRMED);
 
         when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
         when(bookingRepository.save(any())).thenReturn(sampleBooking);

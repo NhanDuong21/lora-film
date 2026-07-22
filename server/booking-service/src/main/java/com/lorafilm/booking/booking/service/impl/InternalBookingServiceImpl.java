@@ -88,20 +88,10 @@ public class InternalBookingServiceImpl implements InternalBookingService {
         BookingStatus oldStatus = booking.getBookingStatus();
         statusTransitionService.validateTransition(oldStatus, targetStatus);
 
-        booking.setBookingStatus(targetStatus);
+        Instant now = Instant.now();
+        booking.changeStatus(targetStatus, now);
         if (targetPaymentStatus != null) {
             booking.setPaymentStatus(targetPaymentStatus);
-        }
-
-        Instant now = Instant.now();
-        if (targetStatus == BookingStatus.CONFIRMED) {
-            booking.setConfirmedAt(now);
-        } else if (targetStatus == BookingStatus.EXPIRED) {
-            booking.setExpiredAt(now);
-        } else if (targetStatus == BookingStatus.REFUNDED) {
-            booking.setRefundedAt(now);
-        } else if (targetStatus == BookingStatus.CANCELLED) {
-            booking.setCancelledAt(now);
         }
 
         Booking savedBooking = bookingRepository.save(booking);

@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -81,7 +82,7 @@ public class AdminBookingServiceTest {
         sampleBooking = new Booking();
         sampleBooking.setId(10L);
         sampleBooking.setBookingCode("BK1001");
-        sampleBooking.setBookingStatus(BookingStatus.PENDING_PAYMENT);
+        ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.PENDING_PAYMENT);
     }
 
     @Test
@@ -129,7 +130,7 @@ public class AdminBookingServiceTest {
     @Test
     public void updateBookingStatus_InvalidTransition_ThrowsException() {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(BookingStatus.CONFIRMED, "Retry", "ADMIN", null);
-        sampleBooking.setBookingStatus(BookingStatus.CANCELLED);
+        ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CANCELLED);
 
         when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
 
