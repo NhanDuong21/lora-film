@@ -7,6 +7,8 @@ import com.lorafilm.movie.autoschedule.model.OperatingWindow;
 import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
 import com.lorafilm.movie.autoschedule.service.CinemaOperatingWindowResolver;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +24,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -75,5 +78,45 @@ class ShowtimeCandidateGeneratorImplTest {
         
         ShowtimeCandidate second = candidates.get(1);
         assertEquals(winStart.plus(30, ChronoUnit.MINUTES), second.getStartTime());
+    }
+
+    @Test
+    void generate_acceptsExactlyTenThousandCandidates() {
+        CandidateGenerationContext context = candidateLimitContext(9_999);
+
+        List<ShowtimeCandidate> candidates = generator.generate(context);
+
+        assertEquals(10_000, candidates.size());
+    }
+
+    @Test
+    void generate_rejectsCandidateTenThousandAndOneWithSpecificError() {
+        CandidateGenerationContext context = candidateLimitContext(10_000);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> generator.generate(context));
+
+        assertEquals(ErrorCode.AUTO_SCHEDULE_TOO_MANY_CANDIDATES, ex.getErrorCode());
+    }
+
+    private CandidateGenerationContext candidateLimitContext(long inclusiveWindowMinutes) {
+        Cinema cinema = new Cinema();
+        Auditorium auditorium = new Auditorium();
+        auditorium.setCleaningBufferMinutes(0);
+
+        Movie movie = new Movie();
+        movie.setDurationMinutes(1);
+        MovieVersion version = new MovieVersion();
+        version.setMovie(movie);
+
+        NormalizedGeneratePreviewRequest request = new NormalizedGeneratePreviewRequest(
+                "cinema-1", LocalDate.now(), LocalDate.now(), List.of(), List.of(),
+                1, 60, "candidate-limit-key");
+        CandidateGenerationContext context = new CandidateGenerationContext(
+                request, cinema, List.of(auditorium), List.of(version));
+
+        Instant windowStart = Instant.parse("2026-07-22T00:00:00Z");
+        when(windowResolver.resolve(any(), any(), any())).thenReturn(List.of(
+                new OperatingWindow(windowStart, windowStart.plus(inclusiveWindowMinutes, ChronoUnit.MINUTES))));
+        return context;
     }
 }

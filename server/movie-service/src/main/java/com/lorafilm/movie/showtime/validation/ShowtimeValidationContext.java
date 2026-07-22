@@ -5,6 +5,7 @@ import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 public class ShowtimeValidationContext {
@@ -61,6 +62,16 @@ public class ShowtimeValidationContext {
 
     public Instant getEndTime() {
         return endTime;
+    }
+
+    public int getCleaningBufferMinutes() {
+        return auditorium != null && auditorium.getCleaningBufferMinutes() != null
+                ? auditorium.getCleaningBufferMinutes()
+                : 0;
+    }
+
+    public Instant getOccupancyEndTime() {
+        return endTime.plus(getCleaningBufferMinutes(), ChronoUnit.MINUTES);
     }
 
     public Optional<Long> getExcludeShowtimeId() {

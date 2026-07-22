@@ -69,6 +69,7 @@ public class AdminShowtimeScheduleController {
         @ApiResponse(responseCode = "403", description = "Forbidden"),
         @ApiResponse(responseCode = "404", description = "Related entities not found"),
         @ApiResponse(responseCode = "409", description = "Conflict, e.g. idempotency key reused"),
+        @ApiResponse(responseCode = "422", description = "Candidate limit exceeded"),
         @ApiResponse(responseCode = "500", description = "Auto schedule generation failed")
     })
     @PostMapping("/generate-preview")

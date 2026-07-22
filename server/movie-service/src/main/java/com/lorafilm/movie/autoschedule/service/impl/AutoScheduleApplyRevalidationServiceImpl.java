@@ -7,8 +7,6 @@ import com.lorafilm.movie.autoschedule.service.AutoScheduleApplyRevalidationServ
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
-import com.lorafilm.movie.showtime.domain.entity.Showtime;
-import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.validation.ShowtimeValidationContext;
 import com.lorafilm.movie.showtime.validation.ShowtimeValidationService;
 import org.springframework.stereotype.Service;
@@ -25,12 +23,9 @@ import java.util.stream.Collectors;
 public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApplyRevalidationService {
 
     private final ShowtimeValidationService showtimeValidationService;
-    private final ShowtimeRepository showtimeRepository;
 
-    public AutoScheduleApplyRevalidationServiceImpl(ShowtimeValidationService showtimeValidationService,
-                                                    ShowtimeRepository showtimeRepository) {
+    public AutoScheduleApplyRevalidationServiceImpl(ShowtimeValidationService showtimeValidationService) {
         this.showtimeValidationService = showtimeValidationService;
-        this.showtimeRepository = showtimeRepository;
     }
 
     @Override
@@ -43,19 +38,8 @@ public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApp
         // Check candidate-candidate overlap first
         validateCandidateCandidateOverlaps(selectedItems);
 
-        List<Long> auditoriumIds = selectedItems.stream()
-                .map(item -> item.getAuditorium().getId())
-                .distinct()
-                .collect(Collectors.toList());
-
         for (ShowtimeSchedulePreviewItem item : selectedItems) {
-            try {
-                revalidateItem(item);
-            } catch (BusinessException e) {
-                // In ALL_OR_NOTHING, one failure rolls back the whole thing.
-                // We map this to a specific apply failure code.
-                throw new BusinessException(ErrorCode.AUTO_SCHEDULE_APPLY_REVALIDATION_FAILED, "Validation failed for item " + item.getPublicId() + ": " + e.getMessage());
-            }
+            revalidateItem(item);
         }
     }
 
@@ -83,6 +67,13 @@ public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApp
     private void revalidateItem(ShowtimeSchedulePreviewItem item) {
         Movie movie = item.getMovie();
         Auditorium auditorium = item.getAuditorium();
+
+        if (movie == null || movie.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.MOVIE_NOT_FOUND);
+        }
+        if (auditorium == null || auditorium.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND);
+        }
 
         if (movie.getDurationMinutes() == null || movie.getDurationMinutes() <= 0) {
             throw new BusinessException(ErrorCode.INVALID_MOVIE_DURATION, "Invalid movie duration");
@@ -112,18 +103,5 @@ public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApp
                 .build();
 
         showtimeValidationService.validateScheduling(context);
-
-        // Explicitly check overlaps with existing real showtimes considering cleaning buffers
-        // We use exact semantics matching manual flow, minus CANCELLED or soft-deleted items.
-        Instant candidateStartMinusBuffer = item.getStartTime().minus(auditorium.getCleaningBufferMinutes(), ChronoUnit.MINUTES);
-        List<Showtime> overlappingShowtimes = showtimeRepository.findBlockingOverlapsForScheduling(
-                auditorium.getId(),
-                candidateStartMinusBuffer,
-                item.getOccupancyEndTime()
-        );
-        
-        if (!overlappingShowtimes.isEmpty()) {
-            throw new BusinessException(ErrorCode.SHOWTIME_OVERLAP_CONFLICT, "Showtime overlaps with an existing schedule");
-        }
     }
 }

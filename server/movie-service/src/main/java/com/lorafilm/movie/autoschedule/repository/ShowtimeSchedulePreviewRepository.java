@@ -43,6 +43,14 @@ public interface ShowtimeSchedulePreviewRepository extends JpaRepository<Showtim
     """)
     Optional<ShowtimeSchedulePreview> findByPublicIdForUpdate(@Param("publicId") String publicId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select p
+        from ShowtimeSchedulePreview p
+        where p.publicId = :publicId
+    """)
+    Optional<ShowtimeSchedulePreview> findByPublicIdForExpiry(@Param("publicId") String publicId);
+
     List<ShowtimeSchedulePreview> findByStatusAndExpiresAtLessThanEqual(SchedulePreviewStatus status, Instant now);
 
     @Query("""

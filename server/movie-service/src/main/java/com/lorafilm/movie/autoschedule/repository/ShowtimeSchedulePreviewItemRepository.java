@@ -74,4 +74,34 @@ public interface ShowtimeSchedulePreviewItemRepository extends JpaRepository<Sho
         @Param("previewId") Long previewId,
         @Param("validStatus") PreviewItemValidationStatus validStatus
     );
+
+    @Query("""
+        select i.id as itemId,
+               i.publicId as itemPublicId,
+               i.movie.id as movieId,
+               i.movieVersion.id as movieVersionId,
+               i.cinema.id as cinemaId,
+               i.auditorium.id as auditoriumId
+        from ShowtimeSchedulePreviewItem i
+        where i.preview.id = :previewId
+          and i.selected = true
+          and i.validationStatus = :validStatus
+        order by i.auditorium.id asc,
+                 i.startTime asc,
+                 i.rankingPosition asc,
+                 i.id asc
+    """)
+    List<ApplyItemReference> findSelectedItemReferencesForApply(
+            @Param("previewId") Long previewId,
+            @Param("validStatus") PreviewItemValidationStatus validStatus
+    );
+
+    interface ApplyItemReference {
+        Long getItemId();
+        String getItemPublicId();
+        Long getMovieId();
+        Long getMovieVersionId();
+        Long getCinemaId();
+        Long getAuditoriumId();
+    }
 }

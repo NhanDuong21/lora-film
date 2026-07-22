@@ -25,13 +25,13 @@ import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateGenerator;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateValidationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
-import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -66,6 +66,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
     private final ShowtimeRepository showtimeRepository;
     private final ShowtimeSchedulePreviewPersistenceMapper mapper;
     private final com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper responseMapper;
+    private final MovieShowtimeEligibilityPolicy movieEligibilityPolicy;
 
     public AutoSchedulePreviewGenerationServiceImpl(AutoScheduleGenerateRequestNormalizer normalizer,
                                                     AutoScheduleRequestFingerprintService fingerprintService,
@@ -82,7 +83,8 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
                                                     ShowtimeSchedulePreviewItemRepository previewItemRepository,
                                                     ShowtimeRepository showtimeRepository,
                                                     ShowtimeSchedulePreviewPersistenceMapper mapper,
-                                                    com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper responseMapper) {
+                                                    com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper responseMapper,
+                                                    MovieShowtimeEligibilityPolicy movieEligibilityPolicy) {
         this.normalizer = normalizer;
         this.fingerprintService = fingerprintService;
         this.generator = generator;
@@ -99,6 +101,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
         this.showtimeRepository = showtimeRepository;
         this.mapper = mapper;
         this.responseMapper = responseMapper;
+        this.movieEligibilityPolicy = movieEligibilityPolicy;
     }
 
     @Override
@@ -166,16 +169,8 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
             throw new BusinessException(ErrorCode.MOVIE_VERSION_NOT_FOUND);
         }
         for (MovieVersion version : movieVersions) {
-            if (version.getStatus() != ActiveStatus.ACTIVE) {
-                throw new BusinessException(ErrorCode.MOVIE_VERSION_NOT_ACTIVE);
-            }
             com.lorafilm.movie.movie.domain.entity.Movie movie = version.getMovie();
-            if (movie == null || movie.getDeletedAt() != null) {
-                throw new BusinessException(ErrorCode.MOVIE_NOT_FOUND);
-            }
-            if (movie.getDurationMinutes() == null || movie.getDurationMinutes() <= 0) {
-                throw new BusinessException(ErrorCode.INVALID_MOVIE_DURATION);
-            }
+            movieEligibilityPolicy.validateMovieAndVersion(movie, version);
         }
 
         ShowtimeSchedulePreview preview;
@@ -230,10 +225,22 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
 
             return responseMapper.toSummaryResponse(preview);
 
+        } catch (BusinessException e) {
+            log.warn("Generation rejected for preview {} with error {}", preview.getPublicId(), e.getErrorCode());
+            markPreviewFailedSafely(preview.getId(), sanitizeFailureReason(e));
+            throw e;
         } catch (Exception e) {
             log.error("Generation failed for preview {}", preview.getPublicId(), e);
-            lifecycleService.markPreviewFailed(preview.getId(), sanitizeFailureReason(e));
+            markPreviewFailedSafely(preview.getId(), sanitizeFailureReason(e));
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_GENERATION_FAILED);
+        }
+    }
+
+    private void markPreviewFailedSafely(Long previewId, String failureReason) {
+        try {
+            lifecycleService.markPreviewFailed(previewId, failureReason);
+        } catch (Exception failurePersistenceException) {
+            log.error("Could not mark auto schedule preview {} as FAILED", previewId, failurePersistenceException);
         }
     }
 
