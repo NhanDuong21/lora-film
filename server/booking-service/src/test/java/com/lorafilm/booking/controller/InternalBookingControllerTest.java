@@ -1,0 +1,103 @@
+package com.lorafilm.booking.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lorafilm.booking.booking.controller.InternalBookingController;
+import com.lorafilm.booking.booking.dto.BookingAdminResponse;
+import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.service.InternalBookingService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@ExtendWith(MockitoExtension.class)
+public class InternalBookingControllerTest {
+
+    private MockMvc mockMvc;
+    private ObjectMapper objectMapper = new ObjectMapper();
+
+    @Mock
+    private InternalBookingService internalBookingService;
+
+    @InjectMocks
+    private InternalBookingController internalBookingController;
+
+    @BeforeEach
+    public void setUp() {
+        mockMvc = MockMvcBuilders.standaloneSetup(internalBookingController).build();
+    }
+
+    @Test
+    public void confirmBooking_Success_Returns200() throws Exception {
+        BookingAdminResponse response = new BookingAdminResponse();
+        response.setId(10L);
+        response.setBookingCode("BK1001");
+        response.setBookingStatus(BookingStatus.CONFIRMED);
+
+        when(internalBookingService.confirmBooking(10L)).thenReturn(response);
+
+        mockMvc.perform(post("/internal/bookings/10/confirm")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.bookingStatus").value("CONFIRMED"));
+    }
+
+    @Test
+    public void expireBooking_Success_Returns200() throws Exception {
+        BookingAdminResponse response = new BookingAdminResponse();
+        response.setId(10L);
+        response.setBookingCode("BK1001");
+        response.setBookingStatus(BookingStatus.EXPIRED);
+
+        when(internalBookingService.expireBooking(10L)).thenReturn(response);
+
+        mockMvc.perform(post("/internal/bookings/10/expire")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.bookingStatus").value("EXPIRED"));
+    }
+
+    @Test
+    public void refundBooking_Success_Returns200() throws Exception {
+        BookingAdminResponse response = new BookingAdminResponse();
+        response.setId(10L);
+        response.setBookingCode("BK1001");
+        response.setBookingStatus(BookingStatus.REFUNDED);
+
+        when(internalBookingService.refundBooking(10L)).thenReturn(response);
+
+        mockMvc.perform(post("/internal/bookings/10/refund")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.bookingStatus").value("REFUNDED"));
+    }
+
+    @Test
+    public void getBookingByCode_Success_Returns200() throws Exception {
+        BookingAdminResponse response = new BookingAdminResponse();
+        response.setId(10L);
+        response.setBookingCode("BK1001");
+
+        when(internalBookingService.getBookingByCode("BK1001")).thenReturn(response);
+
+        mockMvc.perform(get("/internal/bookings/code/BK1001")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.bookingCode").value("BK1001"));
+    }
+}
