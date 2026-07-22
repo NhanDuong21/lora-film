@@ -39,9 +39,15 @@ export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
       }
       
       const data = await adminMovieService.getMovies(params);
-      console.log("API RESPONSE DATA:", data);
-      const normalized = normalizePagination(data?.data || data, pageSize);
-      console.log("NORMALIZED:", normalized);
+      console.log("MOVIE API RESPONSE:", data);
+      const normalized = normalizePagination(data, pageSize);
+      console.log("NORMALIZED MOVIES:", {
+        statusFilter,
+        rawItemsCount: normalized.items?.length,
+        totalElements: normalized.totalElements,
+        totalPages: normalized.totalPages,
+        movies: normalized.items
+      });
       setMovies(normalized.items);
       setTotalElements(normalized.totalElements);
       setTotalPages(normalized.totalPages);

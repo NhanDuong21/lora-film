@@ -12,6 +12,9 @@ import java.util.List;
 
 public class BookingSpecification {
 
+    private BookingSpecification() {
+    }
+
     public static Specification<Booking> hasUserId(Long userId) {
         return (root, query, cb) -> userId == null ? null : cb.equal(root.get("userId"), userId);
     }
@@ -50,5 +53,21 @@ public class BookingSpecification {
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    public static Specification<Booking> createdFrom(Instant fromDate) {
+        return (root, query, cb) -> fromDate == null
+                ? null
+                : cb.greaterThanOrEqualTo(root.get("createdAt"), fromDate);
+    }
+
+    public static Specification<Booking> createdTo(Instant toDate) {
+        return (root, query, cb) -> toDate == null
+                ? null
+                : cb.lessThanOrEqualTo(root.get("createdAt"), toDate);
+    }
+
+    public static Specification<Booking> isNotDeleted() {
+        return (root, query, cb) -> cb.isFalse(root.get("isDeleted"));
     }
 }

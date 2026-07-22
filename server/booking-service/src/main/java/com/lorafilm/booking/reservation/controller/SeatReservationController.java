@@ -128,4 +128,19 @@ public class SeatReservationController {
         SeatReservationResponse response = seatReservationService.findReservationByPublicId(publicId, currentUserId, isAdmin);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/showtime/{showtimeId}/occupied-seats")
+    public ResponseEntity<com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse> getOccupiedSeatsByShowtime(
+            @PathVariable String showtimeId) {
+        com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse response = seatReservationService.getOccupiedSeatsByShowtime(showtimeId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{publicId}/extend")
+    public ResponseEntity<com.lorafilm.booking.reservation.dto.ExtendReservationResponse> extendReservation(
+            @PathVariable String publicId) {
+        Long currentUserId = securityContextService.getCurrentUserId();
+        com.lorafilm.booking.reservation.dto.ExtendReservationResponse response = seatReservationService.extendReservation(publicId, currentUserId);
+        return ResponseEntity.ok(response);
+    }
 }

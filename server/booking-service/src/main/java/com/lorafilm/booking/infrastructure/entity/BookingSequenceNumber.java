@@ -1,17 +1,27 @@
 package com.lorafilm.booking.infrastructure.entity;
 
-import com.lorafilm.booking.common.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDate;
 import java.time.Instant;
 
 @Entity
 @Table(name = "booking_sequence_numbers")
-public class BookingSequenceNumber extends BaseEntity {
+@EntityListeners(AuditingEntityListener.class)
+public class BookingSequenceNumber {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
+    private Long id;
 
     @Column(name = "sequence_name", length = 100, nullable = false)
     private String sequenceName;
@@ -27,6 +37,14 @@ public class BookingSequenceNumber extends BaseEntity {
     private Instant updatedAt;
 
     public BookingSequenceNumber() {
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getSequenceName() {

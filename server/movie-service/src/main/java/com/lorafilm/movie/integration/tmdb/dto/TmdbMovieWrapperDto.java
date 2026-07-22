@@ -9,6 +9,9 @@ public class TmdbMovieWrapperDto {
     private Long tmdbId;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private LocalDateTime lastUpdated;
+    private Boolean approved;
+    private String approvalStatus;
+    private java.util.List<String> reasons;
     private Integer qualityScore;
     private String qualityStatus;
     private TmdbMovieDetailsDto movie;
@@ -18,6 +21,30 @@ public class TmdbMovieWrapperDto {
     private TmdbMediaDto media;
     private java.util.List<TmdbProductionCompanyDto> productionCompanies;
     private java.util.List<TmdbTranslationDto> translations;
+
+    public Boolean getApproved() {
+        return approved;
+    }
+
+    public void setApproved(Boolean approved) {
+        this.approved = approved;
+    }
+
+    public String getApprovalStatus() {
+        return approvalStatus;
+    }
+
+    public void setApprovalStatus(String approvalStatus) {
+        this.approvalStatus = approvalStatus;
+    }
+
+    public java.util.List<String> getReasons() {
+        return reasons;
+    }
+
+    public void setReasons(java.util.List<String> reasons) {
+        this.reasons = reasons;
+    }
 
     public Long getTmdbId() {
         return tmdbId;

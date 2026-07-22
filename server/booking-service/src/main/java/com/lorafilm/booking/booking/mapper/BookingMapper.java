@@ -1,19 +1,17 @@
 package com.lorafilm.booking.booking.mapper;
 
-import com.lorafilm.booking.booking.dto.BookingAdminResponse;
-import com.lorafilm.booking.booking.dto.BookingDetailResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import org.springframework.stereotype.Component;
 
 @Component
 public class BookingMapper {
 
-    public BookingAdminResponse toAdminResponse(Booking booking) {
+    public com.lorafilm.booking.booking.dto.BookingAdminResponse toAdminResponse(Booking booking) {
         if (booking == null) {
             return null;
         }
 
-        BookingAdminResponse response = new BookingAdminResponse();
+        com.lorafilm.booking.booking.dto.BookingAdminResponse response = new com.lorafilm.booking.booking.dto.BookingAdminResponse();
         response.setId(booking.getId());
         response.setPublicId(booking.getPublicId());
         response.setBookingCode(booking.getBookingCode());
@@ -39,12 +37,12 @@ public class BookingMapper {
         return response;
     }
 
-    public BookingDetailResponse toDetailResponse(Booking booking) {
+    public com.lorafilm.booking.booking.dto.BookingDetailResponse toDetailResponse(Booking booking) {
         if (booking == null) {
             return null;
         }
 
-        BookingDetailResponse response = new BookingDetailResponse();
+        com.lorafilm.booking.booking.dto.BookingDetailResponse response = new com.lorafilm.booking.booking.dto.BookingDetailResponse();
         response.setId(booking.getId());
         response.setPublicId(booking.getPublicId());
         response.setBookingCode(booking.getBookingCode());
@@ -77,5 +75,69 @@ public class BookingMapper {
         response.setNote(booking.getNote());
         response.setCreatedAt(booking.getCreatedAt());
         return response;
+    }
+
+    public com.lorafilm.booking.booking.dto.response.BookingResponse toResponse(Booking booking) {
+        if (booking == null) {
+            return null;
+        }
+        return new com.lorafilm.booking.booking.dto.response.BookingResponse(
+                booking.getPublicId(),
+                booking.getBookingCode(),
+                booking.getBookingStatus(),
+                booking.getFinalAmount(),
+                booking.getCurrency(),
+                booking.getExpiresAt(),
+                booking.getCreatedAt());
+    }
+
+    public com.lorafilm.booking.booking.dto.response.BookingSummaryResponse toSummaryResponse(Booking booking) {
+        if (booking == null) {
+            return null;
+        }
+        return new com.lorafilm.booking.booking.dto.response.BookingSummaryResponse(
+                booking.getPublicId(),
+                booking.getBookingCode(),
+                booking.getShowtimeId(),
+                booking.getBookingStatus(),
+                booking.getFinalAmount(),
+                booking.getCurrency(),
+                booking.getExpiresAt(),
+                booking.getCreatedAt());
+    }
+
+    public com.lorafilm.booking.booking.dto.response.BookingDetailResponse toCustomerDetailResponse(Booking booking) {
+        if (booking == null) {
+            return null;
+        }
+        return new com.lorafilm.booking.booking.dto.response.BookingDetailResponse(
+                booking.getPublicId(),
+                booking.getBookingCode(),
+                booking.getUserId(),
+                booking.getShowtimeId(),
+                booking.getMovieId(),
+                booking.getCinemaId(),
+                booking.getAuditoriumId(),
+                booking.getTicketAmount(),
+                booking.getFoodAmount(),
+                booking.getServiceFee(),
+                booking.getTaxAmount(),
+                booking.getPromotionDiscount(),
+                booking.getVoucherDiscount(),
+                booking.getFinalAmount(),
+                booking.getCurrency(),
+                booking.getBookingStatus(),
+                booking.getPaymentStatus(),
+                booking.getExpiresAt(),
+                booking.getConfirmedAt(),
+                booking.getCompletedAt(),
+                booking.getCancelledAt(),
+                booking.getExpiredAt(),
+                booking.getRefundedAt(),
+                booking.getCancelReasonCode(),
+                booking.getCancelReasonDetail(),
+                booking.getNote(),
+                booking.getCreatedAt(),
+                booking.getUpdatedAt());
     }
 }

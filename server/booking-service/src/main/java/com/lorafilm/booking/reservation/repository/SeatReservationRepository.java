@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface SeatReservationRepository extends JpaRepository<SeatReservation, Long>, JpaSpecificationExecutor<SeatReservation> {
@@ -22,6 +25,16 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
     Optional<SeatReservation> findByReservationCode(String reservationCode);
 
     List<SeatReservation> findAllByIdIn(List<Long> ids);
+
+    List<SeatReservation> findAllByBookingId(Long bookingId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select reservation from SeatReservation reservation where reservation.id in :ids")
+    List<SeatReservation> findAllByIdInForUpdate(@Param("ids") List<Long> ids);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select reservation from SeatReservation reservation where reservation.publicId in :publicIds")
+    List<SeatReservation> findAllByPublicIdInForUpdate(@Param("publicIds") List<String> publicIds);
 
     @Query("""
         SELECT sr FROM SeatReservation sr 
@@ -54,6 +67,39 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
     List<SeatReservation> findExpiredReservations(
         @Param("now") Instant now,
         Pageable pageable
+    );
+
+    @Query("""
+        SELECT COUNT(sr) FROM SeatReservation sr 
+        WHERE sr.userId = :userId 
+          AND sr.showtimeId = :showtimeId 
+          AND sr.status = 'HELD' 
+          AND sr.expiresAt > :now
+    """)
+    long countActiveHeldSeatsByUserAndShowtime(
+        @Param("userId") Long userId,
+        @Param("showtimeId") Long showtimeId,
+        @Param("now") Instant now
+    );
+
+    @Query("""
+        SELECT sr FROM SeatReservation sr 
+        WHERE sr.showtimeId = :showtimeId 
+          AND (sr.status = 'BOOKED' OR (sr.status = 'HELD' AND sr.expiresAt > :now))
+    """)
+    List<SeatReservation> findAllActiveReservationsByShowtimeId(
+        @Param("showtimeId") Long showtimeId,
+        @Param("now") Instant now
+    );
+
+    @Query("""
+        SELECT DISTINCT bt.seatId FROM BookingTicket bt 
+        JOIN bt.booking b 
+        WHERE b.showtimeId = :showtimeId 
+          AND b.bookingStatus IN (com.lorafilm.booking.booking.enums.BookingStatus.PENDING_PAYMENT, com.lorafilm.booking.booking.enums.BookingStatus.CONFIRMED, com.lorafilm.booking.booking.enums.BookingStatus.COMPLETED)
+    """)
+    List<Long> findSoldSeatIdsFromBookingsByShowtimeId(
+        @Param("showtimeId") Long showtimeId
     );
 
     Page<SeatReservation> findAllByUserId(Long userId, Pageable pageable);

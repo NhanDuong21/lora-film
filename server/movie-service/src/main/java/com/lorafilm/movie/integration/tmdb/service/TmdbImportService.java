@@ -40,10 +40,12 @@ import com.lorafilm.movie.movie.domain.entity.MovieProductionCompany;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.CreditRoleType;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbGenreDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbPersonDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbTrailerDto;
 import com.lorafilm.movie.common.enums.ActiveStatus;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.UUID;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -59,6 +61,9 @@ public class TmdbImportService {
 
     private static final Logger log = LoggerFactory.getLogger(TmdbImportService.class);
     private static final String SYNC_TYPE_BULK = "TMDB_BULK_EXPORT";
+
+    private final AtomicBoolean stopRequested = new AtomicBoolean(false);
+    private volatile Thread bulkSyncThread;
 
     private final TmdbClient tmdbClient;
     private final TmdbProperties properties;
@@ -108,6 +113,25 @@ public class TmdbImportService {
         this.productionCompanyRepository = productionCompanyRepository;
         this.movieProductionCompanyRepository = movieProductionCompanyRepository;
         this.movieVersionRepository = movieVersionRepository;
+    }
+
+    public void stopBulkSync() {
+        log.info("Request to stop TMDB Bulk Sync received.");
+        stopRequested.set(true);
+        if (bulkSyncThread != null && bulkSyncThread.isAlive()) {
+            bulkSyncThread.interrupt();
+        }
+    }
+
+    public TmdbSyncState getBulkSyncStatus() {
+        return syncStateRepository.findBySyncType(SYNC_TYPE_BULK)
+                .orElseGet(() -> {
+                    TmdbSyncState state = new TmdbSyncState();
+                    state.setSyncType(SYNC_TYPE_BULK);
+                    state.setStatus("IDLE");
+                    state.setCursor("0");
+                    return state;
+                });
     }
 
     public void resetBulkSyncState() {
@@ -163,6 +187,9 @@ public class TmdbImportService {
             }
         }
 
+        stopRequested.set(false);
+        bulkSyncThread = Thread.currentThread();
+
         try {
             log.info("Triggering TMDB export download on Node.js...");
             tmdbClient.triggerDownloadExport();
@@ -178,6 +205,13 @@ public class TmdbImportService {
             int maxRetries = 5;
             
             while (hasMore) {
+                if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
+                    log.info("TMDB Bulk Sync stopped by user request at cursor {}", currentCursor);
+                    syncState.setStatus("STOPPED");
+                    syncStateRepository.save(syncState);
+                    return;
+                }
+
                 try {
                     log.info("Fetching TMDB export with cursor {}", currentCursor);
                     String responseBody = tmdbClient.fetchMoviesExport(currentCursor, properties.getBatchSize());
@@ -207,7 +241,19 @@ public class TmdbImportService {
                     } else {
                         hasMore = false;
                     }
+                } catch (InterruptedException e) {
+                    log.info("TMDB Bulk Sync interrupted at cursor {}", currentCursor);
+                    syncState.setStatus("STOPPED");
+                    syncStateRepository.save(syncState);
+                    Thread.currentThread().interrupt();
+                    return;
                 } catch (Exception e) {
+                    if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
+                        log.info("TMDB Bulk Sync stopped during exception handling at cursor {}", currentCursor);
+                        syncState.setStatus("STOPPED");
+                        syncStateRepository.save(syncState);
+                        return;
+                    }
                     retryCount++;
                     if (retryCount <= maxRetries) {
                         log.warn("Network/Server error fetching export at cursor {} (Attempt {}/{}): {}. Retrying in 5 seconds...", 
@@ -223,10 +269,17 @@ public class TmdbImportService {
             syncState.setStatus("COMPLETED");
             syncStateRepository.save(syncState);
             log.info("TMDB Bulk Sync completed successfully.");
+        } catch (InterruptedException e) {
+            log.info("TMDB Bulk Sync thread interrupted.");
+            syncState.setStatus("STOPPED");
+            syncStateRepository.save(syncState);
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             log.error("TMDB Bulk sync process stopped with error: {}", e.getMessage());
             syncState.setStatus("FAILED");
             syncStateRepository.save(syncState);
+        } finally {
+            bulkSyncThread = null;
         }
     }
 
@@ -315,9 +368,26 @@ public class TmdbImportService {
             return;
         }
         
-        // Import all valid movies received from Node API without skipping
-        if (wrapper.getQualityStatus() != null) {
-            log.info("Processing TMDB ID {}: Quality Status is {}", wrapper.getTmdbId(), wrapper.getQualityStatus());
+        String statusStr = wrapper.getApprovalStatus() != null ? wrapper.getApprovalStatus() : wrapper.getQualityStatus();
+        log.info("Processing TMDB ID {}: Status is {}", wrapper.getTmdbId(), statusStr);
+
+        if ("REJECTED".equalsIgnoreCase(statusStr) || "REJECT".equalsIgnoreCase(statusStr)) {
+            log.info("Skipping REJECTED TMDB Movie ID: {}", wrapper.getTmdbId());
+            return;
+        }
+
+        LocalDate releaseDate = movieMapper.extractReleaseDate(wrapper);
+        MovieStatus targetStatus = MovieStatus.DRAFT;
+
+        if ("AUTO_APPROVED".equalsIgnoreCase(statusStr) || "ACCEPT".equalsIgnoreCase(statusStr)) {
+            // Mọi phim AUTO_APPROVED có ngày chiếu ở tương lai HOẶC phát hành gần đây (trong vòng 90 ngày) đều được đặt là UPCOMING
+            if (releaseDate != null && (releaseDate.isAfter(LocalDate.now()) || releaseDate.isAfter(LocalDate.now().minusDays(90)))) {
+                targetStatus = MovieStatus.UPCOMING;
+            } else {
+                targetStatus = MovieStatus.DRAFT;
+            }
+        } else if ("NEEDS_REVIEW".equalsIgnoreCase(statusStr) || "HOLD".equalsIgnoreCase(statusStr)) {
+            targetStatus = MovieStatus.DRAFT;
         }
 
         Movie existingMovie = movieRepository.findByTmdbId(wrapper.getTmdbId()).orElse(null);
@@ -331,21 +401,23 @@ public class TmdbImportService {
 
         if (existingMovie == null) {
             // INSERT flow
-            log.info("Attempting to insert TMDB ID: {}", wrapper.getTmdbId());
+            log.info("Attempting to insert TMDB ID: {} with status: {}", wrapper.getTmdbId(), targetStatus);
             Movie newMovie = movieMapper.toEntity(wrapper);
+            newMovie.setStatus(targetStatus);
             String baseSlug = movieMapper.generateSlug(newMovie.getTitle());
             newMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), null));
             newMovie = movieRepository.save(newMovie);
-            log.info("INSERTED TMDB Movie ID {}", wrapper.getTmdbId());
+            log.info("INSERTED TMDB Movie ID {} with status: {}", wrapper.getTmdbId(), targetStatus);
             extractAndSaveRelations(newMovie, wrapper);
         } else {
             // UPDATE flow - Always update movie and refresh all relations
-            log.info("Attempting to update TMDB ID: {}", wrapper.getTmdbId());
+            log.info("Attempting to update TMDB ID: {} with status: {}", wrapper.getTmdbId(), targetStatus);
             movieMapper.updateEntityFromDto(wrapper, existingMovie);
+            existingMovie.setStatus(targetStatus);
             String baseSlug = movieMapper.generateSlug(existingMovie.getTitle());
             existingMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), existingMovie.getId()));
             existingMovie = movieRepository.save(existingMovie);
-            log.info("UPDATED TMDB Movie ID {}", wrapper.getTmdbId());
+            log.info("UPDATED TMDB Movie ID {} with status: {}", wrapper.getTmdbId(), targetStatus);
             extractAndSaveRelations(existingMovie, wrapper);
         }
     }

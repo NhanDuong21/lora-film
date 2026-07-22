@@ -6,6 +6,7 @@ import java.util.List;
 
 public class SeatLayoutDto {
     private String showtimePublicId;
+    private Long showtimeId;
     private ShowtimeMovieDto movie;
     private ShowtimeMovieVersionDto movieVersion;
     private ShowtimeCinemaDto cinema;
@@ -18,6 +19,8 @@ public class SeatLayoutDto {
 
     public String getShowtimePublicId() { return showtimePublicId; }
     public void setShowtimePublicId(String showtimePublicId) { this.showtimePublicId = showtimePublicId; }
+    public Long getShowtimeId() { return showtimeId; }
+    public void setShowtimeId(Long showtimeId) { this.showtimeId = showtimeId; }
     public ShowtimeMovieDto getMovie() { return movie; }
     public void setMovie(ShowtimeMovieDto movie) { this.movie = movie; }
     public ShowtimeMovieVersionDto getMovieVersion() { return movieVersion; }

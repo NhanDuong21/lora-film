@@ -143,6 +143,9 @@ class ShowtimeBookingContextServiceImplTest {
         assertNotNull(response);
         assertNotNull(response.getShowtime());
         assertEquals(10L, response.getShowtime().getId());
+        assertEquals(1L, response.getMovieId());
+        assertEquals(1L, response.getCinemaId());
+        assertEquals(1L, response.getAuditoriumId());
         assertEquals(2, response.getSelectedSeats().size());
         assertNotNull(response.getPricing());
         assertEquals(new BigDecimal("200000"), response.getPricing().getTotalAmount());

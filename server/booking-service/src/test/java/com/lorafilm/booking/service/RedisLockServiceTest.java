@@ -32,22 +32,24 @@ public class RedisLockServiceTest {
 
     @Test
     public void acquireHoldLocks_Success_ReturnsTrue() {
+        Long showtimeId = 100L;
         List<Long> seatIds = List.of(15L, 16L);
-        List<String> keys = List.of("seat-lock:15", "seat-lock:16");
+        List<String> keys = List.of("seat-lock:100:15", "seat-lock:100:16");
         when(redisTemplate.execute(any(DefaultRedisScript.class), eq(keys), eq("token-123"), eq("300"))).thenReturn(1L);
 
-        boolean result = redisLockService.acquireHoldLocks(seatIds, "token-123", 300L);
+        boolean result = redisLockService.acquireHoldLocks(showtimeId, seatIds, "token-123", 300L);
 
         assertTrue(result);
     }
 
     @Test
     public void acquireHoldLocks_Collision_ReturnsFalse() {
+        Long showtimeId = 100L;
         List<Long> seatIds = List.of(15L);
-        List<String> keys = List.of("seat-lock:15");
+        List<String> keys = List.of("seat-lock:100:15");
         when(redisTemplate.execute(any(DefaultRedisScript.class), eq(keys), eq("token-123"), eq("300"))).thenReturn(0L);
 
-        boolean result = redisLockService.acquireHoldLocks(seatIds, "token-123", 300L);
+        boolean result = redisLockService.acquireHoldLocks(showtimeId, seatIds, "token-123", 300L);
 
         assertFalse(result);
     }
