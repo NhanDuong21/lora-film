@@ -20,7 +20,7 @@ class BookingAggregateTest {
         Booking booking = createBooking(Instant.now().plusSeconds(900));
 
         assertEquals(BookingStatus.PENDING_PAYMENT, booking.getBookingStatus());
-        assertEquals(new BigDecimal("210000"), booking.getFinalAmount());
+        assertEquals(new BigDecimal("210000.00"), booking.getFinalAmount());
         assertNotNull(booking.getPublicId());
     }
 

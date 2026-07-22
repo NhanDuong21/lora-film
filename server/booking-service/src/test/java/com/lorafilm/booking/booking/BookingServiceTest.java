@@ -100,7 +100,7 @@ class BookingServiceTest {
 
         assertEquals("550e8400-e29b-41d4-a716-446655440000", response.publicId());
         assertEquals(BookingStatus.PENDING_PAYMENT, response.status());
-        assertEquals(new BigDecimal("240000"), response.totalAmount());
+        assertEquals(new BigDecimal("240000.00"), response.totalAmount());
         ArgumentCaptor<ConvertReservationRequest> captor = ArgumentCaptor.forClass(ConvertReservationRequest.class);
         verify(reservationService).convertReservations(captor.capture());
         assertEquals(100L, captor.getValue().getBookingId());

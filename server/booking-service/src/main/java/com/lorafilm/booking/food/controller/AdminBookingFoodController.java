@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/admin")
+@RequestMapping("/api/admin")
 @Tag(name = "Admin Booking Food API", description = "Admin endpoints for managing booking foods")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminBookingFoodController {
