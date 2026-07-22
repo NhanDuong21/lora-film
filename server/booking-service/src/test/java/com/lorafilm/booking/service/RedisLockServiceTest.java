@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 import java.util.List;
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
 public class RedisLockServiceTest {
 
     @Mock
-    private RedisTemplate<String, String> redisTemplate;
+    private RedisOperations<String, String> redisTemplate;
 
     private RedisLockServiceImpl redisLockService;
 

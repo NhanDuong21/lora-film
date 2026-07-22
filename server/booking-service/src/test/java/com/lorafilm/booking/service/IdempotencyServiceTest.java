@@ -6,9 +6,9 @@ import com.lorafilm.booking.infrastructure.enums.IdempotencyStatus;
 import com.lorafilm.booking.infrastructure.repository.BookingIdempotencyKeyRepository;
 import com.lorafilm.booking.infrastructure.service.impl.IdempotencyServiceImpl;
 import com.lorafilm.booking.reservation.dto.HoldSeatRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -28,11 +28,14 @@ public class IdempotencyServiceTest {
     @Mock
     private BookingIdempotencyKeyRepository idempotencyKeyRepository;
 
-    @Mock
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @InjectMocks
     private IdempotencyServiceImpl idempotencyService;
+
+    @BeforeEach
+    public void setUp() {
+        idempotencyService = new IdempotencyServiceImpl(idempotencyKeyRepository, objectMapper);
+    }
 
     @Test
     public void checkKey_Found_ReturnsOptional() {
