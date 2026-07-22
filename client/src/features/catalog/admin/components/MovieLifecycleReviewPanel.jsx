@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ShieldCheck, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { MOVIE_TRANSITIONS } from '../config/movieLifecycleConfig';
-import { evaluatePublishChecklist } from '../utils/movieLifecycleChecklist';
+import { getMovieReadinessView, getPublishChecklist } from '../utils/movieReadiness';
 import useMovieStatusTransition from '../hooks/useMovieStatusTransition';
 import MovieStatusTransitionDialog from './MovieStatusTransitionDialog';
 
@@ -25,7 +25,8 @@ export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
 
   const currentStatus = movie.status || 'UNKNOWN';
   const allowedTransitions = MOVIE_TRANSITIONS[currentStatus] || [];
-  const checklist = evaluatePublishChecklist(movie);
+  const readiness = getMovieReadinessView(movie);
+  const checklist = getPublishChecklist(readiness);
 
   const handleActionClick = (transition) => {
     resetError();
@@ -79,7 +80,6 @@ export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
     );
   };
 
-  const isDurationShort = movie.durationMinutes && movie.durationMinutes > 0 && movie.durationMinutes < 30;
   const isDraft = currentStatus === 'DRAFT';
 
   // Always show review panel for DRAFT, or if there are lifecycle actions
@@ -113,18 +113,24 @@ export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
               <div className="space-y-4">
                 <h4 className="text-sm font-medium text-zinc-300">Thông tin nên kiểm tra (Cảnh báo)</h4>
                 <div className="space-y-2">
-                  {isDurationShort ? (
-                    <div className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500">
-                      <AlertTriangle size={18} className="shrink-0" />
-                      <span className="text-sm text-amber-500/90">Thời lượng phim chỉ {movie.durationMinutes} phút</span>
+                  {readiness.healthStatus === 'UNKNOWN' ? (
+                    <div className="flex items-center gap-3 p-3 bg-zinc-500/10 border border-zinc-500/20 rounded-xl text-zinc-400">
+                      <HelpCircle size={18} className="shrink-0" />
+                      <span className="text-sm">Chưa xác định trạng thái sẵn sàng từ máy chủ.</span>
                     </div>
+                  ) : readiness.warnings.length > 0 ? (
+                    readiness.warnings.map((warning, index) => (
+                      <div key={`${warning.code || 'warning'}-${index}`} className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500">
+                        <AlertTriangle size={18} className="shrink-0" />
+                        <span className="text-sm text-amber-500/90">{warning.message || warning.code}</span>
+                      </div>
+                    ))
                   ) : (
                     <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-500">
                       <CheckCircle2 size={18} className="shrink-0" />
-                      <span className="text-sm text-green-500/90">Thời lượng hợp lý</span>
+                      <span className="text-sm text-green-500/90">Không có cảnh báo dữ liệu</span>
                     </div>
                   )}
-                  {/* Add more non-blocking warnings here if needed */}
                 </div>
               </div>
             </div>
@@ -140,14 +146,11 @@ export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
                 let isDisabled = false;
                 let disableReason = '';
 
-                if (transition.target === 'UPCOMING' && isDraft) {
-                  const hasMissing = checklist.hasGenre === 'MISSING' || checklist.hasActiveVersion === 'MISSING' || checklist.hasPrimaryPoster === 'MISSING';
-                  const hasUnknown = checklist.hasGenre === 'UNKNOWN' || checklist.hasActiveVersion === 'UNKNOWN' || checklist.hasPrimaryPoster === 'UNKNOWN';
-                  
-                  if (hasMissing) {
+                if (transition.requiresPublishChecklist) {
+                  if (readiness.healthStatus === 'BLOCKED') {
                     isDisabled = true;
                     disableReason = 'Chưa thể duyệt phim. Hãy bổ sung các điều kiện còn thiếu.';
-                  } else if (hasUnknown) {
+                  } else if (readiness.healthStatus === 'UNKNOWN') {
                     isDisabled = true;
                     disableReason = 'Chưa thể xác minh điều kiện phát hành.';
                   }
@@ -191,7 +194,7 @@ export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
         onClose={handleCloseDialog}
         config={selectedTransition}
         checklist={checklist}
-        movieDetail={movie}
+        readiness={readiness}
         isPending={isPending}
         error={error}
         onConfirm={handleConfirmTransition}

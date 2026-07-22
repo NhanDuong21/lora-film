@@ -22,7 +22,7 @@ export const MOVIE_TRANSITIONS = {
       target: 'NOW_SHOWING',
       label: 'Bắt đầu công chiếu',
       variant: 'primary',
-      requiresPublishChecklist: false,
+      requiresPublishChecklist: true,
       confirmTitle: 'Bắt đầu công chiếu phim?',
       confirmDescription: 'Sau khi chuyển trạng thái, phim sẽ được hiển thị là Đang chiếu.'
     },

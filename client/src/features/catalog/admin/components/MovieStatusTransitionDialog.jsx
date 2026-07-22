@@ -5,7 +5,7 @@ export default function MovieStatusTransitionDialog({
   onClose,
   config,
   checklist,
-  movieDetail,
+  readiness,
   isPending,
   error,
   onConfirm
@@ -32,8 +32,6 @@ export default function MovieStatusTransitionDialog({
     );
   };
 
-  const isDurationShort = movieDetail?.durationMinutes && movieDetail.durationMinutes > 0 && movieDetail.durationMinutes < 30;
-
   return (
     <div className="relative z-50">
       <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" aria-hidden="true" onClick={() => { if (!isPending) onClose(); }} />
@@ -59,14 +57,14 @@ export default function MovieStatusTransitionDialog({
                 </div>
               </div>
 
-              {isDurationShort && (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex gap-3 text-amber-500">
+              {readiness?.warnings?.map((warning, index) => (
+                <div key={`${warning.code || 'warning'}-${index}`} className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex gap-3 text-amber-500">
                   <AlertTriangle size={18} className="shrink-0" />
                   <div className="text-sm">
-                    <strong>Thông tin cần kiểm tra:</strong> Thời lượng phim chỉ {movieDetail.durationMinutes} phút.
+                    <strong>Thông tin cần kiểm tra:</strong> {warning.message || warning.code}
                   </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
@@ -94,7 +92,7 @@ export default function MovieStatusTransitionDialog({
                   : 'bg-brand-orange text-black hover:bg-brand-orange/90'
               }`}
               onClick={onConfirm}
-              disabled={isPending}
+              disabled={isPending || (config.requiresPublishChecklist && !checklist?.isReady)}
             >
               {isPending ? (
                 <div className="flex items-center gap-2">

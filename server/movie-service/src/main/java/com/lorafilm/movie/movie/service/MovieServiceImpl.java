@@ -144,7 +144,7 @@ public class MovieServiceImpl implements MovieService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
 
         if (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING) {
-            validatePublishConditions(movie.getId());
+            validatePublishConditions(movie);
         }
 
         movie.setStatus(targetStatus);
@@ -163,23 +163,25 @@ public class MovieServiceImpl implements MovieService {
     @Override
     @Transactional(readOnly = true)
     public void validatePublishConditions(Long movieId) {
+        Optional<Movie> movie = movieRepository.findById(movieId);
+        validatePublishConditions(movie.orElse(null), movieId);
+    }
+
+    private void validatePublishConditions(Movie movie) {
+        validatePublishConditions(movie, movie.getId());
+    }
+
+    private void validatePublishConditions(Movie movie, Long movieId) {
         boolean hasActiveVersion = movieVersionRepository.existsActiveVersion(movieId);
         boolean hasPrimaryPoster = movieMediaRepository.existsPrimaryPoster(movieId);
-        boolean hasGenre = !movieGenreRepository.findByMovieId(movieId).isEmpty();
-        
-        if (!hasGenre) {
-            throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least 1 genre to be published");
-        }
+        boolean hasGenres = !movieGenreRepository.findByMovieId(movieId).isEmpty();
 
-        if (!hasActiveVersion && !hasPrimaryPoster) {
-            throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least one active version and one primary poster to publish");
-        }
-        if (!hasActiveVersion) {
-            throw new BusinessException(ErrorCode.MOVIE_ACTIVE_VERSION_REQUIRED, "Movie must have at least one active version to publish");
-        }
-        if (!hasPrimaryPoster) {
-            throw new BusinessException(ErrorCode.MOVIE_PRIMARY_POSTER_REQUIRED, "Movie must have at least one active primary poster to publish");
-        }
+        MovieHealthFacts healthFacts = MovieHealthFacts.from(
+                movie,
+                hasGenres,
+                hasActiveVersion,
+                hasPrimaryPoster);
+        readinessEvaluator.validatePublishConditions(healthFacts);
     }
 
     private MovieDto mapToDto(Movie movie) {

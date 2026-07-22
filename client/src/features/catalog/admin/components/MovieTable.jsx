@@ -1,12 +1,18 @@
 // eslint-disable-next-line no-unused-vars
 import React from 'react';
-import { Search, Plus, LayoutList, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
+import { Search, Plus, LayoutList, Image as ImageIcon, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import { LazyImage } from '@/components/common/ui/uiKit';
 import { formatDate } from '@/utils/movieHelpers';
 import { ADMIN_MOVIE_STATUS_TABS, getStatusConfig } from '@/features/catalog/admin/config/movieStatusConfig';
-import { getMovieListWarnings } from '@/features/catalog/admin/utils/movieListWarnings';
-import { AlertTriangle } from 'lucide-react';
+import { getMovieReadinessView } from '@/features/catalog/admin/utils/movieReadiness';
+
+const READINESS_STATUS_CONFIG = {
+  READY: { label: 'Sẵn sàng', className: 'text-green-500' },
+  WARNING: { label: 'Cần kiểm tra', className: 'text-amber-500' },
+  BLOCKED: { label: 'Bị chặn', className: 'text-red-500' },
+  UNKNOWN: { label: 'Chưa xác định', className: 'text-zinc-500' }
+};
 
 export default function MovieTable({
   movies = [],
@@ -121,7 +127,8 @@ export default function MovieTable({
                 ) : (
                   movies.map((movie, idx) => {
                     const statusCfg = getStatusConfig(movie.status);
-                    const warnings = getMovieListWarnings(movie);
+                    const readiness = getMovieReadinessView(movie);
+                    const readinessStatus = READINESS_STATUS_CONFIG[readiness.healthStatus];
                     return (
                     <tr key={movie.publicId} className="border-b border-neutral-800/50 hover:bg-neutral-900/50 transition-colors">
                       <td className="py-4 px-5 text-center">
@@ -161,23 +168,22 @@ export default function MovieTable({
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           {movie.ageRating && <span className="text-[10px] font-bold text-neutral-500 uppercase">[{movie.ageRating}]</span>}
-                          {movie.readiness?.classification === 'READY' ? (
-                             <span className="text-[9px] text-green-500 font-medium">● Sẵn sàng</span>
-                          ) : (
-                             <span className="text-[9px] text-red-500 font-medium">● Thiếu thông tin</span>
-                          )}
+                          <span className={`text-[9px] font-medium ${readinessStatus.className}`}>
+                            ● {readinessStatus.label}
+                          </span>
                         </div>
-                        {warnings.length > 0 && (
+                        {readiness.issues.length > 0 && (
                           <div className="flex items-center gap-1 mt-1 cursor-help group relative">
-                            <AlertTriangle className="w-3 h-3 text-yellow-500" />
-                            <span className="text-[10px] text-yellow-500 truncate max-w-[150px]">
-                              {warnings[0].label} {warnings.length > 1 && `· Còn ${warnings.length - 1} cảnh báo`}
+                            <AlertTriangle className={`w-3 h-3 ${readiness.healthStatus === 'BLOCKED' ? 'text-red-500' : 'text-amber-500'}`} />
+                            <span className={`text-[10px] truncate max-w-[150px] ${readiness.healthStatus === 'BLOCKED' ? 'text-red-500' : 'text-amber-500'}`}>
+                              {readiness.issues[0].message || readiness.issues[0].code}
+                              {readiness.issues.length > 1 && ` · Còn ${readiness.issues.length - 1} vấn đề`}
                             </span>
-                            {/* Tooltip for full warnings */}
+                            {/* Tooltip for all backend-provided readiness issues */}
                             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-zinc-900 border border-zinc-700 text-zinc-300 text-[10px] p-2 rounded shadow-xl whitespace-normal min-w-[200px] z-50">
                               <ul className="list-disc pl-4 space-y-1">
-                                {warnings.map((w, i) => (
-                                  <li key={i}>{w.label}</li>
+                                {readiness.issues.map((issue, i) => (
+                                  <li key={`${issue.code || 'issue'}-${i}`}>{issue.message || issue.code}</li>
                                 ))}
                               </ul>
                             </div>
