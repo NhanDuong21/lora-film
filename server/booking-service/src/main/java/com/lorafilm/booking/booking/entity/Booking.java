@@ -180,10 +180,10 @@ public class Booking extends FullAuditableEntity {
         this.cancelReasonDetail = reasonDetail;
     }
 
-    private void recalculateFinalAmount() {
-        BigDecimal grossAmount = ticketAmount.add(foodAmount).add(serviceFee).add(taxAmount);
-        BigDecimal totalDiscount = promotionDiscount.add(voucherDiscount);
-        finalAmount = grossAmount.subtract(totalDiscount);
+    public void recalculateFinalAmount() {
+        BigDecimal grossAmount = ticketAmount.add(foodAmount).add(serviceFee).add(taxAmount).setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal totalDiscount = promotionDiscount.add(voucherDiscount).setScale(2, java.math.RoundingMode.HALF_UP);
+        finalAmount = grossAmount.subtract(totalDiscount).setScale(2, java.math.RoundingMode.HALF_UP);
         if (finalAmount.signum() < 0) {
             throw new IllegalArgumentException("finalAmount cannot be negative");
         }
@@ -272,6 +272,11 @@ public class Booking extends FullAuditableEntity {
 
     public void setFoodAmount(BigDecimal foodAmount) {
         this.foodAmount = foodAmount;
+    }
+
+    public void updateFoodAmount(BigDecimal foodAmount) {
+        setFoodAmount(foodAmount);
+        recalculateFinalAmount();
     }
 
     public BigDecimal getServiceFee() {
