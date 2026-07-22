@@ -3,25 +3,22 @@ import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, Clock, AlertTriangle, AlertCircle, Info, RefreshCw, Wand2, List, LayoutTemplate } from 'lucide-react';
 import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
 import AutoScheduleTimeline from '@/features/scheduling/admin/components/AutoScheduleTimeline';
-
-const formatTime = (isoString) => {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '';
-  return new Date(dateStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
-
-const checkOverlap = (item1, item2) => {
-  const start1 = new Date(item1.startTime).getTime();
-  const end1 = new Date(item1.endTime).getTime();
-  const start2 = new Date(item2.startTime).getTime();
-  const end2 = new Date(item2.endTime).getTime();
-  return start1 < end2 && start2 < end1;
-};
+import {
+  formatCinemaDateTime,
+  formatCinemaTime,
+  formatCinemaTimeRange,
+  formatPreviewDateKey,
+  getCinemaDateKey,
+  INVALID_PREVIEW_DATE_KEY,
+  resolveCinemaTimezone,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
+import {
+  buildQuickNonOverlappingSelection,
+  buildSelectedItemsIndex,
+  findSelectionBlock,
+  getMalformedPreviewItems,
+  SELECTION_BLOCK_TYPES,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewSelection';
 
 const REJECTION_REASON_MAP = {
   "SHOWTIME_OUTSIDE_OPERATING_HOURS": "Ngoài giờ hoạt động của cụm rạp",
@@ -66,6 +63,21 @@ const AdminAutoSchedulePreviewPage = () => {
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [viewMode, setViewMode] = useState('timeline'); // 'timeline' or 'table'
 
+  const timezoneResolution = useMemo(
+    () => resolveCinemaTimezone(preview?.timezoneSnapshot),
+    [preview?.timezoneSnapshot],
+  );
+  const effectiveTimezone = timezoneResolution.timezone;
+  const malformedItems = useMemo(() => getMalformedPreviewItems(items), [items]);
+  const malformedItemIds = useMemo(
+    () => new Set(malformedItems.map(item => item.itemPublicId)),
+    [malformedItems],
+  );
+  const selectedItemsIndex = useMemo(
+    () => buildSelectedItemsIndex(items, selectedItemIds),
+    [items, selectedItemIds],
+  );
+
   const rejectionReasons = useMemo(() => {
     if (!items) return {};
     const reasons = {};
@@ -88,11 +100,10 @@ const AdminAutoSchedulePreviewPage = () => {
     if (!items) return [];
     const dates = new Set();
     items.forEach(item => {
-      const d = new Date(item.startTime);
-      dates.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+      dates.add(getCinemaDateKey(item.startTime, effectiveTimezone) || INVALID_PREVIEW_DATE_KEY);
     });
     return Array.from(dates).sort();
-  }, [items]);
+  }, [items, effectiveTimezone]);
 
   const filteredItems = useMemo(() => {
     if (!items) return [];
@@ -103,19 +114,17 @@ const AdminAutoSchedulePreviewPage = () => {
       if (filterAuditorium && audKey !== filterAuditorium) return false;
       if (filterReason && item.rejectionReason !== filterReason) return false;
       if (filterDate) {
-        const d = new Date(item.startTime);
-        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const dateKey = getCinemaDateKey(item.startTime, effectiveTimezone) || INVALID_PREVIEW_DATE_KEY;
         if (dateKey !== filterDate) return false;
       }
       return true;
     });
-  }, [items, filterStatus, filterAuditorium, filterReason, filterDate]);
+  }, [items, filterStatus, filterAuditorium, filterReason, filterDate, effectiveTimezone]);
 
   const groupedFilteredItems = useMemo(() => {
     const groups = {};
     filteredItems.forEach(item => {
-      const d = new Date(item.startTime);
-      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dateKey = getCinemaDateKey(item.startTime, effectiveTimezone) || INVALID_PREVIEW_DATE_KEY;
       if (!groups[dateKey]) groups[dateKey] = {};
       const audKey = item.auditoriumName || item.auditoriumPublicId;
       if (!groups[dateKey][audKey]) groups[dateKey][audKey] = [];
@@ -127,38 +136,11 @@ const AdminAutoSchedulePreviewPage = () => {
       });
     });
     return groups;
-  }, [filteredItems]);
+  }, [filteredItems, effectiveTimezone]);
 
-  const handleAutoSelectOptimal = () => {
+  const handleQuickNonOverlappingSelection = () => {
     if (!items || items.length === 0) return;
-    
-    // We only consider VALID candidates
-    const validCandidates = items.filter(item => item.validationStatus === 'VALID' && item.applyStatus !== 'APPLIED');
-    
-    // Sort by start time (earliest first)
-    validCandidates.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    
-    const newSelectedIds = new Set();
-    const selectedItemsList = [];
-    
-    for (const candidate of validCandidates) {
-      let hasOverlap = false;
-      for (const selectedItem of selectedItemsList) {
-        if ((candidate.auditoriumName || candidate.auditoriumPublicId) === (selectedItem.auditoriumName || selectedItem.auditoriumPublicId)) {
-          if (checkOverlap(candidate, selectedItem)) {
-            hasOverlap = true;
-            break;
-          }
-        }
-      }
-      
-      if (!hasOverlap) {
-        newSelectedIds.add(candidate.itemPublicId);
-        selectedItemsList.push(candidate);
-      }
-    }
-    
-    handleBulkSelection(Array.from(newSelectedIds));
+    handleBulkSelection(buildQuickNonOverlappingSelection(items));
   };
 
   if (isLoading) {
@@ -212,7 +194,7 @@ const AdminAutoSchedulePreviewPage = () => {
             </div>
             <div className="text-zinc-400 text-sm mt-1.5 flex flex-wrap items-center gap-4">
               <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {preview.cinemaName}</span>
-              <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {formatDate(preview.scheduleFrom)} - {formatDate(preview.scheduleTo)}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {formatPreviewDateKey(preview.scheduleFrom)} - {formatPreviewDateKey(preview.scheduleTo)}</span>
             </div>
           </div>
         </div>
@@ -229,11 +211,12 @@ const AdminAutoSchedulePreviewPage = () => {
           
           {canApply && (
             <button
-              onClick={handleAutoSelectOptimal}
+              onClick={handleQuickNonOverlappingSelection}
               disabled={isApplying || isUpdatingSelection}
+              title="Chọn lại theo giờ bắt đầu sớm nhất và khoảng chiếm phòng; thao tác này có thể thay thế đề xuất tối ưu ban đầu."
               className="bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Wand2 className="w-4 h-4" /> ĐỀ XUẤT TỐI ƯU
+              <Wand2 className="w-4 h-4" /> CHỌN NHANH KHÔNG TRÙNG
             </button>
           )}
 
@@ -251,6 +234,27 @@ const AdminAutoSchedulePreviewPage = () => {
       </div>
 
       <div className="p-6 md:p-8 space-y-8 max-w-[1600px] mx-auto w-full">
+        {timezoneResolution.usedFallback && (
+          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-4 rounded-xl flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-bold text-sm">Múi giờ bản xem trước không hợp lệ</h3>
+              <p className="text-xs mt-1 opacity-80">Dữ liệu đang được hiển thị tạm thời theo UTC. Vui lòng làm mới bản xem trước.</p>
+            </div>
+            <button onClick={fetchPreview} className="text-xs font-bold hover:underline">Làm mới</button>
+          </div>
+        )}
+
+        {malformedItems.length > 0 && (
+          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-4 rounded-xl flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-bold text-sm">Thiếu dữ liệu chiếm phòng</h3>
+              <p className="text-xs mt-1 opacity-80">{malformedItems.length} ứng viên không có khoảng chiếm phòng hợp lệ và sẽ không thể được chọn an toàn.</p>
+            </div>
+            <button onClick={fetchPreview} className="text-xs font-bold hover:underline">Làm mới</button>
+          </div>
+        )}
         
         {/* Warning Banner if Expired */}
         {isExpired && !isApplied && (
@@ -281,7 +285,7 @@ const AdminAutoSchedulePreviewPage = () => {
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Hết hạn vào</span>
             <span className="text-sm font-bold text-amber-400 mt-2 block flex items-center gap-1.5">
               <Clock className="w-4 h-4" />
-              {new Date(preview.expiresAt).toLocaleString('vi-VN')}
+              {formatCinemaDateTime(preview.expiresAt, effectiveTimezone)}
             </span>
           </div>
         </div>
@@ -334,7 +338,7 @@ const AdminAutoSchedulePreviewPage = () => {
           >
             <option value="">Tất cả Ngày</option>
             {uniqueDates.map(dateKey => (
-              <option key={dateKey} value={dateKey}>{formatDate(dateKey)}</option>
+              <option key={dateKey} value={dateKey}>{formatPreviewDateKey(dateKey)}</option>
             ))}
           </select>
 
@@ -375,17 +379,10 @@ const AdminAutoSchedulePreviewPage = () => {
           <AutoScheduleTimeline 
             groupedItems={groupedFilteredItems}
             selectedItemIds={selectedItemIds}
+            selectedItemsIndex={selectedItemsIndex}
             handleToggleSelection={handleToggleSelection}
-            isCheckboxDisabledFunc={(isConflicting) => isUpdatingSelection || isApplying || isConflicting}
-            checkOverlapFunc={(item, audItems, currentSelectedIds) => {
-              for (const selectedId of currentSelectedIds) {
-                const selectedObj = audItems.find(i => i.itemPublicId === selectedId);
-                if (selectedObj && checkOverlap(item, selectedObj)) {
-                  return true;
-                }
-              }
-              return false;
-            }}
+            isSelectionBusy={isUpdatingSelection || isApplying}
+            timezone={effectiveTimezone}
           />
         ) : (
           <div className="space-y-10">
@@ -393,7 +390,7 @@ const AdminAutoSchedulePreviewPage = () => {
             <div key={dateKey} className="space-y-4">
               <h2 className="text-lg font-black text-white flex items-center gap-3 border-b border-zinc-800 pb-2">
                 <Calendar className="w-5 h-5 text-brand-orange" />
-                {formatDate(dateKey)}
+                {formatPreviewDateKey(dateKey)}
               </h2>
 
               <div className="space-y-6">
@@ -425,22 +422,16 @@ const AdminAutoSchedulePreviewPage = () => {
                               const isValid = item.validationStatus === 'VALID';
                               const isSelected = selectedItemIds.has(item.itemPublicId);
                               const isItemApplied = item.applyStatus === 'APPLIED';
-                              
-                              let isConflicting = false;
-                              let conflictItem = null;
-                              
-                              if (isValid && !isSelected && !isItemApplied) {
-                                for (const selectedId of selectedItemIds) {
-                                  const selectedObj = audItems.find(i => i.itemPublicId === selectedId);
-                                  if (selectedObj && checkOverlap(item, selectedObj)) {
-                                    isConflicting = true;
-                                    conflictItem = selectedObj;
-                                    break;
-                                  }
-                                }
-                              }
-
-                              const isCheckboxDisabled = isUpdatingSelection || isApplying || isConflicting;
+                              const selectionBlock = isValid && !isSelected && !isItemApplied
+                                ? findSelectionBlock(item, selectedItemsIndex)
+                                : null;
+                              const isConflicting = selectionBlock?.type === SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP;
+                              const hasMalformedData = malformedItemIds.has(item.itemPublicId)
+                                || (selectionBlock && selectionBlock.type !== SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP);
+                              const conflictItem = isConflicting ? selectionBlock.item : null;
+                              const isCheckboxDisabled = isUpdatingSelection
+                                || isApplying
+                                || (!isSelected && Boolean(selectionBlock));
                               
                               return (
                                 <tr 
@@ -448,6 +439,7 @@ const AdminAutoSchedulePreviewPage = () => {
                                   className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${
                                     isItemApplied ? 'bg-green-500/5' :
                                     !isValid ? 'bg-red-500/5' :
+                                    hasMalformedData ? 'bg-amber-500/5' :
                                     isConflicting ? 'bg-red-500/10 opacity-75 grayscale' :
                                     isSelected ? 'bg-brand-orange/5' : 'bg-zinc-950'
                                   }`}
@@ -465,9 +457,12 @@ const AdminAutoSchedulePreviewPage = () => {
                                   </td>
                                   <td className="py-3 px-5">
                                     <div className="flex items-center gap-2">
-                                      <span className="font-bold text-zinc-200">{formatTime(item.startTime)}</span>
+                                      <span className="font-bold text-zinc-200">{formatCinemaTime(item.startTime, effectiveTimezone)}</span>
                                       <span className="text-zinc-500">-</span>
-                                      <span className="font-bold text-zinc-400">{formatTime(item.endTime)}</span>
+                                      <span className="font-bold text-zinc-400">{formatCinemaTime(item.endTime, effectiveTimezone)}</span>
+                                      {getCinemaDateKey(item.startTime, effectiveTimezone) !== getCinemaDateKey(item.endTime, effectiveTimezone) && (
+                                        <span className="text-[10px] text-amber-400">+1 ngày</span>
+                                      )}
                                     </div>
                                   </td>
                                   <td className="py-3 px-5">
@@ -480,6 +475,10 @@ const AdminAutoSchedulePreviewPage = () => {
                                     {isItemApplied ? (
                                       <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-max">
                                         <CheckCircle2 className="w-3 h-3" /> APPLIED
+                                      </span>
+                                    ) : hasMalformedData ? (
+                                      <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
+                                        THIẾU DỮ LIỆU
                                       </span>
                                     ) : isConflicting ? (
                                       <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
@@ -509,10 +508,15 @@ const AdminAutoSchedulePreviewPage = () => {
                                     )}
                                     {isConflicting && (
                                       <div className="text-xs text-red-400 font-bold">
-                                        Xung đột với suất đã chọn: {formatTime(conflictItem.startTime)}-{formatTime(conflictItem.endTime)}
+                                        Xung đột với suất đã chọn: {formatCinemaTimeRange(conflictItem.startTime, conflictItem.endTime, effectiveTimezone)}; chiếm phòng đến {formatCinemaTime(conflictItem.occupancyEndTime, effectiveTimezone)}
                                       </div>
                                     )}
-                                    {isValid && !isItemApplied && !isConflicting && (
+                                    {hasMalformedData && (
+                                      <div className="text-xs text-amber-400 font-bold">
+                                        Thiếu dữ liệu khoảng chiếm phòng. Vui lòng làm mới bản xem trước.
+                                      </div>
+                                    )}
+                                    {isValid && !isItemApplied && !isConflicting && !hasMalformedData && (
                                       <div className="text-xs text-zinc-500">
                                         Đủ điều kiện. {isSelected ? 'Sẽ được áp dụng.' : 'Chưa được chọn.'}
                                       </div>
@@ -557,7 +561,7 @@ const AdminAutoSchedulePreviewPage = () => {
               <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
                 <ul className="space-y-2 text-sm text-zinc-400">
                   <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-500" /> {selectedItemIds.size} ứng viên đã được chọn</li>
-                  <li className="flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-500" /> Từ ngày {formatDate(preview.scheduleFrom)} đến {formatDate(preview.scheduleTo)}</li>
+                  <li className="flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-500" /> Từ ngày {formatPreviewDateKey(preview.scheduleFrom)} đến {formatPreviewDateKey(preview.scheduleTo)}</li>
                 </ul>
               </div>
 

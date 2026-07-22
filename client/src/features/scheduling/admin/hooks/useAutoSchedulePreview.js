@@ -1,5 +1,26 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import adminAutoScheduleService from '@/features/scheduling/admin/services/adminAutoScheduleService';
+import {
+  SELECTION_BLOCK_TYPES,
+  validateBulkSelection,
+  validateSingleSelectionChange,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewSelection';
+
+const getSelectionGuardMessage = (type) => {
+  switch (type) {
+    case SELECTION_BLOCK_TYPES.REJECTED:
+      return 'Ứng viên bị từ chối không thể được chọn.';
+    case SELECTION_BLOCK_TYPES.APPLIED:
+      return 'Suất chiếu này đã được áp dụng.';
+    case SELECTION_BLOCK_TYPES.MALFORMED_ITEM:
+    case SELECTION_BLOCK_TYPES.MALFORMED_SELECTED_ITEM:
+      return 'Thiếu dữ liệu chiếm phòng. Vui lòng làm mới bản xem trước.';
+    case SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP:
+      return 'Suất chiếu xung đột khoảng chiếm phòng với một suất đã chọn.';
+    default:
+      return 'Không thể cập nhật lựa chọn này. Vui lòng làm mới bản xem trước.';
+  }
+};
 
 export default function useAutoSchedulePreview(previewPublicId, { triggerToast, onSuccess }) {
   const [preview, setPreview] = useState(null);
@@ -59,40 +80,24 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
   }, [previewPublicId, triggerToast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchPreview starts the initial async load.
     fetchPreview();
   }, [fetchPreview]);
 
-  // Group items by Date -> Auditorium
-  const groupedItems = useMemo(() => {
-    const groups = {};
-    items.forEach(item => {
-      // Group by Date string (YYYY-MM-DD based on startTime)
-      // Note: startTime is UTC, we should display it in Cinema local time ideally.
-      // But for grouping, a simple localized date string is fine.
-      const d = new Date(item.startTime);
-      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      
-      if (!groups[dateKey]) groups[dateKey] = {};
-      
-      const audKey = item.auditoriumName || item.auditoriumPublicId;
-      if (!groups[dateKey][audKey]) groups[dateKey][audKey] = [];
-      
-      groups[dateKey][audKey].push(item);
-    });
-
-    // Sort items inside each auditorium by startTime
-    Object.keys(groups).forEach(dateKey => {
-      Object.keys(groups[dateKey]).forEach(audKey => {
-        groups[dateKey][audKey].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-      });
-    });
-
-    return groups;
-  }, [items]);
-
   const handleToggleSelection = async (itemPublicId, currentSelectedState) => {
-    // Optimistic UI update
     const newSelectedState = !currentSelectedState;
+    const guard = validateSingleSelectionChange(
+      items,
+      selectedItemIds,
+      itemPublicId,
+      newSelectedState,
+    );
+    if (!guard.valid) {
+      triggerToast?.(getSelectionGuardMessage(guard.type), 'error');
+      return;
+    }
+
+    // Optimistic UI update
     setSelectedItemIds(prev => {
       const next = new Set(prev);
       if (newSelectedState) next.add(itemPublicId);
@@ -113,7 +118,7 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
         setExpectedVersion(res.data.version);
         setPreview(res.data);
       }
-    } catch (err) {
+    } catch {
       triggerToast?.('Lỗi cập nhật trạng thái chọn. Đang tải lại dữ liệu.', 'error');
       // Revert optimism
       fetchPreview();
@@ -123,6 +128,12 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
   };
 
   const handleBulkSelection = async (selectedIdsArray) => {
+    const guard = validateBulkSelection(items, selectedIdsArray);
+    if (!guard.valid) {
+      triggerToast?.(getSelectionGuardMessage(guard.type), 'error');
+      return;
+    }
+
     // Optimistic UI
     setSelectedItemIds(new Set(selectedIdsArray));
 
@@ -143,7 +154,7 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
         setExpectedVersion(res.data.version);
         setPreview(res.data);
       }
-    } catch (err) {
+    } catch {
       triggerToast?.('Lỗi cập nhật đề xuất tối ưu. Đang tải lại dữ liệu.', 'error');
       fetchPreview();
     } finally {
@@ -177,7 +188,7 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
   };
 
   return {
-    preview, items, groupedItems,
+    preview, items,
     isLoading, isApplying, isUpdatingSelection,
     selectedItemIds, handleToggleSelection, handleBulkSelection,
     handleApply, fetchPreview

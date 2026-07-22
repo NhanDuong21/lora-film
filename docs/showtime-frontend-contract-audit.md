@@ -53,11 +53,12 @@ There is no root `GET /api/admin/showtime-schedules` controller method for previ
 
 ### Current preview frontend compliance
 
-- `useAutoSchedulePreview` retains the preview summary, including `timezoneSnapshot`, but `AdminAutoSchedulePreviewPage` and `AutoScheduleTimeline` do not read `preview.timezoneSnapshot`.
-- Preview date grouping and filtering construct `new Date(item.startTime)` and use `getFullYear`, `getMonth`, and `getDate`. Time labels and timeline positioning use `toLocaleTimeString`, `getHours`, and `getMinutes` without a `timeZone` option. The resulting grouping and rendering therefore use the browser's local timezone, not the authoritative snapshot.
-- The frontend does not interpret authoritative service-date ownership. It groups by the browser-local calendar date of `startTime`, so an after-midnight candidate owned by the prior operating service date can appear under the next browser-local date.
-- Manual-selection conflict hints and the page's re-selection helper compare `[startTime, endTime)`, where `endTime` is film end. They do not use the available `occupancyEndTime`, so cleaning-buffer conflicts can be missed in the UI. Backend selection and apply-time validation remain occupancy-authoritative.
-- These are known frontend gaps. Phase S3 does not change frontend source and does not claim current UI compliance with the backend timezone or occupancy contracts.
+- `useAutoSchedulePreview` retains the preview summary, and the preview page and timeline now use `preview.timezoneSnapshot` explicitly through `Intl.DateTimeFormat`. Time labels, cinema-local calendar grouping, date filtering, and timeline positioning are therefore independent of the administrator's browser timezone. A malformed timezone is shown visibly and falls back deterministically to UTC.
+- The timeline retains its existing `08:00–24:00` visual contract. Positions and midnight clipping use cinema-local time parts; candidates entirely outside that visual window are counted and directed to the complete table view instead of being drawn misleadingly at `08:00`.
+- The frontend still does not interpret authoritative service-date ownership. It groups by the cinema-local calendar date of `startTime`, so an after-midnight candidate owned by the prior operating service date can appear under the next cinema-local calendar date. Cinema-local calendar grouping is not operating service-date grouping.
+- Manual-selection conflict hints, disabled states, final local guards, and the explicit quick re-selection helper use `[startTime, occupancyEndTime)` with half-open adjacency. They compare against all selected items in the same auditorium, not only the visible filtered group. Missing occupancy data is never replaced by `endTime`.
+- The quick action is an explicit earliest-start greedy non-overlap helper and is not equivalent to the `BALANCED_V1_S3` weighted interval selection. It can replace the backend-selected flags only after an administrator invokes it.
+- Frontend checks remain assistance only. Backend selection versioning and apply-time revalidation remain authoritative.
 
 ## 5. Phase S3 Auto-Schedule Contract
 
