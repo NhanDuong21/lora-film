@@ -18,7 +18,7 @@ Accepted query parameters:
 |---|---|
 | `cinemaPublicId` | Exact current cinema public ID. Unknown well-formed values return an empty page. |
 | `status` | Exact persisted `SchedulePreviewStatus`. |
-| `strategyVersion` | `BALANCED_V1`, `BALANCED_V1_S2`, or `BALANCED_V1_S3`. |
+| `strategyVersion` | `BALANCED_V1`, `BALANCED_V1_S2`, `BALANCED_V1_S3`, or `BALANCED_V1_S4`. S4 is filter-compatible but remains non-current until its activation checkpoint. |
 | `scheduleFrom` | Inclusive lower overlap boundary as `YYYY-MM-DD`. |
 | `scheduleTo` | Inclusive upper overlap boundary as `YYYY-MM-DD`. |
 | `createdFrom` | Inclusive creation instant with `Z` or an explicit offset. |

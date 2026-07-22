@@ -21,6 +21,8 @@ import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.repository.AutoScheduleExistingShowtimeFact;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +34,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -45,24 +48,35 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
     private final AuditoriumMaintenanceWindowRepository maintenanceRepository;
     private final ShowtimeRepository showtimeRepository;
     private final CinemaOperatingWindowResolver windowResolver;
+    private final ExistingShowtimeServiceDateClassifier serviceDateClassifier;
+
+    private static final List<ShowtimeStatus> COVERAGE_STATUSES = List.of(
+            ShowtimeStatus.DRAFT,
+            ShowtimeStatus.OPEN_FOR_BOOKING,
+            ShowtimeStatus.CLOSED,
+            ShowtimeStatus.FINISHED
+    );
 
     public AutoScheduleGenerationContextLoaderImpl(CinemaOperatingHourRepository operatingHourRepository,
                                                    CinemaClosurePeriodRepository closureRepository,
                                                    AuditoriumMaintenanceWindowRepository maintenanceRepository,
                                                    ShowtimeRepository showtimeRepository,
-                                                   CinemaOperatingWindowResolver windowResolver) {
+                                                   CinemaOperatingWindowResolver windowResolver,
+                                                   ExistingShowtimeServiceDateClassifier serviceDateClassifier) {
         this.operatingHourRepository = operatingHourRepository;
         this.closureRepository = closureRepository;
         this.maintenanceRepository = maintenanceRepository;
         this.showtimeRepository = showtimeRepository;
         this.windowResolver = windowResolver;
+        this.serviceDateClassifier = serviceDateClassifier;
     }
 
     @Override
     public AutoScheduleGenerationContext load(NormalizedGeneratePreviewRequest request,
                                               Cinema cinema,
                                               List<Auditorium> auditoriums,
-                                              List<MovieVersion> movieVersions) {
+                                              List<MovieVersion> movieVersions,
+                                              String strategyVersion) {
         ZoneId zoneId = ZoneId.of(cinema.getTimezone());
         AutoScheduleGenerationContext.CinemaSnapshot cinemaSnapshot =
                 new AutoScheduleGenerationContext.CinemaSnapshot(
@@ -96,7 +110,7 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
             return new AutoScheduleGenerationContext(
                     cinemaSnapshot, request.getScheduleFrom(), request.getScheduleTo(),
                     request.getSlotGranularityMinutes(), MAX_CANDIDATES,
-                    AutoScheduleStrategy.BALANCED, AutoScheduleStrategyVersions.CURRENT,
+                    AutoScheduleStrategy.BALANCED, strategyVersion,
                     auditoriumSnapshots, versionSnapshots, windows, configuredDays,
                     ImmutableIntervalIndex.empty(), Map.of(), Map.of(), Map.of(), null, null);
         }
@@ -128,14 +142,52 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
         List<Showtime> existingShowtimes = showtimeRepository.findBlockingFactsForAutoSchedule(
                 auditoriumIds, showtimeLowerBound, planningEnd);
         ExistingShowtimeIndexes showtimeIndexes = buildShowtimeIndexes(existingShowtimes, auditoriumSnapshots);
+        Map<AutoScheduleGenerationContext.MovieServiceDateKey, Integer> existingShowtimeCounts =
+                loadExistingCoverageCounts(
+                        strategyVersion, cinemaSnapshot, versionSnapshots, windows,
+                        planningStart, latestClose);
 
         return new AutoScheduleGenerationContext(
                 cinemaSnapshot, request.getScheduleFrom(), request.getScheduleTo(),
                 request.getSlotGranularityMinutes(), MAX_CANDIDATES,
-                AutoScheduleStrategy.BALANCED, AutoScheduleStrategyVersions.CURRENT,
+                AutoScheduleStrategy.BALANCED, strategyVersion,
                 auditoriumSnapshots, versionSnapshots, windows, configuredDays,
                 closureIndex, maintenanceIndexes, showtimeIndexes.conflicts(),
-                showtimeIndexes.continuity(), planningStart, planningEnd);
+                showtimeIndexes.continuity(), existingShowtimeCounts, planningStart, planningEnd);
+    }
+
+    private Map<AutoScheduleGenerationContext.MovieServiceDateKey, Integer> loadExistingCoverageCounts(
+            String strategyVersion,
+            AutoScheduleGenerationContext.CinemaSnapshot cinema,
+            List<AutoScheduleGenerationContext.MovieVersionSnapshot> movieVersions,
+            List<OperatingWindow> windows,
+            Instant planningStart,
+            Instant planningEndExclusive) {
+        if (!AutoScheduleStrategyVersions.BALANCED_V1_S4.equals(strategyVersion)) {
+            return Map.of();
+        }
+
+        List<Long> movieIds = movieVersions.stream()
+                .map(AutoScheduleGenerationContext.MovieVersionSnapshot::movieId)
+                .distinct()
+                .sorted()
+                .toList();
+        if (movieIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<AutoScheduleExistingShowtimeFact> facts = showtimeRepository.findCoverageFactsForAutoSchedule(
+                cinema.id(), movieIds, COVERAGE_STATUSES, planningStart, planningEndExclusive);
+        Map<AutoScheduleGenerationContext.MovieServiceDateKey, Integer> counts = new LinkedHashMap<>();
+        for (AutoScheduleExistingShowtimeFact fact : facts) {
+            serviceDateClassifier.classify(fact.getStartTime(), cinema.zoneId(), windows)
+                    .ifPresent(serviceDate -> counts.merge(
+                            new AutoScheduleGenerationContext.MovieServiceDateKey(
+                                    serviceDate, fact.getMovieId()),
+                            1,
+                            Integer::sum));
+        }
+        return counts;
     }
 
     private AutoScheduleGenerationContext.MovieVersionSnapshot snapshotVersion(MovieVersion version) {

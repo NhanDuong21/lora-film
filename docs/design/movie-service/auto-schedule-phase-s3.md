@@ -2,7 +2,7 @@
 
 ## Selection objective
 
-New previews use strategy version `BALANCED_V1_S3`. Phase S3 preserves the S2 candidate universe, validation, scores, score breakdown, and global ranking. It changes only the automatic selected flags.
+New previews continue to use strategy version `BALANCED_V1_S3`. S4A is implemented and registered, but S3 remains `CURRENT` until the separate activation checkpoint is approved. Phase S3 preserves the S2 candidate universe, validation, scores, score breakdown, and global ranking. It changes only the automatic selected flags.
 
 For each independent optimization component, the selector maximizes the exact `BigDecimal` sum of scores for `VALID` candidates subject to non-overlapping half-open occupancy intervals:
 
@@ -54,7 +54,7 @@ For `C` candidates, total sorting and predecessor work is `O(C log C)`; DP, reco
 
 ## Compatibility and persistence
 
-- `BALANCED_V1` and `BALANCED_V1_S2` fingerprints remain supported for immutable idempotent replay.
+- `BALANCED_V1`, `BALANCED_V1_S2`, and `BALANCED_V1_S3` fingerprints remain supported for immutable idempotent replay. `BALANCED_V1_S4` is recognized for forward-compatible persistence/history infrastructure but is not the current generation policy.
 - Same-request legacy replay returns the existing preview; changed-request reuse returns `IDEMPOTENCY_KEY_REUSED`.
 - Unknown stored versions fail with `AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT`.
 - The schema default remains `BALANCED_V1`; no schema or REST DTO shape changes are required.

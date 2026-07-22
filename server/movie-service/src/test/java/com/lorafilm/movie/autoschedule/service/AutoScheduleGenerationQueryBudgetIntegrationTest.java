@@ -6,6 +6,9 @@ import com.lorafilm.movie.auditorium.repository.AuditoriumMaintenanceWindowRepos
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleGenerationContext;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
+import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.impl.ShowtimeSchedulePreviewLifecycleService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -69,6 +72,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 class AutoScheduleGenerationQueryBudgetIntegrationTest {
 
     @Autowired private AutoSchedulePreviewGenerationService generationService;
+    @Autowired private AutoScheduleGenerationContextLoader contextLoader;
     @Autowired private MovieRepository movieRepository;
     @Autowired private EntityManagerFactory entityManagerFactory;
 
@@ -153,9 +157,10 @@ class AutoScheduleGenerationQueryBudgetIntegrationTest {
             return ShowtimeSchedulePreview.createGenerating(
                     loadedCinema, normalized.getScheduleFrom(), normalized.getScheduleTo(),
                     normalized.getSlotGranularityMinutes(), normalized.getPreviewTtlMinutes(),
-                    normalized.getIdempotencyKey(), invocation.getArgument(2, String.class),
-                    invocation.getArgument(3, Long.class), Instant.now());
-        }).when(lifecycleService).createGeneratingPreview(any(), any(), any(), any());
+                    invocation.getArgument(2, String.class), normalized.getIdempotencyKey(),
+                    invocation.getArgument(3, String.class),
+                    invocation.getArgument(4, Long.class), Instant.now());
+        }).when(lifecycleService).createGeneratingPreview(any(), any(), any(), any(), any());
         doAnswer(invocation -> {
             List<?> candidates = invocation.getArgument(1, List.class);
             persistedCandidateCount.set(candidates.size());
@@ -168,6 +173,41 @@ class AutoScheduleGenerationQueryBudgetIntegrationTest {
         runMeasuredCase(1, 15, 96, "small");
         runMeasuredCase(4, 1, 5_712, "medium");
         runMeasuredCase(7, 1, 9_996, "near-limit");
+    }
+
+    @Test
+    void dormantS4ContextAddsExactlyOneBoundedCoverageRead() {
+        clearRepositoryInvocations();
+        Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+        NormalizedGeneratePreviewRequest normalized = new NormalizedGeneratePreviewRequest(
+                cinema.getPublicId(), scheduleDate, scheduleDate,
+                List.of(version.getPublicId()), List.of(auditoriums.getFirst().getPublicId()),
+                15, 60, "s4-context-" + UUID.randomUUID());
+
+        long started = System.nanoTime();
+        AutoScheduleGenerationContext context = contextLoader.load(
+                normalized, cinema, List.of(auditoriums.getFirst()), List.of(version),
+                AutoScheduleStrategyVersions.BALANCED_V1_S4);
+        long wallNanos = System.nanoTime() - started;
+
+        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S4, context.getStrategyVersion());
+        assertEquals(0, context.getExistingShowtimeCounts().size());
+        verify(operatingHourRepository).findByCinemaId(cinema.getId());
+        verify(closureRepository).findOverlappingClosures(eq(cinema.getId()), any(), any());
+        verify(maintenanceRepository).findActiveOverlapsForAutoSchedule(
+                anyList(), eq(ActionStatus.ACTIVE), any(), any());
+        verify(showtimeRepository).findBlockingFactsForAutoSchedule(anyList(), any(), any());
+        verify(showtimeRepository).findCoverageFactsForAutoSchedule(
+                eq(cinema.getId()), eq(List.of(version.getMovie().getId())), anyList(), any(), any());
+        verifyNoMoreInteractions(operatingHourRepository, closureRepository,
+                maintenanceRepository, showtimeRepository);
+
+        System.out.printf(Locale.ROOT,
+                "S4_CONTEXT_QUERY_BENCHMARK contextRepositoryReads=5 totalGenerationReads=9 "
+                        + "coverageFacts=%d preparedStatements=%d wallMs=%.3f db=H2 profile=test%n",
+                context.getExistingShowtimeCounts().size(), statistics.getPrepareStatementCount(),
+                wallNanos / 1_000_000.0);
     }
 
     private void runMeasuredCase(int auditoriumCount,

@@ -12,10 +12,9 @@ import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerateRequestNormalizer;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationContextLoader;
+import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationStrategy;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleRequestFingerprintService;
-import com.lorafilm.movie.autoschedule.service.BalancedCandidateScoringService;
 import com.lorafilm.movie.autoschedule.service.CandidateCountEstimator;
-import com.lorafilm.movie.autoschedule.service.CandidateSelectionResolver;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateGenerator;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateValidationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -62,8 +61,8 @@ class AutoSchedulePreviewGenerationServiceImplTest {
     @Mock private AutoScheduleGenerationContext generationContext;
     @Mock private ShowtimeCandidateGenerator generator;
     @Mock private ShowtimeCandidateValidationService validationService;
-    @Mock private BalancedCandidateScoringService scoringService;
-    @Mock private CandidateSelectionResolver selectionResolver;
+    @Mock private AutoScheduleGenerationStrategyRegistry strategyRegistry;
+    @Mock private AutoScheduleGenerationStrategy generationStrategy;
     @Mock private ShowtimeSchedulePreviewLifecycleService lifecycleService;
     @Mock private CinemaRepository cinemaRepository;
     @Mock private AuditoriumRepository auditoriumRepository;
@@ -116,16 +115,25 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         ReflectionTestUtils.setField(preview, "publicId", "preview");
 
         when(normalizer.normalize(request)).thenReturn(normalized);
-        when(fingerprintService.generateFingerprint(normalized)).thenReturn("fingerprint");
+        when(strategyRegistry.getCurrent()).thenReturn(generationStrategy);
+        when(generationStrategy.getStrategyVersion())
+                .thenReturn(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3);
+        when(fingerprintService.generateFingerprint(
+                normalized, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3))
+                .thenReturn("fingerprint");
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema")).thenReturn(Optional.of(cinema));
         when(previewRepository.findByGenerateIdempotencyKey("generation-key")).thenReturn(Optional.empty());
         lenient().when(auditoriumRepository.findByPublicIdInAndDeletedAtIsNull(List.of("auditorium")))
                 .thenReturn(List.of(auditorium));
         lenient().when(movieVersionRepository.findByPublicIdInWithMovieAndDeletedAtIsNull(List.of("version")))
                 .thenReturn(List.of(version));
-        lenient().when(lifecycleService.createGeneratingPreview(normalized, cinema, "fingerprint", 10L))
+        lenient().when(lifecycleService.createGeneratingPreview(
+                        normalized, cinema, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
+                        "fingerprint", 10L))
                 .thenReturn(preview);
-        lenient().when(contextLoader.load(normalized, cinema, List.of(auditorium), List.of(version)))
+        lenient().when(contextLoader.load(
+                        normalized, cinema, List.of(auditorium), List.of(version),
+                        AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3))
                 .thenReturn(generationContext);
     }
 
@@ -138,6 +146,15 @@ class AutoSchedulePreviewGenerationServiceImplTest {
                 () -> service.generatePreview(request, 10L));
 
         assertEquals(ErrorCode.AUTO_SCHEDULE_TOO_MANY_CANDIDATES, thrown.getErrorCode());
+        verify(fingerprintService).generateFingerprint(
+                any(), org.mockito.ArgumentMatchers.eq(
+                        AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3));
+        verify(lifecycleService).createGeneratingPreview(
+                any(), any(), org.mockito.ArgumentMatchers.eq(
+                        AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3), any(), anyLong());
+        verify(contextLoader).load(
+                any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(
+                        AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3));
         verify(lifecycleService).markPreviewFailed(anyLong(), any());
     }
 
@@ -159,7 +176,8 @@ class AutoSchedulePreviewGenerationServiceImplTest {
                 new BusinessException(ErrorCode.AUTO_SCHEDULE_SELECTION_INVARIANT_VIOLATION);
         when(candidateCountEstimator.estimate(generationContext)).thenReturn(0);
         when(generator.generate(any(), any())).thenReturn(0L);
-        doThrow(invariantFailure).when(selectionResolver).resolveDefaultSelection(any());
+        doThrow(invariantFailure).when(generationStrategy)
+                .scoreAndResolveDefaultSelection(any(), any());
 
         BusinessException thrown = assertThrows(BusinessException.class,
                 () -> service.generatePreview(request, 10L));
@@ -184,9 +202,9 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         assertEquals("BALANCED_V1", preview.getStrategyVersion());
         assertEquals("legacy-fingerprint", preview.getRequestFingerprint());
         assertEquals(7, preview.getTotalCandidateCount());
-        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(contextLoader, never()).load(any(), any(), any(), any(), any());
         verify(generator, never()).generate(any(), any());
-        verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), anyLong());
+        verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -204,7 +222,7 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, thrown.getErrorCode());
         assertEquals("BALANCED_V1", preview.getStrategyVersion());
         assertEquals("legacy-fingerprint", preview.getRequestFingerprint());
-        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(contextLoader, never()).load(any(), any(), any(), any(), any());
         verify(generator, never()).generate(any(), any());
     }
 
@@ -223,7 +241,7 @@ class AutoSchedulePreviewGenerationServiceImplTest {
 
         assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2, preview.getStrategyVersion());
         assertEquals(4, preview.getSelectedCandidateCount());
-        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(contextLoader, never()).load(any(), any(), any(), any(), any());
         verify(generator, never()).generate(any(), any());
     }
 
@@ -243,7 +261,7 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, thrown.getErrorCode());
         assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2, preview.getStrategyVersion());
         assertEquals("s2-fingerprint", preview.getRequestFingerprint());
-        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(contextLoader, never()).load(any(), any(), any(), any(), any());
         verify(generator, never()).generate(any(), any());
     }
 
@@ -263,8 +281,8 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         assertEquals(ErrorCode.AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT, thrown.getErrorCode());
         assertEquals("BALANCED_UNKNOWN", preview.getStrategyVersion());
         assertEquals("stored-fingerprint", preview.getRequestFingerprint());
-        verify(contextLoader, never()).load(any(), any(), any(), any());
+        verify(contextLoader, never()).load(any(), any(), any(), any(), any());
         verify(generator, never()).generate(any(), any());
-        verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), anyLong());
+        verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), any(), anyLong());
     }
 }

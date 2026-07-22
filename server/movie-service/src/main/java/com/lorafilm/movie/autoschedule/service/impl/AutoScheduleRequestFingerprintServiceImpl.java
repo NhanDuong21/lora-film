@@ -62,9 +62,7 @@ public class AutoScheduleRequestFingerprintServiceImpl implements AutoScheduleRe
     }
 
     private String requireSupportedStrategyVersion(String strategyVersion) {
-        if (AutoScheduleStrategyVersions.LEGACY_BALANCED_V1.equals(strategyVersion)
-                || AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2.equals(strategyVersion)
-                || AutoScheduleStrategyVersions.CURRENT.equals(strategyVersion)) {
+        if (AutoScheduleStrategyVersions.isSupported(strategyVersion)) {
             return strategyVersion;
         }
         throw new BusinessException(

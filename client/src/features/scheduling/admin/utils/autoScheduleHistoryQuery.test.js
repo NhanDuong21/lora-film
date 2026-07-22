@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AUTO_SCHEDULE_HISTORY_DEFAULTS,
+  AUTO_SCHEDULE_HISTORY_STRATEGIES,
   dateTimeLocalToInstant,
   getAutoScheduleHistoryRangeError,
   hasAutoScheduleHistoryFilters,
@@ -37,6 +38,17 @@ describe('autoScheduleHistoryQuery', () => {
       size: 20,
       sort: 'cinemaName,asc',
     });
+  });
+
+  it('accepts S4 history links without making assumptions about score breakdowns', () => {
+    const parsed = parseAutoScheduleHistoryQuery(new URLSearchParams(
+      'strategyVersion=BALANCED_V1_S4',
+    ));
+
+    expect(AUTO_SCHEDULE_HISTORY_STRATEGIES).toContain('BALANCED_V1_S4');
+    expect(parsed.strategyVersion).toBe('BALANCED_V1_S4');
+    expect(serializeAutoScheduleHistoryQuery(parsed).toString())
+      .toBe('strategyVersion=BALANCED_V1_S4');
   });
 
   it('validates reversed ranges and resets only filters and page', () => {

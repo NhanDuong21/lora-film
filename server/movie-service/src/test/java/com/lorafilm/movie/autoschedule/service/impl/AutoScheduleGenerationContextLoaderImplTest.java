@@ -6,6 +6,7 @@ import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
 import com.lorafilm.movie.auditorium.repository.AuditoriumMaintenanceWindowRepository;
 import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 import com.lorafilm.movie.autoschedule.model.AutoScheduleGenerationContext;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.model.CandidateScoringContext;
 import com.lorafilm.movie.autoschedule.model.CandidateValidationResult;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
@@ -23,6 +24,8 @@ import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.repository.AutoScheduleExistingShowtimeFact;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
 import com.lorafilm.movie.showtime.validation.ShowtimeSchedulingRules;
@@ -43,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -66,7 +70,8 @@ class AutoScheduleGenerationContextLoaderImplTest {
     void setUp() {
         loader = new AutoScheduleGenerationContextLoaderImpl(
                 operatingHourRepository, closureRepository, maintenanceRepository, showtimeRepository,
-                new CinemaOperatingWindowResolver(operatingHourRepository));
+                new CinemaOperatingWindowResolver(operatingHourRepository),
+                new ExistingShowtimeServiceDateClassifier());
         cinema = cinema();
         auditorium = auditorium(2L, "aud-1", 20);
         movieVersion = movieVersion();
@@ -145,6 +150,52 @@ class AutoScheduleGenerationContextLoaderImplTest {
                 context.continuityFor(2L).occupancyEnds().get(1));
         assertEquals(Instant.parse("2026-07-22T10:00:00Z"),
                 context.continuityFor(3L).occupancyEnds().get(0));
+    }
+
+    @Test
+    void retainsTheExplicitNonCurrentStrategyVersionWithoutActivatingIt() {
+        AutoScheduleGenerationContext context = loader.load(
+                request, cinema, List.of(auditorium), List.of(movieVersion),
+                AutoScheduleStrategyVersions.BALANCED_V1_S4);
+
+        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S4,
+                context.getStrategyVersion());
+        assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
+                AutoScheduleStrategyVersions.CURRENT);
+    }
+
+    @Test
+    void s4LoadsOneBoundedCinemaWideCoverageProjectionAndClassifiesCounts() {
+        AutoScheduleExistingShowtimeFact first = fairnessFact(
+                4L, Instant.parse("2026-07-22T08:30:00Z"));
+        AutoScheduleExistingShowtimeFact second = fairnessFact(
+                4L, Instant.parse("2026-07-22T09:30:00Z"));
+        when(showtimeRepository.findCoverageFactsForAutoSchedule(
+                eq(1L), eq(List.of(4L)), eq(List.of(
+                        ShowtimeStatus.DRAFT,
+                        ShowtimeStatus.OPEN_FOR_BOOKING,
+                        ShowtimeStatus.CLOSED,
+                        ShowtimeStatus.FINISHED)),
+                eq(Instant.parse("2026-07-22T08:00:00Z")),
+                eq(Instant.parse("2026-07-22T12:00:00Z"))))
+                .thenReturn(List.of(first, second));
+
+        AutoScheduleGenerationContext context = loader.load(
+                request, cinema, List.of(auditorium), List.of(movieVersion),
+                AutoScheduleStrategyVersions.BALANCED_V1_S4);
+
+        assertEquals(2, context.existingShowtimeCount(
+                LocalDate.of(2026, 7, 22), 4L));
+        verify(showtimeRepository).findCoverageFactsForAutoSchedule(
+                eq(1L), eq(List.of(4L)), anyList(), any(), any());
+    }
+
+    private AutoScheduleExistingShowtimeFact fairnessFact(
+            Long movieId, Instant startTime) {
+        AutoScheduleExistingShowtimeFact fact = mock(AutoScheduleExistingShowtimeFact.class);
+        when(fact.getMovieId()).thenReturn(movieId);
+        when(fact.getStartTime()).thenReturn(startTime);
+        return fact;
     }
 
     private Cinema cinema() {

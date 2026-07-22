@@ -151,7 +151,7 @@ class AutoSchedulePreviewHistoryServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"BALANCED_V1", "BALANCED_V1_S2", "BALANCED_V1_S3"})
+    @ValueSource(strings = {"BALANCED_V1", "BALANCED_V1_S2", "BALANCED_V1_S3", "BALANCED_V1_S4"})
     void allPersistedStrategyVersions_areAccepted(String strategyVersion) {
         AutoSchedulePreviewHistoryQuery query = new AutoSchedulePreviewHistoryQuery();
         query.setStrategyVersion(strategyVersion);

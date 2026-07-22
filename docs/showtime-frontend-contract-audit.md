@@ -71,7 +71,7 @@ History derives an overdue persisted `PREVIEWED` row to display status `EXPIRED`
 
 ## 5. Phase S3 Auto-Schedule Contract
 
-- New previews use `BALANCED_V1_S3`; `BALANCED_V1` and `BALANCED_V1_S2` remain immutable replay versions.
+- New previews use `BALANCED_V1_S3`; `BALANCED_V1`, `BALANCED_V1_S2`, and stored S3 previews remain immutable replay versions. The history parser accepts `BALANCED_V1_S4`, but S4 is not current and no score-breakdown UI is implied.
 - The candidate universe contains unique `(auditoriumId, movieVersionId, startTime)` slots whose film end fits inside an operating window. Cleaning may finish after closing.
 - Film-end-after-close slots and duplicate keys are not materialized or persisted. Release and operational conflicts remain persisted `REJECTED` items.
 - `totalCandidateCount` is the fit-only unique universe and equals persisted item count. `validCandidateCount + rejectedCandidateCount = totalCandidateCount`.

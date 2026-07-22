@@ -10,8 +10,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 
 public final class AutoScheduleGenerationContext {
 
@@ -30,6 +32,7 @@ public final class AutoScheduleGenerationContext {
     private final Map<Long, ImmutableIntervalIndex> maintenanceByAuditorium;
     private final Map<Long, ImmutableIntervalIndex> showtimeConflictsByAuditorium;
     private final Map<Long, ContinuityIndex> continuityByAuditorium;
+    private final Map<MovieServiceDateKey, Integer> existingShowtimeCounts;
     private final Instant planningStart;
     private final Instant planningEnd;
 
@@ -50,6 +53,31 @@ public final class AutoScheduleGenerationContext {
                                          Map<Long, ContinuityIndex> continuityByAuditorium,
                                          Instant planningStart,
                                          Instant planningEnd) {
+        this(cinema, scheduleFrom, scheduleTo, slotGranularityMinutes, candidateLimit,
+                strategy, strategyVersion, auditoriums, movieVersions, operatingWindows,
+                configuredOperatingDays, cinemaClosures, maintenanceByAuditorium,
+                showtimeConflictsByAuditorium, continuityByAuditorium, Map.of(),
+                planningStart, planningEnd);
+    }
+
+    public AutoScheduleGenerationContext(CinemaSnapshot cinema,
+                                         LocalDate scheduleFrom,
+                                         LocalDate scheduleTo,
+                                         int slotGranularityMinutes,
+                                         int candidateLimit,
+                                         AutoScheduleStrategy strategy,
+                                         String strategyVersion,
+                                         List<AuditoriumSnapshot> auditoriums,
+                                         List<MovieVersionSnapshot> movieVersions,
+                                         List<OperatingWindow> operatingWindows,
+                                         Set<Integer> configuredOperatingDays,
+                                         ImmutableIntervalIndex cinemaClosures,
+                                         Map<Long, ImmutableIntervalIndex> maintenanceByAuditorium,
+                                         Map<Long, ImmutableIntervalIndex> showtimeConflictsByAuditorium,
+                                         Map<Long, ContinuityIndex> continuityByAuditorium,
+                                         Map<MovieServiceDateKey, Integer> existingShowtimeCounts,
+                                         Instant planningStart,
+                                         Instant planningEnd) {
         this.cinema = cinema;
         this.scheduleFrom = scheduleFrom;
         this.scheduleTo = scheduleTo;
@@ -65,6 +93,8 @@ public final class AutoScheduleGenerationContext {
         this.maintenanceByAuditorium = Map.copyOf(maintenanceByAuditorium);
         this.showtimeConflictsByAuditorium = Map.copyOf(showtimeConflictsByAuditorium);
         this.continuityByAuditorium = Map.copyOf(continuityByAuditorium);
+        this.existingShowtimeCounts = Collections.unmodifiableMap(
+                new LinkedHashMap<>(existingShowtimeCounts));
         this.planningStart = planningStart;
         this.planningEnd = planningEnd;
     }
@@ -89,6 +119,12 @@ public final class AutoScheduleGenerationContext {
     }
     public ContinuityIndex continuityFor(Long auditoriumId) {
         return continuityByAuditorium.getOrDefault(auditoriumId, ContinuityIndex.empty());
+    }
+    public Map<MovieServiceDateKey, Integer> getExistingShowtimeCounts() {
+        return existingShowtimeCounts;
+    }
+    public int existingShowtimeCount(LocalDate serviceDate, Long movieId) {
+        return existingShowtimeCounts.getOrDefault(new MovieServiceDateKey(serviceDate, movieId), 0);
     }
     public Instant getPlanningStart() { return planningStart; }
     public Instant getPlanningEnd() { return planningEnd; }
@@ -130,5 +166,8 @@ public final class AutoScheduleGenerationContext {
                                        ActiveStatus status,
                                        boolean deleted,
                                        MovieSnapshot movie) {
+    }
+
+    public record MovieServiceDateKey(LocalDate serviceDate, Long movieId) {
     }
 }

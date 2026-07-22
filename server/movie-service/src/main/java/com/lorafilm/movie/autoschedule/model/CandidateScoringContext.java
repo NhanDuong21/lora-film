@@ -41,6 +41,13 @@ public class CandidateScoringContext {
         return existingShowtimes;
     }
 
+    public AutoScheduleGenerationContext getGenerationContext() {
+        if (generationContext == null) {
+            throw new IllegalStateException("Immutable generation context is required by this strategy");
+        }
+        return generationContext;
+    }
+
     public ZoneId getZoneId() {
         return generationContext != null
                 ? generationContext.getCinema().zoneId()

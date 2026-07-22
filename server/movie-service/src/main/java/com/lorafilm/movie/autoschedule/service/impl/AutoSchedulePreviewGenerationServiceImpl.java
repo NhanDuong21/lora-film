@@ -6,7 +6,6 @@ import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import com.lorafilm.movie.autoschedule.model.AutoScheduleGenerationContext;
-import com.lorafilm.movie.autoschedule.model.CandidateScoreResult;
 import com.lorafilm.movie.autoschedule.model.CandidateScoringContext;
 import com.lorafilm.movie.autoschedule.model.CandidateValidationResult;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
@@ -14,11 +13,10 @@ import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerateRequestNormalizer;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationContextLoader;
+import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationStrategy;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleRequestFingerprintService;
-import com.lorafilm.movie.autoschedule.service.BalancedCandidateScoringService;
 import com.lorafilm.movie.autoschedule.service.CandidateCountEstimator;
-import com.lorafilm.movie.autoschedule.service.CandidateSelectionResolver;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateGenerator;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateValidationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -54,8 +52,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
     private final CandidateCountEstimator candidateCountEstimator;
     private final ShowtimeCandidateGenerator generator;
     private final ShowtimeCandidateValidationService validationService;
-    private final BalancedCandidateScoringService scoringService;
-    private final CandidateSelectionResolver selectionResolver;
+    private final AutoScheduleGenerationStrategyRegistry strategyRegistry;
     private final ShowtimeSchedulePreviewLifecycleService lifecycleService;
     private final CinemaRepository cinemaRepository;
     private final AuditoriumRepository auditoriumRepository;
@@ -70,8 +67,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
                                                     CandidateCountEstimator candidateCountEstimator,
                                                     ShowtimeCandidateGenerator generator,
                                                     ShowtimeCandidateValidationService validationService,
-                                                    BalancedCandidateScoringService scoringService,
-                                                    CandidateSelectionResolver selectionResolver,
+                                                    AutoScheduleGenerationStrategyRegistry strategyRegistry,
                                                     ShowtimeSchedulePreviewLifecycleService lifecycleService,
                                                     CinemaRepository cinemaRepository,
                                                     AuditoriumRepository auditoriumRepository,
@@ -85,8 +81,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
         this.candidateCountEstimator = candidateCountEstimator;
         this.generator = generator;
         this.validationService = validationService;
-        this.scoringService = scoringService;
-        this.selectionResolver = selectionResolver;
+        this.strategyRegistry = strategyRegistry;
         this.lifecycleService = lifecycleService;
         this.cinemaRepository = cinemaRepository;
         this.auditoriumRepository = auditoriumRepository;
@@ -100,7 +95,9 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
     public ShowtimeSchedulePreviewSummaryResponse generatePreview(GenerateShowtimeSchedulePreviewRequest request, Long adminUserId) {
         // 1. Normalize and Fingerprint
         NormalizedGeneratePreviewRequest normalizedRequest = normalizer.normalize(request);
-        String fingerprint = fingerprintService.generateFingerprint(normalizedRequest);
+        AutoScheduleGenerationStrategy generationStrategy = strategyRegistry.getCurrent();
+        String strategyVersion = generationStrategy.getStrategyVersion();
+        String fingerprint = fingerprintService.generateFingerprint(normalizedRequest, strategyVersion);
 
         // Date range validation
         long inclusiveDays = ChronoUnit.DAYS.between(normalizedRequest.getScheduleFrom(), normalizedRequest.getScheduleTo()) + 1;
@@ -170,7 +167,8 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
 
         ShowtimeSchedulePreview preview;
         try {
-            preview = lifecycleService.createGeneratingPreview(normalizedRequest, cinema, fingerprint, adminUserId);
+            preview = lifecycleService.createGeneratingPreview(
+                    normalizedRequest, cinema, strategyVersion, fingerprint, adminUserId);
         } catch (DataIntegrityViolationException e) {
             // Concurrent same key check
             existingOpt = previewRepository.findByGenerateIdempotencyKeyWithCinema(normalizedRequest.getIdempotencyKey());
@@ -186,7 +184,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
 
         try {
             AutoScheduleGenerationContext context = contextLoader.load(
-                    normalizedRequest, cinema, auditoriums, movieVersions);
+                    normalizedRequest, cinema, auditoriums, movieVersions, strategyVersion);
             int estimatedCandidateCount = candidateCountEstimator.estimate(context);
             List<ShowtimeCandidate> candidates = new ArrayList<>(estimatedCandidateCount);
             CandidateScoringContext scoringContext = new CandidateScoringContext(context);
@@ -201,9 +199,6 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
                     candidate.setRejectionReason(valResult.getRejectionReason());
                 }
 
-                CandidateScoreResult scoreResult = scoringService.score(candidate, scoringContext);
-                candidate.setScore(scoreResult.getScore());
-                candidate.setScoreBreakdown(scoreResult.getScoreBreakdown());
                 candidates.add(candidate);
             });
 
@@ -212,7 +207,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
                 throw new IllegalStateException("Candidate estimation and generation diverged");
             }
 
-            selectionResolver.resolveDefaultSelection(candidates);
+            generationStrategy.scoreAndResolveDefaultSelection(candidates, scoringContext);
             attachPersistenceReferences(candidates, cinema, auditoriums, movieVersions);
 
             lifecycleService.persistGeneratedItemsAndMarkPreviewed(preview, candidates);

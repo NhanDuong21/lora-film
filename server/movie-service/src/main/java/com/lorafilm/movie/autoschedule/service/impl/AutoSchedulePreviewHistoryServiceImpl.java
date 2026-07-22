@@ -26,12 +26,6 @@ import java.util.Set;
 @Service
 public class AutoSchedulePreviewHistoryServiceImpl implements AutoSchedulePreviewHistoryService {
 
-    private static final Set<String> STRATEGY_VERSIONS = Set.of(
-            AutoScheduleStrategyVersions.LEGACY_BALANCED_V1,
-            AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S2,
-            AutoScheduleStrategyVersions.CURRENT
-    );
-
     private static final Set<String> SORT_FIELDS = Set.of(
             "createdAt",
             "scheduleFrom",
@@ -89,7 +83,7 @@ public class AutoSchedulePreviewHistoryServiceImpl implements AutoSchedulePrevie
             throw validation("createdFrom must be before createdTo");
         }
         if (hasText(query.getStrategyVersion())
-                && !STRATEGY_VERSIONS.contains(query.getStrategyVersion().trim())) {
+                && !AutoScheduleStrategyVersions.isSupported(query.getStrategyVersion().trim())) {
             throw validation("Unsupported strategyVersion: " + query.getStrategyVersion().trim());
         }
 
