@@ -23,6 +23,11 @@ public enum ErrorCode {
     MOVIE_VERSION_NOT_ACTIVE("Movie version is not active", 400),
     MOVIE_VERSION_NOT_BELONG_TO_MOVIE("Movie version does not belong to the movie", 400),
     INVALID_MOVIE_DURATION("Invalid movie duration", 400),
+    INVALID_MOVIE_STATUS_TRANSITION("Invalid movie status transition", 400),
+    TMDB_IMPORT_INVALID_PAYLOAD("TMDB import payload is invalid", 400),
+    TMDB_MOVIE_REVIEW_NOT_APPLICABLE("TMDB review is not applicable to this movie", 400),
+    TMDB_PROVIDER_UNAVAILABLE("TMDB provider is unavailable", 502),
+    TMDB_PROVIDER_RESPONSE_INVALID("TMDB provider response is invalid", 502),
     COMPANY_DUPLICATED("Production company name already exists", 409),
 
     // --- Cinema & Auditorium Module ---

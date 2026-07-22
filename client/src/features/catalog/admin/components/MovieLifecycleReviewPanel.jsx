@@ -6,9 +6,10 @@ import { getMovieReadinessView, getPublishChecklist } from '../utils/movieReadin
 import useMovieStatusTransition from '../hooks/useMovieStatusTransition';
 import MovieStatusTransitionDialog from './MovieStatusTransitionDialog';
 
-export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
+export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate }) {
   const [selectedTransition, setSelectedTransition] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [warningAcknowledged, setWarningAcknowledged] = useState(false);
   const { triggerToast } = useOutletContext() || {};
 
   const handleSuccess = async () => {
@@ -31,6 +32,7 @@ export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
   const handleActionClick = (transition) => {
     resetError();
     setSelectedTransition(transition);
+    setWarningAcknowledged(false);
     setIsDialogOpen(true);
   };
 
@@ -154,6 +156,10 @@ export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
                     isDisabled = true;
                     disableReason = 'Chưa thể xác minh điều kiện phát hành.';
                   }
+                  if (movie.source === 'TMDB' && currentStatus === 'DRAFT' && tmdbReview?.canApprove === false) {
+                    isDisabled = true;
+                    disableReason = tmdbReview.approvalBlockers?.[0] || 'Backend xác định phim chưa đủ điều kiện duyệt.';
+                  }
                 }
                 
                 let buttonClass = 'px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ';
@@ -197,6 +203,8 @@ export default function MovieLifecycleReviewPanel({ movie, onUpdate }) {
         readiness={readiness}
         isPending={isPending}
         error={error}
+        warningAcknowledged={warningAcknowledged}
+        onWarningAcknowledged={setWarningAcknowledged}
         onConfirm={handleConfirmTransition}
       />
     </>

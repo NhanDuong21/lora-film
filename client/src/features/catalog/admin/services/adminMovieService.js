@@ -38,6 +38,11 @@ const adminMovieService = {
     return response.data;
   },
 
+  getTmdbMovieReview: async (movieId) => {
+    const response = await apiClient.get(`/api/admin/movies/${movieId}/tmdb-review`);
+    return response.data;
+  },
+
   createMovie: async (movieData) => {
     const response = await apiClient.post('/api/admin/movies', movieData);
     return response.data;

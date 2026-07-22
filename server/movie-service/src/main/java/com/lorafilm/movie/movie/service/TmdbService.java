@@ -2,112 +2,54 @@ package com.lorafilm.movie.movie.service;
 
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
-import com.lorafilm.movie.movie.domain.entity.Genre;
-import com.lorafilm.movie.movie.domain.enums.AgeRating;
+import com.lorafilm.movie.integration.tmdb.service.TmdbImportService;
+import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.dto.MovieDto;
-import com.lorafilm.movie.movie.dto.MovieRequest;
-import com.lorafilm.movie.movie.dto.tmdb.TmdbGenreDto;
-import com.lorafilm.movie.movie.dto.tmdb.TmdbMovieDetailResponse;
-import com.lorafilm.movie.movie.dto.tmdb.TmdbProductionCountryDto;
-import com.lorafilm.movie.movie.repository.GenreRepository;
-import org.springframework.beans.factory.annotation.Value;
+import com.lorafilm.movie.movie.repository.MovieRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
-import java.text.Normalizer;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
+/**
+ * Backward-compatible adapter for the former TMDB approve endpoint.
+ *
+ * <p>Approval is a movie lifecycle transition, not an ingestion operation. This
+ * adapter therefore only ensures that the TMDB movie exists as DRAFT through
+ * the canonical importer. Callers must use the movie status endpoint for the
+ * subsequent DRAFT -> UPCOMING approval.</p>
+ */
 @Service
+@Deprecated(forRemoval = true)
 public class TmdbService {
 
-    @Value("${tmdb.api.url}")
-    private String tmdbApiUrl;
+    private static final Logger log = LoggerFactory.getLogger(TmdbService.class);
 
-    @Value("${tmdb.api.key}")
-    private String tmdbApiKey;
+    private final TmdbImportService tmdbImportService;
+    private final MovieRepository movieRepository;
+    private final MovieService movieService;
 
-    private final RestTemplate restTemplate;
-    private final AdminMovieService adminMovieService;
-    private final GenreRepository genreRepository;
-
-    public TmdbService(AdminMovieService adminMovieService, GenreRepository genreRepository) {
-        this.restTemplate = new RestTemplate();
-        this.adminMovieService = adminMovieService;
-        this.genreRepository = genreRepository;
+    public TmdbService(
+            TmdbImportService tmdbImportService,
+            MovieRepository movieRepository,
+            MovieService movieService) {
+        this.tmdbImportService = tmdbImportService;
+        this.movieRepository = movieRepository;
+        this.movieService = movieService;
     }
 
-    public TmdbMovieDetailResponse getMovieDetail(Integer tmdbId) {
-        String url = String.format("%s/movie/%d?api_key=%s", tmdbApiUrl, tmdbId, tmdbApiKey);
-        try {
-            return restTemplate.getForObject(url, TmdbMovieDetailResponse.class);
-        } catch (Exception e) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy phim trên TMDB", null);
-        }
-    }
-
-    @Transactional
+    @Deprecated(forRemoval = true)
     public MovieDto approveTmdbMovie(Integer tmdbId) {
-        TmdbMovieDetailResponse tmdbMovie = getMovieDetail(tmdbId);
-
-        MovieRequest request = new MovieRequest();
-        request.setTitle(tmdbMovie.getTitle());
-        request.setOriginalTitle(tmdbMovie.getOriginalTitle());
-        request.setSynopsis(tmdbMovie.getOverview());
-        
-        int duration = tmdbMovie.getRuntime() != null ? tmdbMovie.getRuntime() : 0;
-        if (duration <= 0) {
-            duration = 1;
-        }
-        request.setDurationMinutes(duration);
-
-        if (Boolean.TRUE.equals(tmdbMovie.getAdult())) {
-            request.setAgeRating(AgeRating.T18);
-        } else {
-            request.setAgeRating(AgeRating.P);
+        if (tmdbId == null || tmdbId <= 0) {
+            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "tmdbId must be a positive number");
         }
 
-        request.setReleaseDate(tmdbMovie.getReleaseDate() != null ? tmdbMovie.getReleaseDate() : LocalDate.now());
-        
-        if (tmdbMovie.getProductionCountries() != null && !tmdbMovie.getProductionCountries().isEmpty()) {
-            TmdbProductionCountryDto country = tmdbMovie.getProductionCountries().get(0);
-            request.setCountry(country.getName());
-        }
-
-        MovieDto createdMovie = adminMovieService.createMovie(request);
-
-        if (tmdbMovie.getGenres() != null && !tmdbMovie.getGenres().isEmpty()) {
-            List<String> genrePublicIds = new ArrayList<>();
-            for (TmdbGenreDto tmdbGenre : tmdbMovie.getGenres()) {
-                String slug = generateSlug(tmdbGenre.getName());
-                Optional<Genre> existingGenre = genreRepository.findBySlugAndDeletedAtIsNull(slug);
-                
-                if (existingGenre.isPresent()) {
-                    genrePublicIds.add(existingGenre.get().getPublicId());
-                } else {
-                    Genre newGenre = new Genre();
-                    newGenre.setPublicId(UUID.randomUUID().toString());
-                    newGenre.setName(tmdbGenre.getName());
-                    newGenre.setSlug(slug);
-                    Genre savedGenre = genreRepository.save(newGenre);
-                    genrePublicIds.add(savedGenre.getPublicId());
-                }
-            }
-            adminMovieService.assignGenres(createdMovie.getPublicId(), genrePublicIds);
-        }
-
-        return createdMovie;
-    }
-    
-    private String generateSlug(String input) {
-        if (input == null) return "";
-        String normalized = Normalizer.normalize(input.trim(), Normalizer.Form.NFD);
-        String noAccents = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
-                                   .replaceAll("đ", "d").replaceAll("Đ", "D");
-        return noAccents.toLowerCase().replaceAll("[^a-z0-9\\s-]", "").replaceAll("\\s+", "-").replaceAll("-+", "-").replaceAll("^-|-$", "");
+        log.warn("Deprecated /api/admin/tmdb/approve called for TMDB ID {}; delegating to import-as-DRAFT", tmdbId);
+        tmdbImportService.importMovieById(tmdbId.longValue());
+        Movie movie = movieRepository.findByTmdbId(tmdbId.longValue())
+                .filter(candidate -> candidate.getDeletedAt() == null)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.MOVIE_NOT_FOUND,
+                        "TMDB movie was not imported because it is rejected or deleted"));
+        return movieService.getMovieByIdentifier(movie.getPublicId());
     }
 }

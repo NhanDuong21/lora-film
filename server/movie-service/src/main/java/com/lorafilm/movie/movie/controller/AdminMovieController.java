@@ -11,6 +11,8 @@ import com.lorafilm.movie.movie.service.AdminMovieService;
 import com.lorafilm.movie.movie.service.MovieService;
 import com.lorafilm.movie.movie.service.MovieSummaryQueryService;
 import com.lorafilm.movie.movie.dto.MovieSummaryResponse;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieReviewResponse;
+import com.lorafilm.movie.integration.tmdb.service.TmdbMovieReviewService;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -26,14 +28,17 @@ public class AdminMovieController {
     private final AdminMovieService adminMovieService;
     private final MovieService movieService;
     private final MovieSummaryQueryService movieSummaryQueryService;
+    private final TmdbMovieReviewService tmdbMovieReviewService;
 
     public AdminMovieController(
             AdminMovieService adminMovieService,
             MovieService movieService,
-            MovieSummaryQueryService movieSummaryQueryService) {
+            MovieSummaryQueryService movieSummaryQueryService,
+            TmdbMovieReviewService tmdbMovieReviewService) {
         this.adminMovieService = adminMovieService;
         this.movieService = movieService;
         this.movieSummaryQueryService = movieSummaryQueryService;
+        this.tmdbMovieReviewService = tmdbMovieReviewService;
     }
 
     @PostMapping
@@ -117,6 +122,13 @@ public class AdminMovieController {
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<MovieSummaryResponse>> getMovieSummary() {
         return ResponseEntity.ok(ApiResponse.ok(movieSummaryQueryService.getSummary()));
+    }
+
+    @GetMapping("/{publicId}/tmdb-review")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<TmdbMovieReviewResponse>> getTmdbReview(
+            @PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(ApiResponse.ok(tmdbMovieReviewService.getReview(publicId)));
     }
 
     @GetMapping("/{publicId}")

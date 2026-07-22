@@ -8,6 +8,8 @@ export default function MovieStatusTransitionDialog({
   readiness,
   isPending,
   error,
+  warningAcknowledged,
+  onWarningAcknowledged,
   onConfirm
 }) {
   if (!isOpen || !config) return null;
@@ -65,6 +67,13 @@ export default function MovieStatusTransitionDialog({
                   </div>
                 </div>
               ))}
+
+              {readiness?.warnings?.length > 0 && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100">
+                  <input type="checkbox" checked={warningAcknowledged} onChange={event => onWarningAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4 accent-amber-500" />
+                  <span>Tôi đã kiểm tra các cảnh báo và vẫn muốn tiếp tục chuyển trạng thái.</span>
+                </label>
+              )}
             </div>
           )}
 
@@ -92,7 +101,7 @@ export default function MovieStatusTransitionDialog({
                   : 'bg-brand-orange text-black hover:bg-brand-orange/90'
               }`}
               onClick={onConfirm}
-              disabled={isPending || (config.requiresPublishChecklist && !checklist?.isReady)}
+              disabled={isPending || (config.requiresPublishChecklist && (!checklist?.isReady || (readiness?.warnings?.length > 0 && !warningAcknowledged)))}
             >
               {isPending ? (
                 <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Filter, Plus, Search } from 'lucide-react';
+import { Cloud, Filter, Plus, Search } from 'lucide-react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import useAdminMovies from '@/features/catalog/admin/hooks/useAdminMovies';
 import useMovieSummary from '@/features/catalog/admin/hooks/useMovieSummary';
@@ -79,6 +79,18 @@ export default function AdminMoviePage() {
         />
 
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => adminMovies.commitQuery({ status: 'DRAFT', source: 'TMDB' })}
+            aria-pressed={query.status === 'DRAFT' && query.source === 'TMDB'}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold transition-all ${
+              query.status === 'DRAFT' && query.source === 'TMDB'
+                ? 'border-sky-500/30 bg-sky-500/20 text-sky-300'
+                : 'border-sky-500/20 bg-sky-500/5 text-sky-400 hover:bg-sky-500/10'
+            }`}
+          >
+            <Cloud className="h-4 w-4" /> Hàng chờ TMDB
+          </button>
           {ADMIN_MOVIE_STATUS_TABS.map(tab => (
             <button
               key={tab.value}

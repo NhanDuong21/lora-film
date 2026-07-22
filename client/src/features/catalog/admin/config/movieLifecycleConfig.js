@@ -10,11 +10,11 @@ export const MOVIE_TRANSITIONS = {
     },
     {
       target: 'INACTIVE',
-      label: 'Chuyển sang Không hoạt động',
+      label: 'Không đưa vào khai thác',
       variant: 'danger',
       requiresPublishChecklist: false,
-      confirmTitle: 'Chuyển phim sang Không hoạt động?',
-      confirmDescription: 'Phim có thể không còn hiển thị trong các luồng vận hành thông thường.'
+      confirmTitle: 'Không đưa phim vào khai thác?',
+      confirmDescription: 'Phim sẽ rời hàng chờ duyệt và chuyển sang Không hoạt động. Đây không phải trạng thái từ chối có lịch sử riêng.'
     }
   ],
   UPCOMING: [

@@ -4,6 +4,7 @@ import com.lorafilm.movie.movie.controller.AdminMovieController;
 import com.lorafilm.movie.movie.service.AdminMovieService;
 import com.lorafilm.movie.movie.service.MovieService;
 import com.lorafilm.movie.movie.service.MovieSummaryQueryService;
+import com.lorafilm.movie.integration.tmdb.service.TmdbMovieReviewService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -43,6 +44,7 @@ class AdminMovieSummarySecurityTest {
     @MockBean private AdminMovieService adminMovieService;
     @MockBean private MovieService movieService;
     @MockBean private MovieSummaryQueryService movieSummaryQueryService;
+    @MockBean private TmdbMovieReviewService tmdbMovieReviewService;
     @MockBean private com.lorafilm.movie.common.security.JwtProvider jwtProvider;
 
     @Test
@@ -62,6 +64,26 @@ class AdminMovieSummarySecurityTest {
     @WithMockUser(authorities = "ROLE_ADMIN")
     void summaryAllowsAdminUsers() throws Exception {
         mockMvc.perform(get("/api/admin/movies/summary"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void tmdbReviewRejectsAnonymousUsers() throws Exception {
+        mockMvc.perform(get("/api/admin/movies/movie-id/tmdb-review"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_CUSTOMER")
+    void tmdbReviewRejectsNonAdminUsers() throws Exception {
+        mockMvc.perform(get("/api/admin/movies/movie-id/tmdb-review"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void tmdbReviewAllowsAdminUsers() throws Exception {
+        mockMvc.perform(get("/api/admin/movies/movie-id/tmdb-review"))
                 .andExpect(status().isOk());
     }
 }

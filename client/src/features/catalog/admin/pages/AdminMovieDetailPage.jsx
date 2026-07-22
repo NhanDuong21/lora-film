@@ -13,10 +13,13 @@ import MovieCompanyTab from './movie/MovieCompanyTab';
 import MovieDetailHeader from './movie/MovieDetailHeader';
 import MovieDetailWarnings from './movie/MovieDetailWarnings';
 import MovieLifecycleReviewPanel from '../components/MovieLifecycleReviewPanel';
+import TmdbMovieReviewPanel from '../components/TmdbMovieReviewPanel';
+import useTmdbMovieReview from '../hooks/useTmdbMovieReview';
 
 export default function AdminMovieDetailPage() {
   const { moviePublicId } = useParams();
   const { movie, isLoading, error, reload } = useAdminMovieDetail(moviePublicId);
+  const tmdbReview = useTmdbMovieReview(movie);
   const [activeTab, setActiveTab] = useState('overview');
 
   const tabs = [
@@ -33,8 +36,13 @@ export default function AdminMovieDetailPage() {
       <MovieDetailHeader movie={movie} />
 
       <AsyncState isLoading={isLoading} error={error} onRetry={reload}>
+        <TmdbMovieReviewPanel movie={movie} {...tmdbReview} onRetry={tmdbReview.reload} />
         <MovieDetailWarnings movie={movie} />
-        <MovieLifecycleReviewPanel movie={movie} onUpdate={reload} />
+        <MovieLifecycleReviewPanel
+          movie={movie}
+          tmdbReview={tmdbReview.review}
+          onUpdate={() => Promise.all([reload(), tmdbReview.reload()])}
+        />
         
         <div className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl overflow-hidden mt-6">
           <div className="flex overflow-x-auto border-b border-zinc-800 scrollbar-hide">

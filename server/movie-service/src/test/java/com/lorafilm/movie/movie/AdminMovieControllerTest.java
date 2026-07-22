@@ -11,6 +11,12 @@ import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
 import com.lorafilm.movie.movie.dto.MovieRequest;
 import com.lorafilm.movie.movie.service.AdminMovieService;
 import com.lorafilm.movie.movie.service.MovieSummaryQueryService;
+import com.lorafilm.movie.integration.tmdb.service.TmdbMovieReviewService;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieReviewResponse;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbFieldDiffDto;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbCollectionDiffDto;
+import com.lorafilm.movie.movie.dto.MovieReadinessDto;
+import com.lorafilm.movie.movie.domain.enums.MovieHealthStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -62,6 +68,9 @@ public class AdminMovieControllerTest {
 
     @MockBean
     private MovieSummaryQueryService movieSummaryQueryService;
+
+    @MockBean
+    private TmdbMovieReviewService tmdbMovieReviewService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -342,6 +351,50 @@ public class AdminMovieControllerTest {
                 .andExpect(jsonPath("$.data.withoutShowtime").value(7))
                 .andExpect(jsonPath("$.data.*", org.hamcrest.Matchers.hasSize(12)))
                 .andExpect(jsonPath("$.errors").isArray());
+    }
+
+    @Test
+    void getTmdbReview_ReturnsCanonicalReadOnlyContract() throws Exception {
+        TmdbMovieReviewResponse review = new TmdbMovieReviewResponse(
+                "TMDB",
+                501L,
+                "PENDING",
+                true,
+                List.of(),
+                new MovieReadinessDto(MovieHealthStatus.READY, "READY", List.of(), List.of()),
+                java.time.LocalDateTime.of(2026, 7, 1, 0, 0),
+                java.time.LocalDateTime.of(2026, 7, 20, 0, 0),
+                true,
+                List.of(new TmdbFieldDiffDto("title", "Tên phim", "Old", "New", true)),
+                List.of(new TmdbCollectionDiffDto("genres", "Thể loại", List.of("Drama"),
+                        List.of("Action"), List.of("Action"), List.of("Drama"), true)));
+        when(tmdbMovieReviewService.getReview("movie-1")).thenReturn(review);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/admin/movies/movie-1/tmdb-review"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.source").value("TMDB"))
+                .andExpect(jsonPath("$.data.tmdbId").value(501))
+                .andExpect(jsonPath("$.data.reviewStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.canApprove").value(true))
+                .andExpect(jsonPath("$.data.readiness.healthStatus").value("READY"))
+                .andExpect(jsonPath("$.data.hasProviderChanges").value(true))
+                .andExpect(jsonPath("$.data.scalarDiffs[0].field").value("title"))
+                .andExpect(jsonPath("$.data.collectionDiffs[0].added[0]").value("Action"));
+    }
+
+    @Test
+    void getTmdbReview_MapsProviderFailureWithoutHidingDomainError() throws Exception {
+        when(tmdbMovieReviewService.getReview("movie-1")).thenThrow(
+                new com.lorafilm.movie.common.exception.BusinessException(
+                        com.lorafilm.movie.common.exception.ErrorCode.TMDB_PROVIDER_UNAVAILABLE));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/admin/movies/movie-1/tmdb-review"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("TMDB_PROVIDER_UNAVAILABLE"));
     }
 
     @Test

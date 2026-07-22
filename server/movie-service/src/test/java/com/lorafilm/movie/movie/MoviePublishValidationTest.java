@@ -8,6 +8,7 @@ import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.movie.service.MovieServiceImpl;
 import com.lorafilm.movie.movie.service.AdminMovieProjectionService;
 import com.lorafilm.movie.movie.service.MovieHealthFacts;
+import com.lorafilm.movie.movie.service.MovieLifecyclePolicy;
 import com.lorafilm.movie.movie.service.MovieReadinessEvaluator;
 import com.lorafilm.movie.movie.domain.entity.MovieGenre;
 import com.lorafilm.movie.movie.domain.entity.Genre;
@@ -21,6 +22,7 @@ import com.lorafilm.movie.movie.dto.MovieMapper;
 import java.util.Optional;
 import java.util.List;
 import java.util.Collections;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,6 +57,9 @@ class MoviePublishValidationTest {
 
     @Spy
     private MovieReadinessEvaluator readinessEvaluator = new MovieReadinessEvaluator();
+
+    @Spy
+    private MovieLifecyclePolicy lifecyclePolicy = new MovieLifecyclePolicy();
 
     @Mock
     private AdminMovieProjectionService projectionService;
@@ -149,6 +154,7 @@ class MoviePublishValidationTest {
         movie.setId(1L);
         movie.setPublicId("movie123");
         movie.setStatus(MovieStatus.ENDED);
+        movie.setReleaseDate(LocalDate.now().plusDays(1));
         
         when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie123")).thenReturn(Optional.of(movie));
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(false);
@@ -168,6 +174,7 @@ class MoviePublishValidationTest {
         movie.setId(1L);
         movie.setPublicId("movie123");
         movie.setStatus(MovieStatus.ENDED);
+        movie.setReleaseDate(LocalDate.now().plusDays(1));
         
         when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie123")).thenReturn(Optional.of(movie));
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(true);
@@ -187,6 +194,7 @@ class MoviePublishValidationTest {
         movie.setId(1L);
         movie.setPublicId("movie123");
         movie.setStatus(MovieStatus.ENDED);
+        movie.setReleaseDate(LocalDate.now().plusDays(1));
         
         MovieGenre mg = new MovieGenre();
         Genre g = new Genre();
@@ -205,9 +213,10 @@ class MoviePublishValidationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = MovieStatus.class, names = {"UPCOMING", "NOW_SHOWING"})
+    @EnumSource(value = MovieStatus.class, names = "UPCOMING")
     void draftPublishTransitionsRejectMissingGenre(MovieStatus targetStatus) {
         Movie movie = draftMovie();
+        setEligibleReleaseDate(movie, targetStatus);
         stubMovieForStatusUpdate(movie);
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(true);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(true);
@@ -221,9 +230,10 @@ class MoviePublishValidationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = MovieStatus.class, names = {"UPCOMING", "NOW_SHOWING"})
+    @EnumSource(value = MovieStatus.class, names = "UPCOMING")
     void draftPublishTransitionsRejectMissingActiveVersion(MovieStatus targetStatus) {
         Movie movie = draftMovie();
+        setEligibleReleaseDate(movie, targetStatus);
         stubMovieForStatusUpdate(movie);
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(false);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(true);
@@ -237,9 +247,10 @@ class MoviePublishValidationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = MovieStatus.class, names = {"UPCOMING", "NOW_SHOWING"})
+    @EnumSource(value = MovieStatus.class, names = "UPCOMING")
     void draftPublishTransitionsRejectMissingPrimaryPoster(MovieStatus targetStatus) {
         Movie movie = draftMovie();
+        setEligibleReleaseDate(movie, targetStatus);
         stubMovieForStatusUpdate(movie);
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(true);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(false);
@@ -286,6 +297,12 @@ class MoviePublishValidationTest {
     private void stubMovieForStatusUpdate(Movie movie) {
         when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie123"))
                 .thenReturn(Optional.of(movie));
+    }
+
+    private void setEligibleReleaseDate(Movie movie, MovieStatus targetStatus) {
+        movie.setReleaseDate(targetStatus == MovieStatus.UPCOMING
+                ? LocalDate.now().plusDays(1)
+                : LocalDate.now().minusDays(1));
     }
 }
 

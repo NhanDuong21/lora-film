@@ -47,6 +47,7 @@ class MovieServiceImplQueryTest {
     @Mock private MovieMapper movieMapper;
     @Mock private MovieReadinessEvaluator readinessEvaluator;
     @Mock private AdminMovieProjectionService projectionService;
+    @Mock private MovieLifecyclePolicy lifecyclePolicy;
 
     private MovieServiceImpl service;
 
@@ -61,7 +62,8 @@ class MovieServiceImplQueryTest {
                 movieVersionRepository,
                 movieMapper,
                 readinessEvaluator,
-                projectionService);
+                projectionService,
+                lifecyclePolicy);
         Page<Movie> emptyPage = new PageImpl<>(List.of());
         lenient().when(movieRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(emptyPage);
         lenient().when(projectionService.enrichMovies(emptyPage)).thenReturn(new PageResponse<>());

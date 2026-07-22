@@ -12,6 +12,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.common.enums.ActiveStatus;
@@ -43,6 +45,8 @@ import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 @Service
 public class MovieServiceImpl implements MovieService {
 
+    private static final Logger log = LoggerFactory.getLogger(MovieServiceImpl.class);
+
     private static final java.util.Set<String> SORT_FIELDS = java.util.Set.of(
             "updatedAt", "releaseDate", "title", "tmdbLastUpdated", "createdAt");
 
@@ -55,6 +59,7 @@ public class MovieServiceImpl implements MovieService {
     private final MovieMapper movieMapper;
     private final MovieReadinessEvaluator readinessEvaluator;
     private final AdminMovieProjectionService projectionService;
+    private final MovieLifecyclePolicy lifecyclePolicy;
 
     public MovieServiceImpl(MovieRepository movieRepository,
             MovieGenreRepository movieGenreRepository,
@@ -64,7 +69,8 @@ public class MovieServiceImpl implements MovieService {
             MovieVersionRepository movieVersionRepository,
             MovieMapper movieMapper,
             MovieReadinessEvaluator readinessEvaluator,
-            AdminMovieProjectionService projectionService) {
+            AdminMovieProjectionService projectionService,
+            MovieLifecyclePolicy lifecyclePolicy) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMediaRepository = movieMediaRepository;
@@ -74,6 +80,7 @@ public class MovieServiceImpl implements MovieService {
         this.movieMapper = movieMapper;
         this.readinessEvaluator = readinessEvaluator;
         this.projectionService = projectionService;
+        this.lifecyclePolicy = lifecyclePolicy;
     }
 
     @Override
@@ -258,12 +265,16 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
 
+        MovieStatus previousStatus = movie.getStatus();
+        lifecyclePolicy.validateTransition(movie, targetStatus);
         if (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING) {
             validatePublishConditions(movie);
         }
 
         movie.setStatus(targetStatus);
         Movie savedMovie = movieRepository.save(movie);
+        log.info("Movie lifecycle transition applied: publicId={}, from={}, to={}",
+                moviePublicId, previousStatus, targetStatus);
 
         List<String> genres = movieGenreRepository.findByMovieId(savedMovie.getId())
                 .stream().map(mg -> mg.getGenre().getName()).collect(Collectors.toList());
