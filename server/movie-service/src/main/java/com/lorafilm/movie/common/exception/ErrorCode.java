@@ -123,6 +123,8 @@ public enum ErrorCode {
     AUTO_SCHEDULE_ITEM_NOT_BELONG_TO_PREVIEW("Preview item does not belong to the preview", 400),
     AUTO_SCHEDULE_REJECTED_ITEM_CANNOT_BE_SELECTED("Rejected preview item cannot be selected", 400),
     AUTO_SCHEDULE_DUPLICATE_ITEM_SELECTION("Duplicate preview item found in selection request", 400),
+    AUTO_SCHEDULE_SELECTION_OVERLAP("Selected preview items overlap in an auditorium", 409),
+    AUTO_SCHEDULE_INVALID_ITEM_SELECTION("Preview item cannot be selected in its current state", 409),
     
     AUTO_SCHEDULE_INVALID_DATE_RANGE("Invalid auto schedule date range", 400),
     AUTO_SCHEDULE_DATE_RANGE_TOO_LARGE("Auto schedule date range exceeds maximum allowed days", 400),

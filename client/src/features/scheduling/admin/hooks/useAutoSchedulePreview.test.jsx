@@ -201,6 +201,45 @@ describe('useAutoSchedulePreview selection compatibility', () => {
       'error',
     );
     await waitFor(() => expect(adminAutoScheduleService.getPreview).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(Array.from(result.current.selectedItemIds)).toEqual(['item-1']));
+  });
+
+  it('maps the authoritative backend overlap code and restores selected state', async () => {
+    const triggerToast = vi.fn();
+    adminAutoScheduleService.updateSelections.mockRejectedValue({
+      errorCode: 'AUTO_SCHEDULE_SELECTION_OVERLAP',
+    });
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', { triggerToast }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.handleToggleSelection('item-2', false);
+    });
+
+    expect(triggerToast).toHaveBeenCalledWith(
+      'Không thể lưu lựa chọn vì có các suất chiếm cùng phòng bị trùng thời gian.',
+      'error',
+    );
+    await waitFor(() => expect(Array.from(result.current.selectedItemIds)).toEqual(['item-1']));
+  });
+
+  it('maps invalid-item selection failures and refreshes the preview', async () => {
+    const triggerToast = vi.fn();
+    adminAutoScheduleService.updateSelections.mockRejectedValue({
+      errorCode: 'AUTO_SCHEDULE_INVALID_ITEM_SELECTION',
+    });
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', { triggerToast }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.handleToggleSelection('item-2', false);
+    });
+
+    expect(triggerToast).toHaveBeenCalledWith(
+      'Không thể lưu lựa chọn vì ứng viên không còn hợp lệ. Đang tải lại dữ liệu.',
+      'error',
+    );
+    await waitFor(() => expect(adminAutoScheduleService.getPreview).toHaveBeenCalledTimes(2));
   });
 
   it('keeps the apply payload shape and expected version', async () => {

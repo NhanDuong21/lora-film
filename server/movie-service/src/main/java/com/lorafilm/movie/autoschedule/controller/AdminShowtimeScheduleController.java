@@ -111,14 +111,17 @@ public class AdminShowtimeScheduleController {
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview generated successfully", response));
     }
 
-    @Operation(summary = "Update preview item selections", description = "Update the selection status of candidate items in a preview.")
+    @Operation(
+        summary = "Update preview item selections",
+        description = "Atomically updates a partial set of candidate selections. The complete final selected set must have non-overlapping half-open occupancy intervals within each auditorium."
+    )
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Selections updated"),
         @ApiResponse(responseCode = "400", description = "Invalid selection request"),
         @ApiResponse(responseCode = "401", description = "Unauthorized"),
         @ApiResponse(responseCode = "403", description = "Forbidden"),
         @ApiResponse(responseCode = "404", description = "Preview or item not found"),
-        @ApiResponse(responseCode = "409", description = "Expired, non-editable, or version conflict")
+        @ApiResponse(responseCode = "409", description = "Expired, non-editable, stale version, invalid item state, or final-set occupancy overlap")
     })
     @PutMapping("/{previewPublicId}/items")
     @PreAuthorize("hasRole('ADMIN')")

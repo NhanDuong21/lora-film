@@ -65,8 +65,9 @@ History derives an overdue persisted `PREVIEWED` row to display status `EXPIRED`
 - Items without a persisted service date remain visible and filterable under `Không xác định ngày vận hành`. They are not assigned to a fabricated timeline day; the full List view remains available.
 - The existing backend preview-item `date=YYYY-MM-DD` filter remains a separate compatibility contract: it filters the cinema-local calendar date of `startTime`. This service-date exposure does not change that query parameter or add a server-side service-date predicate.
 - Manual-selection conflict hints, disabled states, final local guards, and the explicit quick re-selection helper use `[startTime, occupancyEndTime)` with half-open adjacency. They compare against all selected items in the same auditorium, not only the visible filtered group. Missing occupancy data is never replaced by `endTime`.
+- The manual-selection backend now validates the complete proposed final selected state with the same canonical auditorium-only occupancy validator used during apply. This check is global across frontend filters and persisted `serviceDate`; `AUTO_SCHEDULE_SELECTION_OVERLAP` and `AUTO_SCHEDULE_INVALID_ITEM_SELECTION` trigger an authoritative full-preview refresh.
 - The quick action is an explicit earliest-start greedy non-overlap helper and is not equivalent to the `BALANCED_V1_S3` weighted interval selection. It can replace the backend-selected flags only after an administrator invokes it.
-- Frontend checks remain assistance only. Backend selection versioning and apply-time revalidation remain authoritative.
+- Frontend checks remain assistance only. Backend final-state selection validation, versioning, and apply-time revalidation remain authoritative.
 
 ## 5. Phase S3 Auto-Schedule Contract
 

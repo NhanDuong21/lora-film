@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +21,31 @@ public interface ShowtimeSchedulePreviewRepository extends JpaRepository<Showtim
         ShowtimeSchedulePreviewHistoryRepository {
 
     Optional<ShowtimeSchedulePreview> findByPublicId(String publicId);
+
+    @Query("""
+        select p
+        from ShowtimeSchedulePreview p
+        join fetch p.cinema
+        where p.publicId = :publicId
+    """)
+    Optional<ShowtimeSchedulePreview> findByPublicIdWithCinema(@Param("publicId") String publicId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+        update ShowtimeSchedulePreview p
+        set p.selectedCandidateCount = :selectedCandidateCount,
+            p.version = p.version + 1,
+            p.updatedAt = :updatedAt
+        where p.id = :previewId
+          and p.status = :editableStatus
+          and p.version = :expectedVersion
+    """)
+    int compareAndSetSelectionVersion(
+            @Param("previewId") Long previewId,
+            @Param("editableStatus") SchedulePreviewStatus editableStatus,
+            @Param("expectedVersion") Long expectedVersion,
+            @Param("selectedCandidateCount") Integer selectedCandidateCount,
+            @Param("updatedAt") Instant updatedAt);
 
     Optional<ShowtimeSchedulePreview> findByGenerateIdempotencyKey(String generateIdempotencyKey);
 

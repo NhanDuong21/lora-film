@@ -59,7 +59,7 @@ For `C` candidates, total sorting and predecessor work is `O(C log C)`; DP, reco
 - Unknown stored versions fail with `AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT`.
 - The schema default remains `BALANCED_V1`; no schema or REST DTO shape changes are required.
 - Automatic selection keeps `selectedAt` and `selectedBy` null. Manual edits retain their timestamps, actor, optimistic versioning, and selected-count recalculation.
-- Manual selection can still create an overlapping set; authoritative apply-time occupancy revalidation rejects it atomically. That pre-existing editing policy is outside S3.
+- Manual selection and apply both use the canonical backend occupancy-overlap validator. Manual updates reject an overlapping proposed final set before mutation, while apply repeats the same candidate-to-candidate invariant before mutable operational revalidation.
 
 ## Correctness and performance evidence
 

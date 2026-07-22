@@ -22,6 +22,17 @@ const getSelectionGuardMessage = (type) => {
   }
 };
 
+const getSelectionBackendErrorMessage = (error, fallbackMessage) => {
+  switch (error?.errorCode) {
+    case 'AUTO_SCHEDULE_SELECTION_OVERLAP':
+      return 'Không thể lưu lựa chọn vì có các suất chiếm cùng phòng bị trùng thời gian.';
+    case 'AUTO_SCHEDULE_INVALID_ITEM_SELECTION':
+      return 'Không thể lưu lựa chọn vì ứng viên không còn hợp lệ. Đang tải lại dữ liệu.';
+    default:
+      return fallbackMessage;
+  }
+};
+
 export default function useAutoSchedulePreview(previewPublicId, { triggerToast, onSuccess }) {
   const [preview, setPreview] = useState(null);
   const [items, setItems] = useState([]);
@@ -118,8 +129,11 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
         setExpectedVersion(res.data.version);
         setPreview(res.data);
       }
-    } catch {
-      triggerToast?.('Lỗi cập nhật trạng thái chọn. Đang tải lại dữ liệu.', 'error');
+    } catch (error) {
+      triggerToast?.(getSelectionBackendErrorMessage(
+        error,
+        'Lỗi cập nhật trạng thái chọn. Đang tải lại dữ liệu.',
+      ), 'error');
       // Revert optimism
       fetchPreview();
     } finally {
@@ -154,8 +168,11 @@ export default function useAutoSchedulePreview(previewPublicId, { triggerToast, 
         setExpectedVersion(res.data.version);
         setPreview(res.data);
       }
-    } catch {
-      triggerToast?.('Lỗi cập nhật đề xuất tối ưu. Đang tải lại dữ liệu.', 'error');
+    } catch (error) {
+      triggerToast?.(getSelectionBackendErrorMessage(
+        error,
+        'Lỗi cập nhật đề xuất tối ưu. Đang tải lại dữ liệu.',
+      ), 'error');
       fetchPreview();
     } finally {
       setIsUpdatingSelection(false);

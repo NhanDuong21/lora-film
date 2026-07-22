@@ -38,6 +38,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -290,6 +291,69 @@ public class ShowtimeSchedulePreviewPaginationIntegrationTest {
         ShowtimeSchedulePreviewItem updatedItem2 = itemRepository.findById(item2.getId()).orElseThrow();
         assertThat(updatedItem1.getSelected()).isFalse();
         assertThat(updatedItem2.getSelected()).isTrue();
+    }
+
+    @Test
+    void overlappingFinalSelection_isRejectedWithoutAnyMutation() {
+        List<ShowtimeSchedulePreviewItem> items =
+                itemRepository.findAllByPreviewIdOrderByRankingPositionAscIdAsc(preview.getId()).subList(0, 2);
+        ShowtimeSchedulePreviewItem first = items.get(0);
+        ShowtimeSchedulePreviewItem overlapping = items.get(1);
+        ShowtimeSchedulePreview before = previewRepository.findById(preview.getId()).orElseThrow();
+        Long versionBefore = before.getVersion();
+        Instant firstUpdatedAt = first.getUpdatedAt();
+        Instant secondUpdatedAt = overlapping.getUpdatedAt();
+
+        org.mockito.Mockito.when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
+        var request = new com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest(
+                versionBefore,
+                List.of(
+                        new com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest(
+                                first.getPublicId(), true),
+                        new com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest(
+                                overlapping.getPublicId(), true)));
+
+        assertThatThrownBy(() -> previewService.updateSelections(preview.getPublicId(), request))
+                .isInstanceOf(com.lorafilm.movie.common.exception.BusinessException.class)
+                .extracting(error -> ((com.lorafilm.movie.common.exception.BusinessException) error).getErrorCode())
+                .isEqualTo(com.lorafilm.movie.common.exception.ErrorCode.AUTO_SCHEDULE_SELECTION_OVERLAP);
+
+        ShowtimeSchedulePreview after = previewRepository.findById(preview.getId()).orElseThrow();
+        ShowtimeSchedulePreviewItem firstAfter = itemRepository.findById(first.getId()).orElseThrow();
+        ShowtimeSchedulePreviewItem secondAfter = itemRepository.findById(overlapping.getId()).orElseThrow();
+        assertThat(after.getVersion()).isEqualTo(versionBefore);
+        assertThat(after.getSelectedCandidateCount()).isZero();
+        assertThat(firstAfter.getSelected()).isFalse();
+        assertThat(secondAfter.getSelected()).isFalse();
+        assertThat(firstAfter.getUpdatedAt()).isEqualTo(firstUpdatedAt);
+        assertThat(secondAfter.getUpdatedAt()).isEqualTo(secondUpdatedAt);
+        assertThat(firstAfter.getSelectedAt()).isNull();
+        assertThat(secondAfter.getSelectedAt()).isNull();
+    }
+
+    @Test
+    void safeNoOp_preservesVersionAndItemTimestamps() {
+        ShowtimeSchedulePreviewItem item =
+                itemRepository.findAllByPreviewIdOrderByRankingPositionAscIdAsc(preview.getId()).get(0);
+        ShowtimeSchedulePreview before = previewRepository.findById(preview.getId()).orElseThrow();
+        Long versionBefore = before.getVersion();
+        Instant updatedAtBefore = item.getUpdatedAt();
+
+        org.mockito.Mockito.when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
+        previewService.updateSelections(preview.getPublicId(),
+                new com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest(
+                        versionBefore,
+                        List.of(new com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest(
+                                item.getPublicId(), false))));
+
+        ShowtimeSchedulePreview after = previewRepository.findById(preview.getId()).orElseThrow();
+        ShowtimeSchedulePreviewItem itemAfter = itemRepository.findById(item.getId()).orElseThrow();
+        assertThat(after.getVersion()).isEqualTo(versionBefore);
+        assertThat(after.getSelectedCandidateCount()).isZero();
+        assertThat(itemAfter.getSelected()).isFalse();
+        assertThat(itemAfter.getUpdatedAt()).isEqualTo(updatedAtBefore);
+        assertThat(itemAfter.getSelectedAt()).isNull();
+        assertThat(itemAfter.getSelectedBy()).isNull();
     }
 
     @Test

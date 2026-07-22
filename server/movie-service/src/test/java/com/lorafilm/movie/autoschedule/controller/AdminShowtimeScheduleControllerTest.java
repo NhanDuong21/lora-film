@@ -165,6 +165,22 @@ class AdminShowtimeScheduleControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void putSelectionsOverlap_returnsStable409Code() throws Exception {
+        UpdatePreviewItemSelectionsRequest request = new UpdatePreviewItemSelectionsRequest(
+                1L,
+                List.of(new UpdatePreviewItemSelectionRequest("item-1", true)));
+        when(service.updateSelections(eq(previewId), any()))
+                .thenThrow(new BusinessException(ErrorCode.AUTO_SCHEDULE_SELECTION_OVERLAP));
+
+        mockMvc.perform(put("/api/admin/showtime-schedules/{id}/items", previewId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("AUTO_SCHEDULE_SELECTION_OVERLAP"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void case5_getPreviewExpired() throws Exception {
         System.out.println("\n========== CASE 5: GET preview het han -> status EXPIRED ==========");
         ShowtimeSchedulePreviewPageResponse response = new ShowtimeSchedulePreviewPageResponse();
