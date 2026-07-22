@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -118,11 +119,11 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         when(strategyRegistry.getCurrent()).thenReturn(generationStrategy);
         when(generationStrategy.getStrategyVersion())
                 .thenReturn(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3);
-        when(fingerprintService.generateFingerprint(
+        lenient().when(fingerprintService.generateFingerprint(
                 normalized, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3))
                 .thenReturn("fingerprint");
-        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema")).thenReturn(Optional.of(cinema));
-        when(previewRepository.findByGenerateIdempotencyKey("generation-key")).thenReturn(Optional.empty());
+        lenient().when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema")).thenReturn(Optional.of(cinema));
+        lenient().when(previewRepository.findByGenerateIdempotencyKey("generation-key")).thenReturn(Optional.empty());
         lenient().when(auditoriumRepository.findByPublicIdInAndDeletedAtIsNull(List.of("auditorium")))
                 .thenReturn(List.of(auditorium));
         lenient().when(movieVersionRepository.findByPublicIdInWithMovieAndDeletedAtIsNull(List.of("version")))
@@ -284,5 +285,47 @@ class AutoSchedulePreviewGenerationServiceImplTest {
         verify(contextLoader, never()).load(any(), any(), any(), any(), any());
         verify(generator, never()).generate(any(), any());
         verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), any(), anyLong());
+    }
+
+    @Test
+    void eightInclusiveServiceDatesAreRejectedBeforePersistence() {
+        LocalDate scheduleFrom = LocalDate.now().plusDays(30);
+        NormalizedGeneratePreviewRequest eightDayRequest = new NormalizedGeneratePreviewRequest(
+                "cinema", scheduleFrom, scheduleFrom.plusDays(7), List.of("version"),
+                List.of("auditorium"), 15, 60, "eight-day-key");
+        when(normalizer.normalize(request)).thenReturn(eightDayRequest);
+        when(fingerprintService.generateFingerprint(
+                eightDayRequest, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3))
+                .thenReturn("eight-day-fingerprint");
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> service.generatePreview(request, 10L));
+
+        assertEquals(ErrorCode.AUTO_SCHEDULE_DATE_RANGE_TOO_LARGE, thrown.getErrorCode());
+        verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), any(), anyLong());
+    }
+
+    @Test
+    void sevenDayBatchStartingThirtyDaysAheadIsNotRejectedForFutureHorizon() {
+        LocalDate scheduleFrom = LocalDate.now().plusDays(30);
+        NormalizedGeneratePreviewRequest futureRequest = new NormalizedGeneratePreviewRequest(
+                "cinema", scheduleFrom, scheduleFrom.plusDays(6), List.of("version"),
+                List.of("auditorium"), 15, 60, "future-key");
+        when(normalizer.normalize(request)).thenReturn(futureRequest);
+        when(fingerprintService.generateFingerprint(
+                futureRequest, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3))
+                .thenReturn("future-fingerprint");
+        when(previewRepository.findByGenerateIdempotencyKey("future-key")).thenReturn(Optional.empty());
+        when(lifecycleService.createGeneratingPreview(any(), any(), any(), any(), anyLong()))
+                .thenReturn(preview);
+        when(contextLoader.load(
+                org.mockito.ArgumentMatchers.eq(futureRequest), any(), any(), any(),
+                org.mockito.ArgumentMatchers.eq(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3)))
+                .thenReturn(generationContext);
+
+        assertDoesNotThrow(() -> service.generatePreview(request, 10L));
+        verify(lifecycleService).createGeneratingPreview(
+                any(), any(), org.mockito.ArgumentMatchers.eq(
+                        AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3), any(), anyLong());
     }
 }

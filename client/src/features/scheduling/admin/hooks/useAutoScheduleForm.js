@@ -1,8 +1,23 @@
-/* eslint-disable react-hooks/set-state-in-effect, no-unused-vars, react-hooks/exhaustive-deps */
-import { useState, useEffect, useCallback, useMemo } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect, no-unused-vars */
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminAutoScheduleService from '@/features/scheduling/admin/services/adminAutoScheduleService';
+import { getAutoScheduleError } from '@/features/scheduling/admin/utils/autoScheduleErrors';
+import {
+  buildAutoScheduleRequestFingerprint,
+  validateAutoScheduleDateRange,
+} from '@/features/scheduling/admin/utils/autoScheduleForm';
+
+const createUuid = () => globalThis.crypto?.randomUUID?.()
+  || `preview-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const mapFieldErrors = (fieldErrors = {}) => ({
+  ...fieldErrors,
+  cinemaId: fieldErrors.cinemaPublicId || fieldErrors.cinemaId,
+  auditoriums: fieldErrors.auditoriumPublicIds || fieldErrors.auditoriums,
+  versions: fieldErrors.movieVersionPublicIds || fieldErrors.versions,
+});
 
 export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
   // Step 1: Scope State
@@ -30,6 +45,14 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
 
   // Validation
   const [errors, setErrors] = useState({});
+  const idempotencyRef = useRef({ fingerprint: '', key: '' });
+
+  const selectedCinema = useMemo(() => cinemas.find(c => c.publicId === selectedCinemaId), [cinemas, selectedCinemaId]);
+  const dateRangeInfo = useMemo(() => validateAutoScheduleDateRange({
+    scheduleFrom,
+    scheduleTo,
+    cinemaTimezone: selectedCinema?.timezone,
+  }), [scheduleFrom, scheduleTo, selectedCinema?.timezone]);
 
   // 1. Initial Load: Cinemas
   useEffect(() => {
@@ -128,13 +151,8 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
   }, []);
 
   const validate = useCallback(() => {
-    const newErrors = {};
+    const newErrors = { ...dateRangeInfo.errors };
     if (!selectedCinemaId) newErrors.cinemaId = 'Vui lòng chọn cụm rạp';
-    if (!scheduleFrom) newErrors.scheduleFrom = 'Vui lòng chọn ngày bắt đầu';
-    if (!scheduleTo) newErrors.scheduleTo = 'Vui lòng chọn ngày kết thúc';
-    if (scheduleFrom && scheduleTo && new Date(scheduleFrom) > new Date(scheduleTo)) {
-      newErrors.scheduleTo = 'Ngày kết thúc không hợp lệ';
-    }
     if (selectedAuditoriumIds.length === 0) newErrors.auditoriums = 'Vui lòng chọn ít nhất một phòng chiếu';
     if (selectedMovieVersionIds.length === 0) newErrors.versions = 'Vui lòng chọn ít nhất một định dạng phim';
     
@@ -143,31 +161,43 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [selectedCinemaId, scheduleFrom, scheduleTo, selectedAuditoriumIds, selectedMovieVersionIds, slotGranularityMinutes, previewTtlMinutes]);
+  }, [dateRangeInfo.errors, selectedCinemaId, selectedAuditoriumIds, selectedMovieVersionIds, slotGranularityMinutes, previewTtlMinutes]);
 
   const handleSubmit = useCallback(async () => {
-    if (!validate()) return;
+    if (!validate()) return false;
+    const request = {
+      cinemaPublicId: selectedCinemaId,
+      scheduleFrom,
+      scheduleTo,
+      movieVersionPublicIds: selectedMovieVersionIds,
+      auditoriumPublicIds: selectedAuditoriumIds,
+      slotGranularityMinutes: parseInt(slotGranularityMinutes),
+      previewTtlMinutes: parseInt(previewTtlMinutes),
+    };
+    const fingerprint = buildAutoScheduleRequestFingerprint(request);
+    if (idempotencyRef.current.fingerprint !== fingerprint) {
+      idempotencyRef.current = { fingerprint, key: createUuid() };
+    }
     setIsSubmitting(true);
     try {
       const payload = {
-        cinemaPublicId: selectedCinemaId,
-        scheduleFrom, // YYYY-MM-DD
-        scheduleTo,   // YYYY-MM-DD
-        movieVersionPublicIds: selectedMovieVersionIds,
-        auditoriumPublicIds: selectedAuditoriumIds,
-        slotGranularityMinutes: parseInt(slotGranularityMinutes),
-        previewTtlMinutes: parseInt(previewTtlMinutes),
-        idempotencyKey: crypto.randomUUID()
+        ...request,
+        idempotencyKey: idempotencyRef.current.key,
       };
 
       const res = await adminAutoScheduleService.generatePreview(payload);
       if (res?.success) {
+        idempotencyRef.current = { fingerprint: '', key: '' };
         triggerToast?.('Tạo bản xem trước thành công', 'success');
         if (onSuccess) onSuccess(res.data?.previewPublicId);
+        return true;
       }
+      return false;
     } catch (err) {
-      const msg = err.response?.data?.message || 'Lỗi khi tạo bản xem trước xếp lịch';
-      triggerToast?.(msg, 'error');
+      const normalized = getAutoScheduleError(err);
+      setErrors(previous => ({ ...previous, ...mapFieldErrors(normalized.fieldErrors) }));
+      triggerToast?.(normalized.message, 'error');
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -175,8 +205,6 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     selectedCinemaId, scheduleFrom, scheduleTo, selectedAuditoriumIds, selectedMovieVersionIds,
     slotGranularityMinutes, previewTtlMinutes, validate, triggerToast, onSuccess
   ]);
-
-  const selectedCinema = useMemo(() => cinemas.find(c => c.publicId === selectedCinemaId), [cinemas, selectedCinemaId]);
 
   return {
     cinemas, movies, auditoriums, versionsByMovie,
@@ -189,6 +217,7 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     selectedMovieVersionIds, toggleVersion,
     isLoadingCinemas, isLoadingAuditoriums, isLoadingMovies, isSubmitting,
     errors, setErrors,
+    dateRangeInfo,
     toggleMovieExpansion,
     handleSubmit, validate
   };

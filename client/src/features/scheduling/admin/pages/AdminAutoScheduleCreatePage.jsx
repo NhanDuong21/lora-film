@@ -22,7 +22,7 @@ const AdminAutoScheduleCreatePage = () => {
     selectedAuditoriumIds, toggleAuditorium,
     selectedMovieVersionIds, toggleVersion,
     isLoadingCinemas, isLoadingAuditoriums, isLoadingMovies, isSubmitting,
-    errors, toggleMovieExpansion,
+    errors, dateRangeInfo, toggleMovieExpansion,
     handleSubmit
   } = useAutoScheduleForm({ triggerToast, onSuccess: handleSuccess });
 
@@ -65,7 +65,7 @@ const AdminAutoScheduleCreatePage = () => {
         </div>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || dateRangeInfo.isTooLong}
           className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -110,6 +110,7 @@ const AdminAutoScheduleCreatePage = () => {
                   <input
                     type="date"
                     value={scheduleFrom}
+                    min={dateRangeInfo.cinemaToday || undefined}
                     onChange={(e) => setScheduleFrom(e.target.value)}
                     className={`w-full bg-zinc-950 border ${errors.scheduleFrom ? 'border-red-500' : 'border-zinc-800'} text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-sm transition-colors focus:outline-none [color-scheme:dark]`}
                   />
@@ -120,6 +121,7 @@ const AdminAutoScheduleCreatePage = () => {
                   <input
                     type="date"
                     value={scheduleTo}
+                    min={scheduleFrom || dateRangeInfo.cinemaToday || undefined}
                     onChange={(e) => setScheduleTo(e.target.value)}
                     className={`w-full bg-zinc-950 border ${errors.scheduleTo ? 'border-red-500' : 'border-zinc-800'} text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-sm transition-colors focus:outline-none [color-scheme:dark]`}
                   />
@@ -127,8 +129,15 @@ const AdminAutoScheduleCreatePage = () => {
                 </div>
               </div>
               <p className="text-[10px] text-zinc-500 italic flex items-center gap-1 mt-1">
-                <AlertCircle className="w-3 h-3" /> Tối đa 14 ngày mỗi lần tạo bản xem trước.
+                <AlertCircle className="w-3 h-3" /> Mỗi bản xem trước tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để lập lịch trước cho cả tháng.
               </p>
+              {dateRangeInfo.isTooLong && (
+                <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs leading-relaxed text-red-300">
+                  Khoảng đã chọn gồm {dateRangeInfo.dayCount} ngày, nhưng mỗi bản xem trước chỉ được tối đa 7 ngày.
+                  {' '}Gợi ý khoảng hợp lệ đầu tiên: <strong>{dateRangeInfo.suggestedScheduleFrom} đến {dateRangeInfo.suggestedScheduleTo}</strong>.
+                  {' '}Ngày bạn đã nhập được giữ nguyên; hãy điều chỉnh trước khi gửi.
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3 mt-4">
                 <div>
