@@ -380,7 +380,7 @@ export default function useAutoSchedulePreview(
       updateSnapshot(previous => ({ ...previous, selectedItemIds: previousSelectedIds }));
       triggerToast?.(getSelectionBackendErrorMessage(
         error,
-        'Lỗi cập nhật đề xuất tối ưu. Đang tải lại dữ liệu.',
+        'Không thể tự chọn lịch không xung đột. Đang tải lại dữ liệu.',
       ), 'error');
       fetchPreview();
     } finally {

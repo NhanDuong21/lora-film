@@ -24,7 +24,7 @@ import {
 } from '@/features/scheduling/admin/utils/autoScheduleHistoryQuery';
 import {
   formatCinemaDateTime,
-  formatPreviewDateKey,
+  formatPreviewDateRange,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 import {
   getApplyModePresentation,
@@ -298,11 +298,11 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate 
                       type="button"
                       onClick={() => onOpenDetail(preview.previewPublicId)}
                       className="block max-w-[220px] truncate text-left text-sm font-bold text-amber-400 hover:text-amber-300"
-                      title={`${preview.cinemaName} · ${formatPreviewDateKey(preview.scheduleFrom)} – ${formatPreviewDateKey(preview.scheduleTo)}`}
+                      title={`${preview.cinemaName} · ${formatPreviewDateRange(preview.scheduleFrom, preview.scheduleTo)}`}
                     >
                       {preview.cinemaName}
                     </button>
-                    <p className="mt-1 text-xs font-semibold text-zinc-300">{formatPreviewDateKey(preview.scheduleFrom)} – {formatPreviewDateKey(preview.scheduleTo)}</p>
+                    <p className="mt-1 text-xs font-semibold text-zinc-300">{formatPreviewDateRange(preview.scheduleFrom, preview.scheduleTo)}</p>
                     <p className="mt-1 text-[10px] text-zinc-500">Tạo {formatCinemaDateTime(preview.createdAt, preview.timezoneSnapshot)}</p>
                     <p className="mt-1 font-mono text-[10px] text-zinc-500">Mã rút gọn: {getPreviewShortCode(preview.previewPublicId)}</p>
                     <details className="mt-2 text-[10px] text-zinc-500">
@@ -324,7 +324,7 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate 
                     </details>
                   </td>
                   <td className="px-4 py-4 text-xs text-zinc-300">
-                    <p className="font-semibold">{formatPreviewDateKey(preview.scheduleFrom)} – {formatPreviewDateKey(preview.scheduleTo)}</p>
+                    <p className="font-semibold">{formatPreviewDateRange(preview.scheduleFrom, preview.scheduleTo)}</p>
                     <p className="mt-1 text-[10px] text-zinc-500">{preview.timezoneSnapshot}</p>
                     <p className="mt-1 text-[10px] text-zinc-600">{getApplyModePresentation(preview.applyMode).label}</p>
                   </td>

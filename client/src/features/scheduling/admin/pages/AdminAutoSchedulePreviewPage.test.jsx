@@ -52,6 +52,7 @@ const hookValue = ({
   items = [candidate()],
   selectedIds = new Set(items.filter(item => item.selected).map(item => item.itemPublicId)),
   isRefreshing = false,
+  isUpdatingSelection = false,
   snapshotError = null,
 } = {}) => {
   const previewValue = preview(status, {
@@ -63,6 +64,7 @@ const hookValue = ({
   const capabilities = derivePreviewCapabilities(previewValue, {
     selectedCount: selectedIds.size,
     isSnapshotUpdating: isRefreshing,
+    isUpdatingSelection,
     hasUnsafeSnapshot: Boolean(snapshotError?.blocksMutations),
   });
 
@@ -80,7 +82,7 @@ const hookValue = ({
     snapshotError,
     capabilities,
     isApplying: false,
-    isUpdatingSelection: false,
+    isUpdatingSelection,
     handleToggleSelection: vi.fn(),
     handleBulkSelection: vi.fn(),
     handleApply: vi.fn(),
@@ -259,6 +261,23 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(screen.getByRole('button', { name: /Áp dụng \(1\)/i })).toBeDisabled();
     expect(screen.getByRole('tab', { name: /Đề xuất \(1\)/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('checkbox', { name: /Chọn Phim 1/i })).toBeDisabled();
+  });
+
+  it('uses the non-conflicting auto-selection wording for its action and loading state', () => {
+    const value = hookValue();
+    useAutoSchedulePreview.mockReturnValue(value);
+    const { unmount } = renderPage();
+
+    const action = screen.getByRole('button', { name: 'Tự chọn lịch không xung đột' });
+    fireEvent.click(action);
+    expect(value.handleBulkSelection).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Chọn nhanh không trùng')).not.toBeInTheDocument();
+    unmount();
+
+    useAutoSchedulePreview.mockReturnValue(hookValue({ isUpdatingSelection: true }));
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Đang tự chọn lịch không xung đột' }))
+      .toHaveTextContent('Đang tự chọn lịch không xung đột…');
   });
 
   it('defaults an applied preview to created Showtimes and remains read-only', () => {

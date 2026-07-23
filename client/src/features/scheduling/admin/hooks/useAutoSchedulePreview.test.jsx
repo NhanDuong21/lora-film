@@ -332,6 +332,21 @@ describe('useAutoSchedulePreview selection compatibility', () => {
     await waitFor(() => expect(Array.from(result.current.selectedItemIds)).toEqual(['item-1']));
   });
 
+  it('uses the auto-selection action wording when a bulk update fails', async () => {
+    const triggerToast = vi.fn();
+    adminAutoScheduleService.updateSelections.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', { triggerToast }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => result.current.handleBulkSelection(['item-2']));
+
+    expect(triggerToast).toHaveBeenCalledWith(
+      'Không thể tự chọn lịch không xung đột. Đang tải lại dữ liệu.',
+      'error',
+    );
+    await waitFor(() => expect(adminAutoScheduleService.getPreview).toHaveBeenCalledTimes(2));
+  });
+
   it('keeps the apply payload and expected-version contract unchanged', async () => {
     const randomUuid = vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('idempotency-1');
     const { result } = renderHook(() => useAutoSchedulePreview('preview-1', {}));

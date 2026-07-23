@@ -52,6 +52,7 @@ describe('ShowtimeTable cinema timezone', () => {
     expect(screen.getByText('01:30')).toBeInTheDocument();
     expect(screen.getByText('03:00')).toBeInTheDocument();
     expect(screen.getAllByText('25/07/2026')).toHaveLength(2);
+    expect(screen.queryByText('2026-07-25')).not.toBeInTheDocument();
   });
 
   it('shows a safe fallback indicator for invalid cinema timezone data', () => {

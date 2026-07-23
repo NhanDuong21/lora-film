@@ -6,6 +6,7 @@ import {
   PREVIEW_STATUS_PRESENTATION,
   SHOWTIME_SOURCE_PRESENTATION,
   SHOWTIME_STATUS_PRESENTATION,
+  SHOWTIME_TRANSITION_ACTION_PRESENTATION,
   getApplyModePresentation,
   getBatchStatusReasonPresentation,
   getCandidateApplyPresentation,
@@ -17,6 +18,7 @@ import {
   getScoreBreakdownRows,
   getShowtimeSourcePresentation,
   getShowtimeStatusPresentation,
+  getShowtimeTransitionActionPresentation,
 } from './schedulingPresentation';
 
 describe('schedulingPresentation', () => {
@@ -30,6 +32,9 @@ describe('schedulingPresentation', () => {
     ]);
     expect(Object.keys(SHOWTIME_STATUS_PRESENTATION)).toEqual([
       'DRAFT', 'OPEN_FOR_BOOKING', 'CLOSED', 'CANCELLED', 'FINISHED',
+    ]);
+    expect(Object.keys(SHOWTIME_TRANSITION_ACTION_PRESENTATION)).toEqual([
+      'OPEN_FOR_BOOKING', 'CLOSED', 'CANCELLED', 'FINISHED',
     ]);
     expect(Object.keys(SHOWTIME_SOURCE_PRESENTATION)).toEqual(['AUTO', 'MANUAL']);
     expect(Object.keys(BATCH_STATUS_REASON_PRESENTATION)).toEqual([
@@ -47,6 +52,8 @@ describe('schedulingPresentation', () => {
     expect(getCandidateValidationPresentation('VALID').label).toBe('Hợp lệ');
     expect(getCandidateApplyPresentation('SKIPPED').label).toBe('Không được chọn');
     expect(getShowtimeStatusPresentation('OPEN_FOR_BOOKING').label).toBe('Đang mở bán');
+    expect(getShowtimeTransitionActionPresentation('CLOSED').label).toBe('Đóng bán');
+    expect(getShowtimeTransitionActionPresentation('CANCELLED').label).toBe('Hủy suất chiếu');
     expect(getShowtimeSourcePresentation('AUTO').batchLabel).toBe('Đợt tạo tự động');
     expect(getApplyModePresentation('ALL_OR_NOTHING').label).toBe('Tất cả hoặc không tạo');
     expect(getBatchStatusReasonPresentation('SHOWTIME_PRICE_MISSING').label)

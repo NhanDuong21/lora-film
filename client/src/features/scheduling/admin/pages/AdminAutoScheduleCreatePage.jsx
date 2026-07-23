@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';
+import { formatPreviewDateRange } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const sectionClassName = 'rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 md:p-6';
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none transition-colors focus:border-brand-orange/60 focus:ring-2 focus:ring-brand-orange/30';
@@ -200,7 +201,7 @@ const AdminAutoScheduleCreatePage = () => {
               {dateRangeInfo.isTooLong && (
                 <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs leading-relaxed text-red-300">
                   Khoảng đã chọn gồm {dateRangeInfo.dayCount} ngày, nhưng mỗi bản xem trước chỉ được tối đa 7 ngày. Gợi ý khoảng hợp lệ đầu tiên:{' '}
-                  <strong>{dateRangeInfo.suggestedScheduleFrom} đến {dateRangeInfo.suggestedScheduleTo}</strong>. Ngày bạn đã nhập được giữ nguyên; hãy điều chỉnh trước khi gửi.
+                  <strong>{formatPreviewDateRange(dateRangeInfo.suggestedScheduleFrom, dateRangeInfo.suggestedScheduleTo)}</strong>. Ngày bạn đã nhập được giữ nguyên; hãy điều chỉnh trước khi gửi.
                 </div>
               )}
             </div>}
@@ -500,7 +501,7 @@ const AdminAutoScheduleCreatePage = () => {
             <dl className="space-y-3 text-xs">
               <div><dt className="text-zinc-500">Cụm rạp</dt><dd className="mt-0.5 font-bold text-zinc-200">{selectedCinema?.name || 'Chưa chọn'}</dd></div>
               <div><dt className="text-zinc-500">Múi giờ</dt><dd className="mt-0.5 font-bold text-zinc-200">{selectedCinema?.timezone || '—'}</dd></div>
-              <div><dt className="text-zinc-500">Lô xem trước</dt><dd className="mt-0.5 font-bold text-zinc-200">{scheduleFrom || '—'} → {scheduleTo || '—'}</dd></div>
+              <div><dt className="text-zinc-500">Lô xem trước</dt><dd className="mt-0.5 font-bold text-zinc-200">{formatPreviewDateRange(scheduleFrom, scheduleTo)}</dd></div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-zinc-950 p-2 text-center"><dt className="text-zinc-500">Ngày</dt><dd className="mt-1 text-base font-black text-white">{dateRangeInfo.dayCount || 0}</dd></div>
                 <div className="rounded-lg bg-zinc-950 p-2 text-center"><dt className="text-zinc-500">Phòng</dt><dd className="mt-1 text-base font-black text-white">{selectedAuditoriumIds.length}</dd></div>

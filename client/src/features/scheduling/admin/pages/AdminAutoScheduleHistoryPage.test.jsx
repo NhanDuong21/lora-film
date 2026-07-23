@@ -85,6 +85,8 @@ describe('AdminAutoScheduleHistoryPage', () => {
     expect(screen.getByText('Auto schedule generation failed')).toBeInTheDocument();
     expect(screen.getByText('4 suất đã tạo')).toBeInTheDocument();
     expect(screen.getAllByText('Mở / chỉnh sửa')).toHaveLength(1);
+    expect(screen.getAllByText('22/07/2026 – 23/07/2026').length).toBeGreaterThan(0);
+    expect(screen.queryByText('2026-07-22 – 2026-07-23')).not.toBeInTheDocument();
   });
 
   it('emphasizes applied time/count and links an applied row to its operational batch', () => {

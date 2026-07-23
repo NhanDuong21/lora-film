@@ -47,6 +47,7 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
     expect(screen.getByText(/Ngày 25\/07\/2026/)).toBeInTheDocument();
     expect(screen.getByText(/01:45 - 25\/07\/2026/)).toBeInTheDocument();
     expect(screen.getByText(/Múi giờ: Asia\/Ho_Chi_Minh/)).toBeInTheDocument();
+    expect(screen.queryByText('2026-07-25')).not.toBeInTheDocument();
   });
 
   it('warns and formats in UTC when cinema timezone is invalid', () => {
@@ -57,25 +58,52 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
     expect(screen.getByText('18:30')).toBeInTheDocument();
   });
 
-  it('uses backend-supported transition values and never offers reopening a closed showtime', () => {
+  it('uses action verbs while keeping the current status badge distinct', () => {
     useShowtimeDetail.mockReturnValue({
       ...detailValue(),
       showtime: { ...detailValue().showtime, status: 'DRAFT' },
     });
     const { unmount } = renderPage();
-    expect(screen.getByRole('button', { name: 'Đang mở bán' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Đã hủy' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mở bán' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hủy suất chiếu' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'OPEN' })).not.toBeInTheDocument();
     unmount();
+
+    useShowtimeDetail.mockReturnValue({
+      ...detailValue(),
+      showtime: { ...detailValue().showtime, status: 'OPEN_FOR_BOOKING' },
+    });
+    const open = renderPage();
+    expect(screen.getByLabelText('Trạng thái hiện tại: Đang mở bán')).toHaveTextContent('Đang mở bán');
+    expect(screen.getByRole('button', { name: 'Đóng bán' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hủy suất chiếu' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Đã đóng bán' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Đã hủy' })).not.toBeInTheDocument();
+    open.unmount();
 
     useShowtimeDetail.mockReturnValue({
       ...detailValue(),
       showtime: { ...detailValue().showtime, status: 'CLOSED' },
     });
     renderPage();
-    expect(screen.getByRole('button', { name: 'Đã chiếu xong' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Đã hủy' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Đang mở bán' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Trạng thái hiện tại: Đã đóng bán')).toHaveTextContent('Đã đóng bán');
+    expect(screen.getByRole('button', { name: 'Đánh dấu đã chiếu xong' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hủy suất chiếu' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mở bán' })).not.toBeInTheDocument();
+  });
+
+  it('explains temporarily disabled status actions without changing transition capability rules', () => {
+    useShowtimeDetail.mockReturnValue({
+      ...detailValue(),
+      showtime: { ...detailValue().showtime, status: 'OPEN_FOR_BOOKING' },
+      isUpdatingStatus: true,
+    });
+    renderPage();
+
+    const close = screen.getByRole('button', { name: 'Đóng bán' });
+    expect(close).toBeDisabled();
+    expect(close).toHaveAttribute('title', 'Đang cập nhật trạng thái suất chiếu; vui lòng đợi.');
+    expect(screen.queryByRole('button', { name: 'Mở bán' })).not.toBeInTheDocument();
   });
 
   it('renders pricing names and an audit timeline with localized fallbacks and preview link', () => {

@@ -74,7 +74,8 @@ describe('AdminAutoScheduleCreatePage', () => {
 
     expect(screen.getByText('Mỗi bản xem trước tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để lập lịch trước cho cả tháng.')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Khoảng đã chọn gồm 8 ngày');
-    expect(screen.getByRole('alert')).toHaveTextContent('2099-08-22 đến 2099-08-28');
+    expect(screen.getByRole('alert')).toHaveTextContent('22/08/2099 – 28/08/2099');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('2099-08-22');
     expect(screen.getByDisplayValue('2099-08-29')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Tạo bản xem trước/i })).toBeDisabled();
   });
@@ -122,6 +123,8 @@ describe('AdminAutoScheduleCreatePage', () => {
 
     expect(screen.getByRole('button', { name: 'Bỏ chọn Phim A IMAX' })).toBeInTheDocument();
     expect(screen.getByText('Cấu hình hợp lệ và sẵn sàng tạo bản xem trước.')).toBeInTheDocument();
+    expect(screen.getByText('22/08/2099 – 28/08/2099')).toBeInTheDocument();
+    expect(screen.queryByText('2099-08-22 → 2099-08-28')).not.toBeInTheDocument();
     const generate = screen.getByRole('button', { name: /Tạo bản xem trước/i });
     expect(generate).toBeEnabled();
     fireEvent.click(generate);

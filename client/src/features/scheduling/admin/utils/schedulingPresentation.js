@@ -63,6 +63,13 @@ export const SHOWTIME_STATUS_PRESENTATION = Object.freeze({
   FINISHED: { label: 'Đã chiếu xong', tone: 'zinc' },
 });
 
+export const SHOWTIME_TRANSITION_ACTION_PRESENTATION = Object.freeze({
+  OPEN_FOR_BOOKING: { label: 'Mở bán' },
+  CLOSED: { label: 'Đóng bán' },
+  CANCELLED: { label: 'Hủy suất chiếu' },
+  FINISHED: { label: 'Đánh dấu đã chiếu xong' },
+});
+
 export const SHOWTIME_SOURCE_PRESENTATION = Object.freeze({
   AUTO: { label: 'Tạo tự động', batchLabel: 'Đợt tạo tự động', tone: 'blue' },
   MANUAL: { label: 'Tạo thủ công', batchLabel: 'Đợt tạo thủ công', tone: 'zinc' },
@@ -119,6 +126,11 @@ export const getCandidateApplyPresentation = value => getPresentation(
 
 export const getShowtimeStatusPresentation = value => getPresentation(
   SHOWTIME_STATUS_PRESENTATION,
+  value,
+);
+
+export const getShowtimeTransitionActionPresentation = value => getPresentation(
+  SHOWTIME_TRANSITION_ACTION_PRESENTATION,
   value,
 );
 

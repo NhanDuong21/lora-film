@@ -215,7 +215,7 @@ export default function AdminSidebar({
                     className={getSubLinkClass('auto-schedule-history')}
                   >
                     <History className="w-4 h-4 shrink-0" />
-                    <span>Lịch sử bản xem trước xếp lịch</span>
+                    <span>Lịch sử bản xem trước</span>
                   </button>
                 </div>
               )}

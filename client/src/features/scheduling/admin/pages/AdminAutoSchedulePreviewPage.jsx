@@ -30,7 +30,7 @@ import {
 import {
   compareServiceDateKeys,
   formatCinemaDateTime,
-  formatPreviewDateKey,
+  formatPreviewDateRange,
   formatServiceDateKey,
   resolveCinemaTimezone,
   UNKNOWN_SERVICE_DATE_KEY,
@@ -138,6 +138,7 @@ const AdminAutoSchedulePreviewPage = () => {
     snapshotError,
     capabilities,
     isApplying,
+    isUpdatingSelection,
     handleToggleSelection,
     handleBulkSelection,
     handleApply,
@@ -344,7 +345,7 @@ const AdminAutoSchedulePreviewPage = () => {
             </div>
             <div className="mt-2 flex flex-wrap gap-4 text-sm text-zinc-400">
               <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{preview.cinemaName}</span>
-              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" />{formatPreviewDateKey(preview.scheduleFrom)} – {formatPreviewDateKey(preview.scheduleTo)}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" />{formatPreviewDateRange(preview.scheduleFrom, preview.scheduleTo)}</span>
               <span>Tạo lúc {formatCinemaDateTime(preview.generatedAt, effectiveTimezone)}</span>
               <span>Mã rút gọn: <strong className="font-mono text-zinc-300">{getPreviewShortCode(preview.previewPublicId || id)}</strong></span>
             </div>
@@ -361,7 +362,17 @@ const AdminAutoSchedulePreviewPage = () => {
           )}
           <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} aria-label="Làm mới bản xem trước" className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} /></button>
           {capabilities.isEditable && (
-            <button type="button" onClick={handleQuickNonOverlappingSelection} disabled={!capabilities.canSelect} className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2.5 text-xs font-black uppercase text-blue-300 disabled:opacity-50"><Wand2 className="h-4 w-4" />Chọn nhanh không trùng</button>
+            <button
+              type="button"
+              onClick={handleQuickNonOverlappingSelection}
+              disabled={!capabilities.canSelect}
+              aria-label={isUpdatingSelection ? 'Đang tự chọn lịch không xung đột' : 'Tự chọn lịch không xung đột'}
+              title={!capabilities.canSelect && !isUpdatingSelection ? 'Bản xem trước hiện không cho phép tự chọn lịch không xung đột.' : undefined}
+              className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2.5 text-xs font-black uppercase text-blue-300 disabled:opacity-50"
+            >
+              {isUpdatingSelection ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Wand2 className="h-4 w-4" aria-hidden="true" />}
+              {isUpdatingSelection ? 'Đang tự chọn lịch không xung đột…' : 'Tự chọn lịch không xung đột'}
+            </button>
           )}
           {capabilities.isEditable && (
             <button type="button" onClick={() => setShowApplyModal(true)} disabled={!capabilities.canApply} className="flex items-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-black uppercase text-zinc-950 disabled:opacity-50"><Save className="h-4 w-4" />Áp dụng ({selectedItemIds.size})</button>
@@ -537,7 +548,7 @@ const AdminAutoSchedulePreviewPage = () => {
             </div>
             <dl className="mt-5 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">
               <dt className="text-zinc-500">Cụm rạp</dt><dd className="text-right font-bold text-white">{preview.cinemaName}</dd>
-              <dt className="text-zinc-500">Khoảng ngày vận hành</dt><dd className="text-right font-bold text-white">{formatPreviewDateKey(preview.scheduleFrom)} – {formatPreviewDateKey(preview.scheduleTo)}</dd>
+              <dt className="text-zinc-500">Khoảng ngày vận hành</dt><dd className="text-right font-bold text-white">{formatPreviewDateRange(preview.scheduleFrom, preview.scheduleTo)}</dd>
               <dt className="text-zinc-500">Phòng đã chọn</dt><dd className="text-right font-bold text-white">{selectedRoomCount}</dd>
               <dt className="text-zinc-500">Ứng viên đã chọn</dt><dd className="text-right font-bold text-white">{selectedItemIds.size}</dd>
               <dt className="text-zinc-500">Dự kiến tạo suất chiếu</dt><dd className="text-right font-bold text-emerald-300">{selectedItemIds.size}</dd>

@@ -12,6 +12,7 @@ import {
   getLocalizedHistoryReason,
   getShowtimeSourcePresentation,
   getShowtimeStatusPresentation,
+  getShowtimeTransitionActionPresentation,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const formatCurrency = (amount, currency = 'VND') => {
@@ -97,7 +98,10 @@ const AdminShowtimeDetailPage = () => {
               <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">
                 CHI TIẾT SUẤT CHIẾU
               </h1>
-              <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border ${getStatusColor(showtime.status)}`}>
+              <span
+                aria-label={`Trạng thái hiện tại: ${getShowtimeStatusPresentation(showtime.status).label}`}
+                className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border ${getStatusColor(showtime.status)}`}
+              >
                 {getShowtimeStatusPresentation(showtime.status).label}
               </span>
             </div>
@@ -126,9 +130,10 @@ const AdminShowtimeDetailPage = () => {
                     setStatusModalOpen(true);
                   }}
                   disabled={isUpdatingStatus}
+                  title={isUpdatingStatus ? 'Đang cập nhật trạng thái suất chiếu; vui lòng đợi.' : undefined}
                   className="bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-zinc-200 font-bold px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-colors"
                 >
-                  {getShowtimeStatusPresentation(t).label}
+                  {getShowtimeTransitionActionPresentation(t).label}
                 </button>
               ))}
             </div>
