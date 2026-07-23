@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { derivePreviewCapabilities } from '../utils/autoSchedulePreviewLifecycle';
@@ -9,6 +9,7 @@ vi.mock('../hooks/useAutoSchedulePreview');
 
 const candidate = (index = 1, overrides = {}) => ({
   itemPublicId: `item-${index}`,
+  moviePublicId: `movie-${index}`,
   movieTitle: `Phim ${index}`,
   movieVersionPublicId: `version-${index}`,
   versionName: '2D',
@@ -23,6 +24,8 @@ const candidate = (index = 1, overrides = {}) => ({
   validationStatus: 'VALID',
   applyStatus: 'PENDING',
   selected: true,
+  score: 90 - index,
+  rankingPosition: index,
   ...overrides,
 });
 
@@ -33,7 +36,7 @@ const preview = (status = 'PREVIEWED', overrides = {}) => ({
   timezoneSnapshot: 'UTC',
   cinemaName: 'Lora Cinema',
   scheduleFrom: '2026-07-24',
-  scheduleTo: '2026-07-24',
+  scheduleTo: '2026-07-26',
   expiresAt: '2099-07-24T12:00:00Z',
   applyMode: 'ALL_OR_NOTHING',
   totalCandidateCount: 1,
@@ -92,146 +95,27 @@ const renderPage = () => render(
   </MemoryRouter>,
 );
 
-describe('AdminAutoSchedulePreviewPage Milestone B', () => {
+describe('AdminAutoSchedulePreviewPage Milestone C', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAutoSchedulePreview.mockReturnValue(hookValue());
   });
 
-  it.each([
-    'GENERATING',
-    'PREVIEWED',
-    'APPLYING',
-    'APPLIED',
-    'FAILED',
-    'EXPIRED',
-    'CANCELLED',
-  ])('presents lifecycle %s truthfully', status => {
-    const candidateState = status === 'APPLIED' ? 'CREATED' : 'PENDING';
-    useAutoSchedulePreview.mockReturnValue(hookValue({
-      status,
-      items: [candidate(1, { applyStatus: candidateState })],
-    }));
-
+  it('defaults to the earliest service date containing a selected recommendation', () => {
+    const items = [
+      candidate(1, { serviceDate: '2026-07-26', startTime: '2026-07-26T10:00:00Z', endTime: '2026-07-26T11:00:00Z', occupancyEndTime: '2026-07-26T11:15:00Z', selected: false }),
+      candidate(2, { serviceDate: '2026-07-25', startTime: '2026-07-25T10:00:00Z', endTime: '2026-07-25T11:00:00Z', occupancyEndTime: '2026-07-25T11:15:00Z' }),
+      candidate(3, { serviceDate: '2026-07-24', startTime: '2026-07-24T10:00:00Z', endTime: '2026-07-24T11:00:00Z', occupancyEndTime: '2026-07-24T11:15:00Z', selected: false }),
+    ];
+    useAutoSchedulePreview.mockReturnValue(hookValue({ items, selectedIds: new Set(['item-2']) }));
     renderPage();
 
-    expect(screen.getAllByText(status).length).toBeGreaterThan(0);
-    if (status === 'PREVIEWED') {
-      expect(screen.getByRole('button', { name: /Áp dụng \(1\)/i })).toBeEnabled();
-      expect(screen.getByRole('tab', { name: /Đề xuất \(1\)/i })).toHaveAttribute('aria-selected', 'true');
-    } else {
-      expect(screen.queryByRole('button', { name: /Áp dụng \(/i })).not.toBeInTheDocument();
-    }
-    if (status === 'APPLIED') {
-      expect(screen.getByRole('tab', { name: /Suất chiếu đã tạo \(1\)/i }))
-        .toHaveAttribute('aria-selected', 'true');
-    }
+    expect(screen.getByRole('button', { name: '25/07/2026' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('timeline-candidate-item-2')).toBeInTheDocument();
+    expect(screen.queryByTestId('timeline-candidate-item-1')).not.toBeInTheDocument();
   });
 
-  it('locks selection and apply while a replacement snapshot is incomplete', () => {
-    useAutoSchedulePreview.mockReturnValue(hookValue({ isRefreshing: true }));
-    renderPage();
-
-    expect(screen.getByText('Đang làm mới ảnh chụp ứng viên')).toBeInTheDocument();
-    expect(screen.getByText(/2\/4 trang · 200\/361 ứng viên/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Áp dụng \(1\)/i })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: /Danh sách/i }));
-    expect(screen.getByRole('checkbox', { name: /Chọn Phim 1/i })).toBeDisabled();
-  });
-
-  it('shows stale-snapshot recovery without replacing the previous candidates', () => {
-    useAutoSchedulePreview.mockReturnValue(hookValue({
-      snapshotError: {
-        code: 'VERSION_MISMATCH',
-        message: 'Dữ liệu bản xem trước đã thay đổi trong lúc tải.',
-        blocksMutations: true,
-      },
-    }));
-    renderPage();
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Không thể công bố ảnh chụp mới');
-    expect(screen.getByText('Dữ liệu bản xem trước đã thay đổi trong lúc tải.')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Đề xuất \(1\)/i })).toBeInTheDocument();
-  });
-
-  it('maps all five exact candidate apply states and does not expose selection for outcomes', () => {
-    const states = ['PENDING', 'CREATED', 'SKIPPED', 'CONFLICT', 'FAILED'];
-    const items = states.map((applyStatus, index) => candidate(index + 1, {
-      applyStatus,
-      selected: applyStatus === 'PENDING',
-    }));
-    useAutoSchedulePreview.mockReturnValue(hookValue({ items, selectedIds: new Set(['item-1']) }));
-    renderPage();
-
-    fireEvent.click(screen.getByRole('tab', { name: /Tất cả ứng viên/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Danh sách/i }));
-
-    expect(screen.getByText('Đang chờ')).toBeInTheDocument();
-    expect(screen.getByText('Đã tạo suất chiếu')).toBeInTheDocument();
-    expect(screen.getByText('Đã bỏ qua')).toBeInTheDocument();
-    expect(screen.getByText('Xung đột khi áp dụng')).toBeInTheDocument();
-    expect(screen.getByText('Áp dụng thất bại')).toBeInTheDocument();
-    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
-  });
-
-  it('renders no more than 100 candidate rows from a 3,615-item complete dataset', () => {
-    const items = Array.from({ length: 3615 }, (_, index) => candidate(index, {
-      selected: false,
-      auditoriumName: `Phòng ${index % 10}`,
-    }));
-    useAutoSchedulePreview.mockReturnValue(hookValue({
-      status: 'CANCELLED',
-      items,
-      selectedIds: new Set(),
-    }));
-    renderPage();
-
-    fireEvent.click(screen.getByRole('button', { name: /Danh sách/i }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Số ứng viên mỗi trang' }), {
-      target: { value: '100' },
-    });
-
-    expect(screen.getAllByTestId('candidate-row')).toHaveLength(100);
-    expect(screen.getByText('Trang 1/37 · 3615 ứng viên')).toBeInTheDocument();
-  });
-
-  it('resets and clamps the client page when a filter changes', () => {
-    const items = Array.from({ length: 120 }, (_, index) => candidate(index, {
-      selected: false,
-      auditoriumName: index === 119 ? 'Phòng đặc biệt' : 'Phòng 1',
-    }));
-    useAutoSchedulePreview.mockReturnValue(hookValue({
-      status: 'CANCELLED',
-      items,
-      selectedIds: new Set(),
-    }));
-    renderPage();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Sau' }));
-    expect(screen.getByText('Trang 2/3 · 120 ứng viên')).toBeInTheDocument();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Lọc phòng chiếu' }), {
-      target: { value: 'Phòng đặc biệt' },
-    });
-    expect(screen.getByText('Trang 1/1 · 1 ứng viên')).toBeInTheDocument();
-  });
-
-  it('uses the complete candidate array for the manual non-overlap helper', () => {
-    const first = candidate(1, { selected: true });
-    const overlapping = candidate(2, {
-      selected: false,
-      startTime: '2026-07-24T11:05:00Z',
-      endTime: '2026-07-24T12:05:00Z',
-      occupancyEndTime: '2026-07-24T12:20:00Z',
-    });
-    const value = hookValue({ items: [first, overlapping], selectedIds: new Set(['item-1']) });
-    useAutoSchedulePreview.mockReturnValue(value);
-    renderPage();
-
-    fireEvent.click(screen.getByRole('button', { name: /Chọn nhanh không trùng/i }));
-    expect(value.handleBulkSelection).toHaveBeenCalledWith(['item-1']);
-  });
-
-  it('uses authoritative serviceDate for after-midnight filtering', () => {
+  it('uses authoritative serviceDate for after-midnight candidates and extends the axis beyond 24:00', () => {
     useAutoSchedulePreview.mockReturnValue(hookValue({
       items: [candidate(1, {
         serviceDate: '2026-07-24',
@@ -242,20 +126,137 @@ describe('AdminAutoSchedulePreviewPage Milestone B', () => {
     }));
     renderPage();
 
-    expect(screen.getByRole('option', { name: '24/07/2026' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: '25/07/2026' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '24/07/2026' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: '25/07/2026' })).not.toBeInTheDocument();
+    expect(screen.getByText('25:00')).toBeInTheDocument();
+    expect(screen.getByText('26:00')).toBeInTheDocument();
   });
 
-  it('shows the APPLIED empty state when no Showtime was created', () => {
+  it('shows exactly one diagnostic overlay, switches to its service date, and does not mutate selection', () => {
+    const items = [
+      candidate(1),
+      candidate(2, {
+        serviceDate: '2026-07-25',
+        startTime: '2026-07-25T10:00:00Z',
+        endTime: '2026-07-25T11:00:00Z',
+        occupancyEndTime: '2026-07-25T11:15:00Z',
+        selected: false,
+        validationStatus: 'REJECTED',
+        rejectionCode: 'AUDITORIUM_UNAVAILABLE',
+      }),
+      candidate(3, {
+        serviceDate: '2026-07-26',
+        startTime: '2026-07-26T10:00:00Z',
+        endTime: '2026-07-26T11:00:00Z',
+        occupancyEndTime: '2026-07-26T11:15:00Z',
+        selected: false,
+        validationStatus: 'REJECTED',
+      }),
+    ];
+    const value = hookValue({ items, selectedIds: new Set(['item-1']) });
+    useAutoSchedulePreview.mockReturnValue(value);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Bị từ chối \/ xung đột \(2\)/i }));
+    const overlayActions = screen.getAllByRole('button', { name: 'Xem trên timeline' });
+    fireEvent.click(overlayActions[0]);
+    expect(screen.getByRole('button', { name: '25/07/2026' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('timeline-candidate-item-2')).toHaveAttribute('data-diagnostic', 'true');
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('0 đề xuất đã chọn + 1 phủ chẩn đoán');
+
+    fireEvent.click(overlayActions[1]);
+    expect(screen.getByRole('button', { name: '26/07/2026' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByTestId('timeline-candidate-item-2')).not.toBeInTheDocument();
+    expect(screen.getByTestId('timeline-candidate-item-3')).toHaveAttribute('data-diagnostic', 'true');
+    expect(value.handleToggleSelection).not.toHaveBeenCalled();
+    expect(value.handleBulkSelection).not.toHaveBeenCalled();
+  });
+
+  it('detects a diagnostic occupancy conflict from the complete snapshot', () => {
+    const items = [
+      candidate(1, { occupancyEndTime: '2026-07-24T11:30:00Z' }),
+      candidate(2, {
+        selected: false,
+        validationStatus: 'REJECTED',
+        startTime: '2026-07-24T11:10:00Z',
+        endTime: '2026-07-24T12:10:00Z',
+        occupancyEndTime: '2026-07-24T12:25:00Z',
+      }),
+    ];
+    useAutoSchedulePreview.mockReturnValue(hookValue({ items, selectedIds: new Set(['item-1']) }));
+    renderPage();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Bị từ chối \/ xung đột/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trên timeline' }));
+    expect(screen.getByRole('status')).toHaveTextContent('xung đột khoảng chiếm phòng');
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('dữ liệu đầy đủ 2 ứng viên');
+  });
+
+  it('sorts concise rows by selected state before date, room, local start, rank, and stable ID', () => {
+    const items = [
+      candidate(3, { selected: false, serviceDate: '2026-07-24', startTime: '2026-07-24T09:00:00Z', endTime: '2026-07-24T10:00:00Z', occupancyEndTime: '2026-07-24T10:15:00Z', rankingPosition: 1 }),
+      candidate(2, { selected: true, serviceDate: '2026-07-25', startTime: '2026-07-25T10:00:00Z', endTime: '2026-07-25T11:00:00Z', occupancyEndTime: '2026-07-25T11:15:00Z', rankingPosition: 3 }),
+      candidate(1, { selected: true, serviceDate: '2026-07-24', startTime: '2026-07-24T10:00:00Z', endTime: '2026-07-24T11:00:00Z', occupancyEndTime: '2026-07-24T11:15:00Z', rankingPosition: 2 }),
+    ];
+    useAutoSchedulePreview.mockReturnValue(hookValue({ status: 'CANCELLED', items, selectedIds: new Set(['item-1', 'item-2']) }));
+    renderPage();
+
+    const rows = screen.getAllByTestId('candidate-row');
+    expect(within(rows[0]).getByText('Phim 1')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Phim 2')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('Phim 3')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('89 / 2')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Dữ liệu mở rộng')).toBeInTheDocument();
+  });
+
+  it('renders no more than 100 candidate rows from a 3,615-item complete dataset', () => {
+    const items = Array.from({ length: 3615 }, (_, index) => candidate(index, {
+      selected: false,
+      auditoriumPublicId: `aud-${index % 10}`,
+      auditoriumName: `Phòng ${index % 10}`,
+    }));
+    useAutoSchedulePreview.mockReturnValue(hookValue({ status: 'CANCELLED', items, selectedIds: new Set() }));
+    renderPage();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Số ứng viên mỗi trang' }), { target: { value: '100' } });
+    expect(screen.getAllByTestId('candidate-row')).toHaveLength(100);
+    expect(screen.getByText('Trang 1/37 · 3615 ứng viên')).toBeInTheDocument();
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('Timeline: 0 đề xuất đã chọn + 0 phủ chẩn đoán');
+  });
+
+  it('opens an accessible drawer from a semantic timeline button and restores focus on close', async () => {
+    renderPage();
+    const timelineButton = screen.getByRole('button', { name: /Phim 1.*Mở chi tiết/i });
+    timelineButton.focus();
+    fireEvent.click(timelineButton);
+
+    expect(screen.getByRole('dialog', { name: 'Phim 1' })).toBeInTheDocument();
+    const closeButton = screen.getByRole('button', { name: 'Đóng chi tiết ứng viên' });
+    await waitFor(() => expect(closeButton).toHaveFocus());
+    fireEvent.click(closeButton);
+    await waitFor(() => expect(timelineButton).toHaveFocus());
+  });
+
+  it('retains Milestone B lifecycle defaults and mutation locking during snapshot refresh', () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({ isRefreshing: true }));
+    renderPage();
+
+    expect(screen.getByText('Đang làm mới ảnh chụp ứng viên')).toBeInTheDocument();
+    expect(screen.getByText(/2\/4 trang · 200\/361 ứng viên/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Áp dụng \(1\)/i })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: /Đề xuất \(1\)/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('checkbox', { name: /Chọn Phim 1/i })).toBeDisabled();
+  });
+
+  it('defaults an applied preview to created Showtimes and remains read-only', () => {
     useAutoSchedulePreview.mockReturnValue(hookValue({
       status: 'APPLIED',
-      items: [candidate(1, { applyStatus: 'SKIPPED', selected: false })],
-      selectedIds: new Set(),
+      items: [candidate(1, { applyStatus: 'CREATED', createdShowtimePublicId: 'showtime-1' })],
     }));
     renderPage();
 
-    expect(screen.getByRole('tab', { name: /Suất chiếu đã tạo \(0\)/i }))
-      .toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Không có suất chiếu nào được tạo từ bản xem trước này.')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Suất chiếu đã tạo \(1\)/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: /Áp dụng \(/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 });

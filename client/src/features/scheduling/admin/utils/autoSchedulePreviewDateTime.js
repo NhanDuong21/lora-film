@@ -2,8 +2,6 @@ export const FALLBACK_PREVIEW_TIMEZONE = 'UTC';
 export const INVALID_PREVIEW_DATE_KEY = '__INVALID_PREVIEW_DATE__';
 export const UNKNOWN_SERVICE_DATE_KEY = '__UNKNOWN_SERVICE_DATE__';
 export const UNKNOWN_SERVICE_DATE_LABEL = 'Không xác định ngày vận hành';
-export const TIMELINE_START_HOUR = 8;
-export const TIMELINE_END_HOUR = 24;
 
 const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const formatterCache = new Map();
@@ -24,7 +22,7 @@ const daysInMonth = (year, month) => {
   return [4, 6, 9, 11].includes(month) ? 30 : 31;
 };
 
-const parseCalendarDateKey = (value) => {
+const parseCalendarDateKey = value => {
   if (typeof value !== 'string') return null;
   const match = DATE_KEY_PATTERN.exec(value);
   if (!match) return null;
@@ -37,6 +35,10 @@ const parseCalendarDateKey = (value) => {
   }
   return { year, month, day, dateKey: value };
 };
+
+const getCalendarDayNumber = parts => (
+  Math.floor(Date.UTC(parts.year, parts.month - 1, parts.day) / 86_400_000)
+);
 
 const getGregorianWeekday = ({ year, month, day }) => {
   const daysBeforeMonth = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
@@ -51,8 +53,9 @@ const getGregorianWeekday = ({ year, month, day }) => {
   return (elapsedDays + 1) % 7;
 };
 
-export const getServiceDateKey = serviceDate =>
-  parseCalendarDateKey(serviceDate)?.dateKey || UNKNOWN_SERVICE_DATE_KEY;
+export const getServiceDateKey = serviceDate => (
+  parseCalendarDateKey(serviceDate)?.dateKey || UNKNOWN_SERVICE_DATE_KEY
+);
 
 export const compareServiceDateKeys = (first, second) => {
   if (first === UNKNOWN_SERVICE_DATE_KEY) return second === UNKNOWN_SERVICE_DATE_KEY ? 0 : 1;
@@ -71,7 +74,7 @@ export const formatServiceDateKey = (dateKey, { weekday = false } = {}) => {
     : formatted;
 };
 
-const toValidDate = (value) => {
+const toValidDate = value => {
   if (!value) return null;
   const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
   return Number.isFinite(date.getTime()) ? date : null;
@@ -85,18 +88,14 @@ const getFormatter = (locale, options) => {
   return formatterCache.get(key);
 };
 
-export const resolveCinemaTimezone = (timezone) => {
+export const resolveCinemaTimezone = timezone => {
   if (typeof timezone === 'string' && timezone.trim()) {
     const requestedTimezone = timezone.trim();
     try {
       getFormatter('en-US', { timeZone: requestedTimezone }).format(0);
-      return {
-        timezone: requestedTimezone,
-        requestedTimezone,
-        usedFallback: false,
-      };
+      return { timezone: requestedTimezone, requestedTimezone, usedFallback: false };
     } catch {
-      // Fall through to the deterministic fallback.
+      // Use the deterministic UTC fallback below.
     }
   }
 
@@ -120,7 +119,6 @@ const getCinemaParts = (instant, timezone, includeTime) => {
     month: '2-digit',
     day: '2-digit',
   };
-
   if (includeTime) {
     options.hour = '2-digit';
     options.minute = '2-digit';
@@ -129,9 +127,8 @@ const getCinemaParts = (instant, timezone, includeTime) => {
 
   const parts = getFormatter('en-CA', options).formatToParts(date);
   const values = Object.fromEntries(
-    parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]),
+    parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]),
   );
-
   const year = Number(values.year);
   const month = Number(values.month);
   const day = Number(values.day);
@@ -143,7 +140,6 @@ const getCinemaParts = (instant, timezone, includeTime) => {
   const hour = Number(values.hour);
   const minute = Number(values.minute);
   if (![hour, minute].every(Number.isFinite)) return null;
-
   return {
     year,
     month,
@@ -155,18 +151,19 @@ const getCinemaParts = (instant, timezone, includeTime) => {
   };
 };
 
-export const getCinemaDateKey = (instant, timezone) =>
-  getCinemaParts(instant, timezone, false)?.dateKey || null;
+export const getCinemaDateKey = (instant, timezone) => (
+  getCinemaParts(instant, timezone, false)?.dateKey || null
+);
 
-export const getCinemaTimeParts = (instant, timezone) =>
-  getCinemaParts(instant, timezone, true);
+export const getCinemaTimeParts = (instant, timezone) => (
+  getCinemaParts(instant, timezone, true)
+);
 
 export const formatCinemaDate = (instant, timezone, { weekday = false } = {}) => {
   const date = toValidDate(instant);
   if (!date) return '—';
-  const effectiveTimezone = resolveCinemaTimezone(timezone).timezone;
   return getFormatter('vi-VN', {
-    timeZone: effectiveTimezone,
+    timeZone: resolveCinemaTimezone(timezone).timezone,
     calendar: 'gregory',
     numberingSystem: 'latn',
     ...(weekday ? { weekday: 'long' } : {}),
@@ -179,9 +176,8 @@ export const formatCinemaDate = (instant, timezone, { weekday = false } = {}) =>
 export const formatCinemaTime = (instant, timezone) => {
   const date = toValidDate(instant);
   if (!date) return '—';
-  const effectiveTimezone = resolveCinemaTimezone(timezone).timezone;
   return getFormatter('vi-VN', {
-    timeZone: effectiveTimezone,
+    timeZone: resolveCinemaTimezone(timezone).timezone,
     numberingSystem: 'latn',
     hour: '2-digit',
     minute: '2-digit',
@@ -192,9 +188,8 @@ export const formatCinemaTime = (instant, timezone) => {
 export const formatCinemaDateTime = (instant, timezone) => {
   const date = toValidDate(instant);
   if (!date) return '—';
-  const effectiveTimezone = resolveCinemaTimezone(timezone).timezone;
   return getFormatter('vi-VN', {
-    timeZone: effectiveTimezone,
+    timeZone: resolveCinemaTimezone(timezone).timezone,
     calendar: 'gregory',
     numberingSystem: 'latn',
     day: '2-digit',
@@ -208,22 +203,10 @@ export const formatCinemaDateTime = (instant, timezone) => {
 
 export const formatPreviewDateKey = (dateKey, { weekday = false } = {}) => {
   if (dateKey === INVALID_PREVIEW_DATE_KEY) return 'Ngày không hợp lệ';
-  const match = DATE_KEY_PATTERN.exec(dateKey || '');
-  if (!match) return '—';
+  const parts = parseCalendarDateKey(dateKey);
+  if (!parts) return '—';
 
-  const [, yearText, monthText, dayText] = match;
-  const year = Number(yearText);
-  const month = Number(monthText);
-  const day = Number(dayText);
-  const date = new Date(Date.UTC(year, month - 1, day, 12));
-  if (
-    date.getUTCFullYear() !== year
-    || date.getUTCMonth() !== month - 1
-    || date.getUTCDate() !== day
-  ) {
-    return '—';
-  }
-
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12));
   return getFormatter('vi-VN', {
     timeZone: 'UTC',
     calendar: 'gregory',
@@ -240,70 +223,82 @@ export const formatCinemaTimeRange = (startTime, endTime, timezone) => {
   const endParts = getCinemaTimeParts(endTime, timezone);
   if (!startParts || !endParts) return '—';
 
-  const range = `${formatCinemaTime(startTime, timezone)} - ${formatCinemaTime(endTime, timezone)}`;
+  const range = `${formatCinemaTime(startTime, timezone)} – ${formatCinemaTime(endTime, timezone)}`;
   if (endParts.dateKey === startParts.dateKey) return range;
-
-  const startDate = new Date(`${startParts.dateKey}T12:00:00Z`);
-  const endDate = new Date(`${endParts.dateKey}T12:00:00Z`);
-  const dayDifference = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000);
-  return dayDifference === 1
+  const difference = getCalendarDayNumber(endParts) - getCalendarDayNumber(startParts);
+  return difference === 1
     ? `${range} (+1 ngày)`
     : `${range} (${formatPreviewDateKey(endParts.dateKey)})`;
 };
 
-export const getTimelineRange = (
-  startTime,
-  endTime,
-  timezone,
-  { startHour = TIMELINE_START_HOUR, endHour = TIMELINE_END_HOUR } = {},
-) => {
-  const startDate = toValidDate(startTime);
-  const endDate = toValidDate(endTime);
-  const startParts = getCinemaTimeParts(startTime, timezone);
-  const endParts = getCinemaTimeParts(endTime, timezone);
-  const totalMinutes = (endHour - startHour) * 60;
+export const getCinemaMinuteOffset = (instant, serviceDate, timezone) => {
+  const authoritativeDate = parseCalendarDateKey(serviceDate);
+  const localParts = getCinemaTimeParts(instant, timezone);
+  if (!authoritativeDate || !localParts) return null;
 
-  if (!startDate || !endDate || endDate <= startDate || !startParts || !endParts || totalMinutes <= 0) {
-    return { isVisible: false, isMalformed: true, left: '0%', width: '0%' };
-  }
+  const dayOffset = getCalendarDayNumber(localParts) - getCalendarDayNumber(authoritativeDate);
+  return (dayOffset * 24 * 60) + localParts.minutesSinceMidnight;
+};
 
-  const windowStartMinutes = startHour * 60;
-  const windowEndMinutes = endHour * 60;
-  let localEndMinutes;
+export const getCandidateTimelineOffsets = (candidate, serviceDate, timezone) => {
+  const startInstant = toValidDate(candidate?.startTime);
+  const endInstant = toValidDate(candidate?.endTime);
+  const occupancyInstant = toValidDate(candidate?.occupancyEndTime);
+  const startMinute = getCinemaMinuteOffset(candidate?.startTime, serviceDate, timezone);
+  const endMinute = getCinemaMinuteOffset(candidate?.endTime, serviceDate, timezone);
+  const occupancyEndMinute = getCinemaMinuteOffset(candidate?.occupancyEndTime, serviceDate, timezone);
 
-  if (endParts.dateKey === startParts.dateKey) {
-    localEndMinutes = endParts.minutesSinceMidnight;
-  } else if (endParts.dateKey > startParts.dateKey) {
-    localEndMinutes = 24 * 60;
-  } else {
-    return { isVisible: false, isMalformed: true, left: '0%', width: '0%' };
-  }
-
-  const visibleStartMinutes = Math.max(windowStartMinutes, startParts.minutesSinceMidnight);
-  const visibleEndMinutes = Math.min(windowEndMinutes, localEndMinutes);
-  if (visibleEndMinutes <= visibleStartMinutes) {
+  if (
+    !startInstant
+    || !endInstant
+    || !occupancyInstant
+    || endInstant <= startInstant
+    || occupancyInstant < endInstant
+    || ![startMinute, endMinute, occupancyEndMinute].every(Number.isFinite)
+    || endMinute <= startMinute
+    || occupancyEndMinute < endMinute
+  ) {
     return {
-      isVisible: false,
-      isMalformed: false,
-      isOutsideRange: true,
-      startDateKey: startParts.dateKey,
-      left: '0%',
-      width: '0%',
+      valid: false,
+      startMinute: null,
+      endMinute: null,
+      occupancyEndMinute: null,
     };
   }
 
-  const leftPercent = ((visibleStartMinutes - windowStartMinutes) / totalMinutes) * 100;
-  const naturalWidth = ((visibleEndMinutes - visibleStartMinutes) / totalMinutes) * 100;
-  const widthPercent = Math.min(100 - leftPercent, Math.max(2, naturalWidth));
+  return { valid: true, startMinute, endMinute, occupancyEndMinute };
+};
+
+export const buildDynamicTimelineWindow = candidates => {
+  const eligible = (candidates || []).filter(candidate => (
+    candidate?.timelineEligible
+    && Number.isFinite(candidate.startMinuteOffset)
+    && Number.isFinite(candidate.occupancyEndMinuteOffset)
+  ));
+  if (eligible.length === 0) return null;
+
+  const earliestStart = Math.min(...eligible.map(candidate => candidate.startMinuteOffset));
+  const latestOccupancyEnd = Math.max(...eligible.map(candidate => candidate.occupancyEndMinuteOffset));
+  const startMinute = Math.floor(earliestStart / 60) * 60;
+  let endMinute = Math.ceil(latestOccupancyEnd / 60) * 60;
+  if (endMinute <= startMinute) endMinute = startMinute + 60;
 
   return {
-    isVisible: true,
-    isMalformed: false,
-    isOutsideRange: false,
-    isClippedAtStart: startParts.minutesSinceMidnight < windowStartMinutes,
-    isClippedAtEnd: localEndMinutes > windowEndMinutes || endParts.dateKey !== startParts.dateKey,
-    startDateKey: startParts.dateKey,
-    left: `${leftPercent}%`,
-    width: `${widthPercent}%`,
+    startMinute,
+    endMinute,
+    totalMinutes: endMinute - startMinute,
+    ticks: Array.from(
+      { length: Math.floor((endMinute - startMinute) / 60) + 1 },
+      (_, index) => startMinute + (index * 60),
+    ),
   };
+};
+
+export const formatTimelineMinute = minuteOffset => {
+  if (!Number.isFinite(minuteOffset)) return '—';
+  const sign = minuteOffset < 0 ? '−' : '';
+  const absolute = Math.abs(minuteOffset);
+  const hours = Math.floor(absolute / 60);
+  const minutes = absolute % 60;
+  return `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
