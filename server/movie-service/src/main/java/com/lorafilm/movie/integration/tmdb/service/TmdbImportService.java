@@ -1,6 +1,5 @@
 package com.lorafilm.movie.integration.tmdb.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +8,8 @@ import com.lorafilm.movie.integration.tmdb.config.TmdbProperties;
 import com.lorafilm.movie.integration.tmdb.domain.entity.TmdbSyncState;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieResponse;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieWrapperDto;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbImportOutcome;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbImportResult;
 import com.lorafilm.movie.integration.tmdb.mapper.TmdbMovieMapper;
 import com.lorafilm.movie.integration.tmdb.repository.TmdbSyncStateRepository;
 import com.lorafilm.movie.movie.domain.entity.Movie;
@@ -16,6 +17,7 @@ import com.lorafilm.movie.movie.repository.MovieRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,6 +82,7 @@ public class TmdbImportService {
     private final ProductionCompanyRepository productionCompanyRepository;
     private final MovieProductionCompanyRepository movieProductionCompanyRepository;
     private final MovieVersionRepository movieVersionRepository;
+    private final TmdbProviderMovieService providerMovieService;
     private TmdbImportService self;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -97,7 +100,8 @@ public class TmdbImportService {
                              MovieTranslationRepository movieTranslationRepository,
                              ProductionCompanyRepository productionCompanyRepository,
                              MovieProductionCompanyRepository movieProductionCompanyRepository,
-                             MovieVersionRepository movieVersionRepository) {
+                             MovieVersionRepository movieVersionRepository,
+                             TmdbProviderMovieService providerMovieService) {
         this.tmdbClient = tmdbClient;
         this.properties = properties;
         this.movieRepository = movieRepository;
@@ -113,6 +117,7 @@ public class TmdbImportService {
         this.productionCompanyRepository = productionCompanyRepository;
         this.movieProductionCompanyRepository = movieProductionCompanyRepository;
         this.movieVersionRepository = movieVersionRepository;
+        this.providerMovieService = providerMovieService;
     }
 
     public void stopBulkSync() {
@@ -176,9 +181,10 @@ public class TmdbImportService {
             syncState.setCursor("0");
             syncStateRepository.save(syncState);
         } else if ("IN_PROGRESS".equals(syncState.getStatus())) {
-            // Check if stuck for more than 5 minutes
-            if (syncState.getLastSyncTime() != null && syncState.getLastSyncTime().isBefore(LocalDateTime.now().minusMinutes(5))) {
-                log.warn("TMDB Bulk Sync was stuck IN_PROGRESS for over 5 minutes. Automatically recovering state to IDLE.");
+            // Check if stuck based on threshold
+            LocalDateTime thresholdTime = LocalDateTime.now().minusSeconds(properties.getSyncStaleThresholdSeconds());
+            if (syncState.getUpdatedAt() != null && syncState.getUpdatedAt().isBefore(thresholdTime)) {
+                log.warn("TMDB Bulk Sync was stuck IN_PROGRESS for over {} seconds. Automatically recovering state to IDLE.", properties.getSyncStaleThresholdSeconds());
                 syncState.setStatus("IDLE");
                 syncStateRepository.save(syncState);
             } else {
@@ -207,7 +213,7 @@ public class TmdbImportService {
             while (hasMore) {
                 if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
                     log.info("TMDB Bulk Sync stopped by user request at cursor {}", currentCursor);
-                    syncState.setStatus("STOPPED");
+                    syncState.setStatus("IDLE");
                     syncStateRepository.save(syncState);
                     return;
                 }
@@ -231,8 +237,8 @@ public class TmdbImportService {
                         currentCursor = response.getNextCursor();
                         hasMore = Boolean.TRUE.equals(response.getHasMore());
                         
+                        
                         syncState.setCursor(currentCursor);
-                        syncState.setLastSyncTime(LocalDateTime.now());
                         syncStateRepository.save(syncState);
                         
                         retryCount = 0; // Reset retry count on success
@@ -243,14 +249,14 @@ public class TmdbImportService {
                     }
                 } catch (InterruptedException e) {
                     log.info("TMDB Bulk Sync interrupted at cursor {}", currentCursor);
-                    syncState.setStatus("STOPPED");
+                    syncState.setStatus("IDLE");
                     syncStateRepository.save(syncState);
                     Thread.currentThread().interrupt();
                     return;
                 } catch (Exception e) {
                     if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
                         log.info("TMDB Bulk Sync stopped during exception handling at cursor {}", currentCursor);
-                        syncState.setStatus("STOPPED");
+                        syncState.setStatus("IDLE");
                         syncStateRepository.save(syncState);
                         return;
                     }
@@ -267,11 +273,12 @@ public class TmdbImportService {
             }
 
             syncState.setStatus("COMPLETED");
+            syncState.setLastSyncTime(LocalDateTime.now());
             syncStateRepository.save(syncState);
             log.info("TMDB Bulk Sync completed successfully.");
         } catch (InterruptedException e) {
             log.info("TMDB Bulk Sync thread interrupted.");
-            syncState.setStatus("STOPPED");
+            syncState.setStatus("IDLE");
             syncStateRepository.save(syncState);
             Thread.currentThread().interrupt();
         } catch (Exception e) {
@@ -333,93 +340,73 @@ public class TmdbImportService {
     /**
      * Scenario 3: Sync Single Movie By ID
      */
-    public void importMovieById(Long tmdbId) {
+    public TmdbImportResult importMovieById(Long tmdbId) {
+        TmdbMovieWrapperDto dto = providerMovieService.fetchMovie(tmdbId);
+        return importMovieSafely(dto);
+    }
+
+    public TmdbImportResult importMovieSafely(TmdbMovieWrapperDto wrapper) {
         try {
-            String responseBody = tmdbClient.fetchMovieDetails(tmdbId);
-            JsonNode root = objectMapper.readTree(responseBody);
-            if (root.has("success") && !root.get("success").asBoolean()) {
-                throw new RuntimeException("TMDB Error: " + root.path("message").asText());
-            }
-            if (root.has("data")) {
-                TmdbMovieWrapperDto dto = objectMapper.readValue(
-                    root.get("data").toString(), 
-                    TmdbMovieWrapperDto.class
-                );
-                if (self != null) {
-                    self.importMovie(dto);
-                } else {
-                    importMovie(dto);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error importing single movie {}: {}", tmdbId, e.getMessage());
-            throw new RuntimeException(e);
+            return self != null ? self.importMovie(wrapper) : importMovie(wrapper);
+        } catch (DataIntegrityViolationException exception) {
+            if (wrapper == null || wrapper.getTmdbId() == null) throw exception;
+            Movie winner = movieRepository.findByTmdbId(wrapper.getTmdbId()).orElseThrow(() -> exception);
+            TmdbImportOutcome outcome = winner.getDeletedAt() == null
+                    ? TmdbImportOutcome.ALREADY_IMPORTED
+                    : TmdbImportOutcome.DELETED_TOMBSTONE;
+            log.info("Concurrent import for TMDB ID {} lost the unique-key race; returning {}",
+                    wrapper.getTmdbId(), outcome);
+            return new TmdbImportResult(
+                    wrapper.getTmdbId(),
+                    outcome,
+                    winner.getPublicId(),
+                    "A concurrent request already imported this movie; existing data was preserved");
         }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void importMovie(TmdbMovieWrapperDto wrapper) {
-        if (wrapper == null) {
-            log.warn("Wrapper is null");
-            return;
-        }
-        if (wrapper.getMovie() == null) {
-            log.warn("Wrapper movie is null for TMDB ID: {}", wrapper.getTmdbId());
-            return;
-        }
+    public TmdbImportResult importMovie(TmdbMovieWrapperDto wrapper) {
+        providerMovieService.validateIdentity(null, wrapper);
         
         String statusStr = wrapper.getApprovalStatus() != null ? wrapper.getApprovalStatus() : wrapper.getQualityStatus();
         log.info("Processing TMDB ID {}: Status is {}", wrapper.getTmdbId(), statusStr);
 
         if ("REJECTED".equalsIgnoreCase(statusStr) || "REJECT".equalsIgnoreCase(statusStr)) {
             log.info("Skipping REJECTED TMDB Movie ID: {}", wrapper.getTmdbId());
-            return;
-        }
-
-        LocalDate releaseDate = movieMapper.extractReleaseDate(wrapper);
-        MovieStatus targetStatus = MovieStatus.DRAFT;
-
-        if ("AUTO_APPROVED".equalsIgnoreCase(statusStr) || "ACCEPT".equalsIgnoreCase(statusStr)) {
-            // Mọi phim AUTO_APPROVED có ngày chiếu ở tương lai HOẶC phát hành gần đây (trong vòng 90 ngày) đều được đặt là UPCOMING
-            if (releaseDate != null && (releaseDate.isAfter(LocalDate.now()) || releaseDate.isAfter(LocalDate.now().minusDays(90)))) {
-                targetStatus = MovieStatus.UPCOMING;
-            } else {
-                targetStatus = MovieStatus.DRAFT;
-            }
-        } else if ("NEEDS_REVIEW".equalsIgnoreCase(statusStr) || "HOLD".equalsIgnoreCase(statusStr)) {
-            targetStatus = MovieStatus.DRAFT;
+            return new TmdbImportResult(
+                    wrapper.getTmdbId(),
+                    TmdbImportOutcome.REJECTED_BY_PROVIDER,
+                    null,
+                    "Provider rejected movie; nothing was imported");
         }
 
         Movie existingMovie = movieRepository.findByTmdbId(wrapper.getTmdbId()).orElse(null);
-        if (existingMovie == null) {
-            String titleToUse = movieMapper.extractTitle(wrapper);
-            String baseSlug = movieMapper.generateSlug(titleToUse);
-            if (baseSlug != null && !baseSlug.isBlank()) {
-                existingMovie = movieRepository.findBySlugAndDeletedAtIsNull(baseSlug).orElse(null);
-            }
+        if (existingMovie != null) {
+            TmdbImportOutcome outcome = existingMovie.getDeletedAt() == null
+                    ? TmdbImportOutcome.ALREADY_IMPORTED
+                    : TmdbImportOutcome.DELETED_TOMBSTONE;
+            log.info("TMDB ID {} already exists with outcome {}; preserving aggregate", wrapper.getTmdbId(), outcome);
+            return new TmdbImportResult(
+                    wrapper.getTmdbId(),
+                    outcome,
+                    existingMovie.getPublicId(),
+                    outcome == TmdbImportOutcome.DELETED_TOMBSTONE
+                            ? "Deleted TMDB movie is preserved as a tombstone"
+                            : "Movie is already imported; existing data was preserved");
         }
 
-        if (existingMovie == null) {
-            // INSERT flow
-            log.info("Attempting to insert TMDB ID: {} with status: {}", wrapper.getTmdbId(), targetStatus);
-            Movie newMovie = movieMapper.toEntity(wrapper);
-            newMovie.setStatus(targetStatus);
-            String baseSlug = movieMapper.generateSlug(newMovie.getTitle());
-            newMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), null));
-            newMovie = movieRepository.save(newMovie);
-            log.info("INSERTED TMDB Movie ID {} with status: {}", wrapper.getTmdbId(), targetStatus);
-            extractAndSaveRelations(newMovie, wrapper);
-        } else {
-            // UPDATE flow - Always update movie and refresh all relations
-            log.info("Attempting to update TMDB ID: {} with status: {}", wrapper.getTmdbId(), targetStatus);
-            movieMapper.updateEntityFromDto(wrapper, existingMovie);
-            existingMovie.setStatus(targetStatus);
-            String baseSlug = movieMapper.generateSlug(existingMovie.getTitle());
-            existingMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), existingMovie.getId()));
-            existingMovie = movieRepository.save(existingMovie);
-            log.info("UPDATED TMDB Movie ID {} with status: {}", wrapper.getTmdbId(), targetStatus);
-            extractAndSaveRelations(existingMovie, wrapper);
-        }
+        Movie newMovie = movieMapper.toEntity(wrapper);
+        newMovie.setStatus(MovieStatus.DRAFT);
+        String baseSlug = movieMapper.generateSlug(newMovie.getTitle());
+        newMovie.setSlug(resolveUniqueMovieSlug(baseSlug, wrapper.getTmdbId(), null));
+        newMovie = movieRepository.saveAndFlush(newMovie);
+        extractAndSaveRelations(newMovie, wrapper);
+        log.info("Inserted TMDB movie {} as DRAFT", wrapper.getTmdbId());
+        return new TmdbImportResult(
+                wrapper.getTmdbId(),
+                TmdbImportOutcome.CREATED,
+                newMovie.getPublicId(),
+                "Movie imported as DRAFT");
     }
 
     private String resolveUniqueMovieSlug(String baseSlug, Long tmdbId, Long existingMovieId) {
@@ -450,11 +437,7 @@ public class TmdbImportService {
         for (TmdbMovieWrapperDto wrapper : wrappers) {
             if (wrapper == null || wrapper.getMovie() == null) continue;
             try {
-                if (self != null) {
-                    self.importMovie(wrapper);
-                } else {
-                    importMovie(wrapper);
-                }
+                importMovieSafely(wrapper);
             } catch (Exception e) {
                 log.error("Failed to import single movie TMDB ID {}: {}", wrapper.getTmdbId(), e.getMessage());
             }

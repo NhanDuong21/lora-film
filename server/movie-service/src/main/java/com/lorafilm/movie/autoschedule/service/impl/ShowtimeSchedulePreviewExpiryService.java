@@ -20,7 +20,7 @@ public class ShowtimeSchedulePreviewExpiryService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean expireIfNecessary(String previewPublicId, Instant now) {
-        ShowtimeSchedulePreview preview = repository.findByPublicId(previewPublicId)
+        ShowtimeSchedulePreview preview = repository.findByPublicIdForExpiry(previewPublicId)
                 .orElseThrow(() -> new com.lorafilm.movie.common.exception.BusinessException(com.lorafilm.movie.common.exception.ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND));
         
         if (preview.getStatus() == SchedulePreviewStatus.PREVIEWED && !now.isBefore(preview.getExpiresAt())) {

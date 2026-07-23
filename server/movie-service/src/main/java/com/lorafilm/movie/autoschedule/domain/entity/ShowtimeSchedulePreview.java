@@ -3,6 +3,7 @@ package com.lorafilm.movie.autoschedule.domain.entity;
 import com.lorafilm.movie.autoschedule.domain.enums.AutoScheduleStrategy;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewApplyMode;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import jakarta.persistence.*;
 
@@ -118,6 +119,21 @@ public class ShowtimeSchedulePreview {
                                                            String fingerprint,
                                                            Long adminUserId,
                                                            Instant generatedAt) {
+        return createGenerating(
+                cinema, scheduleFrom, scheduleTo, slotGranularityMinutes, previewTtlMinutes,
+                AutoScheduleStrategyVersions.CURRENT, idempotencyKey, fingerprint, adminUserId, generatedAt);
+    }
+
+    public static ShowtimeSchedulePreview createGenerating(Cinema cinema,
+                                                           LocalDate scheduleFrom,
+                                                           LocalDate scheduleTo,
+                                                           Integer slotGranularityMinutes,
+                                                           Integer previewTtlMinutes,
+                                                           String strategyVersion,
+                                                           String idempotencyKey,
+                                                           String fingerprint,
+                                                           Long adminUserId,
+                                                           Instant generatedAt) {
         ShowtimeSchedulePreview preview = new ShowtimeSchedulePreview();
         preview.setPublicId(java.util.UUID.randomUUID().toString());
         preview.setCinema(cinema);
@@ -125,7 +141,7 @@ public class ShowtimeSchedulePreview {
         preview.setScheduleTo(scheduleTo);
         preview.setTimezoneSnapshot(cinema.getTimezone());
         preview.setStrategy(AutoScheduleStrategy.BALANCED);
-        preview.setStrategyVersion("BALANCED_V1");
+        preview.setStrategyVersion(strategyVersion);
         preview.setApplyMode(SchedulePreviewApplyMode.ALL_OR_NOTHING);
         preview.setStatus(SchedulePreviewStatus.GENERATING);
         preview.setSlotGranularityMinutes(slotGranularityMinutes);

@@ -1,5 +1,7 @@
 package com.lorafilm.booking.security.config;
 
+import com.lorafilm.booking.common.filter.CorrelationIdFilter;
+import com.lorafilm.booking.common.filter.RequestLoggingFilter;
 import com.lorafilm.booking.security.filter.InternalTokenFilter;
 import com.lorafilm.booking.security.filter.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
@@ -21,15 +23,21 @@ public class SecurityConfig {
     private final InternalTokenFilter internalTokenFilter;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final CustomAccessDeniedHandler accessDeniedHandler;
+    private final CorrelationIdFilter correlationIdFilter;
+    private final RequestLoggingFilter requestLoggingFilter;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                           InternalTokenFilter internalTokenFilter,
                           CustomAuthenticationEntryPoint authenticationEntryPoint,
-                          CustomAccessDeniedHandler accessDeniedHandler) {
+                          CustomAccessDeniedHandler accessDeniedHandler,
+                          CorrelationIdFilter correlationIdFilter,
+                          RequestLoggingFilter requestLoggingFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.internalTokenFilter = internalTokenFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.accessDeniedHandler = accessDeniedHandler;
+        this.correlationIdFilter = correlationIdFilter;
+        this.requestLoggingFilter = requestLoggingFilter;
     }
 
     @Bean
@@ -51,7 +59,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(internalTokenFilter, JwtAuthenticationFilter.class);
+                .addFilterBefore(internalTokenFilter, JwtAuthenticationFilter.class)
+                .addFilterBefore(correlationIdFilter, InternalTokenFilter.class)
+                .addFilterAfter(requestLoggingFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

@@ -97,7 +97,8 @@ public class AdminMovieProjectionService {
             dto.setMediaCount(mediaCounts.getOrDefault(movie.getId(), 0L));
             dto.setShowtimeCount(showtimeCounts.getOrDefault(movie.getId(), 0L));
             
-            MovieReadinessDto readiness = readinessEvaluator.evaluate(dto, activeVerCount > 0, primPosterCount > 0);
+            MovieHealthFacts healthFacts = MovieHealthFacts.from(dto, activeVerCount > 0, primPosterCount > 0);
+            MovieReadinessDto readiness = readinessEvaluator.evaluate(healthFacts);
             dto.setReadiness(readiness);
             
             return dto;
@@ -136,7 +137,8 @@ public class AdminMovieProjectionService {
         dto.setMediaCount(movieMediaRepository.countMedia(movie.getId())); 
         dto.setShowtimeCount(showtimeRepository.countShowtimes(movie.getId()));
         
-        MovieReadinessDto readiness = readinessEvaluator.evaluate(dto, activeVerCount > 0, primPosterCount > 0);
+        MovieHealthFacts healthFacts = MovieHealthFacts.from(dto, activeVerCount > 0, primPosterCount > 0);
+        MovieReadinessDto readiness = readinessEvaluator.evaluate(healthFacts);
         dto.setReadiness(readiness);
         
         return dto;

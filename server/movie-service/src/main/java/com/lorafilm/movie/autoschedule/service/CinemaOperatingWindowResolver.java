@@ -25,7 +25,6 @@ public class CinemaOperatingWindowResolver {
     }
 
     public List<OperatingWindow> resolve(Cinema cinema, LocalDate fromDate, LocalDate toDate) {
-        List<OperatingWindow> windows = new ArrayList<>();
         ZoneId zoneId;
         try {
             zoneId = ZoneId.of(cinema.getTimezone());
@@ -33,7 +32,27 @@ public class CinemaOperatingWindowResolver {
             throw new BusinessException(ErrorCode.INVALID_CINEMA_TIMEZONE, "Invalid timezone configured for cinema");
         }
 
-        List<CinemaOperatingHour> hours = repository.findByCinemaId(cinema.getId());
+        return resolve(zoneId, fromDate, toDate, repository.findByCinemaId(cinema.getId()));
+    }
+
+    public List<OperatingWindow> resolve(Cinema cinema,
+                                         LocalDate fromDate,
+                                         LocalDate toDate,
+                                         List<CinemaOperatingHour> hours) {
+        ZoneId zoneId;
+        try {
+            zoneId = ZoneId.of(cinema.getTimezone());
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.INVALID_CINEMA_TIMEZONE, "Invalid timezone configured for cinema");
+        }
+        return resolve(zoneId, fromDate, toDate, hours);
+    }
+
+    public List<OperatingWindow> resolve(ZoneId zoneId,
+                                         LocalDate fromDate,
+                                         LocalDate toDate,
+                                         List<CinemaOperatingHour> hours) {
+        List<OperatingWindow> windows = new ArrayList<>();
 
         LocalDate date = fromDate;
         while (!date.isAfter(toDate)) {
@@ -53,7 +72,7 @@ public class CinemaOperatingWindowResolver {
                         closeTime = closeTime.plusDays(1);
                     }
                     
-                    windows.add(new OperatingWindow(openTime.toInstant(), closeTime.toInstant()));
+                    windows.add(new OperatingWindow(date, openTime.toInstant(), closeTime.toInstant()));
                 }
             }
 

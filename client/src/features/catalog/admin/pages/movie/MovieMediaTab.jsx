@@ -4,7 +4,9 @@ import { useOutletContext } from 'react-router-dom';
 import { AsyncState, Select, Input, LazyImage } from '@/components/common/ui/uiKit';
 import { Plus, Trash2, Loader2, Play } from 'lucide-react';
 import { getYoutubeEmbedUrl } from '@/utils/movieHelpers';
-import { getMediaTypeLabel } from '@/features/catalog/admin/config/movieMediaTypeConfig';
+import { MEDIA_TYPES, getMediaTypeLabel } from '@/features/catalog/admin/config/movieMediaTypeConfig';
+
+const SELECTABLE_MEDIA_TYPES = ['POSTER', 'BANNER', 'TRAILER', 'TEASER', 'STILL_IMAGE', 'BEHIND_THE_SCENES'];
 
 const DEFAULT_NEW_MEDIA = {
   mediaType: 'POSTER',
@@ -29,7 +31,7 @@ export default function MovieMediaTab({ movie, onUpdate }) {
     }
     const res = await addMedia(newMedia);
     if (res.success) {
-      triggerToast('Đã thêm media');
+      triggerToast('Đã thêm hình ảnh/video');
       setNewMedia(DEFAULT_NEW_MEDIA);
       setShowAdd(false);
       if (onUpdate) onUpdate();
@@ -47,7 +49,7 @@ export default function MovieMediaTab({ movie, onUpdate }) {
     
     const res = await removeMedia(id);
     if (res.success) {
-      triggerToast('Đã xóa media');
+      triggerToast('Đã xóa hình ảnh/video');
       if (onUpdate) onUpdate();
     } else {
       triggerToast(res.error, 'error');
@@ -58,7 +60,7 @@ export default function MovieMediaTab({ movie, onUpdate }) {
     <div className="space-y-6">
       <AsyncState isLoading={isLoading} error={error} onRetry={reload}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-zinc-100">Danh sách Hình ảnh / Video</h3>
+          <h3 className="text-sm font-semibold text-zinc-100">Danh sách hình ảnh/video</h3>
           {!showAdd && (
             <button
               onClick={() => setShowAdd(true)}
@@ -77,12 +79,7 @@ export default function MovieMediaTab({ movie, onUpdate }) {
                 value={newMedia.mediaType} 
                 onChange={e => setNewMedia(p => ({ ...p, mediaType: e.target.value }))}
               >
-                <option value="POSTER">Poster</option>
-                <option value="BANNER">Banner / Backdrop</option>
-                <option value="TRAILER">Trailer</option>
-                <option value="TEASER">Teaser</option>
-                <option value="STILL_IMAGE">Ảnh tĩnh</option>
-                <option value="BEHIND_THE_SCENES">Hậu trường</option>
+                {SELECTABLE_MEDIA_TYPES.map(type => <option key={type} value={type}>{MEDIA_TYPES[type]}</option>)}
               </Select>
               <Input 
                 label="URL" 
@@ -167,7 +164,7 @@ export default function MovieMediaTab({ movie, onUpdate }) {
                             </div>
                           )
                         ) : (
-                          <LazyImage src={m.url} alt={m.title || m.mediaType} className="w-full h-full object-cover" />
+                          <LazyImage src={m.url} alt={m.title || getMediaTypeLabel(m.mediaType)} className="w-full h-full object-cover" />
                         )}
                         <div className="absolute top-2 left-2 flex gap-1">
                           {m.isPrimary && (
@@ -183,11 +180,11 @@ export default function MovieMediaTab({ movie, onUpdate }) {
                           <button
                             onClick={() => {
                               navigator.clipboard.writeText(m.url);
-                              triggerToast('Đã copy URL');
+                              triggerToast('Đã sao chép URL');
                             }}
                             className="text-[10px] font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
                           >
-                            Copy URL
+                            Sao chép URL
                           </button>
                           <button
                             onClick={() => handleRemove(m.publicId)}

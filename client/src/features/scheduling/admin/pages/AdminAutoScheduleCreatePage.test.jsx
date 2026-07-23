@@ -1,0 +1,129 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import useAutoScheduleForm from '../hooks/useAutoScheduleForm';
+import AdminAutoScheduleCreatePage from './AdminAutoScheduleCreatePage';
+
+vi.mock('../hooks/useAutoScheduleForm');
+vi.mock('@/components/common/SearchableSelect', () => ({
+  default: ({ id, placeholder }) => <input id={id} aria-label={placeholder} readOnly />,
+}));
+
+const baseForm = () => ({
+  cinemas: [{ publicId: 'cinema-1', name: 'Lora Cinema', timezone: 'Asia/Ho_Chi_Minh' }],
+  movies: [],
+  auditoriums: [],
+  versionsByMovie: {},
+  selectedCinemaId: 'cinema-1',
+  setSelectedCinemaId: vi.fn(),
+  selectedCinema: { name: 'Lora Cinema', timezone: 'Asia/Ho_Chi_Minh' },
+  scheduleFrom: '2099-08-22',
+  setScheduleFrom: vi.fn(),
+  scheduleTo: '2099-08-28',
+  setScheduleTo: vi.fn(),
+  slotGranularityMinutes: 15,
+  setSlotGranularityMinutes: vi.fn(),
+  previewTtlMinutes: 60,
+  setPreviewTtlMinutes: vi.fn(),
+  selectedAuditoriumIds: [],
+  toggleAuditorium: vi.fn(),
+  selectAllActiveAuditoriums: vi.fn(),
+  clearAuditoriums: vi.fn(),
+  selectedMovieVersionIds: [],
+  selectedVersions: [],
+  toggleVersion: vi.fn(),
+  isLoadingCinemas: false,
+  isLoadingAuditoriums: false,
+  isLoadingMovies: false,
+  isSubmitting: false,
+  errors: {},
+  readinessIssues: ['Chọn ít nhất một phòng chiếu.', 'Chọn ít nhất một định dạng phim.'],
+  isReady: false,
+  selectionNotice: '',
+  movieLoadError: '',
+  dateRangeInfo: {
+    dayCount: 7,
+    cinemaToday: '2099-07-23',
+    isTooLong: false,
+    suggestedScheduleFrom: null,
+    suggestedScheduleTo: null,
+  },
+  toggleMovieExpansion: vi.fn(),
+  handleSubmit: vi.fn(),
+});
+
+describe('AdminAutoScheduleCreatePage', () => {
+  beforeEach(() => useAutoScheduleForm.mockReturnValue(baseForm()));
+
+  it('keeps an oversized range, explains it inline, and blocks submission', () => {
+    useAutoScheduleForm.mockReturnValue({
+      ...baseForm(),
+      scheduleTo: '2099-08-29',
+      readinessIssues: ['Khoảng ngày vượt quá giới hạn 7 ngày.'],
+      dateRangeInfo: {
+        dayCount: 8,
+        cinemaToday: '2099-07-23',
+        isTooLong: true,
+        suggestedScheduleFrom: '2099-08-22',
+        suggestedScheduleTo: '2099-08-28',
+      },
+    });
+
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    expect(screen.getByText('Mỗi bản xem trước tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để lập lịch trước cho cả tháng.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Khoảng đã chọn gồm 8 ngày');
+    expect(screen.getByRole('alert')).toHaveTextContent('2099-08-22 đến 2099-08-28');
+    expect(screen.getByDisplayValue('2099-08-29')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Tạo bản xem trước/i })).toBeDisabled();
+  });
+
+  it('offers explicit room actions and explains ineligible movies', () => {
+    const form = baseForm();
+    form.auditoriums = [{
+      publicId: 'aud-1', name: 'Phòng 1', status: 'ACTIVE', screenType: '2D', soundType: 'Dolby', capacity: 120,
+    }];
+    form.selectedAuditoriumIds = ['aud-1'];
+    form.movies = [{
+      publicId: 'movie-1', title: 'Phim chưa phát hành', eligible: false,
+      reasons: [{ code: 'OUTSIDE_RELEASE_WINDOW', message: 'Ngoài thời gian phát hành' }],
+      releaseDate: '2099-09-01', durationMinutes: 110,
+    }];
+    form.versionsByMovie = {
+      'movie-1': [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE', format: '2D' }],
+    };
+    useAutoScheduleForm.mockReturnValue(form);
+
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn tất cả đang hoạt động' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa chọn' }));
+    expect(form.selectAllActiveAuditoriums).toHaveBeenCalledTimes(1);
+    expect(form.clearAuditoriums).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Ngoài thời gian phát hành')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Phim chưa phát hành/i }));
+    expect(screen.getAllByRole('checkbox', { name: /2D/i }).find(control => control.disabled)).toBeDisabled();
+  });
+
+  it('shows selected chips and keeps the primary action beside readiness', () => {
+    const form = baseForm();
+    form.selectedAuditoriumIds = ['aud-1'];
+    form.selectedMovieVersionIds = ['version-1'];
+    form.selectedVersions = [{
+      publicId: 'version-1', moviePublicId: 'movie-1', movieTitle: 'Phim A', versionName: 'IMAX', status: 'ACTIVE',
+    }];
+    form.readinessIssues = [];
+    form.isReady = true;
+    useAutoScheduleForm.mockReturnValue(form);
+
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    expect(screen.getByRole('button', { name: 'Bỏ chọn Phim A IMAX' })).toBeInTheDocument();
+    expect(screen.getByText('Cấu hình hợp lệ và sẵn sàng tạo bản xem trước.')).toBeInTheDocument();
+    const generate = screen.getByRole('button', { name: /Tạo bản xem trước/i });
+    expect(generate).toBeEnabled();
+    fireEvent.click(generate);
+    expect(form.handleSubmit).toHaveBeenCalledTimes(1);
+  });
+});

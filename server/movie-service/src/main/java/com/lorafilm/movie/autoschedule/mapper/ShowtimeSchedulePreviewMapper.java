@@ -74,6 +74,7 @@ public class ShowtimeSchedulePreviewMapper {
         response.setStartTime(item.getStartTime());
         response.setEndTime(item.getEndTime());
         response.setOccupancyEndTime(item.getOccupancyEndTime());
+        response.setServiceDate(item.getServiceDate());
         response.setScore(item.getScore());
         response.setScoreBreakdown(item.getScoreBreakdown());
         response.setRankingPosition(item.getRankingPosition());

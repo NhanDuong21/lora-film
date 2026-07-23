@@ -8,6 +8,7 @@ import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemApplyStatus;
 import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Component
@@ -20,6 +21,15 @@ public class ShowtimeSchedulePreviewPersistenceMapper {
     }
 
     public ShowtimeSchedulePreviewItem toEntity(ShowtimeCandidate candidate, ShowtimeSchedulePreview preview) {
-        return ShowtimeSchedulePreviewItem.createItem(preview, candidate);
+        LocalDate serviceDate = candidate.getOperatingWindow() != null
+                ? candidate.getOperatingWindow().getServiceDate()
+                : null;
+        if (serviceDate == null) {
+            throw new IllegalStateException("Generated candidate must retain its authoritative service date");
+        }
+
+        ShowtimeSchedulePreviewItem item = ShowtimeSchedulePreviewItem.createItem(preview, candidate);
+        item.setServiceDate(serviceDate);
+        return item;
     }
 }

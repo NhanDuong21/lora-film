@@ -1,42 +1,100 @@
-import { useState, useMemo } from 'react';
-import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, XCircle, Clock, AlertTriangle, AlertCircle, Info, RefreshCw, Wand2, List, LayoutTemplate } from 'lucide-react';
-import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
+import { useCallback, useMemo, useState } from 'react';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  Eye,
+  ExternalLink,
+  Info,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  Save,
+  Wand2,
+  X,
+} from 'lucide-react';
+import AutoScheduleCandidateDrawer from '@/features/scheduling/admin/components/AutoScheduleCandidateDrawer';
 import AutoScheduleTimeline from '@/features/scheduling/admin/components/AutoScheduleTimeline';
+import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
+import {
+  CANDIDATE_PAGE_SIZES,
+  CANDIDATE_VIEWS,
+  getDefaultCandidateView,
+  paginateCandidates,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewCandidates';
+import {
+  compareServiceDateKeys,
+  formatCinemaDateTime,
+  formatPreviewDateKey,
+  formatServiceDateKey,
+  resolveCinemaTimezone,
+  UNKNOWN_SERVICE_DATE_KEY,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
+import {
+  buildQuickNonOverlappingSelection,
+  buildSelectedItemsIndex,
+  findSelectionBlock,
+  SELECTION_BLOCK_TYPES,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewSelection';
+import {
+  buildCandidateViewModels,
+  getDefaultActiveServiceDate,
+  getPrimaryTimelineCandidates,
+  getRelevantAuditoriums,
+  sortCandidateViewModels,
+  TIMELINE_ZOOM_MODES,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewViewModel';
 
-const formatTime = (isoString) => {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+const CANDIDATE_VIEW_LABELS = {
+  [CANDIDATE_VIEWS.RECOMMENDED]: 'Đề xuất',
+  [CANDIDATE_VIEWS.REJECTED]: 'Bị từ chối / xung đột',
+  [CANDIDATE_VIEWS.ALL]: 'Tất cả ứng viên',
+  [CANDIDATE_VIEWS.CREATED]: 'Suất chiếu đã tạo',
 };
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return '';
-  return new Date(dateStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const LIFECYCLE_TONE_CLASSES = {
+  GENERATING: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+  PREVIEWED: 'border-green-500/30 bg-green-500/10 text-green-300',
+  APPLYING: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+  APPLIED: 'border-green-500/30 bg-green-500/10 text-green-300',
+  FAILED: 'border-red-500/30 bg-red-500/10 text-red-300',
+  EXPIRED: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  CANCELLED: 'border-zinc-700 bg-zinc-800/70 text-zinc-300',
 };
 
-const checkOverlap = (item1, item2) => {
-  const start1 = new Date(item1.startTime).getTime();
-  const end1 = new Date(item1.endTime).getTime();
-  const start2 = new Date(item2.startTime).getTime();
-  const end2 = new Date(item2.endTime).getTime();
-  return start1 < end2 && start2 < end1;
-};
-
-const REJECTION_REASON_MAP = {
-  "SHOWTIME_OUTSIDE_OPERATING_HOURS": "Ngoài giờ hoạt động của cụm rạp",
-  "SHOWTIME_OVERLAPS_EXISTING": "Trùng với suất chiếu hiện có",
-  "MOVIE_NOT_ELIGIBLE": "Phim chưa đủ điều kiện",
-  "AUDITORIUM_UNAVAILABLE": "Phòng chiếu không khả dụng",
-  "NOT_ENOUGH_CLEANING_TIME": "Không đủ thời gian dọn dẹp"
-};
-
-const translateReason = (reason) => {
-  if (!reason) return '';
-  for (const [key, value] of Object.entries(REJECTION_REASON_MAP)) {
-    if (reason.toUpperCase().includes(key)) return value;
+const getViewModelsForTab = (viewModels, view) => {
+  switch (view) {
+    case CANDIDATE_VIEWS.RECOMMENDED:
+      return viewModels.filter(candidate => candidate.selected);
+    case CANDIDATE_VIEWS.REJECTED:
+      return viewModels.filter(candidate => (
+        candidate.validationStatus !== 'VALID'
+        || candidate.applyStatus === 'CONFLICT'
+        || candidate.applyStatus === 'FAILED'
+      ));
+    case CANDIDATE_VIEWS.CREATED:
+      return viewModels.filter(candidate => candidate.applyStatus === 'CREATED');
+    default:
+      return viewModels;
   }
-  return reason;
+};
+
+const getEmptyStateMessage = view => {
+  if (view === CANDIDATE_VIEWS.RECOMMENDED) return 'Không có ứng viên được đề xuất trong bộ lọc hiện tại.';
+  if (view === CANDIDATE_VIEWS.REJECTED) return 'Không có ứng viên bị từ chối hoặc gặp xung đột.';
+  if (view === CANDIDATE_VIEWS.CREATED) return 'Không có suất chiếu nào được tạo từ bản xem trước này.';
+  return 'Không có ứng viên phù hợp với bộ lọc hiện tại.';
+};
+
+const getStatusTone = candidate => {
+  if (candidate.applyStatus === 'CREATED') return 'border-green-500/30 bg-green-500/10 text-green-300';
+  if (candidate.applyStatus === 'CONFLICT' || candidate.applyStatus === 'FAILED') return 'border-red-500/30 bg-red-500/10 text-red-300';
+  if (candidate.validationStatus !== 'VALID') return 'border-red-500/30 bg-red-500/10 text-red-300';
+  if (candidate.applyStatus === 'SKIPPED') return 'border-zinc-700 bg-zinc-800 text-zinc-300';
+  return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
 };
 
 const AdminAutoSchedulePreviewPage = () => {
@@ -45,551 +103,378 @@ const AdminAutoSchedulePreviewPage = () => {
   const navigate = useNavigate();
 
   const handleSuccess = () => {
-    navigate(`/admin/showtimes?source=AUTO&batchId=${id}&status=DRAFT`, {
-      state: {
-        message: `Đã tạo ${selectedItemIds.size} suất chiếu từ bản xem trước.`
-      }
+    navigate(`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(id)}`, {
+      state: { message: `Đã tạo ${selectedItemIds.size} suất chiếu từ bản xem trước.` },
     });
   };
 
   const {
-    preview, items,
-    isLoading, isApplying, isUpdatingSelection,
-    selectedItemIds, handleToggleSelection, handleBulkSelection,
-    handleApply, fetchPreview
+    preview,
+    items,
+    selectedItemIds,
+    isLoading,
+    isRefreshing,
+    isSnapshotUpdating,
+    loadingProgress,
+    snapshotError,
+    capabilities,
+    handleToggleSelection,
+    handleBulkSelection,
+    handleApply,
+    fetchPreview,
   } = useAutoSchedulePreview(id, { triggerToast, onSuccess: handleSuccess });
 
-  const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterAuditorium, setFilterAuditorium] = useState('');
   const [filterReason, setFilterReason] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [candidatePage, setCandidatePage] = useState(1);
+  const [candidatePageSize, setCandidatePageSize] = useState(50);
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [viewMode, setViewMode] = useState('timeline'); // 'timeline' or 'table'
+  const [candidateViewChoice, setCandidateViewChoice] = useState({ key: null, view: null });
+  const [activeDateChoice, setActiveDateChoice] = useState({ key: null, date: null });
+  const [diagnosticChoice, setDiagnosticChoice] = useState({ key: null, id: null });
+  const [drawerCandidateId, setDrawerCandidateId] = useState(null);
+  const [drawerReturnFocusElement, setDrawerReturnFocusElement] = useState(null);
+  const [zoomMode, setZoomMode] = useState(TIMELINE_ZOOM_MODES.FIT);
 
-  const rejectionReasons = useMemo(() => {
-    if (!items) return {};
-    const reasons = {};
-    items.forEach(item => {
-      if (item.validationStatus !== 'VALID' && item.rejectionReason) {
-        reasons[item.rejectionReason] = (reasons[item.rejectionReason] || 0) + 1;
-      }
-    });
-    return reasons;
-  }, [items]);
+  const lifecycleKey = `${preview?.previewPublicId || id}:${capabilities?.effectiveStatus || 'UNKNOWN'}`;
+  const previewKey = preview?.previewPublicId || id;
+  const defaultCandidateView = getDefaultCandidateView(capabilities);
+  const candidateView = candidateViewChoice.key === lifecycleKey
+    ? candidateViewChoice.view
+    : defaultCandidateView;
+  const timezoneResolution = useMemo(
+    () => resolveCinemaTimezone(preview?.timezoneSnapshot),
+    [preview?.timezoneSnapshot],
+  );
+  const effectiveTimezone = timezoneResolution.timezone;
+  const viewModels = useMemo(() => buildCandidateViewModels(items, {
+    selectedItemIds,
+    timezone: effectiveTimezone,
+  }), [effectiveTimezone, items, selectedItemIds]);
+  const sortedViewModels = useMemo(() => sortCandidateViewModels(viewModels), [viewModels]);
+  const candidateById = useMemo(
+    () => new Map(viewModels.map(candidate => [candidate.id, candidate])),
+    [viewModels],
+  );
+  const serviceDates = useMemo(() => Array.from(new Set(
+    viewModels
+      .map(candidate => candidate.serviceDate)
+      .filter(date => date !== UNKNOWN_SERVICE_DATE_KEY),
+  )).sort(compareServiceDateKeys), [viewModels]);
+  const defaultActiveDate = useMemo(
+    () => getDefaultActiveServiceDate(viewModels),
+    [viewModels],
+  );
+  const requestedActiveDate = activeDateChoice.key === previewKey ? activeDateChoice.date : null;
+  const activeServiceDate = serviceDates.includes(requestedActiveDate)
+    ? requestedActiveDate
+    : defaultActiveDate;
+  const diagnosticCandidate = diagnosticChoice.key === previewKey
+    ? candidateById.get(diagnosticChoice.id) || null
+    : null;
+  const timelineCandidates = useMemo(() => getPrimaryTimelineCandidates(
+    viewModels,
+    activeServiceDate,
+    diagnosticCandidate,
+  ), [activeServiceDate, diagnosticCandidate, viewModels]);
+  const relevantAuditoriums = useMemo(
+    () => getRelevantAuditoriums(viewModels, activeServiceDate),
+    [activeServiceDate, viewModels],
+  );
+  const selectedItemsIndex = useMemo(
+    () => buildSelectedItemsIndex(items, selectedItemIds),
+    [items, selectedItemIds],
+  );
+  const diagnosticConflict = useMemo(() => {
+    if (!diagnosticCandidate) return null;
+    const block = findSelectionBlock(diagnosticCandidate.raw, selectedItemsIndex);
+    return block?.type === SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP ? block : null;
+  }, [diagnosticCandidate, selectedItemsIndex]);
 
-  const uniqueAuditoriums = useMemo(() => {
-    if (!items) return [];
-    const auds = new Set();
-    items.forEach(item => auds.add(item.auditoriumName || item.auditoriumPublicId));
-    return Array.from(auds).sort();
-  }, [items]);
+  const viewCounts = useMemo(() => ({
+    [CANDIDATE_VIEWS.RECOMMENDED]: viewModels.filter(candidate => candidate.selected).length,
+    [CANDIDATE_VIEWS.REJECTED]: viewModels.filter(candidate => (
+      candidate.validationStatus !== 'VALID'
+      || candidate.applyStatus === 'CONFLICT'
+      || candidate.applyStatus === 'FAILED'
+    )).length,
+    [CANDIDATE_VIEWS.ALL]: viewModels.length,
+    [CANDIDATE_VIEWS.CREATED]: viewModels.filter(candidate => candidate.applyStatus === 'CREATED').length,
+  }), [viewModels]);
+  const availableCandidateViews = capabilities.effectiveStatus === 'APPLIED'
+    ? [CANDIDATE_VIEWS.RECOMMENDED, CANDIDATE_VIEWS.REJECTED, CANDIDATE_VIEWS.ALL, CANDIDATE_VIEWS.CREATED]
+    : [CANDIDATE_VIEWS.RECOMMENDED, CANDIDATE_VIEWS.REJECTED, CANDIDATE_VIEWS.ALL];
+  const uniqueAuditoriums = useMemo(() => Array.from(new Set(
+    viewModels.map(candidate => candidate.auditoriumName),
+  )).sort(), [viewModels]);
+  const uniqueReasons = useMemo(() => Array.from(new Set(
+    viewModels.map(candidate => candidate.conciseReason).filter(Boolean),
+  )).sort(), [viewModels]);
+  const filteredCandidates = useMemo(() => getViewModelsForTab(
+    sortedViewModels,
+    candidateView,
+  ).filter(candidate => {
+    if (filterAuditorium && candidate.auditoriumName !== filterAuditorium) return false;
+    if (filterReason && candidate.conciseReason !== filterReason) return false;
+    if (filterDate && candidate.serviceDate !== filterDate) return false;
+    return true;
+  }), [candidateView, filterAuditorium, filterDate, filterReason, sortedViewModels]);
+  const pagination = useMemo(
+    () => paginateCandidates(filteredCandidates, candidatePage, candidatePageSize),
+    [candidatePage, candidatePageSize, filteredCandidates],
+  );
+  const drawerBaseCandidate = candidateById.get(drawerCandidateId) || null;
+  const drawerCandidate = useMemo(() => drawerBaseCandidate
+    ? { ...drawerBaseCandidate, diagnostic: diagnosticCandidate?.id === drawerBaseCandidate.id }
+    : null, [diagnosticCandidate?.id, drawerBaseCandidate]);
+  const drawerSelectionBlock = useMemo(() => {
+    if (!drawerBaseCandidate || drawerBaseCandidate.selected) return null;
+    return findSelectionBlock(drawerBaseCandidate.raw, selectedItemsIndex);
+  }, [drawerBaseCandidate, selectedItemsIndex]);
+  const drawerSelectionBlockedMessage = drawerSelectionBlock?.type === SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP
+    ? 'Ứng viên này xung đột khoảng chiếm phòng với một đề xuất đã chọn.'
+    : drawerSelectionBlock
+      ? 'Ứng viên này thiếu dữ liệu cần thiết để lựa chọn an toàn.'
+      : '';
 
-  const uniqueDates = useMemo(() => {
-    if (!items) return [];
-    const dates = new Set();
-    items.forEach(item => {
-      const d = new Date(item.startTime);
-      dates.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-    });
-    return Array.from(dates).sort();
-  }, [items]);
+  const openDrawer = useCallback((candidate, triggerElement) => {
+    setDrawerReturnFocusElement(triggerElement);
+    setDrawerCandidateId(candidate.id);
+  }, []);
+  const closeDrawer = useCallback(() => setDrawerCandidateId(null), []);
 
-  const filteredItems = useMemo(() => {
-    if (!items) return [];
-    return items.filter(item => {
-      if (filterStatus === 'VALID' && item.validationStatus !== 'VALID') return false;
-      if (filterStatus === 'INVALID' && item.validationStatus === 'VALID') return false;
-      const audKey = item.auditoriumName || item.auditoriumPublicId;
-      if (filterAuditorium && audKey !== filterAuditorium) return false;
-      if (filterReason && item.rejectionReason !== filterReason) return false;
-      if (filterDate) {
-        const d = new Date(item.startTime);
-        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        if (dateKey !== filterDate) return false;
-      }
-      return true;
-    });
-  }, [items, filterStatus, filterAuditorium, filterReason, filterDate]);
-
-  const groupedFilteredItems = useMemo(() => {
-    const groups = {};
-    filteredItems.forEach(item => {
-      const d = new Date(item.startTime);
-      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      if (!groups[dateKey]) groups[dateKey] = {};
-      const audKey = item.auditoriumName || item.auditoriumPublicId;
-      if (!groups[dateKey][audKey]) groups[dateKey][audKey] = [];
-      groups[dateKey][audKey].push(item);
-    });
-    Object.keys(groups).forEach(dateKey => {
-      Object.keys(groups[dateKey]).forEach(audKey => {
-        groups[dateKey][audKey].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-      });
-    });
-    return groups;
-  }, [filteredItems]);
-
-  const handleAutoSelectOptimal = () => {
-    if (!items || items.length === 0) return;
-    
-    // We only consider VALID candidates
-    const validCandidates = items.filter(item => item.validationStatus === 'VALID' && item.applyStatus !== 'APPLIED');
-    
-    // Sort by start time (earliest first)
-    validCandidates.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    
-    const newSelectedIds = new Set();
-    const selectedItemsList = [];
-    
-    for (const candidate of validCandidates) {
-      let hasOverlap = false;
-      for (const selectedItem of selectedItemsList) {
-        if ((candidate.auditoriumName || candidate.auditoriumPublicId) === (selectedItem.auditoriumName || selectedItem.auditoriumPublicId)) {
-          if (checkOverlap(candidate, selectedItem)) {
-            hasOverlap = true;
-            break;
-          }
-        }
-      }
-      
-      if (!hasOverlap) {
-        newSelectedIds.add(candidate.itemPublicId);
-        selectedItemsList.push(candidate);
-      }
+  const selectActiveDate = date => {
+    setActiveDateChoice({ key: previewKey, date });
+    setDiagnosticChoice({ key: previewKey, id: null });
+  };
+  const showDiagnosticOnTimeline = candidate => {
+    if (!candidate.timelineEligible) return;
+    setDiagnosticChoice({ key: previewKey, id: candidate.id });
+    setActiveDateChoice({ key: previewKey, date: candidate.serviceDate });
+  };
+  const clearDiagnostic = () => setDiagnosticChoice({ key: previewKey, id: null });
+  const selectCandidateView = view => {
+    setCandidateViewChoice({ key: lifecycleKey, view });
+    setCandidatePage(1);
+  };
+  const resetPageWith = setter => event => {
+    setter(event.target.value);
+    setCandidatePage(1);
+  };
+  const handleQuickNonOverlappingSelection = () => {
+    if (capabilities.canSelect && items.length > 0) {
+      handleBulkSelection(buildQuickNonOverlappingSelection(items));
     }
-    
-    handleBulkSelection(Array.from(newSelectedIds));
   };
 
-  if (isLoading) {
+  if (isLoading && !preview) {
     return (
-      <div className="flex flex-col flex-1 items-center justify-center p-8 bg-zinc-950 text-zinc-400">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-orange mb-4" />
-        <p>Đang tải chi tiết bản xem trước...</p>
+      <div className="flex flex-1 flex-col items-center justify-center bg-zinc-950 p-8 text-zinc-300" role="status">
+        <Loader2 className="mb-4 h-8 w-8 animate-spin text-brand-orange" aria-hidden="true" />
+        <p className="font-semibold">Đang tải bản xem trước…</p>
+        {loadingProgress.totalPages > 0 && <p className="mt-2 text-sm text-zinc-500">{loadingProgress.loadedPages}/{loadingProgress.totalPages} trang · {loadingProgress.loadedItems}/{loadingProgress.totalItems} ứng viên</p>}
       </div>
     );
   }
 
   if (!preview) {
     return (
-      <div className="flex flex-col flex-1 items-center justify-center p-8 bg-zinc-950 text-zinc-400">
-        <AlertTriangle className="w-12 h-12 text-red-500 mb-4 opacity-80" />
-        <h2 className="text-xl font-bold text-white mb-2">Không tìm thấy</h2>
-        <p>Bản xem trước xếp lịch không tồn tại hoặc đã hết hạn.</p>
-        <button onClick={() => navigate(-1)} className="mt-6 text-brand-orange hover:underline text-sm">Quay lại</button>
+      <div className="flex flex-1 flex-col items-center justify-center bg-zinc-950 p-8 text-center text-zinc-300">
+        <AlertTriangle className="mb-4 h-10 w-10 text-red-400" aria-hidden="true" />
+        <h1 className="text-xl font-bold text-white">Không thể tải bản xem trước</h1>
+        <p className="mt-2 max-w-lg text-sm text-zinc-400">{snapshotError?.message || 'Bản xem trước không tồn tại hoặc hiện không khả dụng.'}</p>
+        <button type="button" onClick={fetchPreview} className="mt-5 rounded-lg bg-brand-orange px-4 py-2 text-sm font-bold text-zinc-950">Thử lại</button>
       </div>
     );
   }
 
-  const isExpired = preview.status === 'EXPIRED' || new Date(preview.expiresAt) < new Date();
-  const isApplied = preview.status === 'APPLIED';
-  const canApply = preview.status === 'PREVIEWED' && !isExpired;
-
   return (
-    <div className="flex flex-col flex-1 bg-zinc-950 text-white min-h-[400px] animate-fade-in">
-      
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-20 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="flex min-h-[400px] flex-1 flex-col bg-zinc-950 text-white">
+      <header className="sticky top-0 z-20 flex flex-col gap-4 border-b border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-md md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-zinc-800 rounded-xl transition-colors text-zinc-400 hover:text-white flex-shrink-0"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+          <button type="button" onClick={() => navigate(-1)} aria-label="Quay lại" className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"><ArrowLeft className="h-5 w-5" /></button>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">
-                BẢN XEM TRƯỚC LỊCH CHIẾU
-              </h1>
-              <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border ${
-                isApplied ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
-                isExpired ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
-                'bg-blue-500/10 text-blue-400 border-blue-500/20'
-              }`}>
-                {isExpired && !isApplied ? 'EXPIRED' : preview.status}
-              </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-xl font-black uppercase tracking-wider md:text-2xl">Rà soát lịch chiếu</h1>
+              <span className={`rounded border px-2 py-1 text-[10px] font-black tracking-wider ${LIFECYCLE_TONE_CLASSES[capabilities.effectiveStatus] || LIFECYCLE_TONE_CLASSES.CANCELLED}`}>{capabilities.effectiveStatus || preview.status}</span>
             </div>
-            <div className="text-zinc-400 text-sm mt-1.5 flex flex-wrap items-center gap-4">
-              <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {preview.cinemaName}</span>
-              <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {formatDate(preview.scheduleFrom)} - {formatDate(preview.scheduleTo)}</span>
+            <div className="mt-2 flex flex-wrap gap-4 text-sm text-zinc-400">
+              <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{preview.cinemaName}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" />{formatPreviewDateKey(preview.scheduleFrom)} – {formatPreviewDateKey(preview.scheduleTo)}</span>
             </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchPreview}
-            disabled={isUpdatingSelection || isApplying}
-            className="p-2.5 rounded-xl border border-zinc-800 hover:bg-zinc-800 text-zinc-400 transition-colors disabled:opacity-50"
-            title="Làm mới"
-          >
-            <RefreshCw className={`w-4 h-4 ${isUpdatingSelection ? 'animate-spin' : ''}`} />
-          </button>
-          
-          {canApply && (
-            <button
-              onClick={handleAutoSelectOptimal}
-              disabled={isApplying || isUpdatingSelection}
-              className="bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        <div className="flex flex-wrap gap-3">
+          {capabilities.effectiveStatus === 'APPLIED' && (
+            <Link
+              to={`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(preview.previewPublicId || id)}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-black uppercase text-violet-200 hover:bg-violet-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
             >
-              <Wand2 className="w-4 h-4" /> ĐỀ XUẤT TỐI ƯU
-            </button>
+              <ExternalLink className="h-4 w-4" aria-hidden="true" /> Xem các suất chiếu đã tạo
+            </Link>
           )}
-
-          {canApply && (
-            <button
-              onClick={() => setShowApplyModal(true)}
-              disabled={isApplying || isUpdatingSelection || selectedItemIds.size === 0}
-              className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>ÁP DỤNG LỊCH CHIẾU ({selectedItemIds.size})</span>
-            </button>
+          <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} aria-label="Làm mới bản xem trước" className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} /></button>
+          {capabilities.isEditable && (
+            <button type="button" onClick={handleQuickNonOverlappingSelection} disabled={!capabilities.canSelect} className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2.5 text-xs font-black uppercase text-blue-300 disabled:opacity-50"><Wand2 className="h-4 w-4" />Chọn nhanh không trùng</button>
+          )}
+          {capabilities.isEditable && (
+            <button type="button" onClick={() => setShowApplyModal(true)} disabled={!capabilities.canApply} className="flex items-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-black uppercase text-zinc-950 disabled:opacity-50"><Save className="h-4 w-4" />Áp dụng ({selectedItemIds.size})</button>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="p-6 md:p-8 space-y-8 max-w-[1600px] mx-auto w-full">
-        
-        {/* Warning Banner if Expired */}
-        {isExpired && !isApplied && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+      <main className="mx-auto w-full max-w-[1700px] space-y-6 p-5 md:p-8">
+        <section className={`rounded-xl border p-4 ${LIFECYCLE_TONE_CLASSES[capabilities.effectiveStatus] || LIFECYCLE_TONE_CLASSES.CANCELLED}`} aria-live="polite">
+          <div className="flex gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0" /><div><h2 className="font-bold">{capabilities.effectiveStatus}</h2><p className="mt-1 text-sm opacity-90">{capabilities.lifecycleMessage}</p></div></div>
+        </section>
+
+        {(isRefreshing || isSnapshotUpdating) && (
+          <section className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-blue-300" role="status">
+            <p className="font-bold">Đang làm mới ảnh chụp ứng viên</p>
+            <p className="mt-1 text-sm">{loadingProgress.loadedPages}/{loadingProgress.totalPages || '…'} trang · {loadingProgress.loadedItems}/{loadingProgress.totalItems || '…'} ứng viên. Lựa chọn đang bị khóa.</p>
+          </section>
+        )}
+        {snapshotError && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert"><strong>Không thể công bố ảnh chụp mới.</strong> {snapshotError.message}</section>}
+        {timezoneResolution.usedFallback && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert">Múi giờ không hợp lệ; thời gian tạm hiển thị theo UTC.</section>}
+
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Tóm tắt bản xem trước">
+          {[
+            ['Tổng ứng viên', preview.totalCandidateCount ?? items.length],
+            ['Đã chọn', selectedItemIds.size],
+            ['Bị từ chối', preview.rejectedCandidateCount ?? 0],
+            [capabilities.effectiveStatus === 'APPLIED' ? 'Đã tạo' : 'Hết hạn', capabilities.effectiveStatus === 'APPLIED' ? viewCounts.CREATED : formatCinemaDateTime(preview.expiresAt, effectiveTimezone)],
+          ].map(([label, value]) => <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><span className="block text-[10px] font-bold uppercase text-zinc-500">{label}</span><span className={`${typeof value === 'number' ? 'text-2xl' : 'text-sm'} mt-2 block font-black text-white`}>{value}</span></div>)}
+        </section>
+
+        {capabilities.effectiveStatus === 'APPLIED' && (
+          <section className="grid gap-4 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4 text-violet-100 sm:grid-cols-2" aria-label="Kết quả áp dụng">
             <div>
-              <h3 className="font-bold text-sm">Bản xem trước đã hết hạn</h3>
-              <p className="text-xs mt-1 opacity-80">Bạn không thể áp dụng bản xem trước này nữa vì nó đã vượt quá thời gian tồn tại (TTL). Vui lòng tạo bản xem trước mới.</p>
+              <p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Đã áp dụng lúc</p>
+              <p className="mt-1 font-bold">{formatCinemaDateTime(preview.appliedAt, effectiveTimezone)}</p>
             </div>
-          </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Kết quả vận hành</p>
+              <p className="mt-1 font-bold">{viewCounts.CREATED} suất chiếu đã tạo</p>
+            </div>
+          </section>
         )}
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Tổng ứng viên</span>
-            <span className="text-2xl font-black text-white">{preview.totalCandidateCount}</span>
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Hợp lệ</span>
-            <span className="text-2xl font-black text-green-400">{preview.validCandidateCount}</span>
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Xung đột / Từ chối</span>
-            <span className="text-2xl font-black text-red-400">{preview.rejectedCandidateCount}</span>
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Hết hạn vào</span>
-            <span className="text-sm font-bold text-amber-400 mt-2 block flex items-center gap-1.5">
-              <Clock className="w-4 h-4" />
-              {new Date(preview.expiresAt).toLocaleString('vi-VN')}
-            </span>
-          </div>
-        </div>
-
-        {/* Breakdown of Rejection Reasons */}
-        {Object.keys(rejectionReasons).length > 0 && (
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-500" /> Lý do từ chối (Tổng cộng: {preview.rejectedCandidateCount})
-            </h3>
-            <div className="flex flex-wrap gap-3">
-              {Object.entries(rejectionReasons).map(([reason, count]) => (
-                <div key={reason} className="bg-zinc-950 border border-zinc-800 px-3 py-2 rounded-xl flex items-center gap-2">
-                  <span className="text-red-400 font-black text-sm">{count}</span>
-                  <span className="text-xs text-zinc-300">{translateReason(reason)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Filters and View Toggle */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="bg-zinc-900/60 border border-zinc-800 p-2 rounded-2xl flex flex-wrap gap-2 items-center">
-            <select 
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-            >
-            <option value="ALL">Tất cả ứng viên</option>
-            <option value="VALID">Chỉ Hợp lệ</option>
-            <option value="INVALID">Chỉ Bị từ chối</option>
-          </select>
-          
-          <select 
-            value={filterAuditorium}
-            onChange={(e) => setFilterAuditorium(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-          >
-            <option value="">Tất cả Phòng chiếu</option>
-            {uniqueAuditoriums.map(aud => (
-              <option key={aud} value={aud}>{aud}</option>
-            ))}
-          </select>
-
-          <select 
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-          >
-            <option value="">Tất cả Ngày</option>
-            {uniqueDates.map(dateKey => (
-              <option key={dateKey} value={dateKey}>{formatDate(dateKey)}</option>
-            ))}
-          </select>
-
-            <select 
-              value={filterReason}
-              onChange={(e) => setFilterReason(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-            >
-              <option value="">Tất cả Lý do</option>
-              {Object.keys(rejectionReasons).map(reason => (
-                <option key={reason} value={reason}>{translateReason(reason)}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-            <button
-              onClick={() => setViewMode('timeline')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'timeline' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <LayoutTemplate className="w-4 h-4" /> TIMELINE
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'table' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <List className="w-4 h-4" /> DANH SÁCH
-            </button>
-          </div>
-        </div>
-
-        {/* View Mode Content */}
-        {viewMode === 'timeline' ? (
-          <AutoScheduleTimeline 
-            groupedItems={groupedFilteredItems}
-            selectedItemIds={selectedItemIds}
-            handleToggleSelection={handleToggleSelection}
-            isCheckboxDisabledFunc={(isConflicting) => isUpdatingSelection || isApplying || isConflicting}
-            checkOverlapFunc={(item, audItems, currentSelectedIds) => {
-              for (const selectedId of currentSelectedIds) {
-                const selectedObj = audItems.find(i => i.itemPublicId === selectedId);
-                if (selectedObj && checkOverlap(item, selectedObj)) {
-                  return true;
-                }
-              }
-              return false;
-            }}
-          />
-        ) : (
-          <div className="space-y-10">
-          {Object.keys(groupedFilteredItems).sort().map(dateKey => (
-            <div key={dateKey} className="space-y-4">
-              <h2 className="text-lg font-black text-white flex items-center gap-3 border-b border-zinc-800 pb-2">
-                <Calendar className="w-5 h-5 text-brand-orange" />
-                {formatDate(dateKey)}
-              </h2>
-
-              <div className="space-y-6">
-                {Object.keys(groupedFilteredItems[dateKey]).sort().map(audKey => {
-                  const audItems = groupedFilteredItems[dateKey][audKey];
-                  
-                  return (
-                    <div key={audKey} className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden">
-                      <div className="bg-zinc-900 px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-                        <h3 className="font-bold text-sm text-zinc-200">{audKey}</h3>
-                        <span className="text-xs text-zinc-500">{audItems.length} suất chiếu</span>
-                      </div>
-                      
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse whitespace-nowrap">
-                          <thead>
-                            <tr className="bg-zinc-950/50 border-b border-zinc-800/80 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                              <th className="py-3 px-5 w-10 text-center">
-                                {/* Removed select-all to prevent overlapping selection errors */}
-                              </th>
-                              <th className="py-3 px-5">THỜI GIAN</th>
-                              <th className="py-3 px-5">PHIM & ĐỊNH DẠNG</th>
-                              <th className="py-3 px-5">TRẠNG THÁI</th>
-                              <th className="py-3 px-5">CHI TIẾT</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {audItems.map(item => {
-                              const isValid = item.validationStatus === 'VALID';
-                              const isSelected = selectedItemIds.has(item.itemPublicId);
-                              const isItemApplied = item.applyStatus === 'APPLIED';
-                              
-                              let isConflicting = false;
-                              let conflictItem = null;
-                              
-                              if (isValid && !isSelected && !isItemApplied) {
-                                for (const selectedId of selectedItemIds) {
-                                  const selectedObj = audItems.find(i => i.itemPublicId === selectedId);
-                                  if (selectedObj && checkOverlap(item, selectedObj)) {
-                                    isConflicting = true;
-                                    conflictItem = selectedObj;
-                                    break;
-                                  }
-                                }
-                              }
-
-                              const isCheckboxDisabled = isUpdatingSelection || isApplying || isConflicting;
-                              
-                              return (
-                                <tr 
-                                  key={item.itemPublicId}
-                                  className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${
-                                    isItemApplied ? 'bg-green-500/5' :
-                                    !isValid ? 'bg-red-500/5' :
-                                    isConflicting ? 'bg-red-500/10 opacity-75 grayscale' :
-                                    isSelected ? 'bg-brand-orange/5' : 'bg-zinc-950'
-                                  }`}
-                                >
-                                  <td className="py-3 px-5 text-center">
-                                    {isValid && !isItemApplied && canApply && (
-                                      <input 
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={() => handleToggleSelection(item.itemPublicId, isSelected)}
-                                        disabled={isCheckboxDisabled}
-                                        className="w-4 h-4 rounded border-zinc-700 text-brand-orange focus:ring-brand-orange bg-zinc-900 cursor-pointer disabled:cursor-not-allowed"
-                                      />
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-5">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-bold text-zinc-200">{formatTime(item.startTime)}</span>
-                                      <span className="text-zinc-500">-</span>
-                                      <span className="font-bold text-zinc-400">{formatTime(item.endTime)}</span>
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-5">
-                                    <div className="flex flex-col">
-                                      <span className="font-bold text-sm text-white">{item.movieTitle}</span>
-                                      <span className="text-xs text-zinc-400">{item.versionName} • {item.format} • {item.audioLanguage}</span>
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-5">
-                                    {isItemApplied ? (
-                                      <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-max">
-                                        <CheckCircle2 className="w-3 h-3" /> APPLIED
-                                      </span>
-                                    ) : isConflicting ? (
-                                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
-                                        XUNG ĐỘT
-                                      </span>
-                                    ) : isValid ? (
-                                      <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
-                                        HỢP LỆ
-                                      </span>
-                                    ) : (
-                                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
-                                        TỪ CHỐI
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-5 whitespace-normal min-w-[200px]">
-                                    {!isValid && (
-                                      <div className="text-xs text-red-400 flex items-start gap-1">
-                                        <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                        <span>{translateReason(item.rejectionReason)}</span>
-                                      </div>
-                                    )}
-                                    {isItemApplied && (
-                                      <div className="text-xs text-green-400">
-                                        Đã được tạo thành lịch chiếu chính thức.
-                                      </div>
-                                    )}
-                                    {isConflicting && (
-                                      <div className="text-xs text-red-400 font-bold">
-                                        Xung đột với suất đã chọn: {formatTime(conflictItem.startTime)}-{formatTime(conflictItem.endTime)}
-                                      </div>
-                                    )}
-                                    {isValid && !isItemApplied && !isConflicting && (
-                                      <div className="text-xs text-zinc-500">
-                                        Đủ điều kiện. {isSelected ? 'Sẽ được áp dụng.' : 'Chưa được chọn.'}
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })}
+        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 md:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Ngày vận hành đang rà soát</p>
+              <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Chọn ngày vận hành">
+                {serviceDates.map(date => <button key={date} type="button" aria-pressed={activeServiceDate === date} onClick={() => selectActiveDate(date)} className={`rounded-xl border px-3 py-2 text-sm font-bold ${activeServiceDate === date ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 text-zinc-400'}`}>{formatServiceDateKey(date)}</button>)}
               </div>
             </div>
-          ))}
-
-          {Object.keys(groupedFilteredItems).length === 0 && (
-            <div className="text-center py-20 text-zinc-500">
-              <p>Không có ứng viên suất chiếu nào phù hợp với bộ lọc.</p>
-            </div>
+            {diagnosticCandidate && (
+              <button type="button" onClick={clearDiagnostic} className="flex items-center gap-2 rounded-xl border border-dashed border-blue-400/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-200"><X className="h-4 w-4" />Bỏ phủ chẩn đoán: {diagnosticCandidate.movieTitle}</button>
+            )}
+          </div>
+          {diagnosticConflict && (
+            <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200" role="status">
+              Ứng viên chẩn đoán xung đột khoảng chiếm phòng với một đề xuất đã chọn trong toàn bộ ảnh chụp.
+            </p>
           )}
-        </div>
-        )}
-      </div>
+          {activeServiceDate ? (
+            <AutoScheduleTimeline
+              serviceDate={activeServiceDate}
+              candidates={timelineCandidates}
+              auditoriums={relevantAuditoriums}
+              zoomMode={zoomMode}
+              onZoomChange={setZoomMode}
+              onOpenDetails={openDrawer}
+            />
+          ) : <div className="py-12 text-center text-zinc-500">Không có ngày vận hành hợp lệ để dựng timeline.</div>}
+          <p className="text-xs text-zinc-500" data-testid="timeline-boundary-evidence">Timeline: {timelineCandidates.filter(candidate => !candidate.diagnostic).length} đề xuất đã chọn + {diagnosticCandidate ? 1 : 0} phủ chẩn đoán; dữ liệu đầy đủ {items.length} ứng viên vẫn được giữ cho kiểm tra xung đột.</p>
+        </section>
 
-      {/* Confirmation Modal */}
-      {showApplyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-zinc-800 flex items-center gap-3 text-brand-orange">
-              <AlertCircle className="w-6 h-6" />
-              <h2 className="text-lg font-black uppercase tracking-wider text-white">Xác nhận áp dụng lịch chiếu</h2>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <p className="text-zinc-300">
-                Bạn đang chuẩn bị áp dụng <strong className="text-white">{selectedItemIds.size} suất chiếu</strong> cho cụm rạp <strong className="text-white">{preview.cinemaName}</strong>.
-              </p>
-              
-              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                <ul className="space-y-2 text-sm text-zinc-400">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-500" /> {selectedItemIds.size} ứng viên đã được chọn</li>
-                  <li className="flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-500" /> Từ ngày {formatDate(preview.scheduleFrom)} đến {formatDate(preview.scheduleTo)}</li>
-                </ul>
-              </div>
-
-              <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl flex items-start gap-2 text-blue-400">
-                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p className="text-xs leading-relaxed">
-                  Tất cả các suất chiếu sẽ được tạo ở trạng thái <strong>DRAFT</strong>. Bạn cần chuyển chúng sang trạng thái <strong>OPEN FOR BOOKING</strong> để hệ thống có thể mở bán vé.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-zinc-950/50 border-t border-zinc-800 flex items-center justify-end gap-3">
-              <button 
-                onClick={() => setShowApplyModal(false)}
-                className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-              >
-                Hủy bỏ
-              </button>
-              <button 
-                onClick={() => {
-                  setShowApplyModal(false);
-                  handleApply();
-                }}
-                className="px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider bg-brand-orange text-zinc-950 hover:bg-opacity-90 transition-all shadow-lg shadow-brand-orange/10 flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" /> Xác nhận Áp dụng
-              </button>
-            </div>
+        <section className="space-y-4">
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Nhóm ứng viên">
+            {availableCandidateViews.map(view => <button key={view} type="button" role="tab" aria-selected={candidateView === view} onClick={() => selectCandidateView(view)} className={`rounded-xl border px-4 py-2 text-sm font-bold ${candidateView === view ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 text-zinc-400'}`}>{CANDIDATE_VIEW_LABELS[view]} ({viewCounts[view]})</button>)}
           </div>
-        </div>
-      )}
+          <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+            <select aria-label="Lọc phòng chiếu" value={filterAuditorium} onChange={resetPageWith(setFilterAuditorium)} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs"><option value="">Tất cả phòng</option>{uniqueAuditoriums.map(value => <option key={value} value={value}>{value}</option>)}</select>
+            <select aria-label="Lọc ngày vận hành" value={filterDate} onChange={resetPageWith(setFilterDate)} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs"><option value="">Tất cả ngày</option>{serviceDates.map(value => <option key={value} value={value}>{formatServiceDateKey(value)}</option>)}</select>
+            <select aria-label="Lọc lý do" value={filterReason} onChange={resetPageWith(setFilterReason)} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs"><option value="">Tất cả lý do</option>{uniqueReasons.map(value => <option key={value} value={value}>{value}</option>)}</select>
+          </div>
+        </section>
 
+        {pagination.totalItems === 0 ? (
+          <section className="rounded-2xl border border-dashed border-zinc-800 py-14 text-center text-zinc-500">{getEmptyStateMessage(candidateView)}</section>
+        ) : (
+          <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1050px] text-left">
+                <thead className="border-b border-zinc-800 bg-zinc-950/70 text-[10px] uppercase tracking-wider text-zinc-400"><tr><th className="px-4 py-3">Ngày / giờ</th><th className="px-4 py-3">Phòng</th><th className="px-4 py-3">Phim / phiên bản</th><th className="px-4 py-3">Điểm / hạng</th><th className="px-4 py-3">Xác thực / áp dụng</th><th className="px-4 py-3">Lựa chọn / hành động</th></tr></thead>
+                <tbody>
+                  {pagination.items.map(candidate => {
+                    const selectionBlock = !candidate.selected ? findSelectionBlock(candidate.raw, selectedItemsIndex) : null;
+                    const selectionAvailable = capabilities.isEditable && candidate.validationStatus === 'VALID' && candidate.applyStatus === 'PENDING';
+                    const selectionDisabled = !capabilities.canSelect || Boolean(selectionBlock);
+                    const showDiagnosticAction = (candidateView === CANDIDATE_VIEWS.REJECTED || candidateView === CANDIDATE_VIEWS.ALL) && candidate.timelineEligible;
+                    return (
+                      <tr key={candidate.id} data-testid="candidate-row" className="border-b border-zinc-800/70 align-top text-sm last:border-b-0">
+                        <td className="px-4 py-3"><strong className="text-zinc-200">{formatServiceDateKey(candidate.serviceDate)}</strong><div className="mt-1 text-xs text-zinc-400">{candidate.startTimeDisplay}–{candidate.endTimeDisplay}</div></td>
+                        <td className="px-4 py-3 text-zinc-300">{candidate.auditoriumName}</td>
+                        <td className="px-4 py-3"><strong className="text-white">{candidate.movieTitle}</strong><div className="mt-1 text-xs text-zinc-400">{candidate.versionName}</div></td>
+                        <td className="px-4 py-3 text-zinc-300">{candidate.score ?? '—'} / {candidate.rank ?? '—'}</td>
+                        <td className="px-4 py-3"><span className={`inline-flex rounded border px-2 py-1 text-[10px] font-black uppercase ${getStatusTone(candidate)}`}>{candidate.validationStatus} · {candidate.applyState.label}</span>{candidate.conciseReason && <div className="mt-2 max-w-xs text-xs text-zinc-400">{candidate.conciseReason}</div>}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {selectionAvailable ? <label className="flex items-center gap-2 text-xs font-bold text-zinc-300"><input type="checkbox" checked={candidate.selected} disabled={selectionDisabled} onChange={() => handleToggleSelection(candidate.id, candidate.selected)} aria-label={`Chọn ${candidate.movieTitle} lúc ${candidate.startTimeDisplay}`} />{candidate.selected ? 'Đã chọn' : 'Chưa chọn'}</label> : <span className="text-xs text-zinc-500">{candidate.selected ? 'Đã chọn' : 'Không thể chọn'}</span>}
+                            {showDiagnosticAction && <button type="button" onClick={() => showDiagnosticOnTimeline(candidate)} className="flex items-center gap-1 rounded-lg border border-blue-500/30 px-2 py-1.5 text-xs font-bold text-blue-300"><Eye className="h-3.5 w-3.5" />Xem trên timeline</button>}
+                            {candidate.createdShowtimePath && (
+                              <Link
+                                to={candidate.createdShowtimePath}
+                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs font-bold text-emerald-300"
+                                aria-label={`Mở suất chiếu ${candidate.createdShowtimePublicId}`}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /> Suất chiếu
+                              </Link>
+                            )}
+                            <button type="button" onClick={event => openDrawer(candidate, event.currentTarget)} className="rounded-lg border border-zinc-700 px-2 py-1.5 text-xs font-bold text-zinc-300">Mở chi tiết</button>
+                          </div>
+                          <details className="mt-3 text-xs text-zinc-400"><summary className="cursor-pointer font-bold">Dữ liệu mở rộng</summary><dl className="mt-2 space-y-1 break-all font-mono"><div>ID: {candidate.id}</div><div>startTime: {candidate.technicalDetails.startTime || '—'}</div><div>endTime: {candidate.technicalDetails.endTime || '—'}</div><div>occupancyEndTime: {candidate.technicalDetails.occupancyEndTime || '—'}</div><div>codes: {[candidate.technicalDetails.rejectionCode, candidate.technicalDetails.applyErrorCode].filter(Boolean).join(' / ') || '—'}</div><div>scoreBreakdown: {candidate.technicalDetails.scoreBreakdown ? JSON.stringify(candidate.technicalDetails.scoreBreakdown) : '—'}</div></dl></details>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {pagination.totalItems > 0 && (
+          <nav className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3" aria-label="Phân trang ứng viên">
+            <label className="flex items-center gap-2 text-sm text-zinc-400">Số dòng<select aria-label="Số ứng viên mỗi trang" value={pagination.pageSize} onChange={event => { setCandidatePageSize(Number(event.target.value)); setCandidatePage(1); }} className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200">{CANDIDATE_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}</select></label>
+            <span className="text-sm text-zinc-400">Trang {pagination.page}/{pagination.totalPages} · {pagination.totalItems} ứng viên</span>
+            <div className="flex gap-2"><button type="button" onClick={() => setCandidatePage(pagination.page - 1)} disabled={pagination.page <= 1} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Trước</button><button type="button" onClick={() => setCandidatePage(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Sau</button></div>
+          </nav>
+        )}
+      </main>
+
+      <AutoScheduleCandidateDrawer
+        candidate={drawerCandidate}
+        timezone={effectiveTimezone}
+        capabilities={capabilities}
+        selectionBlockedMessage={drawerSelectionBlockedMessage}
+        onToggleSelection={handleToggleSelection}
+        canInspectOnTimeline={Boolean(
+          drawerCandidate?.timelineEligible
+          && (candidateView === CANDIDATE_VIEWS.REJECTED || candidateView === CANDIDATE_VIEWS.ALL)
+        )}
+        onShowDiagnostic={() => showDiagnosticOnTimeline(drawerCandidate)}
+        onClearDiagnostic={clearDiagnostic}
+        onClose={closeDrawer}
+        returnFocusElement={drawerReturnFocusElement}
+      />
+
+      {showApplyModal && capabilities.isEditable && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"><div role="dialog" aria-modal="true" aria-labelledby="apply-preview-title" className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6"><div className="flex items-center gap-3"><AlertCircle className="h-6 w-6 text-brand-orange" /><h2 id="apply-preview-title" className="text-lg font-black">Xác nhận áp dụng lịch chiếu</h2></div><p className="mt-4 text-zinc-300">Áp dụng <strong>{selectedItemIds.size} suất chiếu</strong> theo chế độ {preview.applyMode}.</p><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowApplyModal(false)} className="rounded-xl px-4 py-2 text-zinc-400">Hủy</button><button type="button" disabled={!capabilities.canApply} onClick={() => { setShowApplyModal(false); handleApply(); }} className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2 font-black text-zinc-950 disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />Xác nhận</button></div></div></div>
+      )}
     </div>
   );
 };

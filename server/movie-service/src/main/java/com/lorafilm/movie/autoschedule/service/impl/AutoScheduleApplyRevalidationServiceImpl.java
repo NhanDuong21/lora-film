@@ -4,11 +4,11 @@ import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleApplyRevalidationService;
+import com.lorafilm.movie.autoschedule.validation.OccupancyInterval;
+import com.lorafilm.movie.autoschedule.validation.OccupancyOverlapValidator;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
-import com.lorafilm.movie.showtime.domain.entity.Showtime;
-import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.validation.ShowtimeValidationContext;
 import com.lorafilm.movie.showtime.validation.ShowtimeValidationService;
 import org.springframework.stereotype.Service;
@@ -17,20 +17,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApplyRevalidationService {
 
     private final ShowtimeValidationService showtimeValidationService;
-    private final ShowtimeRepository showtimeRepository;
 
-    public AutoScheduleApplyRevalidationServiceImpl(ShowtimeValidationService showtimeValidationService,
-                                                    ShowtimeRepository showtimeRepository) {
+    public AutoScheduleApplyRevalidationServiceImpl(ShowtimeValidationService showtimeValidationService) {
         this.showtimeValidationService = showtimeValidationService;
-        this.showtimeRepository = showtimeRepository;
     }
 
     @Override
@@ -43,46 +38,62 @@ public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApp
         // Check candidate-candidate overlap first
         validateCandidateCandidateOverlaps(selectedItems);
 
-        List<Long> auditoriumIds = selectedItems.stream()
-                .map(item -> item.getAuditorium().getId())
-                .distinct()
-                .collect(Collectors.toList());
-
         for (ShowtimeSchedulePreviewItem item : selectedItems) {
-            try {
-                revalidateItem(item);
-            } catch (BusinessException e) {
-                // In ALL_OR_NOTHING, one failure rolls back the whole thing.
-                // We map this to a specific apply failure code.
-                throw new BusinessException(ErrorCode.AUTO_SCHEDULE_APPLY_REVALIDATION_FAILED, "Validation failed for item " + item.getPublicId() + ": " + e.getMessage());
-            }
+            revalidateItem(item);
         }
     }
 
     private void validateCandidateCandidateOverlaps(List<ShowtimeSchedulePreviewItem> items) {
-        // Group by auditorium
-        var itemsByAuditorium = items.stream()
-                .collect(Collectors.groupingBy(item -> item.getAuditorium().getId()));
+        List<OccupancyInterval> intervals = items.stream()
+                .map(this::toCanonicalInterval)
+                .toList();
 
-        for (var entry : itemsByAuditorium.entrySet()) {
-            List<ShowtimeSchedulePreviewItem> audItems = entry.getValue();
-            audItems.sort(Comparator.comparing(ShowtimeSchedulePreviewItem::getStartTime));
+        OccupancyOverlapValidator.findConflict(intervals).ifPresent(conflict -> {
+            String auditoriumName = items.stream()
+                    .filter(item -> item.getAuditorium().getId().equals(conflict.auditoriumId()))
+                    .map(item -> String.valueOf(item.getAuditorium().getName()))
+                    .findFirst()
+                    .orElse("null");
+            throw new BusinessException(
+                    ErrorCode.AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP,
+                    "Selected candidates overlap in auditorium " + auditoriumName);
+        });
+    }
 
-            for (int i = 0; i < audItems.size() - 1; i++) {
-                ShowtimeSchedulePreviewItem current = audItems.get(i);
-                ShowtimeSchedulePreviewItem next = audItems.get(i + 1);
-
-                if (next.getStartTime().isBefore(current.getOccupancyEndTime())) {
-                    throw new BusinessException(ErrorCode.AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP, 
-                            "Selected candidates overlap in auditorium " + current.getAuditorium().getName());
-                }
-            }
+    private OccupancyInterval toCanonicalInterval(ShowtimeSchedulePreviewItem item) {
+        if (item == null
+                || item.getAuditorium() == null
+                || item.getAuditorium().getId() == null
+                || item.getPublicId() == null
+                || item.getPublicId().isBlank()
+                || !hasValidInterval(item)) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT);
         }
+        return new OccupancyInterval(
+                item.getAuditorium().getId(),
+                item.getStartTime(),
+                item.getOccupancyEndTime(),
+                item.getPublicId());
+    }
+
+    private boolean hasValidInterval(ShowtimeSchedulePreviewItem item) {
+        return item.getStartTime() != null
+                && item.getEndTime() != null
+                && item.getOccupancyEndTime() != null
+                && item.getStartTime().isBefore(item.getEndTime())
+                && !item.getEndTime().isAfter(item.getOccupancyEndTime());
     }
 
     private void revalidateItem(ShowtimeSchedulePreviewItem item) {
         Movie movie = item.getMovie();
         Auditorium auditorium = item.getAuditorium();
+
+        if (movie == null || movie.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.MOVIE_NOT_FOUND);
+        }
+        if (auditorium == null || auditorium.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND);
+        }
 
         if (movie.getDurationMinutes() == null || movie.getDurationMinutes() <= 0) {
             throw new BusinessException(ErrorCode.INVALID_MOVIE_DURATION, "Invalid movie duration");
@@ -112,18 +123,5 @@ public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApp
                 .build();
 
         showtimeValidationService.validateScheduling(context);
-
-        // Explicitly check overlaps with existing real showtimes considering cleaning buffers
-        // We use exact semantics matching manual flow, minus CANCELLED or soft-deleted items.
-        Instant candidateStartMinusBuffer = item.getStartTime().minus(auditorium.getCleaningBufferMinutes(), ChronoUnit.MINUTES);
-        List<Showtime> overlappingShowtimes = showtimeRepository.findBlockingOverlapsForScheduling(
-                auditorium.getId(),
-                candidateStartMinusBuffer,
-                item.getOccupancyEndTime()
-        );
-        
-        if (!overlappingShowtimes.isEmpty()) {
-            throw new BusinessException(ErrorCode.SHOWTIME_OVERLAP_CONFLICT, "Showtime overlaps with an existing schedule");
-        }
     }
 }

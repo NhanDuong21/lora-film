@@ -23,11 +23,14 @@ public class RedisLockServiceTest {
     @Mock
     private RedisOperations<String, String> redisTemplate;
 
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+
     private RedisLockServiceImpl redisLockService;
 
     @BeforeEach
     public void setUp() {
-        redisLockService = new RedisLockServiceImpl(redisTemplate);
+        redisLockService = new RedisLockServiceImpl(redisTemplate, bookingMetricsManager);
     }
 
     @Test

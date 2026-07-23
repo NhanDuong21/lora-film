@@ -17,6 +17,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -124,6 +125,82 @@ class BalancedCandidateScoringServiceImplTest {
 
         CandidateScoreResult result = scoringService.score(candidate, context);
 
-        assertEquals(0.0, result.getScore().doubleValue(), 0.001);
+        assertEquals(new BigDecimal("0.000"), result.getScore());
+        assertEquals(Map.of(), result.getScoreBreakdown());
+    }
+
+    @Test
+    void score_timeBoundariesAndPrimePrecedenceRemainExact() {
+        CandidateScoringContext context = new CandidateScoringContext(cinema, List.of(), List.of());
+
+        CandidateScoreResult atNine = scoringService.score(candidateAt(9, 0), context);
+        CandidateScoreResult atTwelve = scoringService.score(candidateAt(12, 0), context);
+        CandidateScoreResult atEighteen = scoringService.score(candidateAt(18, 0), context);
+        CandidateScoreResult atTwentyTwo = scoringService.score(candidateAt(22, 0), context);
+
+        assertEquals(new BigDecimal("5.000"), atNine.getScoreBreakdown().get("offPeak"));
+        assertEquals(new BigDecimal("0.000"), atTwelve.getScoreBreakdown().get("offPeak"));
+        assertEquals(new BigDecimal("20.000"), atEighteen.getScoreBreakdown().get("primeTime"));
+        assertEquals(new BigDecimal("0.000"), atEighteen.getScoreBreakdown().get("offPeak"));
+        assertEquals(new BigDecimal("0.000"), atTwentyTwo.getScoreBreakdown().get("primeTime"));
+    }
+
+    @Test
+    void score_earlyAndContinuityBoundariesRemainExact() {
+        Instant open = Instant.parse("2023-10-01T08:00:00Z");
+        OperatingWindow window = new OperatingWindow(open, open.plusSeconds(8 * 3600));
+
+        ShowtimeCandidate fiftyNineMinutes = candidateAt(8, 59);
+        fiftyNineMinutes.setOperatingWindow(window);
+        ShowtimeCandidate sixtyMinutes = candidateAt(9, 0);
+        sixtyMinutes.setOperatingWindow(window);
+
+        CandidateScoringContext windowContext = new CandidateScoringContext(
+                cinema, List.of(window), List.of());
+        assertEquals(new BigDecimal("5.000"), scoringService.score(
+                fiftyNineMinutes, windowContext).getScoreBreakdown().get("earlySlot"));
+        assertEquals(new BigDecimal("0.000"), scoringService.score(
+                sixtyMinutes, windowContext).getScoreBreakdown().get("earlySlot"));
+
+        ShowtimeCandidate candidate = candidateAt(14, 0);
+        Showtime thirtyMinutePrevious = previousEndingAt("2023-10-01T13:30:00Z");
+        Showtime thirtyOneMinutePrevious = previousEndingAt("2023-10-01T13:29:00Z");
+        assertEquals(new BigDecimal("10.000"), scoringService.score(candidate,
+                new CandidateScoringContext(cinema, List.of(), List.of(thirtyMinutePrevious)))
+                .getScoreBreakdown().get("scheduleContinuity"));
+        assertEquals(new BigDecimal("0.000"), scoringService.score(candidate,
+                new CandidateScoringContext(cinema, List.of(), List.of(thirtyOneMinutePrevious)))
+                .getScoreBreakdown().get("scheduleContinuity"));
+    }
+
+    @Test
+    void score_validBreakdownHasStableComponentsScaleAndExactSum() {
+        CandidateScoreResult result = scoringService.score(candidateAt(19, 0),
+                new CandidateScoringContext(cinema, List.of(), List.of()));
+
+        assertEquals(Set.of("base", "primeTime", "offPeak", "earlySlot",
+                "auditoriumFit", "scheduleContinuity"), result.getScoreBreakdown().keySet());
+        result.getScoreBreakdown().values().forEach(value -> assertEquals(3, value.scale()));
+        BigDecimal sum = result.getScoreBreakdown().values().stream()
+                .reduce(new BigDecimal("0.000"), BigDecimal::add);
+        assertEquals(new BigDecimal("80.000"), result.getScore());
+        assertEquals(result.getScore(), sum);
+    }
+
+    private ShowtimeCandidate candidateAt(int hour, int minute) {
+        ShowtimeCandidate candidate = new ShowtimeCandidate();
+        candidate.setValidationStatus(PreviewItemValidationStatus.VALID);
+        candidate.setAuditorium(auditorium);
+        candidate.setStartTime(ZonedDateTime.of(
+                2023, 10, 1, hour, minute, 0, 0, ZoneId.of("UTC")).toInstant());
+        return candidate;
+    }
+
+    private Showtime previousEndingAt(String end) {
+        auditorium.setCleaningBufferMinutes(0);
+        Showtime previous = new Showtime();
+        previous.setAuditorium(auditorium);
+        previous.setEndTime(Instant.parse(end));
+        return previous;
     }
 }

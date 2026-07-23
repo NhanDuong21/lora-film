@@ -27,6 +27,8 @@ import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
 import com.lorafilm.booking.security.service.SecurityContextService;
+import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -60,6 +62,7 @@ public class BookingServiceImpl implements BookingService {
     private final com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort;
     private final com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository;
     private final com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
+    private final BookingMetricsManager bookingMetricsManager;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -72,7 +75,8 @@ public class BookingServiceImpl implements BookingService {
             FoodOrderService foodOrderService,
             com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort,
             com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository,
-            com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService) {
+            com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
+            BookingMetricsManager bookingMetricsManager) {
         this.bookingRepository = bookingRepository;
         this.reservationRepository = reservationRepository;
         this.reservationService = reservationService;
@@ -84,6 +88,7 @@ public class BookingServiceImpl implements BookingService {
         this.paymentIntegrationPort = paymentIntegrationPort;
         this.paymentEventRepository = paymentEventRepository;
         this.outboxService = outboxService;
+        this.bookingMetricsManager = bookingMetricsManager;
     }
 
 
@@ -91,6 +96,8 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request) {
         Long currentUserId = requireAuthenticatedUser();
+        MDC.put("userId", currentUserId.toString());
+        MDC.put("action", "CREATE_BOOKING");
         ValidatedCreateRequest validatedRequest = validateCreateRequest(request);
 
         List<SeatReservation> reservations =
@@ -121,8 +128,13 @@ public class BookingServiceImpl implements BookingService {
                 null);
 
         Booking savedBooking = bookingRepository.saveAndFlush(booking);
+        MDC.put("bookingId", savedBooking.getPublicId());
+        
         List<Long> reservationIds = reservations.stream().map(SeatReservation::getId).toList();
         reservationService.convertReservations(new ConvertReservationRequest(savedBooking.getId(), reservationIds));
+        
+        bookingMetricsManager.incrementBookingCreated();
+        
         return bookingMapper.toResponse(savedBooking);
     }
 
@@ -130,6 +142,8 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse cancelBooking(String publicId, CancelBookingRequest request) {
         Long currentUserId = requireAuthenticatedUser();
+        MDC.put("bookingId", publicId);
+        MDC.put("action", "CANCEL_BOOKING");
         Booking booking = getBooking(publicId);
         requireOwnerOrAdmin(booking, currentUserId);
 
@@ -140,6 +154,9 @@ public class BookingServiceImpl implements BookingService {
         booking.cancel(reasonCode, reasonDetail, Instant.now());
         Booking saved = bookingRepository.save(booking);
         reservationService.handleBookingStatusChange(saved.getId(), BookingStatus.CANCELLED, reasonDetail != null ? reasonDetail : reasonCode);
+        
+        bookingMetricsManager.incrementBookingCancelled();
+        
         return bookingMapper.toResponse(saved);
     }
 
@@ -164,6 +181,7 @@ public class BookingServiceImpl implements BookingService {
     @Override
     public BookingDetailResponse findById(String publicId) {
         Long currentUserId = requireAuthenticatedUser();
+        MDC.put("bookingId", publicId);
         Booking booking = getBooking(publicId);
         requireOwnerOrAdmin(booking, currentUserId);
         return bookingMapper.toDetailResponse(booking);
@@ -175,6 +193,7 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = bookingRepository.findByBookingCode(bookingCode)
                 .filter(this::isActive)
                 .orElseThrow(() -> new BookingNotFoundException(bookingCode));
+        MDC.put("bookingId", booking.getPublicId());
         requireOwnerOrAdmin(booking, currentUserId);
         return bookingMapper.toDetailResponse(booking);
     }
@@ -212,6 +231,8 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private BookingResponse changeStatusInternal(String publicId, BookingStatus targetStatus) {
+        MDC.put("bookingId", publicId);
+        MDC.put("action", "CHANGE_BOOKING_STATUS");
         Booking booking = getBooking(publicId);
         booking.changeStatus(targetStatus, Instant.now());
         Booking saved = bookingRepository.save(booking);
@@ -222,6 +243,18 @@ public class BookingServiceImpl implements BookingService {
         if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED || targetStatus == BookingStatus.REFUNDED) {
             reservationService.handleBookingStatusChange(saved.getId(), targetStatus, "Booking status changed to " + targetStatus);
         }
+
+        // Increment Metrics
+        if (targetStatus == BookingStatus.CONFIRMED) {
+            bookingMetricsManager.incrementBookingConfirmed();
+            bookingMetricsManager.incrementPaymentSuccess();
+        } else if (targetStatus == BookingStatus.EXPIRED) {
+            bookingMetricsManager.incrementBookingExpired();
+            bookingMetricsManager.incrementPaymentFailed();
+        } else if (targetStatus == BookingStatus.CANCELLED) {
+            bookingMetricsManager.incrementBookingCancelled();
+        }
+
         return bookingMapper.toResponse(saved);
     }
 

@@ -19,5 +19,7 @@ public interface BookingRetryTaskRepository extends JpaRepository<BookingRetryTa
     List<BookingRetryTask> findByStatusAndNextRetryAtBefore(RetryTaskStatus status, Instant now, Pageable pageable);
 
     boolean existsByTaskTypeAndReferenceId(RetryTaskType taskType, Long referenceId);
+
+    long countByStatus(RetryTaskStatus status);
 }
 

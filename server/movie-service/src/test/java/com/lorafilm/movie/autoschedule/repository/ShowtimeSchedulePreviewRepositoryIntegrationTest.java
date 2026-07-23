@@ -281,4 +281,41 @@ public class ShowtimeSchedulePreviewRepositoryIntegrationTest {
         assertThat(found).isPresent();
         assertThat(org.hibernate.Hibernate.isInitialized(found.get().getCinema())).isFalse();
     }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void PREVIEW_REPO_011_selectionCompareAndSetAllowsOnlyOneSameVersionCommit() throws Exception {
+        ShowtimeSchedulePreview preview = createValidPreview(
+                UUID.randomUUID().toString(), UUID.randomUUID().toString(), null);
+        preview.setStatus(SchedulePreviewStatus.PREVIEWED);
+        preview = previewRepository.saveAndFlush(preview);
+        Long previewId = preview.getId();
+        Long expectedVersion = preview.getVersion();
+
+        java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(2);
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<Integer> update = () -> {
+                barrier.await();
+                org.springframework.transaction.support.TransactionTemplate template =
+                        new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+                template.setPropagationBehavior(
+                        org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                return template.execute(status -> previewRepository.compareAndSetSelectionVersion(
+                        previewId,
+                        SchedulePreviewStatus.PREVIEWED,
+                        expectedVersion,
+                        1,
+                        Instant.now()));
+            };
+
+            List<java.util.concurrent.Future<Integer>> results = executor.invokeAll(List.of(update, update));
+
+            assertThat(results.get(0).get() + results.get(1).get()).isEqualTo(1);
+            ShowtimeSchedulePreview updated = previewRepository.findById(previewId).orElseThrow();
+            assertThat(updated.getVersion()).isEqualTo(expectedVersion + 1);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
 }

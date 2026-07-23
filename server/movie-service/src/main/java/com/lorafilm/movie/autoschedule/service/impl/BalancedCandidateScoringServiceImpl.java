@@ -6,7 +6,6 @@ import com.lorafilm.movie.autoschedule.model.CandidateScoringContext;
 import com.lorafilm.movie.autoschedule.model.OperatingWindow;
 import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
 import com.lorafilm.movie.autoschedule.service.BalancedCandidateScoringService;
-import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -37,7 +36,7 @@ public class BalancedCandidateScoringServiceImpl implements BalancedCandidateSco
         breakdown.put("base", baseScore);
         totalScore = totalScore.add(baseScore);
 
-        ZoneId zoneId = ZoneId.of(context.getCinema().getTimezone());
+        ZoneId zoneId = context.getZoneId();
         ZonedDateTime startZdt = candidate.getStartTime().atZone(zoneId);
         LocalTime startTime = startZdt.toLocalTime();
 
@@ -66,10 +65,12 @@ public class BalancedCandidateScoringServiceImpl implements BalancedCandidateSco
 
         // Early Slot Bonus
         BigDecimal earlyBonus = BigDecimal.ZERO;
-        Optional<OperatingWindow> matchedWindow = context.getOperatingWindows().stream()
-                .filter(w -> !candidate.getStartTime().isBefore(w.getOpenInstant()) &&
-                             !candidate.getStartTime().isAfter(w.getCloseInstant()))
-                .findFirst();
+        Optional<OperatingWindow> matchedWindow = candidate.getOperatingWindow() != null
+                ? Optional.of(candidate.getOperatingWindow())
+                : context.getOperatingWindows().stream()
+                    .filter(w -> !candidate.getStartTime().isBefore(w.getOpenInstant()) &&
+                                 !candidate.getStartTime().isAfter(w.getCloseInstant()))
+                    .findFirst();
                 
         if (matchedWindow.isPresent()) {
             Instant openInstant = matchedWindow.get().getOpenInstant();
@@ -82,8 +83,7 @@ public class BalancedCandidateScoringServiceImpl implements BalancedCandidateSco
 
         // Auditorium Fit Bonus
         BigDecimal fitBonus = BigDecimal.ZERO;
-        if (candidate.getAuditorium() != null && candidate.getAuditorium().getCapacity() != null 
-                && candidate.getAuditorium().getCapacity() > 0) {
+        if (candidate.getAuditoriumCapacity() != null && candidate.getAuditoriumCapacity() > 0) {
             fitBonus = BigDecimal.valueOf(10);
         }
         breakdown.put("auditoriumFit", fitBonus);
@@ -91,19 +91,12 @@ public class BalancedCandidateScoringServiceImpl implements BalancedCandidateSco
 
         // Schedule Continuity Bonus
         BigDecimal continuityBonus = BigDecimal.ZERO;
-        if (context.getExistingShowtimes() != null) {
-            // Find existing showtimes in the same auditorium
-            Showtime closestPrevious = context.getExistingShowtimes().stream()
-                    .filter(st -> st.getAuditorium().getId().equals(candidate.getAuditorium().getId()))
-                    .filter(st -> getOccupancyEnd(st).isBefore(candidate.getStartTime()) || getOccupancyEnd(st).equals(candidate.getStartTime()))
-                    .max((s1, s2) -> getOccupancyEnd(s1).compareTo(getOccupancyEnd(s2)))
-                    .orElse(null);
-
-            if (closestPrevious != null) {
-                long gapMinutes = ChronoUnit.MINUTES.between(getOccupancyEnd(closestPrevious), candidate.getStartTime());
-                if (gapMinutes <= 30) {
-                    continuityBonus = BigDecimal.valueOf(10);
-                }
+        Optional<Instant> closestPrevious = context.findClosestPreviousOccupancyEnd(
+                candidate.getAuditoriumId(), candidate.getStartTime());
+        if (closestPrevious.isPresent()) {
+            long gapMinutes = ChronoUnit.MINUTES.between(closestPrevious.get(), candidate.getStartTime());
+            if (gapMinutes <= 30) {
+                continuityBonus = BigDecimal.valueOf(10);
             }
         }
         breakdown.put("scheduleContinuity", continuityBonus);
@@ -116,12 +109,5 @@ public class BalancedCandidateScoringServiceImpl implements BalancedCandidateSco
         }
 
         return new CandidateScoreResult(totalScore, breakdown);
-    }
-
-    private Instant getOccupancyEnd(Showtime showtime) {
-        if (showtime.getAuditorium() != null && showtime.getAuditorium().getCleaningBufferMinutes() != null) {
-            return showtime.getEndTime().plus(showtime.getAuditorium().getCleaningBufferMinutes(), ChronoUnit.MINUTES);
-        }
-        return showtime.getEndTime();
     }
 }

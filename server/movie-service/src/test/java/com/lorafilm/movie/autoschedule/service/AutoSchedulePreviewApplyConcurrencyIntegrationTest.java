@@ -309,9 +309,9 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
         
         try {
             applyService.applyPreview(previewPublicId, request);
-            org.junit.jupiter.api.Assertions.fail("Should have thrown SHOWTIME_OVERLAP_CONFLICT via AUTO_SCHEDULE_APPLY_REVALIDATION_FAILED");
+            org.junit.jupiter.api.Assertions.fail("Should have thrown SHOWTIME_OVERLAP_CONFLICT");
         } catch (BusinessException e) {
-            assertThat(e.getErrorCode()).isEqualTo(ErrorCode.AUTO_SCHEDULE_APPLY_REVALIDATION_FAILED);
+            assertThat(e.getErrorCode()).isEqualTo(ErrorCode.SHOWTIME_OVERLAP_CONFLICT);
         }
         
         // Assert rollback

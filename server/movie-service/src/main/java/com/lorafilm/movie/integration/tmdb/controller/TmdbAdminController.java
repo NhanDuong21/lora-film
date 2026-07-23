@@ -14,8 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.integration.tmdb.domain.entity.TmdbSyncState;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbSyncStateDto;
-import com.lorafilm.movie.integration.tmdb.repository.TmdbSyncStateRepository;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbImportResult;
 import com.lorafilm.movie.integration.tmdb.service.TmdbImportService;
+import com.lorafilm.movie.integration.tmdb.service.TmdbSyncStateQueryService;
 
 @RestController
 @RequestMapping("/api/admin/tmdb")
@@ -24,44 +25,26 @@ public class TmdbAdminController {
     private static final Logger log = LoggerFactory.getLogger(TmdbAdminController.class);
 
     private final TmdbImportService tmdbImportService;
-    private final TmdbSyncStateRepository syncStateRepository;
+    private final TmdbSyncStateQueryService syncStateQueryService;
 
-    public TmdbAdminController(TmdbImportService tmdbImportService, TmdbSyncStateRepository syncStateRepository) {
+    public TmdbAdminController(TmdbImportService tmdbImportService, TmdbSyncStateQueryService syncStateQueryService) {
         this.tmdbImportService = tmdbImportService;
-        this.syncStateRepository = syncStateRepository;
+        this.syncStateQueryService = syncStateQueryService;
     }
 
     @GetMapping("/sync/state")
     public ResponseEntity<ApiResponse<TmdbSyncStateDto>> getSyncState() {
         log.info("[TmdbAdminController] Request to get sync state");
-        Optional<TmdbSyncState> stateOpt = syncStateRepository.findBySyncType("DAILY_CHANGES");
-
-        TmdbSyncStateDto dto = new TmdbSyncStateDto();
-        if (stateOpt.isPresent()) {
-            TmdbSyncState state = stateOpt.get();
-            dto.setStatus(state.getStatus());
-            dto.setCursor(state.getCursor());
-            dto.setLastCompletedAt(state.getLastSyncTime());
-            // Other fields like startedAt, lastSuccessAt, lastFailureAt, lastError are NOT persisted in the database.
-            // Requirement strictly forbids faking these metrics.
-        } else {
-            dto.setStatus("IDLE");
-        }
-
+        TmdbSyncStateDto dto = syncStateQueryService.getSyncState("TMDB_BULK_EXPORT");
         return ResponseEntity.ok(ApiResponse.ok(dto));
     }
 
     @PostMapping("/sync/{tmdbId}")
     public ResponseEntity<ApiResponse<String>> syncMovieById(@PathVariable Long tmdbId) {
         log.info("[TmdbAdminController] Request to sync movie by ID: {}", tmdbId);
-        try {
-            tmdbImportService.importMovieById(tmdbId);
-            log.info("[TmdbAdminController] Successfully synced movie ID: {}", tmdbId);
-            return ResponseEntity.ok(ApiResponse.ok("Movie synced successfully"));
-        } catch (Exception e) {
-            log.error("[TmdbAdminController] Failed to sync movie ID: {}", tmdbId, e);
-            return ResponseEntity.badRequest().body(ApiResponse.fail("SYNC_ERROR", "Failed to sync movie: " + e.getMessage()));
-        }
+        TmdbImportResult result = tmdbImportService.importMovieById(tmdbId);
+        log.info("[TmdbAdminController] TMDB sync outcome for {}: {}", tmdbId, result.outcome());
+        return ResponseEntity.ok(ApiResponse.ok("Movie synced successfully"));
     }
 
     @PostMapping("/sync/bulk/start")

@@ -13,6 +13,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Map;
 
 @Entity
@@ -57,6 +58,9 @@ public class ShowtimeSchedulePreviewItem {
 
     @Column(name = "occupancy_end_time", nullable = false)
     private Instant occupancyEndTime;
+
+    @Column(name = "service_date")
+    private LocalDate serviceDate;
 
     @Column(name = "score", nullable = false, precision = 10, scale = 3)
     private BigDecimal score;
@@ -213,6 +217,14 @@ public class ShowtimeSchedulePreviewItem {
 
     public void setOccupancyEndTime(Instant occupancyEndTime) {
         this.occupancyEndTime = occupancyEndTime;
+    }
+
+    public LocalDate getServiceDate() {
+        return serviceDate;
+    }
+
+    public void setServiceDate(LocalDate serviceDate) {
+        this.serviceDate = serviceDate;
     }
 
     public BigDecimal getScore() {

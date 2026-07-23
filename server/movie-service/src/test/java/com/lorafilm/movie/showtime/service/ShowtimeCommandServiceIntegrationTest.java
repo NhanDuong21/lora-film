@@ -6,6 +6,8 @@ import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
+import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
+import com.lorafilm.movie.cinema.domain.entity.CinemaClosurePeriod;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
@@ -61,6 +63,9 @@ class ShowtimeCommandServiceIntegrationTest {
     private com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository operatingHourRepository;
 
     @Autowired
+    private CinemaClosurePeriodRepository closurePeriodRepository;
+
+    @Autowired
     private ShowtimeStatusHistoryRepository statusHistoryRepository;
 
     @MockBean
@@ -80,6 +85,7 @@ class ShowtimeCommandServiceIntegrationTest {
         jdbcTemplate.execute("TRUNCATE TABLE seats");
         jdbcTemplate.execute("TRUNCATE TABLE showtime_status_history");
         jdbcTemplate.execute("TRUNCATE TABLE showtimes");
+        jdbcTemplate.execute("TRUNCATE TABLE cinema_closure_periods");
         jdbcTemplate.execute("TRUNCATE TABLE auditoriums");
         jdbcTemplate.execute("TRUNCATE TABLE cinemas");
         jdbcTemplate.execute("TRUNCATE TABLE movies");
@@ -167,5 +173,74 @@ class ShowtimeCommandServiceIntegrationTest {
         assertEquals(1, history.size());
         assertEquals(ShowtimeStatus.DRAFT, history.get(0).getNewStatus());
         assertNull(history.get(0).getPreviousStatus());
+    }
+
+    @Test
+    void createShowtime_rejectsClosureThatStartsDuringCleaningOccupancy() {
+        Instant start = Instant.parse("2026-08-03T05:00:00Z");
+        CinemaClosurePeriod closure = new CinemaClosurePeriod();
+        closure.setCinema(cinema);
+        closure.setStartTime(start.plus(125, ChronoUnit.MINUTES));
+        closure.setEndTime(start.plus(180, ChronoUnit.MINUTES));
+        closure.setReason("Cleaning overlap regression");
+        closure.setStatus(com.lorafilm.movie.common.enums.ActionStatus.ACTIVE);
+        closurePeriodRepository.saveAndFlush(closure);
+
+        CreateShowtimeRequest request = new CreateShowtimeRequest();
+        request.setMoviePublicId(movie.getPublicId());
+        request.setMovieVersionPublicId(movieVersion.getPublicId());
+        request.setCinemaPublicId(cinema.getPublicId());
+        request.setAuditoriumPublicId(auditorium.getPublicId());
+        request.setStartTime(start);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> showtimeCommandService.createShowtime(request));
+
+        assertEquals(ErrorCode.SHOWTIME_OVERLAPS_CINEMA_CLOSURE, ex.getErrorCode());
+        assertEquals(0, showtimeRepository.count());
+    }
+
+    @Test
+    void createShowtime_rejectsBeforeCinemaLocalReleaseStartAndPersistsNothing() {
+        movie.setReleaseDate(java.time.LocalDate.of(2026, 8, 3));
+        movieRepository.saveAndFlush(movie);
+
+        CreateShowtimeRequest request = new CreateShowtimeRequest();
+        request.setMoviePublicId(movie.getPublicId());
+        request.setMovieVersionPublicId(movieVersion.getPublicId());
+        request.setCinemaPublicId(cinema.getPublicId());
+        request.setAuditoriumPublicId(auditorium.getPublicId());
+        request.setStartTime(java.time.LocalDate.of(2026, 8, 3)
+                .atStartOfDay(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+                .minusMinutes(1)
+                .toInstant());
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> showtimeCommandService.createShowtime(request));
+
+        assertEquals(ErrorCode.SHOWTIME_OUTSIDE_RELEASE_WINDOW, ex.getErrorCode());
+        assertEquals(0, showtimeRepository.count());
+        assertEquals(0, statusHistoryRepository.count());
+    }
+
+    @Test
+    void createShowtime_allowsExactOccupancyAdjacency() {
+        CreateShowtimeRequest first = requestAt(Instant.parse("2026-08-03T05:00:00Z"));
+        CreateShowtimeRequest adjacent = requestAt(Instant.parse("2026-08-03T07:15:00Z"));
+
+        assertDoesNotThrow(() -> showtimeCommandService.createShowtime(first));
+        assertDoesNotThrow(() -> showtimeCommandService.createShowtime(adjacent));
+
+        assertEquals(2, showtimeRepository.count());
+    }
+
+    private CreateShowtimeRequest requestAt(Instant start) {
+        CreateShowtimeRequest request = new CreateShowtimeRequest();
+        request.setMoviePublicId(movie.getPublicId());
+        request.setMovieVersionPublicId(movieVersion.getPublicId());
+        request.setCinemaPublicId(cinema.getPublicId());
+        request.setAuditoriumPublicId(auditorium.getPublicId());
+        request.setStartTime(start);
+        return request;
     }
 }

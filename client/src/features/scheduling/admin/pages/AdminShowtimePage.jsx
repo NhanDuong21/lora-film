@@ -28,7 +28,6 @@ const AdminShowtimePage = () => {
     setSource,
     currentPage,
     setCurrentPage,
-    pageSize,
     totalPages,
     totalElements,
     fetchShowtimes
@@ -36,43 +35,37 @@ const AdminShowtimePage = () => {
 
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const locationProcessed = useRef(false);
+  const locationStateProcessed = useRef(false);
+  const isReady = useRef(false);
   const [isBatchActionLoading, setIsBatchActionLoading] = useState(false);
 
   useEffect(() => {
-    if (!locationProcessed.current) {
-      const urlBatchId = searchParams.get('batchId');
-      const urlSource = searchParams.get('source');
-      const urlStatus = searchParams.get('status');
-      
-      if (urlBatchId) setBatchId(urlBatchId);
-      if (urlSource) setSource(urlSource);
-      if (urlStatus) setStatus(urlStatus);
-      
-      if (location.state) {
-        if (location.state.cinemaSlug) setCinemaSlug(location.state.cinemaSlug);
-        if (location.state.status) setStatus(location.state.status);
-        if (location.state.dateFrom) setDate(location.state.dateFrom);
-        
-        if (location.state.message) {
-          triggerToast?.(location.state.message, 'success');
-        }
-        
-        // Clear state to avoid infinite re-triggering if user navigates away and back
-        window.history.replaceState({}, document.title);
-      }
-      
-      locationProcessed.current = true;
-    }
-  }, [location.state, searchParams, setCinemaSlug, setStatus, setDate, setBatchId, setSource, triggerToast]);
-
-  const shouldWait = !locationProcessed.current;
+    setBatchId(searchParams.get('batchId') || '');
+    setSource(searchParams.get('source') || '');
+    setStatus(searchParams.get('status') || '');
+    isReady.current = true;
+  }, [searchParams, setBatchId, setSource, setStatus]);
 
   useEffect(() => {
-    if (!shouldWait) {
+    if (!locationStateProcessed.current && location.state) {
+      if (location.state.cinemaSlug) setCinemaSlug(location.state.cinemaSlug);
+      if (location.state.status) setStatus(location.state.status);
+      if (location.state.dateFrom) setDate(location.state.dateFrom);
+
+      if (location.state.message) {
+        triggerToast?.(location.state.message, 'success');
+      }
+
+      window.history.replaceState({}, document.title);
+    }
+    locationStateProcessed.current = true;
+  }, [location.state, setCinemaSlug, setStatus, setDate, triggerToast]);
+
+  useEffect(() => {
+    if (isReady.current) {
       fetchShowtimes();
     }
-  }, [fetchShowtimes, shouldWait]);
+  }, [fetchShowtimes, isReady]);
 
   const handleOpenCreate = () => {
     navigate('/admin/showtimes/create');
@@ -87,11 +80,23 @@ const AdminShowtimePage = () => {
   };
 
   const handleClearBatch = () => {
-    searchParams.delete('batchId');
-    searchParams.delete('source');
-    setSearchParams(searchParams);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('batchId');
+    nextSearchParams.delete('source');
+    setSearchParams(nextSearchParams, { replace: true });
     setBatchId('');
     setSource('');
+  };
+
+  const handleClearFilters = () => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('batchId');
+    nextSearchParams.delete('source');
+    nextSearchParams.delete('status');
+    setSearchParams(nextSearchParams, { replace: true });
+    setBatchId('');
+    setSource('');
+    setStatus('');
   };
 
   const handleTransitionBatch = async (targetStatus) => {
@@ -153,18 +158,16 @@ const AdminShowtimePage = () => {
       setStatus={setStatus}
       currentPage={currentPage}
       setCurrentPage={setCurrentPage}
-      pageSize={pageSize}
       totalPages={totalPages}
       totalElements={totalElements}
       batchId={batchId}
       source={source}
-      setBatchId={setBatchId}
-      setSource={setSource}
       onOpenCreate={handleOpenCreate}
       onOpenAutoSchedule={handleOpenAutoSchedule}
       onViewDetail={handleViewDetail}
       fetchShowtimes={fetchShowtimes}
       onClearBatch={handleClearBatch}
+      onClearFilters={handleClearFilters}
       onTransitionBatch={handleTransitionBatch}
       onDeleteBatch={handleDeleteBatch}
       isBatchActionLoading={isBatchActionLoading}

@@ -42,6 +42,12 @@ public class InternalSeatReservationControllerTest {
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockBean
+    private com.lorafilm.booking.common.filter.CorrelationIdFilter correlationIdFilter;
+
+    @MockBean
+    private com.lorafilm.booking.common.filter.RequestLoggingFilter requestLoggingFilter;
+
     @Test
     public void convertReservation_Success_Returns200() throws Exception {
         ConvertReservationRequest request = new ConvertReservationRequest(50L, List.of(101L));

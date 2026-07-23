@@ -1,9 +1,17 @@
 package com.lorafilm.movie.movie.repository;
 
 import com.lorafilm.movie.movie.domain.entity.Movie;
+import com.lorafilm.movie.movie.domain.entity.MovieGenre;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
+import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import org.springframework.data.jpa.domain.Specification;
-import jakarta.persistence.criteria.JoinType;
+
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Locale;
 
 public class MovieSpecification {
 
@@ -36,6 +44,54 @@ public class MovieSpecification {
             subquery.select(genreRoot.get("movie").get("id"))
                     .where(cb.equal(genreRoot.get("genre").get("id"), genreId));
             return cb.in(root.get("id")).value(subquery);
+        };
+    }
+
+    public static Specification<Movie> hasGenrePublicId(String genrePublicId) {
+        return (root, query, cb) -> {
+            Subquery<Integer> subquery = query.subquery(Integer.class);
+            Root<MovieGenre> genre = subquery.from(MovieGenre.class);
+            subquery.select(cb.literal(1)).where(
+                    cb.equal(genre.get("movie").get("id"), root.get("id")),
+                    cb.equal(genre.get("genre").get("publicId"), genrePublicId));
+            return cb.exists(subquery);
+        };
+    }
+
+    public static Specification<Movie> hasCountry(String country) {
+        return (root, query, cb) -> cb.equal(cb.lower(root.get("country")), country.toLowerCase(Locale.ROOT));
+    }
+
+    public static Specification<Movie> hasTmdbSource(boolean tmdbSource) {
+        return (root, query, cb) -> tmdbSource
+                ? cb.isNotNull(root.get("tmdbId"))
+                : cb.isNull(root.get("tmdbId"));
+    }
+
+    public static Specification<Movie> releaseDateFrom(LocalDate from) {
+        return (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("releaseDate"), from);
+    }
+
+    public static Specification<Movie> releaseDateTo(LocalDate to) {
+        return (root, query, cb) -> cb.lessThanOrEqualTo(root.get("releaseDate"), to);
+    }
+
+    public static Specification<Movie> tmdbUpdatedFrom(LocalDateTime from) {
+        return (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("tmdbLastUpdated"), from);
+    }
+
+    public static Specification<Movie> tmdbUpdatedBefore(LocalDateTime exclusiveTo) {
+        return (root, query, cb) -> cb.lessThan(root.get("tmdbLastUpdated"), exclusiveTo);
+    }
+
+    public static Specification<Movie> hasShowtime(boolean hasShowtime) {
+        return (root, query, cb) -> {
+            Subquery<Integer> subquery = query.subquery(Integer.class);
+            Root<Showtime> showtime = subquery.from(Showtime.class);
+            subquery.select(cb.literal(1)).where(
+                    cb.equal(showtime.get("movie").get("id"), root.get("id")),
+                    cb.isNull(showtime.get("deletedAt")));
+            return hasShowtime ? cb.exists(subquery) : cb.not(cb.exists(subquery));
         };
     }
 

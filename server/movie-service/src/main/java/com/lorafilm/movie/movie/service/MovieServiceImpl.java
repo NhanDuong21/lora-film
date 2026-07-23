@@ -1,7 +1,7 @@
 package com.lorafilm.movie.movie.service;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -12,6 +12,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.common.enums.ActiveStatus;
@@ -25,7 +27,9 @@ import com.lorafilm.movie.movie.domain.entity.MovieMedia;
 import com.lorafilm.movie.movie.domain.entity.MovieProductionCompany;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.domain.enums.MovieHealthStatus;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
+import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
@@ -34,11 +38,17 @@ import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
+import com.lorafilm.movie.movie.repository.MovieHealthSpecifications;
 import com.lorafilm.movie.movie.repository.MovieSpecification;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 
 @Service
 public class MovieServiceImpl implements MovieService {
+
+    private static final Logger log = LoggerFactory.getLogger(MovieServiceImpl.class);
+
+    private static final java.util.Set<String> SORT_FIELDS = java.util.Set.of(
+            "updatedAt", "releaseDate", "title", "tmdbLastUpdated", "createdAt");
 
     private final MovieRepository movieRepository;
     private final MovieGenreRepository movieGenreRepository;
@@ -49,6 +59,7 @@ public class MovieServiceImpl implements MovieService {
     private final MovieMapper movieMapper;
     private final MovieReadinessEvaluator readinessEvaluator;
     private final AdminMovieProjectionService projectionService;
+    private final MovieLifecyclePolicy lifecyclePolicy;
 
     public MovieServiceImpl(MovieRepository movieRepository,
             MovieGenreRepository movieGenreRepository,
@@ -58,7 +69,8 @@ public class MovieServiceImpl implements MovieService {
             MovieVersionRepository movieVersionRepository,
             MovieMapper movieMapper,
             MovieReadinessEvaluator readinessEvaluator,
-            AdminMovieProjectionService projectionService) {
+            AdminMovieProjectionService projectionService,
+            MovieLifecyclePolicy lifecyclePolicy) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMediaRepository = movieMediaRepository;
@@ -68,60 +80,170 @@ public class MovieServiceImpl implements MovieService {
         this.movieMapper = movieMapper;
         this.readinessEvaluator = readinessEvaluator;
         this.projectionService = projectionService;
+        this.lifecyclePolicy = lifecyclePolicy;
     }
 
     @Override
-    public PageResponse<MovieDto> getMovies(String status, Long genreId, String keyword, String city, Long cinemaId, java.time.LocalDate date, int page, int size, String sort) {
+    @Transactional(readOnly = true)
+    public PageResponse<MovieDto> getMovies(AdminMovieListQuery query) {
         Specification<Movie> spec = Specification.where(MovieSpecification.isNotDeleted());
 
-        if (status != null && !status.isEmpty()) {
-            if (!status.equalsIgnoreCase("ALL")) {
-                try {
-                    MovieStatus parsedStatus = MovieStatus.valueOf(status.toUpperCase());
-                    spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
-                } catch (IllegalArgumentException e) {
-                    throw new IllegalArgumentException("Invalid status: " + status);
-                }
+        String status = normalize(query.getStatus());
+        if (status != null && !status.equalsIgnoreCase("ALL")) {
+            try {
+                MovieStatus parsedStatus = MovieStatus.valueOf(status.toUpperCase(Locale.ROOT));
+                spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
+            } catch (IllegalArgumentException e) {
+                throw validationError("Invalid status: " + status);
             }
         }
 
-        if (genreId != null) {
-            spec = spec.and(MovieSpecification.hasGenreId(genreId));
+        if (query.getGenreId() != null) {
+            spec = spec.and(MovieSpecification.hasGenreId(query.getGenreId()));
         }
 
-        if (keyword != null && !keyword.isEmpty()) {
+        String genrePublicId = normalize(query.getGenrePublicId());
+        if (genrePublicId != null) {
+            spec = spec.and(MovieSpecification.hasGenrePublicId(genrePublicId));
+        }
+
+        String keyword = normalize(query.getKeyword());
+        if (keyword != null) {
             spec = spec.and(MovieSpecification.hasKeyword(keyword));
         }
 
-        if (city != null && !city.isEmpty()) {
+        String city = normalize(query.getCity());
+        if (city != null) {
             spec = spec.and(MovieSpecification.hasShowtimeInCity(city));
         }
 
-        if (cinemaId != null) {
-            spec = spec.and(MovieSpecification.hasShowtimeInCinema(cinemaId));
+        if (query.getCinemaId() != null) {
+            spec = spec.and(MovieSpecification.hasShowtimeInCinema(query.getCinemaId()));
         }
 
-        if (date != null) {
-            spec = spec.and(MovieSpecification.hasShowtimeOnDate(date));
+        if (query.getDate() != null) {
+            spec = spec.and(MovieSpecification.hasShowtimeOnDate(query.getDate()));
         }
 
-        Sort sorting = Sort.unsorted();
-        if (sort != null && !sort.isEmpty()) {
-            String[] sortParams = sort.split(",");
-            if (sortParams.length >= 2) {
-                sorting = sortParams[1].equalsIgnoreCase("desc") ? 
-                        Sort.by(sortParams[0]).descending() : 
-                        Sort.by(sortParams[0]).ascending();
+        String source = normalize(query.getSource());
+        if (source != null) {
+            if (source.equalsIgnoreCase("TMDB")) {
+                spec = spec.and(MovieSpecification.hasTmdbSource(true));
+            } else if (source.equalsIgnoreCase("MANUAL")) {
+                spec = spec.and(MovieSpecification.hasTmdbSource(false));
             } else {
-                sorting = Sort.by(sortParams[0]).ascending();
+                throw validationError("Invalid source: " + source + ". Allowed values: TMDB, MANUAL");
             }
-        } else {
-            sorting = Sort.by("createdAt").descending();
         }
-        Pageable pageable = PageRequest.of(page, size, sorting);
+
+        String healthStatus = normalize(query.getHealthStatus());
+        if (healthStatus != null) {
+            try {
+                MovieHealthStatus parsed = MovieHealthStatus.valueOf(healthStatus.toUpperCase(Locale.ROOT));
+                spec = spec.and(MovieHealthSpecifications.healthStatusEquals(parsed));
+            } catch (IllegalArgumentException e) {
+                throw validationError("Invalid healthStatus: " + healthStatus + ". Allowed values: READY, WARNING, BLOCKED");
+            }
+        }
+
+        Boolean hasPrimaryPoster = parseBoolean(query.getHasPrimaryPoster(), "hasPrimaryPoster");
+        if (hasPrimaryPoster != null) {
+            Specification<Movie> posterSpec = MovieHealthSpecifications.hasActivePrimaryPoster();
+            spec = spec.and(hasPrimaryPoster ? posterSpec : Specification.not(posterSpec));
+        }
+
+        Boolean hasActiveVersion = parseBoolean(query.getHasActiveVersion(), "hasActiveVersion");
+        if (hasActiveVersion != null) {
+            Specification<Movie> versionSpec = MovieHealthSpecifications.hasActiveVersion();
+            spec = spec.and(hasActiveVersion ? versionSpec : Specification.not(versionSpec));
+        }
+
+        Boolean hasShowtime = parseBoolean(query.getHasShowtime(), "hasShowtime");
+        if (hasShowtime != null) {
+            spec = spec.and(MovieSpecification.hasShowtime(hasShowtime));
+        }
+
+        String country = normalize(query.getCountry());
+        if (country != null) {
+            spec = spec.and(MovieSpecification.hasCountry(country));
+        }
+
+        validateRange(query.getReleaseDateFrom(), query.getReleaseDateTo(), "releaseDate");
+        if (query.getReleaseDateFrom() != null) {
+            spec = spec.and(MovieSpecification.releaseDateFrom(query.getReleaseDateFrom()));
+        }
+        if (query.getReleaseDateTo() != null) {
+            spec = spec.and(MovieSpecification.releaseDateTo(query.getReleaseDateTo()));
+        }
+
+        validateRange(query.getTmdbUpdatedFrom(), query.getTmdbUpdatedTo(), "tmdbUpdated");
+        if (query.getTmdbUpdatedFrom() != null) {
+            spec = spec.and(MovieSpecification.tmdbUpdatedFrom(query.getTmdbUpdatedFrom().atStartOfDay()));
+        }
+        if (query.getTmdbUpdatedTo() != null) {
+            try {
+                spec = spec.and(MovieSpecification.tmdbUpdatedBefore(query.getTmdbUpdatedTo().plusDays(1).atStartOfDay()));
+            } catch (java.time.DateTimeException exception) {
+                throw validationError("tmdbUpdatedTo is outside the supported date range");
+            }
+        }
+
+        Pageable pageable = PageRequest.of(query.getPage(), query.getSize(), parseSort(query.getSort()));
         Page<Movie> moviePage = movieRepository.findAll(spec, pageable);
 
         return projectionService.enrichMovies(moviePage);
+    }
+
+    private Sort parseSort(String rawSort) {
+        String sort = rawSort == null ? "releaseDate,desc" : rawSort.trim();
+        if (sort.isEmpty()) {
+            throw validationError("Invalid sort format. Expected field,direction");
+        }
+        String[] parts = sort.split(",", -1);
+        if (parts.length != 2) {
+            throw validationError("Invalid sort format. Expected field,direction");
+        }
+        String field = parts[0].trim();
+        String direction = parts[1].trim().toLowerCase(Locale.ROOT);
+        if (!SORT_FIELDS.contains(field)) {
+            throw validationError("Unsupported sort field: " + field);
+        }
+        if (!direction.equals("asc") && !direction.equals("desc")) {
+            throw validationError("Unsupported sort direction: " + parts[1].trim());
+        }
+        Sort primary = direction.equals("desc") ? Sort.by(field).descending() : Sort.by(field).ascending();
+        return primary.and(Sort.by("id").descending());
+    }
+
+    private Boolean parseBoolean(String rawValue, String fieldName) {
+        if (rawValue == null) {
+            return null;
+        }
+        if (rawValue.equals("true")) {
+            return true;
+        }
+        if (rawValue.equals("false")) {
+            return false;
+        }
+        throw validationError("Invalid " + fieldName + ": " + rawValue + ". Allowed values: true, false");
+    }
+
+    private void validateRange(java.time.LocalDate from, java.time.LocalDate to, String fieldName) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw validationError(fieldName + "From must be on or before " + fieldName + "To");
+        }
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private BusinessException validationError(String message) {
+        return new BusinessException(ErrorCode.VALIDATION_ERROR, message);
     }
 
     @Override
@@ -143,12 +265,16 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
 
+        MovieStatus previousStatus = movie.getStatus();
+        lifecyclePolicy.validateTransition(movie, targetStatus);
         if (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING) {
-            validatePublishConditions(movie.getId());
+            validatePublishConditions(movie);
         }
 
         movie.setStatus(targetStatus);
         Movie savedMovie = movieRepository.save(movie);
+        log.info("Movie lifecycle transition applied: publicId={}, from={}, to={}",
+                moviePublicId, previousStatus, targetStatus);
 
         List<String> genres = movieGenreRepository.findByMovieId(savedMovie.getId())
                 .stream().map(mg -> mg.getGenre().getName()).collect(Collectors.toList());
@@ -163,23 +289,25 @@ public class MovieServiceImpl implements MovieService {
     @Override
     @Transactional(readOnly = true)
     public void validatePublishConditions(Long movieId) {
+        Optional<Movie> movie = movieRepository.findById(movieId);
+        validatePublishConditions(movie.orElse(null), movieId);
+    }
+
+    private void validatePublishConditions(Movie movie) {
+        validatePublishConditions(movie, movie.getId());
+    }
+
+    private void validatePublishConditions(Movie movie, Long movieId) {
         boolean hasActiveVersion = movieVersionRepository.existsActiveVersion(movieId);
         boolean hasPrimaryPoster = movieMediaRepository.existsPrimaryPoster(movieId);
-        boolean hasGenre = !movieGenreRepository.findByMovieId(movieId).isEmpty();
-        
-        if (!hasGenre) {
-            throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least 1 genre to be published");
-        }
+        boolean hasGenres = !movieGenreRepository.findByMovieId(movieId).isEmpty();
 
-        if (!hasActiveVersion && !hasPrimaryPoster) {
-            throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie must have at least one active version and one primary poster to publish");
-        }
-        if (!hasActiveVersion) {
-            throw new BusinessException(ErrorCode.MOVIE_ACTIVE_VERSION_REQUIRED, "Movie must have at least one active version to publish");
-        }
-        if (!hasPrimaryPoster) {
-            throw new BusinessException(ErrorCode.MOVIE_PRIMARY_POSTER_REQUIRED, "Movie must have at least one active primary poster to publish");
-        }
+        MovieHealthFacts healthFacts = MovieHealthFacts.from(
+                movie,
+                hasGenres,
+                hasActiveVersion,
+                hasPrimaryPoster);
+        readinessEvaluator.validatePublishConditions(healthFacts);
     }
 
     private MovieDto mapToDto(Movie movie) {

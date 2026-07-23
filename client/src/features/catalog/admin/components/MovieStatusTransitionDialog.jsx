@@ -5,9 +5,11 @@ export default function MovieStatusTransitionDialog({
   onClose,
   config,
   checklist,
-  movieDetail,
+  readiness,
   isPending,
   error,
+  warningAcknowledged,
+  onWarningAcknowledged,
   onConfirm
 }) {
   if (!isOpen || !config) return null;
@@ -31,8 +33,6 @@ export default function MovieStatusTransitionDialog({
       </div>
     );
   };
-
-  const isDurationShort = movieDetail?.durationMinutes && movieDetail.durationMinutes > 0 && movieDetail.durationMinutes < 30;
 
   return (
     <div className="relative z-50">
@@ -59,13 +59,20 @@ export default function MovieStatusTransitionDialog({
                 </div>
               </div>
 
-              {isDurationShort && (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex gap-3 text-amber-500">
+              {readiness?.warnings?.map((warning, index) => (
+                <div key={`${warning.code || 'warning'}-${index}`} className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex gap-3 text-amber-500">
                   <AlertTriangle size={18} className="shrink-0" />
                   <div className="text-sm">
-                    <strong>Thông tin cần kiểm tra:</strong> Thời lượng phim chỉ {movieDetail.durationMinutes} phút.
+                    <strong>Thông tin cần kiểm tra:</strong> {warning.message || warning.code}
                   </div>
                 </div>
+              ))}
+
+              {readiness?.warnings?.length > 0 && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100">
+                  <input type="checkbox" checked={warningAcknowledged} onChange={event => onWarningAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4 accent-amber-500" />
+                  <span>Tôi đã kiểm tra các cảnh báo và vẫn muốn tiếp tục chuyển trạng thái.</span>
+                </label>
               )}
             </div>
           )}
@@ -94,7 +101,7 @@ export default function MovieStatusTransitionDialog({
                   : 'bg-brand-orange text-black hover:bg-brand-orange/90'
               }`}
               onClick={onConfirm}
-              disabled={isPending}
+              disabled={isPending || (config.requiresPublishChecklist && (!checklist?.isReady || (readiness?.warnings?.length > 0 && !warningAcknowledged)))}
             >
               {isPending ? (
                 <div className="flex items-center gap-2">

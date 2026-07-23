@@ -37,17 +37,20 @@ public class FoodOrderServiceImpl implements FoodOrderService {
     private final FoodCatalogClient foodCatalogClient;
     private final BookingOutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
 
     public FoodOrderServiceImpl(FoodOrderRepository foodOrderRepository,
                                 FoodOrderItemRepository foodOrderItemRepository,
                                 FoodCatalogClient foodCatalogClient,
                                 BookingOutboxEventRepository outboxEventRepository,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager) {
         this.foodOrderRepository = foodOrderRepository;
         this.foodOrderItemRepository = foodOrderItemRepository;
         this.foodCatalogClient = foodCatalogClient;
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper;
+        this.bookingMetricsManager = bookingMetricsManager;
     }
 
     @Override
@@ -190,6 +193,7 @@ public class FoodOrderServiceImpl implements FoodOrderService {
             event.setPayload(objectMapper.writeValueAsString(payload));
             event.setStatus(OutboxStatus.PENDING);
             outboxEventRepository.save(event);
+            bookingMetricsManager.incrementOutboxCreated();
         } catch (Exception ex) {
             log.error("Failed to insert outbox event {}: ", eventType, ex);
         }

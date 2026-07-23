@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleRequestFingerprintService;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -22,6 +25,12 @@ public class AutoScheduleRequestFingerprintServiceImpl implements AutoScheduleRe
 
     @Override
     public String generateFingerprint(NormalizedGeneratePreviewRequest request) {
+        return generateFingerprint(request, AutoScheduleStrategyVersions.CURRENT);
+    }
+
+    @Override
+    public String generateFingerprint(NormalizedGeneratePreviewRequest request, String strategyVersion) {
+        String supportedStrategyVersion = requireSupportedStrategyVersion(strategyVersion);
         try {
             // Build canonical JSON node manually to ensure consistent property order
             ObjectNode root = objectMapper.createObjectNode();
@@ -41,7 +50,7 @@ public class AutoScheduleRequestFingerprintServiceImpl implements AutoScheduleRe
             root.put("scheduleTo", request.getScheduleTo().toString());
             root.put("slotGranularityMinutes", request.getSlotGranularityMinutes());
             root.put("strategy", "BALANCED");
-            root.put("strategyVersion", "BALANCED_V1");
+            root.put("strategyVersion", supportedStrategyVersion);
 
             // Convert to string and hash
             String canonicalJson = objectMapper.writeValueAsString(root);
@@ -50,6 +59,15 @@ public class AutoScheduleRequestFingerprintServiceImpl implements AutoScheduleRe
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate request fingerprint", e);
         }
+    }
+
+    private String requireSupportedStrategyVersion(String strategyVersion) {
+        if (AutoScheduleStrategyVersions.isSupported(strategyVersion)) {
+            return strategyVersion;
+        }
+        throw new BusinessException(
+                ErrorCode.AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT,
+                "Unsupported auto schedule strategy version: " + strategyVersion);
     }
 
     private String hashSha256(String input) {

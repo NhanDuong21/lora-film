@@ -66,6 +66,8 @@ class BookingServiceTest {
     private com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository;
     @Mock
     private com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
 
     @Spy
     private BookingMapper bookingMapper = new BookingMapper();
@@ -85,7 +87,8 @@ class BookingServiceTest {
                 foodOrderService,
                 paymentIntegrationPort,
                 paymentEventRepository,
-                outboxService);
+                outboxService,
+                bookingMetricsManager);
     }
 
 
