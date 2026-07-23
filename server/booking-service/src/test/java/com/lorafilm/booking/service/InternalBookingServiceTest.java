@@ -3,6 +3,10 @@ package com.lorafilm.booking.service;
 import com.lorafilm.booking.audit.service.BookingAuditService;
 import com.lorafilm.booking.audit.service.BookingOperationLogService;
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
+import com.lorafilm.booking.booking.dto.BookingPaymentContextDto;
+import com.lorafilm.booking.booking.dto.BookingPaymentResultRequestDto;
+import com.lorafilm.booking.booking.dto.BookingPaymentResultResponseDto;
+import com.lorafilm.booking.booking.dto.BookingSnapshotDto;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
@@ -18,6 +22,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.time.Instant;
 
 import java.util.Optional;
 
@@ -45,6 +52,12 @@ public class InternalBookingServiceTest {
 
     @Mock
     private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+    @Mock
+    private com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository;
+    @Mock
+    private com.lorafilm.booking.booking.service.BookingSnapshotService snapshotService;
+    @Mock
+    private com.lorafilm.booking.booking.service.BookingTicketService ticketService;
 
     private BookingMapper bookingMapper = new BookingMapper();
     private BookingStatusTransitionService statusTransitionService = new BookingStatusTransitionService();
@@ -63,7 +76,10 @@ public class InternalBookingServiceTest {
                 auditService,
                 operationLogService,
                 outboxService,
-                bookingMetricsManager
+                bookingMetricsManager,
+                paymentEventRepository,
+                snapshotService,
+                ticketService
         );
 
         sampleBooking = new Booking();
@@ -129,5 +145,77 @@ public class InternalBookingServiceTest {
 
         assertThrows(BookingNotFoundException.class, () ->
                 internalBookingService.getBookingByCode("INVALID"));
+    }
+
+    @Test
+    public void getPaymentContext_Success() {
+        sampleBooking.setUserId(15L);
+        sampleBooking.setFinalAmount(BigDecimal.valueOf(250000.00));
+        sampleBooking.setCurrency("VND");
+        
+        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        
+        BookingSnapshotDto snapshot = new BookingSnapshotDto();
+        snapshot.setMovieId(99L);
+        snapshot.setMovieTitle("Avengers");
+        snapshot.setSeatCount(2);
+        when(snapshotService.findByBooking(10L)).thenReturn(snapshot);
+
+        BookingPaymentContextDto context = internalBookingService.getPaymentContext(10L);
+
+        assertNotNull(context);
+        assertEquals(10L, context.getBookingId());
+        assertEquals(15L, context.getAccountId());
+        assertEquals("PENDING_PAYMENT", context.getBookingStatus());
+        assertEquals(BigDecimal.valueOf(250000.00), context.getAmount());
+        assertEquals("VND", context.getCurrency());
+        assertNotNull(context.getAnalyticsSnapshot());
+        assertEquals(99L, context.getAnalyticsSnapshot().getMovieId());
+        assertEquals("Avengers", context.getAnalyticsSnapshot().getMovieTitle());
+        assertEquals(2, context.getAnalyticsSnapshot().getTicketCount());
+    }
+
+    @Test
+    public void processPaymentResult_Success() {
+        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
+        when(paymentEventRepository.findByPublicId("event-123")).thenReturn(Optional.empty());
+        when(bookingRepository.save(any())).thenReturn(sampleBooking);
+
+        BookingPaymentResultRequestDto request = new BookingPaymentResultRequestDto();
+        request.setEventId("event-123");
+        request.setPaymentId(123L);
+        request.setPaymentTransactionCode("TX-1001");
+        request.setExternalTransactionId("EXT-999");
+        request.setPaymentMethod("VNPAY");
+        request.setResult("SUCCESS");
+        request.setAmount(BigDecimal.valueOf(250000.00));
+        request.setOccurredAt(Instant.now());
+
+        BookingPaymentResultResponseDto response = internalBookingService.processPaymentResult(10L, request);
+
+        assertNotNull(response);
+        assertEquals("event-123", response.getEventId());
+        assertEquals(true, response.getApplied());
+        assertEquals(false, response.getDuplicate());
+        assertEquals("BOOKING_CONFIRMED", response.getResult());
+    }
+
+    @Test
+    public void processPaymentResult_DuplicateEvent() {
+        com.lorafilm.booking.payment.entity.BookingPaymentEvent event = new com.lorafilm.booking.payment.entity.BookingPaymentEvent();
+        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(paymentEventRepository.findByPublicId("event-123")).thenReturn(Optional.of(event));
+
+        BookingPaymentResultRequestDto request = new BookingPaymentResultRequestDto();
+        request.setEventId("event-123");
+        request.setResult("SUCCESS");
+
+        BookingPaymentResultResponseDto response = internalBookingService.processPaymentResult(10L, request);
+
+        assertNotNull(response);
+        assertEquals(false, response.getApplied());
+        assertEquals(true, response.getDuplicate());
+        assertEquals("ALREADY_PROCESSED", response.getResult());
     }
 }

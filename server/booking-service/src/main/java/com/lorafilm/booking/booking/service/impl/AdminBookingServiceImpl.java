@@ -24,6 +24,8 @@ import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.response.PagedResponse;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -38,6 +40,8 @@ import java.util.List;
 
 @Service
 public class AdminBookingServiceImpl implements AdminBookingService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminBookingServiceImpl.class);
 
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
@@ -168,6 +172,15 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         auditService.logAudit(savedBooking.getId(), "ADMIN", "CHANGE_STATUS", "bookingStatus", oldStatus.name(), newStatus.name(), null, null, null, null);
         operationLogService.logOperation(savedBooking.getId(), "CHANGE_STATUS", "ADMIN", true, 0L, null, null, request.getReason());
         outboxService.createOutboxEvent("BOOKING", savedBooking.getId(), "BOOKING_" + newStatus.name(), savedBooking);
+
+        // Cancel/Delete tickets if cancelling/refunding/expiring
+        if (newStatus == BookingStatus.CANCELLED || newStatus == BookingStatus.EXPIRED || newStatus == BookingStatus.REFUNDED) {
+            try {
+                ticketService.deleteTickets(savedBooking.getId());
+            } catch (Exception e) {
+                log.warn("Failed to delete/cancel tickets for bookingId: {}", savedBooking.getId(), e);
+            }
+        }
 
         // Increment Metrics
         if (newStatus == BookingStatus.CONFIRMED) {
