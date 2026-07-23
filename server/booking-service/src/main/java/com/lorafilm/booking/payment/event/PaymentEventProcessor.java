@@ -11,8 +11,14 @@ import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingStatusHistoryRepository;
 import com.lorafilm.booking.common.exception.BusinessException;
-import com.lorafilm.booking.food.service.FoodOrderService;
+import com.lorafilm.booking.booking.service.BookingTicketService;
+import com.lorafilm.booking.booking.repository.BookingSnapshotRepository;
+import com.lorafilm.booking.booking.repository.BookingTicketRepository;
+import com.lorafilm.booking.booking.entity.BookingSnapshot;
+import com.lorafilm.booking.food.event.FoodOrderConfirmedEvent;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.lorafilm.booking.payment.entity.BookingPaymentEvent;
 import com.lorafilm.booking.payment.enums.PaymentEventStatus;
 import com.lorafilm.booking.payment.enums.PaymentEventType;
@@ -26,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PaymentEventProcessor {
@@ -39,7 +47,10 @@ public class PaymentEventProcessor {
     private final BookingOperationLogRepository operationLogRepository;
     private final BookingOutboxService outboxService;
     private final SeatReservationService seatReservationService;
-    private final FoodOrderService foodOrderService;
+    private final BookingTicketService bookingTicketService;
+    private final BookingSnapshotRepository bookingSnapshotRepository;
+    private final BookingTicketRepository bookingTicketRepository;
+    private final ObjectMapper objectMapper;
 
     public PaymentEventProcessor(
             BookingRepository bookingRepository,
@@ -49,7 +60,10 @@ public class PaymentEventProcessor {
             BookingOperationLogRepository operationLogRepository,
             BookingOutboxService outboxService,
             SeatReservationService seatReservationService,
-            FoodOrderService foodOrderService) {
+            BookingTicketService bookingTicketService,
+            BookingSnapshotRepository bookingSnapshotRepository,
+            BookingTicketRepository bookingTicketRepository,
+            ObjectMapper objectMapper) {
         this.bookingRepository = bookingRepository;
         this.paymentEventRepository = paymentEventRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -57,7 +71,10 @@ public class PaymentEventProcessor {
         this.operationLogRepository = operationLogRepository;
         this.outboxService = outboxService;
         this.seatReservationService = seatReservationService;
-        this.foodOrderService = foodOrderService;
+        this.bookingTicketService = bookingTicketService;
+        this.bookingSnapshotRepository = bookingSnapshotRepository;
+        this.bookingTicketRepository = bookingTicketRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -146,8 +163,19 @@ public class PaymentEventProcessor {
             }
             Booking savedBooking = bookingRepository.save(booking);
 
-            // Sync with food order status
-            foodOrderService.updateOrderStatusBasedOnBooking(savedBooking.getId(), targetBookingStatus);
+            // Sync with food order status is handled automatically inside booking.changeStatus()
+
+            if (targetBookingStatus == BookingStatus.CONFIRMED) {
+                generateTicketsForConfirmedBooking(savedBooking.getId());
+                if (savedBooking.getFoodOrder() != null) {
+                    FoodOrderConfirmedEvent foodEvent = new FoodOrderConfirmedEvent(
+                            savedBooking.getId().toString(),
+                            savedBooking.getFoodOrder().getPublicId(),
+                            savedBooking.getFoodOrder().getFinalAmount()
+                    );
+                    outboxService.createOutboxEvent("FoodOrder", savedBooking.getFoodOrder().getId(), "FOOD_ORDER_CONFIRMED", foodEvent);
+                }
+            }
 
             // Sync seat reservations status
             if (targetBookingStatus == BookingStatus.CANCELLED || targetBookingStatus == BookingStatus.EXPIRED) {
@@ -217,5 +245,45 @@ public class PaymentEventProcessor {
             case "FAILED", "EXPIRED", "CANCELLED" -> PaymentEventStatus.FAILED;
             default -> PaymentEventStatus.PENDING;
         };
+    }
+
+    private void generateTicketsForConfirmedBooking(Long bookingId) {
+        if (!bookingTicketRepository.findByBookingId(bookingId).isEmpty()) {
+            return;
+        }
+
+        Optional<BookingSnapshot> snapshotOpt = bookingSnapshotRepository.findByBookingId(bookingId);
+        if (snapshotOpt.isEmpty()) {
+            log.warn("Snapshot not found for booking ID: {}. Skipping ticket generation.", bookingId);
+            return;
+        }
+        BookingSnapshot snapshot = snapshotOpt.get();
+
+        if (snapshot.getSnapshotJson() == null || snapshot.getSnapshotJson().isBlank()) {
+            return;
+        }
+
+        List<com.lorafilm.booking.booking.client.ShowtimeBookingContext.SeatContext> seats;
+        try {
+            seats = objectMapper.readValue(snapshot.getSnapshotJson(), new TypeReference<List<com.lorafilm.booking.booking.client.ShowtimeBookingContext.SeatContext>>() {});
+        } catch (Exception e) {
+            throw new BusinessException("SNAPSHOT_DESERIALIZATION_FAILED", "Failed to deserialize seat snapshot data: " + e.getMessage());
+        }
+
+        List<com.lorafilm.booking.booking.dto.CreateTicketRequest> ticketRequests = seats.stream().map(seat -> {
+            com.lorafilm.booking.booking.dto.CreateTicketRequest req = new com.lorafilm.booking.booking.dto.CreateTicketRequest();
+            req.setSeatId(seat.seatId());
+            req.setSeatLabel(seat.seatLabel());
+            req.setSeatType(seat.seatType());
+            req.setTicketPrice(seat.price());
+            req.setMovieTitle(snapshot.getMovieTitle());
+            req.setCinemaName(snapshot.getCinemaName());
+            req.setAuditoriumName(snapshot.getAuditoriumName());
+            req.setShowtimeStart(snapshot.getShowtimeStart());
+            req.setShowtimeEnd(snapshot.getShowtimeEnd());
+            return req;
+        }).toList();
+
+        bookingTicketService.createTickets(bookingId, ticketRequests);
     }
 }

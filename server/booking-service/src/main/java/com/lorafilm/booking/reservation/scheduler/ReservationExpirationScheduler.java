@@ -3,6 +3,7 @@ package com.lorafilm.booking.reservation.scheduler;
 import com.lorafilm.booking.reservation.entity.SeatReservation;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
+import com.lorafilm.booking.infrastructure.lock.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +30,7 @@ public class ReservationExpirationScheduler {
     }
 
     @Scheduled(cron = "0 * * * * *")
+    @SchedulerLock(name = "ReservationExpirationScheduler", lockAtMostForSeconds = 55)
     public void processExpiredReservations() {
         log.debug("ReservationExpirationScheduler starting expired reservation check...");
         Instant now = Instant.now();

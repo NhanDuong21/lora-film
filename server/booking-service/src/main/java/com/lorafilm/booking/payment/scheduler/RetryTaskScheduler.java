@@ -1,9 +1,11 @@
 package com.lorafilm.booking.payment.scheduler;
 
 import com.lorafilm.booking.infrastructure.entity.BookingRetryTask;
+import com.lorafilm.booking.infrastructure.entity.BookingDeadLetterEvent;
 import com.lorafilm.booking.infrastructure.enums.RetryTaskStatus;
 import com.lorafilm.booking.infrastructure.enums.RetryTaskType;
 import com.lorafilm.booking.infrastructure.repository.BookingRetryTaskRepository;
+import com.lorafilm.booking.infrastructure.repository.BookingDeadLetterEventRepository;
 import com.lorafilm.booking.payment.event.PaymentEventConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +15,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
+
+import com.lorafilm.booking.infrastructure.lock.SchedulerLock;
 
 @Component
 public class RetryTaskScheduler {
@@ -22,15 +27,19 @@ public class RetryTaskScheduler {
 
     private final BookingRetryTaskRepository retryTaskRepository;
     private final PaymentEventConsumer paymentEventConsumer;
+    private final BookingDeadLetterEventRepository deadLetterEventRepository;
 
     public RetryTaskScheduler(
             BookingRetryTaskRepository retryTaskRepository,
-            PaymentEventConsumer paymentEventConsumer) {
+            PaymentEventConsumer paymentEventConsumer,
+            BookingDeadLetterEventRepository deadLetterEventRepository) {
         this.retryTaskRepository = retryTaskRepository;
         this.paymentEventConsumer = paymentEventConsumer;
+        this.deadLetterEventRepository = deadLetterEventRepository;
     }
 
     @Scheduled(fixedDelay = 10000) // Poll database every 10 seconds
+    @SchedulerLock(name = "RetryTaskScheduler", lockAtMostForSeconds = 8)
     public void processRetryTasks() {
         Instant now = Instant.now();
         List<BookingRetryTask> pendingTasks = retryTaskRepository.findByStatusAndNextRetryAtBefore(
@@ -65,6 +74,20 @@ public class RetryTaskScheduler {
                 if (count >= task.getMaxRetry()) {
                     task.setStatus(RetryTaskStatus.DEAD_LETTER);
                     log.error("Retry task publicId: {} failed and reached max retries. Moved to DEAD_LETTER.", task.getPublicId());
+
+                    BookingDeadLetterEvent dlEvent = new BookingDeadLetterEvent();
+                    dlEvent.setPublicId(UUID.randomUUID().toString());
+                    dlEvent.setEventId(task.getPublicId());
+                    dlEvent.setSourceTable("booking_retry_tasks");
+                    dlEvent.setAggregateType(task.getReferenceType());
+                    dlEvent.setAggregateId(task.getReferenceId());
+                    dlEvent.setEventType(task.getTaskType() != null ? task.getTaskType().name() : "UNKNOWN");
+                    dlEvent.setPayload(task.getPayload());
+                    dlEvent.setRetryCount(count);
+                    dlEvent.setErrorCode(task.getErrorCode());
+                    dlEvent.setErrorMessage(task.getErrorMessage());
+                    dlEvent.setMovedAt(Instant.now());
+                    deadLetterEventRepository.save(dlEvent);
                 } else {
                     task.setStatus(RetryTaskStatus.PENDING);
                     // Exponential backoff: 30s, 60s, 120s...
