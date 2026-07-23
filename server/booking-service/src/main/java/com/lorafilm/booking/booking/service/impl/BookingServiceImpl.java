@@ -27,7 +27,13 @@ import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
 import com.lorafilm.booking.security.service.SecurityContextService;
+import com.lorafilm.booking.booking.dto.CreateSnapshotRequest;
+import com.lorafilm.booking.booking.dto.CreateTicketRequest;
+import com.lorafilm.booking.booking.service.BookingSnapshotService;
+import com.lorafilm.booking.booking.service.BookingTicketService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,6 +54,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class BookingServiceImpl implements BookingService {
 
+    private static final Logger log = LoggerFactory.getLogger(BookingServiceImpl.class);
+
     private static final String OPEN_FOR_BOOKING = "OPEN_FOR_BOOKING";
     private static final int BOOKING_CODE_GENERATION_ATTEMPTS = 3;
 
@@ -63,6 +71,8 @@ public class BookingServiceImpl implements BookingService {
     private final com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository;
     private final com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
     private final BookingMetricsManager bookingMetricsManager;
+    private final BookingTicketService bookingTicketService;
+    private final BookingSnapshotService bookingSnapshotService;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -76,7 +86,9 @@ public class BookingServiceImpl implements BookingService {
             com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort,
             com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository,
             com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
-            BookingMetricsManager bookingMetricsManager) {
+            BookingMetricsManager bookingMetricsManager,
+            BookingTicketService bookingTicketService,
+            BookingSnapshotService bookingSnapshotService) {
         this.bookingRepository = bookingRepository;
         this.reservationRepository = reservationRepository;
         this.reservationService = reservationService;
@@ -89,8 +101,9 @@ public class BookingServiceImpl implements BookingService {
         this.paymentEventRepository = paymentEventRepository;
         this.outboxService = outboxService;
         this.bookingMetricsManager = bookingMetricsManager;
+        this.bookingTicketService = bookingTicketService;
+        this.bookingSnapshotService = bookingSnapshotService;
     }
-
 
     @Override
     @Transactional
@@ -100,8 +113,8 @@ public class BookingServiceImpl implements BookingService {
         MDC.put("action", "CREATE_BOOKING");
         ValidatedCreateRequest validatedRequest = validateCreateRequest(request);
 
-        List<SeatReservation> reservations =
-                reservationRepository.findAllByPublicIdInForUpdate(validatedRequest.reservationPublicIds());
+        List<SeatReservation> reservations = reservationRepository
+                .findAllByPublicIdInForUpdate(validatedRequest.reservationPublicIds());
         Long showtimeId = validateReservations(
                 reservations, validatedRequest.reservationPublicIds().size(), currentUserId);
 
@@ -129,12 +142,42 @@ public class BookingServiceImpl implements BookingService {
 
         Booking savedBooking = bookingRepository.saveAndFlush(booking);
         MDC.put("bookingId", savedBooking.getPublicId());
-        
+
         List<Long> reservationIds = reservations.stream().map(SeatReservation::getId).toList();
         reservationService.convertReservations(new ConvertReservationRequest(savedBooking.getId(), reservationIds));
-        
+
+        // Create Snapshot
+        CreateSnapshotRequest snapshotRequest = new CreateSnapshotRequest();
+        snapshotRequest.setMovieId(context.movieId());
+        snapshotRequest.setMovieTitle(context.movieTitle());
+        snapshotRequest.setShowtimeId(context.showtimeId());
+        snapshotRequest.setShowtimeStart(context.startsAt());
+        snapshotRequest.setShowtimeEnd(context.endsAt());
+        snapshotRequest.setCinemaId(context.cinemaId());
+        snapshotRequest.setCinemaName(context.cinemaName());
+        snapshotRequest.setAuditoriumId(context.auditoriumId());
+        snapshotRequest.setAuditoriumName(context.auditoriumName());
+        snapshotRequest.setSeatCount(context.seats().size());
+        bookingSnapshotService.createSnapshot(savedBooking.getId(), snapshotRequest);
+
+        // Create Tickets
+        List<CreateTicketRequest> ticketRequests = context.seats().stream().map(seat -> {
+            CreateTicketRequest req = new CreateTicketRequest();
+            req.setSeatId(seat.seatId());
+            req.setSeatLabel(seat.seatLabel());
+            req.setSeatType(seat.seatType());
+            req.setTicketPrice(seat.price());
+            req.setMovieTitle(context.movieTitle());
+            req.setCinemaName(context.cinemaName());
+            req.setAuditoriumName(context.auditoriumName());
+            req.setShowtimeStart(context.startsAt());
+            req.setShowtimeEnd(context.endsAt());
+            return req;
+        }).toList();
+        bookingTicketService.createTickets(savedBooking.getId(), ticketRequests);
+
         bookingMetricsManager.incrementBookingCreated();
-        
+
         return bookingMapper.toResponse(savedBooking);
     }
 
@@ -153,10 +196,11 @@ public class BookingServiceImpl implements BookingService {
         String reasonDetail = request == null ? null : request.getReasonDetail();
         booking.cancel(reasonCode, reasonDetail, Instant.now());
         Booking saved = bookingRepository.save(booking);
-        reservationService.handleBookingStatusChange(saved.getId(), BookingStatus.CANCELLED, reasonDetail != null ? reasonDetail : reasonCode);
-        
+        reservationService.handleBookingStatusChange(saved.getId(), BookingStatus.CANCELLED,
+                reasonDetail != null ? reasonDetail : reasonCode);
+
         bookingMetricsManager.incrementBookingCancelled();
-        
+
         return bookingMapper.toResponse(saved);
     }
 
@@ -236,12 +280,20 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = getBooking(publicId);
         booking.changeStatus(targetStatus, Instant.now());
         Booking saved = bookingRepository.save(booking);
-        
+
         // Sync status with Food Order
         foodOrderService.updateOrderStatusBasedOnBooking(saved.getId(), targetStatus);
-        
-        if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED || targetStatus == BookingStatus.REFUNDED) {
-            reservationService.handleBookingStatusChange(saved.getId(), targetStatus, "Booking status changed to " + targetStatus);
+
+        if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED
+                || targetStatus == BookingStatus.REFUNDED) {
+            reservationService.handleBookingStatusChange(saved.getId(), targetStatus,
+                    "Booking status changed to " + targetStatus);
+            // Cancel tickets
+            try {
+                bookingTicketService.deleteTickets(saved.getId());
+            } catch (Exception e) {
+                log.warn("Failed to delete/cancel tickets for bookingId: {}", saved.getId(), e);
+            }
         }
 
         // Increment Metrics
@@ -268,7 +320,8 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("BOOKING_RESERVATION_REQUIRED", "At least one reservation is required");
         }
         if (reservationPublicIds.size() > BookingConstants.DEFAULT_MAX_TICKETS_PER_BOOKING) {
-            throw new BusinessException("BOOKING_TOO_MANY_RESERVATIONS", "A booking cannot contain more than 8 reservations");
+            throw new BusinessException("BOOKING_TOO_MANY_RESERVATIONS",
+                    "A booking cannot contain more than 8 reservations");
         }
 
         List<String> normalizedPublicIds;
@@ -480,28 +533,30 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId, com.lorafilm.booking.payment.dto.InitiatePaymentRequest request) {
+    public com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId,
+            com.lorafilm.booking.payment.dto.InitiatePaymentRequest request) {
         Long currentUserId = requireAuthenticatedUser();
         Booking booking = getBooking(publicId);
         requireOwnerOrAdmin(booking, currentUserId);
 
         if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
-            throw new BusinessException("BOOKING_INVALID_STATUS", "Payment can only be initiated for bookings in PENDING_PAYMENT status");
+            throw new BusinessException("BOOKING_INVALID_STATUS",
+                    "Payment can only be initiated for bookings in PENDING_PAYMENT status");
         }
 
         // Call port to request payment
         com.lorafilm.booking.payment.dto.PaymentRequestDto portRequest = new com.lorafilm.booking.payment.dto.PaymentRequestDto(
-            booking.getId(),
-            booking.getBookingCode(),
-            booking.getFinalAmount(),
-            booking.getCurrency(),
-            request.paymentMethod(),
-            request.paymentProvider(),
-            booking.getUserId(),
-            booking.getExpiresAt()
-        );
+                booking.getId(),
+                booking.getBookingCode(),
+                booking.getFinalAmount(),
+                booking.getCurrency(),
+                request.paymentMethod(),
+                request.paymentProvider(),
+                booking.getUserId(),
+                booking.getExpiresAt());
 
-        com.lorafilm.booking.payment.dto.PaymentResponseDto portResponse = paymentIntegrationPort.requestPayment(portRequest);
+        com.lorafilm.booking.payment.dto.PaymentResponseDto portResponse = paymentIntegrationPort
+                .requestPayment(portRequest);
 
         // Update booking metadata snapshot
         booking.setPaymentMethodSnapshot(request.paymentMethod());
@@ -535,4 +590,3 @@ public class BookingServiceImpl implements BookingService {
     private record ValidatedCreateRequest(String showtimePublicId, List<String> reservationPublicIds) {
     }
 }
-
