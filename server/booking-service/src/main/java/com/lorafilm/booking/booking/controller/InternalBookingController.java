@@ -2,6 +2,10 @@ package com.lorafilm.booking.booking.controller;
 
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.service.InternalBookingService;
+import com.lorafilm.booking.booking.service.InternalBookingPaymentService;
+import com.lorafilm.booking.booking.dto.request.InternalPaymentResultRequest;
+import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
+import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
 import com.lorafilm.booking.common.constant.ValidationConstants;
 import com.lorafilm.booking.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +20,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestBody;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/internal/bookings")
@@ -25,9 +31,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalBookingController {
 
     private final InternalBookingService internalBookingService;
+    private final InternalBookingPaymentService internalBookingPaymentService;
 
-    public InternalBookingController(InternalBookingService internalBookingService) {
+    public InternalBookingController(InternalBookingService internalBookingService,
+                                     InternalBookingPaymentService internalBookingPaymentService) {
         this.internalBookingService = internalBookingService;
+        this.internalBookingPaymentService = internalBookingPaymentService;
     }
 
     @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/confirm")
@@ -71,5 +80,22 @@ public class InternalBookingController {
     public ResponseEntity<ApiResponse<BookingAdminResponse>> getBookingByCode(@PathVariable String bookingCode) {
         BookingAdminResponse response = internalBookingService.getBookingByCode(bookingCode);
         return ResponseEntity.ok(ApiResponse.success("Booking retrieved successfully", response));
+    }
+
+    @GetMapping("/{bookingId:\\d+}/payment-context")
+    @Operation(summary = "Get authoritative payment context by numeric Booking ID")
+    public ResponseEntity<ApiResponse<InternalPaymentContextResponse>> getPaymentContext(
+            @PathVariable Long bookingId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.getPaymentContext(bookingId)));
+    }
+
+    @PostMapping("/{bookingId:\\d+}/payment-results")
+    @Operation(summary = "Apply an idempotent Payment Service result")
+    public ResponseEntity<ApiResponse<InternalPaymentResultResponse>> recordPaymentResult(
+            @PathVariable Long bookingId,
+            @Valid @RequestBody InternalPaymentResultRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.recordPaymentResult(bookingId, request)));
     }
 }

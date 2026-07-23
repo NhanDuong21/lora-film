@@ -5,6 +5,8 @@ import com.lorafilm.booking.booking.controller.InternalBookingController;
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.service.InternalBookingService;
+import com.lorafilm.booking.booking.service.InternalBookingPaymentService;
+import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +18,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.Mockito.when;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -29,6 +33,8 @@ public class InternalBookingControllerTest {
 
     @Mock
     private InternalBookingService internalBookingService;
+    @Mock
+    private InternalBookingPaymentService internalBookingPaymentService;
 
     @InjectMocks
     private InternalBookingController internalBookingController;
@@ -102,5 +108,26 @@ public class InternalBookingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.bookingCode").value("BK1001"));
+    }
+
+    @Test
+    public void getPaymentContext_Success_ReturnsAuthoritativeAmount() throws Exception {
+        InternalPaymentContextResponse response = new InternalPaymentContextResponse(
+                10L,
+                15L,
+                "PENDING_PAYMENT",
+                true,
+                new BigDecimal("240000.00"),
+                "VND",
+                LocalDateTime.now().plusMinutes(15),
+                new InternalPaymentContextResponse.AnalyticsSnapshot(101L, "Superman", 2));
+        when(internalBookingPaymentService.getPaymentContext(10L)).thenReturn(response);
+
+        mockMvc.perform(get("/internal/bookings/10/payment-context")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.amount").value(240000.00))
+                .andExpect(jsonPath("$.data.currency").value("VND"))
+                .andExpect(jsonPath("$.data.analyticsSnapshot.ticketCount").value(2));
     }
 }
