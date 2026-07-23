@@ -16,6 +16,7 @@ public interface FoodMapper {
 
     FoodMapper INSTANCE = Mappers.getMapper(FoodMapper.class);
 
+    @Mapping(target = "bookingId", source = "booking.id")
     FoodOrderResponse toFoodOrderResponse(FoodOrder order);
 
     FoodItemResponse toFoodItemResponse(FoodOrderItem item);

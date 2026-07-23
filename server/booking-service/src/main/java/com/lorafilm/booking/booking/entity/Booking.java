@@ -9,6 +9,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.FetchType;
+import com.lorafilm.booking.food.entity.FoodOrder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -17,6 +21,9 @@ import java.util.Objects;
 @Entity
 @Table(name = "bookings")
 public class Booking extends FullAuditableEntity {
+
+    @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private FoodOrder foodOrder;
 
     @Column(name = "booking_code", length = 50, nullable = false, unique = true)
     private String bookingCode;
@@ -171,6 +178,15 @@ public class Booking extends FullAuditableEntity {
             case REFUNDED -> refundedAt = changedAt;
             case PENDING_PAYMENT -> throw new InvalidBookingStatusException(
                     "Cannot transition a booking back to PENDING_PAYMENT");
+        }
+
+        if (this.foodOrder != null) {
+            switch (targetStatus) {
+                case CONFIRMED -> this.foodOrder.setStatus(com.lorafilm.booking.food.enums.FoodOrderStatus.CONFIRMED);
+                case CANCELLED, EXPIRED -> this.foodOrder.setStatus(com.lorafilm.booking.food.enums.FoodOrderStatus.CANCELLED);
+                case REFUNDED -> this.foodOrder.setStatus(com.lorafilm.booking.food.enums.FoodOrderStatus.REFUNDED);
+                default -> {}
+            }
         }
     }
 
@@ -433,5 +449,45 @@ public class Booking extends FullAuditableEntity {
 
     public void setNote(String note) {
         this.note = note;
+    }
+
+    public FoodOrder getFoodOrder() {
+        return foodOrder;
+    }
+
+    public void setFoodOrder(FoodOrder foodOrder) {
+        this.foodOrder = foodOrder;
+        if (foodOrder != null) {
+            foodOrder.setBooking(this);
+        }
+    }
+
+    public void addFood(com.lorafilm.booking.food.client.FoodCatalogItem catalogItem, int quantity) {
+        if (this.foodOrder == null) {
+            this.foodOrder = new FoodOrder();
+            this.foodOrder.setBooking(this);
+            this.foodOrder.setPublicId(java.util.UUID.randomUUID().toString());
+            this.foodOrder.setStatus(com.lorafilm.booking.food.enums.FoodOrderStatus.PENDING);
+        }
+        this.foodOrder.addItem(catalogItem, quantity);
+        this.updateFoodAmount(this.foodOrder.getFinalAmount());
+    }
+
+    public void updateFoodQuantity(Long itemId, int quantity) {
+        if (this.foodOrder != null) {
+            this.foodOrder.updateItemQuantity(itemId, quantity);
+            this.updateFoodAmount(this.foodOrder.getFinalAmount());
+        }
+    }
+
+    public void removeFoodItem(Long itemId) {
+        if (this.foodOrder != null) {
+            boolean removed = this.foodOrder.getItems().removeIf(i -> i.getId().equals(itemId));
+            if (!removed) {
+                throw new com.lorafilm.booking.common.exception.NotFoundException("FoodOrderItem", "id", itemId.toString());
+            }
+            this.foodOrder.recalculateTotals();
+            this.updateFoodAmount(this.foodOrder.getFinalAmount());
+        }
     }
 }

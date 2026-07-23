@@ -21,7 +21,8 @@ import {
   DoorOpen,
   Armchair,
   History,
-  Zap
+  Zap,
+  ClipboardList
 } from 'lucide-react';
 
 
@@ -245,6 +246,13 @@ export default function AdminSidebar({
                 >
                   <Ticket className="w-4 h-4 shrink-0" />
                   <span>Quản lý vé bán</span>
+                </button>
+                <button
+                  onClick={() => handleTabClick('bookings', '#/admin/bookings')}
+                  className={getSubLinkClass('bookings')}
+                >
+                  <ClipboardList className="w-4 h-4 shrink-0" />
+                  <span>Quản lý đơn hàng</span>
                 </button>
                 <button
                   onClick={() => handleTabClick('concession-sales', '#/admin/concession-sales')}

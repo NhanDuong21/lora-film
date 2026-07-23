@@ -14,13 +14,18 @@ import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingSpecification;
 import com.lorafilm.booking.booking.service.BookingService;
 import com.lorafilm.booking.common.constant.BookingConstants;
-import com.lorafilm.booking.food.service.FoodOrderService;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.exception.ForbiddenException;
 import com.lorafilm.booking.common.exception.IntegrationException;
 import com.lorafilm.booking.common.exception.UnauthorizedException;
 import com.lorafilm.booking.common.util.BookingCodeGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.lorafilm.booking.booking.repository.BookingSnapshotRepository;
+import com.lorafilm.booking.booking.repository.BookingTicketRepository;
+import com.lorafilm.booking.booking.entity.BookingSnapshot;
+import com.lorafilm.booking.booking.dto.BookingTicketDto;
 import com.lorafilm.booking.reservation.dto.ConvertReservationRequest;
 import com.lorafilm.booking.reservation.entity.SeatReservation;
 import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
@@ -47,6 +52,7 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -66,7 +72,12 @@ public class BookingServiceImpl implements BookingService {
     private final SecurityContextService securityContextService;
     private final BookingCodeGenerator bookingCodeGenerator;
     private final BookingMapper bookingMapper;
-    private final FoodOrderService foodOrderService;
+    private final ObjectMapper objectMapper;
+    private final BookingSnapshotRepository bookingSnapshotRepository;
+    private final BookingTicketRepository bookingTicketRepository;
+    private final com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort;
+    private final com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository;
+    private final com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
     private final BookingMetricsManager bookingMetricsManager;
     private final BookingTicketService bookingTicketService;
     private final BookingSnapshotService bookingSnapshotService;
@@ -79,7 +90,12 @@ public class BookingServiceImpl implements BookingService {
             SecurityContextService securityContextService,
             BookingCodeGenerator bookingCodeGenerator,
             BookingMapper bookingMapper,
-            FoodOrderService foodOrderService,
+            ObjectMapper objectMapper,
+            BookingSnapshotRepository bookingSnapshotRepository,
+            BookingTicketRepository bookingTicketRepository,
+            com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort,
+            com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository,
+            com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
             BookingMetricsManager bookingMetricsManager,
             BookingTicketService bookingTicketService,
             BookingSnapshotService bookingSnapshotService) {
@@ -90,7 +106,12 @@ public class BookingServiceImpl implements BookingService {
         this.securityContextService = securityContextService;
         this.bookingCodeGenerator = bookingCodeGenerator;
         this.bookingMapper = bookingMapper;
-        this.foodOrderService = foodOrderService;
+        this.objectMapper = objectMapper;
+        this.bookingSnapshotRepository = bookingSnapshotRepository;
+        this.bookingTicketRepository = bookingTicketRepository;
+        this.paymentIntegrationPort = paymentIntegrationPort;
+        this.paymentEventRepository = paymentEventRepository;
+        this.outboxService = outboxService;
         this.bookingMetricsManager = bookingMetricsManager;
         this.bookingTicketService = bookingTicketService;
         this.bookingSnapshotService = bookingSnapshotService;
@@ -104,8 +125,8 @@ public class BookingServiceImpl implements BookingService {
         MDC.put("action", "CREATE_BOOKING");
         ValidatedCreateRequest validatedRequest = validateCreateRequest(request);
 
-        List<SeatReservation> reservations =
-                reservationRepository.findAllByPublicIdInForUpdate(validatedRequest.reservationPublicIds());
+        List<SeatReservation> reservations = reservationRepository
+                .findAllByPublicIdInForUpdate(validatedRequest.reservationPublicIds());
         Long showtimeId = validateReservations(
                 reservations, validatedRequest.reservationPublicIds().size(), currentUserId);
 
@@ -133,10 +154,10 @@ public class BookingServiceImpl implements BookingService {
 
         Booking savedBooking = bookingRepository.saveAndFlush(booking);
         MDC.put("bookingId", savedBooking.getPublicId());
-        
+
         List<Long> reservationIds = reservations.stream().map(SeatReservation::getId).toList();
         reservationService.convertReservations(new ConvertReservationRequest(savedBooking.getId(), reservationIds));
-        
+
         // Create Snapshot
         CreateSnapshotRequest snapshotRequest = new CreateSnapshotRequest();
         snapshotRequest.setMovieId(context.movieId());
@@ -149,26 +170,15 @@ public class BookingServiceImpl implements BookingService {
         snapshotRequest.setAuditoriumId(context.auditoriumId());
         snapshotRequest.setAuditoriumName(context.auditoriumName());
         snapshotRequest.setSeatCount(context.seats().size());
+        try {
+            snapshotRequest.setSnapshotJson(objectMapper.writeValueAsString(context.seats()));
+        } catch (Exception e) {
+            log.error("Failed to serialize seats to snapshotJson", e);
+        }
         bookingSnapshotService.createSnapshot(savedBooking.getId(), snapshotRequest);
 
-        // Create Tickets
-        List<CreateTicketRequest> ticketRequests = context.seats().stream().map(seat -> {
-            CreateTicketRequest req = new CreateTicketRequest();
-            req.setSeatId(seat.seatId());
-            req.setSeatLabel(seat.seatLabel());
-            req.setSeatType(seat.seatType());
-            req.setTicketPrice(seat.price());
-            req.setMovieTitle(context.movieTitle());
-            req.setCinemaName(context.cinemaName());
-            req.setAuditoriumName(context.auditoriumName());
-            req.setShowtimeStart(context.startsAt());
-            req.setShowtimeEnd(context.endsAt());
-            return req;
-        }).toList();
-        bookingTicketService.createTickets(savedBooking.getId(), ticketRequests);
-
         bookingMetricsManager.incrementBookingCreated();
-        
+
         return bookingMapper.toResponse(savedBooking);
     }
 
@@ -187,10 +197,11 @@ public class BookingServiceImpl implements BookingService {
         String reasonDetail = request == null ? null : request.getReasonDetail();
         booking.cancel(reasonCode, reasonDetail, Instant.now());
         Booking saved = bookingRepository.save(booking);
-        reservationService.handleBookingStatusChange(saved.getId(), BookingStatus.CANCELLED, reasonDetail != null ? reasonDetail : reasonCode);
-        
+        reservationService.handleBookingStatusChange(saved.getId(), BookingStatus.CANCELLED,
+                reasonDetail != null ? reasonDetail : reasonCode);
+
         bookingMetricsManager.incrementBookingCancelled();
-        
+
         return bookingMapper.toResponse(saved);
     }
 
@@ -270,12 +281,25 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = getBooking(publicId);
         booking.changeStatus(targetStatus, Instant.now());
         Booking saved = bookingRepository.save(booking);
-        
-        // Sync status with Food Order
-        foodOrderService.updateOrderStatusBasedOnBooking(saved.getId(), targetStatus);
-        
-        if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED || targetStatus == BookingStatus.REFUNDED) {
-            reservationService.handleBookingStatusChange(saved.getId(), targetStatus, "Booking status changed to " + targetStatus);
+
+        // Sync status with Food Order is handled automatically inside booking.changeStatus()
+
+        if (targetStatus == BookingStatus.CONFIRMED) {
+            generateTicketsForConfirmedBooking(saved.getId());
+            if (saved.getFoodOrder() != null) {
+                com.lorafilm.booking.food.event.FoodOrderConfirmedEvent foodEvent = new com.lorafilm.booking.food.event.FoodOrderConfirmedEvent(
+                        saved.getId().toString(),
+                        saved.getFoodOrder().getPublicId(),
+                        saved.getFoodOrder().getFinalAmount()
+                );
+                outboxService.createOutboxEvent("FoodOrder", saved.getFoodOrder().getId(), "FOOD_ORDER_CONFIRMED", foodEvent);
+            }
+        }
+
+        if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED
+                || targetStatus == BookingStatus.REFUNDED) {
+            reservationService.handleBookingStatusChange(saved.getId(), targetStatus,
+                    "Booking status changed to " + targetStatus);
             // Cancel tickets
             try {
                 bookingTicketService.deleteTickets(saved.getId());
@@ -308,7 +332,8 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("BOOKING_RESERVATION_REQUIRED", "At least one reservation is required");
         }
         if (reservationPublicIds.size() > BookingConstants.DEFAULT_MAX_TICKETS_PER_BOOKING) {
-            throw new BusinessException("BOOKING_TOO_MANY_RESERVATIONS", "A booking cannot contain more than 8 reservations");
+            throw new BusinessException("BOOKING_TOO_MANY_RESERVATIONS",
+                    "A booking cannot contain more than 8 reservations");
         }
 
         List<String> normalizedPublicIds;
@@ -516,6 +541,106 @@ public class BookingServiceImpl implements BookingService {
                 .and(BookingSpecification.hasStatus(status))
                 .and(BookingSpecification.createdFrom(fromDate))
                 .and(BookingSpecification.createdTo(toDate));
+    }
+
+    @Override
+    @Transactional
+    public com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId,
+            com.lorafilm.booking.payment.dto.InitiatePaymentRequest request) {
+        Long currentUserId = requireAuthenticatedUser();
+        Booking booking = getBooking(publicId);
+        requireOwnerOrAdmin(booking, currentUserId);
+
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
+            throw new BusinessException("BOOKING_INVALID_STATUS",
+                    "Payment can only be initiated for bookings in PENDING_PAYMENT status");
+        }
+
+        // Call port to request payment
+        com.lorafilm.booking.payment.dto.PaymentRequestDto portRequest = new com.lorafilm.booking.payment.dto.PaymentRequestDto(
+                booking.getId(),
+                booking.getBookingCode(),
+                booking.getFinalAmount(),
+                booking.getCurrency(),
+                request.paymentMethod(),
+                request.paymentProvider(),
+                booking.getUserId(),
+                booking.getExpiresAt());
+
+        com.lorafilm.booking.payment.dto.PaymentResponseDto portResponse = paymentIntegrationPort
+                .requestPayment(portRequest);
+
+        // Update booking metadata snapshot
+        booking.setPaymentMethodSnapshot(request.paymentMethod());
+        booking.setPaymentProvider(request.paymentProvider());
+        booking.setPaymentReference(portResponse.transactionCode());
+        bookingRepository.save(booking);
+
+        // Record a PAYMENT_REQUESTED snapshot
+        com.lorafilm.booking.payment.entity.BookingPaymentEvent paymentEvent = new com.lorafilm.booking.payment.entity.BookingPaymentEvent();
+        paymentEvent.setPublicId(UUID.randomUUID().toString());
+        paymentEvent.setBooking(booking);
+        paymentEvent.setPaymentId(portResponse.paymentId());
+        paymentEvent.setTransactionId(portResponse.transactionCode());
+        paymentEvent.setGatewayTransactionId(portResponse.externalTransactionId());
+        paymentEvent.setPaymentProvider(request.paymentProvider());
+        paymentEvent.setPaymentMethod(request.paymentMethod());
+        paymentEvent.setEventType(com.lorafilm.booking.payment.enums.PaymentEventType.PAYMENT_CREATED);
+        paymentEvent.setAmount(booking.getFinalAmount());
+        paymentEvent.setCurrency(booking.getCurrency());
+        paymentEvent.setStatus(com.lorafilm.booking.payment.enums.PaymentEventStatus.PENDING);
+        paymentEvent.setOccurredAt(Instant.now());
+        paymentEvent.setRequestPayload("{\"bookingId\":" + booking.getId() + ",\"action\":\"INITIATE_PAYMENT\"}");
+        paymentEventRepository.save(paymentEvent);
+
+        // Create Outbox Event: BOOKING_PAYMENT_RECEIVED
+        outboxService.createOutboxEvent("BOOKING", booking.getId(), "BOOKING_PAYMENT_RECEIVED", booking);
+
+        return portResponse;
+    }
+
+    public void generateTicketsForConfirmedBooking(Long bookingId) {
+        log.info("Generating tickets for confirmed booking ID: {}", bookingId);
+        if (!bookingTicketRepository.findByBookingId(bookingId).isEmpty()) {
+            log.info("Tickets already generated for booking ID: {}. Skipping.", bookingId);
+            return;
+        }
+
+        Optional<BookingSnapshot> snapshotOpt = bookingSnapshotRepository.findByBookingId(bookingId);
+        if (snapshotOpt.isEmpty()) {
+            log.warn("Snapshot not found for booking ID: {}. Skipping ticket generation.", bookingId);
+            return;
+        }
+        BookingSnapshot snapshot = snapshotOpt.get();
+
+        if (snapshot.getSnapshotJson() == null || snapshot.getSnapshotJson().isBlank()) {
+            log.warn("Snapshot JSON is empty for booking ID: {}. Cannot generate tickets.", bookingId);
+            return;
+        }
+
+        List<ShowtimeBookingContext.SeatContext> seats;
+        try {
+            seats = objectMapper.readValue(snapshot.getSnapshotJson(), new TypeReference<List<ShowtimeBookingContext.SeatContext>>() {});
+        } catch (Exception e) {
+            throw new BusinessException("SNAPSHOT_DESERIALIZATION_FAILED", "Failed to deserialize seat snapshot data: " + e.getMessage());
+        }
+
+        List<CreateTicketRequest> ticketRequests = seats.stream().map(seat -> {
+            CreateTicketRequest req = new CreateTicketRequest();
+            req.setSeatId(seat.seatId());
+            req.setSeatLabel(seat.seatLabel());
+            req.setSeatType(seat.seatType());
+            req.setTicketPrice(seat.price());
+            req.setMovieTitle(snapshot.getMovieTitle());
+            req.setCinemaName(snapshot.getCinemaName());
+            req.setAuditoriumName(snapshot.getAuditoriumName());
+            req.setShowtimeStart(snapshot.getShowtimeStart());
+            req.setShowtimeEnd(snapshot.getShowtimeEnd());
+            return req;
+        }).toList();
+
+        bookingTicketService.createTickets(bookingId, ticketRequests);
+        log.info("Successfully generated {} tickets for booking ID: {}", ticketRequests.size(), bookingId);
     }
 
     private record ValidatedCreateRequest(String showtimePublicId, List<String> reservationPublicIds) {
