@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useAutoScheduleHistory from '../hooks/useAutoScheduleHistory';
@@ -56,7 +56,8 @@ const defaultHookValue = {
 };
 
 function LocationProbe() {
-  return <span data-testid="location">{useLocation().pathname}</span>;
+  const location = useLocation();
+  return <span data-testid="location">{location.pathname}{location.search}</span>;
 }
 
 const renderPage = () => render(
@@ -78,11 +79,33 @@ describe('AdminAutoScheduleHistoryPage', () => {
   it('renders every backend display status and authoritative action flags', () => {
     renderPage();
 
+    expect(screen.getByRole('heading', { name: 'Lịch sử bản xem trước xếp lịch' })).toBeInTheDocument();
     labels.forEach(label => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
     expect(screen.getByText('Có thể áp dụng trong chi tiết')).toBeInTheDocument();
     expect(screen.getByText('Auto schedule generation failed')).toBeInTheDocument();
     expect(screen.getByText('4 suất đã tạo')).toBeInTheDocument();
     expect(screen.getAllByText('Mở / chỉnh sửa')).toHaveLength(1);
+  });
+
+  it('emphasizes applied time/count and links an applied row to its operational batch', () => {
+    renderPage();
+
+    expect(screen.getByText('4 suất đã tạo')).toBeInTheDocument();
+    expect(screen.getByText(/Đã áp dụng lúc/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem các suất chiếu đã tạo' }));
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/admin/showtimes?source=AUTO&batchId=preview-3',
+    );
+    expect(screen.getByTestId('location')).not.toHaveTextContent('status=DRAFT');
+  });
+
+  it('uses five compact information groups without the 1450px table floor', () => {
+    renderPage();
+
+    const table = screen.getByRole('table');
+    expect(within(table).getAllByRole('columnheader')).toHaveLength(5);
+    expect(table).not.toHaveClass('min-w-[1450px]');
+    expect(table).toHaveAttribute('data-layout', 'laptop-five-groups');
   });
 
   it('navigates to the existing detail route with previewPublicId', () => {

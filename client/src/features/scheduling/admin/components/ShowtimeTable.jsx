@@ -4,6 +4,11 @@ import React from 'react';
 import { Search, MapPin, Calendar, Clock, Plus, Zap, AlertCircle, RefreshCw, X, Play, Trash2 } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import SearchableSelect from '@/components/common/SearchableSelect';
+import {
+  formatShowtimeCinemaDate,
+  formatShowtimeCinemaTime,
+  resolveShowtimeCinemaTimezone,
+} from '@/features/scheduling/admin/utils/showtimeCinemaDateTime';
 
 export default function ShowtimeTable({
   showtimes,
@@ -21,17 +26,15 @@ export default function ShowtimeTable({
   setStatus,
   currentPage,
   setCurrentPage,
-  pageSize,
   totalPages,
   totalElements,
   batchId,
   source,
-  setBatchId,
-  setSource,
   onOpenCreate,
   onOpenAutoSchedule,
   onViewDetail,
   onClearBatch,
+  onClearFilters,
   onTransitionBatch,
   onDeleteBatch,
   isBatchActionLoading
@@ -51,18 +54,6 @@ export default function ShowtimeTable({
         {status?.replace(/_/g, ' ') || 'UNKNOWN'}
       </span>
     );
-  };
-
-  const formatDate = (isoString) => {
-    if (!isoString) return '—';
-    const d = new Date(isoString);
-    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
-
-  const formatTime = (isoString) => {
-    if (!isoString) return '—';
-    const d = new Date(isoString);
-    return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
 
   const cinemaOptions = cinemas.map(c => ({
@@ -92,6 +83,7 @@ export default function ShowtimeTable({
     setDate('');
     setStatus('');
     setCurrentPage(0);
+    onClearFilters?.();
   };
 
   return (
@@ -191,6 +183,7 @@ export default function ShowtimeTable({
           </div>
           <button
             onClick={handleClearFilters}
+            aria-label="Xóa bộ lọc"
             className="p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
             title="Xóa bộ lọc"
           >
@@ -247,25 +240,28 @@ export default function ShowtimeTable({
                     </td>
                   </tr>
                 ) : (
-                  showtimes.map((showtime) => (
+                  showtimes.map((showtime) => {
+                    const cinemaTimezone = showtime.cinema?.timezone;
+                    const timezoneResolution = resolveShowtimeCinemaTimezone(cinemaTimezone);
+                    return (
                     <tr key={showtime.showtimePublicId} className="border-b border-zinc-900/60 hover:bg-zinc-900/30 transition-colors group">
                       <td className="py-4 px-6">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-sm font-bold text-zinc-200">
-                            {formatTime(showtime.startTime)}
+                            {formatShowtimeCinemaTime(showtime.startTime, cinemaTimezone)}
                           </span>
                           <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                            {formatDate(showtime.startTime)}
+                            {formatShowtimeCinemaDate(showtime.startTime, cinemaTimezone)}
                           </span>
                         </div>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-sm font-bold text-zinc-400">
-                            {formatTime(showtime.endTime)}
+                            {formatShowtimeCinemaTime(showtime.endTime, cinemaTimezone)}
                           </span>
                           <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider">
-                            {formatDate(showtime.endTime)}
+                            {formatShowtimeCinemaDate(showtime.endTime, cinemaTimezone)}
                           </span>
                         </div>
                       </td>
@@ -290,6 +286,11 @@ export default function ShowtimeTable({
                         <span className="text-xs font-semibold text-zinc-300 truncate block" title={showtime.cinema?.name}>
                           {showtime.cinema?.name || '—'}
                         </span>
+                        {timezoneResolution.usedFallback && (
+                          <span className="mt-1 inline-flex rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
+                            UTC dự phòng
+                          </span>
+                        )}
                       </td>
                       <td className="py-4 px-6">
                         <span className="text-xs font-semibold text-zinc-400">
@@ -308,7 +309,8 @@ export default function ShowtimeTable({
                         </button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { derivePreviewCapabilities } from '../utils/autoSchedulePreviewLifecycle';
 import useAutoSchedulePreview from '../hooks/useAutoSchedulePreview';
@@ -87,10 +87,16 @@ const hookValue = ({
   };
 };
 
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location">{location.pathname}{location.search}</span>;
+}
+
 const renderPage = () => render(
   <MemoryRouter initialEntries={['/admin/showtime-schedules/preview-1']}>
     <Routes>
-      <Route path="/admin/showtime-schedules/:id" element={<AdminAutoSchedulePreviewPage />} />
+      <Route path="/admin/showtime-schedules/:id" element={<><AdminAutoSchedulePreviewPage /><LocationProbe /></>} />
+      <Route path="*" element={<LocationProbe />} />
     </Routes>
   </MemoryRouter>,
 );
@@ -258,5 +264,44 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(screen.getByRole('tab', { name: /Suất chiếu đã tạo \(1\)/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: /Áp dụng \(/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('emphasizes APPLIED metadata and links only CREATED items to operational Showtimes', () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      status: 'APPLIED',
+      previewOverrides: { appliedAt: '2026-07-24T18:30:00Z' },
+      items: [
+        candidate(1, { applyStatus: 'CREATED', createdShowtimePublicId: 'showtime-1' }),
+        candidate(2, { applyStatus: 'SKIPPED', createdShowtimePublicId: 'should-not-link', selected: false }),
+      ],
+      selectedIds: new Set(['item-1']),
+    }));
+    renderPage();
+
+    expect(screen.getByText('Đã áp dụng lúc')).toBeInTheDocument();
+    expect(screen.getAllByText('1 suất chiếu đã tạo').length).toBeGreaterThan(0);
+    const batchLink = screen.getByRole('link', { name: 'Xem các suất chiếu đã tạo' });
+    expect(batchLink).toHaveAttribute('href', '/admin/showtimes?source=AUTO&batchId=preview-1');
+    expect(batchLink).not.toHaveAttribute('href', expect.stringContaining('status=DRAFT'));
+
+    fireEvent.click(screen.getByRole('tab', { name: /Tất cả ứng viên \(2\)/i }));
+    expect(screen.getByRole('link', { name: 'Mở suất chiếu showtime-1' }))
+      .toHaveAttribute('href', '/admin/showtimes/showtime-1');
+    expect(screen.queryByText('should-not-link')).not.toBeInTheDocument();
+  });
+
+  it('navigates after apply without forcing the DRAFT status filter', () => {
+    let hookOptions;
+    useAutoSchedulePreview.mockImplementation((_, options) => {
+      hookOptions = options;
+      return hookValue();
+    });
+    renderPage();
+
+    act(() => hookOptions.onSuccess());
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/admin/showtimes?source=AUTO&batchId=preview-1',
+    );
+    expect(screen.getByTestId('location')).not.toHaveTextContent('status=DRAFT');
   });
 });

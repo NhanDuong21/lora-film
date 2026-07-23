@@ -1,4 +1,3 @@
-// eslint-disable-next-line no-unused-vars
 import { useState, useEffect, useCallback } from 'react';
 import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
@@ -39,7 +38,7 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
         ]);
         if (cinemaRes?.success) setCinemas(cinemaRes.data?.data || []);
         if (movieRes?.success) setMovies(movieRes.data?.data || []);
-      } catch (err) {
+      } catch {
         // ignore
       } finally {
         setIsOptionsLoading(false);
@@ -80,7 +79,8 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
   }, [
     currentPage, pageSize, 
     cinemaSlug, movieSlug, date, status,
-    format, audioLanguage, subtitleLanguage, 
+    format, audioLanguage, subtitleLanguage,
+    batchId, source,
     triggerToast
   ]);
 

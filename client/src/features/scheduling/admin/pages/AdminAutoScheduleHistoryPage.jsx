@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  ExternalLink,
   RefreshCw,
   RotateCcw,
   Sparkles,
@@ -209,7 +210,7 @@ function HistoryFilters({ history }) {
   );
 }
 
-function HistoryTable({ history, onOpenDetail, onCreate }) {
+function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate }) {
   const {
     previews,
     query,
@@ -231,7 +232,7 @@ function HistoryTable({ history, onOpenDetail, onCreate }) {
     return (
       <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-red-900/40 bg-red-950/20 p-8 text-center text-red-300">
         <AlertTriangle className="h-8 w-8" />
-        <p className="text-sm">Không thể tải lịch sử xếp lịch: {error}</p>
+        <p className="text-sm">Không thể tải lịch sử bản xem trước xếp lịch: {error}</p>
         <button type="button" onClick={fetchHistory} className="inline-flex items-center gap-2 rounded-lg border border-red-800 px-3 py-2 text-xs font-bold hover:bg-red-900/30">
           <RefreshCw className="h-3.5 w-3.5" /> Thử lại
         </button>
@@ -248,7 +249,7 @@ function HistoryTable({ history, onOpenDetail, onCreate }) {
       )}
       {error && previews.length > 0 && (
         <div className="flex items-center justify-between border-b border-red-900/40 bg-red-950/20 px-4 py-2 text-xs text-red-300">
-          <span>Không thể làm mới lịch sử: {error}</span>
+          <span>Không thể làm mới lịch sử bản xem trước: {error}</span>
           <button type="button" onClick={fetchHistory} className="font-bold underline">Thử lại</button>
         </div>
       )}
@@ -259,28 +260,24 @@ function HistoryTable({ history, onOpenDetail, onCreate }) {
       )}
 
       <div className="max-h-[620px] overflow-auto custom-scrollbar">
-        <table className="w-full min-w-[1450px] whitespace-nowrap text-left">
+        <table className="w-full min-w-[960px] text-left" data-layout="laptop-five-groups">
           <thead className="sticky top-0 z-20 bg-zinc-900">
             <tr className="border-b border-zinc-800 text-[10px] font-black uppercase tracking-wider text-zinc-400">
-              <th className="px-5 py-4">Bản xem trước / Cụm rạp</th>
-              <th className="px-5 py-4">Khoảng lịch</th>
-              <th className="px-5 py-4">Trạng thái</th>
-              <th className="px-5 py-4">Chiến lược</th>
-              <th className="px-5 py-4 text-center">Ứng viên</th>
-              <th className="px-5 py-4 text-center">Đã chọn / áp dụng</th>
-              <th className="px-5 py-4">Thời điểm tạo</th>
-              <th className="px-5 py-4">Hết hạn / áp dụng</th>
-              <th className="px-5 py-4 text-right">Thao tác</th>
+              <th className="px-4 py-4">Bản xem trước / Cụm rạp</th>
+              <th className="px-4 py-4">Lịch chiếu / Múi giờ</th>
+              <th className="px-4 py-4">Vòng đời / Thời điểm</th>
+              <th className="px-4 py-4">Ứng viên / Đã tạo</th>
+              <th className="px-4 py-4 text-right">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {previews.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-16 text-center text-zinc-500">
+                <td colSpan={5} className="py-16 text-center text-zinc-500">
                   <div className="flex flex-col items-center gap-3">
                     <CalendarClock className="h-10 w-10 text-zinc-700" />
                     <p className="text-sm">
-                      {filtered ? 'Không có bản xem trước phù hợp với bộ lọc.' : 'Chưa có lịch sử xếp lịch tự động.'}
+                      {filtered ? 'Không có bản xem trước phù hợp với bộ lọc.' : 'Chưa có lịch sử bản xem trước xếp lịch.'}
                     </p>
                     <button
                       type="button"
@@ -296,7 +293,7 @@ function HistoryTable({ history, onOpenDetail, onCreate }) {
               const actionLabel = preview.editable ? 'Mở / chỉnh sửa' : 'Xem chi tiết';
               return (
                 <tr key={preview.previewPublicId} className="border-b border-zinc-800/60 align-top transition-colors hover:bg-zinc-900/50">
-                  <td className="max-w-[260px] px-5 py-4">
+                  <td className="max-w-[230px] px-4 py-4">
                     <button
                       type="button"
                       onClick={() => onOpenDetail(preview.previewPublicId)}
@@ -306,52 +303,53 @@ function HistoryTable({ history, onOpenDetail, onCreate }) {
                       {preview.previewPublicId}
                     </button>
                     <p className="mt-1 max-w-[230px] truncate text-xs font-semibold text-zinc-300" title={preview.cinemaName}>{preview.cinemaName}</p>
+                    <p className="mt-2 font-mono text-[10px] text-zinc-500">{preview.strategyVersion}</p>
                   </td>
-                  <td className="px-5 py-4 text-xs text-zinc-300">
+                  <td className="px-4 py-4 text-xs text-zinc-300">
                     <p className="font-semibold">{formatPreviewDateKey(preview.scheduleFrom)} – {formatPreviewDateKey(preview.scheduleTo)}</p>
                     <p className="mt-1 text-[10px] text-zinc-500">{preview.timezoneSnapshot}</p>
+                    <p className="mt-1 text-[10px] text-zinc-600">{preview.applyMode}</p>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="max-w-[250px] px-4 py-4">
                     <StatusBadge status={preview.displayStatus} />
                     {preview.applicable && <p className="mt-2 text-[10px] font-bold text-emerald-400">Có thể áp dụng trong chi tiết</p>}
                     {preview.failureReasonSafe && <p className="mt-2 max-w-[220px] whitespace-normal text-[10px] text-red-300">{preview.failureReasonSafe}</p>}
+                    <div className="mt-2 text-[10px] text-zinc-500">
+                      <p>Tạo {formatCinemaDateTime(preview.createdAt, preview.timezoneSnapshot)}</p>
+                      {preview.displayStatus === 'APPLIED' ? (
+                        <p className="mt-1 font-bold text-violet-300">Đã áp dụng lúc {formatCinemaDateTime(preview.appliedAt, preview.timezoneSnapshot)}</p>
+                      ) : (
+                        <p className="mt-1">Hết hạn {formatCinemaDateTime(preview.expiresAt, preview.timezoneSnapshot)}</p>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-5 py-4 text-xs text-zinc-300">
-                    <p className="font-mono font-semibold">{preview.strategyVersion}</p>
-                    <p className="mt-1 text-[10px] text-zinc-500">{preview.applyMode}</p>
+                  <td className="px-4 py-4 text-xs text-zinc-300">
+                    <p><strong className="text-zinc-100">{preview.totalCandidateCount}</strong> ứng viên</p>
+                    <p className="mt-1 text-[10px] text-zinc-500"><span className="text-emerald-400">{preview.validCandidateCount} hợp lệ</span> · <span className="text-red-400">{preview.rejectedCandidateCount} loại</span></p>
+                    <p className="mt-1 text-[10px]"><span className="font-bold text-amber-400">{preview.selectedCandidateCount}</span> đã chọn</p>
+                    {preview.displayStatus === 'APPLIED' && (
+                      <p className="mt-2 font-bold text-violet-300">{preview.appliedShowtimeCount ?? 0} suất đã tạo</p>
+                    )}
                   </td>
-                  <td className="px-5 py-4 text-center text-xs">
-                    <p className="font-bold text-zinc-200">{preview.totalCandidateCount}</p>
-                    <p className="mt-1 text-[10px] text-zinc-500">
-                      <span className="text-emerald-400">{preview.validCandidateCount} hợp lệ</span>
-                      {' · '}
-                      <span className="text-red-400">{preview.rejectedCandidateCount} loại</span>
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-center text-xs text-zinc-300">
-                    <p><span className="font-bold text-amber-400">{preview.selectedCandidateCount}</span> đã chọn</p>
-                    <p className="mt-1 text-[10px] text-zinc-500">
-                      {preview.appliedShowtimeCount == null ? 'Chưa áp dụng' : `${preview.appliedShowtimeCount} suất đã tạo`}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-xs text-zinc-300">
-                    {formatCinemaDateTime(preview.createdAt, preview.timezoneSnapshot)}
-                    <p className="mt-1 text-[10px] text-zinc-500">{preview.timezoneSnapshot}</p>
-                  </td>
-                  <td className="px-5 py-4 text-xs text-zinc-300">
-                    <p>{preview.appliedAt ? 'Áp dụng' : 'Hết hạn'}</p>
-                    <p className="mt-1 font-semibold">
-                      {formatCinemaDateTime(preview.appliedAt || preview.expiresAt, preview.timezoneSnapshot)}
-                    </p>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onOpenDetail(preview.previewPublicId)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-400 hover:bg-amber-500/10"
-                    >
-                      <Eye className="h-3.5 w-3.5" /> {actionLabel}
-                    </button>
+                  <td className="px-4 py-4 text-right">
+                    <div className="flex flex-col items-end gap-2">
+                      {preview.displayStatus === 'APPLIED' && (
+                        <button
+                          type="button"
+                          onClick={() => onViewCreatedShowtimes(preview.previewPublicId)}
+                          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-violet-300 hover:bg-violet-500/20"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" /> Xem các suất chiếu đã tạo
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onOpenDetail(preview.previewPublicId)}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-400 hover:bg-amber-500/10"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> {actionLabel}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -408,7 +406,7 @@ export default function AdminAutoScheduleHistoryPage() {
     <div className="flex min-h-[400px] flex-col space-y-6 bg-zinc-950 text-white animate-fade-in">
       <header className="flex flex-col gap-4 border-b border-zinc-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-black uppercase tracking-wider text-white md:text-2xl">Lịch sử xếp lịch tự động</h1>
+          <h1 className="text-xl font-black uppercase tracking-wider text-white md:text-2xl">Lịch sử bản xem trước xếp lịch</h1>
           <p className="mt-1 text-sm text-zinc-500">Tra cứu các bản xem trước đã tạo mà không thay đổi trạng thái lịch.</p>
         </div>
         <div className="flex gap-2">
@@ -435,6 +433,7 @@ export default function AdminAutoScheduleHistoryPage() {
         history={history}
         onCreate={() => navigate('/admin/showtime-schedules/create')}
         onOpenDetail={previewPublicId => navigate(`/admin/showtime-schedules/${previewPublicId}`)}
+        onViewCreatedShowtimes={previewPublicId => navigate(`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(previewPublicId)}`)}
       />
     </div>
   );

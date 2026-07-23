@@ -108,8 +108,10 @@ export const buildCandidateViewModels = (items, { selectedItemIds, timezone }) =
       rank: item.rankingPosition ?? null,
       conciseReason: getConciseReason(item),
       palette: getMoviePalette(movieKey),
-      createdShowtimePublicId: item.createdShowtimePublicId || null,
-      createdShowtimePath: item.createdShowtimePublicId
+      createdShowtimePublicId: item.applyStatus === 'CREATED'
+        ? item.createdShowtimePublicId || null
+        : null,
+      createdShowtimePath: item.applyStatus === 'CREATED' && item.createdShowtimePublicId
         ? `/admin/showtimes/${item.createdShowtimePublicId}`
         : null,
       timelineEligible: serviceDate !== UNKNOWN_SERVICE_DATE_KEY && offsets.valid,

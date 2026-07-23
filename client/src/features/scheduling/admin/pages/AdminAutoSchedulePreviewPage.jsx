@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   AlertCircle,
   AlertTriangle,
@@ -7,6 +7,7 @@ import {
   Calendar,
   CheckCircle2,
   Eye,
+  ExternalLink,
   Info,
   Loader2,
   MapPin,
@@ -102,7 +103,7 @@ const AdminAutoSchedulePreviewPage = () => {
   const navigate = useNavigate();
 
   const handleSuccess = () => {
-    navigate(`/admin/showtimes?source=AUTO&batchId=${id}&status=DRAFT`, {
+    navigate(`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(id)}`, {
       state: { message: `Đã tạo ${selectedItemIds.size} suất chiếu từ bản xem trước.` },
     });
   };
@@ -305,6 +306,14 @@ const AdminAutoSchedulePreviewPage = () => {
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
+          {capabilities.effectiveStatus === 'APPLIED' && (
+            <Link
+              to={`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(preview.previewPublicId || id)}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-black uppercase text-violet-200 hover:bg-violet-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden="true" /> Xem các suất chiếu đã tạo
+            </Link>
+          )}
           <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} aria-label="Làm mới bản xem trước" className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} /></button>
           {capabilities.isEditable && (
             <button type="button" onClick={handleQuickNonOverlappingSelection} disabled={!capabilities.canSelect} className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2.5 text-xs font-black uppercase text-blue-300 disabled:opacity-50"><Wand2 className="h-4 w-4" />Chọn nhanh không trùng</button>
@@ -337,6 +346,19 @@ const AdminAutoSchedulePreviewPage = () => {
             [capabilities.effectiveStatus === 'APPLIED' ? 'Đã tạo' : 'Hết hạn', capabilities.effectiveStatus === 'APPLIED' ? viewCounts.CREATED : formatCinemaDateTime(preview.expiresAt, effectiveTimezone)],
           ].map(([label, value]) => <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><span className="block text-[10px] font-bold uppercase text-zinc-500">{label}</span><span className={`${typeof value === 'number' ? 'text-2xl' : 'text-sm'} mt-2 block font-black text-white`}>{value}</span></div>)}
         </section>
+
+        {capabilities.effectiveStatus === 'APPLIED' && (
+          <section className="grid gap-4 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4 text-violet-100 sm:grid-cols-2" aria-label="Kết quả áp dụng">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Đã áp dụng lúc</p>
+              <p className="mt-1 font-bold">{formatCinemaDateTime(preview.appliedAt, effectiveTimezone)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Kết quả vận hành</p>
+              <p className="mt-1 font-bold">{viewCounts.CREATED} suất chiếu đã tạo</p>
+            </div>
+          </section>
+        )}
 
         <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -403,6 +425,15 @@ const AdminAutoSchedulePreviewPage = () => {
                           <div className="flex flex-wrap items-center gap-2">
                             {selectionAvailable ? <label className="flex items-center gap-2 text-xs font-bold text-zinc-300"><input type="checkbox" checked={candidate.selected} disabled={selectionDisabled} onChange={() => handleToggleSelection(candidate.id, candidate.selected)} aria-label={`Chọn ${candidate.movieTitle} lúc ${candidate.startTimeDisplay}`} />{candidate.selected ? 'Đã chọn' : 'Chưa chọn'}</label> : <span className="text-xs text-zinc-500">{candidate.selected ? 'Đã chọn' : 'Không thể chọn'}</span>}
                             {showDiagnosticAction && <button type="button" onClick={() => showDiagnosticOnTimeline(candidate)} className="flex items-center gap-1 rounded-lg border border-blue-500/30 px-2 py-1.5 text-xs font-bold text-blue-300"><Eye className="h-3.5 w-3.5" />Xem trên timeline</button>}
+                            {candidate.createdShowtimePath && (
+                              <Link
+                                to={candidate.createdShowtimePath}
+                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs font-bold text-emerald-300"
+                                aria-label={`Mở suất chiếu ${candidate.createdShowtimePublicId}`}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /> Suất chiếu
+                              </Link>
+                            )}
                             <button type="button" onClick={event => openDrawer(candidate, event.currentTarget)} className="rounded-lg border border-zinc-700 px-2 py-1.5 text-xs font-bold text-zinc-300">Mở chi tiết</button>
                           </div>
                           <details className="mt-3 text-xs text-zinc-400"><summary className="cursor-pointer font-bold">Dữ liệu mở rộng</summary><dl className="mt-2 space-y-1 break-all font-mono"><div>ID: {candidate.id}</div><div>startTime: {candidate.technicalDetails.startTime || '—'}</div><div>endTime: {candidate.technicalDetails.endTime || '—'}</div><div>occupancyEndTime: {candidate.technicalDetails.occupancyEndTime || '—'}</div><div>codes: {[candidate.technicalDetails.rejectionCode, candidate.technicalDetails.applyErrorCode].filter(Boolean).join(' / ') || '—'}</div><div>scoreBreakdown: {candidate.technicalDetails.scoreBreakdown ? JSON.stringify(candidate.technicalDetails.scoreBreakdown) : '—'}</div></dl></details>
