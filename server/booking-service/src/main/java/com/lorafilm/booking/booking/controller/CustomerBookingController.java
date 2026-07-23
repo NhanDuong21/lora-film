@@ -42,6 +42,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.util.Map;
 
+import com.lorafilm.booking.infrastructure.idempotency.Idempotent;
+
 @RestController
 @RequestMapping("/api/bookings")
 @Validated
@@ -78,6 +80,7 @@ public class CustomerBookingController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "409", description = "Reservation expired or already converted", content = @Content)
     })
+    @Idempotent
     public ResponseEntity<ApiResponse<BookingResponse>> createBooking(
             @Valid @RequestBody CreateBookingRequest request) {
         BookingResponse response = bookingService.createBooking(request);
