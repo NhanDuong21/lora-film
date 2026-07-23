@@ -176,6 +176,17 @@ class ShowtimeCommandServiceIntegrationTest {
     }
 
     @Test
+    void deleteBatchFailsClosedWhenBookingSafetyIsUnavailable() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> showtimeCommandService.deleteBatch("legacy-batch"));
+
+        assertEquals(
+                ErrorCode.SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE,
+                exception.getErrorCode());
+    }
+
+    @Test
     void createShowtime_rejectsClosureThatStartsDuringCleaningOccupancy() {
         Instant start = Instant.parse("2026-08-03T05:00:00Z");
         CinemaClosurePeriod closure = new CinemaClosurePeriod();
