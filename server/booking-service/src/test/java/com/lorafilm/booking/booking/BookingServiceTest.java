@@ -59,7 +59,11 @@ class BookingServiceTest {
         @Mock
         private BookingCodeGenerator bookingCodeGenerator;
         @Mock
-        private FoodOrderService foodOrderService;
+        private com.lorafilm.booking.booking.repository.BookingSnapshotRepository bookingSnapshotRepository;
+        @Mock
+        private com.lorafilm.booking.booking.repository.BookingTicketRepository bookingTicketRepository;
+        @Mock
+        private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
         @Mock
         private com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort;
         @Mock
@@ -88,7 +92,9 @@ class BookingServiceTest {
                                 securityContextService,
                                 bookingCodeGenerator,
                                 bookingMapper,
-                                foodOrderService,
+                                objectMapper,
+                                bookingSnapshotRepository,
+                                bookingTicketRepository,
                                 paymentIntegrationPort,
                                 paymentEventRepository,
                                 outboxService,
