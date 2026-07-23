@@ -22,6 +22,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -186,5 +187,106 @@ class ShowtimeStatusTransitionServiceImplTest {
 
         BusinessException ex = assertThrows(BusinessException.class, () -> transitionService.transitionStatus("pub-id", request));
         assertEquals(ErrorCode.SHOWTIME_CANNOT_FINISH_BEFORE_END, ex.getErrorCode());
+    }
+
+    @Test
+    void previewBatchStatus_GroupsBlockedItemsAndTreatsAlreadyOpenAsNoOp() {
+        Showtime eligible = showtime("eligible", ShowtimeStatus.DRAFT, "2026-07-10T12:00:00Z");
+        Showtime missingPrice = showtime("missing", ShowtimeStatus.DRAFT, "2026-07-10T13:00:00Z");
+        Showtime alreadyOpen = showtime("open", ShowtimeStatus.OPEN_FOR_BOOKING, "2026-07-10T14:00:00Z");
+        when(showtimeRepository.findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc("batch-1"))
+                .thenReturn(List.of(eligible, missingPrice, alreadyOpen));
+        doAnswer(invocation -> {
+            if (invocation.getArgument(0) == missingPrice) {
+                throw new BusinessException(ErrorCode.SHOWTIME_PRICE_MISSING, "missing");
+            }
+            return null;
+        }).when(showtimePricingService).validateCompleteness(any(Showtime.class));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(7L);
+
+        var summary = transitionService.previewBatchStatus(
+                "batch-1", ShowtimeStatus.OPEN_FOR_BOOKING);
+
+        assertEquals(3, summary.getTotalCount());
+        assertEquals(1, summary.getEligibleCount());
+        assertEquals(1, summary.getAlreadyTargetCount());
+        assertEquals(1, summary.getSkippedCount());
+        assertFalse(summary.isActionAllowed());
+        assertTrue(summary.isAtomic());
+        assertEquals("SHOWTIME_PRICE_MISSING", summary.getReasonGroups().get(0).getReasonCode());
+        assertEquals(7L, summary.getActorId());
+    }
+
+    @Test
+    void transitionBatchStatus_BlockedItemPreventsPartialOpen() {
+        Showtime eligible = showtime("eligible", ShowtimeStatus.DRAFT, "2026-07-10T12:00:00Z");
+        Showtime started = showtime("started", ShowtimeStatus.DRAFT, "2026-07-10T09:00:00Z");
+        when(showtimeRepository.findAllByBatchIdForUpdate("batch-1"))
+                .thenReturn(List.of(eligible, started));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(9L);
+        UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
+        request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+
+        var summary = transitionService.transitionBatchStatus("batch-1", request);
+
+        assertFalse(summary.isActionAllowed());
+        assertEquals(0, summary.getAffectedCount());
+        assertEquals(ShowtimeStatus.DRAFT, eligible.getStatus());
+        verify(showtimeRepository, never()).saveAndFlush(any());
+        verify(historyService, never()).recordTransitionHistory(
+                any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void transitionBatchStatus_UsesSharedActorAndTimeForEligibleItems() {
+        Showtime first = showtime("first", ShowtimeStatus.DRAFT, "2026-07-10T12:00:00Z");
+        Showtime second = showtime("second", ShowtimeStatus.DRAFT, "2026-07-10T13:00:00Z");
+        Showtime alreadyOpen = showtime("open", ShowtimeStatus.OPEN_FOR_BOOKING, "2026-07-10T14:00:00Z");
+        when(showtimeRepository.findAllByBatchIdForUpdate("batch-1"))
+                .thenReturn(List.of(first, second, alreadyOpen));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(11L);
+        when(showtimeRepository.saveAndFlush(any(Showtime.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
+        request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+
+        var summary = transitionService.transitionBatchStatus("batch-1", request);
+
+        assertTrue(summary.isActionAllowed());
+        assertEquals(2, summary.getAffectedCount());
+        assertEquals(1, summary.getAlreadyTargetCount());
+        assertEquals(ShowtimeStatus.OPEN_FOR_BOOKING, first.getStatus());
+        assertEquals(ShowtimeStatus.OPEN_FOR_BOOKING, second.getStatus());
+        assertEquals(fixedClock.instant(), first.getBookingOpenTime());
+        assertEquals(fixedClock.instant(), second.getBookingOpenTime());
+        assertEquals(11L, summary.getActorId());
+        assertEquals(fixedClock.instant(), summary.getActionAt());
+        verify(historyService, times(2)).recordTransitionHistory(
+                any(), eq(ShowtimeStatus.DRAFT), eq(ShowtimeStatus.OPEN_FOR_BOOKING),
+                isNull(), eq(11L), eq(fixedClock.instant()));
+    }
+
+    @Test
+    void transitionBatchStatus_CancellationFailsClosedBeforeReadingBatch() {
+        UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
+        request.setStatus(ShowtimeStatus.CANCELLED);
+        request.setReason("Requested cancellation");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> transitionService.transitionBatchStatus("batch-1", request));
+
+        assertEquals(
+                ErrorCode.SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE,
+                exception.getErrorCode());
+        verify(showtimeRepository, never()).findAllByBatchIdForUpdate(anyString());
+    }
+
+    private Showtime showtime(String publicId, ShowtimeStatus status, String startTime) {
+        Showtime showtime = new Showtime();
+        showtime.setPublicId(publicId);
+        showtime.setStatus(status);
+        showtime.setStartTime(Instant.parse(startTime));
+        showtime.setEndTime(Instant.parse(startTime).plusSeconds(3600));
+        return showtime;
     }
 }

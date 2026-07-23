@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSpecificationExecutor<Showtime> {
@@ -24,6 +25,21 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             "AND s.deletedAt IS NULL")
     Optional<Showtime> findByPublicIdForUpdate(
             @org.springframework.data.repository.query.Param("publicId") String publicId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s " +
+            "JOIN FETCH s.movie " +
+            "JOIN FETCH s.movieVersion " +
+            "JOIN FETCH s.cinema " +
+            "JOIN FETCH s.auditorium " +
+            "WHERE s.batchId = :batchId " +
+            "AND s.deletedAt IS NULL " +
+            "ORDER BY s.id ASC")
+    List<Showtime> findAllByBatchIdForUpdate(
+            @org.springframework.data.repository.query.Param("batchId") String batchId);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
+    List<Showtime> findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc(String batchId);
 
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
     Optional<Showtime> findByIdAndDeletedAtIsNull(Long id);

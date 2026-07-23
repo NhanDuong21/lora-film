@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
+import com.lorafilm.movie.showtime.dto.response.BatchStatusActionSummary;
 import com.lorafilm.movie.showtime.dto.response.ShowtimeStatusHistoryResponse;
 import com.lorafilm.movie.showtime.service.ShowtimeCommandService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
@@ -123,5 +124,29 @@ class AdminShowtimeControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].newStatus").value("DRAFT"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void previewBatchStatus_ReturnsAuthoritativeCounts() throws Exception {
+        BatchStatusActionSummary summary = new BatchStatusActionSummary();
+        summary.setBatchId("batch-1");
+        summary.setTargetStatus("OPEN_FOR_BOOKING");
+        summary.setTotalCount(25);
+        summary.setEligibleCount(20);
+        summary.setAlreadyTargetCount(5);
+        summary.setActionAllowed(true);
+        summary.setAtomic(true);
+        when(transitionService.previewBatchStatus("batch-1", ShowtimeStatus.OPEN_FOR_BOOKING))
+                .thenReturn(summary);
+
+        mockMvc.perform(get("/api/admin/showtimes/batch/batch-1/status-preview")
+                        .param("targetStatus", "OPEN_FOR_BOOKING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalCount").value(25))
+                .andExpect(jsonPath("$.data.eligibleCount").value(20))
+                .andExpect(jsonPath("$.data.alreadyTargetCount").value(5))
+                .andExpect(jsonPath("$.data.atomic").value(true))
+                .andExpect(jsonPath("$.data.actionAllowed").value(true));
     }
 }

@@ -109,6 +109,7 @@ public enum ErrorCode {
     SHOWTIME_CANCELLATION_REASON_REQUIRED("Cancellation reason is required", 400),
     SHOWTIME_CANNOT_OPEN_AFTER_START("Cannot open showtime for booking after it has started", 400),
     SHOWTIME_CANNOT_FINISH_BEFORE_END("Cannot finish showtime before it ends", 400),
+    SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE("Batch cancellation safety cannot be verified", 409),
     
     // --- Auto Scheduling ---
     AUTO_SCHEDULE_PREVIEW_NOT_FOUND("Auto schedule preview not found", 404),
