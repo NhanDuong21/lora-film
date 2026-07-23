@@ -144,6 +144,18 @@ public class CustomerBookingController {
                 "Booking cancelled successfully", bookingService.cancelBooking(publicId, request)));
     }
 
+    @PostMapping("/{publicId}/payment")
+    @Operation(summary = "Initiate payment", description = "Requests payment initiation for a PENDING_PAYMENT booking")
+    public ResponseEntity<ApiResponse<com.lorafilm.booking.payment.dto.PaymentResponseDto>> initiatePayment(
+            @PathVariable
+            @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")
+            String publicId,
+            @Valid @RequestBody com.lorafilm.booking.payment.dto.InitiatePaymentRequest request) {
+        com.lorafilm.booking.payment.dto.PaymentResponseDto response = bookingService.initiatePayment(publicId, request);
+        return ResponseEntity.ok(ApiResponse.success("Payment initiated successfully", response));
+    }
+
+
     private Sort parseSort(String sortValue) {
         String[] parts = sortValue == null ? new String[0] : sortValue.split(",", -1);
         String requestedProperty = parts.length > 0 ? parts[0].trim() : "createdAt";

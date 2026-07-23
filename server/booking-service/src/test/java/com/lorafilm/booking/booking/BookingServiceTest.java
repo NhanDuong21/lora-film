@@ -60,6 +60,12 @@ class BookingServiceTest {
     private BookingCodeGenerator bookingCodeGenerator;
     @Mock
     private FoodOrderService foodOrderService;
+    @Mock
+    private com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort;
+    @Mock
+    private com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository;
+    @Mock
+    private com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
 
     @Spy
     private BookingMapper bookingMapper = new BookingMapper();
@@ -76,8 +82,12 @@ class BookingServiceTest {
                 securityContextService,
                 bookingCodeGenerator,
                 bookingMapper,
-                foodOrderService);
+                foodOrderService,
+                paymentIntegrationPort,
+                paymentEventRepository,
+                outboxService);
     }
+
 
     @Test
     void shouldCreateBookingFromValidReservations() {

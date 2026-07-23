@@ -57,6 +57,9 @@ public class BookingServiceImpl implements BookingService {
     private final BookingCodeGenerator bookingCodeGenerator;
     private final BookingMapper bookingMapper;
     private final FoodOrderService foodOrderService;
+    private final com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort;
+    private final com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository;
+    private final com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -66,7 +69,10 @@ public class BookingServiceImpl implements BookingService {
             SecurityContextService securityContextService,
             BookingCodeGenerator bookingCodeGenerator,
             BookingMapper bookingMapper,
-            FoodOrderService foodOrderService) {
+            FoodOrderService foodOrderService,
+            com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort,
+            com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository,
+            com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService) {
         this.bookingRepository = bookingRepository;
         this.reservationRepository = reservationRepository;
         this.reservationService = reservationService;
@@ -75,7 +81,11 @@ public class BookingServiceImpl implements BookingService {
         this.bookingCodeGenerator = bookingCodeGenerator;
         this.bookingMapper = bookingMapper;
         this.foodOrderService = foodOrderService;
+        this.paymentIntegrationPort = paymentIntegrationPort;
+        this.paymentEventRepository = paymentEventRepository;
+        this.outboxService = outboxService;
     }
+
 
     @Override
     @Transactional
@@ -435,6 +445,61 @@ public class BookingServiceImpl implements BookingService {
                 .and(BookingSpecification.createdTo(toDate));
     }
 
+    @Override
+    @Transactional
+    public com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId, com.lorafilm.booking.payment.dto.InitiatePaymentRequest request) {
+        Long currentUserId = requireAuthenticatedUser();
+        Booking booking = getBooking(publicId);
+        requireOwnerOrAdmin(booking, currentUserId);
+
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
+            throw new BusinessException("BOOKING_INVALID_STATUS", "Payment can only be initiated for bookings in PENDING_PAYMENT status");
+        }
+
+        // Call port to request payment
+        com.lorafilm.booking.payment.dto.PaymentRequestDto portRequest = new com.lorafilm.booking.payment.dto.PaymentRequestDto(
+            booking.getId(),
+            booking.getBookingCode(),
+            booking.getFinalAmount(),
+            booking.getCurrency(),
+            request.paymentMethod(),
+            request.paymentProvider(),
+            booking.getUserId(),
+            booking.getExpiresAt()
+        );
+
+        com.lorafilm.booking.payment.dto.PaymentResponseDto portResponse = paymentIntegrationPort.requestPayment(portRequest);
+
+        // Update booking metadata snapshot
+        booking.setPaymentMethodSnapshot(request.paymentMethod());
+        booking.setPaymentProvider(request.paymentProvider());
+        booking.setPaymentReference(portResponse.transactionCode());
+        bookingRepository.save(booking);
+
+        // Record a PAYMENT_REQUESTED snapshot
+        com.lorafilm.booking.payment.entity.BookingPaymentEvent paymentEvent = new com.lorafilm.booking.payment.entity.BookingPaymentEvent();
+        paymentEvent.setPublicId(UUID.randomUUID().toString());
+        paymentEvent.setBooking(booking);
+        paymentEvent.setPaymentId(portResponse.paymentId());
+        paymentEvent.setTransactionId(portResponse.transactionCode());
+        paymentEvent.setGatewayTransactionId(portResponse.externalTransactionId());
+        paymentEvent.setPaymentProvider(request.paymentProvider());
+        paymentEvent.setPaymentMethod(request.paymentMethod());
+        paymentEvent.setEventType(com.lorafilm.booking.payment.enums.PaymentEventType.PAYMENT_CREATED);
+        paymentEvent.setAmount(booking.getFinalAmount());
+        paymentEvent.setCurrency(booking.getCurrency());
+        paymentEvent.setStatus(com.lorafilm.booking.payment.enums.PaymentEventStatus.PENDING);
+        paymentEvent.setOccurredAt(Instant.now());
+        paymentEvent.setRequestPayload("{\"bookingId\":" + booking.getId() + ",\"action\":\"INITIATE_PAYMENT\"}");
+        paymentEventRepository.save(paymentEvent);
+
+        // Create Outbox Event: BOOKING_PAYMENT_RECEIVED
+        outboxService.createOutboxEvent("BOOKING", booking.getId(), "BOOKING_PAYMENT_RECEIVED", booking);
+
+        return portResponse;
+    }
+
     private record ValidatedCreateRequest(String showtimePublicId, List<String> reservationPublicIds) {
     }
 }
+
