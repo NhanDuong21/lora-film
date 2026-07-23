@@ -35,7 +35,7 @@ function FormSection({ title, icon, children }) {
   );
 }
 
-export default function MovieFormModal({ selectedMovie, triggerToast, onClose, onRefreshList }) {
+export default function MovieFormModal({ selectedMovie, triggerToast, onClose, onRefreshList, detailQuery = '' }) {
   const isEdit = !!selectedMovie;
   const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
@@ -109,7 +109,7 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
         // Edit payload should NEVER contain status (prevent lifecycle bypass)
         await adminMovieService.updateMovie(selectedMovie.publicId, moviePayload);
         triggerToast?.('Cập nhật thông tin cơ bản thành công!');
-        onRefreshList();
+        await onRefreshList?.();
         onClose();
       } else {
         // Create payload no longer needs status since backend defaults to DRAFT
@@ -118,9 +118,9 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
         if (!publicId) throw new Error('Không nhận được mã phim từ server. Vui lòng kiểm tra lại.');
 
         triggerToast?.('Tạo phim thành công! Chuyển đến trang chi tiết để thêm các thông tin khác.');
-        onRefreshList();
+        await onRefreshList?.();
         onClose();
-        navigate(`/admin/movies/${publicId}`);
+        navigate(`/admin/movies/${publicId}${detailQuery}`);
       }
     } catch (err) {
       console.error("Failed to save movie:", err);

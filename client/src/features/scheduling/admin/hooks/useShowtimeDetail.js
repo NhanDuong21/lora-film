@@ -16,7 +16,7 @@ export default function useShowtimeDetail(showtimePublicId, { triggerToast }) {
         adminShowtimeService.getShowtimeDetail(showtimePublicId)
           .catch(err => ({ success: false, error: err, isDetailError: true })),
         adminShowtimeService.getStatusHistory(showtimePublicId)
-          .catch(err => ({ success: false, data: [] })),
+          .catch(() => ({ success: false, data: [] })),
         adminShowtimeService.getPrices(showtimePublicId)
           .catch(err => ({ success: false, data: { prices: [] }, isPricingError: err.response?.status }))
       ]);
@@ -34,7 +34,7 @@ export default function useShowtimeDetail(showtimePublicId, { triggerToast }) {
           // Pass the status code for conditional rendering
           setPrices({ errorStatus: pricesRes.isPricingError });
       }
-    } catch (err) {
+    } catch {
       triggerToast?.('Lỗi hệ thống khi tải dữ liệu', 'error');
     } finally {
       setIsLoading(false);
@@ -42,6 +42,7 @@ export default function useShowtimeDetail(showtimePublicId, { triggerToast }) {
   }, [showtimePublicId, triggerToast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDetail();
   }, [fetchDetail]);
 

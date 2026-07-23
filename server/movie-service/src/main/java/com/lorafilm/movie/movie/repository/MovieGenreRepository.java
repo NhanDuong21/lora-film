@@ -14,7 +14,9 @@ import org.springframework.data.repository.query.Param;
 @Repository
 public interface MovieGenreRepository extends JpaRepository<MovieGenre, MovieGenreId> {
     List<MovieGenre> findByMovieId(Long movieId);
-    List<MovieGenre> findByMovieIdIn(List<Long> movieIds);
+
+    @Query("SELECT mg FROM MovieGenre mg JOIN FETCH mg.genre WHERE mg.movie.id IN :movieIds")
+    List<MovieGenre> findByMovieIdIn(@Param("movieIds") List<Long> movieIds);
     
     @Modifying
     @Query("DELETE FROM MovieGenre mg WHERE mg.movie.id = :movieId")

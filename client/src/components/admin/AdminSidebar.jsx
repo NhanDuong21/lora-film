@@ -19,7 +19,9 @@ import {
   Shield,
   Tags,
   DoorOpen,
-  Armchair
+  Armchair,
+  History,
+  Zap
 } from 'lucide-react';
 
 
@@ -200,6 +202,20 @@ export default function AdminSidebar({
                   >
                     <Calendar className="w-4 h-4 shrink-0" />
                     <span>Quản lý suất chiếu</span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('auto-schedule-create', '#/admin/showtime-schedules/create')}
+                    className={getSubLinkClass('auto-schedule-create')}
+                  >
+                    <Zap className="w-4 h-4 shrink-0" />
+                    <span>Tạo lịch tự động</span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('auto-schedule-history', '#/admin/showtime-schedules')}
+                    className={getSubLinkClass('auto-schedule-history')}
+                  >
+                    <History className="w-4 h-4 shrink-0" />
+                    <span>Lịch sử bản xem trước xếp lịch</span>
                   </button>
                 </div>
               )}

@@ -191,6 +191,12 @@ Không tạo showtime nếu cinema:
 
 ## 5. Cinema Operating Hours Rule
 
+### Canonical interval semantics
+
+Operating-hours validation uses the film interval `[start_time, end_time)`. The film must end no later than the cinema closing instant. The cleaning buffer may finish after closing time.
+
+Operating instants are constructed from the operating calendar date and the cinema timezone; they are not constructed in UTC unless the cinema timezone is UTC.
+
 Cinema có operating hours theo `day_of_week`.
 
 Showtime phải nằm trong giờ mở cửa của cinema theo timezone của cinema.
@@ -224,6 +230,8 @@ Closure period có status:
 ---
 
 ## 7. Auditorium Rule
+
+Auditorium maintenance conflicts use the complete occupied interval `[start_time, end_time + cleaning_buffer_minutes)`. A maintenance window beginning exactly at occupied end is adjacent and does not overlap.
 
 Auditorium thuộc cinema.
 
@@ -274,6 +282,18 @@ Seat có:
 ---
 
 ## 9. Showtime Creation Rule
+
+### Cinema-local movie release window
+
+Movie `release_date` and `end_date` are calendar dates in the current cinema timezone. Release validation is based only on the Showtime start:
+
+```text
+release_start = release_date at 00:00 in cinema timezone
+end_exclusive = (end_date + 1 day) at 00:00 in cinema timezone
+valid = start_time >= release_start AND start_time < end_exclusive
+```
+
+A Showtime that starts on `end_date` remains valid even when the film finishes after `end_exclusive`.
 
 Showtime chỉ được tạo nếu:
 

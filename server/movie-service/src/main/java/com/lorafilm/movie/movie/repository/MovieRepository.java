@@ -23,6 +23,9 @@ public interface MovieRepository extends JpaRepository<Movie, Long>, JpaSpecific
     Optional<Movie> findByIdentifierAndDeletedAtIsNull(@Param("identifier") String identifier);
     
     Page<Movie> findByStatusAndDeletedAtIsNull(MovieStatus status, Pageable pageable);
+
+    @Query("SELECT m.status AS status, COUNT(m) AS total FROM Movie m WHERE m.deletedAt IS NULL GROUP BY m.status")
+    List<MovieStatusCountProjection> countNonDeletedMoviesByStatus();
     
     @Query("SELECT m.slug FROM Movie m WHERE m.slug LIKE :slugPrefix% AND m.deletedAt IS NULL")
     List<String> findSlugsByPrefix(@Param("slugPrefix") String slugPrefix);

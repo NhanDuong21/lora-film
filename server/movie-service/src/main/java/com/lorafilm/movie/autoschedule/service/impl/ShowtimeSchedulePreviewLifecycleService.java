@@ -10,6 +10,7 @@ import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewApplyMode;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
@@ -51,6 +52,16 @@ public class ShowtimeSchedulePreviewLifecycleService {
                                                            Cinema cinema,
                                                            String fingerprint,
                                                            Long adminUserId) {
+        return createGeneratingPreview(
+                request, cinema, AutoScheduleStrategyVersions.CURRENT, fingerprint, adminUserId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ShowtimeSchedulePreview createGeneratingPreview(NormalizedGeneratePreviewRequest request,
+                                                           Cinema cinema,
+                                                           String strategyVersion,
+                                                           String fingerprint,
+                                                           Long adminUserId) {
         Instant now = Instant.now(clock);
         
         ShowtimeSchedulePreview preview = ShowtimeSchedulePreview.createGenerating(
@@ -59,6 +70,7 @@ public class ShowtimeSchedulePreviewLifecycleService {
                 request.getScheduleTo(),
                 request.getSlotGranularityMinutes(),
                 request.getPreviewTtlMinutes(),
+                strategyVersion,
                 request.getIdempotencyKey(),
                 fingerprint,
                 adminUserId,

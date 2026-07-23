@@ -5,9 +5,18 @@ import com.lorafilm.movie.movie.controller.AdminMovieController;
 import com.lorafilm.movie.movie.domain.enums.AgeRating;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.MovieDto;
+import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
+import com.lorafilm.movie.movie.dto.MovieSummaryResponse;
 import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
 import com.lorafilm.movie.movie.dto.MovieRequest;
 import com.lorafilm.movie.movie.service.AdminMovieService;
+import com.lorafilm.movie.movie.service.MovieSummaryQueryService;
+import com.lorafilm.movie.integration.tmdb.service.TmdbMovieReviewService;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieReviewResponse;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbFieldDiffDto;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbCollectionDiffDto;
+import com.lorafilm.movie.movie.dto.MovieReadinessDto;
+import com.lorafilm.movie.movie.domain.enums.MovieHealthStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -22,6 +31,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -55,6 +65,12 @@ public class AdminMovieControllerTest {
 
     @MockBean
     private com.lorafilm.movie.movie.service.MovieService movieService;
+
+    @MockBean
+    private MovieSummaryQueryService movieSummaryQueryService;
+
+    @MockBean
+    private TmdbMovieReviewService tmdbMovieReviewService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -214,7 +230,7 @@ public class AdminMovieControllerTest {
         pageResponse.setTotalPages(1);
         pageResponse.setLast(true);
 
-        when(movieService.getMovies(null, null, null, null, null, null, 0, 10, "releaseDate,desc"))
+        when(movieService.getMovies(any(AdminMovieListQuery.class)))
                 .thenReturn(pageResponse);
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
@@ -238,7 +254,7 @@ public class AdminMovieControllerTest {
         pageResponse.setTotalPages(0);
         pageResponse.setLast(true);
 
-        when(movieService.getMovies(null, null, null, null, null, null, 0, 10, "releaseDate,desc"))
+        when(movieService.getMovies(any(AdminMovieListQuery.class)))
                 .thenReturn(pageResponse);
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
@@ -266,7 +282,7 @@ public class AdminMovieControllerTest {
         pageResponse.setTotalPages(1);
         pageResponse.setLast(true);
 
-        when(movieService.getMovies("NOW_SHOWING", null, null, null, null, null, 0, 10, "releaseDate,desc"))
+        when(movieService.getMovies(argThat(query -> "NOW_SHOWING".equals(query.getStatus()))))
                 .thenReturn(pageResponse);
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
@@ -294,7 +310,7 @@ public class AdminMovieControllerTest {
         pageResponse.setTotalPages(1);
         pageResponse.setLast(true);
 
-        when(movieService.getMovies(null, null, "Batman", null, null, null, 0, 10, "releaseDate,desc"))
+        when(movieService.getMovies(argThat(query -> "Batman".equals(query.getKeyword()))))
                 .thenReturn(pageResponse);
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
@@ -306,5 +322,134 @@ public class AdminMovieControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.data[0].publicId").value("movie-3"))
                 .andExpect(jsonPath("$.data.data[0].title").value("Batman"));
+    }
+
+    @Test
+    void getMovieSummary_ReturnsExactContract() throws Exception {
+        MovieSummaryResponse summary = new MovieSummaryResponse(
+                15, 3, 3, 3, 3, 3, 8, 4, 3, 5, 4, 7);
+        when(movieSummaryQueryService.getSummary()).thenReturn(summary);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/admin/movies/summary")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.errorCode").value("SUCCESS"))
+                .andExpect(jsonPath("$.message").value("Success"))
+                .andExpect(jsonPath("$.data.total").value(15))
+                .andExpect(jsonPath("$.data.draft").value(3))
+                .andExpect(jsonPath("$.data.upcoming").value(3))
+                .andExpect(jsonPath("$.data.nowShowing").value(3))
+                .andExpect(jsonPath("$.data.ended").value(3))
+                .andExpect(jsonPath("$.data.inactive").value(3))
+                .andExpect(jsonPath("$.data.ready").value(8))
+                .andExpect(jsonPath("$.data.warning").value(4))
+                .andExpect(jsonPath("$.data.blocked").value(3))
+                .andExpect(jsonPath("$.data.missingPrimaryPoster").value(5))
+                .andExpect(jsonPath("$.data.missingActiveVersion").value(4))
+                .andExpect(jsonPath("$.data.withoutShowtime").value(7))
+                .andExpect(jsonPath("$.data.*", org.hamcrest.Matchers.hasSize(12)))
+                .andExpect(jsonPath("$.errors").isArray());
+    }
+
+    @Test
+    void getTmdbReview_ReturnsCanonicalReadOnlyContract() throws Exception {
+        TmdbMovieReviewResponse review = new TmdbMovieReviewResponse(
+                "TMDB",
+                501L,
+                "PENDING",
+                true,
+                List.of(),
+                new MovieReadinessDto(MovieHealthStatus.READY, "READY", List.of(), List.of()),
+                java.time.LocalDateTime.of(2026, 7, 1, 0, 0),
+                java.time.LocalDateTime.of(2026, 7, 20, 0, 0),
+                true,
+                List.of(new TmdbFieldDiffDto("title", "Tên phim", "Old", "New", true)),
+                List.of(new TmdbCollectionDiffDto("genres", "Thể loại", List.of("Drama"),
+                        List.of("Action"), List.of("Action"), List.of("Drama"), true)));
+        when(tmdbMovieReviewService.getReview("movie-1")).thenReturn(review);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/admin/movies/movie-1/tmdb-review"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.source").value("TMDB"))
+                .andExpect(jsonPath("$.data.tmdbId").value(501))
+                .andExpect(jsonPath("$.data.reviewStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.canApprove").value(true))
+                .andExpect(jsonPath("$.data.readiness.healthStatus").value("READY"))
+                .andExpect(jsonPath("$.data.hasProviderChanges").value(true))
+                .andExpect(jsonPath("$.data.scalarDiffs[0].field").value("title"))
+                .andExpect(jsonPath("$.data.collectionDiffs[0].added[0]").value("Action"));
+    }
+
+    @Test
+    void getTmdbReview_MapsProviderFailureWithoutHidingDomainError() throws Exception {
+        when(tmdbMovieReviewService.getReview("movie-1")).thenThrow(
+                new com.lorafilm.movie.common.exception.BusinessException(
+                        com.lorafilm.movie.common.exception.ErrorCode.TMDB_PROVIDER_UNAVAILABLE));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/admin/movies/movie-1/tmdb-review"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("TMDB_PROVIDER_UNAVAILABLE"));
+    }
+
+    @Test
+    void getMovies_BindsAdvancedFilterContract() throws Exception {
+        com.lorafilm.movie.common.dto.PageResponse<MovieDto> pageResponse = new com.lorafilm.movie.common.dto.PageResponse<>(
+                List.of(), 0, 20, 0, 0, true);
+        when(movieService.getMovies(argThat(query ->
+                "TMDB".equals(query.getSource())
+                        && "WARNING".equals(query.getHealthStatus())
+                        && "false".equals(query.getHasPrimaryPoster())
+                        && "true".equals(query.getHasActiveVersion())
+                        && "false".equals(query.getHasShowtime())
+                        && "genre-public-id".equals(query.getGenrePublicId())
+                        && "VN".equals(query.getCountry())
+                        && LocalDate.of(2026, 1, 1).equals(query.getReleaseDateFrom())
+                        && LocalDate.of(2026, 12, 31).equals(query.getReleaseDateTo())
+                        && LocalDate.of(2026, 2, 1).equals(query.getTmdbUpdatedFrom())
+                        && LocalDate.of(2026, 2, 28).equals(query.getTmdbUpdatedTo())
+                        && query.getPage() == 0
+                        && query.getSize() == 20
+                        && "updatedAt,desc".equals(query.getSort())))).thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
+                        .param("source", "TMDB")
+                        .param("healthStatus", "WARNING")
+                        .param("hasPrimaryPoster", "false")
+                        .param("hasActiveVersion", "true")
+                        .param("hasShowtime", "false")
+                        .param("genrePublicId", "genre-public-id")
+                        .param("country", "VN")
+                        .param("releaseDateFrom", "2026-01-01")
+                        .param("releaseDateTo", "2026-12-31")
+                        .param("tmdbUpdatedFrom", "2026-02-01")
+                        .param("tmdbUpdatedTo", "2026-02-28")
+                        .param("size", "20")
+                        .param("sort", "updatedAt,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pageSize").value(20));
+    }
+
+    @Test
+    void getMovies_InvalidPageAndDateReturnValidationErrors() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
+                        .param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/movies")
+                        .param("releaseDateFrom", "22-07-2026"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
     }
 }

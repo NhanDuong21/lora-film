@@ -1,63 +1,137 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminGenreService from '@/features/catalog/admin/services/adminGenreService';
 import { parseApiError } from '@/utils/apiErrorHandler';
-import { normalizePagination } from '@/utils/pagination';
+import {
+  ADMIN_MOVIE_QUERY_DEFAULTS,
+  clearAdvancedMovieFilters,
+  parseAdminMovieQuery,
+  serializeAdminMovieQuery,
+  toMovieApiParams,
+} from '@/features/catalog/admin/utils/adminMovieQuery';
 
-export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
+const unwrapMoviePage = envelope => {
+  const page = envelope?.data;
+  if (
+    envelope?.success !== true
+    || !page
+    || !Array.isArray(page.data)
+    || !Number.isInteger(page.pageNo)
+    || !Number.isInteger(page.pageSize)
+    || typeof page.totalElements !== 'number'
+    || !Number.isInteger(page.totalPages)
+    || typeof page.last !== 'boolean'
+  ) {
+    throw new Error('Phản hồi danh sách phim không đúng định dạng.');
+  }
+  return page;
+};
+
+const unwrapGenres = envelope => {
+  const genres = envelope?.data?.content;
+  if (envelope?.success !== true || !Array.isArray(genres)) {
+    throw new Error('Phản hồi thể loại không đúng định dạng.');
+  }
+  return genres;
+};
+
+export default function useAdminMovies({ triggerConfirm, triggerToast, onMutation } = {}) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryString = searchParams.toString();
+  const query = useMemo(
+    () => parseAdminMovieQuery(new URLSearchParams(queryString)),
+    [queryString]
+  );
+
   const [movies, setMovies] = useState([]);
   const [genresList, setGenresList] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState('DRAFT');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [searchInput, setSearchInput] = useState(query.keyword);
+  const requestSequence = useRef(0);
+  const hasLoaded = useRef(false);
+
+  const canonicalQueryString = useMemo(
+    () => serializeAdminMovieQuery(query).toString(),
+    [query]
+  );
+
+  useEffect(() => {
+    if (canonicalQueryString !== queryString) {
+      setSearchParams(canonicalQueryString, { replace: true });
+    }
+  }, [canonicalQueryString, queryString, setSearchParams]);
+
+  const commitQuery = useCallback((changes, options = {}) => {
+    const { replace = false, resetPage = true } = options;
+    const resolvedChanges = typeof changes === 'function' ? changes(query) : changes;
+    const nextQuery = {
+      ...query,
+      ...resolvedChanges,
+      page: resetPage ? 0 : (resolvedChanges.page ?? query.page),
+    };
+    setSearchParams(serializeAdminMovieQuery(nextQuery), { replace });
+  }, [query, setSearchParams]);
+
+  useEffect(() => {
+    // URL navigation is authoritative for the transient search box.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSearchInput(query.keyword);
+  }, [query.keyword]);
+
+  useEffect(() => {
+    const keyword = searchInput.trim();
+    if (keyword === query.keyword) return undefined;
+    const timer = window.setTimeout(() => {
+      commitQuery({ keyword }, { replace: true, resetPage: true });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [commitQuery, query.keyword, searchInput]);
 
   const fetchGenres = useCallback(async () => {
     try {
-      const data = await adminGenreService.getAllGenres();
-      let list = data?.data?.content || data?.data || data?.content || data || [];
-      if (!Array.isArray(list)) list = [];
-      setGenresList(list);
-    } catch { /* ignore */ }
-  }, []);
+      const envelope = await adminGenreService.getAllGenres();
+      setGenresList(unwrapGenres(envelope));
+    } catch (err) {
+      triggerToast?.(parseApiError(err), 'error');
+    }
+  }, [triggerToast]);
 
   const fetchMovies = useCallback(async () => {
-    setIsLoading(true);
+    const requestId = ++requestSequence.current;
+    if (hasLoaded.current) setIsRefreshing(true);
+    else setIsInitialLoading(true);
+    setError('');
+
     try {
-      const params = {
-        page: currentPage,
-        size: pageSize,
-        status: statusFilter || undefined,
-      };
-      
-      const keyword = searchTerm?.trim();
-      if (keyword) {
-        params.keyword = keyword;
+      const envelope = await adminMovieService.getMovies(toMovieApiParams(query));
+      const page = unwrapMoviePage(envelope);
+      if (requestId !== requestSequence.current) return;
+
+      if (page.totalPages > 0 && query.page >= page.totalPages) {
+        commitQuery({ page: page.totalPages - 1 }, { replace: true, resetPage: false });
+        return;
       }
-      
-      const data = await adminMovieService.getMovies(params);
-      console.log("MOVIE API RESPONSE:", data);
-      const normalized = normalizePagination(data, pageSize);
-      console.log("NORMALIZED MOVIES:", {
-        statusFilter,
-        rawItemsCount: normalized.items?.length,
-        totalElements: normalized.totalElements,
-        totalPages: normalized.totalPages,
-        movies: normalized.items
-      });
-      setMovies(normalized.items);
-      setTotalElements(normalized.totalElements);
-      setTotalPages(normalized.totalPages);
-    } catch (error) {
-      console.error("API ERROR:", error);
-      triggerToast?.('Lỗi khi tải danh sách phim', 'error');
+      setMovies(page.data);
+      setTotalElements(page.totalElements);
+      setTotalPages(page.totalPages);
+      hasLoaded.current = true;
+    } catch (err) {
+      if (requestId !== requestSequence.current) return;
+      const message = parseApiError(err);
+      setError(message);
+      triggerToast?.(message, 'error');
     } finally {
-      setIsLoading(false);
+      if (requestId === requestSequence.current) {
+        setIsInitialLoading(false);
+        setIsRefreshing(false);
+      }
     }
-  }, [currentPage, pageSize, searchTerm, statusFilter, triggerToast]);
+  }, [commitQuery, query, triggerToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -65,42 +139,50 @@ export default function useAdminMovies({ triggerConfirm, triggerToast } = {}) {
   }, [fetchGenres]);
 
   useEffect(() => {
-    const t = setTimeout(fetchMovies, 300);
-    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchMovies();
   }, [fetchMovies]);
 
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchMovies(), onMutation?.()]);
+  }, [fetchMovies, onMutation]);
+
   const handleDelete = async (publicId, title) => {
-    const shouldDelete = triggerConfirm 
+    const shouldDelete = triggerConfirm
       ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)
       : window.confirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`);
-      
+
     if (!shouldDelete) return;
     try {
       await adminMovieService.deleteMovie(publicId);
       triggerToast?.('Đã xóa phim thành công!');
-      fetchMovies();
+      await refreshAll();
     } catch (err) {
       triggerToast?.(parseApiError(err), 'error');
     }
   };
 
+  const clearAdvancedFilters = useCallback(() => {
+    setSearchParams(serializeAdminMovieQuery(clearAdvancedMovieFilters(query)));
+  }, [query, setSearchParams]);
+
   return {
     movies,
     genresList,
     setGenresList,
-    isLoading,
-    setIsLoading,
-    currentPage,
-    setCurrentPage,
-    pageSize,
-    setPageSize,
-    statusFilter,
-    setStatusFilter,
-    searchTerm,
-    setSearchTerm,
+    query,
+    searchInput,
+    setSearchInput,
+    isInitialLoading,
+    isRefreshing,
+    error,
     totalElements,
     totalPages,
+    commitQuery,
+    clearAdvancedFilters,
     fetchMovies,
+    refreshAll,
     handleDelete,
+    defaults: ADMIN_MOVIE_QUERY_DEFAULTS,
   };
 }

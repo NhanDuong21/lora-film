@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,6 +57,7 @@ class ShowtimeSchedulePreviewMapperTest {
     void toItemResponse_shouldPassScoreBreakdown() {
         ShowtimeSchedulePreviewItem item = mock(ShowtimeSchedulePreviewItem.class);
         when(item.getPublicId()).thenReturn("item-1");
+        when(item.getServiceDate()).thenReturn(LocalDate.of(2026, 7, 24));
         when(item.getScore()).thenReturn(new BigDecimal("9.5"));
         when(item.getScoreBreakdown()).thenReturn(java.util.Map.of("baseScore", new BigDecimal("5.0"), "timeBonus", new BigDecimal("4.5")));
 
@@ -63,6 +65,7 @@ class ShowtimeSchedulePreviewMapperTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getItemPublicId()).isEqualTo("item-1");
+        assertThat(response.getServiceDate()).isEqualTo(LocalDate.of(2026, 7, 24));
         assertThat(response.getScore()).isEqualTo(new BigDecimal("9.5"));
         assertThat(response.getScoreBreakdown()).containsEntry("baseScore", new BigDecimal("5.0"))
                                                 .containsEntry("timeBonus", new BigDecimal("4.5"));

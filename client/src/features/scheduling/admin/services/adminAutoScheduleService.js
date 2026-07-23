@@ -6,8 +6,11 @@ const adminAutoScheduleService = {
     return response.data;
   },
 
-  getPreview: async (previewPublicId, params) => {
-    const response = await apiClient.get(`/api/admin/showtime-schedules/${previewPublicId}`, { params });
+  getPreview: async (previewPublicId, params, config = {}) => {
+    const response = await apiClient.get(`/api/admin/showtime-schedules/${previewPublicId}`, {
+      ...config,
+      params,
+    });
     return response.data;
   },
 

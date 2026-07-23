@@ -724,6 +724,9 @@ CREATE TABLE showtime_schedule_preview_items (
     occupancy_end_time TIMESTAMP NOT NULL
         COMMENT 'end_time cộng cleaning buffer tại thời điểm generate',
 
+    service_date DATE NULL
+        COMMENT 'Authoritative operating service date from the originating operating window',
+
     score DECIMAL(10, 3) NOT NULL DEFAULT 0,
 
     score_breakdown_json JSON NULL

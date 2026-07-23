@@ -18,6 +18,7 @@ public class AdminTmdbController {
     }
 
     @PostMapping("/approve")
+    @Deprecated(forRemoval = true)
     public ApiResponse<MovieDto> approveTmdbMovie(@Valid @RequestBody TmdbApproveRequest request) {
         return ApiResponse.ok(tmdbService.approveTmdbMovie(request.getTmdbId()));
     }

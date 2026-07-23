@@ -23,6 +23,11 @@ public enum ErrorCode {
     MOVIE_VERSION_NOT_ACTIVE("Movie version is not active", 400),
     MOVIE_VERSION_NOT_BELONG_TO_MOVIE("Movie version does not belong to the movie", 400),
     INVALID_MOVIE_DURATION("Invalid movie duration", 400),
+    INVALID_MOVIE_STATUS_TRANSITION("Invalid movie status transition", 400),
+    TMDB_IMPORT_INVALID_PAYLOAD("TMDB import payload is invalid", 400),
+    TMDB_MOVIE_REVIEW_NOT_APPLICABLE("TMDB review is not applicable to this movie", 400),
+    TMDB_PROVIDER_UNAVAILABLE("TMDB provider is unavailable", 502),
+    TMDB_PROVIDER_RESPONSE_INVALID("TMDB provider response is invalid", 502),
     COMPANY_DUPLICATED("Production company name already exists", 409),
 
     // --- Cinema & Auditorium Module ---
@@ -118,6 +123,8 @@ public enum ErrorCode {
     AUTO_SCHEDULE_ITEM_NOT_BELONG_TO_PREVIEW("Preview item does not belong to the preview", 400),
     AUTO_SCHEDULE_REJECTED_ITEM_CANNOT_BE_SELECTED("Rejected preview item cannot be selected", 400),
     AUTO_SCHEDULE_DUPLICATE_ITEM_SELECTION("Duplicate preview item found in selection request", 400),
+    AUTO_SCHEDULE_SELECTION_OVERLAP("Selected preview items overlap in an auditorium", 409),
+    AUTO_SCHEDULE_INVALID_ITEM_SELECTION("Preview item cannot be selected in its current state", 409),
     
     AUTO_SCHEDULE_INVALID_DATE_RANGE("Invalid auto schedule date range", 400),
     AUTO_SCHEDULE_DATE_RANGE_TOO_LARGE("Auto schedule date range exceeds maximum allowed days", 400),
@@ -127,6 +134,7 @@ public enum ErrorCode {
     AUTO_SCHEDULE_INVALID_PREVIEW_TTL("Invalid auto schedule preview TTL", 400),
     AUTO_SCHEDULE_TOO_MANY_CANDIDATES("Too many auto schedule candidates generated", 422),
     AUTO_SCHEDULE_GENERATION_FAILED("Auto schedule generation failed", 500),
+    AUTO_SCHEDULE_SELECTION_INVARIANT_VIOLATION("Optimized auto schedule selection is inconsistent", 500),
     
     AUTO_SCHEDULE_NO_SELECTED_ITEMS("No selected items to apply", 400),
     AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP("Selected items overlap with each other", 409),

@@ -21,7 +21,7 @@ export default function MovieOverviewTab({ movie, onUpdate }) {
           onClick={() => setIsEditModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-semibold rounded-lg transition-colors"
         >
-          <Pencil size={16} /> Chỉnh sửa metadata
+          <Pencil size={16} /> Chỉnh sửa thông tin phim
         </button>
       </div>
 
@@ -47,7 +47,7 @@ export default function MovieOverviewTab({ movie, onUpdate }) {
             
             {(movie.slug || movie.activeSlug) && (
               <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Đường dẫn (Slug)</label>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">Đường dẫn</label>
                 <div className="text-sm text-zinc-100 font-mono">{movie.slug || movie.activeSlug}</div>
               </div>
             )}
@@ -95,7 +95,7 @@ export default function MovieOverviewTab({ movie, onUpdate }) {
             )}
             
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Trạng thái (Read-only)</label>
+              <label className="block text-xs font-medium text-zinc-500 mb-1">Trạng thái (Chỉ đọc)</label>
               <div className="text-sm">
                 <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-wider ${statusCfg.colorClass}`}>
                   {statusCfg.label}
@@ -108,7 +108,7 @@ export default function MovieOverviewTab({ movie, onUpdate }) {
 
       {/* Nội dung */}
       <div className="bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800/50">
-        <h3 className="text-sm font-black uppercase tracking-wider text-amber-500 mb-4">Nội dung (Synopsis)</h3>
+        <h3 className="text-sm font-black uppercase tracking-wider text-amber-500 mb-4">Nội dung tóm tắt</h3>
         {movie.synopsis ? (
           <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">
             {movie.synopsis}

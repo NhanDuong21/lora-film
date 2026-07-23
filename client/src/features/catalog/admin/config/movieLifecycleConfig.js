@@ -2,19 +2,19 @@ export const MOVIE_TRANSITIONS = {
   DRAFT: [
     {
       target: 'UPCOMING',
-      label: 'Duyệt và chuyển sang Sắp chiếu',
+      label: 'Duyệt phim',
       variant: 'primary',
       requiresPublishChecklist: true,
-      confirmTitle: 'Duyệt phim và chuyển sang Sắp chiếu?',
-      confirmDescription: 'Phim sẽ xuất hiện trong nhóm Sắp chiếu sau khi chuyển trạng thái.'
+      confirmTitle: 'Duyệt phim?',
+      confirmDescription: 'Phim sẽ được chuyển sang trạng thái Sắp chiếu.'
     },
     {
       target: 'INACTIVE',
-      label: 'Chuyển sang Không hoạt động',
+      label: 'Không đưa vào khai thác',
       variant: 'danger',
       requiresPublishChecklist: false,
-      confirmTitle: 'Chuyển phim sang Không hoạt động?',
-      confirmDescription: 'Phim có thể không còn hiển thị trong các luồng vận hành thông thường.'
+      confirmTitle: 'Không đưa phim vào khai thác?',
+      confirmDescription: 'Phim sẽ rời hàng chờ duyệt và chuyển sang Không hoạt động. Đây không phải trạng thái từ chối có lịch sử riêng.'
     }
   ],
   UPCOMING: [
@@ -22,7 +22,7 @@ export const MOVIE_TRANSITIONS = {
       target: 'NOW_SHOWING',
       label: 'Bắt đầu công chiếu',
       variant: 'primary',
-      requiresPublishChecklist: false,
+      requiresPublishChecklist: true,
       confirmTitle: 'Bắt đầu công chiếu phim?',
       confirmDescription: 'Sau khi chuyển trạng thái, phim sẽ được hiển thị là Đang chiếu.'
     },

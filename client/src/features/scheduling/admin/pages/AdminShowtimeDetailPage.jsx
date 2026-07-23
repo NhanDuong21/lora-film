@@ -2,16 +2,11 @@ import { useState } from 'react';
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Calendar, MapPin, Clock, Film, RefreshCw, AlertCircle, Edit, DollarSign, History } from 'lucide-react';
 import useShowtimeDetail from '@/features/scheduling/admin/hooks/useShowtimeDetail';
-
-const formatTime = (isoString) => {
-  if (!isoString) return '';
-  return new Date(isoString).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '';
-  return new Date(dateStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
+import {
+  formatShowtimeCinemaDate,
+  formatShowtimeCinemaTime,
+  resolveShowtimeCinemaTimezone,
+} from '@/features/scheduling/admin/utils/showtimeCinemaDateTime';
 
 const formatCurrency = (amount, currency = 'VND') => {
   if (amount == null) return 'N/A';
@@ -70,6 +65,8 @@ const AdminShowtimeDetailPage = () => {
   }
 
   const transitions = getAvailableTransitions(showtime.status);
+  const cinemaTimezone = showtime.cinema?.timezone;
+  const timezoneResolution = resolveShowtimeCinemaTimezone(cinemaTimezone);
 
   const confirmTransition = async () => {
     await handleUpdateStatus(targetStatus, statusReason);
@@ -168,18 +165,26 @@ const AdminShowtimeDetailPage = () => {
                     <MapPin className="w-4 h-4 text-zinc-400" />
                     <span>{showtime.cinema?.name} - Phòng: <strong>{showtime.auditorium?.name}</strong></span>
                   </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Múi giờ: {timezoneResolution.usedFallback ? 'UTC dự phòng' : timezoneResolution.timezone}
+                  </p>
                 </div>
                 <div>
                   <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Thời gian</span>
                   <p className="text-white mt-1 flex items-center gap-2 text-lg">
                     <Clock className="w-4 h-4 text-zinc-400" />
-                    <span className="font-bold text-brand-orange">{formatTime(showtime.startTime)}</span>
+                    <span className="font-bold text-brand-orange">{formatShowtimeCinemaTime(showtime.startTime, cinemaTimezone)}</span>
                     <span className="text-zinc-500 text-sm">đến</span>
-                    <span className="font-bold">{formatTime(showtime.endTime)}</span>
+                    <span className="font-bold">{formatShowtimeCinemaTime(showtime.endTime, cinemaTimezone)}</span>
                   </p>
                   <p className="text-sm text-zinc-400 mt-1 flex items-center gap-2">
-                    <Calendar className="w-3 h-3" /> Ngày {formatDate(showtime.startTime)}
+                    <Calendar className="w-3 h-3" /> Ngày {formatShowtimeCinemaDate(showtime.startTime, cinemaTimezone)}
                   </p>
+                  {timezoneResolution.usedFallback && (
+                    <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-300" role="status">
+                      Múi giờ cụm rạp không hợp lệ hoặc bị thiếu; thời gian đang hiển thị theo UTC dự phòng.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -234,7 +239,7 @@ const AdminShowtimeDetailPage = () => {
                           {h.newStatus}
                         </span>
                         <time className="text-[10px] text-zinc-500 font-medium">
-                          {formatTime(h.changedAt)} - {formatDate(h.changedAt)}
+                          {formatShowtimeCinemaTime(h.changedAt, cinemaTimezone)} - {formatShowtimeCinemaDate(h.changedAt, cinemaTimezone)}
                         </time>
                       </div>
                       {h.reason && <p className="text-xs text-zinc-400 mt-2 bg-zinc-900/50 p-2 rounded">{h.reason}</p>}

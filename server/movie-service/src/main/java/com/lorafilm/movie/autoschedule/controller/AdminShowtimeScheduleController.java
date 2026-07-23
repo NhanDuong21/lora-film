@@ -2,9 +2,13 @@ package com.lorafilm.movie.autoschedule.controller;
 
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
 import com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery;
+import com.lorafilm.movie.autoschedule.dto.request.AutoSchedulePreviewHistoryQuery;
+import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePreviewHistoryItemResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
+import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewHistoryService;
 import com.lorafilm.movie.autoschedule.service.ShowtimeSchedulePreviewService;
+import com.lorafilm.movie.common.dto.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -21,21 +25,43 @@ import org.springdoc.core.annotations.ParameterObject;
 public class AdminShowtimeScheduleController {
 
     private final ShowtimeSchedulePreviewService service;
+    private final AutoSchedulePreviewHistoryService historyService;
     private final com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService;
     private final com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService applyService;
     private final com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider;
     private final com.lorafilm.movie.autoschedule.service.AutoScheduleEligibilityService eligibilityService;
 
     public AdminShowtimeScheduleController(ShowtimeSchedulePreviewService service,
+                                           AutoSchedulePreviewHistoryService historyService,
                                            com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService,
                                            com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService applyService,
                                            com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider,
                                            com.lorafilm.movie.autoschedule.service.AutoScheduleEligibilityService eligibilityService) {
         this.service = service;
+        this.historyService = historyService;
         this.generationService = generationService;
         this.applyService = applyService;
         this.currentUserProvider = currentUserProvider;
         this.eligibilityService = eligibilityService;
+    }
+
+    @Operation(summary = "Get preview history", description = "Retrieves a filtered page of auto schedule preview summaries without loading preview items.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Preview history retrieved"),
+        @ApiResponse(responseCode = "400", description = "Invalid filter, pagination, or sort"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<PageResponse<AutoSchedulePreviewHistoryItemResponse>>> getPreviewHistory(
+            @Valid @ParameterObject AutoSchedulePreviewHistoryQuery query
+    ) {
+        PageResponse<AutoSchedulePreviewHistoryItemResponse> response = historyService.getHistory(query);
+        return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok(
+                "Auto schedule preview history retrieved successfully",
+                response
+        ));
     }
 
     @Operation(summary = "Get preview details", description = "Retrieves the persisted auto schedule preview and its candidates.")
@@ -69,6 +95,7 @@ public class AdminShowtimeScheduleController {
         @ApiResponse(responseCode = "403", description = "Forbidden"),
         @ApiResponse(responseCode = "404", description = "Related entities not found"),
         @ApiResponse(responseCode = "409", description = "Conflict, e.g. idempotency key reused"),
+        @ApiResponse(responseCode = "422", description = "Candidate limit exceeded"),
         @ApiResponse(responseCode = "500", description = "Auto schedule generation failed")
     })
     @PostMapping("/generate-preview")
@@ -84,14 +111,17 @@ public class AdminShowtimeScheduleController {
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview generated successfully", response));
     }
 
-    @Operation(summary = "Update preview item selections", description = "Update the selection status of candidate items in a preview.")
+    @Operation(
+        summary = "Update preview item selections",
+        description = "Atomically updates a partial set of candidate selections. The complete final selected set must have non-overlapping half-open occupancy intervals within each auditorium."
+    )
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Selections updated"),
         @ApiResponse(responseCode = "400", description = "Invalid selection request"),
         @ApiResponse(responseCode = "401", description = "Unauthorized"),
         @ApiResponse(responseCode = "403", description = "Forbidden"),
         @ApiResponse(responseCode = "404", description = "Preview or item not found"),
-        @ApiResponse(responseCode = "409", description = "Expired, non-editable, or version conflict")
+        @ApiResponse(responseCode = "409", description = "Expired, non-editable, stale version, invalid item state, or final-set occupancy overlap")
     })
     @PutMapping("/{previewPublicId}/items")
     @PreAuthorize("hasRole('ADMIN')")

@@ -1,121 +1,218 @@
-import React from 'react';
-import { Info, CheckCircle2, Clock } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Minus,
+  Search,
+  Star,
+} from 'lucide-react';
+import {
+  buildDynamicTimelineWindow,
+  formatServiceDateKey,
+  formatTimelineMinute,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
+import { TIMELINE_ZOOM_MODES } from '@/features/scheduling/admin/utils/autoSchedulePreviewViewModel';
 
-const formatTime = (isoString) => {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-};
+const LABEL_WIDTH = 144;
+const FALLBACK_VIEWPORT_WIDTH = 960;
 
-// Calculate left position and width based on time within 08:00 to 24:00 range
-const getStylesForTimeRange = (startIso, endIso) => {
-  const START_HOUR = 8;
-  const END_HOUR = 24;
-  const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
+const ZOOM_OPTIONS = [
+  { value: TIMELINE_ZOOM_MODES.FIT, label: 'Vừa khung' },
+  { value: TIMELINE_ZOOM_MODES.COMPACT, label: '30 px/giờ' },
+  { value: TIMELINE_ZOOM_MODES.COMFORTABLE, label: '60 px/giờ' },
+  { value: TIMELINE_ZOOM_MODES.DETAILED, label: '120 px/giờ' },
+];
 
-  const startDate = new Date(startIso);
-  const endDate = new Date(endIso);
-
-  const startMinutes = (startDate.getHours() * 60 + startDate.getMinutes()) - (START_HOUR * 60);
-  const endMinutes = (endDate.getHours() * 60 + endDate.getMinutes()) - (START_HOUR * 60);
-
-  const leftPercent = Math.max(0, (startMinutes / TOTAL_MINUTES) * 100);
-  let widthPercent = ((endMinutes - startMinutes) / TOTAL_MINUTES) * 100;
-  
-  // Handle cross-midnight by capping at 100%
-  if (endDate.getDate() > startDate.getDate() || endDate.getHours() < START_HOUR) {
-    widthPercent = 100 - leftPercent;
+const getStatePresentation = candidate => {
+  if (candidate.diagnostic) {
+    return { marker: 'Chẩn đoán', icon: Search, className: 'border-dashed border-white/80' };
   }
-
-  return {
-    left: `${leftPercent}%`,
-    width: `${Math.max(2, widthPercent)}%` // min width 2%
-  };
+  if (candidate.applyStatus === 'CREATED') {
+    return { marker: 'Đã tạo', icon: CheckCircle2, className: 'border-solid' };
+  }
+  if (candidate.applyStatus === 'CONFLICT') {
+    return { marker: 'Xung đột', icon: AlertTriangle, className: 'border-dashed border-red-200' };
+  }
+  if (candidate.applyStatus === 'FAILED') {
+    return { marker: 'Thất bại', icon: AlertTriangle, className: 'border-dashed border-red-200' };
+  }
+  if (candidate.applyStatus === 'SKIPPED') {
+    return { marker: 'Bỏ qua', icon: Minus, className: 'border-solid opacity-75' };
+  }
+  if (candidate.selected) {
+    return { marker: 'Đã chọn', icon: Star, className: 'border-solid' };
+  }
+  return { marker: 'Đang chờ', icon: Clock3, className: 'border-solid' };
 };
 
 const AutoScheduleTimeline = ({
-  groupedItems,
-  selectedItemIds,
-  handleToggleSelection,
-  isCheckboxDisabledFunc,
-  checkOverlapFunc
+  serviceDate,
+  candidates,
+  auditoriums,
+  zoomMode,
+  onZoomChange,
+  onOpenDetails,
 }) => {
+  const viewportRef = useRef(null);
+  const [viewportWidth, setViewportWidth] = useState(FALLBACK_VIEWPORT_WIDTH);
+  const timelineWindow = useMemo(
+    () => buildDynamicTimelineWindow(candidates),
+    [candidates],
+  );
 
-  const hours = Array.from({ length: 17 }, (_, i) => i + 8); // 8 to 24
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (!node) return undefined;
+
+    const measure = () => {
+      const nextWidth = node.clientWidth || FALLBACK_VIEWPORT_WIDTH;
+      setViewportWidth(previous => Math.abs(previous - nextWidth) > 1 ? nextWidth : previous);
+    };
+    const frame = requestAnimationFrame(measure);
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    observer?.observe(node);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
+  const durationHours = timelineWindow ? timelineWindow.totalMinutes / 60 : 1;
+  const fitWidth = Math.max(viewportWidth - LABEL_WIDTH - 32, 320);
+  const pixelsPerHour = zoomMode === TIMELINE_ZOOM_MODES.FIT
+    ? fitWidth / durationHours
+    : Number(zoomMode);
+  const contentWidth = zoomMode === TIMELINE_ZOOM_MODES.FIT
+    ? fitWidth
+    : Math.max(durationHours * pixelsPerHour, 1);
+  const timelineItemsByAuditorium = useMemo(() => {
+    const groups = new Map();
+    (candidates || []).forEach(candidate => {
+      if (!candidate.timelineEligible) return;
+      if (!groups.has(candidate.auditoriumKey)) groups.set(candidate.auditoriumKey, []);
+      groups.get(candidate.auditoriumKey).push(candidate);
+    });
+    groups.forEach(items => items.sort((left, right) => (
+      left.startMinuteOffset - right.startMinuteOffset || left.id.localeCompare(right.id)
+    )));
+    return groups;
+  }, [candidates]);
+  const invalidCount = (candidates || []).filter(candidate => !candidate.timelineEligible).length;
 
   return (
-    <div className="space-y-12 w-full max-w-full overflow-x-auto">
-      {Object.keys(groupedItems).sort().map(dateKey => (
-        <div key={dateKey} className="space-y-6 min-w-[800px]">
-          <h2 className="text-lg font-black text-white flex items-center gap-3 border-b border-zinc-800 pb-2 sticky left-0">
-            {new Date(dateKey).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
-          </h2>
+    <section className="space-y-4" aria-label={`Timeline ${formatServiceDateKey(serviceDate)}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-black text-white">{formatServiceDateKey(serviceDate, { weekday: true })}</h2>
+          <p className="mt-1 text-xs text-zinc-500">Thời gian rạp · phạm vi tự động theo thời gian chiếm phòng</p>
+        </div>
+        <div className="flex flex-wrap gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1" role="group" aria-label="Mức thu phóng timeline">
+          {ZOOM_OPTIONS.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={zoomMode === option.value}
+              onClick={() => onZoomChange(option.value)}
+              className={`rounded-lg px-3 py-2 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange ${zoomMode === option.value ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-          <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4">
-            {/* Timeline Header (Hours) */}
-            <div className="flex relative border-b border-zinc-800 pb-2 mb-4 ml-28">
-              {hours.map(hour => (
-                <div key={hour} className="flex-1 text-left text-[10px] font-bold text-zinc-500 border-l border-zinc-800/50 pl-1">
-                  {String(hour).padStart(2, '0')}:00
-                </div>
-              ))}
+      {invalidCount > 0 && (
+        <p className="flex items-center gap-2 text-sm text-amber-300" role="status">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          {invalidCount} ứng viên có thời gian không hợp lệ đã được bỏ qua khỏi timeline.
+        </p>
+      )}
+
+      <div ref={viewportRef} className="max-w-full overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/40" data-zoom-mode={zoomMode} data-pixels-per-hour={pixelsPerHour.toFixed(2)}>
+        {!timelineWindow ? (
+          <div className="p-8 text-center text-sm text-zinc-500">
+            Chưa có đề xuất hợp lệ để dựng trục thời gian cho ngày này.
+          </div>
+        ) : (
+          <div style={{ width: `${LABEL_WIDTH + contentWidth}px` }}>
+            <div className="sticky top-0 z-10 grid border-b border-zinc-800 bg-zinc-950/95" style={{ gridTemplateColumns: `${LABEL_WIDTH}px ${contentWidth}px` }}>
+              <div className="sticky left-0 z-20 border-r border-zinc-800 bg-zinc-950 px-3 py-3 text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                Phòng chiếu
+              </div>
+              <div className="relative h-11" data-testid="timeline-ruler" style={{ width: `${contentWidth}px` }}>
+                {timelineWindow.ticks.map(tick => {
+                  const left = ((tick - timelineWindow.startMinute) / timelineWindow.totalMinutes) * 100;
+                  return (
+                    <div key={tick} className="absolute inset-y-0 border-l border-zinc-700/70" style={{ left: `${left}%` }}>
+                      <span className="absolute left-1 top-2 whitespace-nowrap text-[10px] font-bold text-zinc-500">{formatTimelineMinute(tick)}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Auditorium Rows */}
-            <div className="space-y-4">
-              {Object.keys(groupedItems[dateKey]).sort().map(audKey => {
-                const audItems = groupedItems[dateKey][audKey];
-                
+            <div>
+              {(auditoriums || []).map(auditorium => {
+                const rowCandidates = timelineItemsByAuditorium.get(auditorium.key) || [];
                 return (
-                  <div key={audKey} className="flex items-stretch gap-4 relative group">
-                    <div className="w-24 flex-shrink-0 flex items-center border-r border-zinc-800 pr-2">
-                      <span className="text-xs font-bold text-zinc-300 truncate" title={audKey}>{audKey}</span>
+                  <div key={auditorium.key} className="grid min-h-[76px] border-b border-zinc-800/70 last:border-b-0" style={{ gridTemplateColumns: `${LABEL_WIDTH}px ${contentWidth}px` }}>
+                    <div className="sticky left-0 z-10 flex items-center border-r border-zinc-800 bg-zinc-900 px-3 py-2">
+                      <span className="truncate text-xs font-bold text-zinc-200" title={auditorium.name}>{auditorium.name}</span>
                     </div>
-
-                    <div className="flex-1 relative h-14 bg-zinc-950/50 rounded-lg overflow-hidden border border-zinc-800/50">
-                      {/* Grid Lines */}
-                      <div className="absolute inset-0 flex pointer-events-none">
-                        {hours.map(hour => (
-                          <div key={hour} className="flex-1 border-r border-zinc-800/30 h-full"></div>
-                        ))}
-                      </div>
-
-                      {/* Items */}
-                      {audItems.map(item => {
-                        const isValid = item.validationStatus === 'VALID';
-                        const isSelected = selectedItemIds.has(item.itemPublicId);
-                        const isItemApplied = item.applyStatus === 'APPLIED';
-                        
-                        let isConflicting = false;
-                        if (isValid && !isSelected && !isItemApplied) {
-                          isConflicting = checkOverlapFunc(item, audItems, selectedItemIds);
-                        }
-
-                        const isDisabled = isCheckboxDisabledFunc(isConflicting);
-                        const { left, width } = getStylesForTimeRange(item.startTime, item.endTime);
-
-                        let bgColor = 'bg-zinc-800 border-zinc-700 text-zinc-400';
-                        if (isItemApplied) bgColor = 'bg-green-500/20 border-green-500/50 text-green-300';
-                        else if (!isValid) bgColor = 'bg-red-500/20 border-red-500/50 text-red-300';
-                        else if (isConflicting) bgColor = 'bg-red-500/10 border-red-500/30 text-red-500/50 grayscale opacity-50';
-                        else if (isSelected) bgColor = 'bg-brand-orange text-zinc-950 border-brand-orange shadow-[0_0_10px_rgba(255,165,0,0.3)]';
-                        else bgColor = 'bg-blue-500/20 border-blue-500/40 text-blue-300 cursor-pointer hover:bg-blue-500/40 hover:border-blue-400';
+                    <div className="relative my-2 h-[60px] bg-zinc-950/45" data-testid={`timeline-track-${auditorium.key}`} style={{ width: `${contentWidth}px` }}>
+                      {timelineWindow.ticks.map(tick => (
+                        <div key={tick} className="pointer-events-none absolute inset-y-0 border-l border-zinc-800/60" style={{ left: `${((tick - timelineWindow.startMinute) / timelineWindow.totalMinutes) * 100}%` }} />
+                      ))}
+                      {rowCandidates.length === 0 && (
+                        <span className="absolute inset-0 flex items-center px-4 text-xs text-zinc-600">Chưa có đề xuất đã chọn</span>
+                      )}
+                      {rowCandidates.map(candidate => {
+                        const state = getStatePresentation(candidate);
+                        const StateIcon = state.icon;
+                        const totalDuration = candidate.occupancyEndMinuteOffset - candidate.startMinuteOffset;
+                        const runtimeDuration = candidate.endMinuteOffset - candidate.startMinuteOffset;
+                        const left = ((candidate.startMinuteOffset - timelineWindow.startMinute) / timelineWindow.totalMinutes) * 100;
+                        const width = (totalDuration / timelineWindow.totalMinutes) * 100;
+                        const runtimeWidth = totalDuration > 0 ? (runtimeDuration / totalDuration) * 100 : 100;
+                        const cleaningWidth = Math.max(100 - runtimeWidth, 0);
 
                         return (
-                          <div
-                            key={item.itemPublicId}
-                            onClick={() => {
-                              if (isValid && !isItemApplied && !isDisabled) {
-                                handleToggleSelection(item.itemPublicId, isSelected);
-                              }
-                            }}
-                            className={`absolute top-1 bottom-1 rounded border overflow-hidden flex flex-col justify-center px-1.5 transition-all ${bgColor} ${isDisabled && !isSelected && isValid ? 'cursor-not-allowed' : ''}`}
-                            style={{ left, width }}
-                            title={`${item.movieTitle}\n${formatTime(item.startTime)} - ${formatTime(item.endTime)}\n${!isValid ? 'Từ chối' : isConflicting ? 'Xung đột' : ''}`}
+                          <button
+                            key={candidate.id}
+                            type="button"
+                            onClick={event => onOpenDetails(candidate, event.currentTarget)}
+                            aria-label={`${candidate.diagnostic ? 'Ứng viên chẩn đoán. ' : ''}${candidate.movieTitle}, ${candidate.startTimeDisplay}, ${state.marker}. Mở chi tiết`}
+                            data-testid={`timeline-candidate-${candidate.id}`}
+                            data-palette-index={candidate.palette.index}
+                            data-state-marker={state.marker}
+                            data-diagnostic={candidate.diagnostic ? 'true' : 'false'}
+                            className={`absolute top-1 h-[52px] min-w-11 overflow-hidden rounded-lg border-2 text-left shadow-lg transition-transform hover:z-20 hover:scale-[1.02] focus-visible:z-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${state.className}`}
+                            style={{ left: `${left}%`, width: `${width}%`, borderColor: candidate.diagnostic ? '#ffffff' : candidate.palette.border }}
                           >
-                            <span className="text-[9px] font-bold truncate leading-tight whitespace-nowrap">{item.movieTitle}</span>
-                            <span className="text-[8px] opacity-80 truncate leading-tight">{formatTime(item.startTime)}-{formatTime(item.endTime)}</span>
-                          </div>
+                            <span className="absolute inset-y-0 left-0" data-testid={`runtime-segment-${candidate.id}`} style={{ width: `${runtimeWidth}%`, backgroundColor: candidate.palette.solid }} />
+                            {cleaningWidth > 0 && (
+                              <span
+                                className="absolute inset-y-0 right-0 border-l border-black/25"
+                                data-testid={`cleaning-segment-${candidate.id}`}
+                                aria-label={`Dọn phòng đến ${candidate.occupancyEndTimeDisplay}`}
+                                style={{
+                                  width: `${cleaningWidth}%`,
+                                  backgroundColor: candidate.palette.cleaning,
+                                  backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.55) 0 2px, transparent 2px 6px)',
+                                }}
+                              />
+                            )}
+                            <span className="relative z-10 flex h-full min-w-0 flex-col justify-center px-2" style={{ color: candidate.palette.text }}>
+                              <span className="flex items-center gap-1 truncate text-[10px] font-black">
+                                <StateIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                <span className="truncate">{candidate.movieTitle}</span>
+                              </span>
+                              <span className="truncate text-[9px] font-bold opacity-80">{candidate.startTimeDisplay} · {state.marker}</span>
+                            </span>
+                          </button>
                         );
                       })}
                     </div>
@@ -124,9 +221,9 @@ const AutoScheduleTimeline = ({
               })}
             </div>
           </div>
-        </div>
-      ))}
-    </div>
+        )}
+      </div>
+    </section>
   );
 };
 
