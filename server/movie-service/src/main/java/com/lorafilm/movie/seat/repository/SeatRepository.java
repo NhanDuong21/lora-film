@@ -55,6 +55,14 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
            "AND st.deletedAt IS NULL AND st.status = 'ACTIVE'")
     List<String> findActiveSeatTypePublicIdsByAuditoriumId(@Param("auditoriumId") Long auditoriumId);
 
+    @Query("SELECT DISTINCT st FROM Seat s JOIN s.seatType st " +
+           "WHERE s.auditorium.id = :auditoriumId " +
+           "AND s.deletedAt IS NULL AND s.status IN ('ACTIVE', 'MAINTENANCE') " +
+           "AND st.deletedAt IS NULL AND st.status = 'ACTIVE' " +
+           "ORDER BY st.publicId ASC")
+    List<com.lorafilm.movie.seat.domain.entity.SeatType> findActiveSeatTypesByAuditoriumId(
+            @Param("auditoriumId") Long auditoriumId);
+
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"seatType"})
     List<Seat> findByAuditoriumIdAndDeletedAtIsNull(Long auditoriumId);
     
