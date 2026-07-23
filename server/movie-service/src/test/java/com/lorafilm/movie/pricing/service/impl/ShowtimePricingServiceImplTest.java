@@ -11,6 +11,7 @@ import com.lorafilm.movie.pricing.dto.request.UpdateShowtimePricesRequest;
 import com.lorafilm.movie.pricing.dto.response.ShowtimePricesResponse;
 import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
@@ -67,11 +68,15 @@ public class ShowtimePricingServiceImplTest {
         vipSeatType = new SeatType();
         vipSeatType.setId(1L);
         vipSeatType.setPublicId("vip-id");
+        vipSeatType.setName("Ghế VIP");
+        vipSeatType.setCode(SeatTypeCode.VIP);
         vipSeatType.setStatus(ActiveStatus.ACTIVE);
 
         standardSeatType = new SeatType();
         standardSeatType.setId(2L);
         standardSeatType.setPublicId("standard-id");
+        standardSeatType.setName("Ghế tiêu chuẩn");
+        standardSeatType.setCode(SeatTypeCode.STANDARD);
         standardSeatType.setStatus(ActiveStatus.ACTIVE);
     }
 
@@ -106,6 +111,8 @@ public class ShowtimePricingServiceImplTest {
         assertEquals(1, response.getPrices().size());
         assertEquals(new BigDecimal("100000"), response.getPrices().get(0).getPrice());
         assertEquals("vip-id", response.getPrices().get(0).getSeatTypeId());
+        assertEquals("Ghế VIP", response.getPrices().get(0).getSeatTypeName());
+        assertEquals("VIP", response.getPrices().get(0).getSeatTypeCode());
     }
 
     @Test

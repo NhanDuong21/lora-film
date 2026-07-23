@@ -110,7 +110,11 @@ public class ShowtimePricingServiceImpl implements ShowtimePricingService {
         List<ShowtimePrice> prices = showtimePriceRepository.findByShowtimeIdWithSeatType(showtime.getId());
         
         List<ShowtimePriceDto> dtos = prices.stream()
-                .map(p -> new ShowtimePriceDto(p.getSeatType().getPublicId(), p.getPrice()))
+                .map(p -> new ShowtimePriceDto(
+                        p.getSeatType().getPublicId(),
+                        p.getSeatType().getName(),
+                        p.getSeatType().getCode().name(),
+                        p.getPrice()))
                 .collect(Collectors.toList());
 
         String currency = "VND";
