@@ -22,28 +22,28 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BaseException.class)
     public ResponseEntity<ErrorResponse> handleBaseException(BaseException ex) {
-        log.error("BaseException occurred: [{}] {}", ex.getErrorCode(), ex.getMessage());
+        log.warn("BaseException occurred: [{}] {}", ex.getErrorCode(), ex.getMessage(), ex);
         ErrorResponse errorResponse = new ErrorResponse(ex.getErrorCode(), ex.getMessage());
         return new ResponseEntity<>(errorResponse, ex.getStatus());
     }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException ex) {
-        log.error("BusinessException occurred: [{}] {}", ex.getErrorCode(), ex.getMessage());
+        log.warn("BusinessException occurred: [{}] {}", ex.getErrorCode(), ex.getMessage(), ex);
         ErrorResponse errorResponse = new ErrorResponse(ex.getErrorCode(), ex.getMessage());
         return new ResponseEntity<>(errorResponse, ex.getStatus());
     }
 
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(ValidationException ex) {
-        log.error("ValidationException occurred: [{}] {}", ex.getErrorCode(), ex.getMessage());
+        log.warn("ValidationException occurred: [{}] {}", ex.getErrorCode(), ex.getMessage(), ex);
         ErrorResponse errorResponse = new ErrorResponse(ex.getErrorCode(), ex.getMessage());
         return new ResponseEntity<>(errorResponse, ex.getStatus());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
-        log.error("Validation failed for request: {}", ex.getMessage());
+        log.warn("Validation failed for request: {}", ex.getMessage(), ex);
         List<ErrorResponse.ValidationErrorDetail> details = new ArrayList<>();
         ex.getBindingResult().getFieldErrors().forEach(fieldError ->
                 details.add(new ErrorResponse.ValidationErrorDetail(fieldError.getField(), fieldError.getDefaultMessage()))
@@ -54,7 +54,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
-        log.error("Constraint violation: {}", ex.getMessage());
+        log.warn("Constraint violation: {}", ex.getMessage(), ex);
         List<ErrorResponse.ValidationErrorDetail> details = new ArrayList<>();
         ex.getConstraintViolations().forEach(violation ->
                 details.add(new ErrorResponse.ValidationErrorDetail(violation.getPropertyPath().toString(), violation.getMessage()))
@@ -65,14 +65,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
-        log.error("IllegalArgumentException: {}", ex.getMessage());
+        log.warn("IllegalArgumentException occurred: {}", ex.getMessage(), ex);
         ErrorResponse errorResponse = new ErrorResponse("ILLEGAL_ARGUMENT", ex.getMessage());
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        log.error("Invalid request parameter {}: {}", ex.getName(), ex.getValue());
+        log.warn("Invalid request parameter {}: {}", ex.getName(), ex.getValue(), ex);
         ErrorResponse errorResponse = new ErrorResponse(
                 "INVALID_REQUEST_PARAMETER",
                 "Invalid value for parameter: " + ex.getName());
@@ -81,7 +81,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableMessage(HttpMessageNotReadableException ex) {
-        log.error("Malformed request body: {}", ex.getMessage());
+        log.warn("Malformed request body: {}", ex.getMessage(), ex);
         ErrorResponse errorResponse = new ErrorResponse(
                 "MALFORMED_REQUEST_BODY",
                 "Request body is malformed or contains an unsupported value");
