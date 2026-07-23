@@ -66,6 +66,11 @@ const getSelectionBackendErrorMessage = (error, fallbackMessage) => {
   }
 };
 
+const createUuid = () => (
+  globalThis.crypto?.randomUUID?.()
+  || `apply-${Date.now()}-${Math.random().toString(16).slice(2)}`
+);
+
 const readPage = response => {
   if (!response?.success || !response.data?.preview || !response.data?.items) {
     throw createLoadError('INVALID_RESPONSE', 'Phản hồi bản xem trước không đầy đủ.');
@@ -84,6 +89,7 @@ export default function useAutoSchedulePreview(
   const [isUpdatingSelection, setIsUpdatingSelection] = useState(false);
   const snapshotRef = useRef(snapshot);
   const activeLoadRef = useRef({ generation: 0, controller: null });
+  const applyIdempotencyRef = useRef({ fingerprint: '', key: '' });
 
   const updateSnapshot = useCallback(updater => {
     setSnapshot(previous => {
@@ -385,25 +391,34 @@ export default function useAutoSchedulePreview(
   const handleApply = async () => {
     if (!capabilities.canApply) {
       triggerToast?.('Bản xem trước chưa sẵn sàng để áp dụng.', 'error');
-      return;
+      return null;
     }
 
     setIsApplying(true);
     try {
+      const selectionFingerprint = Array.from(snapshot.selectedItemIds).sort().join(',');
+      const fingerprint = `${previewPublicId}:${snapshot.expectedVersion}:${selectionFingerprint}`;
+      if (applyIdempotencyRef.current.fingerprint !== fingerprint) {
+        applyIdempotencyRef.current = { fingerprint, key: createUuid() };
+      }
       const payload = {
         expectedVersion: snapshot.expectedVersion,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: applyIdempotencyRef.current.key,
       };
       const response = await adminAutoScheduleService.applyPreview(previewPublicId, payload);
       if (response?.success) {
         triggerToast?.('Đã áp dụng lịch chiếu thành công', 'success');
-        onSuccess?.();
+        applyIdempotencyRef.current = { fingerprint: '', key: '' };
+        onSuccess?.(response.data);
+        return response.data;
       }
+      return null;
     } catch (error) {
       const message = error?.response?.data?.message
         || error?.message
         || 'Lỗi áp dụng lịch chiếu';
       triggerToast?.(message, 'error');
+      return null;
     } finally {
       setIsApplying(false);
     }

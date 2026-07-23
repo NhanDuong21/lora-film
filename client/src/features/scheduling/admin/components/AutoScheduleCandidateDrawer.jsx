@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, ExternalLink, Eye, X } from 'lucide-react';
 import { formatServiceDateKey } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
+import { getCandidateValidationPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
@@ -119,8 +120,9 @@ const AutoScheduleCandidateDrawer = ({
             <DetailRow label="Bắt đầu">{candidate.startDateTimeDisplay}</DetailRow>
             <DetailRow label="Kết thúc phim">{candidate.endDateTimeDisplay}</DetailRow>
             <DetailRow label="Hết chiếm phòng">{candidate.occupancyEndDateTimeDisplay}</DetailRow>
-            <DetailRow label="Điểm / hạng">{candidate.score ?? '—'} / {candidate.rank ?? '—'}</DetailRow>
-            <DetailRow label="Xác thực">{candidate.validationStatus}</DetailRow>
+            <DetailRow label="Điểm ưu tiên">{candidate.score ?? '—'} <span className="text-xs text-zinc-500">(cao hơn tốt hơn)</span></DetailRow>
+            <DetailRow label="Hạng toàn cục">{candidate.rank ?? '—'} <span className="text-xs text-zinc-500">(thứ tự hiển thị, không phải thứ tự chọn)</span></DetailRow>
+            <DetailRow label="Kiểm tra">{getCandidateValidationPresentation(candidate.validationStatus).label}</DetailRow>
             <DetailRow label="Áp dụng">{candidate.applyState.label}</DetailRow>
             <DetailRow label="Lý do">{candidate.conciseReason || 'Không có'}</DetailRow>
             {candidate.createdShowtimePath && (

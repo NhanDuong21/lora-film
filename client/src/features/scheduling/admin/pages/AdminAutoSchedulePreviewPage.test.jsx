@@ -37,6 +37,7 @@ const preview = (status = 'PREVIEWED', overrides = {}) => ({
   cinemaName: 'Lora Cinema',
   scheduleFrom: '2026-07-24',
   scheduleTo: '2026-07-26',
+  generatedAt: '2026-07-23T10:00:00Z',
   expiresAt: '2099-07-24T12:00:00Z',
   applyMode: 'ALL_OR_NOTHING',
   totalCandidateCount: 1,
@@ -119,6 +120,9 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(screen.getByRole('button', { name: '25/07/2026' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('timeline-candidate-item-2')).toBeInTheDocument();
     expect(screen.queryByTestId('timeline-candidate-item-1')).not.toBeInTheDocument();
+    expect(screen.getByText('Tạo lúc 10:00 23/07/2026')).toBeInTheDocument();
+    expect(screen.getByText(/Mã rút gọn:/)).toHaveTextContent('PREVIEW1');
+    expect(screen.getByText('previewPublicId: preview-1')).toBeInTheDocument();
   });
 
   it('uses authoritative serviceDate for after-midnight candidates and extends the axis beyond 24:00', () => {
@@ -163,7 +167,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     useAutoSchedulePreview.mockReturnValue(value);
     renderPage();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Bị từ chối \/ xung đột \(2\)/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Không hợp lệ \/ xung đột \(2\)/i }));
     const overlayActions = screen.getAllByRole('button', { name: 'Xem trên timeline' });
     fireEvent.click(overlayActions[0]);
     expect(screen.getByRole('button', { name: '25/07/2026' })).toHaveAttribute('aria-pressed', 'true');
@@ -192,7 +196,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     useAutoSchedulePreview.mockReturnValue(hookValue({ items, selectedIds: new Set(['item-1']) }));
     renderPage();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Bị từ chối \/ xung đột/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Không hợp lệ \/ xung đột/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Xem trên timeline' }));
     expect(screen.getByRole('status')).toHaveTextContent('xung đột khoảng chiếm phòng');
     expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('dữ liệu đầy đủ 2 ứng viên');
@@ -211,8 +215,11 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(within(rows[0]).getByText('Phim 1')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Phim 2')).toBeInTheDocument();
     expect(within(rows[2]).getByText('Phim 3')).toBeInTheDocument();
-    expect(within(rows[0]).getByText('89 / 2')).toBeInTheDocument();
+    expect(within(rows[0]).getByText((_, element) => element?.tagName === 'TD' && element.textContent === '89 / 2')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Dữ liệu mở rộng')).toBeInTheDocument();
+    expect(screen.getByText(/Điểm ưu tiên là tổng các thành phần/)).toHaveTextContent('điểm cao hơn tốt hơn');
+    expect(screen.getByText(/Điểm ưu tiên là tổng các thành phần/)).toHaveTextContent('Hạng chỉ là thứ tự hiển thị, không phải thứ tự chọn');
+    expect(screen.getByText(/Điểm ưu tiên là tổng các thành phần/)).toHaveTextContent('hạng thấp hơn vẫn có thể được chọn');
   });
 
   it('renders no more than 100 candidate rows from a 3,615-item complete dataset', () => {
@@ -298,10 +305,41 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     });
     renderPage();
 
-    act(() => hookOptions.onSuccess());
+    act(() => hookOptions.onSuccess({ createdShowtimeCount: 1, skippedItemCount: 0 }));
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/admin/showtimes?source=AUTO&batchId=preview-1',
     );
     expect(screen.getByTestId('location')).not.toHaveTextContent('status=DRAFT');
+  });
+
+  it('shows the complete apply confirmation and keeps the dialog open while the request fails', async () => {
+    const value = hookValue({
+      items: [
+        candidate(1),
+        candidate(2, {
+          selected: false,
+          auditoriumPublicId: 'aud-2',
+          auditoriumName: 'Phòng 2',
+          validationStatus: 'REJECTED',
+        }),
+      ],
+      selectedIds: new Set(['item-1']),
+    });
+    value.handleApply.mockResolvedValue(null);
+    useAutoSchedulePreview.mockReturnValue(value);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /Áp dụng \(1\)/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Xác nhận áp dụng lịch chiếu' });
+    expect(dialog).toHaveTextContent('Lora Cinema');
+    expect(dialog).toHaveTextContent('24/07/2026 – 26/07/2026');
+    expect(dialog).toHaveTextContent('Bản nháp');
+    expect(dialog).toHaveTextContent('Tất cả hoặc không tạo');
+    expect(dialog).toHaveTextContent('Không hợp lệ / xung đột toàn bản');
+    expect(dialog).toHaveTextContent('lần thử lại dùng cùng khóa an toàn');
+
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' })));
+    expect(value.handleApply).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog', { name: 'Xác nhận áp dụng lịch chiếu' })).toBeInTheDocument();
   });
 });

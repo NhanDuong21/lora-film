@@ -345,4 +345,36 @@ describe('useAutoSchedulePreview selection compatibility', () => {
     });
     randomUuid.mockRestore();
   });
+
+  it('reuses one apply idempotency key after transport failure and rotates it after success', async () => {
+    const randomUuid = vi.spyOn(globalThis.crypto, 'randomUUID')
+      .mockReturnValueOnce('idempotency-1')
+      .mockReturnValueOnce('idempotency-2');
+    adminAutoScheduleService.applyPreview
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({
+        success: true,
+        data: { createdShowtimeCount: 1, skippedItemCount: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { createdShowtimeCount: 1, skippedItemCount: 1 },
+      });
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', { onSuccess }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => result.current.handleApply());
+    await act(async () => result.current.handleApply());
+    await act(async () => result.current.handleApply());
+
+    expect(adminAutoScheduleService.applyPreview.mock.calls[0][1].idempotencyKey).toBe('idempotency-1');
+    expect(adminAutoScheduleService.applyPreview.mock.calls[1][1].idempotencyKey).toBe('idempotency-1');
+    expect(adminAutoScheduleService.applyPreview.mock.calls[2][1].idempotencyKey).toBe('idempotency-2');
+    expect(onSuccess).toHaveBeenCalledWith({
+      createdShowtimeCount: 1,
+      skippedItemCount: 1,
+    });
+    randomUuid.mockRestore();
+  });
 });
