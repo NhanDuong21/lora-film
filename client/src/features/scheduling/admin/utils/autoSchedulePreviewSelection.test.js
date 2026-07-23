@@ -95,6 +95,30 @@ describe('canonical preview occupancy selection helpers', () => {
       .toBe(SELECTION_BLOCK_TYPES.REJECTED);
   });
 
+  it.each(['CREATED', 'SKIPPED', 'CONFLICT', 'FAILED'])(
+    'blocks the exact non-pending backend item state %s',
+    applyStatus => {
+      const candidate = item({
+        id: applyStatus.toLowerCase(),
+        start: '2026-07-24T10:00:00Z',
+        end: '2026-07-24T11:00:00Z',
+        occupancyEnd: '2026-07-24T11:15:00Z',
+        applyStatus,
+      });
+
+      expect(validateSingleSelectionChange([candidate], new Set(), candidate.itemPublicId, true).type)
+        .toBe(SELECTION_BLOCK_TYPES.ITEM_NOT_PENDING);
+      expect(validateSingleSelectionChange(
+        [candidate],
+        new Set([candidate.itemPublicId]),
+        candidate.itemPublicId,
+        false,
+      ).type).toBe(SELECTION_BLOCK_TYPES.ITEM_NOT_PENDING);
+      expect(validateBulkSelection([candidate], [candidate.itemPublicId]).type)
+        .toBe(SELECTION_BLOCK_TYPES.ITEM_NOT_PENDING);
+    },
+  );
+
   it('validates the complete proposed bulk final set', () => {
     const first = item({
       id: 'first', start: '2026-07-24T10:00:00Z', end: '2026-07-24T11:00:00Z', occupancyEnd: '2026-07-24T11:15:00Z',

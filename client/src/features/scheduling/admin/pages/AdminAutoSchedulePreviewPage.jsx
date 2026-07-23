@@ -1,13 +1,34 @@
-import { useState, useMemo } from 'react';
-import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, Calendar, MapPin, CheckCircle2, Clock, AlertTriangle, AlertCircle, Info, RefreshCw, Wand2, List, LayoutTemplate } from 'lucide-react';
-import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
+import { useMemo, useState } from 'react';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  Info,
+  LayoutTemplate,
+  List,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  Save,
+  Wand2,
+} from 'lucide-react';
 import AutoScheduleTimeline from '@/features/scheduling/admin/components/AutoScheduleTimeline';
+import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
+import {
+  CANDIDATE_PAGE_SIZES,
+  CANDIDATE_VIEWS,
+  filterCandidatesByView,
+  getCandidateViewCounts,
+  getDefaultCandidateView,
+  paginateCandidates,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewCandidates';
 import {
   compareServiceDateKeys,
   formatCinemaDateTime,
   formatCinemaTime,
-  formatCinemaTimeRange,
   formatPreviewDateKey,
   formatServiceDateKey,
   getCinemaDateKey,
@@ -15,6 +36,10 @@ import {
   resolveCinemaTimezone,
   UNKNOWN_SERVICE_DATE_KEY,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
+import {
+  getCandidateApplyStateMeta,
+  isCandidateSelectable,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewLifecycle';
 import {
   buildQuickNonOverlappingSelection,
   buildSelectedItemsIndex,
@@ -24,19 +49,74 @@ import {
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewSelection';
 
 const REJECTION_REASON_MAP = {
-  "SHOWTIME_OUTSIDE_OPERATING_HOURS": "Ngoài giờ hoạt động của cụm rạp",
-  "SHOWTIME_OVERLAPS_EXISTING": "Trùng với suất chiếu hiện có",
-  "MOVIE_NOT_ELIGIBLE": "Phim chưa đủ điều kiện",
-  "AUDITORIUM_UNAVAILABLE": "Phòng chiếu không khả dụng",
-  "NOT_ENOUGH_CLEANING_TIME": "Không đủ thời gian dọn dẹp"
+  SHOWTIME_OUTSIDE_OPERATING_HOURS: 'Ngoài giờ hoạt động của cụm rạp',
+  SHOWTIME_OVERLAPS_EXISTING: 'Trùng với suất chiếu hiện có',
+  MOVIE_NOT_ELIGIBLE: 'Phim chưa đủ điều kiện',
+  AUDITORIUM_UNAVAILABLE: 'Phòng chiếu không khả dụng',
+  NOT_ENOUGH_CLEANING_TIME: 'Không đủ thời gian dọn dẹp',
 };
 
-const translateReason = (reason) => {
+const CANDIDATE_VIEW_LABELS = {
+  [CANDIDATE_VIEWS.RECOMMENDED]: 'Đề xuất',
+  [CANDIDATE_VIEWS.REJECTED]: 'Bị từ chối / xung đột',
+  [CANDIDATE_VIEWS.ALL]: 'Tất cả ứng viên',
+  [CANDIDATE_VIEWS.CREATED]: 'Suất chiếu đã tạo',
+};
+
+const STATE_TONE_CLASSES = {
+  blue: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+  green: 'border-green-500/30 bg-green-500/10 text-green-300',
+  red: 'border-red-500/30 bg-red-500/10 text-red-300',
+  zinc: 'border-zinc-700 bg-zinc-800/70 text-zinc-300',
+};
+
+const LIFECYCLE_TONE_CLASSES = {
+  GENERATING: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+  PREVIEWED: 'border-green-500/30 bg-green-500/10 text-green-300',
+  APPLYING: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+  APPLIED: 'border-green-500/30 bg-green-500/10 text-green-300',
+  FAILED: 'border-red-500/30 bg-red-500/10 text-red-300',
+  EXPIRED: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  CANCELLED: 'border-zinc-700 bg-zinc-800/70 text-zinc-300',
+};
+
+const translateReason = reason => {
   if (!reason) return '';
-  for (const [key, value] of Object.entries(REJECTION_REASON_MAP)) {
-    if (reason.toUpperCase().includes(key)) return value;
+  const normalized = reason.toUpperCase();
+  const match = Object.entries(REJECTION_REASON_MAP)
+    .find(([code]) => normalized.includes(code));
+  return match?.[1] || reason;
+};
+
+const groupItemsForTimeline = items => {
+  const groups = {};
+  items.forEach(item => {
+    const dateKey = getServiceDateKey(item.serviceDate);
+    if (dateKey === UNKNOWN_SERVICE_DATE_KEY) return;
+    const auditoriumKey = item.auditoriumName || item.auditoriumPublicId || 'Không xác định';
+    groups[dateKey] ||= {};
+    groups[dateKey][auditoriumKey] ||= [];
+    groups[dateKey][auditoriumKey].push(item);
+  });
+  Object.values(groups).forEach(dateGroup => {
+    Object.values(dateGroup).forEach(auditoriumItems => {
+      auditoriumItems.sort((left, right) => new Date(left.startTime) - new Date(right.startTime));
+    });
+  });
+  return groups;
+};
+
+const getEmptyStateMessage = view => {
+  switch (view) {
+    case CANDIDATE_VIEWS.RECOMMENDED:
+      return 'Không có ứng viên được đề xuất trong bộ lọc hiện tại.';
+    case CANDIDATE_VIEWS.REJECTED:
+      return 'Không có ứng viên bị từ chối hoặc gặp xung đột.';
+    case CANDIDATE_VIEWS.CREATED:
+      return 'Không có suất chiếu nào được tạo từ bản xem trước này.';
+    default:
+      return 'Không có ứng viên phù hợp với bộ lọc hiện tại.';
   }
-  return reason;
 };
 
 const AdminAutoSchedulePreviewPage = () => {
@@ -47,24 +127,43 @@ const AdminAutoSchedulePreviewPage = () => {
   const handleSuccess = () => {
     navigate(`/admin/showtimes?source=AUTO&batchId=${id}&status=DRAFT`, {
       state: {
-        message: `Đã tạo ${selectedItemIds.size} suất chiếu từ bản xem trước.`
-      }
+        message: `Đã tạo ${selectedItemIds.size} suất chiếu từ bản xem trước.`,
+      },
     });
   };
 
   const {
-    preview, items,
-    isLoading, isApplying, isUpdatingSelection,
-    selectedItemIds, handleToggleSelection, handleBulkSelection,
-    handleApply, fetchPreview
+    preview,
+    items,
+    selectedItemIds,
+    isLoading,
+    isRefreshing,
+    isSnapshotUpdating,
+    loadingProgress,
+    snapshotError,
+    capabilities,
+    isApplying,
+    isUpdatingSelection,
+    handleToggleSelection,
+    handleBulkSelection,
+    handleApply,
+    fetchPreview,
   } = useAutoSchedulePreview(id, { triggerToast, onSuccess: handleSuccess });
 
-  const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterAuditorium, setFilterAuditorium] = useState('');
   const [filterReason, setFilterReason] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [candidatePage, setCandidatePage] = useState(1);
+  const [candidatePageSize, setCandidatePageSize] = useState(50);
+  const [viewMode, setViewMode] = useState('timeline');
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [viewMode, setViewMode] = useState('timeline'); // 'timeline' or 'table'
+  const [candidateViewChoice, setCandidateViewChoice] = useState({ key: null, view: null });
+
+  const lifecycleKey = `${preview?.previewPublicId || id}:${capabilities?.effectiveStatus || 'UNKNOWN'}`;
+  const defaultCandidateView = getDefaultCandidateView(capabilities);
+  const candidateView = candidateViewChoice.key === lifecycleKey
+    ? candidateViewChoice.view
+    : defaultCandidateView;
 
   const timezoneResolution = useMemo(
     () => resolveCinemaTimezone(preview?.timezoneSnapshot),
@@ -80,567 +179,425 @@ const AdminAutoSchedulePreviewPage = () => {
     () => buildSelectedItemsIndex(items, selectedItemIds),
     [items, selectedItemIds],
   );
-
-  const rejectionReasons = useMemo(() => {
-    if (!items) return {};
-    const reasons = {};
-    items.forEach(item => {
-      if (item.validationStatus !== 'VALID' && item.rejectionReason) {
-        reasons[item.rejectionReason] = (reasons[item.rejectionReason] || 0) + 1;
-      }
-    });
-    return reasons;
-  }, [items]);
-
-  const uniqueAuditoriums = useMemo(() => {
-    if (!items) return [];
-    const auds = new Set();
-    items.forEach(item => auds.add(item.auditoriumName || item.auditoriumPublicId));
-    return Array.from(auds).sort();
-  }, [items]);
-
-  const uniqueDates = useMemo(() => {
-    if (!items) return [];
-    const dates = new Set();
-    items.forEach(item => {
-      dates.add(getServiceDateKey(item.serviceDate));
-    });
-    return Array.from(dates).sort(compareServiceDateKeys);
-  }, [items]);
-
-  const filteredItems = useMemo(() => {
-    if (!items) return [];
-    return items.filter(item => {
-      if (filterStatus === 'VALID' && item.validationStatus !== 'VALID') return false;
-      if (filterStatus === 'INVALID' && item.validationStatus === 'VALID') return false;
-      const audKey = item.auditoriumName || item.auditoriumPublicId;
-      if (filterAuditorium && audKey !== filterAuditorium) return false;
-      if (filterReason && item.rejectionReason !== filterReason) return false;
-      if (filterDate) {
-        const dateKey = getServiceDateKey(item.serviceDate);
-        if (dateKey !== filterDate) return false;
-      }
-      return true;
-    });
-  }, [items, filterStatus, filterAuditorium, filterReason, filterDate]);
-
-  const groupedFilteredItems = useMemo(() => {
-    const groups = {};
-    filteredItems.forEach(item => {
-      const dateKey = getServiceDateKey(item.serviceDate);
-      if (!groups[dateKey]) groups[dateKey] = {};
-      const audKey = item.auditoriumName || item.auditoriumPublicId;
-      if (!groups[dateKey][audKey]) groups[dateKey][audKey] = [];
-      groups[dateKey][audKey].push(item);
-    });
-    Object.keys(groups).forEach(dateKey => {
-      Object.keys(groups[dateKey]).forEach(audKey => {
-        groups[dateKey][audKey].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-      });
-    });
-    return groups;
-  }, [filteredItems]);
-
-  const knownTimelineGroups = useMemo(
-    () => Object.fromEntries(
-      Object.entries(groupedFilteredItems)
-        .filter(([dateKey]) => dateKey !== UNKNOWN_SERVICE_DATE_KEY),
-    ),
-    [groupedFilteredItems],
+  const candidateViewCounts = useMemo(
+    () => getCandidateViewCounts(items, selectedItemIds),
+    [items, selectedItemIds],
   );
-  const unknownServiceDateCount = useMemo(
-    () => items.filter(item => getServiceDateKey(item.serviceDate) === UNKNOWN_SERVICE_DATE_KEY).length,
-    [items],
+  const availableCandidateViews = capabilities.effectiveStatus === 'APPLIED'
+    ? [CANDIDATE_VIEWS.RECOMMENDED, CANDIDATE_VIEWS.REJECTED, CANDIDATE_VIEWS.ALL, CANDIDATE_VIEWS.CREATED]
+    : [CANDIDATE_VIEWS.RECOMMENDED, CANDIDATE_VIEWS.REJECTED, CANDIDATE_VIEWS.ALL];
+  const rejectionReasons = useMemo(() => Array.from(new Set(
+    items.filter(item => item.rejectionReason).map(item => item.rejectionReason),
+  )), [items]);
+  const uniqueAuditoriums = useMemo(() => Array.from(new Set(
+    items.map(item => item.auditoriumName || item.auditoriumPublicId).filter(Boolean),
+  )).sort(), [items]);
+  const uniqueDates = useMemo(() => Array.from(new Set(
+    items.map(item => getServiceDateKey(item.serviceDate)),
+  )).sort(compareServiceDateKeys), [items]);
+
+  const filteredCandidates = useMemo(() => filterCandidatesByView(
+    items,
+    candidateView,
+    selectedItemIds,
+  ).filter(item => {
+    const auditoriumKey = item.auditoriumName || item.auditoriumPublicId;
+    if (filterAuditorium && auditoriumKey !== filterAuditorium) return false;
+    if (filterReason && item.rejectionReason !== filterReason) return false;
+    if (filterDate && getServiceDateKey(item.serviceDate) !== filterDate) return false;
+    return true;
+  }), [
+    candidateView,
+    filterAuditorium,
+    filterDate,
+    filterReason,
+    items,
+    selectedItemIds,
+  ]);
+  const pagination = useMemo(
+    () => paginateCandidates(filteredCandidates, candidatePage, candidatePageSize),
+    [candidatePage, candidatePageSize, filteredCandidates],
   );
-  const filteredUnknownServiceDateCount = useMemo(
-    () => filteredItems.filter(
-      item => getServiceDateKey(item.serviceDate) === UNKNOWN_SERVICE_DATE_KEY,
-    ).length,
-    [filteredItems],
+  const timelineGroups = useMemo(
+    () => groupItemsForTimeline(pagination.items),
+    [pagination.items],
   );
+  const createdCount = candidateViewCounts[CANDIDATE_VIEWS.CREATED];
+
+  const resetPageWith = setter => event => {
+    setter(event.target.value);
+    setCandidatePage(1);
+  };
+
+  const selectCandidateView = view => {
+    setCandidateViewChoice({ key: lifecycleKey, view });
+    setCandidatePage(1);
+  };
 
   const handleQuickNonOverlappingSelection = () => {
-    if (!items || items.length === 0) return;
+    if (!capabilities.canSelect || items.length === 0) return;
     handleBulkSelection(buildQuickNonOverlappingSelection(items));
   };
 
-  if (isLoading) {
+  if (isLoading && !preview) {
     return (
-      <div className="flex flex-col flex-1 items-center justify-center p-8 bg-zinc-950 text-zinc-400">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-orange mb-4" />
-        <p>Đang tải chi tiết bản xem trước...</p>
+      <div className="flex flex-1 flex-col items-center justify-center bg-zinc-950 p-8 text-zinc-300" role="status">
+        <Loader2 className="mb-4 h-8 w-8 animate-spin text-brand-orange" aria-hidden="true" />
+        <p className="font-semibold">Đang tải bản xem trước…</p>
+        {loadingProgress.totalPages > 0 && (
+          <p className="mt-2 text-sm text-zinc-500">
+            {loadingProgress.loadedPages}/{loadingProgress.totalPages} trang · {loadingProgress.loadedItems}/{loadingProgress.totalItems} ứng viên
+          </p>
+        )}
       </div>
     );
   }
 
   if (!preview) {
     return (
-      <div className="flex flex-col flex-1 items-center justify-center p-8 bg-zinc-950 text-zinc-400">
-        <AlertTriangle className="w-12 h-12 text-red-500 mb-4 opacity-80" />
-        <h2 className="text-xl font-bold text-white mb-2">Không tìm thấy</h2>
-        <p>Bản xem trước xếp lịch không tồn tại hoặc đã hết hạn.</p>
-        <button onClick={() => navigate(-1)} className="mt-6 text-brand-orange hover:underline text-sm">Quay lại</button>
+      <div className="flex flex-1 flex-col items-center justify-center bg-zinc-950 p-8 text-center text-zinc-300">
+        <AlertTriangle className="mb-4 h-10 w-10 text-red-400" aria-hidden="true" />
+        <h1 className="text-xl font-bold text-white">Không thể tải bản xem trước</h1>
+        <p className="mt-2 max-w-lg text-sm text-zinc-400">
+          {snapshotError?.message || 'Bản xem trước không tồn tại hoặc hiện không khả dụng.'}
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button type="button" onClick={() => navigate(-1)} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm">
+            Quay lại
+          </button>
+          <button type="button" onClick={fetchPreview} className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-bold text-zinc-950">
+            Thử lại
+          </button>
+        </div>
       </div>
     );
   }
 
-  const isExpired = preview.status === 'EXPIRED' || new Date(preview.expiresAt) < new Date();
-  const isApplied = preview.status === 'APPLIED';
-  const canApply = preview.status === 'PREVIEWED' && !isExpired;
-
   return (
-    <div className="flex flex-col flex-1 bg-zinc-950 text-white min-h-[400px] animate-fade-in">
-      
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-20 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="flex min-h-[400px] flex-1 flex-col bg-zinc-950 text-white">
+      <header className="sticky top-0 z-20 flex flex-col gap-4 border-b border-zinc-800 bg-zinc-950/90 p-6 backdrop-blur-md md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-zinc-800 rounded-xl transition-colors text-zinc-400 hover:text-white flex-shrink-0"
-          >
-            <ArrowLeft className="w-5 h-5" />
+          <button type="button" onClick={() => navigate(-1)} aria-label="Quay lại" className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white">
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">
-                BẢN XEM TRƯỚC LỊCH CHIẾU
-              </h1>
-              <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border ${
-                isApplied ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
-                isExpired ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
-                'bg-blue-500/10 text-blue-400 border-blue-500/20'
-              }`}>
-                {isExpired && !isApplied ? 'EXPIRED' : preview.status}
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-xl font-black uppercase tracking-wider md:text-2xl">Bản xem trước lịch chiếu</h1>
+              <span className={`rounded border px-2 py-1 text-[10px] font-black tracking-wider ${LIFECYCLE_TONE_CLASSES[capabilities.effectiveStatus] || LIFECYCLE_TONE_CLASSES.CANCELLED}`}>
+                {capabilities.effectiveStatus || preview.status}
               </span>
             </div>
-            <div className="text-zinc-400 text-sm mt-1.5 flex flex-wrap items-center gap-4">
-              <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {preview.cinemaName}</span>
-              <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {formatPreviewDateKey(preview.scheduleFrom)} - {formatPreviewDateKey(preview.scheduleTo)}</span>
+            <div className="mt-2 flex flex-wrap gap-4 text-sm text-zinc-400">
+              <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" aria-hidden="true" />{preview.cinemaName}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" aria-hidden="true" />{formatPreviewDateKey(preview.scheduleFrom)} – {formatPreviewDateKey(preview.scheduleTo)}</span>
             </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3">
+
+        <div className="flex flex-wrap items-center gap-3">
           <button
+            type="button"
             onClick={fetchPreview}
-            disabled={isUpdatingSelection || isApplying}
-            className="p-2.5 rounded-xl border border-zinc-800 hover:bg-zinc-800 text-zinc-400 transition-colors disabled:opacity-50"
-            title="Làm mới"
+            disabled={!capabilities.canRefresh}
+            aria-label="Làm mới bản xem trước"
+            className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${isUpdatingSelection ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} aria-hidden="true" />
           </button>
-          
-          {canApply && (
+          {capabilities.isEditable && (
             <button
+              type="button"
               onClick={handleQuickNonOverlappingSelection}
-              disabled={isApplying || isUpdatingSelection}
+              disabled={!capabilities.canSelect}
               title="Chọn lại theo giờ bắt đầu sớm nhất và khoảng chiếm phòng; thao tác này có thể thay thế đề xuất tối ưu ban đầu."
-              className="bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Wand2 className="w-4 h-4" /> CHỌN NHANH KHÔNG TRÙNG
+              <Wand2 className="h-4 w-4" aria-hidden="true" /> Chọn nhanh không trùng
             </button>
           )}
-
-          {canApply && (
+          {capabilities.isEditable && (
             <button
+              type="button"
               onClick={() => setShowApplyModal(true)}
-              disabled={isApplying || isUpdatingSelection || selectedItemIds.size === 0}
-              className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!capabilities.canApply}
+              className="flex items-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-black uppercase tracking-wider text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>ÁP DỤNG LỊCH CHIẾU ({selectedItemIds.size})</span>
+              {isApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Áp dụng ({selectedItemIds.size})
             </button>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="p-6 md:p-8 space-y-8 max-w-[1600px] mx-auto w-full">
-        {timezoneResolution.usedFallback && (
-          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-4 rounded-xl flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-bold text-sm">Múi giờ bản xem trước không hợp lệ</h3>
-              <p className="text-xs mt-1 opacity-80">Dữ liệu đang được hiển thị tạm thời theo UTC. Vui lòng làm mới bản xem trước.</p>
-            </div>
-            <button onClick={fetchPreview} className="text-xs font-bold hover:underline">Làm mới</button>
-          </div>
-        )}
-
-        {unknownServiceDateCount > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-4 rounded-xl flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-bold text-sm">Không xác định ngày vận hành</h3>
-              <p className="text-xs mt-1 opacity-80">
-                {unknownServiceDateCount} ứng viên lịch sử không lưu ngày vận hành. Dữ liệu vẫn được giữ nguyên và hiển thị đầy đủ trong chế độ Danh sách.
-              </p>
-            </div>
-            {viewMode === 'timeline' && filteredUnknownServiceDateCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className="text-xs font-bold hover:underline whitespace-nowrap"
-              >
-                Xem danh sách
-              </button>
-            )}
-          </div>
-        )}
-
-        {malformedItems.length > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-4 rounded-xl flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-bold text-sm">Thiếu dữ liệu chiếm phòng</h3>
-              <p className="text-xs mt-1 opacity-80">{malformedItems.length} ứng viên không có khoảng chiếm phòng hợp lệ và sẽ không thể được chọn an toàn.</p>
-            </div>
-            <button onClick={fetchPreview} className="text-xs font-bold hover:underline">Làm mới</button>
-          </div>
-        )}
-        
-        {/* Warning Banner if Expired */}
-        {isExpired && !isApplied && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+      <main className="mx-auto w-full max-w-[1600px] space-y-6 p-6 md:p-8">
+        <section className={`rounded-xl border p-4 ${LIFECYCLE_TONE_CLASSES[capabilities.effectiveStatus] || LIFECYCLE_TONE_CLASSES.CANCELLED}`} aria-live="polite">
+          <div className="flex items-start gap-3">
+            <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
-              <h3 className="font-bold text-sm">Bản xem trước đã hết hạn</h3>
-              <p className="text-xs mt-1 opacity-80">Bạn không thể áp dụng bản xem trước này nữa vì nó đã vượt quá thời gian tồn tại (TTL). Vui lòng tạo bản xem trước mới.</p>
+              <h2 className="font-bold">{capabilities.effectiveStatus}</h2>
+              <p className="mt-1 text-sm opacity-90">{capabilities.lifecycleMessage}</p>
+              {capabilities.failureReasonSafe && <p className="mt-1 text-sm">{capabilities.failureReasonSafe}</p>}
             </div>
           </div>
-        )}
+        </section>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Tổng ứng viên</span>
-            <span className="text-2xl font-black text-white">{preview.totalCandidateCount}</span>
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Hợp lệ</span>
-            <span className="text-2xl font-black text-green-400">{preview.validCandidateCount}</span>
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Xung đột / Từ chối</span>
-            <span className="text-2xl font-black text-red-400">{preview.rejectedCandidateCount}</span>
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Hết hạn vào</span>
-            <span className="text-sm font-bold text-amber-400 mt-2 block flex items-center gap-1.5">
-              <Clock className="w-4 h-4" />
-              {formatCinemaDateTime(preview.expiresAt, effectiveTimezone)}
-            </span>
-          </div>
-        </div>
-
-        {/* Breakdown of Rejection Reasons */}
-        {Object.keys(rejectionReasons).length > 0 && (
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5">
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-500" /> Lý do từ chối (Tổng cộng: {preview.rejectedCandidateCount})
-            </h3>
-            <div className="flex flex-wrap gap-3">
-              {Object.entries(rejectionReasons).map(([reason, count]) => (
-                <div key={reason} className="bg-zinc-950 border border-zinc-800 px-3 py-2 rounded-xl flex items-center gap-2">
-                  <span className="text-red-400 font-black text-sm">{count}</span>
-                  <span className="text-xs text-zinc-300">{translateReason(reason)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Filters and View Toggle */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="bg-zinc-900/60 border border-zinc-800 p-2 rounded-2xl flex flex-wrap gap-2 items-center">
-            <select 
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-            >
-            <option value="ALL">Tất cả ứng viên</option>
-            <option value="VALID">Chỉ Hợp lệ</option>
-            <option value="INVALID">Chỉ Bị từ chối</option>
-          </select>
-          
-          <select 
-            value={filterAuditorium}
-            onChange={(e) => setFilterAuditorium(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-          >
-            <option value="">Tất cả Phòng chiếu</option>
-            {uniqueAuditoriums.map(aud => (
-              <option key={aud} value={aud}>{aud}</option>
-            ))}
-          </select>
-
-          <select 
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-          >
-            <option value="">Tất cả Ngày</option>
-            {uniqueDates.map(dateKey => (
-              <option key={dateKey} value={dateKey}>{formatServiceDateKey(dateKey)}</option>
-            ))}
-          </select>
-
-            <select 
-              value={filterReason}
-              onChange={(e) => setFilterReason(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-xs transition-colors focus:outline-none"
-            >
-              <option value="">Tất cả Lý do</option>
-              {Object.keys(rejectionReasons).map(reason => (
-                <option key={reason} value={reason}>{translateReason(reason)}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-            <button
-              onClick={() => setViewMode('timeline')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'timeline' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <LayoutTemplate className="w-4 h-4" /> TIMELINE
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'table' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <List className="w-4 h-4" /> DANH SÁCH
-            </button>
-          </div>
-        </div>
-
-        {/* View Mode Content */}
-        {viewMode === 'timeline' ? (
-          <AutoScheduleTimeline 
-            groupedItems={knownTimelineGroups}
-            selectedItemIds={selectedItemIds}
-            selectedItemsIndex={selectedItemsIndex}
-            handleToggleSelection={handleToggleSelection}
-            isSelectionBusy={isUpdatingSelection || isApplying}
-            timezone={effectiveTimezone}
-          />
-        ) : (
-          <div className="space-y-10">
-          {Object.keys(groupedFilteredItems).sort(compareServiceDateKeys).map(dateKey => (
-            <div key={dateKey} className="space-y-4">
-              <h2 className="text-lg font-black text-white flex items-center gap-3 border-b border-zinc-800 pb-2">
-                <Calendar className="w-5 h-5 text-brand-orange" />
-                {formatServiceDateKey(dateKey)}
-                {dateKey === UNKNOWN_SERVICE_DATE_KEY && (
-                  <span className="text-[10px] uppercase tracking-wider text-amber-400 border border-amber-500/30 rounded px-2 py-0.5">
-                    Dữ liệu lịch sử
-                  </span>
-                )}
-              </h2>
-
-              <div className="space-y-6">
-                {Object.keys(groupedFilteredItems[dateKey]).sort().map(audKey => {
-                  const audItems = groupedFilteredItems[dateKey][audKey];
-                  
-                  return (
-                    <div key={audKey} className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden">
-                      <div className="bg-zinc-900 px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-                        <h3 className="font-bold text-sm text-zinc-200">{audKey}</h3>
-                        <span className="text-xs text-zinc-500">{audItems.length} suất chiếu</span>
-                      </div>
-                      
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse whitespace-nowrap">
-                          <thead>
-                            <tr className="bg-zinc-950/50 border-b border-zinc-800/80 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                              <th className="py-3 px-5 w-10 text-center">
-                                {/* Removed select-all to prevent overlapping selection errors */}
-                              </th>
-                              <th className="py-3 px-5">THỜI GIAN</th>
-                              <th className="py-3 px-5">PHIM & ĐỊNH DẠNG</th>
-                              <th className="py-3 px-5">TRẠNG THÁI</th>
-                              <th className="py-3 px-5">CHI TIẾT</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {audItems.map(item => {
-                              const isValid = item.validationStatus === 'VALID';
-                              const isSelected = selectedItemIds.has(item.itemPublicId);
-                              const isItemApplied = item.applyStatus === 'APPLIED';
-                              const selectionBlock = isValid && !isSelected && !isItemApplied
-                                ? findSelectionBlock(item, selectedItemsIndex)
-                                : null;
-                              const isConflicting = selectionBlock?.type === SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP;
-                              const hasMalformedData = malformedItemIds.has(item.itemPublicId)
-                                || (selectionBlock && selectionBlock.type !== SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP);
-                              const conflictItem = isConflicting ? selectionBlock.item : null;
-                              const isCheckboxDisabled = isUpdatingSelection
-                                || isApplying
-                                || (!isSelected && Boolean(selectionBlock));
-                              
-                              return (
-                                <tr 
-                                  key={item.itemPublicId}
-                                  className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${
-                                    isItemApplied ? 'bg-green-500/5' :
-                                    !isValid ? 'bg-red-500/5' :
-                                    hasMalformedData ? 'bg-amber-500/5' :
-                                    isConflicting ? 'bg-red-500/10 opacity-75 grayscale' :
-                                    isSelected ? 'bg-brand-orange/5' : 'bg-zinc-950'
-                                  }`}
-                                >
-                                  <td className="py-3 px-5 text-center">
-                                    {isValid && !isItemApplied && canApply && (
-                                      <input 
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={() => handleToggleSelection(item.itemPublicId, isSelected)}
-                                        disabled={isCheckboxDisabled}
-                                        className="w-4 h-4 rounded border-zinc-700 text-brand-orange focus:ring-brand-orange bg-zinc-900 cursor-pointer disabled:cursor-not-allowed"
-                                      />
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-5">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-bold text-zinc-200">{formatCinemaTime(item.startTime, effectiveTimezone)}</span>
-                                      <span className="text-zinc-500">-</span>
-                                      <span className="font-bold text-zinc-400">{formatCinemaTime(item.endTime, effectiveTimezone)}</span>
-                                      {getCinemaDateKey(item.startTime, effectiveTimezone) !== getCinemaDateKey(item.endTime, effectiveTimezone) && (
-                                        <span className="text-[10px] text-amber-400">+1 ngày</span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-5">
-                                    <div className="flex flex-col">
-                                      <span className="font-bold text-sm text-white">{item.movieTitle}</span>
-                                      <span className="text-xs text-zinc-400">{item.versionName} • {item.format} • {item.audioLanguage}</span>
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-5">
-                                    {isItemApplied ? (
-                                      <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-max">
-                                        <CheckCircle2 className="w-3 h-3" /> APPLIED
-                                      </span>
-                                    ) : hasMalformedData ? (
-                                      <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
-                                        THIẾU DỮ LIỆU
-                                      </span>
-                                    ) : isConflicting ? (
-                                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
-                                        XUNG ĐỘT
-                                      </span>
-                                    ) : isValid ? (
-                                      <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
-                                        HỢP LỆ
-                                      </span>
-                                    ) : (
-                                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider w-max block">
-                                        TỪ CHỐI
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-5 whitespace-normal min-w-[200px]">
-                                    {!isValid && (
-                                      <div className="text-xs text-red-400 flex items-start gap-1">
-                                        <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                        <span>{translateReason(item.rejectionReason)}</span>
-                                      </div>
-                                    )}
-                                    {isItemApplied && (
-                                      <div className="text-xs text-green-400">
-                                        Đã được tạo thành lịch chiếu chính thức.
-                                      </div>
-                                    )}
-                                    {isConflicting && (
-                                      <div className="text-xs text-red-400 font-bold">
-                                        Xung đột với suất đã chọn: {formatCinemaTimeRange(conflictItem.startTime, conflictItem.endTime, effectiveTimezone)}; chiếm phòng đến {formatCinemaTime(conflictItem.occupancyEndTime, effectiveTimezone)}
-                                      </div>
-                                    )}
-                                    {hasMalformedData && (
-                                      <div className="text-xs text-amber-400 font-bold">
-                                        Thiếu dữ liệu khoảng chiếm phòng. Vui lòng làm mới bản xem trước.
-                                      </div>
-                                    )}
-                                    {isValid && !isItemApplied && !isConflicting && !hasMalformedData && (
-                                      <div className="text-xs text-zinc-500">
-                                        Đủ điều kiện. {isSelected ? 'Sẽ được áp dụng.' : 'Chưa được chọn.'}
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          {Object.keys(groupedFilteredItems).length === 0 && (
-            <div className="text-center py-20 text-zinc-500">
-              <p>Không có ứng viên suất chiếu nào phù hợp với bộ lọc.</p>
-            </div>
-          )}
-        </div>
-        )}
-      </div>
-
-      {/* Confirmation Modal */}
-      {showApplyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-zinc-800 flex items-center gap-3 text-brand-orange">
-              <AlertCircle className="w-6 h-6" />
-              <h2 className="text-lg font-black uppercase tracking-wider text-white">Xác nhận áp dụng lịch chiếu</h2>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <p className="text-zinc-300">
-                Bạn đang chuẩn bị áp dụng <strong className="text-white">{selectedItemIds.size} suất chiếu</strong> cho cụm rạp <strong className="text-white">{preview.cinemaName}</strong>.
-              </p>
-              
-              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                <ul className="space-y-2 text-sm text-zinc-400">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-500" /> {selectedItemIds.size} ứng viên đã được chọn</li>
-                  <li className="flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-500" /> Từ ngày {formatPreviewDateKey(preview.scheduleFrom)} đến {formatPreviewDateKey(preview.scheduleTo)}</li>
-                </ul>
-              </div>
-
-              <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl flex items-start gap-2 text-blue-400">
-                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p className="text-xs leading-relaxed">
-                  Tất cả các suất chiếu sẽ được tạo ở trạng thái <strong>DRAFT</strong>. Bạn cần chuyển chúng sang trạng thái <strong>OPEN FOR BOOKING</strong> để hệ thống có thể mở bán vé.
+        {(isRefreshing || isSnapshotUpdating) && (
+          <section className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-blue-300" role="status">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+              <div>
+                <p className="font-bold">Đang làm mới ảnh chụp ứng viên</p>
+                <p className="mt-1 text-sm">
+                  {loadingProgress.loadedPages}/{loadingProgress.totalPages || '…'} trang · {loadingProgress.loadedItems}/{loadingProgress.totalItems || '…'} ứng viên. Dữ liệu hoàn chỉnh trước đó vẫn đang được hiển thị ở chế độ khóa.
                 </p>
               </div>
             </div>
+          </section>
+        )}
 
-            <div className="p-4 bg-zinc-950/50 border-t border-zinc-800 flex items-center justify-end gap-3">
-              <button 
-                onClick={() => setShowApplyModal(false)}
-                className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-              >
-                Hủy bỏ
+        {snapshotError && (
+          <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                <div>
+                  <h2 className="font-bold">Không thể công bố ảnh chụp mới</h2>
+                  <p className="mt-1 text-sm">{snapshotError.message}</p>
+                </div>
+              </div>
+              <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} className="rounded-lg border border-amber-500/40 px-3 py-2 text-sm font-bold disabled:opacity-50">
+                Làm mới lại
               </button>
-              <button 
+            </div>
+          </section>
+        )}
+
+        {timezoneResolution.usedFallback && (
+          <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert">
+            Múi giờ bản xem trước không hợp lệ; thời gian đang được hiển thị tạm thời theo UTC.
+          </section>
+        )}
+
+        {malformedItems.length > 0 && (
+          <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert">
+            {malformedItems.length} ứng viên thiếu khoảng chiếm phòng hợp lệ và không thể được chọn an toàn.
+          </section>
+        )}
+
+        <section className="grid grid-cols-2 gap-4 md:grid-cols-4" aria-label="Tóm tắt bản xem trước">
+          {[
+            ['Tổng ứng viên', preview.totalCandidateCount ?? items.length, 'text-white'],
+            ['Hợp lệ', preview.validCandidateCount ?? 0, 'text-green-300'],
+            ['Bị từ chối', preview.rejectedCandidateCount ?? 0, 'text-red-300'],
+            capabilities.effectiveStatus === 'APPLIED'
+              ? ['Đã tạo', createdCount, 'text-green-300']
+              : ['Hết hạn', formatCinemaDateTime(preview.expiresAt, effectiveTimezone), 'text-amber-300'],
+          ].map(([label, value, tone]) => (
+            <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500">{label}</span>
+              <span className={`mt-2 block font-black ${typeof value === 'number' ? 'text-2xl' : 'text-sm'} ${tone}`}>{value}</span>
+            </div>
+          ))}
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Nhóm ứng viên">
+              {availableCandidateViews.map(view => (
+                <button
+                  key={view}
+                  type="button"
+                  role="tab"
+                  aria-selected={candidateView === view}
+                  onClick={() => selectCandidateView(view)}
+                  className={`rounded-xl border px-4 py-2 text-sm font-bold ${candidateView === view ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 text-zinc-400 hover:text-white'}`}
+                >
+                  {CANDIDATE_VIEW_LABELS[view]} ({candidateViewCounts[view]})
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center rounded-xl border border-zinc-800 bg-zinc-900 p-1">
+              <button type="button" onClick={() => setViewMode('timeline')} aria-pressed={viewMode === 'timeline'} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold ${viewMode === 'timeline' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}>
+                <LayoutTemplate className="h-4 w-4" aria-hidden="true" /> Timeline
+              </button>
+              <button type="button" onClick={() => setViewMode('table')} aria-pressed={viewMode === 'table'} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold ${viewMode === 'table' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}>
+                <List className="h-4 w-4" aria-hidden="true" /> Danh sách
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
+            <select aria-label="Lọc phòng chiếu" value={filterAuditorium} onChange={resetPageWith(setFilterAuditorium)} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300">
+              <option value="">Tất cả phòng chiếu</option>
+              {uniqueAuditoriums.map(auditorium => <option key={auditorium} value={auditorium}>{auditorium}</option>)}
+            </select>
+            <select aria-label="Lọc ngày vận hành" value={filterDate} onChange={resetPageWith(setFilterDate)} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300">
+              <option value="">Tất cả ngày</option>
+              {uniqueDates.map(date => <option key={date} value={date}>{formatServiceDateKey(date)}</option>)}
+            </select>
+            <select aria-label="Lọc lý do" value={filterReason} onChange={resetPageWith(setFilterReason)} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300">
+              <option value="">Tất cả lý do</option>
+              {rejectionReasons.map(reason => <option key={reason} value={reason}>{translateReason(reason)}</option>)}
+            </select>
+          </div>
+        </section>
+
+        {pagination.totalItems === 0 ? (
+          <section className="rounded-2xl border border-dashed border-zinc-800 py-16 text-center text-zinc-500">
+            {getEmptyStateMessage(candidateView)}
+          </section>
+        ) : viewMode === 'timeline' ? (
+          <section className="space-y-3">
+            {pagination.totalItems > pagination.items.length && (
+              <p className="text-sm text-zinc-500">
+                Timeline đang hiển thị trang hiện tại ({pagination.items.length}/{pagination.totalItems} ứng viên) để giới hạn số phần tử dựng.
+              </p>
+            )}
+            <AutoScheduleTimeline
+              groupedItems={timelineGroups}
+              selectedItemIds={selectedItemIds}
+              selectedItemsIndex={selectedItemsIndex}
+              handleToggleSelection={handleToggleSelection}
+              isSelectionBusy={isUpdatingSelection || isApplying || isSnapshotUpdating}
+              canSelect={capabilities.canSelect}
+              timezone={effectiveTimezone}
+            />
+          </section>
+        ) : (
+          <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left">
+                <thead className="border-b border-zinc-800 bg-zinc-950/70 text-[10px] uppercase tracking-wider text-zinc-400">
+                  <tr>
+                    <th className="px-4 py-3">Chọn</th>
+                    <th className="px-4 py-3">Ngày / thời gian</th>
+                    <th className="px-4 py-3">Phòng</th>
+                    <th className="px-4 py-3">Phim & định dạng</th>
+                    <th className="px-4 py-3">Trạng thái áp dụng</th>
+                    <th className="px-4 py-3">Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagination.items.map(item => {
+                    const isSelected = selectedItemIds.has(item.itemPublicId);
+                    const selectable = isCandidateSelectable(item, capabilities);
+                    const selectionControlAvailable = capabilities.isEditable
+                      && item.validationStatus === 'VALID'
+                      && item.applyStatus === 'PENDING';
+                    const selectionBlock = selectable && !isSelected
+                      ? findSelectionBlock(item, selectedItemsIndex)
+                      : null;
+                    const malformed = malformedItemIds.has(item.itemPublicId)
+                      || (selectionBlock && selectionBlock.type !== SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP);
+                    const applyState = getCandidateApplyStateMeta(item.applyStatus);
+                    const checkboxDisabled = !selectable
+                      || isUpdatingSelection
+                      || isApplying
+                      || isSnapshotUpdating
+                      || (!isSelected && Boolean(selectionBlock));
+
+                    return (
+                      <tr key={item.itemPublicId} data-testid="candidate-row" className="border-b border-zinc-800/70 text-sm last:border-b-0">
+                        <td className="px-4 py-3">
+                          {selectionControlAvailable ? (
+                            <input
+                              type="checkbox"
+                              aria-label={`Chọn ${item.movieTitle} lúc ${formatCinemaTime(item.startTime, effectiveTimezone)}`}
+                              checked={isSelected}
+                              onChange={() => handleToggleSelection(item.itemPublicId, isSelected)}
+                              disabled={checkboxDisabled}
+                              className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-brand-orange focus:ring-brand-orange disabled:cursor-not-allowed"
+                            />
+                          ) : <span aria-hidden="true" className="text-zinc-600">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-zinc-200">{formatServiceDateKey(getServiceDateKey(item.serviceDate))}</div>
+                          <div className="mt-1 text-xs text-zinc-400">
+                            {formatCinemaTime(item.startTime, effectiveTimezone)}–{formatCinemaTime(item.endTime, effectiveTimezone)}
+                            {getCinemaDateKey(item.startTime, effectiveTimezone) !== getCinemaDateKey(item.endTime, effectiveTimezone) && ' (+1 ngày)'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-300">{item.auditoriumName || item.auditoriumPublicId}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-white">{item.movieTitle}</div>
+                          <div className="mt-1 text-xs text-zinc-400">{[item.versionName, item.format, item.audioLanguage].filter(Boolean).join(' · ')}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex rounded border px-2 py-1 text-[10px] font-black uppercase tracking-wider ${STATE_TONE_CLASSES[applyState.tone]}`}>
+                            {applyState.label}
+                          </span>
+                        </td>
+                        <td className="max-w-sm whitespace-normal px-4 py-3 text-xs">
+                          {item.validationStatus !== 'VALID' && <p className="text-red-300">{translateReason(item.rejectionReason) || 'Ứng viên không hợp lệ.'}</p>}
+                          {selectionBlock?.type === SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP && <p className="text-red-300">Xung đột khoảng chiếm phòng với một ứng viên đã chọn.</p>}
+                          {malformed && <p className="text-amber-300">Thiếu dữ liệu khoảng chiếm phòng.</p>}
+                          {item.validationStatus === 'VALID' && !selectionBlock && !malformed && <p className="text-zinc-400">{applyState.description}</p>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {pagination.totalItems > 0 && (
+          <nav className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3" aria-label="Phân trang ứng viên">
+            <label className="flex items-center gap-2 text-sm text-zinc-400">
+              Số dòng
+              <select
+                aria-label="Số ứng viên mỗi trang"
+                value={pagination.pageSize}
+                onChange={event => {
+                  setCandidatePageSize(Number(event.target.value));
+                  setCandidatePage(1);
+                }}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200"
+              >
+                {CANDIDATE_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+              </select>
+            </label>
+            <span className="text-sm text-zinc-400">Trang {pagination.page}/{pagination.totalPages} · {pagination.totalItems} ứng viên</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setCandidatePage(pagination.page - 1)} disabled={pagination.page <= 1} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Trước</button>
+              <button type="button" onClick={() => setCandidatePage(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Sau</button>
+            </div>
+          </nav>
+        )}
+      </main>
+
+      {showApplyModal && capabilities.isEditable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="apply-preview-title" className="w-full max-w-md overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl">
+            <div className="flex items-center gap-3 border-b border-zinc-800 p-6">
+              <AlertCircle className="h-6 w-6 text-brand-orange" aria-hidden="true" />
+              <h2 id="apply-preview-title" className="text-lg font-black uppercase tracking-wider">Xác nhận áp dụng lịch chiếu</h2>
+            </div>
+            <div className="space-y-4 p-6 text-zinc-300">
+              <p>Bạn sắp áp dụng <strong className="text-white">{selectedItemIds.size} suất chiếu</strong> cho <strong className="text-white">{preview.cinemaName}</strong>.</p>
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-300">
+                <CheckCircle2 className="mr-2 inline h-4 w-4" aria-hidden="true" />
+                Hệ thống sẽ áp dụng theo chế độ {preview.applyMode}.
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-zinc-800 bg-zinc-950/50 p-4">
+              <button type="button" onClick={() => setShowApplyModal(false)} className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-400 hover:bg-zinc-800">Hủy</button>
+              <button
+                type="button"
+                disabled={!capabilities.canApply}
                 onClick={() => {
                   setShowApplyModal(false);
                   handleApply();
                 }}
-                className="px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider bg-brand-orange text-zinc-950 hover:bg-opacity-90 transition-all shadow-lg shadow-brand-orange/10 flex items-center gap-2"
+                className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2 text-sm font-black text-zinc-950 disabled:opacity-50"
               >
-                <Save className="w-4 h-4" /> Xác nhận Áp dụng
+                <Save className="h-4 w-4" aria-hidden="true" /> Xác nhận áp dụng
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 };

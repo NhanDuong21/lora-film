@@ -1,7 +1,7 @@
 export const SELECTION_BLOCK_TYPES = Object.freeze({
   ITEM_NOT_FOUND: 'ITEM_NOT_FOUND',
   REJECTED: 'REJECTED',
-  APPLIED: 'APPLIED',
+  ITEM_NOT_PENDING: 'ITEM_NOT_PENDING',
   MALFORMED_ITEM: 'MALFORMED_ITEM',
   MALFORMED_SELECTED_ITEM: 'MALFORMED_SELECTED_ITEM',
   OCCUPANCY_OVERLAP: 'OCCUPANCY_OVERLAP',
@@ -114,12 +114,12 @@ export const validateSingleSelectionChange = (
 ) => {
   const item = (items || []).find((candidate) => candidate.itemPublicId === itemPublicId);
   if (!item) return { valid: false, type: SELECTION_BLOCK_TYPES.ITEM_NOT_FOUND };
+  if (item.applyStatus !== 'PENDING') {
+    return { valid: false, type: SELECTION_BLOCK_TYPES.ITEM_NOT_PENDING, item };
+  }
   if (!newSelectedState) return { valid: true };
   if (item.validationStatus !== 'VALID') {
     return { valid: false, type: SELECTION_BLOCK_TYPES.REJECTED, item };
-  }
-  if (item.applyStatus === 'APPLIED') {
-    return { valid: false, type: SELECTION_BLOCK_TYPES.APPLIED, item };
   }
 
   const selectedItemsIndex = buildSelectedItemsIndex(items, selectedItemIds);
@@ -139,8 +139,8 @@ export const validateBulkSelection = (items, selectedItemIds) => {
     if (item.validationStatus !== 'VALID') {
       return { valid: false, type: SELECTION_BLOCK_TYPES.REJECTED, item };
     }
-    if (item.applyStatus === 'APPLIED') {
-      return { valid: false, type: SELECTION_BLOCK_TYPES.APPLIED, item };
+    if (item.applyStatus !== 'PENDING') {
+      return { valid: false, type: SELECTION_BLOCK_TYPES.ITEM_NOT_PENDING, item };
     }
     const validation = validatePreviewItemInterval(item);
     if (!validation.valid) {
@@ -179,7 +179,7 @@ export const buildQuickNonOverlappingSelection = (items) => {
     .map((item, originalIndex) => ({ item, originalIndex, validation: validatePreviewItemInterval(item) }))
     .filter(({ item, validation }) =>
       item.validationStatus === 'VALID'
-      && item.applyStatus !== 'APPLIED'
+      && item.applyStatus === 'PENDING'
       && validation.valid,
     )
     .sort((a, b) =>

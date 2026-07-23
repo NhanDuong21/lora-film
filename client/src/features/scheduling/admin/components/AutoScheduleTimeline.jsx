@@ -20,6 +20,7 @@ const AutoScheduleTimeline = ({
   selectedItemsIndex,
   handleToggleSelection,
   isSelectionBusy,
+  canSelect,
   timezone,
 }) => {
   const hours = Array.from(
@@ -87,18 +88,27 @@ const AutoScheduleTimeline = ({
 
                           const isValid = item.validationStatus === 'VALID';
                           const isSelected = selectedItemIds.has(item.itemPublicId);
-                          const isItemApplied = item.applyStatus === 'APPLIED';
-                          const selectionBlock = isValid && !isSelected && !isItemApplied
+                          const isPending = item.applyStatus === 'PENDING';
+                          const isCreated = item.applyStatus === 'CREATED';
+                          const isApplyFailure = item.applyStatus === 'CONFLICT'
+                            || item.applyStatus === 'FAILED';
+                          const isSkipped = item.applyStatus === 'SKIPPED';
+                          const selectionBlock = canSelect && isValid && isPending && !isSelected
                             ? findSelectionBlock(item, selectedItemsIndex)
                             : null;
                           const isConflicting = selectionBlock?.type === SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP;
                           const hasMalformedData = !validatePreviewItemInterval(item).valid
                             || (selectionBlock
                               && selectionBlock.type !== SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP);
-                          const isDisabled = isSelectionBusy || Boolean(selectionBlock);
+                          const isDisabled = !canSelect
+                            || !isPending
+                            || isSelectionBusy
+                            || Boolean(selectionBlock);
 
                           let bgColor;
-                          if (isItemApplied) bgColor = 'bg-green-500/20 border-green-500/50 text-green-300';
+                          if (isCreated) bgColor = 'bg-green-500/20 border-green-500/50 text-green-300';
+                          else if (isApplyFailure) bgColor = 'bg-red-500/20 border-red-500/50 text-red-300';
+                          else if (isSkipped) bgColor = 'bg-zinc-800 border-zinc-700 text-zinc-400';
                           else if (!isValid) bgColor = 'bg-red-500/20 border-red-500/50 text-red-300';
                           else if (hasMalformedData) bgColor = 'bg-amber-500/10 border-amber-500/30 text-amber-400 opacity-70';
                           else if (isConflicting) bgColor = 'bg-red-500/10 border-red-500/30 text-red-500/50 grayscale opacity-50';
@@ -120,7 +130,7 @@ const AutoScheduleTimeline = ({
                             <div
                               key={item.itemPublicId}
                               onClick={() => {
-                                if (isValid && !isItemApplied && !isDisabled) {
+                                if (isValid && isPending && !isDisabled) {
                                   handleToggleSelection(item.itemPublicId, isSelected);
                                 }
                               }}

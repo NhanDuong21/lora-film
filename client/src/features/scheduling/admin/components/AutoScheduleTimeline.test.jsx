@@ -33,6 +33,7 @@ describe('AutoScheduleTimeline', () => {
         selectedItemsIndex={buildSelectedItemsIndex(items, new Set())}
         handleToggleSelection={vi.fn()}
         isSelectionBusy={false}
+        canSelect
         timezone="UTC"
       />,
     );
@@ -62,6 +63,7 @@ describe('AutoScheduleTimeline', () => {
         selectedItemsIndex={buildSelectedItemsIndex(allItems, new Set(['Previous']))}
         handleToggleSelection={vi.fn()}
         isSelectionBusy={false}
+        canSelect
         timezone="UTC"
       />,
     );
