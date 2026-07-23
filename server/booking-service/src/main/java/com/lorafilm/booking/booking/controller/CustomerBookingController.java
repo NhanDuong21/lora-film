@@ -42,6 +42,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.util.Map;
 
+import com.lorafilm.booking.infrastructure.idempotency.Idempotent;
+
 @RestController
 @RequestMapping("/api/bookings")
 @Validated
@@ -78,6 +80,7 @@ public class CustomerBookingController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "409", description = "Reservation expired or already converted", content = @Content)
     })
+    @Idempotent
     public ResponseEntity<ApiResponse<BookingResponse>> createBooking(
             @Valid @RequestBody CreateBookingRequest request) {
         BookingResponse response = bookingService.createBooking(request);
@@ -143,6 +146,18 @@ public class CustomerBookingController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Booking cancelled successfully", bookingService.cancelBooking(publicId, request)));
     }
+
+    @PostMapping("/{publicId}/payment")
+    @Operation(summary = "Initiate payment", description = "Requests payment initiation for a PENDING_PAYMENT booking")
+    public ResponseEntity<ApiResponse<com.lorafilm.booking.payment.dto.PaymentResponseDto>> initiatePayment(
+            @PathVariable
+            @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")
+            String publicId,
+            @Valid @RequestBody com.lorafilm.booking.payment.dto.InitiatePaymentRequest request) {
+        com.lorafilm.booking.payment.dto.PaymentResponseDto response = bookingService.initiatePayment(publicId, request);
+        return ResponseEntity.ok(ApiResponse.success("Payment initiated successfully", response));
+    }
+
 
     private Sort parseSort(String sortValue) {
         String[] parts = sortValue == null ? new String[0] : sortValue.split(",", -1);

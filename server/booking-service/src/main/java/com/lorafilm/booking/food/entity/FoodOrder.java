@@ -9,8 +9,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import com.lorafilm.booking.booking.entity.Booking;
 import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigDecimal;
@@ -26,9 +29,9 @@ public class FoodOrder extends BaseEntity {
     @Column(name = "public_id", length = 36, nullable = false, unique = true)
     private String publicId;
 
-    // Cross-aggregate reference to Booking (nullable for standalone kiosk orders)
-    @Column(name = "booking_id", nullable = false)
-    private Long bookingId;
+    @OneToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @JoinColumn(name = "booking_id", nullable = false)
+    private Booking booking;
 
     @OneToMany(mappedBy = "foodOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FoodOrderItem> items = new ArrayList<>();
@@ -53,6 +56,10 @@ public class FoodOrder extends BaseEntity {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    private Integer version = 0;
+
     public FoodOrder() {
     }
 
@@ -64,12 +71,12 @@ public class FoodOrder extends BaseEntity {
         this.publicId = publicId;
     }
 
-    public Long getBookingId() {
-        return bookingId;
+    public Booking getBooking() {
+        return booking;
     }
 
-    public void setBookingId(Long bookingId) {
-        this.bookingId = bookingId;
+    public void setBooking(Booking booking) {
+        this.booking = booking;
     }
 
     public List<FoodOrderItem> getItems() {
@@ -177,5 +184,13 @@ public class FoodOrder extends BaseEntity {
             existingItem.recalculateSubtotal();
             this.recalculateTotals();
         }
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 }

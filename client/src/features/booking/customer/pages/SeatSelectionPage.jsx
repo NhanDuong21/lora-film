@@ -5,6 +5,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { ArrowLeft, CheckCircle, Info, Clock, AlertTriangle, ShieldAlert, Film, ShieldCheck } from 'lucide-react';
 import { getShowtimeDetail, getSeatLayout } from '@/features/catalog/customer/services/movieService';
+import { holdSeats } from '@/features/booking/customer/services/seatReservationService';
+import { createBooking } from '@/features/booking/customer/services/bookingService';
 
 export default function SeatSelectionPage() {
   const location = useLocation();
@@ -25,6 +27,7 @@ export default function SeatSelectionPage() {
   const [toastMessage, setToastMessage] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showGapModal, setShowGapModal] = useState(false);
+  const [reservationLoading, setReservationLoading] = useState(false);
 
   const fetchLayoutData = useCallback(async () => {
     if (!showtimeId) {
@@ -134,13 +137,38 @@ export default function SeatSelectionPage() {
     return false;
   };
 
-  const handleCheckoutSubmit = () => {
+  const handleCheckoutSubmit = async () => {
     if (selectedSeats.length === 0) return;
     if (checkSingleSeatGap()) {
       setShowGapModal(true);
       return;
     }
-    setShowSuccessModal(true);
+
+    setReservationLoading(true);
+    try {
+      const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+
+      const idempotencyKey = uuidv4();
+      const holdData = await holdSeats({
+        showtimeId: showtime.id,
+        seatIds: selectedSeats.map(s => s.id)
+      }, idempotencyKey);
+
+      const reservationPublicIds = holdData.reservationPublicIds || [];
+      const bookingData = await createBooking({
+        showtimePublicId: showtime.showtimePublicId,
+        reservationPublicIds
+      });
+
+      navigate(`/bookings/checkout?bookingId=${bookingData.publicId}`);
+    } catch (err) {
+      showToast(err.message || err.detail || "Không thể giữ ghế hoặc tạo đơn hàng. Vui lòng thử lại!");
+    } finally {
+      setReservationLoading(false);
+    }
   };
 
   const handleBack = () => {
@@ -433,15 +461,15 @@ export default function SeatSelectionPage() {
 
             {/* Action button */}
             <button
-              disabled={selectedSeats.length === 0}
+              disabled={selectedSeats.length === 0 || reservationLoading}
               onClick={handleCheckoutSubmit}
               className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-wider shadow-lg transition-all duration-300 transform ${
-                selectedSeats.length > 0
+                selectedSeats.length > 0 && !reservationLoading
                   ? 'bg-brand-orange hover:bg-opacity-95 hover:scale-[1.02] text-white shadow-brand-orange/25'
                   : 'bg-zinc-850 text-zinc-550 border border-zinc-800 cursor-not-allowed'
               }`}
             >
-              Tiếp tục đặt vé
+              {reservationLoading ? 'Đang giữ ghế...' : 'Tiếp tục đặt vé'}
             </button>
           </div>
         </div>

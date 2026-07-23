@@ -1,6 +1,7 @@
 package com.lorafilm.booking.reservation.service.impl;
 
 import com.lorafilm.booking.reservation.service.RedisLockService;
+import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -20,9 +21,11 @@ public class RedisLockServiceImpl implements RedisLockService {
     private final RedisOperations<String, String> redisTemplate;
     private final DefaultRedisScript<Long> holdScript;
     private final DefaultRedisScript<Long> releaseScript;
+    private final BookingMetricsManager bookingMetricsManager;
 
-    public RedisLockServiceImpl(RedisOperations<String, String> redisTemplate) {
+    public RedisLockServiceImpl(RedisOperations<String, String> redisTemplate, BookingMetricsManager bookingMetricsManager) {
         this.redisTemplate = redisTemplate;
+        this.bookingMetricsManager = bookingMetricsManager;
 
         this.holdScript = new DefaultRedisScript<>();
         this.holdScript.setScriptSource(new ResourceScriptSource(new ClassPathResource("lua/hold_seats.lua")));
@@ -38,7 +41,10 @@ public class RedisLockServiceImpl implements RedisLockService {
         List<String> keys = buildSeatLockKeys(showtimeId, seatIds);
         Long result = redisTemplate.execute(holdScript, keys, lockOwner, String.valueOf(ttlSeconds));
         boolean success = result != null && result == 1L;
-        if (!success) {
+        if (success) {
+            bookingMetricsManager.incrementRedisLockSuccess();
+        } else {
+            bookingMetricsManager.incrementRedisLockFailed();
             log.warn("Failed to acquire Redis locks for keys: {}", keys);
         }
         return success;
@@ -53,7 +59,13 @@ public class RedisLockServiceImpl implements RedisLockService {
     @Override
     public boolean acquireSingleLock(String lockKey, String lockOwner, long ttlSeconds) {
         Long result = redisTemplate.execute(holdScript, List.of(lockKey), lockOwner, String.valueOf(ttlSeconds));
-        return result != null && result == 1L;
+        boolean success = result != null && result == 1L;
+        if (success) {
+            bookingMetricsManager.incrementRedisLockSuccess();
+        } else {
+            bookingMetricsManager.incrementRedisLockFailed();
+        }
+        return success;
     }
 
     @Override

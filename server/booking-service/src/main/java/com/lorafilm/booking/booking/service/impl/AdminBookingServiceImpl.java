@@ -23,6 +23,10 @@ import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.response.PagedResponse;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
+import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +41,8 @@ import java.util.List;
 @Service
 public class AdminBookingServiceImpl implements AdminBookingService {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminBookingServiceImpl.class);
+
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
     private final BookingStatusTransitionService statusTransitionService;
@@ -46,6 +52,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
     private final BookingOutboxService outboxService;
     private final BookingTicketService ticketService;
     private final BookingSnapshotService snapshotService;
+    private final BookingMetricsManager bookingMetricsManager;
 
     public AdminBookingServiceImpl(BookingRepository bookingRepository,
                                   BookingMapper bookingMapper,
@@ -55,7 +62,8 @@ public class AdminBookingServiceImpl implements AdminBookingService {
                                   BookingOperationLogService operationLogService,
                                   BookingOutboxService outboxService,
                                   BookingTicketService ticketService,
-                                  BookingSnapshotService snapshotService) {
+                                  BookingSnapshotService snapshotService,
+                                  BookingMetricsManager bookingMetricsManager) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.statusTransitionService = statusTransitionService;
@@ -65,6 +73,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         this.outboxService = outboxService;
         this.ticketService = ticketService;
         this.snapshotService = snapshotService;
+        this.bookingMetricsManager = bookingMetricsManager;
     }
 
     @Override
@@ -95,6 +104,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
             throw new BusinessException("INVALID_BOOKING_ID", "Booking public ID cannot be null or empty");
         }
 
+        MDC.put("bookingId", publicId);
         Booking booking = bookingRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
 
@@ -135,6 +145,8 @@ public class AdminBookingServiceImpl implements AdminBookingService {
             throw new BusinessException("INVALID_REQUEST", "Target status is required");
         }
 
+        MDC.put("bookingId", publicId);
+        MDC.put("action", "ADMIN_CHANGE_STATUS");
         Booking booking = bookingRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
 
@@ -160,6 +172,26 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         auditService.logAudit(savedBooking.getId(), "ADMIN", "CHANGE_STATUS", "bookingStatus", oldStatus.name(), newStatus.name(), null, null, null, null);
         operationLogService.logOperation(savedBooking.getId(), "CHANGE_STATUS", "ADMIN", true, 0L, null, null, request.getReason());
         outboxService.createOutboxEvent("BOOKING", savedBooking.getId(), "BOOKING_" + newStatus.name(), savedBooking);
+
+        // Cancel/Delete tickets if cancelling/refunding/expiring
+        if (newStatus == BookingStatus.CANCELLED || newStatus == BookingStatus.EXPIRED || newStatus == BookingStatus.REFUNDED) {
+            try {
+                ticketService.deleteTickets(savedBooking.getId());
+            } catch (Exception e) {
+                log.warn("Failed to delete/cancel tickets for bookingId: {}", savedBooking.getId(), e);
+            }
+        }
+
+        // Increment Metrics
+        if (newStatus == BookingStatus.CONFIRMED) {
+            bookingMetricsManager.incrementBookingConfirmed();
+            bookingMetricsManager.incrementPaymentSuccess();
+        } else if (newStatus == BookingStatus.EXPIRED) {
+            bookingMetricsManager.incrementBookingExpired();
+            bookingMetricsManager.incrementPaymentFailed();
+        } else if (newStatus == BookingStatus.CANCELLED) {
+            bookingMetricsManager.incrementBookingCancelled();
+        }
 
         return bookingMapper.toAdminResponse(savedBooking);
     }

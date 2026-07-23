@@ -53,6 +53,12 @@ public class SeatReservationControllerTest {
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockBean
+    private com.lorafilm.booking.common.filter.CorrelationIdFilter correlationIdFilter;
+
+    @MockBean
+    private com.lorafilm.booking.common.filter.RequestLoggingFilter requestLoggingFilter;
+
     @Test
     public void holdSeats_Success_Returns201() throws Exception {
         HoldSeatRequest request = new HoldSeatRequest(1001L, List.of(15L, 16L));
