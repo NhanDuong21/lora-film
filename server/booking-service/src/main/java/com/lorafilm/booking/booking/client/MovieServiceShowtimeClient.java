@@ -118,9 +118,10 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         public String seatCode;
         public String seatType;
         public BigDecimal price;
+        public String currency;
 
         private ShowtimeBookingContext.SeatContext toDomain() {
-            return new ShowtimeBookingContext.SeatContext(seatId, seatCode, seatType, price);
+            return new ShowtimeBookingContext.SeatContext(seatId, seatCode, seatType, price, currency);
         }
     }
 

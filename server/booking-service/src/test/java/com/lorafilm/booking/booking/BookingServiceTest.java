@@ -1,5 +1,6 @@
 package com.lorafilm.booking.booking;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
@@ -9,6 +10,7 @@ import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.service.impl.BookingServiceImpl;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.util.BookingCodeGenerator;
@@ -60,6 +62,8 @@ class BookingServiceTest {
     private BookingCodeGenerator bookingCodeGenerator;
     @Mock
     private FoodOrderService foodOrderService;
+    @Mock
+    private BookingPriceSnapshotRepository priceSnapshotRepository;
 
     @Spy
     private BookingMapper bookingMapper = new BookingMapper();
@@ -76,7 +80,9 @@ class BookingServiceTest {
                 securityContextService,
                 bookingCodeGenerator,
                 bookingMapper,
-                foodOrderService);
+                foodOrderService,
+                priceSnapshotRepository,
+                new ObjectMapper().findAndRegisterModules());
     }
 
     @Test
@@ -103,6 +109,7 @@ class BookingServiceTest {
             booking.setCreatedAt(now);
             return booking;
         });
+        when(priceSnapshotRepository.existsByBookingId(100L)).thenReturn(false);
 
         BookingResponse response = bookingService.createBooking(request);
 
@@ -184,8 +191,8 @@ class BookingServiceTest {
                 "Lora Cinema",
                 "Room 1",
                 List.of(
-                        new ShowtimeBookingContext.SeatContext(101L, "A01", "STANDARD", new BigDecimal("120000")),
-                        new ShowtimeBookingContext.SeatContext(102L, "A02", "STANDARD", new BigDecimal("120000"))));
+                        new ShowtimeBookingContext.SeatContext(101L, "A01", "STANDARD", new BigDecimal("120000"), "VND"),
+                        new ShowtimeBookingContext.SeatContext(102L, "A02", "STANDARD", new BigDecimal("120000"), "VND")));
     }
 
     private Booking existingBooking(Instant expiresAt) {

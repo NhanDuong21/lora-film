@@ -1,16 +1,21 @@
 package com.lorafilm.booking.booking.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
+import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
 import com.lorafilm.booking.booking.entity.Booking;
+import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingSpecification;
 import com.lorafilm.booking.booking.service.BookingService;
 import com.lorafilm.booking.common.constant.BookingConstants;
@@ -57,6 +62,8 @@ public class BookingServiceImpl implements BookingService {
     private final BookingCodeGenerator bookingCodeGenerator;
     private final BookingMapper bookingMapper;
     private final FoodOrderService foodOrderService;
+    private final BookingPriceSnapshotRepository priceSnapshotRepository;
+    private final ObjectMapper objectMapper;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -66,7 +73,9 @@ public class BookingServiceImpl implements BookingService {
             SecurityContextService securityContextService,
             BookingCodeGenerator bookingCodeGenerator,
             BookingMapper bookingMapper,
-            FoodOrderService foodOrderService) {
+            FoodOrderService foodOrderService,
+            BookingPriceSnapshotRepository priceSnapshotRepository,
+            ObjectMapper objectMapper) {
         this.bookingRepository = bookingRepository;
         this.reservationRepository = reservationRepository;
         this.reservationService = reservationService;
@@ -75,6 +84,8 @@ public class BookingServiceImpl implements BookingService {
         this.bookingCodeGenerator = bookingCodeGenerator;
         this.bookingMapper = bookingMapper;
         this.foodOrderService = foodOrderService;
+        this.priceSnapshotRepository = priceSnapshotRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -111,6 +122,7 @@ public class BookingServiceImpl implements BookingService {
                 null);
 
         Booking savedBooking = bookingRepository.saveAndFlush(booking);
+        persistAuthoritativePriceSnapshot(savedBooking, context);
         List<Long> reservationIds = reservations.stream().map(SeatReservation::getId).toList();
         reservationService.convertReservations(new ConvertReservationRequest(savedBooking.getId(), reservationIds));
         return bookingMapper.toResponse(savedBooking);
@@ -343,6 +355,9 @@ public class BookingServiceImpl implements BookingService {
         if (context.seats() == null) {
             throw new IntegrationException("Movie Service returned incomplete seat information");
         }
+        if (context.seats().size() != requestedSeatIds.size()) {
+            throw new IntegrationException("Movie Service returned duplicate or extra seat price lines");
+        }
         Set<Long> returnedSeatIds = context.seats().stream()
                 .map(ShowtimeBookingContext.SeatContext::seatId)
                 .collect(java.util.stream.Collectors.toSet());
@@ -365,6 +380,53 @@ public class BookingServiceImpl implements BookingService {
         if (calculatedTotal.signum() < 0 || calculatedTotal.compareTo(context.totalAmount()) != 0) {
             throw new IntegrationException("Movie Service returned inconsistent pricing information");
         }
+        if (context.ticketAmount().signum() <= 0) {
+            throw new IntegrationException("Movie Service returned a non-positive ticket amount");
+        }
+        BigDecimal seatLineTotal = BigDecimal.ZERO;
+        for (ShowtimeBookingContext.SeatContext seat : context.seats()) {
+            if (seat.seatId() == null || seat.price() == null || seat.price().signum() <= 0) {
+                throw new IntegrationException("Movie Service returned an invalid seat price line");
+            }
+            if (!context.currency().equals(seat.currency())) {
+                throw new IntegrationException("Movie Service returned mixed seat-line currencies");
+            }
+            seatLineTotal = seatLineTotal.add(seat.price());
+        }
+        if (seatLineTotal.compareTo(context.ticketAmount()) != 0) {
+            throw new IntegrationException("Seat price lines do not equal the authoritative ticket amount");
+        }
+    }
+
+    private void persistAuthoritativePriceSnapshot(Booking booking, ShowtimeBookingContext context) {
+        if (priceSnapshotRepository.existsByBookingId(booking.getId())) {
+            throw new BusinessException(
+                    "BOOKING_PRICE_SNAPSHOT_EXISTS",
+                    "The Booking already has an authoritative price snapshot",
+                    HttpStatus.CONFLICT);
+        }
+        BookingPriceSnapshotPayload payload = new BookingPriceSnapshotPayload(
+                context.showtimeId(),
+                context.showtimePublicId(),
+                Instant.now(),
+                context.currency(),
+                context.movieId(),
+                context.movieTitle(),
+                context.ticketAmount(),
+                context.seats().stream()
+                        .map(seat -> new BookingPriceSnapshotPayload.SeatPriceLine(
+                                seat.seatId(), seat.seatLabel(), seat.seatType(), seat.price()))
+                        .toList());
+        BookingPriceSnapshot snapshot = new BookingPriceSnapshot();
+        snapshot.setBooking(booking);
+        snapshot.setCurrency(context.currency());
+        snapshot.setPricingEngineVersion("showtime-snapshot-v1");
+        try {
+            snapshot.setPricingBreakdownJson(objectMapper.writeValueAsString(payload));
+        } catch (JsonProcessingException exception) {
+            throw new IntegrationException("Cannot persist authoritative price snapshot", exception);
+        }
+        priceSnapshotRepository.save(snapshot);
     }
 
     private String generateUniqueBookingCode() {
