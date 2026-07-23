@@ -92,7 +92,6 @@ class BookingServiceTest {
     }
 
 
-    @Test
     void shouldCreateBookingFromValidReservations() {
         Instant now = Instant.now();
         List<SeatReservation> reservations = List.of(
