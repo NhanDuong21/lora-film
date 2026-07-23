@@ -26,6 +26,7 @@ export const routePaths = {
     members: '/admin/members',
     settings: '/admin/settings',
     showtimes: '/admin/showtimes',
+    pricing: '/admin/pricing',
     staff: '/admin/staff',
     concessionSales: '/admin/concession-sales',
     payroll: '/admin/payroll',

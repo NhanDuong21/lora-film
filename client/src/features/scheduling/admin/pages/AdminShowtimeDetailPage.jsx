@@ -129,8 +129,12 @@ const AdminShowtimeDetailPage = () => {
                     setTargetStatus(t);
                     setStatusModalOpen(true);
                   }}
-                  disabled={isUpdatingStatus}
-                  title={isUpdatingStatus ? 'Đang cập nhật trạng thái suất chiếu; vui lòng đợi.' : undefined}
+                  disabled={isUpdatingStatus || (t === 'OPEN_FOR_BOOKING' && prices?.complete === false)}
+                  title={isUpdatingStatus
+                    ? 'Đang cập nhật trạng thái suất chiếu; vui lòng đợi.'
+                    : (t === 'OPEN_FOR_BOOKING' && prices?.complete === false
+                      ? 'Không thể mở bán khi snapshot giá chưa đầy đủ.'
+                      : undefined)}
                   className="bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-zinc-200 font-bold px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-colors"
                 >
                   {getShowtimeTransitionActionPresentation(t).label}
@@ -203,10 +207,31 @@ const AdminShowtimeDetailPage = () => {
 
           {/* Pricing Info */}
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6">
-            <h2 className="text-sm font-black uppercase tracking-wider text-zinc-300 flex items-center gap-2 border-b border-zinc-800 pb-3 mb-4">
-              <DollarSign className="w-4 h-4 text-brand-orange" />
-              Bảng giá áp dụng (Snapshot)
-            </h2>
+            <div className="mb-4 flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h2 className="text-sm font-black uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-brand-orange" />
+                Bảng giá áp dụng (Snapshot)
+              </h2>
+              <button
+                type="button"
+                onClick={() => navigate(`/admin/showtimes/${id}/pricing`)}
+                className="text-xs font-bold text-brand-orange hover:underline"
+              >
+                Nguồn & chẩn đoán
+              </button>
+            </div>
+
+            {prices?.complete === false && (
+              <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                Snapshot giá chưa đầy đủ. Còn thiếu {prices.missingSeatTypes?.length || 0} loại ghế
+                {prices.ambiguousSeatTypes?.length ? ` và ${prices.ambiguousSeatTypes.length} loại ghế bị mơ hồ` : ''}.
+                {showtime.status === 'DRAFT' && (
+                  <button type="button" onClick={() => navigate(`/admin/showtimes/${id}/pricing`)} className="ml-2 font-black underline">
+                    Phân giải giá
+                  </button>
+                )}
+              </div>
+            )}
 
             {!prices || prices.prices?.length === 0 ? (
               <p className="text-zinc-500 text-sm italic">Không có dữ liệu giá. Giá chưa được cấu hình cho suất chiếu này.</p>
@@ -217,6 +242,7 @@ const AdminShowtimeDetailPage = () => {
                     <span className="text-sm text-zinc-200 font-bold mb-1 block">{p.seatTypeName || 'Loại ghế chưa đặt tên'}</span>
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2 block">{p.seatTypeCode || 'Không có mã'}</span>
                     <span className="text-lg font-black text-green-400">{formatCurrency(p.price, prices.currency)}</span>
+                    <p className="mt-2 text-[10px] font-bold text-zinc-500">{p.pricingSource || 'LEGACY'}</p>
                     <details className="mt-2 text-[10px] text-zinc-500">
                       <summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary>
                       <p className="mt-1 break-all font-mono">seatTypeId: {p.seatTypeId}</p>

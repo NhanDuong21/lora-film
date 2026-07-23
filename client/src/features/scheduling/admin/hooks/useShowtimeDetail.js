@@ -17,7 +17,7 @@ export default function useShowtimeDetail(showtimePublicId, { triggerToast }) {
           .catch(err => ({ success: false, error: err, isDetailError: true })),
         adminShowtimeService.getStatusHistory(showtimePublicId)
           .catch(() => ({ success: false, data: [] })),
-        adminShowtimeService.getPrices(showtimePublicId)
+        adminShowtimeService.getPricing(showtimePublicId)
           .catch(err => ({ success: false, data: { prices: [] }, isPricingError: err.response?.status }))
       ]);
       

@@ -20,6 +20,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/movies') || path.includes('/movies/')) return 'movies';
     if (path.endsWith('/genres')) return 'genres';
     if (path.includes('/showtimes')) return 'showtimes';
+    if (path.includes('/pricing')) return 'pricing';
     if (path === '/admin/showtime-schedules/create') return 'auto-schedule-create';
     if (path.includes('/showtime-schedules')) return 'auto-schedule-history';
     if (path.endsWith('/events') || path.includes('/events')) return 'events-promo';

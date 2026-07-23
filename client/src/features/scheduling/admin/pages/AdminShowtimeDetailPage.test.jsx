@@ -106,6 +106,25 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
     expect(screen.queryByRole('button', { name: 'Mở bán' })).not.toBeInTheDocument();
   });
 
+  it('disables opening when the backend reports incomplete pricing', () => {
+    useShowtimeDetail.mockReturnValue({
+      ...detailValue(),
+      showtime: { ...detailValue().showtime, status: 'DRAFT' },
+      prices: {
+        complete: false,
+        prices: [],
+        missingSeatTypes: [{ seatTypeId: 'vip', seatTypeName: 'Ghế VIP' }],
+        ambiguousSeatTypes: [],
+      },
+    });
+    renderPage();
+
+    const open = screen.getByRole('button', { name: 'Mở bán' });
+    expect(open).toBeDisabled();
+    expect(open).toHaveAttribute('title', 'Không thể mở bán khi snapshot giá chưa đầy đủ.');
+    expect(screen.getByText(/Snapshot giá chưa đầy đủ/)).toBeInTheDocument();
+  });
+
   it('renders pricing names and an audit timeline with localized fallbacks and preview link', () => {
     useShowtimeDetail.mockReturnValue({
       ...detailValue(),

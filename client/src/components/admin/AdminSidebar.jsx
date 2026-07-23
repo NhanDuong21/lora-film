@@ -21,7 +21,8 @@ import {
   DoorOpen,
   Armchair,
   History,
-  Zap
+  Zap,
+  BadgeDollarSign
 } from 'lucide-react';
 
 
@@ -202,6 +203,13 @@ export default function AdminSidebar({
                   >
                     <Calendar className="w-4 h-4 shrink-0" />
                     <span>Quản lý suất chiếu</span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('pricing', '#/admin/pricing')}
+                    className={getSubLinkClass('pricing')}
+                  >
+                    <BadgeDollarSign className="w-4 h-4 shrink-0" />
+                    <span>Chính sách giá</span>
                   </button>
                   <button
                     onClick={() => handleTabClick('auto-schedule-create', '#/admin/showtime-schedules/create')}
