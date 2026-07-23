@@ -18,6 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.lorafilm.booking.food.repository.FoodOrderItemRepository;
 import com.lorafilm.booking.food.repository.FoodOrderRepository;
+import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.food.service.FoodOrderService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,19 +40,22 @@ public class FoodOrderServiceImpl implements FoodOrderService {
     private final BookingOutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
     private final com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+    private final BookingRepository bookingRepository;
 
     public FoodOrderServiceImpl(FoodOrderRepository foodOrderRepository,
                                 FoodOrderItemRepository foodOrderItemRepository,
                                 FoodCatalogClient foodCatalogClient,
                                 BookingOutboxEventRepository outboxEventRepository,
                                 ObjectMapper objectMapper,
-                                com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager) {
+                                com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager,
+                                BookingRepository bookingRepository) {
         this.foodOrderRepository = foodOrderRepository;
         this.foodOrderItemRepository = foodOrderItemRepository;
         this.foodCatalogClient = foodCatalogClient;
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper;
         this.bookingMetricsManager = bookingMetricsManager;
+        this.bookingRepository = bookingRepository;
     }
 
     @Override
@@ -74,7 +79,9 @@ public class FoodOrderServiceImpl implements FoodOrderService {
     public FoodOrderResponse createFoodOrder(Long bookingId) {
         FoodOrder foodOrder = new FoodOrder();
         foodOrder.setPublicId(UUID.randomUUID().toString());
-        foodOrder.setBookingId(bookingId);
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BusinessException("BOOKING_NOT_FOUND", "Booking not found with ID: " + bookingId));
+        foodOrder.setBooking(booking);
         foodOrder.setStatus(FoodOrderStatus.PENDING);
 
         FoodOrder saved = foodOrderRepository.save(foodOrder);
