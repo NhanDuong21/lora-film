@@ -40,11 +40,14 @@ class FoodOrderServiceTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+
     private FoodOrderServiceImpl foodOrderService;
 
     @BeforeEach
     void setUp() {
-        foodOrderService = new FoodOrderServiceImpl(foodOrderRepository, foodOrderItemRepository, foodCatalogClient, outboxEventRepository, objectMapper);
+        foodOrderService = new FoodOrderServiceImpl(foodOrderRepository, foodOrderItemRepository, foodCatalogClient, outboxEventRepository, objectMapper, bookingMetricsManager);
     }
 
     @Test

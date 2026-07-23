@@ -43,6 +43,9 @@ public class InternalBookingServiceTest {
     @Mock
     private BookingOutboxService outboxService;
 
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+
     private BookingMapper bookingMapper = new BookingMapper();
     private BookingStatusTransitionService statusTransitionService = new BookingStatusTransitionService();
 
@@ -59,7 +62,8 @@ public class InternalBookingServiceTest {
                 historyService,
                 auditService,
                 operationLogService,
-                outboxService
+                outboxService,
+                bookingMetricsManager
         );
 
         sampleBooking = new Booking();

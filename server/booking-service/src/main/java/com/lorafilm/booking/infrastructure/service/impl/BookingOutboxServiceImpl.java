@@ -7,6 +7,7 @@ import com.lorafilm.booking.infrastructure.entity.BookingOutboxEvent;
 import com.lorafilm.booking.infrastructure.enums.OutboxStatus;
 import com.lorafilm.booking.infrastructure.repository.BookingOutboxEventRepository;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
+import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,10 +18,12 @@ public class BookingOutboxServiceImpl implements BookingOutboxService {
 
     private final BookingOutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final BookingMetricsManager bookingMetricsManager;
 
-    public BookingOutboxServiceImpl(BookingOutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
+    public BookingOutboxServiceImpl(BookingOutboxEventRepository outboxEventRepository, ObjectMapper objectMapper, BookingMetricsManager bookingMetricsManager) {
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper;
+        this.bookingMetricsManager = bookingMetricsManager;
     }
 
     @Override
@@ -57,6 +60,8 @@ public class BookingOutboxServiceImpl implements BookingOutboxService {
         event.setStatus(OutboxStatus.PENDING);
         event.setRetryCount(0);
 
-        return outboxEventRepository.save(event);
+        BookingOutboxEvent saved = outboxEventRepository.save(event);
+        bookingMetricsManager.incrementOutboxCreated();
+        return saved;
     }
 }

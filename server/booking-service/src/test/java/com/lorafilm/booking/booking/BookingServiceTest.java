@@ -60,6 +60,8 @@ class BookingServiceTest {
     private BookingCodeGenerator bookingCodeGenerator;
     @Mock
     private FoodOrderService foodOrderService;
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
 
     @Spy
     private BookingMapper bookingMapper = new BookingMapper();
@@ -76,7 +78,8 @@ class BookingServiceTest {
                 securityContextService,
                 bookingCodeGenerator,
                 bookingMapper,
-                foodOrderService);
+                foodOrderService,
+                bookingMetricsManager);
     }
 
     @Test

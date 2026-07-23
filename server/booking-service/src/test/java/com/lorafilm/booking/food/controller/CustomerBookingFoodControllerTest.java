@@ -34,6 +34,12 @@ class CustomerBookingFoodControllerTest {
     @MockBean
     private com.lorafilm.booking.security.jwt.JwtTokenProvider jwtTokenProvider;
 
+    @MockBean
+    private com.lorafilm.booking.common.filter.CorrelationIdFilter correlationIdFilter;
+
+    @MockBean
+    private com.lorafilm.booking.common.filter.RequestLoggingFilter requestLoggingFilter;
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -46,7 +52,7 @@ class CustomerBookingFoodControllerTest {
 
         when(facadeService.addFoodItem(eq(bookingId), any())).thenReturn(new FoodOrderResponse());
 
-        mockMvc.perform(post("/api/v1/bookings/{bookingId}/foods", bookingId)
+        mockMvc.perform(post("/api/bookings/{bookingId}/foods", bookingId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());

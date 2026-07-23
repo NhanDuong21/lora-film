@@ -32,4 +32,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     Page<Booking> findByUserId(Long userId, Pageable pageable);
 
     Page<Booking> findByUserIdAndBookingStatus(Long userId, BookingStatus bookingStatus, Pageable pageable);
+
+    long countByCreatedAtAfter(java.time.Instant start);
+
+    long countByPaymentStatus(com.lorafilm.booking.booking.enums.PaymentStatus status);
+
+    long countByBookingStatus(com.lorafilm.booking.booking.enums.BookingStatus status);
 }
