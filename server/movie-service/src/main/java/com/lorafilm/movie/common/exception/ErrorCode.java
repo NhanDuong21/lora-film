@@ -90,6 +90,12 @@ public enum ErrorCode {
     SHOWTIME_OVERLAP_CONFLICT("Showtime overlaps with an existing schedule", 409),
     SHOWTIME_PRICE_MISSING("Showtime price config is missing", 400),
     SHOWTIME_PRICE_NOT_EDITABLE("Cannot edit prices for this showtime status", 400),
+    PRICE_POLICY_NOT_FOUND("Price policy not found", 404),
+    PRICE_POLICY_OVERLAP("Price policy rules overlap at equal rank", 409),
+    PRICE_POLICY_IMMUTABLE("Published price policies are immutable", 409),
+    PRICING_AMBIGUOUS("More than one price rule has the highest rank", 409),
+    PRICING_INCOMPLETE("Showtime pricing is incomplete", 409),
+    PRICING_CONCURRENT_MODIFICATION("Pricing data was modified by another request", 409),
     INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400),
     
     AUDITORIUM_LAYOUT_NOT_EDITABLE("The seating arrangement cannot be changed while the auditorium is in operation", 409),

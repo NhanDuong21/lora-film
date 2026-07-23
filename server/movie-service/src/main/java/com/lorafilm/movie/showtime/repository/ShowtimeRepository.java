@@ -132,4 +132,20 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
 
     @org.springframework.data.jpa.repository.Query("SELECT s.movie.id, COUNT(s) FROM Showtime s WHERE s.movie.id IN :movieIds AND s.deletedAt IS NULL GROUP BY s.movie.id")
     java.util.List<Object[]> countShowtimesByMovieIds(@org.springframework.data.repository.query.Param("movieIds") java.util.List<Long> movieIds);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"auditorium"})
+    @org.springframework.data.jpa.repository.Query("""
+            select s from Showtime s
+            where s.cinema.id = :cinemaId
+              and s.status = com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.DRAFT
+              and s.deletedAt is null
+              and s.startTime >= :fromInclusive
+              and (:toExclusive is null or s.startTime < :toExclusive)
+            order by s.startTime asc
+            """)
+    org.springframework.data.domain.Page<Showtime> findFutureDraftsForPricingPolicy(
+            @org.springframework.data.repository.query.Param("cinemaId") Long cinemaId,
+            @org.springframework.data.repository.query.Param("fromInclusive") java.time.Instant fromInclusive,
+            @org.springframework.data.repository.query.Param("toExclusive") java.time.Instant toExclusive,
+            org.springframework.data.domain.Pageable pageable);
 }
