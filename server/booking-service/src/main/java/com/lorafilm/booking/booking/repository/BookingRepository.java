@@ -15,6 +15,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpecificationExecutor<Booking> {
@@ -38,4 +39,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     long countByPaymentStatus(com.lorafilm.booking.booking.enums.PaymentStatus status);
 
     long countByBookingStatus(com.lorafilm.booking.booking.enums.BookingStatus status);
+
+    @Query("SELECT b FROM Booking b " +
+           "WHERE b.bookingStatus = :status " +
+           "AND b.expiresAt <= :now")
+    List<Booking> findExpiredBookings(@Param("status") BookingStatus status,
+                                      @Param("now") java.time.Instant now,
+                                      Pageable pageable);
 }
