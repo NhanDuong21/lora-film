@@ -10,6 +10,8 @@ import com.lorafilm.movie.pricing.dto.request.ShowtimePriceItemRequest;
 import com.lorafilm.movie.pricing.dto.request.UpdateShowtimePricesRequest;
 import com.lorafilm.movie.pricing.dto.response.ShowtimePricesResponse;
 import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.pricing.service.PricePolicyResolver;
+import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
 import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
 import com.lorafilm.movie.seat.repository.SeatRepository;
@@ -46,6 +48,9 @@ public class ShowtimePricingServiceImplTest {
     @Mock
     private SeatRepository seatRepository;
 
+    @Mock
+    private PricePolicyResolver pricePolicyResolver;
+
     @InjectMocks
     private ShowtimePricingServiceImpl pricingService;
 
@@ -64,6 +69,9 @@ public class ShowtimePricingServiceImplTest {
         showtime.setPublicId("showtime-id");
         showtime.setAuditorium(auditorium);
         showtime.setStatus(ShowtimeStatus.DRAFT);
+        Cinema cinema = new Cinema();
+        cinema.setTimezone("Asia/Ho_Chi_Minh");
+        showtime.setCinema(cinema);
 
         vipSeatType = new SeatType();
         vipSeatType.setId(1L);
@@ -88,15 +96,12 @@ public class ShowtimePricingServiceImplTest {
         item1.setPrice(new BigDecimal("100000"));
         request.setPrices(Collections.singletonList(item1));
 
-        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("showtime-id"))
+        when(showtimeRepository.findByPublicIdForUpdate("showtime-id"))
                 .thenReturn(Optional.of(showtime));
         when(seatRepository.findActiveSeatTypePublicIdsByAuditoriumId(1L))
                 .thenReturn(Collections.singletonList("vip-id"));
         when(seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(any()))
                 .thenReturn(Collections.singletonList(vipSeatType));
-        when(showtimePriceRepository.findByShowtimeId(1L))
-                .thenReturn(new ArrayList<>());
-        
         ShowtimePrice sp = new ShowtimePrice();
         sp.setSeatType(vipSeatType);
         sp.setPrice(new BigDecimal("100000"));
@@ -133,7 +138,7 @@ public class ShowtimePricingServiceImplTest {
         item2.setPrice(new BigDecimal("120000"));
         request.setPrices(Arrays.asList(item1, item2));
 
-        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("showtime-id"))
+        when(showtimeRepository.findByPublicIdForUpdate("showtime-id"))
                 .thenReturn(Optional.of(showtime));
         when(seatRepository.findActiveSeatTypePublicIdsByAuditoriumId(1L))
                 .thenReturn(Collections.singletonList("vip-id"));
@@ -154,13 +159,12 @@ public class ShowtimePricingServiceImplTest {
         item1.setPrice(new BigDecimal("100000"));
         request.setPrices(Collections.singletonList(item1));
 
-        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("showtime-id"))
+        when(showtimeRepository.findByPublicIdForUpdate("showtime-id"))
                 .thenReturn(Optional.of(showtime));
         when(seatRepository.findActiveSeatTypePublicIdsByAuditoriumId(1L))
                 .thenReturn(Collections.singletonList("vip-id"));
         when(seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(any()))
                 .thenReturn(Collections.singletonList(vipSeatType));
-
         BusinessException exception = assertThrows(BusinessException.class, () -> 
                 pricingService.updatePrices("showtime-id", request));
         assertEquals(ErrorCode.SEAT_TYPE_INACTIVE, exception.getErrorCode());
@@ -174,18 +178,14 @@ public class ShowtimePricingServiceImplTest {
         item1.setPrice(new BigDecimal("100000"));
         request.setPrices(Collections.singletonList(item1));
 
-        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("showtime-id"))
+        when(showtimeRepository.findByPublicIdForUpdate("showtime-id"))
                 .thenReturn(Optional.of(showtime));
         // Auditorium has standard but NOT vip
         when(seatRepository.findActiveSeatTypePublicIdsByAuditoriumId(1L))
                 .thenReturn(Collections.singletonList("standard-id"));
-        when(seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(any()))
-                .thenReturn(Collections.singletonList(vipSeatType));
-
         BusinessException exception = assertThrows(BusinessException.class, () -> 
                 pricingService.updatePrices("showtime-id", request));
-        assertEquals(ErrorCode.SEAT_TYPE_INVALID, exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("not inside the auditorium"));
+        assertEquals(ErrorCode.PRICING_INCOMPLETE, exception.getErrorCode());
     }
 
     @Test
@@ -200,7 +200,7 @@ public class ShowtimePricingServiceImplTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> 
                 pricingService.validateCompleteness(showtime));
-        assertEquals(ErrorCode.SHOWTIME_PRICE_MISSING, exception.getErrorCode());
+        assertEquals(ErrorCode.PRICING_INCOMPLETE, exception.getErrorCode());
     }
 
     @Test
@@ -210,8 +210,12 @@ public class ShowtimePricingServiceImplTest {
         
         ShowtimePrice sp1 = new ShowtimePrice();
         sp1.setSeatType(vipSeatType);
+        sp1.setPrice(new BigDecimal("100000"));
+        sp1.setCurrency("VND");
         ShowtimePrice sp2 = new ShowtimePrice();
         sp2.setSeatType(standardSeatType);
+        sp2.setPrice(new BigDecimal("75000"));
+        sp2.setCurrency("VND");
         when(showtimePriceRepository.findByShowtimeIdWithSeatType(1L))
                 .thenReturn(Arrays.asList(sp1, sp2));
 
@@ -224,7 +228,7 @@ public class ShowtimePricingServiceImplTest {
 
         UpdateShowtimePricesRequest request = new UpdateShowtimePricesRequest();
 
-        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("showtime-id"))
+        when(showtimeRepository.findByPublicIdForUpdate("showtime-id"))
                 .thenReturn(Optional.of(showtime));
 
         BusinessException exception = assertThrows(BusinessException.class, () -> 
@@ -238,7 +242,7 @@ public class ShowtimePricingServiceImplTest {
 
         UpdateShowtimePricesRequest request = new UpdateShowtimePricesRequest();
 
-        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("showtime-id"))
+        when(showtimeRepository.findByPublicIdForUpdate("showtime-id"))
                 .thenReturn(Optional.of(showtime));
 
         BusinessException exception = assertThrows(BusinessException.class, () -> 

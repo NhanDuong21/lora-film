@@ -21,6 +21,7 @@ public class AdminShowtimeMapper {
         response.setSource(showtime.getSource() != null ? showtime.getSource().name() : null);
         response.setCreatedAt(showtime.getCreatedAt());
         response.setUpdatedAt(showtime.getUpdatedAt());
+        response.setVersion(showtime.getVersion());
 
         if (showtime.getMovie() != null) {
             AdminShowtimeResponse.MovieSummary movieSummary = new AdminShowtimeResponse.MovieSummary();

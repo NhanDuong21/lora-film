@@ -63,6 +63,10 @@ public class Showtime extends BaseAuditableEntity {
     @Column(name = "source", nullable = false)
     private ShowtimeSource source = ShowtimeSource.MANUAL;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     public Showtime() {}
 
     public Long getId() {
@@ -176,4 +180,7 @@ public class Showtime extends BaseAuditableEntity {
     public void setSource(ShowtimeSource source) {
         this.source = source;
     }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 }

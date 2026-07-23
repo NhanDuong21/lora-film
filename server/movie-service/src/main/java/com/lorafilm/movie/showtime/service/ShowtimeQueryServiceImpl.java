@@ -37,7 +37,7 @@ import com.lorafilm.movie.showtime.dto.ShowtimeMovieVersionDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeCinemaDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeAuditoriumDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
-import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeSpecification;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
@@ -137,8 +137,13 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
 
         List<SeatLayoutDto.SeatPriceDto> seatPriceDtos = seats.stream().map(seat -> {
             ShowtimePrice showtimePrice = priceMap.get(seat.getSeatType().getId());
-            BigDecimal price = showtimePrice != null ? showtimePrice.getPrice() : BigDecimal.ZERO;
-            String currency = showtimePrice != null ? showtimePrice.getCurrency() : "VND";
+            if (showtimePrice == null || showtimePrice.getPrice() == null
+                    || showtimePrice.getPrice().signum() <= 0) {
+                throw new BusinessException(ErrorCode.PRICING_INCOMPLETE,
+                        "Missing or invalid price for SeatType " + seat.getSeatType().getPublicId());
+            }
+            BigDecimal price = showtimePrice.getPrice();
+            String currency = showtimePrice.getCurrency();
             boolean isBlocked = blockedSeatMap.containsKey(seat.getId());
 
             SeatLayoutDto.SeatPriceDto dto = new SeatLayoutDto.SeatPriceDto();
