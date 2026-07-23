@@ -7,6 +7,12 @@ import {
   formatShowtimeCinemaTime,
   resolveShowtimeCinemaTimezone,
 } from '@/features/scheduling/admin/utils/showtimeCinemaDateTime';
+import {
+  getHistoryActorLabel,
+  getLocalizedHistoryReason,
+  getShowtimeSourcePresentation,
+  getShowtimeStatusPresentation,
+} from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const formatCurrency = (amount, currency = 'VND') => {
   if (amount == null) return 'N/A';
@@ -16,7 +22,7 @@ const formatCurrency = (amount, currency = 'VND') => {
 const getStatusColor = (status) => {
   switch (status) {
     case 'DRAFT': return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20';
-    case 'OPEN': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+    case 'OPEN_FOR_BOOKING': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
     case 'CLOSED': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
     case 'CANCELLED': return 'bg-red-500/10 text-red-400 border-red-500/20';
     case 'FINISHED': return 'bg-green-500/10 text-green-400 border-green-500/20';
@@ -26,9 +32,9 @@ const getStatusColor = (status) => {
 
 const getAvailableTransitions = (status) => {
   switch (status) {
-    case 'DRAFT': return ['OPEN', 'CANCELLED'];
-    case 'OPEN': return ['CLOSED', 'CANCELLED'];
-    case 'CLOSED': return ['OPEN', 'FINISHED', 'CANCELLED'];
+    case 'DRAFT': return ['OPEN_FOR_BOOKING', 'CANCELLED'];
+    case 'OPEN_FOR_BOOKING': return ['CLOSED', 'CANCELLED'];
+    case 'CLOSED': return ['FINISHED', 'CANCELLED'];
     default: return [];
   }
 };
@@ -92,7 +98,7 @@ const AdminShowtimeDetailPage = () => {
                 CHI TIẾT SUẤT CHIẾU
               </h1>
               <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border ${getStatusColor(showtime.status)}`}>
-                {showtime.status}
+                {getShowtimeStatusPresentation(showtime.status).label}
               </span>
             </div>
             <p className="text-zinc-500 text-sm mt-1 flex gap-2">
@@ -122,7 +128,7 @@ const AdminShowtimeDetailPage = () => {
                   disabled={isUpdatingStatus}
                   className="bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-zinc-200 font-bold px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-colors"
                 >
-                  {t}
+                  {getShowtimeStatusPresentation(t).label}
                 </button>
               ))}
             </div>
@@ -203,8 +209,13 @@ const AdminShowtimeDetailPage = () => {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {prices.prices.map(p => (
                   <div key={p.seatTypeId} className="bg-zinc-950 border border-zinc-800 p-4 rounded-xl">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Loại ghế: {p.seatTypeId}</span>
+                    <span className="text-sm text-zinc-200 font-bold mb-1 block">{p.seatTypeName || 'Loại ghế chưa đặt tên'}</span>
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2 block">{p.seatTypeCode || 'Không có mã'}</span>
                     <span className="text-lg font-black text-green-400">{formatCurrency(p.price, prices.currency)}</span>
+                    <details className="mt-2 text-[10px] text-zinc-500">
+                      <summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary>
+                      <p className="mt-1 break-all font-mono">seatTypeId: {p.seatTypeId}</p>
+                    </details>
                   </div>
                 ))}
               </div>
@@ -236,13 +247,36 @@ const AdminShowtimeDetailPage = () => {
                     <div className="w-[calc(100%-2.5rem)] md:w-[calc(50%-1.5rem)] bg-zinc-950 p-4 rounded-xl border border-zinc-800/80 shadow">
                       <div className="flex items-center justify-between mb-1">
                         <span className={`px-1.5 py-0.5 rounded text-[9px] font-black tracking-wider uppercase border ${getStatusColor(h.newStatus)}`}>
-                          {h.newStatus}
+                          {h.previousStatus ? getShowtimeStatusPresentation(h.previousStatus).label : 'Khởi tạo'} → {getShowtimeStatusPresentation(h.newStatus).label}
                         </span>
                         <time className="text-[10px] text-zinc-500 font-medium">
                           {formatShowtimeCinemaTime(h.changedAt, cinemaTimezone)} - {formatShowtimeCinemaDate(h.changedAt, cinemaTimezone)}
                         </time>
                       </div>
-                      {h.reason && <p className="text-xs text-zinc-400 mt-2 bg-zinc-900/50 p-2 rounded">{h.reason}</p>}
+                      <p className="text-xs text-zinc-400 mt-2 bg-zinc-900/50 p-2 rounded">{getLocalizedHistoryReason(h.reason)}</p>
+                      <p className="mt-2 text-[10px] text-zinc-500">
+                        {getHistoryActorLabel(h.changedBy)} · {getShowtimeSourcePresentation(h.source).label}
+                      </p>
+                      {h.previewPublicId && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/showtime-schedules/${encodeURIComponent(h.previewPublicId)}`)}
+                          className="mt-2 text-[10px] font-bold text-brand-orange hover:underline"
+                        >
+                          Mở bản xem trước nguồn
+                        </button>
+                      )}
+                      <details className="mt-2 text-[10px] text-zinc-500">
+                        <summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary>
+                        <div className="mt-1 break-all font-mono">
+                          <p>{h.previousStatus || 'null'} → {h.newStatus || 'null'}</p>
+                          <p>changedBy: {h.changedBy ?? 'null'}</p>
+                          <p>changedAt: {h.changedAt || 'null'}</p>
+                          <p>source: {h.source || 'null'}</p>
+                          <p>previewPublicId: {h.previewPublicId || 'null'}</p>
+                          <p>reason: {h.reason || 'null'}</p>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 ))
@@ -258,7 +292,7 @@ const AdminShowtimeDetailPage = () => {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-2">Chuyển trạng thái</h3>
             <p className="text-sm text-zinc-400 mb-4">
-              Bạn đang chuyển trạng thái suất chiếu sang <strong className={`px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider uppercase border ${getStatusColor(targetStatus)}`}>{targetStatus}</strong>.
+              Bạn đang chuyển trạng thái suất chiếu sang <strong className={`px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider uppercase border ${getStatusColor(targetStatus)}`}>{getShowtimeStatusPresentation(targetStatus).label}</strong>.
             </p>
             
             <label className="block text-xs font-semibold text-zinc-400 mb-1">Lý do thay đổi (Tuỳ chọn)</label>

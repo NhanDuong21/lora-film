@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import useShowtimeDetail from '../hooks/useShowtimeDetail';
@@ -55,5 +55,69 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('UTC dự phòng');
     expect(screen.getByText('18:30')).toBeInTheDocument();
+  });
+
+  it('uses backend-supported transition values and never offers reopening a closed showtime', () => {
+    useShowtimeDetail.mockReturnValue({
+      ...detailValue(),
+      showtime: { ...detailValue().showtime, status: 'DRAFT' },
+    });
+    const { unmount } = renderPage();
+    expect(screen.getByRole('button', { name: 'Đang mở bán' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đã hủy' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'OPEN' })).not.toBeInTheDocument();
+    unmount();
+
+    useShowtimeDetail.mockReturnValue({
+      ...detailValue(),
+      showtime: { ...detailValue().showtime, status: 'CLOSED' },
+    });
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Đã chiếu xong' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đã hủy' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Đang mở bán' })).not.toBeInTheDocument();
+  });
+
+  it('renders pricing names and an audit timeline with localized fallbacks and preview link', () => {
+    useShowtimeDetail.mockReturnValue({
+      ...detailValue(),
+      prices: {
+        currency: 'VND',
+        prices: [{
+          seatTypeId: 'seat-type-uuid',
+          seatTypeName: 'Ghế VIP',
+          seatTypeCode: 'VIP',
+          price: 120000,
+        }],
+      },
+      history: [{
+        previousStatus: null,
+        newStatus: 'DRAFT',
+        changedAt: '2026-07-24T18:45:00Z',
+        reason: 'Showtime created',
+        changedBy: 42,
+        source: 'AUTO',
+        previewPublicId: 'preview-1',
+      }, {
+        previousStatus: 'DRAFT',
+        newStatus: 'OPEN_FOR_BOOKING',
+        changedAt: '2026-07-24T19:00:00Z',
+        reason: null,
+        changedBy: null,
+        source: 'MANUAL',
+      }],
+    });
+    renderPage();
+
+    expect(screen.getByText('Ghế VIP')).toBeInTheDocument();
+    expect(screen.getByText('VIP')).toBeInTheDocument();
+    expect(screen.getByText(/120.000/)).toBeInTheDocument();
+    expect(screen.getByText('Khởi tạo → Bản nháp')).toBeInTheDocument();
+    expect(screen.getByText('Bản nháp → Đang mở bán')).toBeInTheDocument();
+    expect(screen.getByText('Đã tạo suất chiếu')).toBeInTheDocument();
+    expect(screen.getByText('Không ghi nhận lý do')).toBeInTheDocument();
+    expect(screen.getByText(/Người dùng #42 · Tạo tự động/)).toBeInTheDocument();
+    expect(screen.getByText(/Không xác định · Tạo thủ công/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mở bản xem trước nguồn' }));
   });
 });
