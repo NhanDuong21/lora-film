@@ -38,6 +38,7 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [movieLoadError, setMovieLoadError] = useState('');
+  const [movieReloadSequence, setMovieReloadSequence] = useState(0);
   const [errors, setErrors] = useState({});
 
   const idempotencyRef = useRef({ fingerprint: '', key: '' });
@@ -128,7 +129,9 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
       }
     };
     fetchMovies();
-  }, [scheduleFrom, scheduleTo, triggerToast]);
+  }, [movieReloadSequence, scheduleFrom, scheduleTo, triggerToast]);
+
+  const retryMovies = useCallback(() => setMovieReloadSequence(previous => previous + 1), []);
 
   useEffect(() => {
     const requestId = ++auditoriumRequestSequence.current;
@@ -316,6 +319,7 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     isReady,
     selectionNotice,
     movieLoadError,
+    retryMovies,
     dateRangeInfo,
     toggleMovieExpansion,
     handleSubmit,
