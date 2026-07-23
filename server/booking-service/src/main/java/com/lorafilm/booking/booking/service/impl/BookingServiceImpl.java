@@ -27,7 +27,13 @@ import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
 import com.lorafilm.booking.security.service.SecurityContextService;
+import com.lorafilm.booking.booking.dto.CreateSnapshotRequest;
+import com.lorafilm.booking.booking.dto.CreateTicketRequest;
+import com.lorafilm.booking.booking.service.BookingSnapshotService;
+import com.lorafilm.booking.booking.service.BookingTicketService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,6 +54,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class BookingServiceImpl implements BookingService {
 
+    private static final Logger log = LoggerFactory.getLogger(BookingServiceImpl.class);
+
     private static final String OPEN_FOR_BOOKING = "OPEN_FOR_BOOKING";
     private static final int BOOKING_CODE_GENERATION_ATTEMPTS = 3;
 
@@ -60,6 +68,8 @@ public class BookingServiceImpl implements BookingService {
     private final BookingMapper bookingMapper;
     private final FoodOrderService foodOrderService;
     private final BookingMetricsManager bookingMetricsManager;
+    private final BookingTicketService bookingTicketService;
+    private final BookingSnapshotService bookingSnapshotService;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -70,7 +80,9 @@ public class BookingServiceImpl implements BookingService {
             BookingCodeGenerator bookingCodeGenerator,
             BookingMapper bookingMapper,
             FoodOrderService foodOrderService,
-            BookingMetricsManager bookingMetricsManager) {
+            BookingMetricsManager bookingMetricsManager,
+            BookingTicketService bookingTicketService,
+            BookingSnapshotService bookingSnapshotService) {
         this.bookingRepository = bookingRepository;
         this.reservationRepository = reservationRepository;
         this.reservationService = reservationService;
@@ -80,6 +92,8 @@ public class BookingServiceImpl implements BookingService {
         this.bookingMapper = bookingMapper;
         this.foodOrderService = foodOrderService;
         this.bookingMetricsManager = bookingMetricsManager;
+        this.bookingTicketService = bookingTicketService;
+        this.bookingSnapshotService = bookingSnapshotService;
     }
 
     @Override
@@ -123,6 +137,36 @@ public class BookingServiceImpl implements BookingService {
         List<Long> reservationIds = reservations.stream().map(SeatReservation::getId).toList();
         reservationService.convertReservations(new ConvertReservationRequest(savedBooking.getId(), reservationIds));
         
+        // Create Snapshot
+        CreateSnapshotRequest snapshotRequest = new CreateSnapshotRequest();
+        snapshotRequest.setMovieId(context.movieId());
+        snapshotRequest.setMovieTitle(context.movieTitle());
+        snapshotRequest.setShowtimeId(context.showtimeId());
+        snapshotRequest.setShowtimeStart(context.startsAt());
+        snapshotRequest.setShowtimeEnd(context.endsAt());
+        snapshotRequest.setCinemaId(context.cinemaId());
+        snapshotRequest.setCinemaName(context.cinemaName());
+        snapshotRequest.setAuditoriumId(context.auditoriumId());
+        snapshotRequest.setAuditoriumName(context.auditoriumName());
+        snapshotRequest.setSeatCount(context.seats().size());
+        bookingSnapshotService.createSnapshot(savedBooking.getId(), snapshotRequest);
+
+        // Create Tickets
+        List<CreateTicketRequest> ticketRequests = context.seats().stream().map(seat -> {
+            CreateTicketRequest req = new CreateTicketRequest();
+            req.setSeatId(seat.seatId());
+            req.setSeatLabel(seat.seatLabel());
+            req.setSeatType(seat.seatType());
+            req.setTicketPrice(seat.price());
+            req.setMovieTitle(context.movieTitle());
+            req.setCinemaName(context.cinemaName());
+            req.setAuditoriumName(context.auditoriumName());
+            req.setShowtimeStart(context.startsAt());
+            req.setShowtimeEnd(context.endsAt());
+            return req;
+        }).toList();
+        bookingTicketService.createTickets(savedBooking.getId(), ticketRequests);
+
         bookingMetricsManager.incrementBookingCreated();
         
         return bookingMapper.toResponse(savedBooking);
@@ -232,6 +276,12 @@ public class BookingServiceImpl implements BookingService {
         
         if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED || targetStatus == BookingStatus.REFUNDED) {
             reservationService.handleBookingStatusChange(saved.getId(), targetStatus, "Booking status changed to " + targetStatus);
+            // Cancel tickets
+            try {
+                bookingTicketService.deleteTickets(saved.getId());
+            } catch (Exception e) {
+                log.warn("Failed to delete/cancel tickets for bookingId: {}", saved.getId(), e);
+            }
         }
 
         // Increment Metrics

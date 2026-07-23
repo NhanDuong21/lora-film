@@ -1,6 +1,9 @@
 package com.lorafilm.booking.booking.controller;
 
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
+import com.lorafilm.booking.booking.dto.BookingPaymentContextDto;
+import com.lorafilm.booking.booking.dto.BookingPaymentResultRequestDto;
+import com.lorafilm.booking.booking.dto.BookingPaymentResultResponseDto;
 import com.lorafilm.booking.booking.service.InternalBookingService;
 import com.lorafilm.booking.common.constant.ValidationConstants;
 import com.lorafilm.booking.common.response.ApiResponse;
@@ -8,12 +11,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -71,5 +76,21 @@ public class InternalBookingController {
     public ResponseEntity<ApiResponse<BookingAdminResponse>> getBookingByCode(@PathVariable String bookingCode) {
         BookingAdminResponse response = internalBookingService.getBookingByCode(bookingCode);
         return ResponseEntity.ok(ApiResponse.success("Booking retrieved successfully", response));
+    }
+
+    @GetMapping("/{bookingId:\\d+}/payment-context")
+    @Operation(summary = "Get payment context of booking")
+    public ResponseEntity<ApiResponse<BookingPaymentContextDto>> getPaymentContext(@PathVariable Long bookingId) {
+        BookingPaymentContextDto response = internalBookingService.getPaymentContext(bookingId);
+        return ResponseEntity.ok(ApiResponse.success("Booking payment context retrieved successfully", response));
+    }
+
+    @PostMapping("/{bookingId:\\d+}/payment-results")
+    @Operation(summary = "Process payment results of booking")
+    public ResponseEntity<ApiResponse<BookingPaymentResultResponseDto>> processPaymentResult(
+            @PathVariable Long bookingId,
+            @Valid @RequestBody BookingPaymentResultRequestDto request) {
+        BookingPaymentResultResponseDto response = internalBookingService.processPaymentResult(bookingId, request);
+        return ResponseEntity.ok(ApiResponse.success("Payment result processed successfully", response));
     }
 }
