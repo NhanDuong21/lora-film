@@ -10,6 +10,7 @@ import { customerFacilitiesRoutes } from "@/features/facilities/customer/routes"
 import { adminFacilitiesRoutes } from "@/features/facilities/admin/routes";
 import { adminSchedulingRoutes } from "@/features/scheduling/admin/routes";
 import { customerBookingRoutes } from "@/features/booking/customer/routes";
+import { adminBookingRoutes } from "@/features/booking/admin/routes";
 
 import { adminConcessionRoutes } from "@/features/concessions-sales/admin/routes";
 import { employeeConcessionRoutes } from "@/features/concessions-sales/employee/routes";
@@ -80,6 +81,9 @@ function AppRoutes() {
                     ))}
                     {adminConcessionRoutes.map((route, index) => (
                         <Route key={`conc-adm-${index}`} path={route.path} element={route.element} />
+                    ))}
+                    {adminBookingRoutes.map((route, index) => (
+                        <Route key={`book-adm-${index}`} path={route.path} element={route.element} />
                     ))}
                 </Route>
             </Routes>
