@@ -22,6 +22,21 @@ import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.pricing.domain.entity.PricePolicy;
+import com.lorafilm.movie.pricing.domain.entity.PricePolicyRule;
+import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.pricing.domain.enums.PriceDayType;
+import com.lorafilm.movie.pricing.domain.enums.PricePolicyStatus;
+import com.lorafilm.movie.pricing.domain.enums.PricingSource;
+import com.lorafilm.movie.pricing.repository.PricePolicyRepository;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.seat.domain.entity.Seat;
+import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatStatus;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.repository.SeatTypeRepository;
+import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +62,10 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -87,20 +105,35 @@ public class AdminAutoScheduleApplyE2ETest {
     private MovieRepository movieRepository;
     @Autowired
     private MovieVersionRepository movieVersionRepository;
+    @Autowired
+    private SeatTypeRepository seatTypeRepository;
+    @Autowired
+    private SeatRepository seatRepository;
+    @Autowired
+    private PricePolicyRepository pricePolicyRepository;
+    @Autowired
+    private ShowtimePriceRepository showtimePriceRepository;
 
     @MockBean
     private CurrentUserProvider currentUserProvider;
 
     private String previewPublicId;
     private Long initialVersion;
+    private SeatType standardSeatType;
+    private PricePolicy standardPolicy;
 
     @BeforeEach
     void setUp() {
         jdbcTemplate.execute("DELETE FROM cinema_operating_hours");
         jdbcTemplate.execute("DELETE FROM showtime_status_history");
+        jdbcTemplate.execute("DELETE FROM showtime_prices");
         itemRepository.deleteAllInBatch();
         previewRepository.deleteAllInBatch();
         jdbcTemplate.execute("DELETE FROM showtimes");
+        jdbcTemplate.execute("DELETE FROM price_policy_rules");
+        jdbcTemplate.execute("DELETE FROM price_policies");
+        jdbcTemplate.execute("DELETE FROM seats");
+        jdbcTemplate.execute("DELETE FROM seat_types");
         auditoriumRepository.deleteAllInBatch();
         cinemaRepository.deleteAllInBatch();
         movieVersionRepository.deleteAllInBatch();
@@ -128,6 +161,46 @@ public class AdminAutoScheduleApplyE2ETest {
         auditorium.setCapacity(100);
         auditorium.setCleaningBufferMinutes(15);
         auditorium = auditoriumRepository.saveAndFlush(auditorium);
+
+        standardSeatType = new SeatType();
+        standardSeatType.setPublicId(UUID.randomUUID().toString());
+        standardSeatType.setCode(SeatTypeCode.STANDARD);
+        standardSeatType.setName("Standard");
+        standardSeatType.setStatus(ActiveStatus.ACTIVE);
+        standardSeatType = seatTypeRepository.saveAndFlush(standardSeatType);
+
+        Seat seat = new Seat();
+        seat.setPublicId(UUID.randomUUID().toString());
+        seat.setAuditorium(auditorium);
+        seat.setSeatType(standardSeatType);
+        seat.setRowLabel("A");
+        seat.setSeatNumber(1);
+        seat.setSeatCode("A1");
+        seat.setPositionRow(1);
+        seat.setPositionColumn(1);
+        seat.setStatus(SeatStatus.ACTIVE);
+        seatRepository.saveAndFlush(seat);
+
+        standardPolicy = new PricePolicy();
+        standardPolicy.setPublicId(UUID.randomUUID().toString());
+        standardPolicy.setName("Auto Schedule E2E policy");
+        standardPolicy.setCinema(cinema);
+        standardPolicy.setEffectiveFrom(LocalDate.now().minusDays(1));
+        standardPolicy.setEffectiveTo(LocalDate.now().plusDays(60));
+        standardPolicy.setStatus(PricePolicyStatus.ACTIVE);
+        standardPolicy.setCurrency("VND");
+        standardPolicy.setPriority(0);
+        standardPolicy.setActivatedAt(Instant.now());
+        standardPolicy.setActivatedBy(999L);
+
+        PricePolicyRule standardRule = new PricePolicyRule();
+        standardRule.setPublicId(UUID.randomUUID().toString());
+        standardRule.setSeatType(standardSeatType);
+        standardRule.setDayType(PriceDayType.ALL_DAYS);
+        standardRule.setPrice(new BigDecimal("75000.00"));
+        standardRule.setActive(true);
+        standardPolicy.addRule(standardRule);
+        standardPolicy = pricePolicyRepository.saveAndFlush(standardPolicy);
 
         Movie movie = new Movie();
         movie.setPublicId("MOVIE_" + UUID.randomUUID().toString().substring(0, 8));
@@ -191,9 +264,14 @@ public class AdminAutoScheduleApplyE2ETest {
     void tearDown() {
         jdbcTemplate.execute("DELETE FROM cinema_operating_hours");
         jdbcTemplate.execute("DELETE FROM showtime_status_history");
+        jdbcTemplate.execute("DELETE FROM showtime_prices");
         itemRepository.deleteAllInBatch();
         previewRepository.deleteAllInBatch();
         jdbcTemplate.execute("DELETE FROM showtimes");
+        jdbcTemplate.execute("DELETE FROM price_policy_rules");
+        jdbcTemplate.execute("DELETE FROM price_policies");
+        jdbcTemplate.execute("DELETE FROM seats");
+        jdbcTemplate.execute("DELETE FROM seat_types");
         auditoriumRepository.deleteAllInBatch();
         cinemaRepository.deleteAllInBatch();
         movieVersionRepository.deleteAllInBatch();
@@ -234,6 +312,34 @@ public class AdminAutoScheduleApplyE2ETest {
         List<Map<String, Object>> showtimeRows = jdbcTemplate.queryForList(
                 "SELECT public_id, movie_id, movie_version_id, cinema_id, auditorium_id, start_time, end_time, status FROM showtimes WHERE id IN (SELECT created_showtime_id FROM showtime_schedule_preview_items WHERE preview_id = (SELECT id FROM showtime_schedule_previews WHERE public_id = ?))", previewPublicId);
         showtimeRows.forEach(System.out::println);
+
+        Showtime createdShowtime = showtimeRepository.findAll().stream()
+                .filter(showtime -> showtime.getBatchId() != null)
+                .findFirst()
+                .orElseThrow();
+        List<ShowtimePrice> snapshots =
+                showtimePriceRepository.findByShowtimeIdWithSeatType(createdShowtime.getId());
+        assertThat(snapshots).hasSize(1);
+        ShowtimePrice snapshot = snapshots.get(0);
+        assertThat(snapshot.getPrice()).isEqualByComparingTo("75000.00");
+        assertThat(snapshot.getCurrency()).isEqualTo("VND");
+        assertThat(snapshot.getSeatType().getPublicId()).isEqualTo(standardSeatType.getPublicId());
+        assertThat(snapshot.getSeatTypeNameSnapshot()).isEqualTo("Standard");
+        assertThat(snapshot.getSeatTypeCodeSnapshot()).isEqualTo("STANDARD");
+        assertThat(snapshot.getPricingSource()).isEqualTo(PricingSource.POLICY);
+        assertThat(snapshot.getResolutionTimezone()).isEqualTo("Asia/Ho_Chi_Minh");
+        assertThat(snapshot.getResolvedAt()).isNotNull();
+        assertThat(snapshot.getSourcePolicy().getPublicId()).isEqualTo(standardPolicy.getPublicId());
+        assertThat(snapshot.getSourceRule()).isNotNull();
+
+        mockMvc.perform(get("/api/admin/showtimes/batch/{batchId}/status-preview",
+                        createdShowtime.getBatchId())
+                        .param("targetStatus", "OPEN_FOR_BOOKING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalCount").value(1))
+                .andExpect(jsonPath("$.data.eligibleCount").value(1))
+                .andExpect(jsonPath("$.data.skippedCount").value(0))
+                .andExpect(jsonPath("$.data.actionAllowed").value(true));
         
         System.out.println("\n--- 8. Idempotency replay evidence ---");
         MvcResult replayRes = mockMvc.perform(post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
@@ -257,6 +363,39 @@ public class AdminAutoScheduleApplyE2ETest {
         System.out.println("Stale Version Response:\n" + staleRes.getResponse().getContentAsString());
         
         System.out.println("\n========== E2E EVIDENCE END ==========");
+    }
+
+    @Test
+    void missingPricingReturnsBatchValidationReasonInsteadOfInternalServerError() throws Exception {
+        jdbcTemplate.execute("DELETE FROM price_policy_rules");
+        jdbcTemplate.execute("DELETE FROM price_policies");
+
+        ApplyShowtimeSchedulePreviewRequest request = new ApplyShowtimeSchedulePreviewRequest();
+        request.setExpectedVersion(initialVersion);
+        request.setIdempotencyKey("apply-missing-pricing-e2e");
+
+        mockMvc.perform(post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        Showtime createdShowtime = showtimeRepository.findAll().stream()
+                .filter(showtime -> showtime.getBatchId() != null)
+                .findFirst()
+                .orElseThrow();
+        assertThat(showtimePriceRepository.findByShowtimeId(createdShowtime.getId())).isEmpty();
+
+        mockMvc.perform(get("/api/admin/showtimes/batch/{batchId}/status-preview",
+                        createdShowtime.getBatchId())
+                        .param("targetStatus", "OPEN_FOR_BOOKING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.totalCount").value(1))
+                .andExpect(jsonPath("$.data.eligibleCount").value(0))
+                .andExpect(jsonPath("$.data.skippedCount").value(1))
+                .andExpect(jsonPath("$.data.actionAllowed").value(false))
+                .andExpect(jsonPath("$.data.reasonGroups[0].reasonCode").value("PRICING_INCOMPLETE"))
+                .andExpect(jsonPath("$.data.reasonGroups[0].count").value(1));
     }
     
     @Test

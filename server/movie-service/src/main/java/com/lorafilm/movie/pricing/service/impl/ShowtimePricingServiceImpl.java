@@ -209,7 +209,7 @@ public class ShowtimePricingServiceImpl implements ShowtimePricingService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = BusinessException.class)
     public void validateCompleteness(Showtime showtime) {
         List<String> requiredIds =
                 seatRepository.findActiveSeatTypePublicIdsByAuditoriumId(showtime.getAuditorium().getId());
