@@ -5,6 +5,8 @@ import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.dto.response.BatchStatusActionSummary;
+import com.lorafilm.movie.showtime.dto.response.BatchStatusBlockedShowtime;
+import com.lorafilm.movie.showtime.dto.response.BatchStatusReasonGroup;
 import com.lorafilm.movie.showtime.dto.response.ShowtimeStatusHistoryResponse;
 import com.lorafilm.movie.showtime.service.ShowtimeCommandService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
@@ -133,10 +135,20 @@ class AdminShowtimeControllerTest {
         summary.setBatchId("batch-1");
         summary.setTargetStatus("OPEN_FOR_BOOKING");
         summary.setTotalCount(25);
-        summary.setEligibleCount(20);
+        summary.setEligibleCount(19);
         summary.setAlreadyTargetCount(5);
-        summary.setActionAllowed(true);
+        summary.setSkippedCount(1);
+        summary.setActionAllowed(false);
         summary.setAtomic(true);
+        summary.setReasonGroups(List.of(new BatchStatusReasonGroup(
+                "PRICING_INCOMPLETE",
+                "Showtime pricing is incomplete",
+                1,
+                List.of("showtime-1"))));
+        summary.setBlockedShowtimes(List.of(new BatchStatusBlockedShowtime(
+                "showtime-1",
+                "PRICING_INCOMPLETE",
+                "Showtime pricing is incomplete")));
         when(transitionService.previewBatchStatus("batch-1", ShowtimeStatus.OPEN_FOR_BOOKING))
                 .thenReturn(summary);
 
@@ -144,9 +156,15 @@ class AdminShowtimeControllerTest {
                         .param("targetStatus", "OPEN_FOR_BOOKING"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalCount").value(25))
-                .andExpect(jsonPath("$.data.eligibleCount").value(20))
+                .andExpect(jsonPath("$.data.eligibleCount").value(19))
                 .andExpect(jsonPath("$.data.alreadyTargetCount").value(5))
+                .andExpect(jsonPath("$.data.skippedCount").value(1))
                 .andExpect(jsonPath("$.data.atomic").value(true))
-                .andExpect(jsonPath("$.data.actionAllowed").value(true));
+                .andExpect(jsonPath("$.data.actionAllowed").value(false))
+                .andExpect(jsonPath("$.data.reasonGroups[0].reasonCode").value("PRICING_INCOMPLETE"))
+                .andExpect(jsonPath("$.data.reasonGroups[0].reason").value("Showtime pricing is incomplete"))
+                .andExpect(jsonPath("$.data.reasonGroups[0].sampleShowtimePublicIds[0]").value("showtime-1"))
+                .andExpect(jsonPath("$.data.blockedShowtimes[0].showtimePublicId").value("showtime-1"))
+                .andExpect(jsonPath("$.data.blockedShowtimes[0].reasonCode").value("PRICING_INCOMPLETE"));
     }
 }

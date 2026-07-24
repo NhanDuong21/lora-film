@@ -17,6 +17,7 @@ public class BatchStatusActionSummary {
     private boolean atomic = true;
     private boolean actionAllowed;
     private List<BatchStatusReasonGroup> reasonGroups = new ArrayList<>();
+    private List<BatchStatusBlockedShowtime> blockedShowtimes = new ArrayList<>();
     private Long actorId;
     private Instant actionAt;
 
@@ -106,6 +107,14 @@ public class BatchStatusActionSummary {
 
     public void setReasonGroups(List<BatchStatusReasonGroup> reasonGroups) {
         this.reasonGroups = reasonGroups;
+    }
+
+    public List<BatchStatusBlockedShowtime> getBlockedShowtimes() {
+        return blockedShowtimes;
+    }
+
+    public void setBlockedShowtimes(List<BatchStatusBlockedShowtime> blockedShowtimes) {
+        this.blockedShowtimes = blockedShowtimes;
     }
 
     public Long getActorId() {

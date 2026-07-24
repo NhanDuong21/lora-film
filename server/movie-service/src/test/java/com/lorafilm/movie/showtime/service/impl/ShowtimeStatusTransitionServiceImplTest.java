@@ -214,7 +214,45 @@ class ShowtimeStatusTransitionServiceImplTest {
         assertFalse(summary.isActionAllowed());
         assertTrue(summary.isAtomic());
         assertEquals("SHOWTIME_PRICE_MISSING", summary.getReasonGroups().get(0).getReasonCode());
+        assertEquals("Showtime price config is missing", summary.getReasonGroups().get(0).getReason());
+        assertEquals(List.of("missing"), summary.getReasonGroups().get(0).getSampleShowtimePublicIds());
+        assertEquals(1, summary.getBlockedShowtimes().size());
+        assertEquals("missing", summary.getBlockedShowtimes().get(0).getShowtimePublicId());
+        assertEquals("SHOWTIME_PRICE_MISSING", summary.getBlockedShowtimes().get(0).getReasonCode());
+        assertEquals("Showtime price config is missing", summary.getBlockedShowtimes().get(0).getReason());
         assertEquals(7L, summary.getActorId());
+    }
+
+    @Test
+    void previewBatchStatus_GroupsEveryBlockedShowtimeByCanonicalReason() {
+        Showtime firstMissing = showtime("missing-1", ShowtimeStatus.DRAFT, "2026-07-10T12:00:00Z");
+        Showtime secondMissing = showtime("missing-2", ShowtimeStatus.DRAFT, "2026-07-10T13:00:00Z");
+        Showtime invalidStatus = showtime("closed", ShowtimeStatus.CLOSED, "2026-07-10T14:00:00Z");
+        when(showtimeRepository.findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc("batch-1"))
+                .thenReturn(List.of(firstMissing, secondMissing, invalidStatus));
+        doThrow(new BusinessException(ErrorCode.PRICING_INCOMPLETE, "diagnostic details"))
+                .when(showtimePricingService).validateCompleteness(any(Showtime.class));
+
+        var summary = transitionService.previewBatchStatus(
+                "batch-1", ShowtimeStatus.OPEN_FOR_BOOKING);
+
+        assertEquals(3, summary.getSkippedCount());
+        assertFalse(summary.isActionAllowed());
+        assertEquals(2, summary.getReasonGroups().size());
+        assertEquals("PRICING_INCOMPLETE", summary.getReasonGroups().get(0).getReasonCode());
+        assertEquals(2, summary.getReasonGroups().get(0).getCount());
+        assertEquals(
+                List.of("missing-1", "missing-2"),
+                summary.getReasonGroups().get(0).getSampleShowtimePublicIds());
+        assertEquals("INVALID_SHOWTIME_STATUS_TRANSITION", summary.getReasonGroups().get(1).getReasonCode());
+        assertEquals(3, summary.getBlockedShowtimes().size());
+        assertEquals(
+                List.of("missing-1", "missing-2", "closed"),
+                summary.getBlockedShowtimes().stream()
+                        .map(blocked -> blocked.getShowtimePublicId())
+                        .toList());
+        assertTrue(summary.getBlockedShowtimes().stream()
+                .allMatch(blocked -> blocked.getReasonCode() != null && blocked.getReason() != null));
     }
 
     @Test

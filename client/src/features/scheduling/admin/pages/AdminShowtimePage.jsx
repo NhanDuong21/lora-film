@@ -8,6 +8,12 @@ import {
   getShowtimeStatusPresentation,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
+const canConfirmBatchTransition = summary => Boolean(
+  summary?.actionAllowed
+  && Number(summary.eligibleCount) > 0
+  && (!summary.atomic || Number(summary.skippedCount) === 0)
+);
+
 const AdminShowtimePage = () => {
   const { triggerToast } = useOutletContext() || {};
   const navigate = useNavigate();
@@ -123,7 +129,7 @@ const AdminShowtimePage = () => {
 
   const confirmBatchTransition = async () => {
     const summary = batchActionDialog?.summary;
-    if (!summary?.actionAllowed || !batchId) return;
+    if (!canConfirmBatchTransition(summary) || !batchId) return;
     setIsBatchActionLoading(true);
     try {
       const res = await adminShowtimeService.transitionBatchStatus(batchId, {
@@ -196,15 +202,20 @@ const AdminShowtimePage = () => {
             <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
               <p className="text-sm font-bold text-amber-200">Lý do chặn</p>
               <ul className="mt-2 space-y-1 text-xs text-amber-100">
-                {batchActionDialog.summary.reasonGroups.map(group => (
-                  <li key={group.reasonCode}>
-                    {group.count} suất · {getBatchStatusReasonPresentation(group.reasonCode).label}
-                    <details className="mt-1 text-[10px] text-amber-100/70">
-                      <summary className="cursor-pointer">Thông tin kỹ thuật</summary>
-                      <span className="font-mono">{group.reasonCode}: {group.reason}</span>
-                    </details>
-                  </li>
-                ))}
+                {batchActionDialog.summary.reasonGroups.map((group, index) => {
+                  const presentation = getBatchStatusReasonPresentation(group.reasonCode);
+                  return (
+                    <li key={`${group.reasonCode || 'UNKNOWN'}-${index}`}>
+                      {group.count} suất · {presentation.label}
+                      <details className="mt-1 text-[10px] text-amber-100/70">
+                        <summary className="cursor-pointer">Thông tin kỹ thuật</summary>
+                        <span className="font-mono">
+                          {group.reasonCode || 'NO_REASON_CODE'}: {group.reason || 'No safe reason supplied'}
+                        </span>
+                      </details>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -216,7 +227,7 @@ const AdminShowtimePage = () => {
               {batchActionDialog.phase === 'confirm' ? 'Hủy' : 'Đóng'}
             </button>
             {batchActionDialog.phase === 'confirm' && (
-              <button type="button" disabled={!batchActionDialog.summary.actionAllowed || isBatchActionLoading} onClick={confirmBatchTransition} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950 disabled:opacity-40">
+              <button type="button" disabled={!canConfirmBatchTransition(batchActionDialog.summary) || isBatchActionLoading} onClick={confirmBatchTransition} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950 disabled:opacity-40">
                 {isBatchActionLoading ? 'Đang mở bán…' : 'Mở bán toàn bộ'}
               </button>
             )}

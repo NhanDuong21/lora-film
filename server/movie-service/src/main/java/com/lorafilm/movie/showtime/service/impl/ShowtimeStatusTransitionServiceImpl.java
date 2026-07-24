@@ -10,6 +10,7 @@ import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.dto.response.BatchStatusActionSummary;
+import com.lorafilm.movie.showtime.dto.response.BatchStatusBlockedShowtime;
 import com.lorafilm.movie.showtime.dto.response.BatchStatusReasonGroup;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.pricing.service.ShowtimePricingService;
@@ -27,6 +28,8 @@ import java.util.Map;
 
 @Service
 public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransitionService {
+
+    private static final int REASON_GROUP_SAMPLE_SIZE = 5;
 
     private final ShowtimeRepository showtimeRepository;
     private final ShowtimeStatusHistoryService historyService;
@@ -228,6 +231,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
                                               ShowtimeStatus targetStatus,
                                               Instant now) {
         List<Showtime> eligible = new ArrayList<>();
+        List<BatchStatusBlockedShowtime> blockedShowtimes = new ArrayList<>();
         int alreadyTargetCount = 0;
         Map<String, ReasonAccumulator> reasons = new LinkedHashMap<>();
 
@@ -242,11 +246,18 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
                 validateTimingRules(showtime, showtime.getStatus(), targetStatus, now);
                 eligible.add(showtime);
             } catch (BusinessException exception) {
-                String code = exception.getErrorCode().name();
+                ErrorCode errorCode = exception.getErrorCode();
+                if (errorCode == null) {
+                    throw exception;
+                }
+                String code = errorCode.name();
+                String safeReason = errorCode.getMessage();
                 reasons.computeIfAbsent(
                         code,
-                        ignored -> new ReasonAccumulator(exception.getErrorCode().getMessage()))
-                        .increment();
+                        ignored -> new ReasonAccumulator(safeReason))
+                        .add(showtime.getPublicId());
+                blockedShowtimes.add(new BatchStatusBlockedShowtime(
+                        showtime.getPublicId(), code, safeReason));
             }
         }
 
@@ -263,8 +274,12 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         summary.setActionAllowed(summary.getSkippedCount() == 0);
         summary.setReasonGroups(reasons.entrySet().stream()
                 .map(entry -> new BatchStatusReasonGroup(
-                        entry.getKey(), entry.getValue().reason(), entry.getValue().count()))
+                        entry.getKey(),
+                        entry.getValue().reason(),
+                        entry.getValue().count(),
+                        entry.getValue().sampleShowtimePublicIds()))
                 .toList());
+        summary.setBlockedShowtimes(List.copyOf(blockedShowtimes));
         return new BatchClassification(summary, eligible);
     }
 
@@ -275,14 +290,19 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
 
     private static final class ReasonAccumulator {
         private final String reason;
+        private final List<String> sampleShowtimePublicIds = new ArrayList<>();
         private int count;
 
         private ReasonAccumulator(String reason) {
             this.reason = reason;
         }
 
-        private void increment() {
+        private void add(String showtimePublicId) {
             count++;
+            if (showtimePublicId != null
+                    && sampleShowtimePublicIds.size() < REASON_GROUP_SAMPLE_SIZE) {
+                sampleShowtimePublicIds.add(showtimePublicId);
+            }
         }
 
         private String reason() {
@@ -291,6 +311,10 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
 
         private int count() {
             return count;
+        }
+
+        private List<String> sampleShowtimePublicIds() {
+            return List.copyOf(sampleShowtimePublicIds);
         }
     }
 }

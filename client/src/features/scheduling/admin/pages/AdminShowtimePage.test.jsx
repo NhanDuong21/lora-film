@@ -151,14 +151,73 @@ describe('AdminShowtimePage URL-backed batch context', () => {
         affectedCount: 0,
         atomic: true,
         actionAllowed: false,
-        reasonGroups: [{ reasonCode: 'SHOWTIME_PRICE_MISSING', reason: 'Thiếu giá', count: 1 }],
+        reasonGroups: [{
+          reasonCode: 'PRICING_INCOMPLETE',
+          reason: 'Showtime pricing is incomplete',
+          count: 1,
+        }],
       },
     });
     renderPage('/admin/showtimes?source=AUTO&batchId=preview-1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
+    expect(await screen.findByText('1 suất · Chưa có bảng giá đầy đủ')).toBeInTheDocument();
     expect(await screen.findByText('Không thể mở bán một phần. Không có suất chiếu nào được thay đổi.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mở bán toàn bộ' })).toBeDisabled();
+    expect(adminShowtimeService.transitionBatchStatus).not.toHaveBeenCalled();
+  });
+
+  it('uses the technical-details fallback only when no known blocker code is returned', async () => {
+    useAdminShowtimes.mockReturnValue({ ...hookValue(), batchId: 'preview-1', source: 'AUTO' });
+    adminShowtimeService.previewBatchStatus.mockResolvedValue({
+      success: true,
+      data: {
+        batchId: 'preview-1',
+        targetStatus: 'OPEN_FOR_BOOKING',
+        totalCount: 1,
+        eligibleCount: 0,
+        alreadyTargetCount: 0,
+        skippedCount: 1,
+        failedCount: 0,
+        affectedCount: 0,
+        atomic: true,
+        actionAllowed: false,
+        reasonGroups: [{ reasonCode: null, reason: null, count: 1 }],
+      },
+    });
+    renderPage('/admin/showtimes?source=AUTO&batchId=preview-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
+
+    expect(await screen.findByText(
+      '1 suất · Không xác định — xem chi tiết kỹ thuật',
+    )).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mở bán toàn bộ' })).toBeDisabled();
+  });
+
+  it('disables confirmation when no showtime is eligible even if actionAllowed is inconsistent', async () => {
+    useAdminShowtimes.mockReturnValue({ ...hookValue(), batchId: 'preview-1', source: 'AUTO' });
+    adminShowtimeService.previewBatchStatus.mockResolvedValue({
+      success: true,
+      data: {
+        batchId: 'preview-1',
+        targetStatus: 'OPEN_FOR_BOOKING',
+        totalCount: 0,
+        eligibleCount: 0,
+        alreadyTargetCount: 0,
+        skippedCount: 0,
+        failedCount: 0,
+        affectedCount: 0,
+        atomic: true,
+        actionAllowed: true,
+        reasonGroups: [],
+      },
+    });
+    renderPage('/admin/showtimes?source=AUTO&batchId=preview-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
+
+    expect(await screen.findByRole('button', { name: 'Mở bán toàn bộ' })).toBeDisabled();
     expect(adminShowtimeService.transitionBatchStatus).not.toHaveBeenCalled();
   });
 });

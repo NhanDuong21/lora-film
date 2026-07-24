@@ -41,6 +41,20 @@ describe('schedulingPresentation', () => {
       'INVALID_SHOWTIME_STATUS_TRANSITION',
       'SHOWTIME_CANNOT_OPEN_AFTER_START',
       'SHOWTIME_PRICE_MISSING',
+      'PRICING_INCOMPLETE',
+      'PRICE_POLICY_NOT_FOUND',
+      'PRICING_AMBIGUOUS',
+      'PRICE_POLICY_OVERLAP',
+      'INVALID_CINEMA_TIMEZONE',
+      'SHOWTIME_OUTSIDE_RELEASE_WINDOW',
+      'MOVIE_NOT_AVAILABLE_FOR_SCHEDULING',
+      'MOVIE_VERSION_NOT_ACTIVE',
+      'CINEMA_NOT_ACTIVE',
+      'AUDITORIUM_NOT_ACTIVE',
+      'CINEMA_OPERATING_HOURS_NOT_CONFIGURED',
+      'SHOWTIME_OUTSIDE_OPERATING_HOURS',
+      'SHOWTIME_OVERLAPS_CINEMA_CLOSURE',
+      'SHOWTIME_OVERLAPS_AUDITORIUM_MAINTENANCE',
     ]);
   });
 
@@ -56,14 +70,28 @@ describe('schedulingPresentation', () => {
     expect(getShowtimeTransitionActionPresentation('CANCELLED').label).toBe('Hủy suất chiếu');
     expect(getShowtimeSourcePresentation('AUTO').batchLabel).toBe('Đợt tạo tự động');
     expect(getApplyModePresentation('ALL_OR_NOTHING').label).toBe('Tất cả hoặc không tạo');
-    expect(getBatchStatusReasonPresentation('SHOWTIME_PRICE_MISSING').label)
-      .toBe('Chưa cấu hình đủ giá cho các loại ghế');
+    expect(getBatchStatusReasonPresentation('PRICING_INCOMPLETE')).toMatchObject({
+      label: 'Chưa có bảng giá đầy đủ',
+      technicalValue: 'PRICING_INCOMPLETE',
+      isFallback: false,
+    });
+    expect(getBatchStatusReasonPresentation('PRICE_POLICY_NOT_FOUND').label)
+      .toBe('Không có chính sách giá hiệu lực');
+    expect(getBatchStatusReasonPresentation('SHOWTIME_OUTSIDE_RELEASE_WINDOW').label)
+      .toBe('Phim nằm ngoài thời gian được phép chiếu');
+    expect(getBatchStatusReasonPresentation('AUDITORIUM_NOT_ACTIVE').label)
+      .toBe('Phòng chiếu không hoạt động');
   });
 
   it('uses a safe fallback while retaining an unknown technical value', () => {
     expect(getShowtimeStatusPresentation('LEGACY_STATUS')).toMatchObject({
       label: 'Không xác định',
       technicalValue: 'LEGACY_STATUS',
+    });
+    expect(getBatchStatusReasonPresentation(null)).toMatchObject({
+      label: 'Không xác định — xem chi tiết kỹ thuật',
+      technicalValue: null,
+      isFallback: true,
     });
   });
 

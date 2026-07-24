@@ -395,7 +395,14 @@ public class AdminAutoScheduleApplyE2ETest {
                 .andExpect(jsonPath("$.data.skippedCount").value(1))
                 .andExpect(jsonPath("$.data.actionAllowed").value(false))
                 .andExpect(jsonPath("$.data.reasonGroups[0].reasonCode").value("PRICING_INCOMPLETE"))
-                .andExpect(jsonPath("$.data.reasonGroups[0].count").value(1));
+                .andExpect(jsonPath("$.data.reasonGroups[0].reason").value("Showtime pricing is incomplete"))
+                .andExpect(jsonPath("$.data.reasonGroups[0].count").value(1))
+                .andExpect(jsonPath("$.data.reasonGroups[0].sampleShowtimePublicIds[0]")
+                        .value(createdShowtime.getPublicId()))
+                .andExpect(jsonPath("$.data.blockedShowtimes[0].showtimePublicId")
+                        .value(createdShowtime.getPublicId()))
+                .andExpect(jsonPath("$.data.blockedShowtimes[0].reasonCode")
+                        .value("PRICING_INCOMPLETE"));
     }
     
     @Test

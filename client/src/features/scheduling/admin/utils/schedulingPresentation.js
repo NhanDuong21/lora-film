@@ -99,7 +99,49 @@ export const BATCH_STATUS_REASON_PRESENTATION = Object.freeze({
     label: 'Suất chiếu đã bắt đầu hoặc thời điểm bắt đầu đã qua',
   },
   SHOWTIME_PRICE_MISSING: {
-    label: 'Chưa cấu hình đủ giá cho các loại ghế',
+    label: 'Chưa có bảng giá đầy đủ',
+  },
+  PRICING_INCOMPLETE: {
+    label: 'Chưa có bảng giá đầy đủ',
+  },
+  PRICE_POLICY_NOT_FOUND: {
+    label: 'Không có chính sách giá hiệu lực',
+  },
+  PRICING_AMBIGUOUS: {
+    label: 'Có nhiều quy tắc giá cùng mức ưu tiên',
+  },
+  PRICE_POLICY_OVERLAP: {
+    label: 'Các quy tắc giá đang bị chồng lấn',
+  },
+  INVALID_CINEMA_TIMEZONE: {
+    label: 'Múi giờ của rạp không hợp lệ',
+  },
+  SHOWTIME_OUTSIDE_RELEASE_WINDOW: {
+    label: 'Phim nằm ngoài thời gian được phép chiếu',
+  },
+  MOVIE_NOT_AVAILABLE_FOR_SCHEDULING: {
+    label: 'Phim không khả dụng để xếp lịch',
+  },
+  MOVIE_VERSION_NOT_ACTIVE: {
+    label: 'Phiên bản phim không hoạt động',
+  },
+  CINEMA_NOT_ACTIVE: {
+    label: 'Rạp chiếu phim không hoạt động',
+  },
+  AUDITORIUM_NOT_ACTIVE: {
+    label: 'Phòng chiếu không hoạt động',
+  },
+  CINEMA_OPERATING_HOURS_NOT_CONFIGURED: {
+    label: 'Rạp chưa cấu hình giờ hoạt động',
+  },
+  SHOWTIME_OUTSIDE_OPERATING_HOURS: {
+    label: 'Suất chiếu nằm ngoài giờ hoạt động của rạp',
+  },
+  SHOWTIME_OVERLAPS_CINEMA_CLOSURE: {
+    label: 'Suất chiếu trùng thời gian rạp đóng cửa',
+  },
+  SHOWTIME_OVERLAPS_AUDITORIUM_MAINTENANCE: {
+    label: 'Suất chiếu trùng thời gian bảo trì phòng chiếu',
   },
 });
 
@@ -144,10 +186,23 @@ export const getApplyModePresentation = value => getPresentation(
   value,
 );
 
-export const getBatchStatusReasonPresentation = value => getPresentation(
-  BATCH_STATUS_REASON_PRESENTATION,
-  value,
-);
+export const getBatchStatusReasonPresentation = value => {
+  const presentation = BATCH_STATUS_REASON_PRESENTATION[value];
+  if (presentation) {
+    return {
+      ...UNKNOWN_PRESENTATION,
+      ...presentation,
+      technicalValue: value,
+      isFallback: false,
+    };
+  }
+  return {
+    ...UNKNOWN_PRESENTATION,
+    label: 'Không xác định — xem chi tiết kỹ thuật',
+    technicalValue: value || null,
+    isFallback: true,
+  };
+};
 
 export const getScoreBreakdownRows = breakdown => Object.entries(breakdown || {}).map(
   ([key, value]) => ({
