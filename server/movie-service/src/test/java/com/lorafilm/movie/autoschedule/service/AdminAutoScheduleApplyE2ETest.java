@@ -269,8 +269,8 @@ public class AdminAutoScheduleApplyE2ETest {
         Long movieId = jdbcTemplate.queryForObject("SELECT id FROM movies LIMIT 1", Long.class);
         Long movieVersionId = jdbcTemplate.queryForObject("SELECT id FROM movie_versions LIMIT 1", Long.class);
         
-        jdbcTemplate.update("INSERT INTO showtimes (public_id, cinema_id, auditorium_id, movie_id, movie_version_id, start_time, end_time, booking_open_time, booking_close_time, status, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', NOW(), NOW())",
+        jdbcTemplate.update("INSERT INTO showtimes (public_id, cinema_id, auditorium_id, movie_id, movie_version_id, start_time, end_time, booking_open_time, booking_close_time, status, version, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 0, NOW(), NOW())",
                 "ST_CONFLICT", cinemaId, auditoriumId, movieId, movieVersionId, baseTime, baseTime.plus(120, ChronoUnit.MINUTES), baseTime.minus(7, ChronoUnit.DAYS), baseTime);
 
         int countBefore = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
