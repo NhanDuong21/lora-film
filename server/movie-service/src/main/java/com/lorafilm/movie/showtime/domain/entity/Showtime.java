@@ -9,6 +9,7 @@ import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "showtimes")
@@ -42,6 +43,9 @@ public class Showtime extends BaseAuditableEntity {
 
     @Column(name = "end_time", nullable = false)
     private Instant endTime;
+
+    @Column(name = "service_date", nullable = false)
+    private LocalDate serviceDate;
 
     @Column(name = "booking_open_time")
     private Instant bookingOpenTime;
@@ -131,6 +135,14 @@ public class Showtime extends BaseAuditableEntity {
 
     public void setEndTime(Instant endTime) {
         this.endTime = endTime;
+    }
+
+    public LocalDate getServiceDate() {
+        return serviceDate;
+    }
+
+    public void setServiceDate(LocalDate serviceDate) {
+        this.serviceDate = serviceDate;
     }
 
     public Instant getBookingOpenTime() {

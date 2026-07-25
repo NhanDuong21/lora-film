@@ -7,6 +7,7 @@ import com.lorafilm.movie.showtime.dto.ShowtimeMovieVersionDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeCinemaDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeAuditoriumDto;
 import org.springframework.stereotype.Component;
+import java.time.ZoneId;
 
 @Component
 public class ShowtimeMapper {
@@ -48,6 +49,10 @@ public class ShowtimeMapper {
 
         dto.setStartTime(showtime.getStartTime());
         dto.setEndTime(showtime.getEndTime());
+        dto.setServiceDate(showtime.getServiceDate());
+        ZoneId cinemaZone = ZoneId.of(showtime.getCinema().getTimezone());
+        dto.setLocalStartTime(showtime.getStartTime().atZone(cinemaZone).toLocalDateTime());
+        dto.setLocalEndTime(showtime.getEndTime().atZone(cinemaZone).toLocalDateTime());
         dto.setStatus(showtime.getStatus().name());
         
         return dto;

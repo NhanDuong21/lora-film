@@ -7,7 +7,6 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 
 public class ShowtimeSpecification {
 
@@ -32,11 +31,7 @@ public class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> hasDate(LocalDate date) {
-        return (root, query, cb) -> {
-            Instant startOfDay = date.atStartOfDay().toInstant(ZoneOffset.ofHours(7)); // default VN time
-            Instant endOfDay = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.ofHours(7));
-            return cb.between(root.get("startTime"), startOfDay, endOfDay);
-        };
+        return (root, query, cb) -> cb.equal(root.get("serviceDate"), date);
     }
 
     public static Specification<Showtime> hasMoviePublicId(String moviePublicId) {

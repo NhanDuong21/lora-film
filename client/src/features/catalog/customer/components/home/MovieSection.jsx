@@ -142,7 +142,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                   <div
                     key={movie.publicId || movie.id}
                     onClick={() => {
-                      const idToUse = movie.publicId || movie.id;
+                      const idToUse = movie.slug || movie.publicId;
                       if (onSelectMovie) {
                         onSelectMovie(idToUse);
                       } else {

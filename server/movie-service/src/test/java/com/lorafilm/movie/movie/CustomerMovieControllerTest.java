@@ -47,6 +47,9 @@ public class CustomerMovieControllerTest {
     @MockBean
     private CustomerMovieService customerMovieService;
 
+    @MockBean
+    private com.lorafilm.movie.showtime.service.CustomerShowtimeService customerShowtimeService;
+
     @MockBean(name = "jpaMappingContext")
     private org.springframework.data.jpa.mapping.JpaMetamodelMappingContext jpaMappingContext;
 
