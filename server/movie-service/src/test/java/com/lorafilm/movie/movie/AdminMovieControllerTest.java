@@ -9,6 +9,7 @@ import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResult;
 import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
+import com.lorafilm.movie.movie.dto.TmdbQueueBreakdownResponse;
 import com.lorafilm.movie.movie.dto.MovieSummaryResponse;
 import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
 import com.lorafilm.movie.movie.dto.MovieRequest;
@@ -37,6 +38,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -311,6 +313,23 @@ public class AdminMovieControllerTest {
                 .andExpect(jsonPath("$.data.archived").value(1))
                 .andExpect(jsonPath("$.data.results[0].outcome").value("ARCHIVED"))
                 .andExpect(jsonPath("$.data.results[0].newStatus").value("INACTIVE"));
+    }
+
+    @Test
+    void tmdbQueueBreakdown_ReturnsSeparatedCounts() throws Exception {
+        when(movieService.getTmdbQueueBreakdown(any(AdminMovieListQuery.class)))
+                .thenReturn(new TmdbQueueBreakdownResponse(17, 8, 6, 3));
+
+        mockMvc.perform(get("/api/admin/movies/tmdb-queue-breakdown")
+                        .param("status", "DRAFT")
+                        .param("source", "TMDB")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(17))
+                .andExpect(jsonPath("$.data.future").value(8))
+                .andExpect(jsonPath("$.data.old").value(6))
+                .andExpect(jsonPath("$.data.undated").value(3));
     }
 
     @Test

@@ -7,8 +7,7 @@ import MovieAdvancedFilters from '@/features/catalog/admin/components/MovieAdvan
 import MovieFormModal from '@/features/catalog/admin/components/MovieFormModal';
 import MovieSummaryCards from '@/features/catalog/admin/components/MovieSummaryCards';
 import MovieTable from '@/features/catalog/admin/components/MovieTable';
-import MovieBulkApprovalPanel from '@/features/catalog/admin/components/MovieBulkApprovalPanel';
-import MovieBulkArchivePanel from '@/features/catalog/admin/components/MovieBulkArchivePanel';
+import MovieTmdbQueuePanel from '@/features/catalog/admin/components/MovieTmdbQueuePanel';
 import TmdbSyncStatusPanel from '@/features/catalog/admin/components/TmdbSyncStatusPanel';
 import { ADMIN_MOVIE_STATUS_TABS } from '@/features/catalog/admin/config/movieStatusConfig';
 import { ADVANCED_FILTER_KEYS, countAdvancedFilters } from '@/features/catalog/admin/utils/adminMovieQuery';
@@ -183,21 +182,15 @@ export default function AdminMoviePage() {
         />
 
         {isTmdbApprovalQueue && (
-          <>
-            <MovieBulkArchivePanel
-              isPending={adminMovies.bulkArchive.isPending}
-              result={adminMovies.bulkArchive.result}
-              error={adminMovies.bulkArchive.error}
-              onArchive={handleBulkArchive}
-            />
-            <MovieBulkApprovalPanel
-              totalElements={adminMovies.totalElements}
-              isPending={adminMovies.bulkApproval.isPending}
-              result={adminMovies.bulkApproval.result}
-              error={adminMovies.bulkApproval.error}
-              onApprove={handleBulkApprove}
-            />
-          </>
+          <MovieTmdbQueuePanel
+            breakdown={adminMovies.queueBreakdown.data}
+            isBreakdownLoading={adminMovies.queueBreakdown.isLoading}
+            breakdownError={adminMovies.queueBreakdown.error}
+            approval={adminMovies.bulkApproval}
+            archive={adminMovies.bulkArchive}
+            onApprove={handleBulkApprove}
+            onArchive={handleBulkArchive}
+          />
         )}
 
         <MovieTable

@@ -12,6 +12,7 @@ import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
+import com.lorafilm.movie.movie.dto.TmdbQueueBreakdownResponse;
 import com.lorafilm.movie.movie.repository.MovieCreditRepository;
 import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
@@ -212,6 +213,23 @@ class MovieServiceImplLifecycleTest {
 
         assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
         verify(movieRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void tmdbQueueBreakdownReturnsFutureOldAndUndatedCounts() {
+        AdminMovieListQuery filter = new AdminMovieListQuery();
+        filter.setStatus("DRAFT");
+        filter.setSource("TMDB");
+
+        when(movieRepository.count(any(Specification.class)))
+                .thenReturn(17L, 6L, 8L, 3L);
+
+        TmdbQueueBreakdownResponse response = service.getTmdbQueueBreakdown(filter);
+
+        assertEquals(17L, response.total());
+        assertEquals(8L, response.future());
+        assertEquals(6L, response.old());
+        assertEquals(3L, response.undated());
     }
 
     private Movie movie(Long id, MovieStatus status, int duration) {

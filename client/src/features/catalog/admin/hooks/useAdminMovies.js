@@ -36,6 +36,18 @@ const unwrapGenres = envelope => {
   return genres;
 };
 
+const unwrapTmdbQueueBreakdown = envelope => {
+  const breakdown = envelope?.data;
+  if (
+    envelope?.success !== true
+    || !breakdown
+    || !['total', 'future', 'old', 'undated'].every(key => Number.isFinite(breakdown[key]))
+  ) {
+    throw new Error('Phản hồi phân loại hàng đợi TMDB không đúng định dạng.');
+  }
+  return breakdown;
+};
+
 export default function useAdminMovies({ triggerConfirm, triggerToast, onMutation } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryString = searchParams.toString();
@@ -62,8 +74,15 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     result: null,
     error: '',
   });
+  const [queueBreakdown, setQueueBreakdown] = useState({
+    isLoading: false,
+    data: null,
+    error: '',
+  });
   const requestSequence = useRef(0);
+  const breakdownRequestSequence = useRef(0);
   const hasLoaded = useRef(false);
+  const isTmdbApprovalQueue = query.status === 'DRAFT' && query.source === 'TMDB';
 
   const canonicalQueryString = useMemo(
     () => serializeAdminMovieQuery(query).toString(),
@@ -143,6 +162,26 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     }
   }, [commitQuery, query, triggerToast]);
 
+  const fetchQueueBreakdown = useCallback(async () => {
+    const requestId = ++breakdownRequestSequence.current;
+    if (!isTmdbApprovalQueue) {
+      setQueueBreakdown({ isLoading: false, data: null, error: '' });
+      return;
+    }
+    setQueueBreakdown(current => ({ ...current, isLoading: true, error: '' }));
+    try {
+      const envelope = await adminMovieService.getTmdbQueueBreakdown(toMovieApiParams(query));
+      const breakdown = unwrapTmdbQueueBreakdown(envelope);
+      if (requestId !== breakdownRequestSequence.current) return;
+      setQueueBreakdown({ isLoading: false, data: breakdown, error: '' });
+    } catch (err) {
+      if (requestId !== breakdownRequestSequence.current) return;
+      const message = parseApiError(err);
+      setQueueBreakdown({ isLoading: false, data: null, error: message });
+      triggerToast?.(message, 'error');
+    }
+  }, [isTmdbApprovalQueue, query, triggerToast]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchGenres();
@@ -153,9 +192,14 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     fetchMovies();
   }, [fetchMovies]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchQueueBreakdown();
+  }, [fetchQueueBreakdown]);
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([fetchMovies(), onMutation?.()]);
-  }, [fetchMovies, onMutation]);
+    await Promise.all([fetchMovies(), fetchQueueBreakdown(), onMutation?.()]);
+  }, [fetchMovies, fetchQueueBreakdown, onMutation]);
 
   const bulkApproveTmdbMovies = useCallback(async (limit = 100) => {
     setBulkApproval({ isPending: true, result: null, error: '' });
@@ -232,6 +276,7 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     bulkApproveTmdbMovies,
     bulkArchive,
     bulkArchiveOldTmdbMovies,
+    queueBreakdown,
     handleDelete,
     defaults: ADMIN_MOVIE_QUERY_DEFAULTS,
   };

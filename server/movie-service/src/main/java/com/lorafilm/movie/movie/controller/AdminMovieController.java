@@ -6,6 +6,7 @@ import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
+import com.lorafilm.movie.movie.dto.TmdbQueueBreakdownResponse;
 import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
 import com.lorafilm.movie.movie.dto.MovieRequest;
@@ -142,6 +143,13 @@ public class AdminMovieController {
             @Valid @RequestBody AdminMovieListQuery filter,
             @RequestParam(name = "limit", defaultValue = "100") @Min(1) @Max(100) int limit) {
         return ResponseEntity.ok(ApiResponse.ok(movieService.bulkArchiveOldTmdbMovies(filter, limit)));
+    }
+
+    @GetMapping("/tmdb-queue-breakdown")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<TmdbQueueBreakdownResponse>> getTmdbQueueBreakdown(
+            @Valid @ModelAttribute AdminMovieListQuery filter) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.getTmdbQueueBreakdown(filter)));
     }
 
     @GetMapping("/{publicId}/tmdb-review")

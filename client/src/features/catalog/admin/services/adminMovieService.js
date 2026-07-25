@@ -74,6 +74,11 @@ const adminMovieService = {
     return response.data;
   },
 
+  getTmdbQueueBreakdown: async (params) => {
+    const response = await apiClient.get('/api/admin/movies/tmdb-queue-breakdown', { params });
+    return response.data;
+  },
+
   deleteMovie: async (publicId) => {
     const response = await apiClient.delete(`/api/admin/movies/${publicId}`);
     return response.data;

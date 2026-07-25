@@ -33,6 +33,7 @@ import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResult;
 import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
+import com.lorafilm.movie.movie.dto.TmdbQueueBreakdownResponse;
 import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
@@ -260,6 +261,22 @@ public class MovieServiceImpl implements MovieService {
                 List.copyOf(results));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public TmdbQueueBreakdownResponse getTmdbQueueBreakdown(AdminMovieListQuery filter) {
+        validateTmdbQueueFilter(filter);
+
+        Specification<Movie> base = buildAdminMovieSpecification(filter)
+                .and(MovieSpecification.hasStatus(MovieStatus.DRAFT))
+                .and(MovieSpecification.hasTmdbSource(true));
+        java.time.LocalDate today = lifecyclePolicy.currentDate();
+        long total = movieRepository.count(base);
+        long old = movieRepository.count(base.and(MovieSpecification.releaseDateTo(today)));
+        long future = movieRepository.count(base.and(MovieSpecification.releaseDateFrom(today.plusDays(1))));
+        long undated = movieRepository.count(base.and(MovieSpecification.releaseDateIsNull()));
+        return new TmdbQueueBreakdownResponse(total, future, old, undated);
+    }
+
     private Specification<Movie> buildAdminMovieSpecification(AdminMovieListQuery query) {
         if (query == null) {
             throw validationError("Movie filter is required");
@@ -397,6 +414,18 @@ public class MovieServiceImpl implements MovieService {
         }
         if (!"TMDB".equalsIgnoreCase(normalize(filter.getSource()))) {
             throw validationError("Bulk archive requires source=TMDB");
+        }
+    }
+
+    private void validateTmdbQueueFilter(AdminMovieListQuery filter) {
+        if (filter == null) {
+            throw validationError("Movie filter is required");
+        }
+        if (!"DRAFT".equalsIgnoreCase(normalize(filter.getStatus()))) {
+            throw validationError("TMDB queue breakdown requires status=DRAFT");
+        }
+        if (!"TMDB".equalsIgnoreCase(normalize(filter.getSource()))) {
+            throw validationError("TMDB queue breakdown requires source=TMDB");
         }
     }
 

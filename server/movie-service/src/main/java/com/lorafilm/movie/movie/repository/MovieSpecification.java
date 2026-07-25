@@ -76,6 +76,10 @@ public class MovieSpecification {
         return (root, query, cb) -> cb.lessThanOrEqualTo(root.get("releaseDate"), to);
     }
 
+    public static Specification<Movie> releaseDateIsNull() {
+        return (root, query, cb) -> cb.isNull(root.get("releaseDate"));
+    }
+
     public static Specification<Movie> tmdbUpdatedFrom(LocalDateTime from) {
         return (root, query, cb) -> cb.greaterThanOrEqualTo(root.get("tmdbLastUpdated"), from);
     }

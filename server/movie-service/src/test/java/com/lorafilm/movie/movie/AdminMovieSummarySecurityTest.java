@@ -122,4 +122,21 @@ class AdminMovieSummarySecurityTest {
                         .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    void queueBreakdownRejectsAnonymousUsers() throws Exception {
+        mockMvc.perform(get("/api/admin/movies/tmdb-queue-breakdown")
+                        .param("status", "DRAFT")
+                        .param("source", "TMDB"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void queueBreakdownAllowsAdminUsers() throws Exception {
+        mockMvc.perform(get("/api/admin/movies/tmdb-queue-breakdown")
+                        .param("status", "DRAFT")
+                        .param("source", "TMDB"))
+                .andExpect(status().isOk());
+    }
 }
