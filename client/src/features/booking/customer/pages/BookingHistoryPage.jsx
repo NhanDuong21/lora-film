@@ -1,11 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Calendar, Tag, ShieldCheck, CreditCard, ChevronRight, SlidersHorizontal, Search, Info } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronRight, Search, Info, AlertTriangle } from 'lucide-react';
 import { getBookingHistory } from '../services/bookingService';
 
 export default function BookingHistoryPage() {
-  const navigate = useNavigate();
-
   // Filters state
   const [status, setStatus] = useState('ALL'); // 'ALL', 'PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +33,7 @@ export default function BookingHistoryPage() {
   }, [page, size, status]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchHistory();
   }, [fetchHistory]);
 

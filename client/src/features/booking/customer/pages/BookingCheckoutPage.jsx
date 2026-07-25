@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, Info, AlertTriangle, ChevronRight, Search, ShieldCheck, Check } from 'lucide-react';
-import { getBookingDetails, initiatePayment } from '../services/bookingService';
+import { Clock, AlertTriangle, ChevronRight, Search, ShieldCheck, Check } from 'lucide-react';
+import { getBookingDetails, initiatePayment, cancelBooking } from '../services/bookingService';
 import { getConcessions, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 
 export default function BookingCheckoutPage() {
@@ -54,6 +54,7 @@ export default function BookingCheckoutPage() {
   }, [bookingId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
 

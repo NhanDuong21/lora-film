@@ -25,6 +25,7 @@ export default function SeatSelectionPage() {
   
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [toastMessage, setToastMessage] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showGapModal, setShowGapModal] = useState(false);
   const [reservationLoading, setReservationLoading] = useState(false);

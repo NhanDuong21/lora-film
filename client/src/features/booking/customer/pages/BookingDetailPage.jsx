@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Calendar, MapPin, Printer, ArrowLeft, Trash2, Clock, AlertTriangle, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Printer, ArrowLeft, Trash2, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { getBookingDetails, cancelBooking, initiatePayment } from '../services/bookingService';
 
 export default function BookingDetailPage() {
@@ -29,6 +29,7 @@ export default function BookingDetailPage() {
   }, [bookingId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDetail();
   }, [fetchDetail]);
 

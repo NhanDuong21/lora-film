@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sliders, ShieldCheck, HelpCircle, History, Clock, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Sliders, History, FileText, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { getBookingDetail, updateBookingStatus } from '../services/adminBookingService';
 
 export default function AdminBookingDetailPage() {
@@ -31,6 +31,7 @@ export default function AdminBookingDetailPage() {
   }, [bookingId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDetails();
   }, [fetchDetails]);
 

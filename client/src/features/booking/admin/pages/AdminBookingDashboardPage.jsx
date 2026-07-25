@@ -47,6 +47,7 @@ export default function AdminBookingDashboardPage() {
   }, [page, size, bookingCode, userId, status, fromDate, toDate]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBookingsList();
   }, [fetchBookingsList]);
 

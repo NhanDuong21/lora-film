@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, Info, Calendar, MapPin, Printer, ArrowRight, ShoppingBag, ShieldCheck } from 'lucide-react';
+import { CheckCircle, Info, Printer, ArrowRight, ShoppingBag } from 'lucide-react';
 import { getBookingDetails } from '../services/bookingService';
 
 export default function BookingSuccessPage() {
@@ -36,6 +36,7 @@ export default function BookingSuccessPage() {
   }, [bookingId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBooking();
   }, [fetchBooking]);
 
