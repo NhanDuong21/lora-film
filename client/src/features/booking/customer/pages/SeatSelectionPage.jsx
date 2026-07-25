@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, Info, MapPin, Monitor, ShieldAlert
+  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, Info, MapPin, Monitor, ShieldAlert, Check
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
@@ -10,6 +10,9 @@ import {
   seatTypePresentation,
   sortSeatLegend
 } from '@/features/booking/customer/utils/seatPresentation';
+import { holdSeats } from '../services/seatReservationService';
+import { createBooking } from '../services/bookingService';
+import BookingStepper from '../components/BookingStepper';
 
 const money = value => value == null
   ? 'Chưa có giá'
@@ -28,6 +31,12 @@ export default function SeatSelectionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Seat Selection States
+  const [selectedSeats, setSelectedSeats] = useState([]);
+  const [toastMessage, setToastMessage] = useState('');
+  const [showGapModal, setShowGapModal] = useState(false);
+  const [reservationLoading, setReservationLoading] = useState(false);
+
   const load = useCallback(async signal => {
     if (!showtimePublicId) {
       setError('Thiếu thông tin suất chiếu.');
@@ -37,7 +46,8 @@ export default function SeatSelectionPage() {
     setLoading(true);
     setError(null);
     try {
-      setLayout(await getSeatLayout(showtimePublicId, { signal }));
+      const data = await getSeatLayout(showtimePublicId, { signal });
+      setLayout(data);
     } catch (requestError) {
       if (requestError?.name !== 'CanceledError') {
         setError('Suất chiếu này không còn mở bán hoặc không thể tải sơ đồ ghế.');
@@ -49,7 +59,6 @@ export default function SeatSelectionPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(controller.signal);
     return () => controller.abort();
   }, [load]);
@@ -68,6 +77,143 @@ export default function SeatSelectionPage() {
         seats.sort((a, b) => (a.positionColumn ?? 999) - (b.positionColumn ?? 999))
       ]);
   }, [layout]);
+
+  // Handle seat click selection (with couple seat pairing rules)
+  const handleSeatClick = (seat) => {
+    if (!seat.sellable || seat.blockedForShowtime || seat.operationalStatus !== 'ACTIVE') return;
+
+    const isSelected = selectedSeats.some(s => s.publicId === seat.publicId);
+
+    // Find if this is a couple seat / has a pair group
+    let pairedSeat = null;
+    if (seat.pairGroup) {
+      pairedSeat = layout?.seats?.find(
+        s => s.pairGroup === seat.pairGroup && s.publicId !== seat.publicId
+      );
+    }
+
+    if (isSelected) {
+      // Deselect
+      if (pairedSeat) {
+        setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId && s.publicId !== pairedSeat.publicId));
+      } else {
+        setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId));
+      }
+      setToastMessage('');
+    } else {
+      // Select
+      const seatsToSelect = pairedSeat ? [seat, pairedSeat] : [seat];
+      const neededSlots = seatsToSelect.length;
+
+      if (selectedSeats.length + neededSlots > 8) {
+        showToast('Bạn chỉ được chọn tối đa 8 ghế cho mỗi giao dịch!');
+        return;
+      }
+
+      setSelectedSeats(prev => [...prev, ...seatsToSelect]);
+      setToastMessage('');
+    }
+  };
+
+  const showToast = (message) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(''), 4000);
+  };
+
+  // Check for single seat gaps in rows
+  const checkSingleSeatGap = () => {
+    for (const [label, rowSeats] of rows) {
+      const seatsWithSelection = rowSeats.map(seat => {
+        let seatStatus = 'AVAILABLE';
+        if (seat.blockedForShowtime) {
+          seatStatus = 'BOOKED';
+        } else if (seat.operationalStatus !== 'ACTIVE') {
+          seatStatus = 'MAINTENANCE';
+        } else if (selectedSeats.some(s => s.publicId === seat.publicId)) {
+          seatStatus = 'SELECTED';
+        }
+        return { ...seat, seatStatus };
+      });
+
+      for (let i = 0; i < seatsWithSelection.length; i++) {
+        if (seatsWithSelection[i].seatStatus === 'AVAILABLE') {
+          const leftIsBlocked = i === 0 || ['SELECTED', 'BOOKED', 'MAINTENANCE'].includes(seatsWithSelection[i - 1].seatStatus);
+          const rightIsBlocked = i === seatsWithSelection.length - 1 || ['SELECTED', 'BOOKED', 'MAINTENANCE'].includes(seatsWithSelection[i + 1].seatStatus);
+          
+          if (leftIsBlocked && rightIsBlocked) {
+            const leftIsSelected = i > 0 && seatsWithSelection[i - 1].seatStatus === 'SELECTED';
+            const rightIsSelected = i < seatsWithSelection.length - 1 && seatsWithSelection[i + 1].seatStatus === 'SELECTED';
+            if (leftIsSelected || rightIsSelected) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  };
+
+  // Handle proceed to food selection & checkout
+  const handleContinue = async () => {
+    if (selectedSeats.length === 0) return;
+    if (checkSingleSeatGap()) {
+      setShowGapModal(true);
+      return;
+    }
+    await proceedWithHold();
+  };
+
+  const proceedWithHold = async () => {
+    setShowGapModal(false);
+    setReservationLoading(true);
+    try {
+      const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+
+      const holdResponse = await holdSeats({
+        showtimeId: layout.showtimeId,
+        seatIds: selectedSeats.map(s => s.id)
+      }, uuidv4());
+
+      const reservationPublicIds = holdResponse.publicIds || [];
+
+      // Create Booking Draft
+      const bookingData = await createBooking({
+        showtimePublicId: layout.showtimePublicId,
+        reservationPublicIds
+      });
+
+      // Navigate to checkout/F&B page
+      navigate(`/bookings/checkout?bookingId=${bookingData.publicId}`, {
+        state: {
+          showtime: {
+            showtimePublicId: layout.showtimePublicId,
+            movieTitle: layout.movie?.title,
+            moviePoster: layout.movie?.primaryPoster,
+            cinemaName: layout.cinema?.name,
+            auditoriumName: layout.auditorium?.name,
+            startTime: layout.startTime,
+            endTime: layout.endTime,
+            seatCount: selectedSeats.length,
+            duration: layout.movie?.durationMinutes
+          },
+          selectedSeats: selectedSeats.map(s => ({
+            id: s.id,
+            publicId: s.publicId,
+            seatCode: s.seatCode,
+            seatType: s.seatType,
+            price: s.price
+          }))
+        }
+      });
+    } catch (err) {
+      showToast(err.response?.data?.message || err.message || "Không thể giữ ghế hoặc tạo đơn hàng. Vui lòng thử lại!");
+    } finally {
+      setReservationLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -93,15 +239,20 @@ export default function SeatSelectionPage() {
 
   const backPath = layout.movie?.slug ? `/movies/${layout.movie.slug}` : '/movies';
   const legend = sortSeatLegend(layout.seats);
+  const totalAmount = selectedSeats.reduce((sum, seat) => sum + (Number(seat.price) || 0), 0);
 
   return (
     <main className="min-h-screen bg-zinc-950 px-4 pb-28 pt-28 text-zinc-100 sm:px-6">
       <div className="mx-auto max-w-7xl">
+        {/* Booking Stepper */}
+        <BookingStepper currentStep={2} />
+
         <button onClick={() => navigate(backPath)} className={`mb-6 flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-brand-orange ${focus}`}>
           <ArrowLeft size={16} /> Quay lại phim
         </button>
 
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-zinc-900 to-zinc-950 p-5 shadow-2xl shadow-black/30 md:p-7">
+        {/* Selected Movie Info Summary */}
+        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-zinc-900 to-zinc-950 p-5 shadow-2xl shadow-black/30 md:p-7 mb-8">
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
             <div className="flex items-start gap-4">
               <div className="rounded-2xl border border-brand-orange/30 bg-brand-orange/10 p-3 text-brand-orange">
@@ -136,76 +287,85 @@ export default function SeatSelectionPage() {
           </div>
         </section>
 
-        <div className="my-7 flex gap-3 rounded-2xl border border-amber-500/25 bg-amber-950/25 p-4 text-sm text-amber-100" role="status">
-          <Info className="mt-0.5 shrink-0 text-amber-400" size={20} />
-          <div>
-            <strong>Chưa thể xác nhận tình trạng ghế</strong>
-            <p className="mt-1 leading-6 text-amber-100/75">
-              Sơ đồ hiện hiển thị cấu hình phòng và giá theo suất chiếu. Tình trạng ghế trống,
-              đang giữ hoặc đã đặt cần được Booking Service xác nhận.
-            </p>
+        {/* Warning Toast Alerts */}
+        {toastMessage && (
+          <div className="mb-6 bg-red-950/80 border border-red-500/30 text-red-200 px-5 py-4 rounded-2xl flex items-center gap-3 text-sm animate-pulse">
+            <Info size={18} className="text-red-400 shrink-0" />
+            <span>{toastMessage}</span>
           </div>
-        </div>
+        )}
 
-        <section className="overflow-x-auto rounded-3xl border border-white/10 bg-zinc-900/70 p-5 shadow-2xl shadow-black/20 md:p-8">
+        {/* Projector Screen & Seating Map */}
+        <section className="overflow-x-auto rounded-3xl border border-white/10 bg-zinc-900/70 p-5 shadow-2xl shadow-black/20 md:p-8 mb-8">
           <div className="mx-auto min-w-[680px]">
-            <div className="mx-auto max-w-3xl">
+            <div className="mx-auto max-w-3xl mb-12">
               <div className="h-2 rounded-[100%] bg-gradient-to-r from-transparent via-brand-orange to-transparent shadow-[0_8px_28px_rgba(255,122,0,0.35)]" />
               <p className="mt-3 flex items-center justify-center gap-2 text-center text-[10px] font-black tracking-[.35em] text-zinc-500">
-                <Monitor size={14} /> MÀN HÌNH
+                <Monitor size={14} /> MÀN HÌNH CHIẾU
               </p>
             </div>
 
-            <div className="mx-auto mt-14 max-w-5xl space-y-4">
+            <div className="mx-auto max-w-5xl space-y-4">
               {rows.map(([label, seats]) => {
                 const columnCount = Math.max(16, ...seats.map(seat => (seat.positionColumn ?? 0) + 1));
                 return (
-                <div key={label} className="flex items-center gap-3">
-                  <span className="sticky left-0 z-10 w-8 rounded bg-zinc-900 py-1 text-center text-xs font-black text-zinc-500">{label}</span>
-                  <div
-                    className="grid flex-1 gap-2"
-                    style={{
-                      gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`
-                    }}
-                  >
-                    {seats.map(seat => {
-                      const presentation = seatPresentation(seat);
-                      const column = (seat.positionColumn ?? 0) + 1;
-                      const accessibleLabel = `Ghế ${seat.seatCode}, ${presentation.label}, ${money(seat.price)}, ${presentation.reason}`;
-                      return (
-                        <button
-                          key={seat.publicId}
-                          type="button"
-                          disabled
-                          aria-disabled="true"
-                          aria-label={accessibleLabel}
-                          title={accessibleLabel}
-                          style={{
-                            gridColumnStart: column
-                          }}
-                          className={`relative h-10 min-w-0 cursor-not-allowed border px-1 text-[10px] font-black shadow-inner ${
-                            presentation.wide ? 'rounded-xl border-2' : 'rounded-t-lg rounded-b-xl'
-                          } ${presentation.className}`}
-                        >
-                          <span aria-hidden="true">{seat.seatCode}</span>
-                          {(seat.blockedForShowtime || seat.operationalStatus !== 'ACTIVE' || !seat.priced) && (
-                            <span className="absolute -right-1 -top-1 rounded-full bg-zinc-950 p-0.5 text-red-300" aria-hidden="true">
-                              <ShieldAlert size={10} />
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                  <div key={label} className="flex items-center gap-3">
+                    <span className="sticky left-0 z-10 w-8 rounded bg-zinc-900 py-1 text-center text-xs font-black text-zinc-500">{label}</span>
+                    <div
+                      className="grid flex-1 gap-2"
+                      style={{
+                        gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`
+                      }}
+                    >
+                      {seats.map(seat => {
+                        const presentation = seatPresentation(seat);
+                        const isSelected = selectedSeats.some(s => s.publicId === seat.publicId);
+                        const column = (seat.positionColumn ?? 0) + 1;
+                        const accessibleLabel = `Ghế ${seat.seatCode}, ${presentation.label}, ${money(seat.price)}, ${presentation.reason}`;
+
+                        return (
+                          <button
+                            key={seat.publicId}
+                            type="button"
+                            onClick={() => handleSeatClick(seat)}
+                            disabled={!seat.sellable || seat.blockedForShowtime}
+                            aria-label={accessibleLabel}
+                            title={accessibleLabel}
+                            style={{
+                              gridColumnStart: column
+                            }}
+                            className={`relative h-10 min-w-0 border px-1 text-[10px] font-black shadow-inner transition-all ${
+                              presentation.wide ? 'rounded-xl border-2' : 'rounded-t-lg rounded-b-xl'
+                            } ${
+                              isSelected
+                                ? 'bg-brand-orange border-brand-orange text-white shadow-[0_0_12px_rgba(255,122,0,0.4)] scale-105'
+                                : presentation.className
+                            } ${
+                              seat.sellable && !seat.blockedForShowtime
+                                ? 'cursor-pointer hover:scale-105'
+                                : 'cursor-not-allowed opacity-40'
+                            }`}
+                          >
+                            <span aria-hidden="true">{seat.seatCode}</span>
+                            {(seat.blockedForShowtime || seat.operationalStatus !== 'ACTIVE' || !seat.priced) && (
+                              <span className="absolute -right-1 -top-1 rounded-full bg-zinc-950 p-0.5 text-red-300" aria-hidden="true">
+                                <ShieldAlert size={10} />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="w-8 text-center text-xs font-black text-zinc-500">{label}</span>
                   </div>
-                  <span className="w-8 text-center text-xs font-black text-zinc-500">{label}</span>
-                </div>
                 );
               })}
             </div>
           </div>
         </section>
 
-        <section className="mt-7 rounded-2xl border border-white/10 bg-zinc-900/60 p-5" aria-labelledby="seat-legend-title">
+        {/* Seat Category Legend */}
+        <section className="rounded-2xl border border-white/10 bg-zinc-900/60 p-5 mb-8" aria-labelledby="seat-legend-title">
           <h2 id="seat-legend-title" className="text-sm font-black uppercase tracking-wider text-zinc-300">Loại ghế và giá suất chiếu</h2>
           <div className="mt-4 flex flex-wrap gap-3">
             {legend.map(seat => {
@@ -223,13 +383,76 @@ export default function SeatSelectionPage() {
           </div>
         </section>
 
-        <section className="mt-8 rounded-2xl border border-white/10 bg-zinc-900 p-5 text-center">
-          <button disabled aria-disabled="true" className="w-full cursor-not-allowed rounded-xl border border-white/10 bg-zinc-800 py-4 font-black text-zinc-500">
-            Chưa thể tiếp tục đặt vé
-          </button>
-          <p className="mt-3 text-xs text-zinc-500">Tình trạng ghế cần được Booking Service xác nhận.</p>
+        {/* Selected Summary & Action Footer */}
+        <section className="rounded-2xl border border-white/10 bg-zinc-900 p-6 flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="space-y-2 text-center md:text-left">
+            <span className="text-xs text-zinc-500 uppercase tracking-widest font-black">Ghế đã chọn</span>
+            <div className="flex flex-wrap justify-center md:justify-start gap-1.5 mt-1">
+              {selectedSeats.length > 0 ? (
+                selectedSeats.map(s => (
+                  <span key={s.publicId} className="bg-brand-orange text-white text-xs font-black px-3 py-1 rounded-lg">
+                    {s.seatCode}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-zinc-500 italic">Vui lòng chọn vị trí ngồi ưa thích của bạn</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+            <div className="text-right">
+              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Tổng thanh toán</span>
+              <span className="text-2xl font-black text-brand-orange">{money(totalAmount)}</span>
+            </div>
+
+            <button
+              disabled={selectedSeats.length === 0 || reservationLoading}
+              onClick={handleContinue}
+              className={`px-8 py-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg ${
+                selectedSeats.length > 0 && !reservationLoading
+                  ? 'bg-brand-orange text-white cursor-pointer hover:bg-orange-600 hover:scale-105 shadow-brand-orange/20'
+                  : 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed'
+              }`}
+            >
+              {reservationLoading ? 'Đang đặt chỗ...' : 'Tiếp Tục'}
+            </button>
+          </div>
         </section>
       </div>
+
+      {/* Single Seat Gap Warning Modal */}
+      {showGapModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl">
+            <div className="flex items-start gap-4">
+              <div className="rounded-2xl bg-amber-500/10 p-3 text-amber-500 shrink-0">
+                <AlertTriangle size={24} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-black text-white">Để trống ghế đơn lẻ</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Lựa chọn ghế của bạn đang để lại một vị trí ghế đơn lẻ ở hàng ghế. Rạp chiếu phim không khuyến khích việc này do khó bán được các ghế đơn lẻ này.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowGapModal(false)}
+                className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-white rounded-lg transition-colors border border-zinc-800 hover:bg-zinc-800"
+              >
+                Chọn lại ghế
+              </button>
+              <button
+                onClick={proceedWithHold}
+                className="px-5 py-2 text-xs font-black uppercase bg-brand-orange hover:bg-orange-600 text-white rounded-lg transition-all shadow-lg shadow-brand-orange/20"
+              >
+                Vẫn tiếp tục
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

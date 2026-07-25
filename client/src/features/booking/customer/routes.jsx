@@ -6,6 +6,7 @@ const MasterBookingFunnelPage = lazy(() => import('@/features/booking/customer/p
 const SeatSelectionPage = lazy(() => import('@/features/booking/customer/pages/SeatSelectionPage'));
 const BookingCheckoutPage = lazy(() => import('@/features/booking/customer/pages/BookingCheckoutPage'));
 const BookingSuccessPage = lazy(() => import('@/features/booking/customer/pages/BookingSuccessPage'));
+const BookingFailedPage = lazy(() => import('@/features/booking/customer/pages/BookingFailedPage'));
 const BookingHistoryPage = lazy(() => import('@/features/booking/customer/pages/BookingHistoryPage'));
 const BookingDetailPage = lazy(() => import('@/features/booking/customer/pages/BookingDetailPage'));
 
@@ -27,6 +28,7 @@ export const customerBookingRoutes = [
     },
     { path: '/bookings/checkout', element: lazyPage(BookingCheckoutPage) },
     { path: '/bookings/success', element: lazyPage(BookingSuccessPage) },
+    { path: '/bookings/failed', element: lazyPage(BookingFailedPage) },
     { path: '/bookings', element: lazyPage(BookingHistoryPage) },
     { path: '/bookings/history', element: lazyPage(BookingHistoryPage) },
     { path: '/bookings/:bookingId', element: lazyPage(BookingDetailPage) }

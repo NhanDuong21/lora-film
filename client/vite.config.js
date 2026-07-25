@@ -24,6 +24,11 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
+      },
+      '/internal/mock/payment': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        secure: false,
       }
     }
   }

@@ -96,6 +96,7 @@ public class CustomerShowtimeService {
                         .toList();
 
         return new CustomerSeatLayoutResponse(
+                showtime.getId(),
                 showtime.getPublicId(), showtime.getServiceDate(),
                 showtime.getStartTime(), showtime.getEndTime(),
                 showtime.getStartTime().atZone(zone).toLocalDateTime(),
@@ -151,11 +152,13 @@ public class CustomerShowtimeService {
         boolean priced = price != null && price.signum() > 0;
         boolean sellable = seat.getStatus() == SeatStatus.ACTIVE && !blocked && priced;
         return new CustomerSeatLayoutResponse.CustomerSeat(
+                seat.getId(),
                 seat.getPublicId(), seat.getSeatCode(), seat.getRowLabel(), seat.getSeatNumber(),
                 seat.getPositionRow(), seat.getPositionColumn(),
                 seat.getSeatType().getCode().name(), seat.getSeatType().getName(),
                 priced ? price : null, snapshot == null ? null : snapshot.getCurrency(),
-                seat.getStatus().name(), blocked, priced, sellable);
+                seat.getStatus().name(), blocked, priced, sellable,
+                seat.getPairGroup());
     }
 
     private Showtime customerVisibleShowtime(String publicId) {
