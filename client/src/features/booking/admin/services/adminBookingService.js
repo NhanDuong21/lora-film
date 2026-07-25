@@ -41,3 +41,22 @@ export const updateBookingStatus = async (publicId, status, reason = "Admin manu
   });
   return response.data.data;
 };
+
+/**
+ * Get food order for a booking (Admin only)
+ * @param {string} bookingId - Booking UUID (publicId)
+ * @returns {Promise<Object>} Food order response
+ */
+export const getBookingFoods = async (bookingId) => {
+  const response = await apiClient.get(`/api/admin/bookings/${bookingId}/foods`);
+  return response.data.data;
+};
+
+/**
+ * Get booking monitoring summary statistics (Admin only)
+ * @returns {Promise<Object>} Monitoring summary response
+ */
+export const getBookingMonitoringSummary = async () => {
+  const response = await apiClient.get("/api/admin/monitoring/summary");
+  return response.data.data;
+};
