@@ -4,6 +4,7 @@ import com.lorafilm.booking.food.enums.FoodOrderStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
 
 public class FoodOrderResponse {
 
@@ -14,6 +15,7 @@ public class FoodOrderResponse {
     private BigDecimal discountAmount;
     private BigDecimal finalAmount;
     private FoodOrderStatus status;
+    private PaymentStatus paymentStatus;
     private Instant updatedAt;
     private List<FoodItemResponse> items;
 
@@ -82,6 +84,14 @@ public class FoodOrderResponse {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public PaymentStatus getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public void setPaymentStatus(PaymentStatus paymentStatus) {
+        this.paymentStatus = paymentStatus;
     }
 
     public List<FoodItemResponse> getItems() {
