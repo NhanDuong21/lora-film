@@ -9,6 +9,7 @@ import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
 import com.lorafilm.movie.showtime.dto.response.BookingContextShowtimeDto;
 import com.lorafilm.movie.showtime.dto.response.BookingContextPricingDto;
 import com.lorafilm.movie.showtime.service.ShowtimeBookingContextService;
+import com.lorafilm.movie.showtime.service.ShowtimeQueryService;
 import com.lorafilm.movie.common.security.InternalTokenFilter;
 
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,9 @@ class InternalShowtimeControllerTest {
 
     @MockBean
     private ShowtimeBookingContextService showtimeBookingContextService;
+
+    @MockBean
+    private ShowtimeQueryService showtimeQueryService;
 
 
     // Since InternalTokenFilter reads this value from property, we might need to mock or set it.
@@ -131,5 +135,21 @@ class InternalShowtimeControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value(ErrorCode.VALIDATION_ERROR.name()));
+    }
+
+    @Test
+    void getSeatLayout_valid_returnsOk() throws Exception {
+        com.lorafilm.movie.showtime.dto.SeatLayoutDto layoutDto = new com.lorafilm.movie.showtime.dto.SeatLayoutDto();
+        layoutDto.setShowtimeId(10L);
+        layoutDto.setShowtimePublicId("showtime-pub-id");
+
+        when(showtimeQueryService.getSeatLayout(eq(10L))).thenReturn(layoutDto);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/internal/showtimes/10/seat-layout")
+                .header("X-Internal-Token", validToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.showtimeId").value(10))
+                .andExpect(jsonPath("$.data.showtimePublicId").value("showtime-pub-id"));
     }
 }
