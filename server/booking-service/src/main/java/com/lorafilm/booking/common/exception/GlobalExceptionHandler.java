@@ -45,9 +45,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         log.warn("Validation failed for request: {}", ex.getMessage(), ex);
         List<ErrorResponse.ValidationErrorDetail> details = new ArrayList<>();
-        ex.getBindingResult().getFieldErrors().forEach(fieldError ->
-                details.add(new ErrorResponse.ValidationErrorDetail(fieldError.getField(), fieldError.getDefaultMessage()))
-        );
+        ex.getBindingResult().getFieldErrors().forEach(fieldError -> details
+                .add(new ErrorResponse.ValidationErrorDetail(fieldError.getField(), fieldError.getDefaultMessage())));
         ErrorResponse errorResponse = new ErrorResponse("VALIDATION_FAILED", "Invalid request parameters", details);
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
@@ -56,10 +55,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
         log.warn("Constraint violation: {}", ex.getMessage(), ex);
         List<ErrorResponse.ValidationErrorDetail> details = new ArrayList<>();
-        ex.getConstraintViolations().forEach(violation ->
-                details.add(new ErrorResponse.ValidationErrorDetail(violation.getPropertyPath().toString(), violation.getMessage()))
-        );
-        ErrorResponse errorResponse = new ErrorResponse("CONSTRAINT_VIOLATION", "Constraint validation failed", details);
+        ex.getConstraintViolations().forEach(
+                violation -> details.add(new ErrorResponse.ValidationErrorDetail(violation.getPropertyPath().toString(),
+                        violation.getMessage())));
+        ErrorResponse errorResponse = new ErrorResponse("CONSTRAINT_VIOLATION", "Constraint validation failed",
+                details);
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
@@ -89,9 +89,11 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ErrorResponse> handleOptimisticLockFailure(org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+    public ResponseEntity<ErrorResponse> handleOptimisticLockFailure(
+            org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
         log.warn("Optimistic locking failure occurred: {}", ex.getMessage(), ex);
-        ErrorResponse errorResponse = new ErrorResponse("CONCURRENCY_CONFLICT", "The resource was updated by another transaction. Please try again.");
+        ErrorResponse errorResponse = new ErrorResponse("CONCURRENCY_CONFLICT",
+                "The resource was updated by another transaction. Please try again.");
         return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 
