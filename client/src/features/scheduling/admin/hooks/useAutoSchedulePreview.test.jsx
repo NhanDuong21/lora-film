@@ -361,6 +361,37 @@ describe('useAutoSchedulePreview selection compatibility', () => {
     randomUuid.mockRestore();
   });
 
+  it('exposes grouped pricing preflight diagnostics from an atomic apply rejection', async () => {
+    adminAutoScheduleService.applyPreview.mockRejectedValue({
+      errorCode: 'PRICING_INCOMPLETE',
+      message: 'Không thể áp dụng lịch vì một hoặc nhiều ứng viên chưa có giá đầy đủ.',
+      data: {
+        complete: false,
+        totalCandidateCount: 1,
+        completeCandidateCount: 0,
+        incompleteCandidateCount: 1,
+        ambiguousCandidateCount: 0,
+        reasonGroups: [{
+          reasonCode: 'PRICING_INCOMPLETE',
+          count: 1,
+          affectedDates: ['2026-09-30'],
+          auditoriums: [{ publicId: 'room-1', name: 'Phòng 1' }],
+          seatTypes: [{ publicId: 'vip', code: 'VIP', name: 'Ghế VIP' }],
+        }],
+      },
+    });
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', {}));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => result.current.handleApply());
+
+    expect(result.current.pricingPreflight).toMatchObject({
+      complete: false,
+      incompleteCandidateCount: 1,
+    });
+    expect(result.current.pricingPreflight.reasonGroups[0].seatTypes[0].name).toBe('Ghế VIP');
+  });
+
   it('reuses one apply idempotency key after transport failure and rotates it after success', async () => {
     const randomUuid = vi.spyOn(globalThis.crypto, 'randomUUID')
       .mockReturnValueOnce('idempotency-1')

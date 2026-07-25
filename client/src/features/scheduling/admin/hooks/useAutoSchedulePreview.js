@@ -87,6 +87,7 @@ export default function useAutoSchedulePreview(
   const [snapshotError, setSnapshotError] = useState(null);
   const [isApplying, setIsApplying] = useState(false);
   const [isUpdatingSelection, setIsUpdatingSelection] = useState(false);
+  const [pricingPreflight, setPricingPreflight] = useState(null);
   const snapshotRef = useRef(snapshot);
   const activeLoadRef = useRef({ generation: 0, controller: null });
   const applyIdempotencyRef = useRef({ fingerprint: '', key: '' });
@@ -237,6 +238,7 @@ export default function useAutoSchedulePreview(
         selectedItemIds,
         expectedVersion: previewVersion,
       });
+      setPricingPreflight(null);
       setLoadState({
         active: false,
         loadedPages: reportedTotalPages,
@@ -308,6 +310,7 @@ export default function useAutoSchedulePreview(
     }
 
     const previousSelectedIds = new Set(snapshot.selectedItemIds);
+    setPricingPreflight(null);
     updateSnapshot(previous => {
       const nextSelectedIds = new Set(previous.selectedItemIds);
       if (newSelectedState) nextSelectedIds.add(itemPublicId);
@@ -354,6 +357,7 @@ export default function useAutoSchedulePreview(
     }
 
     const previousSelectedIds = new Set(snapshot.selectedItemIds);
+    setPricingPreflight(null);
     updateSnapshot(previous => ({
       ...previous,
       selectedItemIds: new Set(selectedIdsArray),
@@ -407,6 +411,15 @@ export default function useAutoSchedulePreview(
       };
       const response = await adminAutoScheduleService.applyPreview(previewPublicId, payload);
       if (response?.success) {
+        setPricingPreflight({
+          complete: true,
+          totalCandidateCount: snapshot.selectedItemIds.size,
+          completeCandidateCount: snapshot.selectedItemIds.size,
+          incompleteCandidateCount: 0,
+          ambiguousCandidateCount: 0,
+          reasonGroups: [],
+          candidates: [],
+        });
         triggerToast?.('Đã áp dụng lịch chiếu thành công', 'success');
         applyIdempotencyRef.current = { fingerprint: '', key: '' };
         onSuccess?.(response.data);
@@ -414,8 +427,14 @@ export default function useAutoSchedulePreview(
       }
       return null;
     } catch (error) {
-      const message = error?.response?.data?.message
-        || error?.message
+      if (
+        ['PRICING_INCOMPLETE', 'PRICING_AMBIGUOUS'].includes(error?.errorCode)
+        && error?.data
+      ) {
+        setPricingPreflight(error.data);
+      }
+      const message = error?.message
+        || error?.response?.data?.message
         || 'Lỗi áp dụng lịch chiếu';
       triggerToast?.(message, 'error');
       return null;
@@ -439,6 +458,7 @@ export default function useAutoSchedulePreview(
       totalItems: loadState.totalItems,
     },
     snapshotError,
+    pricingPreflight,
     capabilities,
     isApplying,
     isUpdatingSelection,

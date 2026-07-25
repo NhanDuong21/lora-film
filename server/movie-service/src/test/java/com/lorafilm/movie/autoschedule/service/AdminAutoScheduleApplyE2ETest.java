@@ -3,6 +3,7 @@ package com.lorafilm.movie.autoschedule.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
+import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemApplyStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.ApplyShowtimeSchedulePreviewRequest;
@@ -54,6 +55,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -281,6 +283,14 @@ public class AdminAutoScheduleApplyE2ETest {
     @Test
     void runAllE2ETestsForReport() throws Exception {
         System.out.println("\n========== E2E EVIDENCE START ==========\n");
+        int showtimeCountBeforeApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountBeforeApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        System.out.printf(
+                "Scenario A counts before apply: showtimes=%d, showtime_prices=%d%n",
+                showtimeCountBeforeApply,
+                priceCountBeforeApply);
         
         System.out.println("--- 5. Happy-path E2E đầy đủ ---");
         ApplyShowtimeSchedulePreviewRequest req = new ApplyShowtimeSchedulePreviewRequest();
@@ -331,15 +341,51 @@ public class AdminAutoScheduleApplyE2ETest {
         assertThat(snapshot.getResolvedAt()).isNotNull();
         assertThat(snapshot.getSourcePolicy().getPublicId()).isEqualTo(standardPolicy.getPublicId());
         assertThat(snapshot.getSourceRule()).isNotNull();
+        System.out.println(
+                "Scenario A immutable snapshot row:\n"
+                        + jdbcTemplate.queryForMap(
+                                """
+                                SELECT sp.price,
+                                       sp.currency,
+                                       sp.seat_type_name_snapshot,
+                                       sp.seat_type_code_snapshot,
+                                       sp.pricing_source,
+                                       sp.resolution_timezone,
+                                       sp.resolved_at,
+                                       pp.public_id AS source_policy_public_id,
+                                       ppr.public_id AS source_rule_public_id
+                                  FROM showtime_prices sp
+                                  JOIN price_policies pp ON pp.id = sp.source_policy_id
+                                  JOIN price_policy_rules ppr ON ppr.id = sp.source_rule_id
+                                 WHERE sp.showtime_id = ?
+                                """,
+                                createdShowtime.getId()));
 
-        mockMvc.perform(get("/api/admin/showtimes/batch/{batchId}/status-preview",
-                        createdShowtime.getBatchId())
-                        .param("targetStatus", "OPEN_FOR_BOOKING"))
+        int showtimeCountAfterApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountAfterApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        System.out.printf(
+                "Scenario A counts after apply: showtimes=%d, showtime_prices=%d%n",
+                showtimeCountAfterApply,
+                priceCountAfterApply);
+        assertThat(showtimeCountAfterApply - showtimeCountBeforeApply).isEqualTo(1);
+        assertThat(priceCountAfterApply - priceCountBeforeApply).isEqualTo(1);
+
+        MvcResult openPreviewResult = mockMvc.perform(
+                        get("/api/admin/showtimes/batch/{batchId}/status-preview",
+                                createdShowtime.getBatchId())
+                                .param("targetStatus", "OPEN_FOR_BOOKING"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalCount").value(1))
                 .andExpect(jsonPath("$.data.eligibleCount").value(1))
                 .andExpect(jsonPath("$.data.skippedCount").value(0))
-                .andExpect(jsonPath("$.data.actionAllowed").value(true));
+                .andExpect(jsonPath("$.data.actionAllowed").value(true))
+                .andReturn();
+        System.out.println(
+                "Scenario A OPEN preview response:\n"
+                        + openPreviewResult.getResponse()
+                                .getContentAsString(StandardCharsets.UTF_8));
         
         System.out.println("\n--- 8. Idempotency replay evidence ---");
         MvcResult replayRes = mockMvc.perform(post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
@@ -366,43 +412,92 @@ public class AdminAutoScheduleApplyE2ETest {
     }
 
     @Test
-    void missingPricingReturnsBatchValidationReasonInsteadOfInternalServerError() throws Exception {
+    void missingPricingFailsApplyPreflightBeforeCreatingAnyShowtime() throws Exception {
         jdbcTemplate.execute("DELETE FROM price_policy_rules");
         jdbcTemplate.execute("DELETE FROM price_policies");
+
+        int showtimeCountBeforeApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountBeforeApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        System.out.printf(
+                "Scenario B counts before apply: showtimes=%d, showtime_prices=%d%n",
+                showtimeCountBeforeApply,
+                priceCountBeforeApply);
 
         ApplyShowtimeSchedulePreviewRequest request = new ApplyShowtimeSchedulePreviewRequest();
         request.setExpectedVersion(initialVersion);
         request.setIdempotencyKey("apply-missing-pricing-e2e");
 
-        mockMvc.perform(post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
-
-        Showtime createdShowtime = showtimeRepository.findAll().stream()
-                .filter(showtime -> showtime.getBatchId() != null)
-                .findFirst()
-                .orElseThrow();
-        assertThat(showtimePriceRepository.findByShowtimeId(createdShowtime.getId())).isEmpty();
-
-        mockMvc.perform(get("/api/admin/showtimes/batch/{batchId}/status-preview",
-                        createdShowtime.getBatchId())
-                        .param("targetStatus", "OPEN_FOR_BOOKING"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.totalCount").value(1))
-                .andExpect(jsonPath("$.data.eligibleCount").value(0))
-                .andExpect(jsonPath("$.data.skippedCount").value(1))
-                .andExpect(jsonPath("$.data.actionAllowed").value(false))
+        MvcResult firstAttempt = mockMvc.perform(
+                        post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("PRICING_INCOMPLETE"))
+                .andExpect(jsonPath("$.data.complete").value(false))
+                .andExpect(jsonPath("$.data.totalCandidateCount").value(1))
+                .andExpect(jsonPath("$.data.completeCandidateCount").value(0))
+                .andExpect(jsonPath("$.data.incompleteCandidateCount").value(1))
                 .andExpect(jsonPath("$.data.reasonGroups[0].reasonCode").value("PRICING_INCOMPLETE"))
-                .andExpect(jsonPath("$.data.reasonGroups[0].reason").value("Showtime pricing is incomplete"))
+                .andExpect(jsonPath("$.data.reasonGroups[0].displayMessage")
+                        .value("Thiếu chính sách hoặc quy tắc giá hiệu lực cho một hoặc nhiều loại ghế."))
                 .andExpect(jsonPath("$.data.reasonGroups[0].count").value(1))
-                .andExpect(jsonPath("$.data.reasonGroups[0].sampleShowtimePublicIds[0]")
-                        .value(createdShowtime.getPublicId()))
-                .andExpect(jsonPath("$.data.blockedShowtimes[0].showtimePublicId")
-                        .value(createdShowtime.getPublicId()))
-                .andExpect(jsonPath("$.data.blockedShowtimes[0].reasonCode")
-                        .value("PRICING_INCOMPLETE"));
+                .andExpect(jsonPath("$.data.reasonGroups[0].auditoriums[0].name")
+                        .value("E2E Auditorium"))
+                .andExpect(jsonPath("$.data.reasonGroups[0].seatTypes[0].name")
+                        .value(standardSeatType.getName()))
+                .andReturn();
+        System.out.println(
+                "Scenario B first HTTP 409 response:\n"
+                        + firstAttempt.getResponse().getContentAsString(StandardCharsets.UTF_8));
+
+        assertThat(showtimeRepository.findAll().stream()
+                .filter(showtime -> showtime.getBatchId() != null)).isEmpty();
+        int showtimeCountAfterFirstAttempt =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountAfterFirstAttempt =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        assertThat(showtimeCountAfterFirstAttempt).isEqualTo(showtimeCountBeforeApply);
+        assertThat(priceCountAfterFirstAttempt).isEqualTo(priceCountBeforeApply);
+        assertThat(previewRepository.findByPublicId(previewPublicId).orElseThrow().getStatus())
+                .isEqualTo(SchedulePreviewStatus.PREVIEWED);
+        Long previewId = previewRepository.findByPublicId(previewPublicId).orElseThrow().getId();
+        assertThat(itemRepository.findDetailedItemsByPreviewId(previewId).getFirst().getApplyStatus())
+                .isEqualTo(PreviewItemApplyStatus.PENDING);
+
+        MvcResult retryAttempt = mockMvc.perform(
+                        post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("PRICING_INCOMPLETE"))
+                .andExpect(jsonPath("$.data.incompleteCandidateCount").value(1))
+                .andReturn();
+        System.out.println(
+                "Scenario B retry HTTP 409 response:\n"
+                        + retryAttempt.getResponse().getContentAsString(StandardCharsets.UTF_8));
+
+        int showtimeCountAfterRetry =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountAfterRetry =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        SchedulePreviewStatus previewStatusAfterRetry =
+                previewRepository.findByPublicId(previewPublicId).orElseThrow().getStatus();
+        PreviewItemApplyStatus itemStatusAfterRetry =
+                itemRepository.findDetailedItemsByPreviewId(previewId).getFirst().getApplyStatus();
+        System.out.printf(
+                "Scenario B counts/status after retry: showtimes=%d, showtime_prices=%d, "
+                        + "preview=%s, item=%s%n",
+                showtimeCountAfterRetry,
+                priceCountAfterRetry,
+                previewStatusAfterRetry,
+                itemStatusAfterRetry);
+        assertThat(showtimeCountAfterRetry).isEqualTo(showtimeCountBeforeApply);
+        assertThat(priceCountAfterRetry).isEqualTo(priceCountBeforeApply);
+        assertThat(previewStatusAfterRetry).isEqualTo(SchedulePreviewStatus.PREVIEWED);
+        assertThat(itemStatusAfterRetry).isEqualTo(PreviewItemApplyStatus.PENDING);
     }
     
     @Test

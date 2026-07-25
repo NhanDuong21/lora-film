@@ -11,11 +11,13 @@ import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewApplyMode;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.ApplyShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.dto.response.ApplyShowtimeSchedulePreviewResponse;
+import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePricingPreflightResponse;
 import com.lorafilm.movie.autoschedule.mapper.AutoScheduleApplyResponseMapper;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleApplyRevalidationService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleAuditoriumLockService;
+import com.lorafilm.movie.autoschedule.service.AutoSchedulePricingPreflightService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleShowtimeCreationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
@@ -74,6 +76,7 @@ class AutoSchedulePreviewApplyServiceImplTest {
     @Mock private AutoScheduleAuditoriumLockService auditoriumLockService;
     @Mock private AutoScheduleApplyRevalidationService revalidationService;
     @Mock private AutoScheduleShowtimeCreationService showtimeCreationService;
+    @Mock private AutoSchedulePricingPreflightService pricingPreflightService;
     @Mock private AutoScheduleApplyResponseMapper responseMapper;
     @Mock private MovieRepository movieRepository;
     @Mock private MovieVersionRepository movieVersionRepository;
@@ -98,10 +101,14 @@ class AutoSchedulePreviewApplyServiceImplTest {
                 return action.doInTransaction(new SimpleTransactionStatus());
             }
         };
+        AutoSchedulePricingPreflightResponse completePricing = new AutoSchedulePricingPreflightResponse(
+                true, 1, 1, 0, 0, List.of(), List.of());
+        lenient().when(pricingPreflightService.evaluate(any())).thenReturn(
+                new AutoSchedulePricingPreflightService.Evaluation(completePricing, List.of()));
         applyService = new AutoSchedulePreviewApplyServiceImpl(
                 currentUserProvider, expiryService, previewRepository, itemRepository,
                 auditoriumLockService, revalidationService, showtimeCreationService,
-                responseMapper, clock, transactionTemplate, movieRepository,
+                pricingPreflightService, responseMapper, clock, transactionTemplate, movieRepository,
                 movieVersionRepository, cinemaRepository, auditoriumRepository, entityManager);
     }
 
@@ -135,7 +142,8 @@ class AutoSchedulePreviewApplyServiceImplTest {
         when(movieVersionRepository.findAllById(List.of(version.getId()))).thenReturn(List.of(version));
         when(cinemaRepository.findAllById(List.of(cinema.getId()))).thenReturn(List.of(cinema));
         when(auditoriumRepository.findAllById(List.of(auditorium.getId()))).thenReturn(List.of(auditorium));
-        when(showtimeCreationService.createAll(any(), anyLong(), anyString())).thenReturn(List.of(new Showtime()));
+        when(showtimeCreationService.createAll(any(), anyLong(), anyString(), any()))
+                .thenReturn(List.of(new Showtime()));
         when(itemRepository.findDetailedItemsByPreviewId(1L)).thenReturn(List.of(item));
         when(responseMapper.toResponse(preview)).thenReturn(new ApplyShowtimeSchedulePreviewResponse());
 
@@ -148,6 +156,44 @@ class AutoSchedulePreviewApplyServiceImplTest {
         verify(entityManager).clear();
         verify(revalidationService).validateAll(preview, List.of(item), now);
         assertThat(item.getMovie()).isSameAs(movie);
+    }
+
+    @Test
+    void applyPreview_incompletePricingStopsBeforeAnyShowtimeWrite() {
+        String previewId = "prev-pricing-incomplete";
+        Cinema cinema = cinema();
+        Auditorium auditorium = auditorium(cinema);
+        Movie movie = movie();
+        MovieVersion version = version(movie);
+        ShowtimeSchedulePreview preview = preview(previewId, cinema, 1L, now.plusSeconds(3600));
+        ShowtimeSchedulePreviewItem item = item(preview, movie, version, cinema, auditorium);
+        ShowtimeSchedulePreviewItemRepository.ApplyItemReference reference =
+                reference(item.getId(), movie.getId(), version.getId(), cinema.getId(), auditorium.getId());
+        AutoSchedulePricingPreflightResponse blocked = new AutoSchedulePricingPreflightResponse(
+                false, 1, 0, 1, 0, List.of(), List.of());
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(100L);
+        when(expiryService.expireIfNecessary(previewId, now)).thenReturn(false);
+        when(previewRepository.findByApplyIdempotencyKeyDetailed("pricing-key")).thenReturn(Optional.empty());
+        when(previewRepository.findByPublicIdForApply(previewId)).thenReturn(Optional.of(preview));
+        when(itemRepository.findSelectedItemReferencesForApply(1L, PreviewItemValidationStatus.VALID))
+                .thenReturn(List.of(reference));
+        when(itemRepository.findAllById(List.of(item.getId()))).thenReturn(List.of(item));
+        when(movieRepository.findAllById(List.of(movie.getId()))).thenReturn(List.of(movie));
+        when(movieVersionRepository.findAllById(List.of(version.getId()))).thenReturn(List.of(version));
+        when(cinemaRepository.findAllById(List.of(cinema.getId()))).thenReturn(List.of(cinema));
+        when(auditoriumRepository.findAllById(List.of(auditorium.getId()))).thenReturn(List.of(auditorium));
+        when(pricingPreflightService.evaluate(List.of(item))).thenReturn(
+                new AutoSchedulePricingPreflightService.Evaluation(blocked, List.of()));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> applyService.applyPreview(previewId, request("pricing-key", 1L)));
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.PRICING_INCOMPLETE);
+        assertThat(exception.getErrorData()).isSameAs(blocked);
+        assertThat(preview.getStatus()).isEqualTo(SchedulePreviewStatus.PREVIEWED);
+        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString(), any());
+        verify(itemRepository, never()).findDetailedItemsByPreviewId(anyLong());
     }
 
     @Test
@@ -175,7 +221,7 @@ class AutoSchedulePreviewApplyServiceImplTest {
         verify(auditoriumLockService).lockAll(List.of(50L));
         verify(expiryService).expireIfNecessary(previewId, expiresAt);
         verify(entityManager, never()).clear();
-        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString());
+        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString(), any());
     }
 
     @Test
@@ -283,7 +329,7 @@ class AutoSchedulePreviewApplyServiceImplTest {
         assertThat(ex.getErrorCode()).isEqualTo(expectedError);
         verify(entityManager).clear();
         verify(revalidationService, never()).validateAll(any(), any(), any());
-        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString());
+        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString(), any());
     }
 
     @ParameterizedTest(name = "current {0} ownership mismatch returns {1}")
@@ -327,7 +373,7 @@ class AutoSchedulePreviewApplyServiceImplTest {
 
         assertThat(ex.getErrorCode()).isEqualTo(expectedError);
         verify(revalidationService, never()).validateAll(any(), any(), any());
-        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString());
+        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString(), any());
     }
 
     @ParameterizedTest(name = "current {0} change is revalidated as {1}")
@@ -374,7 +420,7 @@ class AutoSchedulePreviewApplyServiceImplTest {
         assertThat(item.getMovie()).isSameAs(currentMovie);
         assertThat(item.getCinema()).isSameAs(currentCinema);
         verify(entityManager).clear();
-        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString());
+        verify(showtimeCreationService, never()).createAll(any(), anyLong(), anyString(), any());
     }
 
     private static Stream<Arguments> unavailableEntityCases() {

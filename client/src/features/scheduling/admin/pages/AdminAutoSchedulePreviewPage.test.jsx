@@ -357,7 +357,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(dialog).toHaveTextContent('Không hợp lệ / xung đột toàn bản');
     expect(dialog).toHaveTextContent('lần thử lại dùng cùng khóa an toàn');
 
-    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' })));
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Kiểm tra giá và áp dụng' })));
     expect(value.handleApply).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('dialog', { name: 'Xác nhận áp dụng lịch chiếu' })).toBeInTheDocument();
   });

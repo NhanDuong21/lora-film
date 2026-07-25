@@ -136,6 +136,7 @@ const AdminAutoSchedulePreviewPage = () => {
     isSnapshotUpdating,
     loadingProgress,
     snapshotError,
+    pricingPreflight,
     capabilities,
     isApplying,
     isUpdatingSelection,
@@ -392,6 +393,26 @@ const AdminAutoSchedulePreviewPage = () => {
           </section>
         )}
         {snapshotError && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert"><strong>Không thể công bố ảnh chụp mới.</strong> {snapshotError.message}</section>}
+        {pricingPreflight && (
+          <section className={`rounded-xl border p-4 ${pricingPreflight.complete ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-red-500/30 bg-red-500/10 text-red-100'}`} role={pricingPreflight.complete ? 'status' : 'alert'}>
+            <h2 className="font-black">
+              Kiểm tra giá: {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} ứng viên đầy đủ
+            </h2>
+            {pricingPreflight.reasonGroups?.map(group => {
+              const displayMessage = group.displayMessage
+                || 'Không xác định — xem chi tiết kỹ thuật';
+              return (
+                <div key={group.reasonCode} className="mt-3 rounded-lg border border-current/20 p-3 text-sm">
+                  <p className="font-bold">{group.count} ứng viên · {displayMessage}</p>
+                  {group.affectedDates?.length > 0 && <p className="mt-1">Ngày: {group.affectedDates.join(', ')}</p>}
+                  {group.auditoriums?.length > 0 && <p className="mt-1">Phòng: {group.auditoriums.map(room => room.name).join(', ')}</p>}
+                  {group.seatTypes?.length > 0 && <p className="mt-1">Loại ghế: {group.seatTypes.map(seat => seat.name).join(', ')}</p>}
+                  <details className="mt-2 text-xs opacity-70"><summary className="cursor-pointer">Chi tiết kỹ thuật</summary><p className="mt-1 font-mono">{group.reasonCode}</p></details>
+                </div>
+              );
+            })}
+          </section>
+        )}
         {timezoneResolution.usedFallback && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert">Múi giờ không hợp lệ; thời gian tạm hiển thị theo UTC.</section>}
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7" aria-label="Tóm tắt ứng viên">
@@ -558,19 +579,31 @@ const AdminAutoSchedulePreviewPage = () => {
               <dt className="text-zinc-500">Không hợp lệ / xung đột đã chọn</dt><dd className="text-right font-bold text-amber-300">{selectedIssueCount}</dd>
             </dl>
             <div className="mt-5 space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+              <p>Hệ thống sẽ phân giải giá cho toàn bộ ứng viên đã chọn trước khi ghi bất kỳ suất chiếu nào.</p>
+              <p>Nếu thiếu hoặc mơ hồ giá trong chế độ toàn bộ-hoặc-không, không suất chiếu nào được tạo.</p>
               <p>Sau khi áp dụng thành công, lựa chọn trở thành chỉ đọc.</p>
               <p>Nếu lỗi truyền tải xảy ra, hộp thoại vẫn mở và lần thử lại dùng cùng khóa an toàn để không tạo trùng.</p>
             </div>
+            {pricingPreflight && !pricingPreflight.complete && (
+              <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-100">
+                <p className="font-black">Chưa thể áp dụng: {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} ứng viên có giá đầy đủ.</p>
+                {pricingPreflight.reasonGroups?.map(group => (
+                  <p key={group.reasonCode} className="mt-1">
+                    {group.count} ứng viên · {group.displayMessage || 'Không xác định — xem chi tiết kỹ thuật'}
+                  </p>
+                ))}
+              </div>
+            )}
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" disabled={isApplying} onClick={() => setShowApplyModal(false)} className="rounded-xl px-4 py-2 text-zinc-400 disabled:opacity-50">Hủy</button>
               <button
                 type="button"
-                disabled={!capabilities.canApply || isApplying}
+                disabled={!capabilities.canApply || isApplying || (pricingPreflight && !pricingPreflight.complete)}
                 onClick={() => handleApply()}
                 className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2 font-black text-zinc-950 disabled:opacity-50"
               >
                 {isApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                {isApplying ? 'Đang áp dụng…' : 'Xác nhận'}
+                {isApplying ? 'Đang kiểm tra và áp dụng…' : 'Kiểm tra giá và áp dụng'}
               </button>
             </div>
           </div>

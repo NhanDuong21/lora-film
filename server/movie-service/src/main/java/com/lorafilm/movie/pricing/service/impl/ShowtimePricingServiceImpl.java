@@ -176,6 +176,21 @@ public class ShowtimePricingServiceImpl implements ShowtimePricingService {
         }
         showtimes.forEach(this::requireDraft);
         List<PriceResolutionResult> results = pricePolicyResolver.resolveAll(showtimes);
+        replaceAllWithResolvedResults(showtimes, results);
+        return results;
+    }
+
+    @Override
+    @Transactional
+    public void replaceAllWithResolvedResults(List<Showtime> showtimes,
+                                              List<PriceResolutionResult> results) {
+        if (showtimes == null || showtimes.isEmpty()) {
+            return;
+        }
+        if (results == null || results.size() != showtimes.size()) {
+            throw new IllegalArgumentException("Each Showtime requires exactly one pricing resolution result");
+        }
+        showtimes.forEach(this::requireDraft);
         for (Showtime showtime : showtimes) {
             showtimePriceRepository.deleteByShowtimeId(showtime.getId());
         }
@@ -205,7 +220,6 @@ public class ShowtimePricingServiceImpl implements ShowtimePricingService {
             showtimePriceRepository.saveAll(snapshots);
             showtimePriceRepository.flush();
         }
-        return results;
     }
 
     @Override

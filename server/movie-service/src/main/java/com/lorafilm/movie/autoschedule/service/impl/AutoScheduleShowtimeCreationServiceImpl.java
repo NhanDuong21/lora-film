@@ -3,6 +3,7 @@ package com.lorafilm.movie.autoschedule.service.impl;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleShowtimeCreationService;
 import com.lorafilm.movie.pricing.service.ShowtimePricingService;
+import com.lorafilm.movie.pricing.service.model.PriceResolutionResult;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
@@ -33,7 +34,10 @@ public class AutoScheduleShowtimeCreationServiceImpl implements AutoScheduleShow
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<Showtime> createAll(List<ShowtimeSchedulePreviewItem> items, Long actorId, String batchId) {
+    public List<Showtime> createAll(List<ShowtimeSchedulePreviewItem> items,
+                                    Long actorId,
+                                    String batchId,
+                                    List<PriceResolutionResult> pricingResolutions) {
         if (items == null || items.isEmpty()) {
             return List.of();
         }
@@ -68,7 +72,7 @@ public class AutoScheduleShowtimeCreationServiceImpl implements AutoScheduleShow
             Showtime savedShowtime = showtimes.get(i);
             showtimeStatusHistoryService.recordInitialHistory(savedShowtime, actorId);
         }
-        showtimePricingService.resolveAndReplaceAll(showtimes);
+        showtimePricingService.replaceAllWithResolvedResults(showtimes, pricingResolutions);
 
         return showtimes;
     }
