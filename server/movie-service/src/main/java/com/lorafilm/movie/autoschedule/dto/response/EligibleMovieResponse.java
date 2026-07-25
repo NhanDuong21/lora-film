@@ -10,6 +10,7 @@ public class EligibleMovieResponse {
     private String title;
     private String originalTitle;
     private String slug;
+    private String primaryPoster;
     private Integer durationMinutes;
     private LocalDate releaseDate;
     private LocalDate endDate;
@@ -50,6 +51,14 @@ public class EligibleMovieResponse {
 
     public void setSlug(String slug) {
         this.slug = slug;
+    }
+
+    public String getPrimaryPoster() {
+        return primaryPoster;
+    }
+
+    public void setPrimaryPoster(String primaryPoster) {
+        this.primaryPoster = primaryPoster;
     }
 
     public Integer getDurationMinutes() {

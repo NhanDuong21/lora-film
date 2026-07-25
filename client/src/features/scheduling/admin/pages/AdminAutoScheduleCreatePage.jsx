@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  Film,
   Loader2,
   MapPin,
   Save,
@@ -25,6 +26,31 @@ const addDays = (dateValue, days) => {
   const [year, month, day] = dateValue.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day + days));
   return date.toISOString().slice(0, 10);
+};
+
+const MoviePoster = ({ src, title }) => {
+  const [loadFailed, setLoadFailed] = useState(false);
+  const showImage = Boolean(src) && !loadFailed;
+
+  return (
+    <span className="relative block aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-700/80 bg-gradient-to-br from-zinc-800 via-zinc-900 to-black shadow-lg shadow-black/30 sm:w-24">
+      {showImage ? (
+        <img
+          src={src}
+          alt={`Poster ${title}`}
+          loading="lazy"
+          onError={() => setLoadFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="flex h-full w-full flex-col items-center justify-center gap-2 px-2 text-center text-zinc-600">
+          <Film className="h-7 w-7" aria-hidden="true" />
+          <span className="text-[9px] font-black uppercase tracking-wider">Chưa có poster</span>
+        </span>
+      )}
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/70 to-transparent" aria-hidden="true" />
+    </span>
+  );
 };
 
 const AdminAutoScheduleCreatePage = () => {
@@ -507,67 +533,121 @@ const AdminAutoScheduleCreatePage = () => {
             )}
             </div>
 
-            <div className="space-y-3 pt-4">
+            <div className="grid gap-4 pt-4 lg:grid-cols-2">
               {isLoadingMovies ? (
-                <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-zinc-500" aria-label="Đang tải phim" /></div>
+                <div className="flex justify-center py-10 lg:col-span-2"><Loader2 className="h-6 w-6 animate-spin text-zinc-500" aria-label="Đang tải phim" /></div>
               ) : movieLoadError ? (
-                <p className="py-10 text-center text-sm text-zinc-500">Không thể tải danh sách phim. Dùng nút “Thử tải lại” ở phía trên.</p>
+                <p className="py-10 text-center text-sm text-zinc-500 lg:col-span-2">Không thể tải danh sách phim. Dùng nút “Thử tải lại” ở phía trên.</p>
               ) : movies.length === 0 ? (
-                <p className="py-10 text-center text-sm text-zinc-500">Chưa có phim đủ điều kiện trong khoảng ngày đã chọn.</p>
+                <p className="py-10 text-center text-sm text-zinc-500 lg:col-span-2">Chưa có phim đủ điều kiện trong khoảng ngày đã chọn.</p>
               ) : showSelectedOnly && selectedMovieVersionIds.length === 0 ? (
-                <p className="py-10 text-center text-sm text-zinc-500">Chưa có định dạng nào được chọn để hiển thị.</p>
+                <p className="py-10 text-center text-sm text-zinc-500 lg:col-span-2">Chưa có định dạng nào được chọn để hiển thị.</p>
               ) : movieSearch.trim() && filteredMovies.length === 0 ? (
-                <p className="py-10 text-center text-sm text-zinc-500">Không tìm thấy phim khớp từ khóa “{movieSearch.trim()}”.</p>
+                <p className="py-10 text-center text-sm text-zinc-500 lg:col-span-2">Không tìm thấy phim khớp từ khóa “{movieSearch.trim()}”.</p>
               ) : filteredMovies.length === 0 ? (
-                <p className="py-10 text-center text-sm text-zinc-500">Không có phim phù hợp với bộ lọc hiện tại.</p>
+                <p className="py-10 text-center text-sm text-zinc-500 lg:col-span-2">Không có phim phù hợp với bộ lọc hiện tại.</p>
               ) : filteredMovies.map(movie => {
                 const isExpanded = Boolean(expandedMovies[movie.publicId]);
                 const versions = versionsByMovie[movie.publicId] || [];
                 const selectedCount = versions.filter(version => selectedMovieVersionIds.includes(version.publicId)).length;
                 const contentId = `movie-${movie.publicId}-versions`;
                 return (
-                  <article key={movie.publicId} className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/60">
+                  <article
+                    key={movie.publicId}
+                    className={`self-start overflow-hidden rounded-2xl border bg-zinc-950/70 transition-colors ${
+                      selectedCount > 0
+                        ? 'border-brand-orange/40 shadow-[0_16px_35px_-25px_rgba(249,115,22,0.7)]'
+                        : 'border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
                     <button
                       type="button"
                       aria-expanded={isExpanded}
                       aria-controls={contentId}
                       onClick={() => handleToggleMovie(movie.publicId)}
-                      className="flex min-h-16 w-full items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-zinc-800/40 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-orange/60 md:p-4"
+                      className="relative flex min-h-[164px] w-full items-stretch gap-4 p-3 text-left transition-colors hover:bg-zinc-800/35 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-orange/60 sm:p-4"
                     >
-                      <span className="flex min-w-0 items-center gap-3">
-                        <span className={`rounded-lg bg-zinc-800 p-2 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
-                          <ChevronRight className="h-4 w-4 text-zinc-400" aria-hidden="true" />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-white">
-                            <span className="truncate">{movie.title}</span>
-                            <span className={`rounded border px-2 py-0.5 text-[9px] font-black uppercase ${movie.eligible ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-red-500/30 bg-red-500/10 text-red-400'}`}>
-                              {movie.eligible ? 'Đủ điều kiện' : 'Không đủ điều kiện'}
-                            </span>
+                      <MoviePoster
+                        key={movie.primaryPoster || 'missing-poster'}
+                        src={movie.primaryPoster}
+                        title={movie.title}
+                      />
+                      <span className="flex min-w-0 flex-1 flex-col py-0.5 pr-8">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wide ${
+                            movie.eligible
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                              : 'border-red-500/30 bg-red-500/10 text-red-300'
+                          }`}>
+                            {movie.eligible ? 'Đủ điều kiện' : 'Không đủ điều kiện'}
                           </span>
-                          <span className="mt-1 flex flex-wrap gap-2 text-[10px] text-zinc-500">
-                            <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" aria-hidden="true" /> {movie.releaseDate || 'N/A'}</span>
-                            <span>{movie.durationMinutes ?? '—'} phút</span>
-                            {selectedCount > 0 && <span className="font-bold text-brand-orange">{selectedCount} đã chọn</span>}
-                          </span>
-                          {!movie.eligible && movie.reasons?.length > 0 && (
-                            <span className="mt-2 block text-xs leading-relaxed text-red-300">
-                              {movie.reasons.map(reason => reason.message || reason.code).join(' · ')}
+                          {selectedCount > 0 && (
+                            <span className="rounded-md border border-brand-orange/30 bg-brand-orange/10 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-brand-orange">
+                              {selectedCount}/{versions.length} đã chọn
                             </span>
                           )}
                         </span>
+                        <span className="mt-2 block truncate text-base font-black text-white">{movie.title}</span>
+                        {movie.originalTitle && movie.originalTitle !== movie.title && (
+                          <span className="mt-0.5 block truncate text-xs text-zinc-500">{movie.originalTitle}</span>
+                        )}
+                        <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-zinc-500">
+                          <span className="flex items-center gap-1">
+                            <CalendarDays className="h-3 w-3 text-zinc-600" aria-hidden="true" />
+                            {movie.releaseDate || 'Chưa có ngày'}
+                          </span>
+                          <span>{movie.durationMinutes ?? '—'} phút</span>
+                          <span>{versions.length} định dạng</span>
+                        </span>
+                        {versions.length > 0 && (
+                          <span className="mt-auto flex flex-wrap gap-1.5 pt-3">
+                            {versions.slice(0, 3).map(version => (
+                              <span
+                                key={version.publicId}
+                                className={`rounded-md border px-2 py-1 text-[9px] font-bold ${
+                                  selectedMovieVersionIds.includes(version.publicId)
+                                    ? 'border-brand-orange/40 bg-brand-orange/10 text-brand-orange'
+                                    : 'border-zinc-800 bg-zinc-900 text-zinc-400'
+                                }`}
+                              >
+                                {version.format || version.versionName}
+                              </span>
+                            ))}
+                            {versions.length > 3 && (
+                              <span className="rounded-md border border-zinc-800 px-2 py-1 text-[9px] font-bold text-zinc-500">
+                                +{versions.length - 3}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                        {!movie.eligible && movie.reasons?.length > 0 && (
+                          <span className="mt-3 block border-t border-red-500/15 pt-2 text-[10px] leading-relaxed text-red-300">
+                            {movie.reasons.map(reason => reason.message || reason.code).join(' · ')}
+                          </span>
+                        )}
+                      </span>
+                      <span className={`absolute right-3 top-3 rounded-lg border border-zinc-700 bg-zinc-900 p-1.5 transition-transform ${
+                        isExpanded ? 'rotate-90 border-brand-orange/40 text-brand-orange' : 'text-zinc-500'
+                      }`}>
+                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
                       </span>
                     </button>
 
                     {isExpanded && (
-                      <div id={contentId} className="grid gap-3 border-t border-zinc-800 bg-zinc-900/30 p-3 md:grid-cols-2 md:p-4">
+                      <div id={contentId} className="space-y-2 border-t border-zinc-800 bg-zinc-900/35 p-3 sm:p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">
+                            Chọn định dạng trình chiếu
+                          </p>
+                          <span className="text-[10px] font-bold text-zinc-500">{selectedCount}/{versions.length}</span>
+                        </div>
                         {versions.length === 0 ? (
                           <p className="text-xs text-zinc-500">Không có định dạng phim.</p>
                         ) : versions.map(version => {
                           const isSelectable = movie.eligible && version.status === 'ACTIVE';
                           const isChecked = selectedMovieVersionIds.includes(version.publicId);
                           return (
-                            <label key={version.publicId} className={`flex min-h-16 items-start gap-3 rounded-xl border p-3 ${isChecked ? 'border-brand-orange/50 bg-brand-orange/5' : 'border-zinc-800 bg-zinc-950/80'} ${isSelectable ? 'cursor-pointer hover:bg-zinc-800/40' : 'cursor-not-allowed opacity-55'}`}>
+                            <label key={version.publicId} className={`flex min-h-16 items-center gap-3 rounded-xl border p-3 transition-colors ${isChecked ? 'border-brand-orange/50 bg-brand-orange/10' : 'border-zinc-800 bg-zinc-950/80'} ${isSelectable ? 'cursor-pointer hover:border-zinc-700 hover:bg-zinc-800/40' : 'cursor-not-allowed opacity-55'}`}>
                               <input
                                 type="checkbox"
                                 checked={isChecked}
@@ -575,12 +655,19 @@ const AdminAutoScheduleCreatePage = () => {
                                 onChange={() => toggleVersion(version.publicId)}
                                 className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-brand-orange focus:ring-brand-orange"
                               />
+                              <span className={`flex h-9 min-w-10 shrink-0 items-center justify-center rounded-lg border px-2 text-[10px] font-black ${
+                                isChecked
+                                  ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange'
+                                  : 'border-zinc-700 bg-zinc-900 text-zinc-400'
+                              }`}>
+                                {version.format || '—'}
+                              </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-bold text-zinc-200">{version.versionName}</span>
+                                <span className="block truncate text-sm font-bold text-zinc-100">{version.versionName}</span>
                                 <span className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-zinc-500">
-                                  <span>{version.format}</span>
                                   <span>Audio: {version.audioLanguage || '—'}</span>
                                   {version.subtitleLanguage && <span>Sub: {version.subtitleLanguage}</span>}
+                                  {version.dubLanguage && <span>Lồng tiếng: {version.dubLanguage}</span>}
                                   {version.status !== 'ACTIVE' && <span className="font-bold text-red-400">Ngừng hoạt động</span>}
                                 </span>
                               </span>

@@ -137,6 +137,31 @@ describe('AdminAutoScheduleCreatePage', () => {
     expect(form.clearMovieVersions).toHaveBeenCalledTimes(1);
   });
 
+  it('renders the primary movie poster and falls back safely when it cannot load', () => {
+    const form = baseForm();
+    form.movies = [{
+      publicId: 'movie-1',
+      title: 'Phim có poster',
+      originalTitle: 'Movie With Poster',
+      primaryPoster: 'https://cdn.example.test/poster.jpg',
+      eligible: true,
+      reasons: [],
+      releaseDate: '2099-09-01',
+      durationMinutes: 110,
+    }];
+    form.versionsByMovie = {
+      'movie-1': [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE', format: '2D' }],
+    };
+    useAutoScheduleForm.mockReturnValue(form);
+
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    const poster = screen.getByRole('img', { name: 'Poster Phim có poster' });
+    expect(poster).toHaveAttribute('src', 'https://cdn.example.test/poster.jpg');
+    fireEvent.error(poster);
+    expect(screen.getByText('Chưa có poster')).toBeInTheDocument();
+  });
+
   it('shows selected chips and keeps the primary action beside readiness', () => {
     const form = baseForm();
     form.selectedAuditoriumIds = ['aud-1'];
