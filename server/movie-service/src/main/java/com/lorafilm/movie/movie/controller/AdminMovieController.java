@@ -4,6 +4,7 @@ import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
+import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
 import com.lorafilm.movie.movie.dto.MovieRequest;
@@ -15,6 +16,8 @@ import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieReviewResponse;
 import com.lorafilm.movie.integration.tmdb.service.TmdbMovieReviewService;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -122,6 +125,14 @@ public class AdminMovieController {
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<MovieSummaryResponse>> getMovieSummary() {
         return ResponseEntity.ok(ApiResponse.ok(movieSummaryQueryService.getSummary()));
+    }
+
+    @PostMapping("/bulk-approve")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<MovieBulkApprovalResponse>> bulkApproveTmdbMovies(
+            @Valid @RequestBody AdminMovieListQuery filter,
+            @RequestParam(name = "limit", defaultValue = "100") @Min(1) @Max(100) int limit) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.bulkApproveTmdbMovies(filter, limit)));
     }
 
     @GetMapping("/{publicId}/tmdb-review")

@@ -60,6 +60,13 @@ const adminMovieService = {
     return response.data;
   },
 
+  bulkApproveTmdbMovies: async (filter, limit = 100) => {
+    const response = await apiClient.post('/api/admin/movies/bulk-approve', filter, {
+      params: { limit }
+    });
+    return response.data;
+  },
+
   deleteMovie: async (publicId) => {
     const response = await apiClient.delete(`/api/admin/movies/${publicId}`);
     return response.data;

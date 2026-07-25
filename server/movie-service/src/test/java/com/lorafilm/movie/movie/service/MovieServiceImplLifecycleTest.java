@@ -7,6 +7,8 @@ import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieGenre;
 import com.lorafilm.movie.movie.domain.enums.AgeRating;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
+import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
+import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
 import com.lorafilm.movie.movie.repository.MovieCreditRepository;
@@ -20,6 +22,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -105,6 +110,62 @@ class MovieServiceImplLifecycleTest {
         assertEquals(MovieStatus.UPCOMING, movie.getStatus());
         assertEquals(MovieStatus.UPCOMING, result.getStatus());
         verify(movieRepository).save(movie);
+    }
+
+    @Test
+    void bulkApprovalRevalidatesEveryCandidateAndReturnsPerMovieResults() {
+        Movie ready = movie(4L, MovieStatus.DRAFT, 120);
+        Movie blocked = movie(5L, MovieStatus.DRAFT, 120);
+        ready.setTmdbId(1004L);
+        blocked.setTmdbId(1005L);
+
+        when(movieRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(ready, blocked)));
+        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-4")).thenReturn(Optional.of(ready));
+        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-5")).thenReturn(Optional.of(blocked));
+        when(movieGenreRepository.findByMovieId(4L)).thenReturn(List.of(genreLink(ready)));
+        when(movieGenreRepository.findByMovieId(5L)).thenReturn(List.of());
+        when(movieVersionRepository.existsActiveVersion(4L)).thenReturn(true);
+        when(movieVersionRepository.existsActiveVersion(5L)).thenReturn(true);
+        when(movieMediaRepository.existsPrimaryPoster(4L)).thenReturn(true);
+        when(movieMediaRepository.existsPrimaryPoster(5L)).thenReturn(true);
+        when(movieRepository.save(ready)).thenReturn(ready);
+        when(movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                any(), any(), any())).thenReturn(Optional.empty());
+        MovieDto approvedDto = new MovieDto();
+        approvedDto.setStatus(MovieStatus.UPCOMING);
+        when(movieMapper.toDto(any(), anyList(), isNull())).thenReturn(approvedDto);
+
+        AdminMovieListQuery filter = new AdminMovieListQuery();
+        filter.setStatus("DRAFT");
+        filter.setSource("TMDB");
+        filter.setHealthStatus("READY");
+
+        MovieBulkApprovalResponse response = service.bulkApproveTmdbMovies(filter, 100);
+
+        assertEquals(2, response.requested());
+        assertEquals(1, response.approved());
+        assertEquals(1, response.skipped());
+        assertEquals(0, response.errors());
+        assertEquals("APPROVED", response.results().get(0).outcome());
+        assertEquals("SKIPPED", response.results().get(1).outcome());
+        assertEquals(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED.name(), response.results().get(1).reasonCode());
+        verify(movieRepository).save(ready);
+        verify(movieRepository, never()).save(blocked);
+    }
+
+    @Test
+    void bulkApprovalRejectsAFilterOutsideTheTmdbDraftQueue() {
+        AdminMovieListQuery filter = new AdminMovieListQuery();
+        filter.setStatus("DRAFT");
+        filter.setSource("MANUAL");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.bulkApproveTmdbMovies(filter, 100));
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
+        verify(movieRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
     private Movie movie(Long id, MovieStatus status, int duration) {

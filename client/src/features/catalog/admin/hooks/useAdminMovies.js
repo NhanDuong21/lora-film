@@ -52,6 +52,11 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [searchInput, setSearchInput] = useState(query.keyword);
+  const [bulkApproval, setBulkApproval] = useState({
+    isPending: false,
+    result: null,
+    error: '',
+  });
   const requestSequence = useRef(0);
   const hasLoaded = useRef(false);
 
@@ -147,6 +152,24 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     await Promise.all([fetchMovies(), onMutation?.()]);
   }, [fetchMovies, onMutation]);
 
+  const bulkApproveTmdbMovies = useCallback(async (limit = 100) => {
+    setBulkApproval({ isPending: true, result: null, error: '' });
+    try {
+      const envelope = await adminMovieService.bulkApproveTmdbMovies(toMovieApiParams(query), limit);
+      if (envelope?.success !== true || !envelope.data || !Array.isArray(envelope.data.results)) {
+        throw new Error('Phản hồi duyệt hàng loạt không đúng định dạng.');
+      }
+      setBulkApproval({ isPending: false, result: envelope.data, error: '' });
+      await refreshAll();
+      return envelope.data;
+    } catch (err) {
+      const message = parseApiError(err);
+      setBulkApproval({ isPending: false, result: null, error: message });
+      triggerToast?.(message, 'error');
+      return null;
+    }
+  }, [query, refreshAll, triggerToast]);
+
   const handleDelete = async (publicId, title) => {
     const shouldDelete = triggerConfirm
       ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)
@@ -182,6 +205,8 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     clearAdvancedFilters,
     fetchMovies,
     refreshAll,
+    bulkApproval,
+    bulkApproveTmdbMovies,
     handleDelete,
     defaults: ADMIN_MOVIE_QUERY_DEFAULTS,
   };

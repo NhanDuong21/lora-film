@@ -6,6 +6,8 @@ import com.lorafilm.movie.movie.domain.enums.AgeRating;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
+import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
+import com.lorafilm.movie.movie.dto.MovieBulkApprovalResult;
 import com.lorafilm.movie.movie.dto.MovieSummaryResponse;
 import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
 import com.lorafilm.movie.movie.dto.MovieRequest;
@@ -242,6 +244,44 @@ public class AdminMovieControllerTest {
                 .andExpect(jsonPath("$.data.data[0].publicId").value("movie-1"))
                 .andExpect(jsonPath("$.data.data[0].status").value("DRAFT"))
                 .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void bulkApproveTmdbMovies_ReturnsPerMovieResults() throws Exception {
+        MovieBulkApprovalResponse response = new MovieBulkApprovalResponse(
+                2,
+                1,
+                1,
+                0,
+                100,
+                List.of(
+                        MovieBulkApprovalResult.approved("movie-1", "Ready Movie", MovieStatus.UPCOMING),
+                        MovieBulkApprovalResult.skipped(
+                                "movie-2",
+                                "Blocked Movie",
+                                "MOVIE_PRIMARY_POSTER_REQUIRED",
+                                "Primary poster is required")));
+        when(movieService.bulkApproveTmdbMovies(any(AdminMovieListQuery.class), eq(100))).thenReturn(response);
+
+        mockMvc.perform(post("/api/admin/movies/bulk-approve")
+                        .param("limit", "100")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "DRAFT",
+                                  "source": "TMDB",
+                                  "healthStatus": "READY",
+                                  "sort": "releaseDate,desc"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.requested").value(2))
+                .andExpect(jsonPath("$.data.approved").value(1))
+                .andExpect(jsonPath("$.data.skipped").value(1))
+                .andExpect(jsonPath("$.data.results[0].outcome").value("APPROVED"))
+                .andExpect(jsonPath("$.data.results[1].outcome").value("SKIPPED"))
+                .andExpect(jsonPath("$.data.results[1].reasonCode").value("MOVIE_PRIMARY_POSTER_REQUIRED"));
     }
 
     @Test
