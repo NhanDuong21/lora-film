@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { MapPin, Phone, Clock, Star, Film, ChevronLeft, ChevronRight, HelpCircle, AlertTriangle } from 'lucide-react';
 import { getCinemaBySlug, getShowtimes, getMovies } from '@/features/catalog/customer/services/movieService';
+import { seatSelectionPath } from '@/features/catalog/customer/utils/customerMovieFlow';
 
 const CINEMA_STATIC_DETAILS = {
   'lora-nguyen-du': {
@@ -387,7 +388,7 @@ export default function CinemaDetailPage() {
                               {formats[formatLabel].map((st) => (
                                 <button
                                   key={st.showtimePublicId}
-                                  onClick={() => navigate(`/seat-selection?showtimeId=${st.showtimePublicId}`)}
+                                  onClick={() => navigate(seatSelectionPath(st.showtimePublicId))}
                                   className="bg-zinc-950 border border-zinc-800 hover:bg-brand-orange hover:border-brand-orange hover:text-white transition-all text-[10px] font-black tracking-wider py-1.5 px-2.5 rounded-lg focus:outline-none cursor-pointer"
                                 >
                                   {formattedStartTime(st.startTime)}

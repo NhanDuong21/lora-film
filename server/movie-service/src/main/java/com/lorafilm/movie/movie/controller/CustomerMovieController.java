@@ -7,15 +7,31 @@ import com.lorafilm.movie.movie.service.CustomerMovieService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
+import com.lorafilm.movie.showtime.dto.response.CustomerBookingOptionResponse;
+import com.lorafilm.movie.showtime.service.CustomerShowtimeService;
+import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/customer/movies")
 public class CustomerMovieController {
 
     private final CustomerMovieService customerMovieService;
+    private final CustomerShowtimeService customerShowtimeService;
 
-    public CustomerMovieController(CustomerMovieService customerMovieService) {
+    public CustomerMovieController(CustomerMovieService customerMovieService,
+                                   CustomerShowtimeService customerShowtimeService) {
         this.customerMovieService = customerMovieService;
+        this.customerShowtimeService = customerShowtimeService;
+    }
+
+    @GetMapping("/{identifier}/booking-options")
+    public ApiResponse<List<CustomerBookingOptionResponse>> getBookingOptions(
+            @PathVariable String identifier,
+            @RequestParam(required = false) LocalDate from,
+            @RequestParam(required = false) LocalDate to) {
+        customerMovieService.getMovieDetail(identifier);
+        return ApiResponse.ok(customerShowtimeService.getBookingOptions(identifier, from, to));
     }
 
     @GetMapping
@@ -23,9 +39,22 @@ public class CustomerMovieController {
             @RequestParam String status,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        Pageable pageable = PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "releaseDate"));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "releaseDate,desc") String sort) {
+        String[] sortParts = sort.split(",", 2);
+        String property = switch (sortParts[0]) {
+            case "createdAt" -> "createdAt";
+            case "releaseDate" -> "releaseDate";
+            default -> throw new com.lorafilm.movie.common.exception.BusinessException(
+                    com.lorafilm.movie.common.exception.ErrorCode.VALIDATION_ERROR,
+                    "Customer movie sort must be createdAt or releaseDate");
+        };
+        org.springframework.data.domain.Sort.Direction direction =
+                sortParts.length > 1 && "asc".equalsIgnoreCase(sortParts[1])
+                        ? org.springframework.data.domain.Sort.Direction.ASC
+                        : org.springframework.data.domain.Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size,
+                org.springframework.data.domain.Sort.by(direction, property));
         return ApiResponse.ok(customerMovieService.getMoviesByStatus(status, keyword, pageable));
     }
 

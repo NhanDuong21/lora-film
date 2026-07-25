@@ -1,6 +1,7 @@
 package com.lorafilm.movie.showtime.dto.response;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 public class AdminShowtimeResponse {
 
@@ -20,6 +21,7 @@ public class AdminShowtimeResponse {
 
     private Instant startTime;
     private Instant endTime;
+    private LocalDate serviceDate;
     private String status;
     private Instant bookingOpenTime;
     private Instant bookingCloseTime;
@@ -55,6 +57,8 @@ public class AdminShowtimeResponse {
 
     public Instant getEndTime() { return endTime; }
     public void setEndTime(Instant endTime) { this.endTime = endTime; }
+    public LocalDate getServiceDate() { return serviceDate; }
+    public void setServiceDate(LocalDate serviceDate) { this.serviceDate = serviceDate; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

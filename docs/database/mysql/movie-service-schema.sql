@@ -337,6 +337,7 @@ CREATE TABLE cinema_closure_periods (
     cinema_id BIGINT NOT NULL,
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP NOT NULL,
+    service_date DATE NOT NULL COMMENT 'Authoritative cinema business/service day',
     reason VARCHAR(255) COMMENT 'Lý do đóng cửa rạp đột xuất (Lễ Tết, Cúp điện)',
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, CANCELLED',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -537,10 +538,12 @@ CREATE TABLE showtimes (
     movie_id BIGINT NOT NULL,
     movie_version_id BIGINT NOT NULL,
     cinema_id BIGINT NOT NULL,
-    auditorium_id BIGINT NOT NULL,
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP NOT NULL,
-    booking_open_time TIMESTAMP NULL,
+     auditorium_id BIGINT NOT NULL,
+     start_time TIMESTAMP NOT NULL,
+     end_time TIMESTAMP NOT NULL,
+     service_date DATE NOT NULL
+         COMMENT 'Authoritative cinema business/service day',
+     booking_open_time TIMESTAMP NULL,
     booking_close_time TIMESTAMP NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, OPEN_FOR_BOOKING, CLOSED, CANCELLED, FINISHED',
     cancellation_reason VARCHAR(255) NULL,
@@ -578,8 +581,14 @@ CREATE TABLE showtimes (
         start_time
     ),
     INDEX idx_showtimes_public_id (public_id),
-    INDEX idx_showtimes_batch_id (batch_id),
-    INDEX idx_showtimes_deleted_at (deleted_at)
+     INDEX idx_showtimes_batch_id (batch_id),
+     INDEX idx_showtimes_deleted_at (deleted_at),
+     INDEX idx_showtimes_customer_service_date (
+         service_date,
+         status,
+         movie_id,
+         cinema_id
+     )
 );
 
 CREATE TABLE showtime_prices (
@@ -773,9 +782,7 @@ CREATE TABLE showtime_schedule_previews (
         generated_at
     ),
 
-    INDEX idx_schedule_preview_created_at (
-        created_at
-    )
+     INDEX idx_schedule_preview_created_at (created_at)
 );
 
 

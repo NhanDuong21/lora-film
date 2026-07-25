@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { Film, Star, ChevronDown, Check, MapPin, AlertCircle } from 'lucide-react';
 import { getMovies, getCinemas, getShowtimes } from '@/features/catalog/customer/services/movieService';
+import { seatSelectionPath } from '@/features/catalog/customer/utils/customerMovieFlow';
 
 export default function MasterBookingFunnelPage() {
   const navigate = useNavigate();
@@ -159,7 +160,7 @@ export default function MasterBookingFunnelPage() {
 
   const handleContinue = () => {
     if (!selectedShowtime) return;
-    navigate(`/seat-selection?showtimeId=${selectedShowtime.showtimePublicId}`);
+    navigate(seatSelectionPath(selectedShowtime.showtimePublicId));
   };
 
   const formattedStartTime = (timeString) => {

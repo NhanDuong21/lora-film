@@ -53,6 +53,7 @@ public class AutoScheduleShowtimeCreationServiceImpl implements AutoScheduleShow
             showtime.setAuditorium(item.getAuditorium());
             showtime.setStartTime(item.getStartTime());
             showtime.setEndTime(item.getEndTime());
+            showtime.setServiceDate(item.getServiceDate());
             showtime.setStatus(ShowtimeStatus.DRAFT);
             showtime.setCancellationReason(null);
             showtime.setBookingOpenTime(null);

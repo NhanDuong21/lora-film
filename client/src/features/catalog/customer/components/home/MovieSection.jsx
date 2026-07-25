@@ -63,14 +63,6 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
     }
   };
 
-  const handleSeeMoreClick = () => {
-    if (onNavigate) {
-      onNavigate('discovery', { initialTab: activeTab });
-    } else {
-      navigate('/movies', { state: { initialTab: activeTab } });
-    }
-  };
-
   return (
     <section id="phim" className="relative px-6 md:px-12 py-16 bg-zinc-950 border-t border-zinc-900/60">
       {/* Grid Header & Filters */}
@@ -141,18 +133,27 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                 return (
                   <div
                     key={movie.publicId || movie.id}
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`Xem chi tiết phim ${movie.title}`}
                     onClick={() => {
-                      const idToUse = movie.publicId || movie.id;
+                      const idToUse = movie.slug || movie.publicId;
                       if (onSelectMovie) {
                         onSelectMovie(idToUse);
                       } else {
                         navigate(`/movies/${idToUse}`);
                       }
                     }}
-                    className="w-full flex flex-col group cursor-pointer overflow-visible"
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        navigate(`/movies/${movie.slug || movie.publicId}`);
+                      }
+                    }}
+                    className="group flex w-full cursor-pointer flex-col overflow-visible rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-4 focus-visible:ring-offset-zinc-950"
                   >
                     {/* The Dynamic Colored Glow Framework / Pop-out Card */}
-                    <div className="group relative w-full aspect-[2/3] rounded-2xl bg-zinc-900 border border-zinc-800/80 transition-all duration-500 ease-out hover:translate-y-[-8px] hover:shadow-[0_35px_60px_-15px_rgba(245,158,11,0.25)] hover:border-amber-500/40 cursor-pointer overflow-visible">
+                    <div className="group relative aspect-[2/3] w-full cursor-pointer overflow-visible rounded-2xl border border-zinc-800/80 bg-zinc-900 transition-all duration-300 ease-out hover:-translate-y-1 hover:border-amber-500/40 hover:shadow-[0_24px_50px_-18px_rgba(245,158,11,0.28)]">
                       
                       {/* Layer 1: The Background Frame */}
                       <div className="z-10 absolute inset-0 rounded-2xl overflow-hidden bg-zinc-900">
@@ -203,28 +204,18 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const defaultBooking = {
-                                movieId: movie.publicId || movie.id,
-                                movieTitle: movie.title,
-                                cinema: 'Lora Nguyễn Du',
-                                time: '19:30',
-                                format: '2D DIGITAL',
-                                date: new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
-                                fullDate: new Date().toLocaleDateString('vi-VN'),
-                                selectedSeats: []
-                              };
                               if (onBuyTicket) {
-                                onBuyTicket(defaultBooking);
+                                onBuyTicket(movie.slug || movie.publicId);
                               } else if (onNavigate) {
-                                onNavigate('seats', defaultBooking);
+                                onNavigate('movie-detail', { movieId: movie.slug || movie.publicId });
                               } else {
-                                navigate('/booking', { state: { bookingPayload: defaultBooking } });
+                                navigate(`/movies/${movie.slug || movie.publicId}`);
                               }
                             }}
                             className="w-full max-w-[160px] bg-brand-orange hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-full flex items-center justify-center gap-2 transition-all text-sm shadow-md shadow-brand-orange/10 cursor-pointer"
                           >
                             <Ticket className="w-4 h-4" />
-                            Mua Vé
+                            Chọn suất
                           </button>
                         )}
 
@@ -291,18 +282,6 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
           </>
         )}
       </div>
-
-      {/* Global Catalog Redirection trigger button */}
-      {!loading && !error && activeMovies.length > 0 && totalPages > 1 && (
-        <div className="flex justify-center mt-12">
-          <button
-            onClick={handleSeeMoreClick}
-            className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 font-bold px-8 py-3.5 rounded-full transition-all duration-300 transform hover:scale-105 shadow-md uppercase tracking-wider text-xs"
-          >
-            Xem thêm
-          </button>
-        </div>
-      )}
 
       {/* Full-Screen Cinematic Lightbox Pop-up Component */}
       {activeTrailerUrl && (

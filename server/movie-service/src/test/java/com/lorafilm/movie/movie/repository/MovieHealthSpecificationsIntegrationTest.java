@@ -397,6 +397,7 @@ class MovieHealthSpecificationsIntegrationTest {
         showtime.setAuditorium(auditorium);
         showtime.setStartTime(Instant.parse("2026-07-15T10:00:00Z"));
         showtime.setEndTime(Instant.parse("2026-07-15T12:00:00Z"));
+        showtime.setServiceDate(java.time.LocalDate.of(2026, 7, 15));
         showtime.setStatus(status);
         if (deleted) {
             showtime.setDeletedAt(Instant.now());

@@ -306,6 +306,7 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
             conflict.setMovieVersion(item.getMovieVersion());
             conflict.setStartTime(item.getStartTime().minus(5, ChronoUnit.MINUTES));
             conflict.setEndTime(item.getEndTime().minus(5, ChronoUnit.MINUTES));
+            conflict.setServiceDate(item.getServiceDate());
             conflict.setPublicId("CONFLICT_123");
             conflict.setStatus(com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.DRAFT);
             showtimeRepository.saveAndFlush(conflict);

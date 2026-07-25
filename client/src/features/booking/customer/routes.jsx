@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { lazy, Suspense } from 'react';
-import { PageLoader } from '@/components/common/RouteGuards';
+import { PageLoader, ProtectedRoute } from '@/components/common/RouteGuards';
 
 const MasterBookingFunnelPage = lazy(() => import('@/features/booking/customer/pages/MasterBookingFunnelPage'));
 const SeatSelectionPage = lazy(() => import('@/features/booking/customer/pages/SeatSelectionPage'));
@@ -17,7 +17,14 @@ const lazyPage = (Page) => (
 
 export const customerBookingRoutes = [
     { path: '/booking', element: lazyPage(MasterBookingFunnelPage) },
-    { path: '/seat-selection', element: lazyPage(SeatSelectionPage) },
+    {
+        path: '/seat-selection',
+        element: (
+            <ProtectedRoute>
+                {lazyPage(SeatSelectionPage)}
+            </ProtectedRoute>
+        )
+    },
     { path: '/bookings/checkout', element: lazyPage(BookingCheckoutPage) },
     { path: '/bookings/success', element: lazyPage(BookingSuccessPage) },
     { path: '/bookings', element: lazyPage(BookingHistoryPage) },

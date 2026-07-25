@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.List;
+import java.time.LocalDate;
 
 @Repository
 public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSpecificationExecutor<Showtime> {
@@ -14,6 +15,24 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
     boolean existsByMovieIdAndDeletedAtIsNull(Long movieId);
 
     Optional<Showtime> findByPublicIdAndDeletedAtIsNull(String publicId);
+
+    @org.springframework.data.jpa.repository.Query("""
+            select s from Showtime s
+            join fetch s.movie m
+            join fetch s.movieVersion
+            join fetch s.cinema
+            join fetch s.auditorium
+            where (m.slug = :identifier or m.publicId = :identifier)
+              and m.deletedAt is null
+              and s.deletedAt is null
+              and s.status = com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.OPEN_FOR_BOOKING
+              and s.serviceDate between :fromDate and :toDate
+            order by s.serviceDate asc, s.startTime asc, s.publicId asc
+            """)
+    List<Showtime> findCustomerBookingOptions(
+            @org.springframework.data.repository.query.Param("identifier") String identifier,
+            @org.springframework.data.repository.query.Param("fromDate") LocalDate fromDate,
+            @org.springframework.data.repository.query.Param("toDate") LocalDate toDate);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s " +
