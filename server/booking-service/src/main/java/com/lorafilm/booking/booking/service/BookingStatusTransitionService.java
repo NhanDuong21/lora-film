@@ -10,15 +10,7 @@ import java.util.EnumSet;
 @Service
 public class BookingStatusTransitionService {
 
-    private final EnumMap<BookingStatus, EnumSet<BookingStatus>> allowedTransitions = new EnumMap<>(BookingStatus.class);
-
     public BookingStatusTransitionService() {
-        allowedTransitions.put(BookingStatus.PENDING_PAYMENT, EnumSet.of(BookingStatus.CONFIRMED, BookingStatus.CANCELLED, BookingStatus.EXPIRED));
-        allowedTransitions.put(BookingStatus.CONFIRMED, EnumSet.of(BookingStatus.CANCELLED, BookingStatus.REFUNDED, BookingStatus.COMPLETED));
-        allowedTransitions.put(BookingStatus.COMPLETED, EnumSet.noneOf(BookingStatus.class));
-        allowedTransitions.put(BookingStatus.CANCELLED, EnumSet.noneOf(BookingStatus.class));
-        allowedTransitions.put(BookingStatus.EXPIRED, EnumSet.noneOf(BookingStatus.class));
-        allowedTransitions.put(BookingStatus.REFUNDED, EnumSet.noneOf(BookingStatus.class));
     }
 
     public void validateTransition(BookingStatus fromStatus, BookingStatus toStatus) {
@@ -36,8 +28,7 @@ public class BookingStatusTransitionService {
             throw new BusinessException("SAME_STATUS_TRANSITION", "Booking is already in status: " + toStatus);
         }
 
-        EnumSet<BookingStatus> validNextStates = allowedTransitions.get(fromStatus);
-        if (validNextStates == null || !validNextStates.contains(toStatus)) {
+        if (!fromStatus.canTransitionTo(toStatus)) {
             if (toStatus == BookingStatus.CONFIRMED) {
                 if (fromStatus == BookingStatus.CANCELLED) {
                     throw new BusinessException("CANNOT_CONFIRM_CANCELLED", "Cancelled booking cannot be confirmed");

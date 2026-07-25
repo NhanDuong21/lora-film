@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProfile name="prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+                <layout class="com.lorafilm.booking.common.logging.JsonLayout" />
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="!prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+                <charset>${CONSOLE_LOG_CHARSET}</charset>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <logger name="com.lorafilm.booking" level="DEBUG"/>
+    <logger name="org.hibernate.SQL" level="DEBUG"/>
+</configuration>

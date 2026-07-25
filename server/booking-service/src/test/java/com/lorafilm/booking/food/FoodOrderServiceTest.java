@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.lorafilm.booking.booking.entity.Booking;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -40,11 +41,17 @@ class FoodOrderServiceTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+
+    @Mock
+    private com.lorafilm.booking.booking.repository.BookingRepository bookingRepository;
+
     private FoodOrderServiceImpl foodOrderService;
 
     @BeforeEach
     void setUp() {
-        foodOrderService = new FoodOrderServiceImpl(foodOrderRepository, foodOrderItemRepository, foodCatalogClient, outboxEventRepository, objectMapper);
+        foodOrderService = new FoodOrderServiceImpl(foodOrderRepository, foodOrderItemRepository, foodCatalogClient, outboxEventRepository, objectMapper, bookingMetricsManager, bookingRepository);
     }
 
     @Test
@@ -54,6 +61,11 @@ class FoodOrderServiceTest {
         Long bookingId = 100L;
         String bookingPublicId = "123-abc";
         Long showtimeId = 50L;
+
+        Booking booking = new Booking();
+        booking.setId(bookingId);
+        booking.setPublicId(bookingPublicId);
+        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
 
         when(foodOrderRepository.save(any(FoodOrder.class))).thenAnswer(i -> {
             FoodOrder order = i.getArgument(0);

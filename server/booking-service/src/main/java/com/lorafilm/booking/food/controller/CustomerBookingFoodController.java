@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/bookings/{bookingId}/foods")
+@RequestMapping("/api/bookings/{bookingId}/foods")
 @Validated
 @Tag(name = "Customer Booking Food API", description = "Manage food and beverage for a booking")
 @SecurityRequirement(name = "bearerAuth")

@@ -57,6 +57,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
     private final SeatReservationMapper seatReservationMapper;
     private final ObjectMapper objectMapper;
     private final com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient;
+    private final com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
 
     public SeatReservationServiceImpl(
             SeatReservationRepository seatReservationRepository,
@@ -68,7 +69,8 @@ public class SeatReservationServiceImpl implements SeatReservationService {
             ReservationProperties reservationProperties,
             SeatReservationMapper seatReservationMapper,
             ObjectMapper objectMapper,
-            com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient) {
+            com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient,
+            com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager) {
         this.seatReservationRepository = seatReservationRepository;
         this.auditLogRepository = auditLogRepository;
         this.operationLogRepository = operationLogRepository;
@@ -79,6 +81,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         this.seatReservationMapper = seatReservationMapper;
         this.objectMapper = objectMapper;
         this.movieServiceClient = movieServiceClient;
+        this.bookingMetricsManager = bookingMetricsManager;
     }
 
     @Override
@@ -215,6 +218,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
             recordAuditLog(userId.toString(), "HOLD_SEAT", "status", null, saved.getStatus().name());
             recordOutboxEvent("SeatReservation", saved.getId(), "SEAT_RESERVED", saved);
         }
+        bookingMetricsManager.incrementSeatReserved(reservationsToSave.size());
 
         recordOperationLog(null, "HOLD_SEATS", true, (int) (System.currentTimeMillis() - startTime), null, null);
 
@@ -253,6 +257,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         }
 
         Map<Long, List<Long>> seatsByShowtime = new java.util.HashMap<>();
+        int releasedCount = 0;
 
         for (SeatReservation reservation : reservations) {
             if (reservation.getStatus() == SeatReservationStatus.HELD) {
@@ -264,7 +269,11 @@ public class SeatReservationServiceImpl implements SeatReservationService {
 
                 recordAuditLog(userId.toString(), "RELEASE_SEAT", "status", "HELD", "RELEASED");
                 recordOutboxEvent("SeatReservation", reservation.getId(), "SEAT_RELEASED", reservation);
+                releasedCount++;
             }
+        }
+        if (releasedCount > 0) {
+            bookingMetricsManager.incrementSeatRelease(releasedCount);
         }
 
         for (Map.Entry<Long, List<Long>> entry : seatsByShowtime.entrySet()) {
@@ -286,6 +295,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         List<SeatReservation> reservations = seatReservationRepository.findAllByIdIn(reservationIds);
         Map<Long, List<Long>> seatsByShowtime = new java.util.HashMap<>();
         String releaseReason = reason != null ? reason : "Internal release request";
+        int releasedCount = 0;
 
         for (SeatReservation reservation : reservations) {
             if (reservation.getStatus() == SeatReservationStatus.HELD) {
@@ -297,7 +307,11 @@ public class SeatReservationServiceImpl implements SeatReservationService {
 
                 recordAuditLog("SYSTEM", "RELEASE_SEAT", "status", "HELD", "RELEASED");
                 recordOutboxEvent("SeatReservation", reservation.getId(), "SEAT_RELEASED", reservation);
+                releasedCount++;
             }
+        }
+        if (releasedCount > 0) {
+            bookingMetricsManager.incrementSeatRelease(releasedCount);
         }
 
         for (Map.Entry<Long, List<Long>> entry : seatsByShowtime.entrySet()) {
@@ -367,6 +381,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
 
         List<SeatReservation> reservations = seatReservationRepository.findAllByIdIn(reservationIds);
         Map<Long, List<Long>> seatsByShowtime = new java.util.HashMap<>();
+        int expiredCount = 0;
 
         for (SeatReservation reservation : reservations) {
             if (reservation.getStatus() == SeatReservationStatus.HELD) {
@@ -378,7 +393,11 @@ public class SeatReservationServiceImpl implements SeatReservationService {
 
                 recordAuditLog("SCHEDULER", "EXPIRE_RESERVATION", "status", "HELD", "EXPIRED");
                 recordOutboxEvent("SeatReservation", reservation.getId(), "SEAT_RESERVATION_EXPIRED", reservation);
+                expiredCount++;
             }
+        }
+        if (expiredCount > 0) {
+            bookingMetricsManager.incrementSeatExpired(expiredCount);
         }
 
         for (Map.Entry<Long, List<Long>> entry : seatsByShowtime.entrySet()) {
@@ -585,6 +604,9 @@ public class SeatReservationServiceImpl implements SeatReservationService {
 
         String expiredReason = reason != null ? reason : ("Booking status changed to " + targetStatus);
 
+        int releasedCount = 0;
+        int expiredCount = 0;
+
         for (SeatReservation reservation : reservations) {
             if (reservation.getStatus() == SeatReservationStatus.BOOKED) {
                 SeatReservationStatus oldStatus = reservation.getStatus();
@@ -596,7 +618,19 @@ public class SeatReservationServiceImpl implements SeatReservationService {
                 recordOutboxEvent("SeatReservation", reservation.getId(),
                         targetReservationStatus == SeatReservationStatus.RELEASED ? "SEAT_RELEASED" : "SEAT_RESERVATION_EXPIRED",
                         reservation);
+
+                if (targetReservationStatus == SeatReservationStatus.RELEASED) {
+                    releasedCount++;
+                } else if (targetReservationStatus == SeatReservationStatus.EXPIRED) {
+                    expiredCount++;
+                }
             }
+        }
+        if (releasedCount > 0) {
+            bookingMetricsManager.incrementSeatRelease(releasedCount);
+        }
+        if (expiredCount > 0) {
+            bookingMetricsManager.incrementSeatExpired(expiredCount);
         }
 
         recordOperationLog(bookingId, "HANDLE_BOOKING_STATUS_CHANGE", true, (int) (System.currentTimeMillis() - startTime), null, null);
@@ -645,6 +679,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
             event.setPayload(objectMapper.writeValueAsString(payload));
             event.setStatus(OutboxStatus.PENDING);
             outboxEventRepository.save(event);
+            bookingMetricsManager.incrementOutboxCreated();
         } catch (Exception ex) {
             log.error("Failed to insert outbox event {}: ", eventType, ex);
             throw new SeatReservationException("INTERNAL_SERVER_ERROR", "Failed to record outbox event", HttpStatus.INTERNAL_SERVER_ERROR, ex);

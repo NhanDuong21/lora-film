@@ -70,6 +70,9 @@ public class SeatReservationServiceTest {
     @Mock
     private com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient;
 
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+
     private SeatReservationServiceImpl seatReservationService;
 
     @BeforeEach
@@ -84,7 +87,8 @@ public class SeatReservationServiceTest {
                 reservationProperties,
                 seatReservationMapper,
                 objectMapper,
-                movieServiceClient
+                movieServiceClient,
+                bookingMetricsManager
         );
     }
 

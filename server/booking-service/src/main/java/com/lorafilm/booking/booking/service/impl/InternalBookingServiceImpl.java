@@ -10,10 +10,15 @@ import com.lorafilm.booking.booking.mapper.BookingMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.service.BookingStatusHistoryService;
 import com.lorafilm.booking.booking.service.BookingStatusTransitionService;
+import com.lorafilm.booking.booking.service.BookingTicketService;
 import com.lorafilm.booking.booking.service.InternalBookingService;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
+import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +27,8 @@ import java.time.Instant;
 @Service
 public class InternalBookingServiceImpl implements InternalBookingService {
 
+    private static final Logger log = LoggerFactory.getLogger(InternalBookingServiceImpl.class);
+
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
     private final BookingStatusTransitionService statusTransitionService;
@@ -29,6 +36,8 @@ public class InternalBookingServiceImpl implements InternalBookingService {
     private final BookingAuditService auditService;
     private final BookingOperationLogService operationLogService;
     private final BookingOutboxService outboxService;
+    private final BookingMetricsManager bookingMetricsManager;
+    private final BookingTicketService ticketService;
 
     public InternalBookingServiceImpl(BookingRepository bookingRepository,
                                        BookingMapper bookingMapper,
@@ -36,7 +45,9 @@ public class InternalBookingServiceImpl implements InternalBookingService {
                                        BookingStatusHistoryService historyService,
                                        BookingAuditService auditService,
                                        BookingOperationLogService operationLogService,
-                                       BookingOutboxService outboxService) {
+                                       BookingOutboxService outboxService,
+                                       BookingMetricsManager bookingMetricsManager,
+                                       BookingTicketService ticketService) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.statusTransitionService = statusTransitionService;
@@ -44,6 +55,8 @@ public class InternalBookingServiceImpl implements InternalBookingService {
         this.auditService = auditService;
         this.operationLogService = operationLogService;
         this.outboxService = outboxService;
+        this.bookingMetricsManager = bookingMetricsManager;
+        this.ticketService = ticketService;
     }
 
     @Override
@@ -74,6 +87,7 @@ public class InternalBookingServiceImpl implements InternalBookingService {
         Booking booking = bookingRepository.findByBookingCode(bookingCode)
                 .orElseThrow(() -> new BookingNotFoundException(bookingCode));
 
+        MDC.put("bookingId", booking.getPublicId());
         return bookingMapper.toAdminResponse(booking);
     }
 
@@ -82,6 +96,8 @@ public class InternalBookingServiceImpl implements InternalBookingService {
             throw new BusinessException("INVALID_BOOKING_ID", "Booking public ID cannot be null or empty");
         }
 
+        MDC.put("bookingId", publicId);
+        MDC.put("action", "CHANGE_BOOKING_STATUS");
         Booking booking = bookingRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
 
@@ -100,6 +116,26 @@ public class InternalBookingServiceImpl implements InternalBookingService {
         auditService.logAudit(savedBooking.getId(), "SYSTEM", operationType, "bookingStatus", oldStatus.name(), targetStatus.name(), null, null, null, null);
         operationLogService.logOperation(savedBooking.getId(), operationType, "SYSTEM", true, 0L, null, null, reason);
         outboxService.createOutboxEvent("BOOKING", savedBooking.getId(), "BOOKING_" + targetStatus.name(), savedBooking);
+
+        // Cancel/Delete tickets if cancelling/refunding/expiring
+        if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED || targetStatus == BookingStatus.REFUNDED) {
+            try {
+                ticketService.deleteTickets(savedBooking.getId());
+            } catch (Exception e) {
+                log.warn("Failed to delete/cancel tickets for bookingId: {}", savedBooking.getId(), e);
+            }
+        }
+
+        // Increment Metrics
+        if (targetStatus == BookingStatus.CONFIRMED) {
+            bookingMetricsManager.incrementBookingConfirmed();
+            bookingMetricsManager.incrementPaymentSuccess();
+        } else if (targetStatus == BookingStatus.EXPIRED) {
+            bookingMetricsManager.incrementBookingExpired();
+            bookingMetricsManager.incrementPaymentFailed();
+        } else if (targetStatus == BookingStatus.CANCELLED) {
+            bookingMetricsManager.incrementBookingCancelled();
+        }
 
         return bookingMapper.toAdminResponse(savedBooking);
     }

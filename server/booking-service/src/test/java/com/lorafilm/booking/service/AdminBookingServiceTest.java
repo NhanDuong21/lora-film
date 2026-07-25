@@ -58,6 +58,9 @@ public class AdminBookingServiceTest {
     @Mock
     private BookingSnapshotService snapshotService;
 
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+
     private BookingMapper bookingMapper = new BookingMapper();
     private BookingStatusTransitionService statusTransitionService = new BookingStatusTransitionService();
 
@@ -76,7 +79,8 @@ public class AdminBookingServiceTest {
                 operationLogService,
                 outboxService,
                 ticketService,
-                snapshotService
+                snapshotService,
+                bookingMetricsManager
         );
 
         sampleBooking = new Booking();
