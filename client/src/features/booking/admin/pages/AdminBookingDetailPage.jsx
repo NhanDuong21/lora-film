@@ -1,30 +1,75 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sliders, History, FileText, AlertTriangle, ShoppingCart } from 'lucide-react';
-import { getBookingDetail, updateBookingStatus } from '../services/adminBookingService';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
+import { 
+  ArrowLeft, Sliders, History, FileText, AlertTriangle, ShoppingCart, 
+  User, Calendar, Building, CreditCard, Film, Armchair, 
+  CheckCircle, Clock, Activity, FileCheck, HelpCircle
+} from 'lucide-react';
+import { getBookingDetail, updateBookingStatus, getBookingFoods } from '../services/adminBookingService';
+import { getUserProfile } from '@/features/auth/services/userService';
+import { useAuth } from '@/contexts/AuthContext';
+import { LazyImage } from '@/components/common/ui/uiKit';
+import { parseApiError } from '@/utils/apiErrorHandler';
 
 export default function AdminBookingDetailPage() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { triggerToast } = useOutletContext() || {};
 
+  const isAdmin = user?.role === 'ADMIN';
+
+  // Data States
   const [booking, setBooking] = useState(null);
+  const [customer, setCustomer] = useState(null);
+  const [foodOrder, setFoodOrder] = useState(null);
+
+  // Loading/Error States
   const [loading, setLoading] = useState(true);
+  const [customerLoading, setCustomerLoading] = useState(false);
+  const [foodLoading, setFoodLoading] = useState(false);
   const [error, setError] = useState(null);
   const [updating, setUpdating] = useState(false);
 
-  // Status select value
+  // Status transition controls
   const [targetStatus, setTargetStatus] = useState('');
   const [changeReason, setChangeReason] = useState('');
 
+  // Fetch Booking details
   const fetchDetails = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getBookingDetail(bookingId);
       setBooking(data);
-      setTargetStatus(data.status);
+      setTargetStatus(data.bookingStatus);
+      
+      // Fetch Customer profile
+      if (data?.userId) {
+        setCustomerLoading(true);
+        try {
+          const profile = await getUserProfile(data.userId);
+          setCustomer(profile);
+        } catch (cErr) {
+          console.warn("Could not load user profile:", cErr);
+        } finally {
+          setCustomerLoading(false);
+        }
+      }
+
+      // Fetch Food Order detail
+      setFoodLoading(true);
+      try {
+        const foods = await getBookingFoods(bookingId);
+        setFoodOrder(foods);
+      } catch (fErr) {
+        console.warn("Could not load food details for booking:", fErr);
+      } finally {
+        setFoodLoading(false);
+      }
+
     } catch (err) {
-      setError(err.message || err.detail || "Không thể tải chi tiết đơn hàng.");
+      setError(parseApiError(err) || "Không thể tải chi tiết đơn hàng.");
     } finally {
       setLoading(false);
     }
@@ -35,15 +80,18 @@ export default function AdminBookingDetailPage() {
     fetchDetails();
   }, [fetchDetails]);
 
+  // Handle manual status changes
   const handleStatusUpdate = async (e) => {
     e.preventDefault();
     if (!targetStatus) return;
-    if (targetStatus === booking.status) {
-      alert("Vui lòng chọn trạng thái khác trạng thái hiện tại.");
+    if (targetStatus === booking.bookingStatus) {
+      if (triggerToast) triggerToast("Vui lòng chọn trạng thái khác trạng thái hiện tại.", 'warning');
+      else alert("Vui lòng chọn trạng thái khác trạng thái hiện tại.");
       return;
     }
 
-    if (!confirm(`Bạn có chắc chắn muốn thay đổi trạng thái đơn hàng sang ${translateStatus(targetStatus)} không?`)) {
+    const confirmMessage = `Bạn có chắc chắn muốn thay đổi trạng thái đơn hàng sang ${translateStatus(targetStatus)} không?`;
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -51,13 +99,15 @@ export default function AdminBookingDetailPage() {
     try {
       await updateBookingStatus(bookingId, targetStatus, changeReason || "Admin manual update");
       setChangeReason('');
+      if (triggerToast) triggerToast("Cập nhật trạng thái đơn hàng thành công.", 'success');
+      else alert("Cập nhật trạng thái đơn hàng thành công.");
+      
       // Reload details
-      const freshData = await getBookingDetail(bookingId);
-      setBooking(freshData);
-      setTargetStatus(freshData.status);
-      alert("Cập nhật trạng thái đơn hàng thành công.");
+      fetchDetails();
     } catch (err) {
-      alert("Lỗi cập nhật trạng thái đơn hàng: " + (err.message || "Lỗi kết nối"));
+      const msg = parseApiError(err) || "Lỗi cập nhật trạng thái đơn hàng";
+      if (triggerToast) triggerToast(msg, 'error');
+      else alert(msg);
     } finally {
       setUpdating(false);
     }
@@ -65,20 +115,24 @@ export default function AdminBookingDetailPage() {
 
   const translateStatus = (bStatus) => {
     switch (bStatus) {
-      case 'CONFIRMED': return 'Đã thanh toán';
+      case 'CONFIRMED': return 'Đã xác nhận';
       case 'PENDING_PAYMENT': return 'Chờ thanh toán';
+      case 'COMPLETED': return 'Đã hoàn thành';
       case 'CANCELLED': return 'Đã hủy';
       case 'EXPIRED': return 'Hết hạn';
-      default: return bStatus;
+      case 'REFUNDED': return 'Hoàn tiền';
+      default: return bStatus || 'PENDING_PAYMENT';
     }
   };
 
   const getStatusColor = (bStatus) => {
     switch (bStatus) {
       case 'CONFIRMED': return 'text-emerald-400 border-emerald-400 bg-emerald-500/10';
+      case 'COMPLETED': return 'text-blue-400 border-blue-400 bg-blue-500/10';
       case 'PENDING_PAYMENT': return 'text-amber-400 border-amber-400 bg-amber-500/10';
       case 'CANCELLED': return 'text-red-400 border-red-400 bg-red-500/10';
       case 'EXPIRED': return 'text-zinc-500 border-zinc-700 bg-zinc-800/40';
+      case 'REFUNDED': return 'text-purple-400 border-purple-400 bg-purple-500/10';
       default: return 'text-zinc-400 border-zinc-800 bg-zinc-900';
     }
   };
@@ -89,10 +143,10 @@ export default function AdminBookingDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#050506] text-white">
+      <div className="flex items-center justify-center min-h-screen bg-zinc-950 text-white">
         <div className="flex flex-col items-center gap-4 animate-pulse">
-          <div className="w-12 h-12 border-4 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-semibold tracking-wider text-zinc-400">Đang tải chi tiết đơn hàng...</p>
+          <div className="w-12 h-12 border-4 border-[#ff7a1a] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-semibold tracking-wider text-zinc-400">Đang tải hồ sơ & chi tiết giao dịch...</p>
         </div>
       </div>
     );
@@ -104,28 +158,28 @@ export default function AdminBookingDetailPage() {
         <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-6">
           <AlertTriangle className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-bold text-zinc-100 mb-2">Không tìm thấy đơn hàng</h2>
+        <h2 className="text-xl font-bold text-zinc-100 mb-2">Đã có lỗi xảy ra</h2>
         <p className="text-sm text-zinc-400 max-w-md mb-8">{error || "Hóa đơn này không tồn tại hoặc đã bị xóa."}</p>
         <button
           onClick={() => navigate('/admin/bookings')}
-          className="bg-brand-orange hover:bg-opacity-90 text-white font-bold px-6 py-3 rounded-full transition-all text-xs uppercase tracking-wider"
+          className="bg-[#ff7a1a] hover:bg-opacity-90 text-zinc-950 font-black px-6 py-3 rounded-xl transition-all text-xs uppercase tracking-wider"
         >
-          Quay lại danh sách
+          Quay lại danh sách đơn
         </button>
       </div>
     );
   }
 
-  const { snapshot, tickets = [], foodOrder, statusHistories = [] } = booking;
+  const { snapshot, tickets = [], statusHistories = [] } = booking;
 
   return (
-    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-brand-orange selection:text-zinc-950">
+    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-[#ff7a1a] selection:text-zinc-950">
 
       {/* Back Link */}
       <div>
         <button
           onClick={() => navigate('/admin/bookings')}
-          className="flex items-center gap-2 text-zinc-400 hover:text-brand-orange transition-colors text-xs font-bold"
+          className="flex items-center gap-2 text-zinc-400 hover:text-[#ff7a1a] transition-colors text-xs font-bold bg-transparent border-none p-0"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Quay lại danh sách đơn hàng</span>
@@ -135,16 +189,20 @@ export default function AdminBookingDetailPage() {
       {/* Header Info */}
       <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-2xl">
         <div className="space-y-1.5">
-          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Chi tiết đơn đặt vé</span>
+          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Hóa đơn đặt vé & bắp nước</span>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl md:text-2xl font-black tracking-widest text-white uppercase">{booking.bookingCode}</h1>
-            <span className={`text-[10px] border px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider ${getStatusColor(booking.status)}`}>
-              {translateStatus(booking.status)}
+            <span className={`text-[10px] border px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider ${getStatusColor(booking.bookingStatus)}`}>
+              {translateStatus(booking.bookingStatus)}
             </span>
           </div>
           <p className="text-[10px] text-zinc-500 font-semibold">
             Ngày lập đơn: {new Date(booking.createdAt).toLocaleString('vi-VN')}
           </p>
+        </div>
+        <div className="flex flex-col text-right items-start md:items-end text-xs text-zinc-400 gap-1 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-850">
+          <span className="text-[10px] text-zinc-550 font-bold uppercase block">Tổng số tiền thanh toán</span>
+          <span className="text-xl font-black text-[#ff7a1a]">{formatCurrency(booking.finalAmount)}</span>
         </div>
       </div>
 
@@ -153,39 +211,125 @@ export default function AdminBookingDetailPage() {
         {/* Left Side: Order info & Audit History */}
         <div className="lg:col-span-2 space-y-8">
 
+          {/* Customer & Payment Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Customer Box */}
+            <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4">
+              <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
+                <User className="w-4 h-4 text-[#ff7a1a]" />
+                <span className="text-xs font-black uppercase tracking-wider text-white">Khách Hàng</span>
+              </div>
+              {customerLoading ? (
+                <div className="h-20 animate-pulse bg-zinc-950/50 rounded-xl" />
+              ) : customer ? (
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Họ và tên:</span>
+                    <span className="font-bold text-zinc-100">{customer.fullName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Email:</span>
+                    <span className="font-mono text-zinc-300">{customer.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Số điện thoại:</span>
+                    <span className="font-mono text-zinc-300">{customer.phoneNumber || 'Không có số'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Mã Account ID:</span>
+                    <span className="font-bold text-zinc-400">#{booking.userId}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 text-xs">
+                  <p className="text-zinc-400">Không tìm thấy thông tin khách hàng chi tiết.</p>
+                  <p className="text-zinc-550">Tài khoản Account ID: <span className="font-bold">#{booking.userId}</span></p>
+                </div>
+              )}
+            </div>
+
+            {/* Payment Snapshot */}
+            <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4">
+              <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-[#ff7a1a]" />
+                <span className="text-xs font-black uppercase tracking-wider text-white">Phương Thức Thanh Toán</span>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Cổng thanh toán:</span>
+                  <span className="font-bold text-zinc-100">{booking.paymentMethodSnapshot || 'Momo/VNPay'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Nhà cung cấp:</span>
+                  <span className="font-mono text-zinc-300">{booking.paymentProvider || 'E-Wallet/ATM'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Trạng thái GD:</span>
+                  <span className={`font-bold uppercase ${
+                    booking.paymentStatus === 'SUCCESS' ? 'text-emerald-400' : 'text-amber-400'
+                  }`}>{booking.paymentStatus || 'SUCCESS'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Tham chiếu GD:</span>
+                  <span className="font-mono text-zinc-400 text-[10px] select-all truncate max-w-[150px]">{booking.paymentReference || 'Chưa ghi nhận'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Movie snapshot details card */}
           <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 md:p-8 space-y-6">
             <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-brand-orange" />
-              <span className="text-xs font-black uppercase tracking-wider text-white">Thông tin Suất chiếu & Ghế</span>
+              <Film className="w-4 h-4 text-[#ff7a1a]" />
+              <span className="text-xs font-black uppercase tracking-wider text-white">Thông tin Suất chiếu & Ghế đặt (Snapshot)</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs text-zinc-400">
-              <div>
-                <span className="text-zinc-500 font-bold block text-[10px] uppercase">Phim</span>
-                <span className="text-white font-extrabold text-sm block mt-1">{snapshot?.movieTitle}</span>
-                <span className="text-[10px] text-zinc-500 mt-1 block">Thời lượng: {snapshot?.duration} phút | Nhãn: {snapshot?.ageRating}</span>
+            <div className="flex flex-col md:flex-row gap-6">
+              {/* Poster image */}
+              <div className="w-24 h-36 rounded-2xl overflow-hidden shrink-0 border border-zinc-800 shadow-xl bg-zinc-950">
+                <LazyImage
+                  src={snapshot?.moviePoster}
+                  alt={snapshot?.movieTitle || 'Movie Poster'}
+                  className="w-full h-full object-cover"
+                />
               </div>
-              <div>
-                <span className="text-zinc-500 font-bold block text-[10px] uppercase">Lịch chiếu</span>
-                <span className="text-white font-extrabold text-sm block mt-1">
-                  {snapshot?.showtimeStart ? new Date(snapshot.showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''} | {snapshot?.showtimeStart ? new Date(snapshot.showtimeStart).toLocaleDateString('vi-VN') : ''}
-                </span>
-                <span className="text-[10px] text-zinc-500 mt-1 block">Rạp: {snapshot?.cinemaName} | Phòng: {snapshot?.auditoriumName}</span>
+
+              {/* Show details */}
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs text-zinc-400">
+                <div>
+                  <span className="text-zinc-500 font-bold block text-[10px] uppercase">Phim Chiếu</span>
+                  <span className="text-white font-extrabold text-sm block mt-1">{snapshot?.movieTitle || 'Tiêu đề phim'}</span>
+                  <span className="text-[10px] text-zinc-550 mt-1 block">Tên gốc: {snapshot?.originalTitle || 'N/A'}</span>
+                  <span className="text-[10px] text-zinc-550 mt-0.5 block">Thời lượng: {snapshot?.duration || '120'} phút | Phân loại: <span className="text-amber-400 font-extrabold">{snapshot?.ageRating || 'P'}</span></span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 font-bold block text-[10px] uppercase">Lịch Suất Chiếu</span>
+                  <span className="text-white font-extrabold text-sm block mt-1">
+                    {snapshot?.showtimeStart ? new Date(snapshot.showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''} | {snapshot?.showtimeStart ? new Date(snapshot.showtimeStart).toLocaleDateString('vi-VN') : ''}
+                  </span>
+                  <span className="text-[10px] text-zinc-550 mt-1 block">Rạp chiếu: <span className="text-zinc-300 font-bold">{snapshot?.cinemaName || 'Cụm rạp'}</span></span>
+                  <span className="text-[10px] text-zinc-550 mt-0.5 block">Phòng chiếu: <span className="text-zinc-300 font-bold">{snapshot?.auditoriumName || 'Phòng'}</span></span>
+                </div>
               </div>
             </div>
 
             {/* List of seats and generated tickets code */}
-            <div className="space-y-3">
-              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Danh sách vé phát hành</span>
+            <div className="space-y-3 pt-2">
+              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Danh sách vé & Ghế phát hành</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {tickets.map(t => (
                   <div key={t.id} className="bg-zinc-950 border border-zinc-850 rounded-2xl p-4 flex justify-between items-center text-xs">
                     <div>
-                      <span className="text-zinc-100 font-extrabold block">Ghế {t.seatLabel} ({t.seatType})</span>
-                      <span className="text-[9px] text-zinc-550 font-semibold mt-0.5 block">Mã vé: {t.ticketCode}</span>
+                      <div className="flex items-center gap-1.5">
+                        <Armchair className="w-3.5 h-3.5 text-[#ff7a1a]" />
+                        <span className="text-zinc-100 font-extrabold block">Ghế {t.seatLabel} ({t.seatType})</span>
+                      </div>
+                      <span className="text-[9px] text-zinc-550 font-bold mt-1 block font-mono">MÃ VÉ: {t.ticketCode}</span>
                     </div>
-                    <span className="text-[9px] bg-zinc-800 text-zinc-400 font-black px-2 py-0.5 rounded">
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded ${
+                      t.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
+                    }`}>
                       {t.status}
                     </span>
                   </div>
@@ -194,31 +338,60 @@ export default function AdminBookingDetailPage() {
             </div>
           </div>
 
-          {/* Concessions lists details */}
+          {/* Concessions / Food lists details */}
           <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 md:p-8 space-y-6">
-            <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4 text-brand-orange" />
-              <span className="text-xs font-black uppercase tracking-wider text-white">Danh sách bắp nước</span>
+            <div className="border-b border-zinc-800 pb-3 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4 text-[#ff7a1a]" />
+                <span className="text-xs font-black uppercase tracking-wider text-white">Danh sách bắp nước phục vụ (Concessions)</span>
+              </div>
+              <span className="text-[9px] text-zinc-500">Đơn hàng: {foodOrder ? `#${foodOrder.publicId.slice(0, 8)}` : 'Không có'}</span>
             </div>
 
-            {foodOrder && foodOrder.items && foodOrder.items.length > 0 ? (
-              <div className="divide-y divide-zinc-800">
-                {foodOrder.items.map(item => (
-                  <div key={item.id} className="py-4 flex justify-between items-center text-xs first:pt-0 last:pb-0">
-                    <div className="space-y-1">
-                      <h4 className="font-extrabold text-white">{item.productName}</h4>
-                      <p className="text-[9px] text-zinc-500">Mã sản phẩm: {item.productCode} | Loại: {item.productType}</p>
+            {foodLoading ? (
+              <div className="space-y-3 animate-pulse">
+                <div className="h-6 bg-zinc-950/50 rounded w-full" />
+                <div className="h-6 bg-zinc-950/50 rounded w-3/4" />
+              </div>
+            ) : foodOrder && foodOrder.items && foodOrder.items.length > 0 ? (
+              <div className="space-y-4">
+                <div className="divide-y divide-zinc-800">
+                  {foodOrder.items.map(item => (
+                    <div key={item.id} className="py-4 flex justify-between items-center text-xs first:pt-0 last:pb-0">
+                      <div className="space-y-1">
+                        <h4 className="font-extrabold text-white">{item.productName}</h4>
+                        <p className="text-[9px] text-zinc-500 font-bold">Mã sản phẩm: <span className="font-mono">{item.productCode}</span> | Loại: {item.productType}</p>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <span className="text-zinc-500 font-bold">x{item.quantity}</span>
+                        <div className="text-right min-w-[90px]">
+                          <span className="text-white font-black block">{formatCurrency(item.finalAmount)}</span>
+                          {item.discountAmount > 0 && (
+                            <span className="text-[8.5px] text-emerald-500 font-bold block">Đã giảm -{formatCurrency(item.discountAmount)}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-6">
-                      <span className="text-zinc-500 font-bold">x{item.quantity}</span>
-                      <span className="text-white font-black text-right min-w-[70px]">{formatCurrency(item.finalAmount)}</span>
+                  ))}
+                </div>
+                
+                {/* Kitchen Status Placeholder */}
+                <div className="bg-zinc-950/50 border border-zinc-850 p-4 rounded-2xl flex items-center justify-between text-xs mt-2">
+                  <div className="flex items-center gap-2.5">
+                    <Activity className="w-4 h-4 text-amber-400 animate-pulse" />
+                    <div>
+                      <span className="text-zinc-400 font-bold block">Trạng thái chuẩn bị (Kitchen Status)</span>
+                      <span className="text-[9px] text-zinc-550 block">Quầy bắp nước đang chuẩn bị đóng gói combo</span>
                     </div>
                   </div>
-                ))}
+                  <span className="text-[9px] bg-amber-500/10 text-amber-400 font-black px-2 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
+                    {foodOrder.status === 'CONFIRMED' ? 'Đang chuẩn bị' : 'Đã giao / Chờ'}
+                  </span>
+                </div>
               </div>
             ) : (
               <div className="text-center py-6 text-xs text-zinc-500 italic">
-                Khách hàng không mua kèm bắp nước
+                Khách hàng không mua kèm bắp nước cho hóa đơn này
               </div>
             )}
           </div>
@@ -226,8 +399,8 @@ export default function AdminBookingDetailPage() {
           {/* Transition Audit log */}
           <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 md:p-8 space-y-6">
             <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
-              <History className="w-4 h-4 text-brand-orange" />
-              <span className="text-xs font-black uppercase tracking-wider text-white">Lịch sử thay đổi trạng thái (Audit Log)</span>
+              <History className="w-4 h-4 text-[#ff7a1a]" />
+              <span className="text-xs font-black uppercase tracking-wider text-white">Lịch sử Chuyển đổi trạng thái (Audit Log)</span>
             </div>
 
             {statusHistories.length > 0 ? (
@@ -235,7 +408,7 @@ export default function AdminBookingDetailPage() {
                 {statusHistories.map((log, index) => (
                   <div key={log.id || index} className="relative space-y-1.5 text-xs">
                     {/* Circle marker */}
-                    <div className="absolute -left-[31px] top-0.5 w-2.5 h-2.5 rounded-full bg-brand-orange border-2 border-zinc-900 shadow"></div>
+                    <div className="absolute -left-[31px] top-0.5 w-2.5 h-2.5 rounded-full bg-[#ff7a1a] border-2 border-zinc-900 shadow"></div>
 
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-zinc-500 text-[10px] font-bold">
@@ -243,12 +416,12 @@ export default function AdminBookingDetailPage() {
                       </span>
                       <span className="text-zinc-650">•</span>
                       <span className="text-zinc-400 font-bold">
-                        {log.fromStatus ? translateStatus(log.fromStatus) : 'Mới'} → <span className="text-white font-extrabold">{translateStatus(log.toStatus)}</span>
+                        {log.fromStatus ? translateStatus(log.fromStatus) : 'Mới tạo'} → <span className="text-white font-extrabold">{translateStatus(log.toStatus)}</span>
                       </span>
                     </div>
 
                     <div className="text-[10px] text-zinc-500 font-semibold space-y-0.5">
-                      <div>Lý do: <span className="text-zinc-400 font-bold italic">"{log.reason || 'Không có lý do'}"</span></div>
+                      <div>Lý do ghi nhận: <span className="text-zinc-400 font-bold italic">"{log.reason || 'Không ghi nhận lý do'}"</span></div>
                       <div>Tác nhân: <span className="text-zinc-400">{log.changedBy || 'Hệ thống'}</span> (Kênh: <span className="text-zinc-550">{log.source || 'CRON'}</span>)</div>
                     </div>
                   </div>
@@ -256,89 +429,114 @@ export default function AdminBookingDetailPage() {
               </div>
             ) : (
               <div className="text-center py-6 text-xs text-zinc-500 italic">
-                Không ghi nhận lịch sử thay đổi trạng thái
+                Không ghi nhận lịch sử thay đổi trạng thái nào cho hóa đơn này
               </div>
             )}
           </div>
         </div>
 
         {/* Right Side Sticky Sidebar: Pricing & Status Update panel */}
-        <div className="lg:col-span-1 space-y-8 sticky top-24">
+        <div className="lg:col-span-1 space-y-8">
+          <div className="sticky top-24 space-y-8">
 
-          {/* Price Summary card */}
-          <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4 shadow-2xl">
-            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-500 border-b border-zinc-800 pb-3">Chi tiết doanh thu</h3>
+            {/* Price Summary card */}
+            <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-white">Chi tiết Doanh Thu</h3>
+                <FileCheck className="w-4 h-4 text-emerald-400" />
+              </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between text-zinc-400">
-                <span>Doanh thu vé:</span>
-                <span className="font-semibold text-zinc-200">{formatCurrency(booking.ticketAmount)}</span>
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between text-zinc-400">
+                  <span>Tiền vé xem phim:</span>
+                  <span className="font-semibold text-zinc-200">{formatCurrency(booking.ticketAmount)}</span>
+                </div>
+                <div className="flex justify-between text-zinc-400">
+                  <span>Tiền bắp nước (Foods):</span>
+                  <span className="font-semibold text-zinc-200">{formatCurrency(booking.foodAmount || 0)}</span>
+                </div>
+                <div className="flex justify-between text-zinc-450 border-t border-zinc-850/50 pt-2 text-[10px]">
+                  <span>Thuế suất (VAT) & Phí dịch vụ:</span>
+                  <span>+{formatCurrency(booking.taxAmount + booking.serviceFee)}</span>
+                </div>
+                
+                {(booking.promotionDiscount > 0 || booking.voucherDiscount > 0) && (
+                  <div className="flex justify-between text-emerald-500 font-bold">
+                    <span>Khuyến mãi / Giảm giá:</span>
+                    <span>-{formatCurrency(booking.promotionDiscount + booking.voucherDiscount)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center py-4 px-4 bg-zinc-950/60 rounded-2xl border border-zinc-850 shadow-inner mt-2">
+                  <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider">Tổng cộng thu</span>
+                  <span className="text-lg font-black text-[#ff7a1a]">{formatCurrency(booking.finalAmount)}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-zinc-400">
-                <span>Doanh thu bắp nước:</span>
-                <span className="font-semibold text-zinc-200">{formatCurrency(foodOrder ? foodOrder.finalAmount : 0)}</span>
+            </div>
+
+            {/* Manual Transition Control Panel (Admin only) */}
+            <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+                <Sliders className="w-4 h-4 text-[#ff7a1a]" />
+                <span className="text-xs font-black uppercase tracking-wider text-white">Chuyển đổi Trạng Thái</span>
               </div>
-              {booking.promotionDiscount > 0 && (
-                <div className="flex justify-between text-emerald-500 font-bold">
-                  <span>Khuyến mãi giảm giá:</span>
-                  <span>-{formatCurrency(booking.promotionDiscount)}</span>
+
+              {isAdmin ? (
+                <form onSubmit={handleStatusUpdate} className="space-y-4 text-xs">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-zinc-500 font-bold uppercase">Chọn trạng thái đích</label>
+                    <select
+                      value={targetStatus}
+                      onChange={(e) => setTargetStatus(e.target.value)}
+                      className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200"
+                    >
+                      <option value="PENDING_PAYMENT">Chờ thanh toán (Pending)</option>
+                      <option value="CONFIRMED">Đã xác nhận (Confirmed)</option>
+                      <option value="COMPLETED">Đã hoàn thành (Completed)</option>
+                      <option value="CANCELLED">Hủy bỏ giao dịch (Cancelled)</option>
+                      <option value="EXPIRED">Đã hết hạn giữ (Expired)</option>
+                      <option value="REFUNDED">Đã hoàn tiền (Refunded)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-zinc-500 font-bold uppercase">Lý do điều chỉnh (Audit)</label>
+                    <textarea
+                      placeholder="Nhập lý do thay đổi trạng thái..."
+                      value={changeReason}
+                      onChange={(e) => setChangeReason(e.target.value)}
+                      rows="3"
+                      className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200 resize-none"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={updating || targetStatus === booking.bookingStatus}
+                    className={`w-full py-3.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors ${
+                      targetStatus !== booking.bookingStatus && !updating
+                        ? 'bg-[#ff7a1a] hover:bg-opacity-90 text-zinc-950 cursor-pointer'
+                        : 'bg-zinc-850 text-zinc-600 border border-zinc-800 cursor-not-allowed'
+                    }`}
+                  >
+                    {updating ? 'Đang thực hiện đổi...' : 'Áp dụng thay đổi trạng thái'}
+                  </button>
+                </form>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-4 border border-zinc-850 rounded-2xl bg-zinc-950/40 text-center gap-2">
+                  <HelpCircle className="w-8 h-8 text-zinc-650" />
+                  <span className="text-[10px] text-zinc-550 font-bold uppercase tracking-wide">Yêu cầu quyền Administrator</span>
+                  <p className="text-[10px] text-zinc-500">
+                    Tài khoản nhân sự của bạn không có đủ quyền thay đổi trạng thái đơn đặt vé.
+                  </p>
                 </div>
               )}
-              <div className="flex justify-between items-center py-4 px-4 bg-zinc-950/60 rounded-2xl border border-zinc-850 shadow-inner mt-2">
-                <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider">Tổng cộng</span>
-                <span className="text-lg font-black text-brand-orange">{formatCurrency(booking.finalAmount)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Manual Transition Control Panel */}
-          <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
-              <Sliders className="w-4 h-4 text-brand-orange" />
-              <span className="text-xs font-black uppercase tracking-wider text-white">Điều khiển trạng thái</span>
             </div>
 
-            <form onSubmit={handleStatusUpdate} className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-500 font-bold uppercase">Trạng thái đích</label>
-                <select
-                  value={targetStatus}
-                  onChange={(e) => setTargetStatus(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-brand-orange text-zinc-200"
-                >
-                  <option value="PENDING_PAYMENT">Chờ thanh toán</option>
-                  <option value="CONFIRMED">Đã thanh toán (Confirm)</option>
-                  <option value="CANCELLED">Hủy bỏ (Cancel)</option>
-                  <option value="EXPIRED">Hết hạn (Expire)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-500 font-bold uppercase">Lý do thay đổi</label>
-                <textarea
-                  placeholder="Nhập lý do thay đổi để ghi nhật ký audit..."
-                  value={changeReason}
-                  onChange={(e) => setChangeReason(e.target.value)}
-                  rows="3"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-brand-orange text-zinc-200 resize-none"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={updating || targetStatus === booking.status}
-                className={`w-full py-3.5 rounded-xl font-bold uppercase text-[10px] tracking-widest transition-colors ${
-                  targetStatus !== booking.status && !updating
-                    ? 'bg-brand-orange hover:bg-opacity-90 text-white cursor-pointer'
-                    : 'bg-zinc-850 text-zinc-600 border border-zinc-800 cursor-not-allowed'
-                }`}
-              >
-                {updating ? 'Đang thực hiện chuyển đổi...' : 'Áp dụng trạng thái mới'}
-              </button>
-            </form>
           </div>
         </div>
+
       </div>
     </div>
   );
