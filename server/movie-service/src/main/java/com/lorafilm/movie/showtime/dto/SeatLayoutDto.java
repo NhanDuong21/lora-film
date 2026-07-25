@@ -37,6 +37,7 @@ public class SeatLayoutDto {
     public void setSeats(List<SeatPriceDto> seats) { this.seats = seats; }
 
     public static class SeatPriceDto {
+        private Long id;
         private String publicId;
         private String seatCode;
         private String rowLabel;
@@ -51,6 +52,8 @@ public class SeatLayoutDto {
 
         public SeatPriceDto() {}
 
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
         public String getSeatCode() { return seatCode; }
