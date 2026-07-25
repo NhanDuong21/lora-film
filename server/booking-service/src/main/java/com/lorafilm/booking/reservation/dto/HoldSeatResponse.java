@@ -14,6 +14,9 @@ public class HoldSeatResponse {
 
     public HoldSeatResponse(List<Long> reservationIds, Instant expiresAt) {
         this.reservationIds = reservationIds;
+        this.reservationPublicIds = reservationIds != null
+                ? reservationIds.stream().map(id -> java.util.UUID.randomUUID().toString()).toList()
+                : java.util.Collections.emptyList();
         this.expiresAt = expiresAt;
     }
 

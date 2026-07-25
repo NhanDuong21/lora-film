@@ -1,6 +1,7 @@
 package com.lorafilm.booking.infrastructure.client.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 import java.util.List;
 
@@ -83,12 +84,16 @@ public class ShowtimeSeatLayoutResponse {
     }
 
     public static class SeatDetailDto {
+        @JsonProperty("id")
         private Long seatId;
         private String seatCode; // E.g., "A1", "B5"
         private String seatType; // E.g., "STANDARD", "VIP", "COUPLE"
         private Long pairedSeatId; // For couple seats
+        @JsonProperty("blockedForShowtime")
         private boolean isBlocked; // Blocked for showtime or inactive
+        @JsonProperty("positionRow")
         private int rowIndex;
+        @JsonProperty("positionColumn")
         private int columnIndex;
 
         public SeatDetailDto() {

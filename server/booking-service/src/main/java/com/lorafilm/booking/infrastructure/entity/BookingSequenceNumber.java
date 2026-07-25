@@ -23,10 +23,10 @@ public class BookingSequenceNumber {
     @Column(name = "id")
     private Long id;
 
-    @Column(name = "sequence_name", length = 100, nullable = false)
+    @Column(name = "sequence_name", length = 100, nullable = false, updatable = false)
     private String sequenceName;
 
-    @Column(name = "sequence_date", nullable = false)
+    @Column(name = "sequence_date", nullable = false, updatable = false)
     private LocalDate sequenceDate;
 
     @Column(name = "current_value", nullable = false)
