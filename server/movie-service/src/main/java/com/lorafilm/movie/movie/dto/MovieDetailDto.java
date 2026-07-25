@@ -43,6 +43,7 @@ public class MovieDetailDto extends MovieDto {
         private String roleType;
         private String characterName;
         private String profileImageUrl;
+        private Integer displayOrder;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -54,6 +55,8 @@ public class MovieDetailDto extends MovieDto {
         public void setCharacterName(String characterName) { this.characterName = characterName; }
         public String getProfileImageUrl() { return profileImageUrl; }
         public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
+        public Integer getDisplayOrder() { return displayOrder; }
+        public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
     }
 
     public static class ProductionCompanyDto {

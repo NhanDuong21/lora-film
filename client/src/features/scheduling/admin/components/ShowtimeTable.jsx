@@ -1,7 +1,6 @@
-// eslint-disable-next-line no-unused-vars
-import React from 'react';
-// eslint-disable-next-line no-unused-vars
-import { Search, MapPin, Calendar, Clock, Plus, Zap, AlertCircle, RefreshCw, X, Play, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Calendar, Plus, Zap, RefreshCw, X, Play, Trash2 } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import {
@@ -9,6 +8,11 @@ import {
   formatShowtimeCinemaTime,
   resolveShowtimeCinemaTimezone,
 } from '@/features/scheduling/admin/utils/showtimeCinemaDateTime';
+import {
+  getPreviewShortCode,
+  getShowtimeSourcePresentation,
+  getShowtimeStatusPresentation,
+} from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 export default function ShowtimeTable({
   showtimes,
@@ -36,9 +40,9 @@ export default function ShowtimeTable({
   onClearBatch,
   onClearFilters,
   onTransitionBatch,
-  onDeleteBatch,
   isBatchActionLoading
 }) {
+  const [copiedBatchId, setCopiedBatchId] = useState(false);
 
   const renderStatusBadge = (status) => {
     const config = {
@@ -51,7 +55,7 @@ export default function ShowtimeTable({
 
     return (
       <span className={`px-2.5 py-1 text-[10px] font-black border rounded-full uppercase tracking-wider ${config[status] || config.DRAFT}`}>
-        {status?.replace(/_/g, ' ') || 'UNKNOWN'}
+        {getShowtimeStatusPresentation(status).label}
       </span>
     );
   };
@@ -70,12 +74,15 @@ export default function ShowtimeTable({
   }));
 
   const statusOptions = [
-    { value: 'DRAFT', label: 'DRAFT (Bản nháp)' },
-    { value: 'OPEN_FOR_BOOKING', label: 'OPEN (Đang mở bán)' },
-    { value: 'CLOSED', label: 'CLOSED (Đã đóng)' },
-    { value: 'CANCELLED', label: 'CANCELLED (Đã hủy)' },
-    { value: 'FINISHED', label: 'FINISHED (Đã chiếu xong)' }
-  ];
+    'DRAFT',
+    'OPEN_FOR_BOOKING',
+    'CLOSED',
+    'CANCELLED',
+    'FINISHED',
+  ].map(value => ({
+    value,
+    label: getShowtimeStatusPresentation(value).label,
+  }));
 
   const handleClearFilters = () => {
     setCinemaSlug('');
@@ -100,13 +107,28 @@ export default function ShowtimeTable({
           <div>
             <div className="flex items-center gap-2">
               <span className="bg-blue-500 text-zinc-950 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
-                {source || 'AUTO'} BATCH
+                {getShowtimeSourcePresentation(source || 'AUTO').batchLabel}
               </span>
               <h3 className="text-blue-400 font-bold">Đang xem các suất chiếu thuộc đợt tự động</h3>
             </div>
             <p className="text-xs text-blue-300/70 mt-1 flex items-center gap-2">
-              ID: <code className="bg-zinc-950 px-1.5 py-0.5 rounded text-blue-400 border border-blue-500/20">{batchId}</code>
+              Mã rút gọn: <code className="bg-zinc-950 px-1.5 py-0.5 rounded text-blue-400 border border-blue-500/20">{getPreviewShortCode(batchId)}</code>
             </p>
+            <details className="mt-2 text-[10px] text-blue-300/70">
+              <summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary>
+              <p className="mt-1 break-all font-mono">previewPublicId: {batchId}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" onClick={async () => {
+                  await navigator.clipboard?.writeText(batchId);
+                  setCopiedBatchId(true);
+                }} className="rounded border border-blue-500/30 px-2 py-1 font-bold text-blue-300">
+                  {copiedBatchId ? 'Đã sao chép UUID' : 'Sao chép UUID'}
+                </button>
+                <Link to={`/admin/showtime-schedules/${encodeURIComponent(batchId)}`} className="rounded border border-blue-500/30 px-2 py-1 font-bold text-blue-300">
+                  Mở bản xem trước nguồn
+                </Link>
+              </div>
+            </details>
           </div>
           
           <div className="flex items-center gap-3">
@@ -117,13 +139,17 @@ export default function ShowtimeTable({
             >
               <Play className="w-3.5 h-3.5" /> Mở bán toàn bộ
             </button>
-            <button
-              onClick={onDeleteBatch}
-              disabled={isBatchActionLoading}
-              className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Hủy đợt
-            </button>
+            <div className="flex flex-col items-start gap-1">
+              <button
+                type="button"
+                disabled
+                title="Chưa thể xác minh an toàn đặt vé"
+                className="bg-rose-500/10 text-rose-300 border border-rose-500/20 font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 cursor-not-allowed opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Hủy đợt
+              </button>
+              <span className="max-w-40 text-[10px] font-semibold text-rose-300/80">Chưa thể xác minh an toàn đặt vé</span>
+            </div>
             <button
               onClick={onClearBatch}
               disabled={isBatchActionLoading}

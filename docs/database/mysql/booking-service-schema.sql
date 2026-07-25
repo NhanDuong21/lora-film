@@ -160,7 +160,7 @@ CREATE TABLE bookings (
     INDEX idx_booking_status(booking_status),
     INDEX idx_booking_payment(payment_status),
     INDEX idx_booking_created(created_at),
-    INDEX idx_booking_expires(expires_at),
+    INDEX idx_booking_status_expires(booking_status, expires_at),
     
     -- Composite Indexes tối ưu truy vấn phức hợp thường gặp
     INDEX idx_booking_user_status(user_id, booking_status),
@@ -492,6 +492,9 @@ CREATE TABLE booking_food_orders (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         COMMENT 'Thời điểm cập nhật',
 
+    version INT NOT NULL DEFAULT 0
+        COMMENT 'Phiên bản bản ghi (Dùng cho Optimistic Locking / Khóa lạc quan)',
+
     CONSTRAINT uk_food_order_public UNIQUE(public_id),
     CONSTRAINT fk_food_order_booking FOREIGN KEY (booking_id) REFERENCES bookings(id),
 
@@ -582,6 +585,7 @@ CREATE TABLE booking_price_snapshots (
         COMMENT 'Thời điểm lưu công thức tính giá',
 
     CONSTRAINT fk_price_snapshot_booking FOREIGN KEY (booking_id) REFERENCES bookings(id),
+    CONSTRAINT uk_price_snapshot_booking UNIQUE (booking_id),
     INDEX idx_price_booking(booking_id)
 )
 ENGINE=InnoDB
@@ -1227,7 +1231,8 @@ VALUES
 -- Khởi tạo danh sách các Distributed Lock dùng cho tiến trình ngầm
 INSERT INTO booking_scheduler_locks (scheduler_name, status)
 VALUES
-    ('BOOKING_EXPIRE', 'RELEASED'),
-    ('OUTBOX_PUBLISHER', 'RELEASED'),
-    ('RETRY_SCHEDULER', 'RELEASED'),
+    ('BookingExpirationScheduler', 'RELEASED'),
+    ('OutboxEventPublisherScheduler', 'RELEASED'),
+    ('RetryTaskScheduler', 'RELEASED'),
+    ('ReservationExpirationScheduler', 'RELEASED'),
     ('RECONCILIATION', 'RELEASED');

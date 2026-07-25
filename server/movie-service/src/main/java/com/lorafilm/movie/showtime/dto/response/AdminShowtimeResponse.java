@@ -1,6 +1,7 @@
 package com.lorafilm.movie.showtime.dto.response;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 public class AdminShowtimeResponse {
 
@@ -20,6 +21,7 @@ public class AdminShowtimeResponse {
 
     private Instant startTime;
     private Instant endTime;
+    private LocalDate serviceDate;
     private String status;
     private Instant bookingOpenTime;
     private Instant bookingCloseTime;
@@ -28,6 +30,10 @@ public class AdminShowtimeResponse {
     private String source;
     private Instant createdAt;
     private Instant updatedAt;
+    private Long version;
+    private String pricingStatus;
+    private java.util.List<String> missingPriceSeatTypeIds;
+    private java.util.List<String> ambiguousPriceSeatTypeIds;
 
     public AdminShowtimeResponse() {}
 
@@ -51,6 +57,8 @@ public class AdminShowtimeResponse {
 
     public Instant getEndTime() { return endTime; }
     public void setEndTime(Instant endTime) { this.endTime = endTime; }
+    public LocalDate getServiceDate() { return serviceDate; }
+    public void setServiceDate(LocalDate serviceDate) { this.serviceDate = serviceDate; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
@@ -88,6 +96,14 @@ public class AdminShowtimeResponse {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
+    public String getPricingStatus() { return pricingStatus; }
+    public void setPricingStatus(String pricingStatus) { this.pricingStatus = pricingStatus; }
+    public java.util.List<String> getMissingPriceSeatTypeIds() { return missingPriceSeatTypeIds; }
+    public void setMissingPriceSeatTypeIds(java.util.List<String> missingPriceSeatTypeIds) { this.missingPriceSeatTypeIds = missingPriceSeatTypeIds; }
+    public java.util.List<String> getAmbiguousPriceSeatTypeIds() { return ambiguousPriceSeatTypeIds; }
+    public void setAmbiguousPriceSeatTypeIds(java.util.List<String> ambiguousPriceSeatTypeIds) { this.ambiguousPriceSeatTypeIds = ambiguousPriceSeatTypeIds; }
 
     // Nested summary classes
     public static class MovieSummary {

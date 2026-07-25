@@ -38,6 +38,7 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [movieLoadError, setMovieLoadError] = useState('');
+  const [movieReloadSequence, setMovieReloadSequence] = useState(0);
   const [errors, setErrors] = useState({});
 
   const idempotencyRef = useRef({ fingerprint: '', key: '' });
@@ -128,7 +129,9 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
       }
     };
     fetchMovies();
-  }, [scheduleFrom, scheduleTo, triggerToast]);
+  }, [movieReloadSequence, scheduleFrom, scheduleTo, triggerToast]);
+
+  const retryMovies = useCallback(() => setMovieReloadSequence(previous => previous + 1), []);
 
   useEffect(() => {
     const requestId = ++auditoriumRequestSequence.current;
@@ -173,6 +176,18 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
   }, [auditoriums]);
 
   const clearAuditoriums = useCallback(() => setSelectedAuditoriumIds([]), []);
+
+  const selectEligibleMovieVersions = useCallback((movieIds = movies.map(movie => movie.publicId)) => {
+    const allowedMovieIds = new Set(movieIds);
+    const selectableIds = movies
+      .filter(movie => allowedMovieIds.has(movie.publicId) && movie.eligible)
+      .flatMap(movie => (versionsByMovie[movie.publicId] || [])
+        .filter(version => version.status === 'ACTIVE')
+        .map(version => version.publicId));
+    setSelectedMovieVersionIds(selectableIds);
+  }, [movies, versionsByMovie]);
+
+  const clearMovieVersions = useCallback(() => setSelectedMovieVersionIds([]), []);
 
   const toggleVersion = useCallback(versionId => {
     setSelectedMovieVersionIds(previous => previous.includes(versionId)
@@ -306,6 +321,8 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     selectedMovieVersionIds,
     selectedVersions,
     toggleVersion,
+    selectEligibleMovieVersions,
+    clearMovieVersions,
     isLoadingCinemas,
     isLoadingAuditoriums,
     isLoadingMovies,
@@ -316,6 +333,7 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     isReady,
     selectionNotice,
     movieLoadError,
+    retryMovies,
     dateRangeInfo,
     toggleMovieExpansion,
     handleSubmit,

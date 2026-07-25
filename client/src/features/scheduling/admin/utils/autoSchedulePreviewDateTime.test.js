@@ -9,6 +9,7 @@ import {
   FALLBACK_PREVIEW_TIMEZONE,
   formatCinemaTime,
   formatPreviewDateKey,
+  formatPreviewDateRange,
   formatServiceDateKey,
   formatTimelineMinute,
   getCandidateTimelineOffsets,
@@ -129,5 +130,12 @@ describe('auto schedule preview cinema time', () => {
     expect(formatServiceDateKey(UNKNOWN_SERVICE_DATE_KEY)).toBe('Không xác định ngày vận hành');
     expect([UNKNOWN_SERVICE_DATE_KEY, '2026-07-25', '2026-07-24'].sort(compareServiceDateKeys))
       .toEqual(['2026-07-24', '2026-07-25', UNKNOWN_SERVICE_DATE_KEY]);
+  });
+
+  it('formats calendar date ranges as dd/MM/yyyy without browser-local conversion', () => {
+    expect(formatPreviewDateRange('2026-08-10', '2026-08-16'))
+      .toBe('10/08/2026 – 16/08/2026');
+    expect(formatPreviewDateRange('2026-08-10', '')).toBe('10/08/2026');
+    expect(formatPreviewDateRange('', '')).toBe('—');
   });
 });

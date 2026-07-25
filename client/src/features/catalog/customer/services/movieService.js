@@ -13,7 +13,8 @@ export const getMovies = async ({
   genreId,
   releaseFrom,
   releaseTo,
-  sort
+  sort,
+  signal
 }) => {
   const params = {};
   if (page !== undefined) params.page = page;
@@ -29,7 +30,7 @@ export const getMovies = async ({
   if (releaseTo !== undefined) params.releaseTo = releaseTo;
   if (sort !== undefined) params.sort = sort;
 
-  const response = await apiClient.get("/api/customer/movies", { params });
+  const response = await apiClient.get("/api/customer/movies", { params, signal });
   return response.data.data;
 };
 
@@ -41,6 +42,14 @@ export const getMovies = async ({
 export const getMovieById = async (movieId) => {
   const response = await apiClient.get(`/api/customer/movies/${movieId}`);
   return response.data.data;
+};
+
+export const getBookingOptions = async (movieIdentifier, { from, to, signal } = {}) => {
+  const response = await apiClient.get(
+    `/api/customer/movies/${encodeURIComponent(movieIdentifier)}/booking-options`,
+    { params: { from, to }, signal }
+  );
+  return response.data.data || [];
 };
 
 /**
@@ -104,7 +113,10 @@ export const getShowtimeDetail = async (showtimePublicId) => {
  * @param {string} showtimePublicId - The public ID of the showtime
  * @returns {Promise<Object>} The auditorium seat layout with price lists
  */
-export const getSeatLayout = async (showtimePublicId) => {
-  const response = await apiClient.get(`/api/showtimes/${showtimePublicId}/seat-layout`);
+export const getSeatLayout = async (showtimePublicId, { signal } = {}) => {
+  const response = await apiClient.get(
+    `/api/customer/showtimes/${encodeURIComponent(showtimePublicId)}/seat-layout`,
+    { signal }
+  );
   return response.data.data;
 };

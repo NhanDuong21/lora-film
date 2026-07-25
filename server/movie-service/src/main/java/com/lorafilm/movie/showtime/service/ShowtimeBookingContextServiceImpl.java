@@ -31,7 +31,7 @@ import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
 import com.lorafilm.movie.showtime.dto.response.BookingContextSeatDto;
 import com.lorafilm.movie.showtime.dto.response.BookingContextShowtimeDto;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 
 @Service
@@ -104,6 +104,14 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
             ShowtimePrice showtimePrice = priceMap.get(seat.getSeatType().getId());
             if (showtimePrice == null) {
                 throw new BusinessException(ErrorCode.SHOWTIME_PRICE_MISSING, "Missing price for seat type: " + seat.getSeatType().getCode());
+            }
+            if (showtimePrice.getPrice() == null || showtimePrice.getPrice().signum() <= 0) {
+                throw new BusinessException(ErrorCode.PRICING_INCOMPLETE,
+                        "Invalid price for seat type: " + seat.getSeatType().getCode());
+            }
+            if (!"VND".equals(showtimePrice.getCurrency())) {
+                throw new BusinessException(ErrorCode.PRICING_INCOMPLETE,
+                        "Unsupported Showtime currency: " + showtimePrice.getCurrency());
             }
 
             BookingContextSeatDto seatDto = new BookingContextSeatDto();

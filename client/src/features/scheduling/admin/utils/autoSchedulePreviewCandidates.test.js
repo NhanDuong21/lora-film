@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CANDIDATE_VIEWS,
   filterCandidatesByView,
+  getCandidateMetrics,
   getCandidateViewCounts,
   getDefaultCandidateView,
   paginateCandidates,
@@ -35,13 +36,26 @@ describe('bounded candidate views', () => {
     ];
     const selected = new Set(['recommended']);
 
-    expect(filterCandidatesByView(items, CANDIDATE_VIEWS.REJECTED, selected).map(row => row.itemPublicId))
+    expect(filterCandidatesByView(items, CANDIDATE_VIEWS.ISSUES, selected).map(row => row.itemPublicId))
       .toEqual(['rejected', 'conflict', 'failed']);
+    expect(filterCandidatesByView(items, CANDIDATE_VIEWS.UNSELECTED_VALID, selected).map(row => row.itemPublicId))
+      .toEqual(['conflict', 'failed', 'skipped', 'created']);
     expect(getCandidateViewCounts(items, selected)).toEqual({
       RECOMMENDED: 1,
-      REJECTED: 3,
+      UNSELECTED_VALID: 4,
+      ISSUES: 3,
       ALL: 6,
       CREATED: 1,
+    });
+    expect(getCandidateMetrics(items, selected)).toEqual({
+      totalGenerated: 6,
+      selectedRecommendations: 1,
+      validUnselected: 4,
+      rejectedCandidates: 1,
+      applyConflictsFailures: 2,
+      issueCandidates: 3,
+      createdShowtimes: 1,
+      skippedCandidates: 1,
     });
   });
 

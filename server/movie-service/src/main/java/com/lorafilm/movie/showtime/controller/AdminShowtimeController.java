@@ -5,7 +5,9 @@ import com.lorafilm.movie.showtime.dto.request.CreateShowtimeRequest;
 import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeRequest;
 import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
+import com.lorafilm.movie.showtime.dto.response.BatchStatusActionSummary;
 import com.lorafilm.movie.showtime.dto.response.ShowtimeStatusHistoryResponse;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.service.ShowtimeCommandService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
@@ -86,18 +88,32 @@ public class AdminShowtimeController {
     @PutMapping("/batch/{batchId}/status")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Transition status for a batch of showtimes")
-    public ResponseEntity<ApiResponse<Void>> transitionBatchStatus(
+    public ResponseEntity<ApiResponse<BatchStatusActionSummary>> transitionBatchStatus(
             @PathVariable String batchId,
             @Valid @RequestBody UpdateShowtimeStatusRequest request) {
         
-        transitionService.transitionBatchStatus(batchId, request);
+        BatchStatusActionSummary response = transitionService.transitionBatchStatus(batchId, request);
         
-        return ResponseEntity.ok(new ApiResponse<>(true, "SUCCESS", "Batch status updated successfully", null, java.util.Collections.emptyList()));
+        return ResponseEntity.ok(new ApiResponse<>(true, "SUCCESS", "Batch status action completed", response, java.util.Collections.emptyList()));
+    }
+
+    @GetMapping("/batch/{batchId}/status-preview")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @Operation(summary = "Preview a batch status transition")
+    public ResponseEntity<ApiResponse<BatchStatusActionSummary>> previewBatchStatus(
+            @PathVariable String batchId,
+            @RequestParam ShowtimeStatus targetStatus) {
+
+        BatchStatusActionSummary response = transitionService.previewBatchStatus(batchId, targetStatus);
+
+        return ResponseEntity.ok(new ApiResponse<>(true, "SUCCESS", "Batch status preview completed", response, java.util.Collections.emptyList()));
     }
 
     @DeleteMapping("/batch/{batchId}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    @Operation(summary = "Delete a batch of DRAFT showtimes")
+    @Operation(
+            summary = "Legacy batch deletion route (disabled)",
+            description = "Fails closed until booking, refund, notification, and compensation safety can be verified")
     public ResponseEntity<ApiResponse<Void>> deleteBatch(
             @PathVariable String batchId) {
         

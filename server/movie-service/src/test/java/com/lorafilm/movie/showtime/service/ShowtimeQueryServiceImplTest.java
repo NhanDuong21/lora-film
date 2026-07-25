@@ -18,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.seat.domain.entity.Seat;
@@ -31,7 +33,7 @@ import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.ShowtimeDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -181,7 +183,7 @@ class ShowtimeQueryServiceImplTest {
     }
 
     @Test
-    void getSeatLayout_validOpenForBooking_returnsLayout() {
+    void getSeatLayout_missingSnapshotFailsInsteadOfReturningZero() {
         showtime.setPublicId("public-123");
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
 
@@ -191,10 +193,10 @@ class ShowtimeQueryServiceImplTest {
         when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L,
                 com.lorafilm.movie.common.enums.ActionStatus.ACTIVE)).thenReturn(Collections.emptyList());
 
-        com.lorafilm.movie.showtime.dto.SeatLayoutDto layout = showtimeService.getSeatLayout("public-123");
-        assertNotNull(layout);
-        assertEquals("public-123", layout.getShowtimePublicId());
-        assertEquals(2, layout.getSeats().size());
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> showtimeService.getSeatLayout("public-123"));
+        assertEquals(ErrorCode.PRICING_INCOMPLETE, exception.getErrorCode());
     }
 
     @Test

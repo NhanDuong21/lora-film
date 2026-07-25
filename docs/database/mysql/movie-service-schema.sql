@@ -337,6 +337,7 @@ CREATE TABLE cinema_closure_periods (
     cinema_id BIGINT NOT NULL,
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP NOT NULL,
+    service_date DATE NOT NULL COMMENT 'Authoritative cinema business/service day',
     reason VARCHAR(255) COMMENT 'Lý do đóng cửa rạp đột xuất (Lễ Tết, Cúp điện)',
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, CANCELLED',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -469,21 +470,86 @@ CREATE TABLE seats (
 -- 6. SHOWTIME / PRICING
 -- ============================================================
 
+CREATE TABLE price_policies (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL UNIQUE,
+    name VARCHAR(120) NOT NULL,
+    cinema_id BIGINT NOT NULL,
+    effective_from DATE NOT NULL,
+    effective_to DATE NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, ACTIVE, INACTIVE',
+    currency CHAR(3) NOT NULL DEFAULT 'VND',
+    priority INT NOT NULL DEFAULT 0,
+    supersedes_policy_id BIGINT NULL,
+    activated_at TIMESTAMP NULL,
+    activated_by BIGINT NULL,
+    deactivated_at TIMESTAMP NULL,
+    deactivated_by BIGINT NULL,
+    deactivation_reason VARCHAR(500) NULL,
+    version BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by BIGINT NULL,
+    updated_by BIGINT NULL,
+    deleted_at TIMESTAMP NULL,
+    deleted_by BIGINT NULL,
+    CONSTRAINT fk_price_policies_cinema FOREIGN KEY (cinema_id) REFERENCES cinemas (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_price_policies_supersedes FOREIGN KEY (supersedes_policy_id) REFERENCES price_policies (id) ON DELETE RESTRICT,
+    CONSTRAINT chk_price_policies_dates CHECK (effective_to IS NULL OR effective_to >= effective_from),
+    CONSTRAINT chk_price_policies_currency CHECK (currency = 'VND'),
+    INDEX idx_price_policies_resolution (cinema_id, status, effective_from, effective_to, priority),
+    INDEX idx_price_policies_supersedes (supersedes_policy_id)
+);
+
+CREATE TABLE price_policy_rules (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL UNIQUE,
+    policy_id BIGINT NOT NULL,
+    seat_type_id BIGINT NOT NULL,
+    auditorium_id BIGINT NULL,
+    screen_type VARCHAR(30) NULL,
+    day_type VARCHAR(20) NOT NULL DEFAULT 'ALL_DAYS' COMMENT 'ALL_DAYS, WEEKDAY, WEEKEND',
+    time_band_start TIME NULL,
+    time_band_end TIME NULL,
+    price DECIMAL(12, 2) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by BIGINT NULL,
+    updated_by BIGINT NULL,
+    deleted_at TIMESTAMP NULL,
+    deleted_by BIGINT NULL,
+    CONSTRAINT fk_price_policy_rules_policy FOREIGN KEY (policy_id) REFERENCES price_policies (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_price_policy_rules_seat_type FOREIGN KEY (seat_type_id) REFERENCES seat_types (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_price_policy_rules_auditorium FOREIGN KEY (auditorium_id) REFERENCES auditoriums (id) ON DELETE RESTRICT,
+    CONSTRAINT chk_price_policy_rules_scope CHECK (auditorium_id IS NULL OR screen_type IS NULL),
+    CONSTRAINT chk_price_policy_rules_band CHECK (
+        (time_band_start IS NULL AND time_band_end IS NULL)
+        OR (time_band_start IS NOT NULL AND time_band_end IS NOT NULL AND time_band_start <> time_band_end)
+    ),
+    CONSTRAINT chk_price_policy_rules_price CHECK (price > 0),
+    INDEX idx_price_policy_rules_resolution (policy_id, active, seat_type_id),
+    INDEX idx_price_policy_rules_auditorium (auditorium_id)
+);
+
 CREATE TABLE showtimes (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     public_id CHAR(36) NOT NULL UNIQUE,
     movie_id BIGINT NOT NULL,
     movie_version_id BIGINT NOT NULL,
     cinema_id BIGINT NOT NULL,
-    auditorium_id BIGINT NOT NULL,
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP NOT NULL,
-    booking_open_time TIMESTAMP NULL,
+     auditorium_id BIGINT NOT NULL,
+     start_time TIMESTAMP NOT NULL,
+     end_time TIMESTAMP NOT NULL,
+     service_date DATE NOT NULL
+         COMMENT 'Authoritative cinema business/service day',
+     booking_open_time TIMESTAMP NULL,
     booking_close_time TIMESTAMP NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, OPEN_FOR_BOOKING, CLOSED, CANCELLED, FINISHED',
     cancellation_reason VARCHAR(255) NULL,
     batch_id VARCHAR(36) NULL COMMENT 'ID của đợt tạo (nếu tự động xếp lịch)',
     source VARCHAR(30) NOT NULL DEFAULT 'MANUAL' COMMENT 'Nguồn tạo: MANUAL, AUTO',
+    version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_by BIGINT NULL,
@@ -515,8 +581,14 @@ CREATE TABLE showtimes (
         start_time
     ),
     INDEX idx_showtimes_public_id (public_id),
-    INDEX idx_showtimes_batch_id (batch_id),
-    INDEX idx_showtimes_deleted_at (deleted_at)
+     INDEX idx_showtimes_batch_id (batch_id),
+     INDEX idx_showtimes_deleted_at (deleted_at),
+     INDEX idx_showtimes_customer_service_date (
+         service_date,
+         status,
+         movie_id,
+         cinema_id
+     )
 );
 
 CREATE TABLE showtime_prices (
@@ -525,15 +597,26 @@ CREATE TABLE showtime_prices (
     seat_type_id BIGINT NOT NULL,
     price DECIMAL(12, 2) NOT NULL,
     currency CHAR(3) NOT NULL DEFAULT 'VND',
+    seat_type_name_snapshot VARCHAR(80) NOT NULL,
+    seat_type_code_snapshot VARCHAR(30) NOT NULL,
+    pricing_source VARCHAR(30) NOT NULL COMMENT 'POLICY, LEGACY, MANUAL_OVERRIDE',
+    source_policy_id BIGINT NULL,
+    source_rule_id BIGINT NULL,
+    resolved_at TIMESTAMP NOT NULL,
+    resolution_timezone VARCHAR(80) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_by BIGINT NULL,
     updated_by BIGINT NULL,
     CONSTRAINT fk_showtime_prices_showtime FOREIGN KEY (showtime_id) REFERENCES showtimes (id) ON DELETE CASCADE,
     CONSTRAINT fk_showtime_prices_seat_type FOREIGN KEY (seat_type_id) REFERENCES seat_types (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_showtime_prices_source_policy FOREIGN KEY (source_policy_id) REFERENCES price_policies (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_showtime_prices_source_rule FOREIGN KEY (source_rule_id) REFERENCES price_policy_rules (id) ON DELETE RESTRICT,
     CONSTRAINT uk_showtime_prices_type UNIQUE (showtime_id, seat_type_id) COMMENT 'Mỗi suất chiếu chỉ có 1 mức giá chốt cho 1 loại ghế',
-    CONSTRAINT chk_showtime_prices_amount CHECK (price >= 0),
-    INDEX idx_showtime_prices_showtime (showtime_id)
+    CONSTRAINT chk_showtime_prices_amount CHECK (price > 0),
+    INDEX idx_showtime_prices_showtime (showtime_id),
+    INDEX idx_showtime_prices_source_policy (source_policy_id),
+    INDEX idx_showtime_prices_source_rule (source_rule_id)
 );
 
 CREATE TABLE showtime_status_history (
@@ -699,9 +782,7 @@ CREATE TABLE showtime_schedule_previews (
         generated_at
     ),
 
-    INDEX idx_schedule_preview_created_at (
-        created_at
-    )
+     INDEX idx_schedule_preview_created_at (created_at)
 );
 
 

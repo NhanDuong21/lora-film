@@ -5,11 +5,14 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieGenre;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
 import com.lorafilm.movie.movie.repository.MovieGenreRepository;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,12 +29,18 @@ public class CustomerMovieService {
 
     private final MovieRepository movieRepository;
     private final MovieGenreRepository movieGenreRepository;
+    private final MovieMediaRepository movieMediaRepository;
     private final MovieMapper movieMapper;
     private final MovieService movieService;
 
-    public CustomerMovieService(MovieRepository movieRepository, MovieGenreRepository movieGenreRepository, MovieMapper movieMapper, MovieService movieService) {
+    public CustomerMovieService(MovieRepository movieRepository,
+                                MovieGenreRepository movieGenreRepository,
+                                MovieMediaRepository movieMediaRepository,
+                                MovieMapper movieMapper,
+                                MovieService movieService) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
+        this.movieMediaRepository = movieMediaRepository;
         this.movieMapper = movieMapper;
         this.movieService = movieService;
     }
@@ -54,8 +64,22 @@ public class CustomerMovieService {
 
         Page<Movie> moviePage = movieRepository.findAll(spec, pageable);
         
+        List<Long> movieIds = moviePage.getContent().stream().map(Movie::getId).toList();
+        Map<Long, String> primaryPosters = movieIds.isEmpty()
+                ? Map.of()
+                : movieMediaRepository
+                        .findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                                movieIds,
+                                MovieMediaType.POSTER,
+                                ActiveStatus.ACTIVE)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                media -> media.getMovie().getId(),
+                                media -> media.getUrl(),
+                                (first, ignored) -> first));
+
         List<MovieDto> content = moviePage.getContent().stream()
-                .map(this::mapToDto)
+                .map(movie -> mapToDto(movie, primaryPosters.get(movie.getId())))
                 .collect(Collectors.toList());
 
         return PageResponse.of(moviePage, content);
@@ -72,9 +96,9 @@ public class CustomerMovieService {
         return movieService.getMovieByIdentifier(movie.getPublicId());
     }
 
-    private MovieDto mapToDto(Movie movie) {
+    private MovieDto mapToDto(Movie movie, String primaryPosterUrl) {
         List<MovieGenre> movieGenres = movieGenreRepository.findByMovieId(movie.getId());
         List<String> genreNames = movieGenres.stream().map(mg -> mg.getGenre().getName()).collect(Collectors.toList());
-        return movieMapper.toDto(movie, genreNames, null);
+        return movieMapper.toDto(movie, genreNames, primaryPosterUrl);
     }
 }

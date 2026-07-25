@@ -3,6 +3,7 @@ package com.lorafilm.movie.autoschedule.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
+import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemApplyStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.ApplyShowtimeSchedulePreviewRequest;
@@ -22,6 +23,21 @@ import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.pricing.domain.entity.PricePolicy;
+import com.lorafilm.movie.pricing.domain.entity.PricePolicyRule;
+import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.pricing.domain.enums.PriceDayType;
+import com.lorafilm.movie.pricing.domain.enums.PricePolicyStatus;
+import com.lorafilm.movie.pricing.domain.enums.PricingSource;
+import com.lorafilm.movie.pricing.repository.PricePolicyRepository;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.seat.domain.entity.Seat;
+import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatStatus;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.repository.SeatTypeRepository;
+import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +55,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -47,7 +64,10 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -87,20 +107,35 @@ public class AdminAutoScheduleApplyE2ETest {
     private MovieRepository movieRepository;
     @Autowired
     private MovieVersionRepository movieVersionRepository;
+    @Autowired
+    private SeatTypeRepository seatTypeRepository;
+    @Autowired
+    private SeatRepository seatRepository;
+    @Autowired
+    private PricePolicyRepository pricePolicyRepository;
+    @Autowired
+    private ShowtimePriceRepository showtimePriceRepository;
 
     @MockBean
     private CurrentUserProvider currentUserProvider;
 
     private String previewPublicId;
     private Long initialVersion;
+    private SeatType standardSeatType;
+    private PricePolicy standardPolicy;
 
     @BeforeEach
     void setUp() {
         jdbcTemplate.execute("DELETE FROM cinema_operating_hours");
         jdbcTemplate.execute("DELETE FROM showtime_status_history");
+        jdbcTemplate.execute("DELETE FROM showtime_prices");
         itemRepository.deleteAllInBatch();
         previewRepository.deleteAllInBatch();
         jdbcTemplate.execute("DELETE FROM showtimes");
+        jdbcTemplate.execute("DELETE FROM price_policy_rules");
+        jdbcTemplate.execute("DELETE FROM price_policies");
+        jdbcTemplate.execute("DELETE FROM seats");
+        jdbcTemplate.execute("DELETE FROM seat_types");
         auditoriumRepository.deleteAllInBatch();
         cinemaRepository.deleteAllInBatch();
         movieVersionRepository.deleteAllInBatch();
@@ -128,6 +163,46 @@ public class AdminAutoScheduleApplyE2ETest {
         auditorium.setCapacity(100);
         auditorium.setCleaningBufferMinutes(15);
         auditorium = auditoriumRepository.saveAndFlush(auditorium);
+
+        standardSeatType = new SeatType();
+        standardSeatType.setPublicId(UUID.randomUUID().toString());
+        standardSeatType.setCode(SeatTypeCode.STANDARD);
+        standardSeatType.setName("Standard");
+        standardSeatType.setStatus(ActiveStatus.ACTIVE);
+        standardSeatType = seatTypeRepository.saveAndFlush(standardSeatType);
+
+        Seat seat = new Seat();
+        seat.setPublicId(UUID.randomUUID().toString());
+        seat.setAuditorium(auditorium);
+        seat.setSeatType(standardSeatType);
+        seat.setRowLabel("A");
+        seat.setSeatNumber(1);
+        seat.setSeatCode("A1");
+        seat.setPositionRow(1);
+        seat.setPositionColumn(1);
+        seat.setStatus(SeatStatus.ACTIVE);
+        seatRepository.saveAndFlush(seat);
+
+        standardPolicy = new PricePolicy();
+        standardPolicy.setPublicId(UUID.randomUUID().toString());
+        standardPolicy.setName("Auto Schedule E2E policy");
+        standardPolicy.setCinema(cinema);
+        standardPolicy.setEffectiveFrom(LocalDate.now().minusDays(1));
+        standardPolicy.setEffectiveTo(LocalDate.now().plusDays(60));
+        standardPolicy.setStatus(PricePolicyStatus.ACTIVE);
+        standardPolicy.setCurrency("VND");
+        standardPolicy.setPriority(0);
+        standardPolicy.setActivatedAt(Instant.now());
+        standardPolicy.setActivatedBy(999L);
+
+        PricePolicyRule standardRule = new PricePolicyRule();
+        standardRule.setPublicId(UUID.randomUUID().toString());
+        standardRule.setSeatType(standardSeatType);
+        standardRule.setDayType(PriceDayType.ALL_DAYS);
+        standardRule.setPrice(new BigDecimal("75000.00"));
+        standardRule.setActive(true);
+        standardPolicy.addRule(standardRule);
+        standardPolicy = pricePolicyRepository.saveAndFlush(standardPolicy);
 
         Movie movie = new Movie();
         movie.setPublicId("MOVIE_" + UUID.randomUUID().toString().substring(0, 8));
@@ -175,6 +250,10 @@ public class AdminAutoScheduleApplyE2ETest {
         c1.setStartTime(baseTime);
         c1.setEndTime(baseTime.plus(120, ChronoUnit.MINUTES));
         c1.setOccupancyEndTime(baseTime.plus(135, ChronoUnit.MINUTES));
+        c1.setOperatingWindow(new com.lorafilm.movie.autoschedule.model.OperatingWindow(
+                LocalDate.now(java.time.ZoneId.of(cinema.getTimezone())),
+                baseTime.minus(30, ChronoUnit.MINUTES),
+                baseTime.plus(4, ChronoUnit.HOURS)));
         c1.setScore(BigDecimal.TEN);
         c1.setScoreBreakdown(Map.of("test", BigDecimal.TEN));
         c1.setRankingPosition(1);
@@ -191,9 +270,14 @@ public class AdminAutoScheduleApplyE2ETest {
     void tearDown() {
         jdbcTemplate.execute("DELETE FROM cinema_operating_hours");
         jdbcTemplate.execute("DELETE FROM showtime_status_history");
+        jdbcTemplate.execute("DELETE FROM showtime_prices");
         itemRepository.deleteAllInBatch();
         previewRepository.deleteAllInBatch();
         jdbcTemplate.execute("DELETE FROM showtimes");
+        jdbcTemplate.execute("DELETE FROM price_policy_rules");
+        jdbcTemplate.execute("DELETE FROM price_policies");
+        jdbcTemplate.execute("DELETE FROM seats");
+        jdbcTemplate.execute("DELETE FROM seat_types");
         auditoriumRepository.deleteAllInBatch();
         cinemaRepository.deleteAllInBatch();
         movieVersionRepository.deleteAllInBatch();
@@ -203,6 +287,14 @@ public class AdminAutoScheduleApplyE2ETest {
     @Test
     void runAllE2ETestsForReport() throws Exception {
         System.out.println("\n========== E2E EVIDENCE START ==========\n");
+        int showtimeCountBeforeApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountBeforeApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        System.out.printf(
+                "Scenario A counts before apply: showtimes=%d, showtime_prices=%d%n",
+                showtimeCountBeforeApply,
+                priceCountBeforeApply);
         
         System.out.println("--- 5. Happy-path E2E đầy đủ ---");
         ApplyShowtimeSchedulePreviewRequest req = new ApplyShowtimeSchedulePreviewRequest();
@@ -234,6 +326,75 @@ public class AdminAutoScheduleApplyE2ETest {
         List<Map<String, Object>> showtimeRows = jdbcTemplate.queryForList(
                 "SELECT public_id, movie_id, movie_version_id, cinema_id, auditorium_id, start_time, end_time, status FROM showtimes WHERE id IN (SELECT created_showtime_id FROM showtime_schedule_preview_items WHERE preview_id = (SELECT id FROM showtime_schedule_previews WHERE public_id = ?))", previewPublicId);
         showtimeRows.forEach(System.out::println);
+
+        Showtime createdShowtime = showtimeRepository.findAll().stream()
+                .filter(showtime -> showtime.getBatchId() != null)
+                .findFirst()
+                .orElseThrow();
+        ShowtimeSchedulePreviewItem appliedItem = itemRepository
+                .findAllByPreviewIdOrderByRankingPositionAscIdAsc(
+                        previewRepository.findByPublicId(previewPublicId).orElseThrow().getId())
+                .stream().filter(item -> item.getCreatedShowtime() != null).findFirst().orElseThrow();
+        assertThat(createdShowtime.getServiceDate()).isEqualTo(appliedItem.getServiceDate());
+        List<ShowtimePrice> snapshots =
+                showtimePriceRepository.findByShowtimeIdWithSeatType(createdShowtime.getId());
+        assertThat(snapshots).hasSize(1);
+        ShowtimePrice snapshot = snapshots.get(0);
+        assertThat(snapshot.getPrice()).isEqualByComparingTo("75000.00");
+        assertThat(snapshot.getCurrency()).isEqualTo("VND");
+        assertThat(snapshot.getSeatType().getPublicId()).isEqualTo(standardSeatType.getPublicId());
+        assertThat(snapshot.getSeatTypeNameSnapshot()).isEqualTo("Standard");
+        assertThat(snapshot.getSeatTypeCodeSnapshot()).isEqualTo("STANDARD");
+        assertThat(snapshot.getPricingSource()).isEqualTo(PricingSource.POLICY);
+        assertThat(snapshot.getResolutionTimezone()).isEqualTo("Asia/Ho_Chi_Minh");
+        assertThat(snapshot.getResolvedAt()).isNotNull();
+        assertThat(snapshot.getSourcePolicy().getPublicId()).isEqualTo(standardPolicy.getPublicId());
+        assertThat(snapshot.getSourceRule()).isNotNull();
+        System.out.println(
+                "Scenario A immutable snapshot row:\n"
+                        + jdbcTemplate.queryForMap(
+                                """
+                                SELECT sp.price,
+                                       sp.currency,
+                                       sp.seat_type_name_snapshot,
+                                       sp.seat_type_code_snapshot,
+                                       sp.pricing_source,
+                                       sp.resolution_timezone,
+                                       sp.resolved_at,
+                                       pp.public_id AS source_policy_public_id,
+                                       ppr.public_id AS source_rule_public_id
+                                  FROM showtime_prices sp
+                                  JOIN price_policies pp ON pp.id = sp.source_policy_id
+                                  JOIN price_policy_rules ppr ON ppr.id = sp.source_rule_id
+                                 WHERE sp.showtime_id = ?
+                                """,
+                                createdShowtime.getId()));
+
+        int showtimeCountAfterApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountAfterApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        System.out.printf(
+                "Scenario A counts after apply: showtimes=%d, showtime_prices=%d%n",
+                showtimeCountAfterApply,
+                priceCountAfterApply);
+        assertThat(showtimeCountAfterApply - showtimeCountBeforeApply).isEqualTo(1);
+        assertThat(priceCountAfterApply - priceCountBeforeApply).isEqualTo(1);
+
+        MvcResult openPreviewResult = mockMvc.perform(
+                        get("/api/admin/showtimes/batch/{batchId}/status-preview",
+                                createdShowtime.getBatchId())
+                                .param("targetStatus", "OPEN_FOR_BOOKING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalCount").value(1))
+                .andExpect(jsonPath("$.data.eligibleCount").value(1))
+                .andExpect(jsonPath("$.data.skippedCount").value(0))
+                .andExpect(jsonPath("$.data.actionAllowed").value(true))
+                .andReturn();
+        System.out.println(
+                "Scenario A OPEN preview response:\n"
+                        + openPreviewResult.getResponse()
+                                .getContentAsString(StandardCharsets.UTF_8));
         
         System.out.println("\n--- 8. Idempotency replay evidence ---");
         MvcResult replayRes = mockMvc.perform(post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
@@ -258,6 +419,95 @@ public class AdminAutoScheduleApplyE2ETest {
         
         System.out.println("\n========== E2E EVIDENCE END ==========");
     }
+
+    @Test
+    void missingPricingFailsApplyPreflightBeforeCreatingAnyShowtime() throws Exception {
+        jdbcTemplate.execute("DELETE FROM price_policy_rules");
+        jdbcTemplate.execute("DELETE FROM price_policies");
+
+        int showtimeCountBeforeApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountBeforeApply =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        System.out.printf(
+                "Scenario B counts before apply: showtimes=%d, showtime_prices=%d%n",
+                showtimeCountBeforeApply,
+                priceCountBeforeApply);
+
+        ApplyShowtimeSchedulePreviewRequest request = new ApplyShowtimeSchedulePreviewRequest();
+        request.setExpectedVersion(initialVersion);
+        request.setIdempotencyKey("apply-missing-pricing-e2e");
+
+        MvcResult firstAttempt = mockMvc.perform(
+                        post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("PRICING_INCOMPLETE"))
+                .andExpect(jsonPath("$.data.complete").value(false))
+                .andExpect(jsonPath("$.data.totalCandidateCount").value(1))
+                .andExpect(jsonPath("$.data.completeCandidateCount").value(0))
+                .andExpect(jsonPath("$.data.incompleteCandidateCount").value(1))
+                .andExpect(jsonPath("$.data.reasonGroups[0].reasonCode").value("PRICING_INCOMPLETE"))
+                .andExpect(jsonPath("$.data.reasonGroups[0].displayMessage")
+                        .value("Thiếu chính sách hoặc quy tắc giá hiệu lực cho một hoặc nhiều loại ghế."))
+                .andExpect(jsonPath("$.data.reasonGroups[0].count").value(1))
+                .andExpect(jsonPath("$.data.reasonGroups[0].auditoriums[0].name")
+                        .value("E2E Auditorium"))
+                .andExpect(jsonPath("$.data.reasonGroups[0].seatTypes[0].name")
+                        .value(standardSeatType.getName()))
+                .andReturn();
+        System.out.println(
+                "Scenario B first HTTP 409 response:\n"
+                        + firstAttempt.getResponse().getContentAsString(StandardCharsets.UTF_8));
+
+        assertThat(showtimeRepository.findAll().stream()
+                .filter(showtime -> showtime.getBatchId() != null)).isEmpty();
+        int showtimeCountAfterFirstAttempt =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountAfterFirstAttempt =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        assertThat(showtimeCountAfterFirstAttempt).isEqualTo(showtimeCountBeforeApply);
+        assertThat(priceCountAfterFirstAttempt).isEqualTo(priceCountBeforeApply);
+        assertThat(previewRepository.findByPublicId(previewPublicId).orElseThrow().getStatus())
+                .isEqualTo(SchedulePreviewStatus.PREVIEWED);
+        Long previewId = previewRepository.findByPublicId(previewPublicId).orElseThrow().getId();
+        assertThat(itemRepository.findDetailedItemsByPreviewId(previewId).getFirst().getApplyStatus())
+                .isEqualTo(PreviewItemApplyStatus.PENDING);
+
+        MvcResult retryAttempt = mockMvc.perform(
+                        post("/api/admin/showtime-schedules/{previewPublicId}/apply", previewPublicId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("PRICING_INCOMPLETE"))
+                .andExpect(jsonPath("$.data.incompleteCandidateCount").value(1))
+                .andReturn();
+        System.out.println(
+                "Scenario B retry HTTP 409 response:\n"
+                        + retryAttempt.getResponse().getContentAsString(StandardCharsets.UTF_8));
+
+        int showtimeCountAfterRetry =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
+        int priceCountAfterRetry =
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtime_prices", Integer.class);
+        SchedulePreviewStatus previewStatusAfterRetry =
+                previewRepository.findByPublicId(previewPublicId).orElseThrow().getStatus();
+        PreviewItemApplyStatus itemStatusAfterRetry =
+                itemRepository.findDetailedItemsByPreviewId(previewId).getFirst().getApplyStatus();
+        System.out.printf(
+                "Scenario B counts/status after retry: showtimes=%d, showtime_prices=%d, "
+                        + "preview=%s, item=%s%n",
+                showtimeCountAfterRetry,
+                priceCountAfterRetry,
+                previewStatusAfterRetry,
+                itemStatusAfterRetry);
+        assertThat(showtimeCountAfterRetry).isEqualTo(showtimeCountBeforeApply);
+        assertThat(priceCountAfterRetry).isEqualTo(priceCountBeforeApply);
+        assertThat(previewStatusAfterRetry).isEqualTo(SchedulePreviewStatus.PREVIEWED);
+        assertThat(itemStatusAfterRetry).isEqualTo(PreviewItemApplyStatus.PENDING);
+    }
     
     @Test
     void runAtomicRollbackE2ETest() throws Exception {
@@ -269,9 +519,12 @@ public class AdminAutoScheduleApplyE2ETest {
         Long movieId = jdbcTemplate.queryForObject("SELECT id FROM movies LIMIT 1", Long.class);
         Long movieVersionId = jdbcTemplate.queryForObject("SELECT id FROM movie_versions LIMIT 1", Long.class);
         
-        jdbcTemplate.update("INSERT INTO showtimes (public_id, cinema_id, auditorium_id, movie_id, movie_version_id, start_time, end_time, booking_open_time, booking_close_time, status, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', NOW(), NOW())",
-                "ST_CONFLICT", cinemaId, auditoriumId, movieId, movieVersionId, baseTime, baseTime.plus(120, ChronoUnit.MINUTES), baseTime.minus(7, ChronoUnit.DAYS), baseTime);
+        jdbcTemplate.update("INSERT INTO showtimes (public_id, cinema_id, auditorium_id, movie_id, movie_version_id, start_time, end_time, service_date, booking_open_time, booking_close_time, status, version, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 0, NOW(), NOW())",
+                "ST_CONFLICT", cinemaId, auditoriumId, movieId, movieVersionId, baseTime,
+                baseTime.plus(120, ChronoUnit.MINUTES),
+                baseTime.atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toLocalDate(),
+                baseTime.minus(7, ChronoUnit.DAYS), baseTime);
 
         int countBefore = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM showtimes", Integer.class);
         System.out.println("Showtimes Count Before Apply: " + countBefore);

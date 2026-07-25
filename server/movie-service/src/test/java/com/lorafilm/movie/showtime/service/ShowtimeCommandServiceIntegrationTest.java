@@ -31,6 +31,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
@@ -168,11 +169,23 @@ class ShowtimeCommandServiceIntegrationTest {
         var savedShowtime = showtimeRepository.findByPublicIdAndDeletedAtIsNull(response.getShowtimePublicId()).orElse(null);
         assertNotNull(savedShowtime);
         assertEquals(ShowtimeStatus.DRAFT, savedShowtime.getStatus());
+        assertEquals(LocalDate.of(2026, 8, 3), savedShowtime.getServiceDate());
         
         var history = statusHistoryRepository.findByShowtimeId(savedShowtime.getId());
         assertEquals(1, history.size());
         assertEquals(ShowtimeStatus.DRAFT, history.get(0).getNewStatus());
         assertNull(history.get(0).getPreviousStatus());
+    }
+
+    @Test
+    void deleteBatchFailsClosedWhenBookingSafetyIsUnavailable() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> showtimeCommandService.deleteBatch("legacy-batch"));
+
+        assertEquals(
+                ErrorCode.SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE,
+                exception.getErrorCode());
     }
 
     @Test

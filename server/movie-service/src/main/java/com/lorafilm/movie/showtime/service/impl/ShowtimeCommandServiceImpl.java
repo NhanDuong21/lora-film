@@ -12,6 +12,9 @@ import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.pricing.service.ShowtimePricingService;
+import com.lorafilm.movie.pricing.service.model.PriceResolutionResult;
+import com.lorafilm.movie.pricing.dto.response.ShowtimePricesResponse;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.request.CreateShowtimeRequest;
@@ -19,8 +22,6 @@ import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimeSpecification;
-import org.springframework.data.jpa.domain.Specification;
 import com.lorafilm.movie.showtime.service.ShowtimeCommandService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.validation.ShowtimeValidationContext;
@@ -28,9 +29,13 @@ import com.lorafilm.movie.showtime.validation.ShowtimeValidationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -46,6 +51,7 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
     private final ShowtimeStatusHistoryService showtimeStatusHistoryService;
     private final AdminShowtimeMapper adminShowtimeMapper;
     private final CurrentUserProvider currentUserProvider;
+    private final ShowtimePricingService showtimePricingService;
 
     public ShowtimeCommandServiceImpl(MovieRepository movieRepository,
                                       MovieVersionRepository movieVersionRepository,
@@ -55,7 +61,8 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
                                       ShowtimeValidationService showtimeValidationService,
                                       ShowtimeStatusHistoryService showtimeStatusHistoryService,
                                       AdminShowtimeMapper adminShowtimeMapper,
-                                      CurrentUserProvider currentUserProvider) {
+                                      CurrentUserProvider currentUserProvider,
+                                      ShowtimePricingService showtimePricingService) {
         this.movieRepository = movieRepository;
         this.movieVersionRepository = movieVersionRepository;
         this.cinemaRepository = cinemaRepository;
@@ -65,6 +72,7 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
         this.showtimeStatusHistoryService = showtimeStatusHistoryService;
         this.adminShowtimeMapper = adminShowtimeMapper;
         this.currentUserProvider = currentUserProvider;
+        this.showtimePricingService = showtimePricingService;
     }
 
     @Override
@@ -96,6 +104,7 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
         showtime.setAuditorium(auditorium);
         showtime.setStartTime(request.getStartTime());
         showtime.setEndTime(endTime);
+        showtime.setServiceDate(resolveServiceDate(request.getStartTime(), cinema));
         showtime.setStatus(ShowtimeStatus.DRAFT);
         showtime.setCancellationReason(null);
         showtime.setBookingOpenTime(null);
@@ -105,7 +114,8 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
 
         showtimeStatusHistoryService.recordInitialHistory(showtime, currentUserId);
 
-        return adminShowtimeMapper.toAdminResponse(showtime);
+        PriceResolutionResult pricing = showtimePricingService.resolveAndReplace(showtime);
+        return withPricing(adminShowtimeMapper.toAdminResponse(showtime), pricing);
     }
 
     @Override
@@ -122,6 +132,9 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
         if (snapshot.getStatus() != ShowtimeStatus.DRAFT) {
             throw new BusinessException(ErrorCode.INVALID_SHOWTIME_STATUS_TRANSITION, "Only draft showtimes can be updated");
         }
+        Long previousCinemaId = snapshot.getCinema().getId();
+        Long previousAuditoriumId = snapshot.getAuditorium().getId();
+        Instant previousStartTime = snapshot.getStartTime();
 
         Auditorium targetAuditoriumSnapshot = resolveAuditorium(request.getAuditoriumPublicId());
         
@@ -159,10 +172,23 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
         lockedShowtime.setAuditorium(targetAuditorium);
         lockedShowtime.setStartTime(request.getStartTime());
         lockedShowtime.setEndTime(endTime);
+        if (!Objects.equals(previousCinemaId, cinema.getId())
+                || !Objects.equals(previousStartTime, request.getStartTime())) {
+            lockedShowtime.setServiceDate(resolveServiceDate(request.getStartTime(), cinema));
+        }
 
         showtimeRepository.flush();
 
-        return adminShowtimeMapper.toAdminResponse(lockedShowtime);
+        boolean pricingDimensionsChanged =
+                !Objects.equals(previousCinemaId, cinema.getId())
+                || !Objects.equals(previousAuditoriumId, targetAuditorium.getId())
+                || !Objects.equals(previousStartTime, request.getStartTime());
+        if (pricingDimensionsChanged) {
+            PriceResolutionResult pricing = showtimePricingService.resolveAndReplace(lockedShowtime);
+            return withPricing(adminShowtimeMapper.toAdminResponse(lockedShowtime), pricing);
+        }
+        ShowtimePricesResponse pricing = showtimePricingService.getPrices(showtimePublicId);
+        return withPricing(adminShowtimeMapper.toAdminResponse(lockedShowtime), pricing);
     }
 
     private Movie resolveMovie(String publicId) {
@@ -193,6 +219,20 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
         return startTime.plus(duration, ChronoUnit.MINUTES);
     }
 
+    private LocalDate resolveServiceDate(Instant startTime, Cinema cinema) {
+        if (startTime == null || cinema == null || cinema.getTimezone() == null
+                || cinema.getTimezone().isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Cinema timezone is required to assign the Showtime service date");
+        }
+        try {
+            return startTime.atZone(ZoneId.of(cinema.getTimezone())).toLocalDate();
+        } catch (DateTimeException exception) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Cinema timezone is invalid; Showtime service date cannot be assigned");
+        }
+    }
+
     private ShowtimeValidationContext buildContext(Movie movie, MovieVersion movieVersion, Cinema cinema, Auditorium auditorium, Instant startTime, Instant endTime, Long excludedShowtimeId) {
         return ShowtimeValidationContext.builder()
                 .movie(movie)
@@ -211,21 +251,31 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
         if (batchId == null || batchId.trim().isEmpty()) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Batch ID is required");
         }
-        
-        Specification<Showtime> spec = ShowtimeSpecification.hasBatchId(batchId);
-        List<Showtime> showtimes = showtimeRepository.findAll(spec);
-        
-        if (showtimes.isEmpty()) {
-            throw new ResourceNotFoundException("No showtimes found for batch ID: " + batchId);
-        }
-        
-        // Ensure all are DRAFT
-        for (Showtime showtime : showtimes) {
-            if (showtime.getStatus() != ShowtimeStatus.DRAFT) {
-                throw new BusinessException(ErrorCode.SHOWTIME_SCHEDULE_NOT_EDITABLE, "Can only delete batch if all showtimes are in DRAFT state. Found status: " + showtime.getStatus());
-            }
-        }
-        
-        showtimeRepository.deleteAll(showtimes);
+
+        throw new BusinessException(
+                ErrorCode.SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE,
+                "Batch cancellation is disabled until booking, refund, notification, and compensation safety can be verified");
+    }
+
+    private AdminShowtimeResponse withPricing(AdminShowtimeResponse response, PriceResolutionResult pricing) {
+        response.setPricingStatus(pricing.isComplete() ? "COMPLETE" : "INCOMPLETE");
+        response.setMissingPriceSeatTypeIds(pricing.missingSeatTypes().stream()
+                .map(PriceResolutionResult.SeatTypeDiagnostic::seatTypeId)
+                .toList());
+        response.setAmbiguousPriceSeatTypeIds(pricing.ambiguousSeatTypes().stream()
+                .map(PriceResolutionResult.SeatTypeDiagnostic::seatTypeId)
+                .toList());
+        return response;
+    }
+
+    private AdminShowtimeResponse withPricing(AdminShowtimeResponse response, ShowtimePricesResponse pricing) {
+        response.setPricingStatus(pricing.isComplete() ? "COMPLETE" : "INCOMPLETE");
+        response.setMissingPriceSeatTypeIds(pricing.getMissingSeatTypes().stream()
+                .map(item -> item.seatTypeId())
+                .toList());
+        response.setAmbiguousPriceSeatTypeIds(pricing.getAmbiguousSeatTypes().stream()
+                .map(item -> item.seatTypeId())
+                .toList());
+        return response;
     }
 }

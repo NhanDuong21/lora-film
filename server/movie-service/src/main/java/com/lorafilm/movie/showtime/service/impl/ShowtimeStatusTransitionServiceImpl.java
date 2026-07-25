@@ -9,10 +9,10 @@ import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
+import com.lorafilm.movie.showtime.dto.response.BatchStatusActionSummary;
+import com.lorafilm.movie.showtime.dto.response.BatchStatusBlockedShowtime;
+import com.lorafilm.movie.showtime.dto.response.BatchStatusReasonGroup;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimeSpecification;
-import org.springframework.data.jpa.domain.Specification;
-import java.util.List;
 import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
@@ -21,9 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransitionService {
+
+    private static final int REASON_GROUP_SAMPLE_SIZE = 5;
 
     private final ShowtimeRepository showtimeRepository;
     private final ShowtimeStatusHistoryService historyService;
@@ -57,28 +63,32 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         Showtime showtime = showtimeRepository.findByPublicIdForUpdate(showtimePublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
 
-        ShowtimeStatus currentStatus = showtime.getStatus();
-        ShowtimeStatus newStatus = request.getStatus();
-
-        validateTransitionMatrix(currentStatus, newStatus);
-        
-        String reason = normalizeReason(request.getReason(), newStatus);
         Instant now = Instant.now(clock);
+        Showtime savedShowtime = applyTransition(showtime, request.getStatus(), request.getReason(), currentUserId, now);
 
+        return adminShowtimeMapper.toAdminResponse(savedShowtime);
+    }
+
+    private Showtime applyTransition(Showtime showtime,
+                                     ShowtimeStatus newStatus,
+                                     String rawReason,
+                                     Long currentUserId,
+                                     Instant now) {
+        ShowtimeStatus currentStatus = showtime.getStatus();
+        validateTransitionMatrix(currentStatus, newStatus);
+        String reason = normalizeReason(rawReason, newStatus);
         validateTimingRules(showtime, currentStatus, newStatus, now);
-
         applyTimestamps(showtime, currentStatus, newStatus, now);
-        
+
         if (newStatus == ShowtimeStatus.CANCELLED) {
             showtime.setCancellationReason(reason);
         }
 
         showtime.setStatus(newStatus);
-        showtime = showtimeRepository.saveAndFlush(showtime);
-
-        historyService.recordTransitionHistory(showtime, currentStatus, newStatus, reason, currentUserId, now);
-
-        return adminShowtimeMapper.toAdminResponse(showtime);
+        Showtime savedShowtime = showtimeRepository.saveAndFlush(showtime);
+        historyService.recordTransitionHistory(
+                savedShowtime, currentStatus, newStatus, reason, currentUserId, now);
+        return savedShowtime;
     }
 
     private void validateTransitionMatrix(ShowtimeStatus current, ShowtimeStatus target) {
@@ -146,22 +156,165 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public BatchStatusActionSummary previewBatchStatus(String batchId, ShowtimeStatus targetStatus) {
+        validateBatchRequest(batchId, targetStatus);
+        List<Showtime> showtimes =
+                showtimeRepository.findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc(batchId);
+        ensureBatchExists(batchId, showtimes);
+
+        Instant now = Instant.now(clock);
+        BatchClassification classification = classifyBatch(batchId, showtimes, targetStatus, now);
+        classification.summary().setActorId(currentUserProvider.getCurrentUserId());
+        classification.summary().setActionAt(now);
+        return classification.summary();
+    }
+
+    @Override
     @Transactional
-    public void transitionBatchStatus(String batchId, UpdateShowtimeStatusRequest request) {
+    public BatchStatusActionSummary transitionBatchStatus(String batchId, UpdateShowtimeStatusRequest request) {
+        ShowtimeStatus targetStatus = request == null ? null : request.getStatus();
+        validateBatchRequest(batchId, targetStatus);
+
+        Long currentUserId = currentUserProvider.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BusinessException(ErrorCode.CURRENT_USER_NOT_AVAILABLE, "Current user not available");
+        }
+
+        List<Showtime> showtimes = showtimeRepository.findAllByBatchIdForUpdate(batchId);
+        ensureBatchExists(batchId, showtimes);
+
+        Instant now = Instant.now(clock);
+        BatchClassification classification = classifyBatch(batchId, showtimes, targetStatus, now);
+        BatchStatusActionSummary summary = classification.summary();
+        summary.setActorId(currentUserId);
+        summary.setActionAt(now);
+
+        if (!summary.isActionAllowed()) {
+            return summary;
+        }
+
+        for (Showtime showtime : classification.eligible()) {
+            applyTransition(showtime, targetStatus, request.getReason(), currentUserId, now);
+        }
+        summary.setAffectedCount(classification.eligible().size());
+        return summary;
+    }
+
+    private void validateBatchRequest(String batchId, ShowtimeStatus targetStatus) {
         if (batchId == null || batchId.trim().isEmpty()) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Batch ID is required");
         }
+        if (targetStatus == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Target status is required");
+        }
+        if (targetStatus == ShowtimeStatus.CANCELLED) {
+            throw new BusinessException(
+                    ErrorCode.SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE,
+                    "Batch cancellation is disabled until booking safety can be verified");
+        }
+        if (targetStatus != ShowtimeStatus.OPEN_FOR_BOOKING) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Only OPEN_FOR_BOOKING is supported for batch status actions");
+        }
+    }
 
-        Specification<Showtime> spec = ShowtimeSpecification.hasBatchId(batchId);
-        List<Showtime> showtimes = showtimeRepository.findAll(spec);
-        
+    private void ensureBatchExists(String batchId, List<Showtime> showtimes) {
         if (showtimes.isEmpty()) {
             throw new ResourceNotFoundException("No showtimes found for batch ID: " + batchId);
         }
+    }
+
+    private BatchClassification classifyBatch(String batchId,
+                                              List<Showtime> showtimes,
+                                              ShowtimeStatus targetStatus,
+                                              Instant now) {
+        List<Showtime> eligible = new ArrayList<>();
+        List<BatchStatusBlockedShowtime> blockedShowtimes = new ArrayList<>();
+        int alreadyTargetCount = 0;
+        Map<String, ReasonAccumulator> reasons = new LinkedHashMap<>();
 
         for (Showtime showtime : showtimes) {
-            // Re-use the existing transition logic for each item
-            transitionStatus(showtime.getPublicId(), request);
+            if (showtime.getStatus() == targetStatus) {
+                alreadyTargetCount++;
+                continue;
+            }
+
+            try {
+                validateTransitionMatrix(showtime.getStatus(), targetStatus);
+                validateTimingRules(showtime, showtime.getStatus(), targetStatus, now);
+                eligible.add(showtime);
+            } catch (BusinessException exception) {
+                ErrorCode errorCode = exception.getErrorCode();
+                if (errorCode == null) {
+                    throw exception;
+                }
+                String code = errorCode.name();
+                String safeReason = errorCode.getMessage();
+                reasons.computeIfAbsent(
+                        code,
+                        ignored -> new ReasonAccumulator(safeReason))
+                        .add(showtime.getPublicId());
+                blockedShowtimes.add(new BatchStatusBlockedShowtime(
+                        showtime.getPublicId(), code, safeReason));
+            }
+        }
+
+        BatchStatusActionSummary summary = new BatchStatusActionSummary();
+        summary.setBatchId(batchId);
+        summary.setTargetStatus(targetStatus.name());
+        summary.setTotalCount(showtimes.size());
+        summary.setEligibleCount(eligible.size());
+        summary.setAlreadyTargetCount(alreadyTargetCount);
+        summary.setSkippedCount(showtimes.size() - eligible.size() - alreadyTargetCount);
+        summary.setFailedCount(0);
+        summary.setAffectedCount(0);
+        summary.setAtomic(true);
+        summary.setActionAllowed(summary.getSkippedCount() == 0);
+        summary.setReasonGroups(reasons.entrySet().stream()
+                .map(entry -> new BatchStatusReasonGroup(
+                        entry.getKey(),
+                        entry.getValue().reason(),
+                        entry.getValue().count(),
+                        entry.getValue().sampleShowtimePublicIds()))
+                .toList());
+        summary.setBlockedShowtimes(List.copyOf(blockedShowtimes));
+        return new BatchClassification(summary, eligible);
+    }
+
+    private record BatchClassification(
+            BatchStatusActionSummary summary,
+            List<Showtime> eligible) {
+    }
+
+    private static final class ReasonAccumulator {
+        private final String reason;
+        private final List<String> sampleShowtimePublicIds = new ArrayList<>();
+        private int count;
+
+        private ReasonAccumulator(String reason) {
+            this.reason = reason;
+        }
+
+        private void add(String showtimePublicId) {
+            count++;
+            if (showtimePublicId != null
+                    && sampleShowtimePublicIds.size() < REASON_GROUP_SAMPLE_SIZE) {
+                sampleShowtimePublicIds.add(showtimePublicId);
+            }
+        }
+
+        private String reason() {
+            return reason;
+        }
+
+        private int count() {
+            return count;
+        }
+
+        private List<String> sampleShowtimePublicIds() {
+            return List.copyOf(sampleShowtimePublicIds);
         }
     }
 }

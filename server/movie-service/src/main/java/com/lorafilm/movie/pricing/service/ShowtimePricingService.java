@@ -10,5 +10,16 @@ public interface ShowtimePricingService {
 
     ShowtimePricesResponse getPrices(String showtimePublicId);
 
+    ShowtimePricesResponse resolvePrices(String showtimePublicId, Long expectedShowtimeVersion);
+
+    com.lorafilm.movie.pricing.service.model.PriceResolutionResult resolveAndReplace(Showtime showtime);
+
+    java.util.List<com.lorafilm.movie.pricing.service.model.PriceResolutionResult> resolveAndReplaceAll(
+            java.util.List<Showtime> showtimes);
+
+    void replaceAllWithResolvedResults(
+            java.util.List<Showtime> showtimes,
+            java.util.List<com.lorafilm.movie.pricing.service.model.PriceResolutionResult> results);
+
     void validateCompleteness(Showtime showtime);
 }

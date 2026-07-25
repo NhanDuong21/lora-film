@@ -3,6 +3,8 @@ package com.lorafilm.movie.showtime.service;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.entity.ShowtimeStatusHistory;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
+import com.lorafilm.movie.showtime.dto.response.ShowtimeStatusHistoryResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeStatusHistoryRepository;
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
@@ -21,6 +23,7 @@ import org.springframework.context.annotation.Import;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,6 +51,9 @@ public class ShowtimeStatusHistoryIntegrationTest {
 
     @Autowired
     private AuditoriumRepository auditoriumRepository;
+
+    @Autowired
+    private ShowtimeStatusHistoryService historyService;
 
     @Test
     void testPersistHistorySuccess() {
@@ -100,7 +106,10 @@ public class ShowtimeStatusHistoryIntegrationTest {
         showtime.setAuditorium(auditorium);
         showtime.setStartTime(Instant.now().plusSeconds(3600));
         showtime.setEndTime(Instant.now().plusSeconds(7200));
+        showtime.setServiceDate(java.time.LocalDate.now());
         showtime.setStatus(ShowtimeStatus.DRAFT);
+        showtime.setSource(ShowtimeSource.AUTO);
+        showtime.setBatchId("preview-source-1");
         showtime = showtimeRepository.save(showtime);
 
         ShowtimeStatusHistory history = new ShowtimeStatusHistory();
@@ -111,6 +120,15 @@ public class ShowtimeStatusHistoryIntegrationTest {
         history.setChangedBy(99L);
         
         history = historyRepository.save(history);
+
+        ShowtimeStatusHistory transition = new ShowtimeStatusHistory();
+        transition.setShowtime(showtime);
+        transition.setPreviousStatus(ShowtimeStatus.DRAFT);
+        transition.setNewStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+        transition.setReason(null);
+        transition.setChangedBy(null);
+        transition.setChangedAt(Instant.now().plusSeconds(1));
+        historyRepository.save(transition);
         historyRepository.flush();
 
         assertThat(history.getId()).isNotNull();
@@ -119,5 +137,15 @@ public class ShowtimeStatusHistoryIntegrationTest {
         assertThat(history.getReason()).isEqualTo("Showtime created");
         assertThat(history.getChangedAt()).isNotNull();
         assertThat(history.getChangedBy()).isEqualTo(99L);
+
+        List<ShowtimeStatusHistoryResponse> responses =
+                historyService.getShowtimeStatusHistory(showtime.getPublicId());
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).getSource()).isEqualTo("AUTO");
+        assertThat(responses.get(0).getPreviewPublicId()).isEqualTo("preview-source-1");
+        assertThat(responses.get(1).getSource()).isEqualTo("MANUAL");
+        assertThat(responses.get(1).getPreviewPublicId()).isEqualTo("preview-source-1");
+        assertThat(responses.get(1).getChangedBy()).isNull();
+        assertThat(responses.get(1).getReason()).isNull();
     }
 }

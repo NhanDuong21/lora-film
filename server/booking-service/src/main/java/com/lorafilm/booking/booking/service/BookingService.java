@@ -34,4 +34,6 @@ public interface BookingService {
             Long userId, BookingStatus status, Instant fromDate, Instant toDate, Pageable pageable);
 
     BookingResponse changeStatus(String publicId, BookingStatus targetStatus);
+
+    com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId, com.lorafilm.booking.payment.dto.InitiatePaymentRequest request);
 }

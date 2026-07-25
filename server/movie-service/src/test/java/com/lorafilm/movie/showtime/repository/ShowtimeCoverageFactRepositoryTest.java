@@ -162,6 +162,8 @@ class ShowtimeCoverageFactRepositoryTest {
         showtime.setMovieVersion(version);
         showtime.setStartTime(start);
         showtime.setEndTime(start.plusSeconds(5_400));
+        showtime.setServiceDate(java.time.LocalDate.ofInstant(
+                start, java.time.ZoneId.of(cinema.getTimezone())));
         showtime.setStatus(status);
         if (deleted) {
             showtime.setDeletedAt(Instant.parse("2026-07-22T00:00:00Z"));
