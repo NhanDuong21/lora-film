@@ -12,14 +12,14 @@ import {
 } from '@/features/catalog/customer/utils/customerMovieFlow';
 
 const SelectField = ({ label, value, onChange, disabled, children }) => (
-  <label className={`relative flex min-w-0 flex-1 flex-col px-4 py-2 ${disabled ? 'opacity-40' : ''}`}>
+  <label className={`relative flex min-w-0 flex-1 flex-col border-b border-white/10 px-4 py-3 last:border-b-0 md:border-b-0 md:border-r ${disabled ? 'opacity-40' : ''}`}>
     <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{label}</span>
     <select
       aria-label={label}
       value={value}
       onChange={onChange}
       disabled={disabled}
-      className="w-full appearance-none truncate border-0 bg-transparent p-0 text-xs font-bold text-zinc-200 outline-none"
+      className="w-full appearance-none truncate border-0 bg-transparent p-0 text-xs font-bold text-zinc-200 outline-none focus-visible:text-brand-orange disabled:cursor-not-allowed"
     >
       {children}
     </select>
@@ -121,7 +121,7 @@ export default function Hero() {
             type="button"
             disabled={!showtimeId}
             onClick={() => navigate(seatSelectionPath(showtimeId))}
-            className="m-3 rounded-full bg-brand-orange px-7 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="m-3 rounded-full bg-brand-orange px-7 py-3 text-sm font-bold text-white shadow-lg shadow-brand-orange/20 transition-colors hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none"
           >
             Mua vé nhanh
           </button>

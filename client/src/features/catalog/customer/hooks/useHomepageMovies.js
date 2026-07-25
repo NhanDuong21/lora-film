@@ -69,11 +69,12 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
       if (data) {
         const content = data.data || data.content || [];
         setMovies(content);
-        setPage(data.pageNo !== undefined ? data.pageNo : data.page || 0);
+        const resolvedPage = data.pageNumber ?? data.pageNo ?? data.page ?? pageToFetch;
+        setPage(resolvedPage);
         setTotalPages(data.totalPages || 0);
         setTotalElements(data.totalElements || 0);
-        setFirst(data.first !== undefined ? data.first : true);
-        setLast(data.last !== undefined ? data.last : true);
+        setFirst(data.first ?? resolvedPage === 0);
+        setLast(data.last ?? resolvedPage >= Math.max((data.totalPages || 1) - 1, 0));
 
         // Call optional callback (useful for updating global state)
         if (onDataLoadedRef.current) {
