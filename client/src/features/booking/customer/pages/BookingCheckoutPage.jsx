@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Clock, AlertTriangle, ChevronRight, Search, ShieldCheck, Check } from 'lucide-react';
 import { getBookingDetails, initiatePayment, cancelBooking } from '../services/bookingService';
-import { getConcessions, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
+import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 
 export default function BookingCheckoutPage() {
   const location = useLocation();
@@ -13,6 +13,7 @@ export default function BookingCheckoutPage() {
     const params = new URLSearchParams(location.search);
     return params.get('bookingId');
   }, [location.search]);
+  const bookingDraft = location.state || {};
 
   // States
   const [booking, setBooking] = useState(null);
@@ -42,7 +43,20 @@ export default function BookingCheckoutPage() {
     setLoading(true);
     try {
       const bookingData = await getBookingDetails(bookingId);
-      setBooking(bookingData);
+      let foodOrder = null;
+      try {
+        foodOrder = await getBookingFoodOrder(bookingId);
+      } catch {
+        foodOrder = null;
+      }
+      setBooking({
+        ...bookingData,
+        foodOrder,
+        finalAmount: bookingData.finalAmount ?? bookingData.totalAmount ?? 0,
+        ticketAmount: bookingData.ticketAmount ?? bookingData.totalAmount ?? 0,
+        expiresAt: bookingData.expiresAt ?? bookingData.expiredAt ?? bookingData.paymentDeadline,
+        snapshot: bookingData.snapshot ?? bookingDraft.showtime ?? null
+      });
 
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
@@ -51,7 +65,7 @@ export default function BookingCheckoutPage() {
     } finally {
       setLoading(false);
     }
-  }, [bookingId]);
+  }, [bookingId, bookingDraft.showtime]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -221,6 +235,12 @@ export default function BookingCheckoutPage() {
 
   const { snapshot } = booking;
   const isExpired = timeLeft === 0;
+  const draftSeats = bookingDraft.selectedSeats || [];
+  const visibleSeats = booking.tickets?.length ? booking.tickets : draftSeats;
+  const showtimeStart = snapshot?.showtimeStart || snapshot?.startTime;
+  const movie = snapshot?.movie || {};
+  const cinema = snapshot?.cinema || {};
+  const auditorium = snapshot?.auditorium || {};
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
@@ -459,9 +479,9 @@ export default function BookingCheckoutPage() {
               <div className="space-y-1.5 flex-grow">
                 <h3 className="text-sm font-black text-white line-clamp-2 leading-snug">{snapshot?.movieTitle}</h3>
                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-semibold">
-                  <span>{snapshot?.duration} phút</span>
+                  <span>{snapshot?.duration || movie?.durationMinutes || '--'} phút</span>
                   <span>•</span>
-                  <span className="text-brand-yellow font-black border border-brand-yellow/30 px-1 py-0.2 rounded text-[8px]">{snapshot?.ageRating}</span>
+                  <span className="text-brand-yellow font-black border border-brand-yellow/30 px-1 py-0.2 rounded text-[8px]">{snapshot?.ageRating || movie?.ageRating || 'P'}</span>
                 </div>
               </div>
             </div>
@@ -470,21 +490,21 @@ export default function BookingCheckoutPage() {
             <div className="space-y-3 py-2 text-xs border-b border-zinc-800">
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Cụm rạp</span>
-                <span className="text-white font-bold text-right">{snapshot?.cinemaName}</span>
+                <span className="text-white font-bold text-right">{snapshot?.cinemaName || cinema?.name || `Rạp #${booking.cinemaId || '--'}`}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Phòng chiếu</span>
-                <span className="text-zinc-200 font-bold text-right">{snapshot?.auditoriumName}</span>
+                <span className="text-zinc-200 font-bold text-right">{snapshot?.auditoriumName || auditorium?.name || `Phòng #${booking.auditoriumId || '--'}`}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Suất chiếu</span>
                 <span className="text-white font-bold text-right">
-                  {snapshot?.showtimeStart ? new Date(snapshot.showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''} | {snapshot?.showtimeStart ? new Date(snapshot.showtimeStart).toLocaleDateString('vi-VN') : ''}
+                  {showtimeStart ? new Date(showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''} | {showtimeStart ? new Date(showtimeStart).toLocaleDateString('vi-VN') : ''}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Số lượng ghế</span>
-                <span className="text-brand-orange font-black text-right">{snapshot?.seatCount} ghế</span>
+                <span className="text-brand-orange font-black text-right">{snapshot?.seatCount || visibleSeats.length || '--'} ghế</span>
               </div>
             </div>
 
@@ -492,9 +512,9 @@ export default function BookingCheckoutPage() {
             <div className="py-2 border-b border-zinc-800 space-y-2">
               <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Các vị trí ghế</span>
               <div className="flex flex-wrap gap-1.5">
-                {(booking.tickets || []).map(t => (
-                  <span key={t.id} className="text-[10px] bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded font-black">
-                    {t.seatLabel} ({t.seatType})
+                {visibleSeats.map((t, index) => (
+                  <span key={t.id || t.publicId || index} className="text-[10px] bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded font-black">
+                    {t.seatLabel || t.seatCode} {t.seatType ? `(${t.seatType})` : ''}
                   </span>
                 ))}
               </div>

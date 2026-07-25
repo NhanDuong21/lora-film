@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Printer, ArrowLeft, Trash2, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { getBookingDetails, cancelBooking, initiatePayment } from '../services/bookingService';
+import { getBookingDetails, getBookingTickets, cancelBooking, initiatePayment } from '../services/bookingService';
+import { getBookingFoodOrder } from '../services/foodService';
 
 export default function BookingDetailPage() {
   const { bookingId } = useParams();
@@ -20,7 +21,19 @@ export default function BookingDetailPage() {
     setError(null);
     try {
       const data = await getBookingDetails(bookingId);
-      setBooking(data);
+      const [tickets, foodOrder] = await Promise.all([
+        getBookingTickets(bookingId).catch(() => data.tickets || []),
+        getBookingFoodOrder(bookingId).catch(() => data.foodOrder || null)
+      ]);
+      setBooking({
+        ...data,
+        tickets,
+        foodOrder,
+        finalAmount: data.finalAmount ?? data.totalAmount ?? 0,
+        ticketAmount: data.ticketAmount ?? data.totalAmount ?? 0,
+        expiresAt: data.expiresAt ?? data.expiredAt ?? data.paymentDeadline,
+        bookingStatus: data.bookingStatus ?? data.status
+      });
     } catch (err) {
       setError(err.message || err.detail || "Không thể tải thông tin chi tiết đặt vé.");
     } finally {
@@ -35,7 +48,7 @@ export default function BookingDetailPage() {
 
   // Expiration countdown logic
   useEffect(() => {
-    if (!booking || booking.status !== 'PENDING_PAYMENT' || !booking.expiresAt) return;
+    if (!booking || booking.bookingStatus !== 'PENDING_PAYMENT' || !booking.expiresAt) return;
 
     const calculateTimeLeft = () => {
       const diff = new Date(booking.expiresAt) - new Date();
@@ -61,7 +74,14 @@ export default function BookingDetailPage() {
       await cancelBooking(bookingId, reason || "Khách hàng chủ động hủy");
       // Refresh details
       const freshData = await getBookingDetails(bookingId);
-      setBooking(freshData);
+      setBooking(prev => ({
+        ...prev,
+        ...freshData,
+        finalAmount: freshData.finalAmount ?? freshData.totalAmount ?? 0,
+        ticketAmount: freshData.ticketAmount ?? freshData.totalAmount ?? 0,
+        expiresAt: freshData.expiresAt ?? freshData.expiredAt ?? freshData.paymentDeadline,
+        bookingStatus: freshData.bookingStatus ?? freshData.status
+      }));
     } catch (err) {
       alert("Không thể hủy đặt vé: " + (err.message || "Lỗi kết nối"));
     } finally {
@@ -155,7 +175,8 @@ export default function BookingDetailPage() {
 
   const { snapshot, tickets = [], foodOrder } = booking;
   const showtimeDate = snapshot?.showtimeStart ? new Date(snapshot.showtimeStart) : null;
-  const isPending = booking.status === 'PENDING_PAYMENT';
+  const currentStatus = booking.bookingStatus || booking.status;
+  const isPending = currentStatus === 'PENDING_PAYMENT';
   const showTimer = isPending && timeLeft !== null && timeLeft > 0;
 
   return (
@@ -190,8 +211,8 @@ export default function BookingDetailPage() {
               <h1 className="text-xl md:text-2xl font-black tracking-widest text-white uppercase print:text-black">
                 {booking.bookingCode}
               </h1>
-              <span className={`text-[10px] border px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider ${getStatusColor(booking.status)}`}>
-                {translateStatus(booking.status)}
+              <span className={`text-[10px] border px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider ${getStatusColor(currentStatus)}`}>
+                {translateStatus(currentStatus)}
               </span>
             </div>
             <p className="text-[10px] text-zinc-500 font-semibold">
@@ -256,32 +277,32 @@ export default function BookingDetailPage() {
             {/* Stage 2: CONFIRMED */}
             <div className="flex-1 flex items-center gap-3 relative mt-4 md:mt-0">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                booking.status === 'CONFIRMED'
+                currentStatus === 'CONFIRMED'
                   ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
                   : 'bg-zinc-900 border border-zinc-800 text-zinc-650'
               }`}>
                 <CheckCircle2 className="w-4 h-4" />
               </div>
               <div className="space-y-0.5">
-                <span className={`text-xs font-bold block ${booking.status === 'CONFIRMED' ? 'text-white' : 'text-zinc-500'}`}>
+                <span className={`text-xs font-bold block ${currentStatus === 'CONFIRMED' ? 'text-white' : 'text-zinc-500'}`}>
                   Hoàn tất thanh toán
                 </span>
                 <span className="text-[10px] text-zinc-500 block">Nhận vé xem phim</span>
               </div>
-              {booking.status === 'CONFIRMED' && (
+              {currentStatus === 'CONFIRMED' && (
                 <div className="hidden md:block absolute left-8 right-0 top-1/2 -translate-y-1/2 h-0.5 bg-brand-orange pointer-events-none"></div>
               )}
             </div>
 
             {/* Stage 3: CANCELLED / EXPIRED */}
-            {(booking.status === 'CANCELLED' || booking.status === 'EXPIRED') && (
+            {(currentStatus === 'CANCELLED' || currentStatus === 'EXPIRED') && (
               <div className="flex-1 flex items-center gap-3 mt-4 md:mt-0">
                 <div className="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
                   <AlertTriangle className="w-4 h-4" />
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-xs font-bold text-white block">
-                    {booking.status === 'CANCELLED' ? 'Đã hủy đơn' : 'Giao dịch hết hạn'}
+                    {currentStatus === 'CANCELLED' ? 'Đã hủy đơn' : 'Giao dịch hết hạn'}
                   </span>
                   <span className="text-[10px] text-zinc-500 block">Vé giải phóng về sơ đồ ghế</span>
                 </div>

@@ -154,17 +154,24 @@ export default function SeatSelectionPage() {
 
       const idempotencyKey = uuidv4();
       const holdData = await holdSeats({
-        showtimeId: showtime.id,
+        showtimeId: layout.showtimeId,
         seatIds: selectedSeats.map(s => s.id)
       }, idempotencyKey);
 
       const reservationPublicIds = holdData.reservationPublicIds || [];
       const bookingData = await createBooking({
         showtimePublicId: showtime.showtimePublicId,
-        reservationPublicIds
+        reservationPublicIds,
+        idempotencyKey: uuidv4()
       });
 
-      navigate(`/bookings/checkout?bookingId=${bookingData.publicId}`);
+      navigate(`/bookings/checkout?bookingId=${bookingData.publicId}`, {
+        state: {
+          showtime,
+          selectedSeats,
+          reservationExpiresAt: holdData.expiresAt
+        }
+      });
     } catch (err) {
       showToast(err.message || err.detail || "Không thể giữ ghế hoặc tạo đơn hàng. Vui lòng thử lại!");
     } finally {

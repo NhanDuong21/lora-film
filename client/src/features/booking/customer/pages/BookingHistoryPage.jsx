@@ -143,9 +143,13 @@ export default function BookingHistoryPage() {
           /* Bookings Grid list */
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredBookings.map(b => (
+              {filteredBookings.map(b => {
+                const bookingStatus = b.bookingStatus || b.status;
+                const amount = b.finalAmount ?? b.totalAmount ?? 0;
+
+                return (
                 <div
-                  key={b.id}
+                  key={b.publicId || b.id}
                   className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-750 transition-all rounded-3xl p-6 flex flex-col justify-between space-y-4 shadow-xl"
                 >
                   <div className="space-y-3">
@@ -155,8 +159,8 @@ export default function BookingHistoryPage() {
                         {b.bookingCode}
                       </span>
                       {/* Status Badges */}
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${getStatusBadgeStyle(b.bookingStatus)}`}>
-                        {translateStatus(b.bookingStatus)}
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${getStatusBadgeStyle(bookingStatus)}`}>
+                        {translateStatus(bookingStatus)}
                       </span>
                     </div>
 
@@ -180,7 +184,7 @@ export default function BookingHistoryPage() {
                       </div>
                       <div>
                         <span className="text-zinc-600 font-bold block uppercase">Tổng tiền</span>
-                        <span className="text-white font-black text-xs">{formatCurrency(b.finalAmount)}</span>
+                        <span className="text-white font-black text-xs">{formatCurrency(amount)}</span>
                       </div>
                     </div>
                   </div>
@@ -200,7 +204,8 @@ export default function BookingHistoryPage() {
                     </Link>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Pagination Controls */}
