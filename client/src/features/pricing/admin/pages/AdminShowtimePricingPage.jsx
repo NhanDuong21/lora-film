@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
+import { getPricingReasonPresentation } from '../utils/pricingPresentation';
 
 const money = (value, currency = 'VND') => new Intl.NumberFormat('vi-VN', { style: 'currency', currency }).format(value || 0);
 
@@ -63,8 +64,8 @@ export default function AdminShowtimePricingPage() {
 
       {(pricing.missingSeatTypes?.length > 0 || pricing.ambiguousSeatTypes?.length > 0) && (
         <section className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5"><h2 className="font-black">Thiếu quy tắc</h2>{pricing.missingSeatTypes?.map(item => <p key={item.seatTypeId} className="mt-2 text-sm text-zinc-400">{item.seatTypeName} ({item.seatTypeCode})</p>)}</div>
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5"><h2 className="font-black">Mơ hồ cùng hạng</h2>{pricing.ambiguousSeatTypes?.map(item => <p key={item.seatTypeId} className="mt-2 text-sm text-zinc-400">{item.seatTypeName}: {item.candidateRuleIds?.join(', ')}</p>)}</div>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5"><h2 className="font-black">{getPricingReasonPresentation('PRICING_INCOMPLETE').label}</h2>{pricing.missingSeatTypes?.map(item => <p key={item.seatTypeId} className="mt-2 text-sm text-zinc-400">{item.seatTypeName} ({item.seatTypeCode})</p>)}</div>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5"><h2 className="font-black">{getPricingReasonPresentation('PRICING_AMBIGUOUS').label}</h2>{pricing.ambiguousSeatTypes?.map(item => <div key={item.seatTypeId} className="mt-2 text-sm text-zinc-400"><p>{item.seatTypeName}</p><details className="mt-1 text-xs text-zinc-500"><summary className="cursor-pointer">Chi tiết kỹ thuật</summary><p className="font-mono">{item.candidateRuleIds?.join(', ')}</p></details></div>)}</div>
         </section>
       )}
 

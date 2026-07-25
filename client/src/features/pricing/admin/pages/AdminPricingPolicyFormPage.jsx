@@ -5,8 +5,13 @@ import adminCinemaService from '@/features/facilities/admin/services/adminCinema
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 import adminPricingService from '../services/adminPricingService';
 import { cinemaLocalDateTimeToInstant } from '../utils/pricingDateTime';
+import {
+  getConflictPresentation,
+  getPricingReasonPresentation,
+} from '../utils/pricingPresentation';
 
 const emptyRule = () => ({
+  scope: 'CINEMA',
   seatTypeId: '',
   auditoriumId: '',
   screenType: '',
@@ -66,6 +71,7 @@ export default function AdminPricingPolicyFormPage() {
           priority: policy.priority,
           expectedVersion: policy.version,
           rules: policy.rules.map(rule => ({
+            scope: rule.auditoriumId ? 'AUDITORIUM' : rule.screenType ? 'SCREEN_TYPE' : 'CINEMA',
             seatTypeId: rule.seatTypeId,
             auditoriumId: rule.auditoriumId || '',
             screenType: rule.screenType || '',
@@ -100,7 +106,10 @@ export default function AdminPricingPolicyFormPage() {
 
   const canSubmit = useMemo(() => form.name.trim() && form.cinemaId
     && form.effectiveFrom && form.rules.length > 0
-    && form.rules.every(rule => rule.seatTypeId && Number(rule.price) > 0), [form]);
+    && form.rules.every(rule => rule.seatTypeId
+      && Number(rule.price) > 0
+      && (rule.scope !== 'SCREEN_TYPE' || rule.screenType)
+      && (rule.scope !== 'AUDITORIUM' || rule.auditoriumId)), [form]);
 
   const setRule = (index, field, value) => {
     setForm(current => ({
@@ -108,6 +117,10 @@ export default function AdminPricingPolicyFormPage() {
       rules: current.rules.map((rule, ruleIndex) => {
         if (ruleIndex !== index) return rule;
         const next = { ...rule, [field]: value };
+        if (field === 'scope') {
+          next.auditoriumId = '';
+          next.screenType = '';
+        }
         if (field === 'auditoriumId' && value) next.screenType = '';
         if (field === 'screenType' && value) next.auditoriumId = '';
         return next;
@@ -125,8 +138,9 @@ export default function AdminPricingPolicyFormPage() {
       priority: Number(form.priority),
       rules: form.rules.map(rule => ({
         ...rule,
-        auditoriumId: rule.auditoriumId || null,
-        screenType: rule.screenType || null,
+        scope: undefined,
+        auditoriumId: rule.scope === 'AUDITORIUM' ? rule.auditoriumId : null,
+        screenType: rule.scope === 'SCREEN_TYPE' ? rule.screenType : null,
         timeBandStart: rule.timeBandStart || null,
         timeBandEnd: rule.timeBandEnd || null,
         price: Number(rule.price),
@@ -140,7 +154,17 @@ export default function AdminPricingPolicyFormPage() {
       triggerToast?.('Đã lưu bản nháp chính sách giá', 'success');
       navigate(`/admin/pricing/${response.data.publicId}`);
     } catch (error) {
-      triggerToast?.(error.response?.data?.message || 'Không thể lưu chính sách giá', 'error');
+      if (error?.errorCode === 'PRICE_POLICY_OVERLAP' && Array.isArray(error?.data)) {
+        setConflicts(error.data);
+      }
+      triggerToast?.(
+        (error?.errorCode?.startsWith('PRIC') || error?.errorCode?.startsWith('PRICE_')
+          ? getPricingReasonPresentation(error.errorCode).label
+          : null)
+          || error?.message
+          || 'Không thể lưu chính sách giá',
+        'error',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -189,7 +213,13 @@ export default function AdminPricingPolicyFormPage() {
             setAuditoriums([]);
             setPreview(null);
             setPreviewInput(current => ({ ...current, auditoriumId: '' }));
-            setForm(current => ({ ...current, cinemaId: event.target.value }));
+            setForm(current => ({
+              ...current,
+              cinemaId: event.target.value,
+              rules: current.rules.map(rule => (
+                rule.scope === 'AUDITORIUM' ? { ...rule, auditoriumId: '' } : rule
+              )),
+            }));
           }} className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-zinc-100">
             <option value="">Chọn rạp</option>
             {cinemas.map(cinema => <option key={cinema.publicId} value={cinema.publicId}>{cinema.name}</option>)}
@@ -221,14 +251,31 @@ export default function AdminPricingPolicyFormPage() {
                 <option value="">Loại ghế</option>
                 {seatTypes.map(item => <option key={item.publicId} value={item.publicId}>{item.name} ({item.code})</option>)}
               </select>
-              <select value={rule.auditoriumId} onChange={event => setRule(index, 'auditoriumId', event.target.value)} className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-xs">
-                <option value="">Toàn rạp</option>
-                {auditoriums.map(item => <option key={item.publicId} value={item.publicId}>Phòng: {item.name}</option>)}
+              <select aria-label={`Phạm vi quy tắc ${index + 1}`} value={rule.scope} onChange={event => setRule(index, 'scope', event.target.value)} className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-xs">
+                <option value="CINEMA">Toàn rạp</option>
+                <option value="SCREEN_TYPE">Theo loại màn hình</option>
+                <option value="AUDITORIUM">Phòng chiếu cụ thể</option>
               </select>
-              <select value={rule.screenType} onChange={event => setRule(index, 'screenType', event.target.value)} className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-xs">
-                <option value="">Mọi loại màn hình</option>
-                <option value="STANDARD">STANDARD</option><option value="IMAX">IMAX</option><option value="4DX">4DX</option><option value="SCREENX">SCREENX</option>
-              </select>
+              {rule.scope === 'AUDITORIUM' && (
+                <div className="space-y-1">
+                  <select aria-label={`Phòng chiếu quy tắc ${index + 1}`} required value={rule.auditoriumId} onChange={event => setRule(index, 'auditoriumId', event.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-xs">
+                    <option value="">Chọn phòng chiếu</option>
+                    {auditoriums.map(item => <option key={item.publicId} value={item.publicId}>{item.name}</option>)}
+                  </select>
+                  {rule.auditoriumId && (
+                    <p className="px-1 text-[10px] text-zinc-500">
+                      Loại màn hình: {auditoriums.find(item => item.publicId === rule.auditoriumId)?.screenType || 'Chưa xác định'}
+                    </p>
+                  )}
+                </div>
+              )}
+              {rule.scope === 'SCREEN_TYPE' && (
+                <select aria-label={`Loại màn hình quy tắc ${index + 1}`} required value={rule.screenType} onChange={event => setRule(index, 'screenType', event.target.value)} className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-xs">
+                  <option value="">Chọn loại màn hình</option>
+                  <option value="STANDARD">STANDARD</option><option value="IMAX">IMAX</option><option value="4DX">4DX</option><option value="SCREENX">SCREENX</option>
+                </select>
+              )}
+              {rule.scope === 'CINEMA' && <div className="rounded-lg border border-zinc-800 px-2 py-2 text-xs text-zinc-500">Áp dụng cho mọi phòng</div>}
               <select value={rule.dayType} onChange={event => setRule(index, 'dayType', event.target.value)} className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-xs">
                 <option value="ALL_DAYS">Mọi ngày</option><option value="WEEKDAY">Ngày thường</option><option value="WEEKEND">Cuối tuần</option>
               </select>
@@ -270,8 +317,8 @@ export default function AdminPricingPolicyFormPage() {
                 </div>
               ))}
             </div>
-            {preview.missingSeatTypes?.length > 0 && <p className="mt-3 text-xs text-red-200">Thiếu: {preview.missingSeatTypes.map(item => item.seatTypeName).join(', ')}</p>}
-            {preview.ambiguousSeatTypes?.length > 0 && <p className="mt-2 text-xs text-red-200">Mơ hồ: {preview.ambiguousSeatTypes.map(item => item.seatTypeName).join(', ')}</p>}
+            {preview.missingSeatTypes?.length > 0 && <p className="mt-3 text-xs text-red-200">{getPricingReasonPresentation('PRICING_INCOMPLETE').label}: {preview.missingSeatTypes.map(item => item.seatTypeName).join(', ')}</p>}
+            {preview.ambiguousSeatTypes?.length > 0 && <p className="mt-2 text-xs text-red-200">{getPricingReasonPresentation('PRICING_AMBIGUOUS').label}: {preview.ambiguousSeatTypes.map(item => item.seatTypeName).join(', ')}</p>}
           </div>
         )}
       </section>
@@ -279,7 +326,20 @@ export default function AdminPricingPolicyFormPage() {
       {conflicts.length > 0 && (
         <section className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5">
           <h2 className="font-black text-red-300">Xung đột cùng hạng</h2>
-          {conflicts.map(conflict => <p key={`${conflict.firstRuleId}-${conflict.secondRuleId}`} className="mt-2 text-xs text-red-200">{conflict.firstRuleId} ↔ {conflict.secondRuleId}: {conflict.message}</p>)}
+          {conflicts.map(conflict => {
+            const presentation = getConflictPresentation(conflict);
+            return (
+              <div key={`${conflict.firstRuleId}-${conflict.secondRuleId}`} className="mt-3 rounded-xl border border-red-500/20 bg-zinc-950/30 p-3 text-xs text-red-100">
+                <p className="font-black">{presentation.title}</p>
+                <p className="mt-1">{presentation.facts}</p>
+                <p className="mt-2 text-red-200">{presentation.guidance}</p>
+                <details className="mt-2 text-zinc-400">
+                  <summary className="cursor-pointer">Chi tiết kỹ thuật</summary>
+                  <p className="mt-1 font-mono">{presentation.technical.reasonCode} · {presentation.technical.ruleIds.join(' ↔ ')}</p>
+                </details>
+              </div>
+            );
+          })}
         </section>
       )}
     </form>

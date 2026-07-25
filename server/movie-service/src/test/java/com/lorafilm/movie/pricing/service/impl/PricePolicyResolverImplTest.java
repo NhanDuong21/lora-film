@@ -94,6 +94,27 @@ class PricePolicyResolverImplTest {
     }
 
     @Test
+    void resolutionPreviewPrecedenceIsAuditoriumThenScreenThenCinema() {
+        PricePolicy policy = policy(
+                "scope-precedence",
+                0,
+                rule("cinema-rule", null, null,
+                        PriceDayType.ALL_DAYS, null, null, "75000"),
+                rule("screen-rule", null, ScreenType.IMAX,
+                        PriceDayType.ALL_DAYS, null, null, "90000"),
+                rule("auditorium-rule", auditorium, null,
+                        PriceDayType.ALL_DAYS, null, null, "120000"));
+        when(policyRepository.findEffectiveActivePolicies(1L, LocalDate.of(2026, 7, 25)))
+                .thenReturn(List.of(policy));
+
+        PriceResolutionResult result = resolver.resolve(showtime);
+
+        assertTrue(result.isComplete());
+        assertEquals("auditorium-rule", result.resolvedPrices().getFirst().rule().getPublicId());
+        assertEquals(new BigDecimal("120000"), result.resolvedPrices().getFirst().price());
+    }
+
+    @Test
     void equalHighestRankIsReportedAsAmbiguous() {
         PricePolicy first = policy("first", 10, rule("rule-a", null, null,
                 PriceDayType.WEEKEND, LocalTime.of(9, 0), LocalTime.of(12, 0), "100000"));

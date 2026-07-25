@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Edit, Power, PowerOff, RefreshCw } from 'lucide-react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import adminPricingService from '../services/adminPricingService';
+import {
+  getConflictPresentation,
+  getDayTypeLabel,
+  getPricingReasonPresentation,
+  getRuleScopePresentation,
+  getTimeBandLabel,
+} from '../utils/pricingPresentation';
 
 const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value || 0);
 
@@ -28,7 +35,6 @@ export default function AdminPricingPolicyDetailPage() {
   }, [id, triggerToast, usagePage]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -46,7 +52,7 @@ export default function AdminPricingPolicyDetailPage() {
         if (!reason?.trim()) return;
         response = await adminPricingService.deactivatePolicy(id, policy.version, reason.trim());
       } else {
-        const name = window.prompt('Tên bản nháp mới:', `${policy.name} - Bản sao`);
+        const name = window.prompt('Tên phiên bản mới:', `${policy.name} - Phiên bản mới`);
         if (!name?.trim()) return;
         response = await adminPricingService.copyPolicy(id, policy.version, name.trim());
         navigate(`/admin/pricing/${response.data.publicId}/edit`);
@@ -56,7 +62,17 @@ export default function AdminPricingPolicyDetailPage() {
       triggerToast?.('Đã cập nhật vòng đời chính sách giá', 'success');
       load();
     } catch (error) {
-      triggerToast?.(error.response?.data?.message || 'Không thể cập nhật chính sách', 'error');
+      if (error?.errorCode === 'PRICE_POLICY_OVERLAP' && Array.isArray(error?.data)) {
+        setPolicy(current => ({ ...current, conflicts: error.data }));
+      }
+      triggerToast?.(
+        (error?.errorCode?.startsWith('PRIC') || error?.errorCode?.startsWith('PRICE_')
+          ? getPricingReasonPresentation(error.errorCode).label
+          : null)
+          || error?.message
+          || 'Không thể cập nhật chính sách',
+        'error',
+      );
     } finally {
       setBusy(false);
     }
@@ -82,9 +98,15 @@ export default function AdminPricingPolicyDetailPage() {
           {policy.storedStatus === 'DRAFT' && <button type="button" onClick={() => navigate(`/admin/pricing/${id}/edit`)} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm font-bold"><Edit className="h-4 w-4" /> Sửa</button>}
           {policy.storedStatus === 'DRAFT' && <button disabled={busy || policy.conflicts?.length > 0} type="button" onClick={() => act('activate')} className="flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-black text-zinc-950 disabled:opacity-40"><Power className="h-4 w-4" /> Kích hoạt</button>}
           {policy.storedStatus === 'ACTIVE' && <button disabled={busy} type="button" onClick={() => act('deactivate')} className="flex items-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-sm font-black text-white"><PowerOff className="h-4 w-4" /> Ngừng áp dụng</button>}
-          <button disabled={busy} type="button" onClick={() => act('copy')} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm font-bold"><Copy className="h-4 w-4" /> Sao chép</button>
+          <button disabled={busy} type="button" onClick={() => act('copy')} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm font-bold"><Copy className="h-4 w-4" /> Tạo phiên bản mới</button>
         </div>
       </div>
+
+      {policy.storedStatus === 'ACTIVE' && (
+        <section className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100">
+          Chính sách đang hoạt động không thể sửa trực tiếp để bảo toàn lịch sử giá. Hãy tạo một phiên bản mới để thay đổi.
+        </section>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 lg:col-span-2">
@@ -110,7 +132,20 @@ export default function AdminPricingPolicyDetailPage() {
       {policy.conflicts?.length > 0 && (
         <section className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5">
           <h2 className="font-black text-red-300">Phải xử lý xung đột trước khi kích hoạt</h2>
-          {policy.conflicts.map(item => <p key={`${item.firstRuleId}-${item.secondRuleId}`} className="mt-2 text-xs text-red-200">{item.firstRuleId} ↔ {item.secondRuleId}: {item.message}</p>)}
+          {policy.conflicts.map(item => {
+            const presentation = getConflictPresentation(item);
+            return (
+              <div key={`${item.firstRuleId}-${item.secondRuleId}`} className="mt-3 rounded-xl border border-red-500/20 bg-zinc-950/30 p-3 text-xs text-red-100">
+                <p className="font-black">{presentation.title}</p>
+                <p className="mt-1">{presentation.facts}</p>
+                <p className="mt-2 text-red-200">{presentation.guidance}</p>
+                <details className="mt-2 text-zinc-400">
+                  <summary className="cursor-pointer">Chi tiết kỹ thuật</summary>
+                  <p className="mt-1 font-mono">{presentation.technical.reasonCode} · {presentation.technical.ruleIds.join(' ↔ ')}</p>
+                </details>
+              </div>
+            );
+          })}
         </section>
       )}
 
@@ -120,14 +155,17 @@ export default function AdminPricingPolicyDetailPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-zinc-950 text-xs uppercase text-zinc-500"><tr><th className="p-4">Loại ghế</th><th className="p-4">Phạm vi</th><th className="p-4">Ngày / giờ</th><th className="p-4 text-right">Giá</th></tr></thead>
             <tbody className="divide-y divide-zinc-800">
-              {policy.rules.map(rule => (
+              {policy.rules.map(rule => {
+                const scope = getRuleScopePresentation(rule);
+                return (
                 <tr key={rule.publicId}>
                   <td className="p-4 font-bold">{rule.seatTypeName} <span className="ml-1 text-xs text-zinc-500">{rule.seatTypeCode}</span></td>
-                  <td className="p-4 text-zinc-400">{rule.auditoriumName || rule.screenType || 'Toàn rạp'}</td>
-                  <td className="p-4 text-zinc-400">{rule.dayType} · {rule.timeBandStart ? `${rule.timeBandStart}–${rule.timeBandEnd}` : 'Cả ngày'}</td>
+                  <td className="p-4 text-zinc-400">{scope.label}{scope.detail ? ` · ${scope.detail}` : ''}</td>
+                  <td className="p-4 text-zinc-400">{getDayTypeLabel(rule.dayType)} · {getTimeBandLabel(rule.timeBandStart, rule.timeBandEnd)}</td>
                   <td className="p-4 text-right font-black text-emerald-400">{money(rule.price)}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

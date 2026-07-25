@@ -131,8 +131,30 @@ public class PricePolicyOverlapValidatorImpl implements PricePolicyOverlapValida
             firstId = secondId;
             secondId = swap;
         }
-        return new Conflict(firstId, secondId,
-                "Rules can produce an equal-rank price for the same Showtime and SeatType");
+        PricePolicyRule representative = first;
+        String scope = representative.getAuditorium() != null
+                ? "AUDITORIUM"
+                : representative.getScreenType() != null ? "SCREEN_TYPE" : "CINEMA";
+        return new Conflict(
+                "PRICE_POLICY_OVERLAP",
+                firstId,
+                secondId,
+                representative.getSeatType().getPublicId(),
+                representative.getSeatType().getCode() == null
+                        ? null : representative.getSeatType().getCode().name(),
+                representative.getSeatType().getName(),
+                scope,
+                representative.getAuditorium() == null
+                        ? null : representative.getAuditorium().getPublicId(),
+                representative.getAuditorium() == null
+                        ? null : representative.getAuditorium().getName(),
+                representative.getScreenType() == null
+                        ? null : representative.getScreenType().getValue(),
+                representative.getDayType(),
+                representative.getTimeBandStart(),
+                representative.getTimeBandEnd(),
+                2,
+                "Hai quy tắc có thể cùng thắng cho một suất chiếu và loại ghế.");
     }
 
     private record TimeInterval(int start, int end) {

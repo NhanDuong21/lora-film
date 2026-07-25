@@ -54,6 +54,10 @@ class PricePolicyOverlapValidatorImplTest {
         assertEquals(1, conflicts.size());
         assertEquals("rule-a", conflicts.getFirst().firstRuleId());
         assertEquals("rule-b", conflicts.getFirst().secondRuleId());
+        assertEquals("PRICE_POLICY_OVERLAP", conflicts.getFirst().reasonCode());
+        assertEquals("CINEMA", conflicts.getFirst().scope());
+        assertEquals(PriceDayType.WEEKDAY, conflicts.getFirst().dayType());
+        assertEquals(2, conflicts.getFirst().conflictingRuleCount());
     }
 
     @Test
