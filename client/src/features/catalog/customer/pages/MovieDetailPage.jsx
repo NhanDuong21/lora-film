@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertCircle, CalendarDays, Clock3, Film, MapPin, Play, RefreshCw, X
+  AlertCircle, Building2, CalendarDays, Clock3, Film, Globe2, MapPin, Play, RefreshCw, Users, X
 } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getBookingOptions, getMovieById } from '@/features/catalog/customer/services/movieService';
@@ -17,6 +17,39 @@ const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2
 
 const surface = 'rounded-3xl border border-white/10 bg-zinc-900/80 shadow-2xl shadow-black/20';
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950';
+const sortedPeople = people => [...(people || [])].sort(
+  (left, right) => (left.displayOrder ?? Number.MAX_SAFE_INTEGER) - (right.displayOrder ?? Number.MAX_SAFE_INTEGER)
+);
+const peopleNames = (people, includeCharacter = false) => sortedPeople(people)
+  .map(person => {
+    if (!person.fullName) return null;
+    return includeCharacter && person.characterName
+      ? `${person.fullName} — ${person.characterName}`
+      : person.fullName;
+  })
+  .filter(Boolean);
+const companyNames = companies => (companies || []).map(company => company.name).filter(Boolean);
+
+function CreditLine({ label, values }) {
+  if (!values.length) return null;
+  return (
+    <div className="border-b border-white/10 py-3 last:border-0">
+      <dt className="text-xs font-black uppercase tracking-wider text-zinc-500">{label}</dt>
+      <dd className="mt-2">
+        <ul className="grid gap-2 md:grid-cols-2">
+          {values.map((value, index) => (
+            <li
+              key={`${value}-${index}`}
+              className="rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2 text-sm leading-5 text-zinc-200"
+            >
+              {value}
+            </li>
+          ))}
+        </ul>
+      </dd>
+    </div>
+  );
+}
 
 export default function MovieDetailPage() {
   const { movieId } = useParams();
@@ -159,6 +192,72 @@ export default function MovieDetailPage() {
                 <Play size={17} /> Xem trailer
               </button>
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto mt-10 max-w-7xl px-6">
+        <div className={`${surface} p-5 md:p-8`}>
+          <div className="flex items-start gap-4">
+            <div className="rounded-xl border border-brand-orange/30 bg-brand-orange/10 p-2.5 text-brand-orange">
+              <Users size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[.22em] text-brand-orange">Thông tin phim</p>
+              <h2 className="mt-2 text-2xl font-black leading-tight text-white">Đội ngũ và thông tin sản xuất</h2>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <dl className="rounded-2xl border border-white/10 bg-zinc-950/50 px-5">
+              <CreditLine label="Đạo diễn" values={peopleNames(movie.directors)} />
+              <CreditLine label="Diễn viên — vai diễn" values={peopleNames(movie.actors, true)} />
+              <CreditLine label="Biên kịch" values={peopleNames(movie.writers)} />
+              <CreditLine label="Nhà sản xuất" values={peopleNames(movie.producers)} />
+            </dl>
+
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <Globe2 size={15} className="text-brand-orange" /> Quốc gia
+                  </p>
+                  <p className="mt-2 text-sm font-bold text-zinc-100">{movie.country || 'Đang cập nhật'}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <Film size={15} className="text-brand-orange" /> Ngôn ngữ
+                  </p>
+                  <p className="mt-2 text-sm font-bold text-zinc-100">
+                    {[...new Set((movie.versions || []).map(version => version.audioLanguage).filter(Boolean))].join(', ') || 'Đang cập nhật'}
+                  </p>
+                </div>
+              </div>
+              {companyNames(movie.productionCompanies).length > 0 && (
+                <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <Building2 size={15} className="text-brand-orange" /> Đơn vị sản xuất
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-200">{companyNames(movie.productionCompanies).join(', ')}</p>
+                </div>
+              )}
+              {(companyNames(movie.distributors).length > 0 || companyNames(movie.studios).length > 0) && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {companyNames(movie.distributors).length > 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                      <p className="text-xs font-black uppercase tracking-wider text-zinc-500">Phát hành</p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-200">{companyNames(movie.distributors).join(', ')}</p>
+                    </div>
+                  )}
+                  {companyNames(movie.studios).length > 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                      <p className="text-xs font-black uppercase tracking-wider text-zinc-500">Hãng phim</p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-200">{companyNames(movie.studios).join(', ')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
