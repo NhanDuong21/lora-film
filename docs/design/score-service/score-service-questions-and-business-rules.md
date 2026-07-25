@@ -4,27 +4,33 @@
 
 > Tài liệu này dành riêng cho **Score Service** trong hệ thống đặt vé rạp chiếu phim.
 >
-> Service này chịu trách nhiệm:
->
-> - Loyalty Point
+Service này là Single Source of Truth cho Loyalty Program.
+
+Service chịu trách nhiệm:
+
+> Loyalty Point (Current / Available / Held)
 > - Membership Tier
-> - Point Ledger
+> - Point Ledger (Immutable Transaction Ledger)
 > - Point History
-> - Earn / Redeem
-> - Hold / Commit / Release
-> - Revoke
-> - Expiration
-> - Reconciliation
-> - Admin Adjustment
-> - Audit
->
-> Promotion Service KHÔNG quản lý điểm.
->
-> Booking Service KHÔNG tự cộng điểm.
->
-> Payment Service KHÔNG tự trừ điểm.
->
-> Mọi thay đổi số dư điểm đều phải đi qua Score Service.
+> - Point Earn
+> - Point Redeem
+> - Point Hold
+> - Point Commit
+> - Point Release
+> - Point Revoke
+> - Point Expiration
+> - Point Reconciliation
+> - Manual Point Adjustment
+> - Audit & Traceability
+
+Booking Service KHÔNG tự cộng điểm.
+
+Promotion Service KHÔNG quản lý điểm hoặc thay đổi số dư điểm.
+Promotion Service chỉ được yêu cầu Hold / Commit / Release thông qua Score Service.
+
+Payment Service KHÔNG tự trừ điểm.
+
+Mọi thay đổi số dư điểm đều phải đi qua Score Service.
 
 ---
 
