@@ -124,6 +124,36 @@ const AutoScheduleTimeline = ({
         </div>
       </div>
 
+      <ul
+        className="flex flex-wrap gap-x-4 gap-y-2 rounded-xl border border-zinc-800 bg-zinc-950/55 p-3 text-xs text-zinc-300"
+        aria-label="Chú giải timeline"
+      >
+        <li className="flex items-center gap-2">
+          <span className="h-4 w-8 rounded border border-orange-300 bg-orange-500" aria-hidden="true" />
+          Thời lượng phim
+        </li>
+        <li className="flex items-center gap-2">
+          <span
+            className="h-4 w-8 rounded border border-orange-300 bg-orange-500/40"
+            style={{ backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.7) 0 2px, transparent 2px 6px)' }}
+            aria-hidden="true"
+          />
+          Thời gian dọn phòng
+        </li>
+        <li className="flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-emerald-300 text-emerald-300" aria-hidden="true"><Star className="h-3 w-3" /></span>
+          Đề xuất đã chọn
+        </li>
+        <li className="flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-dashed border-white text-white" aria-hidden="true"><Search className="h-3 w-3" /></span>
+          Phủ chẩn đoán
+        </li>
+        <li className="flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-dashed border-red-300 text-red-300" aria-hidden="true"><AlertTriangle className="h-3 w-3" /></span>
+          Không hợp lệ / xung đột
+        </li>
+      </ul>
+
       {invalidCount > 0 && (
         <p className="flex items-center gap-2 text-sm text-amber-300" role="status">
           <AlertTriangle className="h-4 w-4" aria-hidden="true" />

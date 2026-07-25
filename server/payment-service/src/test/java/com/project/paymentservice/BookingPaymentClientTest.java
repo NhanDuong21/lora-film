@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -80,6 +81,16 @@ public class BookingPaymentClientTest {
         assertEquals(0, new BigDecimal("150000").compareTo(context.getAmount()));
         assertEquals("VND", context.getCurrency());
         assertEquals(1L, context.getAnalyticsSnapshot().getMovieId());
+    }
+
+    @Test
+    void createPaymentRequestHasNoClientControlledAmountOrCurrency() {
+        var fieldNames = Arrays.stream(
+                        com.project.paymentservice.dto.request.CreatePaymentRequest.class.getDeclaredFields())
+                .map(java.lang.reflect.Field::getName)
+                .toList();
+
+        assertEquals(java.util.Set.of("bookingId", "paymentMethod"), new java.util.HashSet<>(fieldNames));
     }
 
     @Test

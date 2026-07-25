@@ -16,7 +16,7 @@ import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.dto.SeatLayoutDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

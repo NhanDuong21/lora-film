@@ -120,7 +120,7 @@ export default function AdminBookingDetailPage() {
 
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-brand-orange selection:text-zinc-950">
-      
+
       {/* Back Link */}
       <div>
         <button
@@ -149,10 +149,10 @@ export default function AdminBookingDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left Side: Order info & Audit History */}
         <div className="lg:col-span-2 space-y-8">
-          
+
           {/* Movie snapshot details card */}
           <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 md:p-8 space-y-6">
             <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
@@ -236,7 +236,7 @@ export default function AdminBookingDetailPage() {
                   <div key={log.id || index} className="relative space-y-1.5 text-xs">
                     {/* Circle marker */}
                     <div className="absolute -left-[31px] top-0.5 w-2.5 h-2.5 rounded-full bg-brand-orange border-2 border-zinc-900 shadow"></div>
-                    
+
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-zinc-500 text-[10px] font-bold">
                         {new Date(log.createdAt).toLocaleString('vi-VN')}
@@ -264,11 +264,11 @@ export default function AdminBookingDetailPage() {
 
         {/* Right Side Sticky Sidebar: Pricing & Status Update panel */}
         <div className="lg:col-span-1 space-y-8 sticky top-24">
-          
+
           {/* Price Summary card */}
           <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4 shadow-2xl">
             <h3 className="text-xs font-black uppercase tracking-wider text-zinc-500 border-b border-zinc-800 pb-3">Chi tiết doanh thu</h3>
-            
+
             <div className="space-y-3 text-xs">
               <div className="flex justify-between text-zinc-400">
                 <span>Doanh thu vé:</span>

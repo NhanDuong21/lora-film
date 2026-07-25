@@ -81,7 +81,7 @@ public class PaymentEventProcessor {
     public void process(PaymentEvent event, String rawPayload) {
         long startTime = System.currentTimeMillis();
         Long bookingId = event.payload().bookingId();
-        
+
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new BusinessException("BOOKING_NOT_FOUND", "Booking not found with ID: " + bookingId));
 

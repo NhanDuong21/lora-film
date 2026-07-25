@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSpecificationExecutor<Showtime> {
@@ -24,6 +25,21 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             "AND s.deletedAt IS NULL")
     Optional<Showtime> findByPublicIdForUpdate(
             @org.springframework.data.repository.query.Param("publicId") String publicId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s " +
+            "JOIN FETCH s.movie " +
+            "JOIN FETCH s.movieVersion " +
+            "JOIN FETCH s.cinema " +
+            "JOIN FETCH s.auditorium " +
+            "WHERE s.batchId = :batchId " +
+            "AND s.deletedAt IS NULL " +
+            "ORDER BY s.id ASC")
+    List<Showtime> findAllByBatchIdForUpdate(
+            @org.springframework.data.repository.query.Param("batchId") String batchId);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
+    List<Showtime> findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc(String batchId);
 
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
     Optional<Showtime> findByIdAndDeletedAtIsNull(Long id);
@@ -116,4 +132,20 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
 
     @org.springframework.data.jpa.repository.Query("SELECT s.movie.id, COUNT(s) FROM Showtime s WHERE s.movie.id IN :movieIds AND s.deletedAt IS NULL GROUP BY s.movie.id")
     java.util.List<Object[]> countShowtimesByMovieIds(@org.springframework.data.repository.query.Param("movieIds") java.util.List<Long> movieIds);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"auditorium"})
+    @org.springframework.data.jpa.repository.Query("""
+            select s from Showtime s
+            where s.cinema.id = :cinemaId
+              and s.status = com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.DRAFT
+              and s.deletedAt is null
+              and s.startTime >= :fromInclusive
+              and (:toExclusive is null or s.startTime < :toExclusive)
+            order by s.startTime asc
+            """)
+    org.springframework.data.domain.Page<Showtime> findFutureDraftsForPricingPolicy(
+            @org.springframework.data.repository.query.Param("cinemaId") Long cinemaId,
+            @org.springframework.data.repository.query.Param("fromInclusive") java.time.Instant fromInclusive,
+            @org.springframework.data.repository.query.Param("toExclusive") java.time.Instant toExclusive,
+            org.springframework.data.domain.Pageable pageable);
 }

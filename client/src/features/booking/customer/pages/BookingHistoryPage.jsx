@@ -74,7 +74,7 @@ export default function BookingHistoryPage() {
   const filteredBookings = useMemo(() => {
     const list = bookingPage?.content || [];
     if (!searchQuery) return list;
-    return list.filter(b => 
+    return list.filter(b =>
       (b.bookingCode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (b.movieTitle || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -83,7 +83,7 @@ export default function BookingHistoryPage() {
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
       <div className="max-w-6xl mx-auto w-full space-y-8">
-        
+
         {/* Page Header */}
         <div>
           <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">Lịch Sử Đặt Vé</h1>
@@ -144,8 +144,8 @@ export default function BookingHistoryPage() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredBookings.map(b => (
-                <div 
-                  key={b.id} 
+                <div
+                  key={b.id}
                   className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-750 transition-all rounded-3xl p-6 flex flex-col justify-between space-y-4 shadow-xl"
                 >
                   <div className="space-y-3">
@@ -210,7 +210,7 @@ export default function BookingHistoryPage() {
                   disabled={page === 0}
                   onClick={() => setPage(page - 1)}
                   className={`px-4 py-2 border rounded-xl text-xs font-bold transition-all ${
-                    page === 0 
+                    page === 0
                       ? 'border-zinc-850 text-zinc-650 cursor-not-allowed'
                       : 'border-zinc-800 text-zinc-350 hover:bg-zinc-850 hover:text-white'
                   }`}

@@ -43,7 +43,7 @@ export default function BookingCheckoutPage() {
     try {
       const bookingData = await getBookingDetails(bookingId);
       setBooking(bookingData);
-      
+
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
     } catch (err) {
@@ -97,7 +97,7 @@ export default function BookingCheckoutPage() {
   // Filtered concessions
   const filteredConcessions = useMemo(() => {
     return concessions.filter(c => {
-      const matchSearch = (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchSearch = (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (c.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchCat = selectedCategory === 'ALL' || (c.type && c.type.toUpperCase() === selectedCategory);
       return matchSearch && matchCat;
@@ -237,7 +237,7 @@ export default function BookingCheckoutPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           {/* Left panel: F&B selection & payment selection */}
           <div className="lg:col-span-2 space-y-8">
-            
+
             {/* Countdown notice on mobile */}
             <div className="lg:hidden bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
@@ -256,7 +256,7 @@ export default function BookingCheckoutPage() {
                   <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Bắp Nước đi kèm</h2>
                   <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Nâng cấp trải nghiệm điện ảnh của bạn</p>
                 </div>
-                
+
                 {/* Categories filtering tab bar */}
                 <div className="flex gap-2 overflow-x-auto py-1 scrollbar-none">
                   {categories.map(cat => (
@@ -317,10 +317,10 @@ export default function BookingCheckoutPage() {
                             <h4 className="text-xs font-black text-white leading-snug line-clamp-1">{item.name}</h4>
                             <p className="text-[9px] text-zinc-500 leading-normal line-clamp-2">{item.description}</p>
                           </div>
-                          
+
                           <div className="flex justify-between items-center">
                             <span className="text-xs font-black text-brand-orange">{formatCurrency(item.price)}</span>
-                            
+
                             {/* Quantity controller */}
                             <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-lg p-1 gap-3">
                               <button
@@ -431,7 +431,7 @@ export default function BookingCheckoutPage() {
 
           {/* Right panel: Sticky order info sidebar */}
           <div className="lg:col-span-1 sticky top-24 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-6 shadow-2xl">
-            
+
             {/* Desktop Countdown Timer */}
             <div className="hidden lg:flex items-center justify-between gap-4 py-3 px-4 bg-zinc-950/60 rounded-2xl border border-zinc-850 shadow-inner">
               <div className="flex items-center gap-2">
@@ -446,10 +446,10 @@ export default function BookingCheckoutPage() {
             {/* Movie Poster & Meta details */}
             <div className="flex gap-4 items-start pb-6 border-b border-zinc-800">
               <div className="w-16 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0">
-                <img 
-                  src={snapshot?.moviePoster} 
-                  alt={snapshot?.movieTitle} 
-                  className="w-full h-full object-cover" 
+                <img
+                  src={snapshot?.moviePoster}
+                  alt={snapshot?.movieTitle}
+                  className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%2318181b'><rect width='100%' height='100%'/></svg>";
@@ -579,7 +579,7 @@ export default function BookingCheckoutPage() {
                 Hủy đặt vé
               </button>
             </div>
-            
+
             {/* Safety policy */}
             <div className="flex items-center gap-2 text-[9px] text-zinc-500 font-bold uppercase justify-center mt-4">
               <ShieldCheck className="w-4 h-4 text-zinc-500" />

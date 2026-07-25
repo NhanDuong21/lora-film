@@ -63,7 +63,7 @@ public class JsonLayout extends LayoutBase<ILoggingEvent> {
         if (throwableProxy != null) {
             logMap.put("exceptionType", throwableProxy.getClassName());
             logMap.put("exceptionMessage", throwableProxy.getMessage());
-            
+
             StringBuilder stackTrace = new StringBuilder();
             for (StackTraceElementProxy step : throwableProxy.getStackTraceElementProxyArray()) {
                 stackTrace.append(step.toString()).append("\n");

@@ -7,7 +7,7 @@ import AdminAutoScheduleHistoryPage from './AdminAutoScheduleHistoryPage';
 vi.mock('../hooks/useAutoScheduleHistory');
 
 const statuses = ['GENERATING', 'PREVIEWED', 'APPLYING', 'APPLIED', 'EXPIRED', 'FAILED', 'CANCELLED'];
-const labels = ['Đang tạo', 'Sẵn sàng', 'Đang áp dụng', 'Đã áp dụng', 'Đã hết hạn', 'Thất bại', 'Đã hủy'];
+const labels = ['Đang tạo bản xem trước', 'Sẵn sàng rà soát', 'Đang áp dụng', 'Đã áp dụng', 'Đã hết hạn', 'Thất bại', 'Đã hủy'];
 
 const preview = (status, index) => ({
   previewPublicId: `preview-${index}`,
@@ -85,6 +85,8 @@ describe('AdminAutoScheduleHistoryPage', () => {
     expect(screen.getByText('Auto schedule generation failed')).toBeInTheDocument();
     expect(screen.getByText('4 suất đã tạo')).toBeInTheDocument();
     expect(screen.getAllByText('Mở / chỉnh sửa')).toHaveLength(1);
+    expect(screen.getAllByText('22/07/2026 – 23/07/2026').length).toBeGreaterThan(0);
+    expect(screen.queryByText('2026-07-22 – 2026-07-23')).not.toBeInTheDocument();
   });
 
   it('emphasizes applied time/count and links an applied row to its operational batch', () => {
@@ -111,6 +113,16 @@ describe('AdminAutoScheduleHistoryPage', () => {
   it('navigates to the existing detail route with previewPublicId', () => {
     renderPage();
     fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]);
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/showtime-schedules/preview-0');
+  });
+
+  it('uses human-readable identity while retaining the full UUID for routing and technical details', () => {
+    renderPage();
+
+    expect(screen.getAllByRole('button', { name: 'LoraFilm Quận 1' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Mã rút gọn: PREVIEW0/).length).toBeGreaterThan(0);
+    expect(screen.getByText('previewPublicId: preview-0')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'LoraFilm Quận 1' })[0]);
     expect(screen.getByTestId('location')).toHaveTextContent('/admin/showtime-schedules/preview-0');
   });
 

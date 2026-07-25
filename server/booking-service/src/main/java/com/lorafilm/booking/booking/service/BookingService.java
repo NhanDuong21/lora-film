@@ -37,4 +37,3 @@ public interface BookingService {
 
     com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId, com.lorafilm.booking.payment.dto.InitiatePaymentRequest request);
 }
-

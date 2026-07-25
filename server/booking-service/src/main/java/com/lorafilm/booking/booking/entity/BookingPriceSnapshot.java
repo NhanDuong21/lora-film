@@ -5,15 +5,18 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "booking_price_snapshots")
+@Table(name = "booking_price_snapshots",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_price_snapshot_booking", columnNames = "booking_id"))
 public class BookingPriceSnapshot extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_id", nullable = false, unique = true)
     private Booking booking;
 
     @Column(name = "currency", length = 10, nullable = false)

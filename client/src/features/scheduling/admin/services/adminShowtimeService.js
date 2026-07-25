@@ -46,8 +46,22 @@ const adminShowtimeService = {
     return response.data;
   },
 
-  deleteBatch: async (batchId) => {
-    const response = await apiClient.delete(`/api/admin/showtimes/batch/${batchId}`);
+  getPricing: async (showtimePublicId) => {
+    const response = await apiClient.get(`/api/admin/showtimes/${showtimePublicId}/pricing`);
+    return response.data;
+  },
+
+  resolvePricing: async (showtimePublicId, expectedShowtimeVersion) => {
+    const response = await apiClient.post(`/api/admin/showtimes/${showtimePublicId}/pricing/resolve`, {
+      expectedShowtimeVersion,
+    });
+    return response.data;
+  },
+
+  previewBatchStatus: async (batchId, targetStatus) => {
+    const response = await apiClient.get(`/api/admin/showtimes/batch/${batchId}/status-preview`, {
+      params: { targetStatus },
+    });
     return response.data;
   }
 };

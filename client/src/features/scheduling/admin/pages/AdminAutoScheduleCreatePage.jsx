@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';
+import { formatPreviewDateRange } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const sectionClassName = 'rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 md:p-6';
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none transition-colors focus:border-brand-orange/60 focus:ring-2 focus:ring-brand-orange/30';
@@ -25,6 +26,12 @@ const AdminAutoScheduleCreatePage = () => {
   const [expandedMovies, setExpandedMovies] = useState({});
   const [movieSearch, setMovieSearch] = useState('');
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({
+    scope: true,
+    rooms: true,
+    movies: true,
+  });
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
 
   const handleSuccess = previewPublicId => navigate(`/admin/showtime-schedules/${previewPublicId}`);
 
@@ -60,6 +67,7 @@ const AdminAutoScheduleCreatePage = () => {
     isReady,
     selectionNotice,
     movieLoadError,
+    retryMovies,
     dateRangeInfo,
     toggleMovieExpansion,
     handleSubmit,
@@ -91,6 +99,11 @@ const AdminAutoScheduleCreatePage = () => {
   const activeAuditoriumCount = auditoriums.filter(auditorium => auditorium.status === 'ACTIVE').length;
   const broadScope = dateRangeInfo.dayCount > 1
     && (selectedAuditoriumIds.length > 1 || selectedMovieVersionIds.length > 1);
+  const hasAdvancedErrors = Boolean(errors.slotGranularityMinutes || errors.previewTtlMinutes);
+  const toggleSection = section => setExpandedSections(previous => ({
+    ...previous,
+    [section]: !previous[section],
+  }));
 
   return (
     <div className="flex min-h-[400px] flex-1 flex-col space-y-6 overflow-auto bg-zinc-950 p-6 text-white animate-fade-in md:p-8">
@@ -117,12 +130,18 @@ const AdminAutoScheduleCreatePage = () => {
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <main className="space-y-6">
           <section className={sectionClassName} aria-labelledby="scope-heading">
-            <div className="mb-5 border-b border-zinc-800 pb-3">
-              <h2 id="scope-heading" className="text-sm font-black uppercase tracking-wider text-zinc-200">1. Phạm vi</h2>
-              <p className="mt-1 text-xs text-zinc-500">Khoảng lập kế hoạch có thể dài hơn, nhưng mỗi bản xem trước chỉ xử lý một lô từ 1–7 ngày.</p>
+            <div className={`${expandedSections.scope ? 'mb-5' : ''} flex items-start justify-between gap-4 border-b border-zinc-800 pb-3`}>
+              <div>
+                <h2 id="scope-heading" className="text-sm font-black uppercase tracking-wider text-zinc-200">1. Phạm vi</h2>
+                <p className="mt-1 text-xs text-zinc-500">Khoảng lập kế hoạch có thể dài hơn, nhưng mỗi bản xem trước chỉ xử lý một lô từ 1–7 ngày.</p>
+              </div>
+              <button type="button" aria-expanded={expandedSections.scope} aria-controls="scope-content" onClick={() => toggleSection('scope')} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300">
+                <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expandedSections.scope ? 'rotate-90' : ''}`} />
+                {expandedSections.scope ? 'Thu gọn' : 'Mở rộng'}
+              </button>
             </div>
 
-            <div className="space-y-5">
+            {expandedSections.scope && <div id="scope-content" className="space-y-5">
               <div>
                 <label id="cinema-label" htmlFor="auto-schedule-cinema" className="mb-1.5 block text-xs font-bold text-zinc-400">Cụm rạp *</label>
                 <SearchableSelect
@@ -182,10 +201,10 @@ const AdminAutoScheduleCreatePage = () => {
               {dateRangeInfo.isTooLong && (
                 <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs leading-relaxed text-red-300">
                   Khoảng đã chọn gồm {dateRangeInfo.dayCount} ngày, nhưng mỗi bản xem trước chỉ được tối đa 7 ngày. Gợi ý khoảng hợp lệ đầu tiên:{' '}
-                  <strong>{dateRangeInfo.suggestedScheduleFrom} đến {dateRangeInfo.suggestedScheduleTo}</strong>. Ngày bạn đã nhập được giữ nguyên; hãy điều chỉnh trước khi gửi.
+                  <strong>{formatPreviewDateRange(dateRangeInfo.suggestedScheduleFrom, dateRangeInfo.suggestedScheduleTo)}</strong>. Ngày bạn đã nhập được giữ nguyên; hãy điều chỉnh trước khi gửi.
                 </div>
               )}
-            </div>
+            </div>}
           </section>
 
           <section className={sectionClassName} aria-labelledby="rooms-heading">
@@ -195,6 +214,10 @@ const AdminAutoScheduleCreatePage = () => {
                 <p className="mt-1 text-xs text-zinc-500">Bắt đầu với lựa chọn trống để tránh tạo phạm vi ngoài ý muốn.</p>
               </div>
               <div className="flex items-center gap-2">
+                <button type="button" aria-expanded={expandedSections.rooms} aria-controls="rooms-content" onClick={() => toggleSection('rooms')} className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-zinc-700 px-3 text-xs font-bold text-zinc-300">
+                  <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expandedSections.rooms ? 'rotate-90' : ''}`} />
+                  {expandedSections.rooms ? 'Thu gọn' : 'Mở rộng'}
+                </button>
                 <button
                   type="button"
                   onClick={selectAllActiveAuditoriums}
@@ -214,6 +237,7 @@ const AdminAutoScheduleCreatePage = () => {
               </div>
             </div>
 
+            {expandedSections.rooms && <div id="rooms-content">
             <p className="mb-3 text-xs font-bold text-zinc-400">Đã chọn {selectedAuditoriumIds.length}/{activeAuditoriumCount} phòng đang hoạt động</p>
             {isLoadingAuditoriums ? (
               <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-zinc-500" aria-label="Đang tải phòng chiếu" /></div>
@@ -252,14 +276,23 @@ const AdminAutoScheduleCreatePage = () => {
               </div>
             )}
             {errors.auditoriums && <p id="auditoriums-error" className="mt-3 text-xs text-red-400">{errors.auditoriums}</p>}
+            </div>}
           </section>
 
           <section className={sectionClassName} aria-labelledby="movies-heading">
-            <div className="mb-4 border-b border-zinc-800 pb-3">
-              <h2 id="movies-heading" className="text-sm font-black uppercase tracking-wider text-zinc-200">3. Phim và định dạng</h2>
-              <p className="mt-1 text-xs text-zinc-500">Phim không đủ điều kiện vẫn được hiển thị cùng lý do để bạn kiểm tra.</p>
+            <div className={`${expandedSections.movies ? 'mb-4' : ''} flex items-start justify-between gap-4 border-b border-zinc-800 pb-3`}>
+              <div>
+                <h2 id="movies-heading" className="text-sm font-black uppercase tracking-wider text-zinc-200">3. Phim và định dạng</h2>
+                <p className="mt-1 text-xs text-zinc-500">Phim không đủ điều kiện vẫn được hiển thị cùng lý do để bạn kiểm tra.</p>
+              </div>
+              <button type="button" aria-expanded={expandedSections.movies} aria-controls="movies-content" onClick={() => toggleSection('movies')} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300">
+                <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expandedSections.movies ? 'rotate-90' : ''}`} />
+                {expandedSections.movies ? 'Thu gọn' : 'Mở rộng'}
+              </button>
             </div>
 
+            {expandedSections.movies && <div id="movies-content" className="max-h-[680px] overflow-y-auto pr-1 custom-scrollbar">
+            <div className="sticky top-0 z-10 space-y-4 border-b border-zinc-800 bg-zinc-900 pb-4">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <label htmlFor="movie-search" className="sr-only">Tìm phim</label>
@@ -279,15 +312,15 @@ const AdminAutoScheduleCreatePage = () => {
               </label>
             </div>
 
-            <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">Tóm tắt lựa chọn</h3>
-                <span className="text-xs font-bold text-brand-orange">{selectedMovieVersionIds.length} định dạng</span>
-              </div>
-              {selectedVersions.length === 0 ? (
-                <p className="text-xs text-zinc-500">Chưa chọn định dạng phim.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
+            <details className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+              <summary className="cursor-pointer text-xs font-black uppercase tracking-wider text-zinc-400">
+                Tóm tắt lựa chọn · <span className="text-brand-orange">{selectedMovieVersionIds.length} định dạng</span>
+              </summary>
+              <div className="mt-3">
+                {selectedVersions.length === 0 ? (
+                  <p className="text-xs text-zinc-500">Chưa chọn định dạng phim.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
                   {selectedVersions.map(version => (
                     <button
                       key={version.publicId}
@@ -300,21 +333,32 @@ const AdminAutoScheduleCreatePage = () => {
                       <X className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </div>
+            </details>
 
             {(errors.versions || errors.eligibility || movieLoadError) && (
-              <p id="versions-error" role="alert" className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+              <div id="versions-error" role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
                 {errors.versions || errors.eligibility || movieLoadError}
-              </p>
+                {movieLoadError && <button type="button" onClick={retryMovies} className="ml-2 rounded border border-red-300/30 px-2 py-1 font-bold">Thử tải lại</button>}
+              </div>
             )}
+            </div>
 
-            <div className="max-h-[560px] space-y-3 overflow-y-auto pr-1 custom-scrollbar">
+            <div className="space-y-3 pt-4">
               {isLoadingMovies ? (
                 <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-zinc-500" aria-label="Đang tải phim" /></div>
+              ) : movieLoadError ? (
+                <p className="py-10 text-center text-sm text-zinc-500">Không thể tải danh sách phim. Dùng nút “Thử tải lại” ở phía trên.</p>
+              ) : movies.length === 0 ? (
+                <p className="py-10 text-center text-sm text-zinc-500">Chưa có phim đủ điều kiện trong khoảng ngày đã chọn.</p>
+              ) : showSelectedOnly && selectedMovieVersionIds.length === 0 ? (
+                <p className="py-10 text-center text-sm text-zinc-500">Chưa có định dạng nào được chọn để hiển thị.</p>
+              ) : movieSearch.trim() && filteredMovies.length === 0 ? (
+                <p className="py-10 text-center text-sm text-zinc-500">Không tìm thấy phim khớp từ khóa “{movieSearch.trim()}”.</p>
               ) : filteredMovies.length === 0 ? (
-                <p className="py-10 text-center text-sm text-zinc-500">Không có phim phù hợp với bộ lọc.</p>
+                <p className="py-10 text-center text-sm text-zinc-500">Không có phim phù hợp với bộ lọc hiện tại.</p>
               ) : filteredMovies.map(movie => {
                 const isExpanded = Boolean(expandedMovies[movie.publicId]);
                 const versions = versionsByMovie[movie.publicId] || [];
@@ -388,12 +432,19 @@ const AdminAutoScheduleCreatePage = () => {
                 );
               })}
             </div>
+            </div>}
           </section>
 
-          <section className={sectionClassName} aria-labelledby="settings-heading">
-            <div className="mb-4 border-b border-zinc-800 pb-3">
-              <h2 id="settings-heading" className="text-sm font-black uppercase tracking-wider text-zinc-200">4. Thiết lập tạo bản xem trước</h2>
-            </div>
+          <details
+            className={sectionClassName}
+            open={advancedSettingsOpen || hasAdvancedErrors}
+            onToggle={event => setAdvancedSettingsOpen(event.currentTarget.open)}
+          >
+            <summary id="settings-heading" className="cursor-pointer text-sm font-black uppercase tracking-wider text-zinc-200">
+              4. Thiết lập nâng cao
+              <span className="ml-2 text-xs font-normal normal-case text-zinc-500">Khoảng thử lịch và thời hạn bản xem trước</span>
+            </summary>
+            <div className="mt-4 border-t border-zinc-800 pt-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="slot-granularity" className="mb-1.5 block text-xs font-bold text-zinc-400">Khoảng cách thử lịch (phút)</label>
@@ -436,7 +487,8 @@ const AdminAutoScheduleCreatePage = () => {
                 Phạm vi gồm {dateRangeInfo.dayCount} ngày, {selectedAuditoriumIds.length} phòng và {selectedMovieVersionIds.length} định dạng. Phạm vi rộng có thể mất nhiều thời gian hoặc chạm giới hạn ứng viên; hãy thu hẹp nếu hệ thống yêu cầu.
               </div>
             )}
-          </section>
+            </div>
+          </details>
         </main>
 
         <aside className="xl:sticky xl:top-24" aria-labelledby="readiness-heading">
@@ -449,7 +501,7 @@ const AdminAutoScheduleCreatePage = () => {
             <dl className="space-y-3 text-xs">
               <div><dt className="text-zinc-500">Cụm rạp</dt><dd className="mt-0.5 font-bold text-zinc-200">{selectedCinema?.name || 'Chưa chọn'}</dd></div>
               <div><dt className="text-zinc-500">Múi giờ</dt><dd className="mt-0.5 font-bold text-zinc-200">{selectedCinema?.timezone || '—'}</dd></div>
-              <div><dt className="text-zinc-500">Lô xem trước</dt><dd className="mt-0.5 font-bold text-zinc-200">{scheduleFrom || '—'} → {scheduleTo || '—'}</dd></div>
+              <div><dt className="text-zinc-500">Lô xem trước</dt><dd className="mt-0.5 font-bold text-zinc-200">{formatPreviewDateRange(scheduleFrom, scheduleTo)}</dd></div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-zinc-950 p-2 text-center"><dt className="text-zinc-500">Ngày</dt><dd className="mt-1 text-base font-black text-white">{dateRangeInfo.dayCount || 0}</dd></div>
                 <div className="rounded-lg bg-zinc-950 p-2 text-center"><dt className="text-zinc-500">Phòng</dt><dd className="mt-1 text-base font-black text-white">{selectedAuditoriumIds.length}</dd></div>

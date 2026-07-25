@@ -160,9 +160,9 @@ export default function BookingDetailPage() {
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium print:bg-white print:text-black print:pt-4">
-      
+
       <div className="max-w-5xl mx-auto w-full space-y-8">
-        
+
         {/* Back Link */}
         <div className="flex justify-between items-center print:hidden">
           <Link
@@ -239,7 +239,7 @@ export default function BookingDetailPage() {
         {/* Timeline Status Trace */}
         <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6 print:hidden">
           <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400">TIẾN TRÌNH TRẠNG THÁI (TIMELINE)</h2>
-          
+
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-0">
             {/* Stage 1: PENDING_PAYMENT */}
             <div className="flex-1 flex items-center gap-3 relative">
@@ -296,8 +296,8 @@ export default function BookingDetailPage() {
             <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 print:hidden">THÔNG TIN VÉ XEM PHIM (TICKETS)</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {tickets.map(ticket => (
-                <div 
-                  key={ticket.id} 
+                <div
+                  key={ticket.id}
                   className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col sm:flex-row shadow-2xl relative print:bg-white print:text-black print:border-black print:shadow-none"
                 >
                   <div className="hidden sm:block absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 print:hidden"></div>
@@ -345,9 +345,9 @@ export default function BookingDetailPage() {
 
                   <div className="w-full sm:w-40 shrink-0 bg-zinc-950/60 p-6 flex flex-col items-center justify-center text-center gap-3 print:bg-white print:border-t print:border-black">
                     <div className="w-24 aspect-square bg-white rounded-xl p-2 shadow-inner shrink-0 flex items-center justify-center">
-                      <img 
-                        src={getQrCodeUrl(ticket.ticketCode)} 
-                        alt={ticket.ticketCode} 
+                      <img
+                        src={getQrCodeUrl(ticket.ticketCode)}
+                        alt={ticket.ticketCode}
                         className="max-w-full max-h-full"
                       />
                     </div>

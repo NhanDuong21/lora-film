@@ -332,6 +332,21 @@ describe('useAutoSchedulePreview selection compatibility', () => {
     await waitFor(() => expect(Array.from(result.current.selectedItemIds)).toEqual(['item-1']));
   });
 
+  it('uses the auto-selection action wording when a bulk update fails', async () => {
+    const triggerToast = vi.fn();
+    adminAutoScheduleService.updateSelections.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', { triggerToast }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => result.current.handleBulkSelection(['item-2']));
+
+    expect(triggerToast).toHaveBeenCalledWith(
+      'Không thể tự chọn lịch không xung đột. Đang tải lại dữ liệu.',
+      'error',
+    );
+    await waitFor(() => expect(adminAutoScheduleService.getPreview).toHaveBeenCalledTimes(2));
+  });
+
   it('keeps the apply payload and expected-version contract unchanged', async () => {
     const randomUuid = vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('idempotency-1');
     const { result } = renderHook(() => useAutoSchedulePreview('preview-1', {}));
@@ -342,6 +357,69 @@ describe('useAutoSchedulePreview selection compatibility', () => {
     expect(adminAutoScheduleService.applyPreview).toHaveBeenCalledWith('preview-1', {
       expectedVersion: 3,
       idempotencyKey: 'idempotency-1',
+    });
+    randomUuid.mockRestore();
+  });
+
+  it('exposes grouped pricing preflight diagnostics from an atomic apply rejection', async () => {
+    adminAutoScheduleService.applyPreview.mockRejectedValue({
+      errorCode: 'PRICING_INCOMPLETE',
+      message: 'Không thể áp dụng lịch vì một hoặc nhiều ứng viên chưa có giá đầy đủ.',
+      data: {
+        complete: false,
+        totalCandidateCount: 1,
+        completeCandidateCount: 0,
+        incompleteCandidateCount: 1,
+        ambiguousCandidateCount: 0,
+        reasonGroups: [{
+          reasonCode: 'PRICING_INCOMPLETE',
+          count: 1,
+          affectedDates: ['2026-09-30'],
+          auditoriums: [{ publicId: 'room-1', name: 'Phòng 1' }],
+          seatTypes: [{ publicId: 'vip', code: 'VIP', name: 'Ghế VIP' }],
+        }],
+      },
+    });
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', {}));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => result.current.handleApply());
+
+    expect(result.current.pricingPreflight).toMatchObject({
+      complete: false,
+      incompleteCandidateCount: 1,
+    });
+    expect(result.current.pricingPreflight.reasonGroups[0].seatTypes[0].name).toBe('Ghế VIP');
+  });
+
+  it('reuses one apply idempotency key after transport failure and rotates it after success', async () => {
+    const randomUuid = vi.spyOn(globalThis.crypto, 'randomUUID')
+      .mockReturnValueOnce('idempotency-1')
+      .mockReturnValueOnce('idempotency-2');
+    adminAutoScheduleService.applyPreview
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({
+        success: true,
+        data: { createdShowtimeCount: 1, skippedItemCount: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { createdShowtimeCount: 1, skippedItemCount: 1 },
+      });
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', { onSuccess }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => result.current.handleApply());
+    await act(async () => result.current.handleApply());
+    await act(async () => result.current.handleApply());
+
+    expect(adminAutoScheduleService.applyPreview.mock.calls[0][1].idempotencyKey).toBe('idempotency-1');
+    expect(adminAutoScheduleService.applyPreview.mock.calls[1][1].idempotencyKey).toBe('idempotency-1');
+    expect(adminAutoScheduleService.applyPreview.mock.calls[2][1].idempotencyKey).toBe('idempotency-2');
+    expect(onSuccess).toHaveBeenCalledWith({
+      createdShowtimeCount: 1,
+      skippedItemCount: 1,
     });
     randomUuid.mockRestore();
   });

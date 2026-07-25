@@ -16,6 +16,7 @@ import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewReposit
 import com.lorafilm.movie.autoschedule.service.AutoScheduleApplyRevalidationService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleAuditoriumLockService;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService;
+import com.lorafilm.movie.autoschedule.service.AutoSchedulePricingPreflightService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleShowtimeCreationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
@@ -58,6 +59,7 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
     private final AutoScheduleAuditoriumLockService auditoriumLockService;
     private final AutoScheduleApplyRevalidationService revalidationService;
     private final AutoScheduleShowtimeCreationService showtimeCreationService;
+    private final AutoSchedulePricingPreflightService pricingPreflightService;
     private final AutoScheduleApplyResponseMapper responseMapper;
     private final Clock clock;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
@@ -74,6 +76,7 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
                                                AutoScheduleAuditoriumLockService auditoriumLockService,
                                                AutoScheduleApplyRevalidationService revalidationService,
                                                AutoScheduleShowtimeCreationService showtimeCreationService,
+                                               AutoSchedulePricingPreflightService pricingPreflightService,
                                                AutoScheduleApplyResponseMapper responseMapper,
                                                Clock clock,
                                                org.springframework.transaction.support.TransactionTemplate transactionTemplate,
@@ -89,6 +92,7 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
         this.auditoriumLockService = auditoriumLockService;
         this.revalidationService = revalidationService;
         this.showtimeCreationService = showtimeCreationService;
+        this.pricingPreflightService = pricingPreflightService;
         this.responseMapper = responseMapper;
         this.clock = clock;
         this.transactionTemplate = transactionTemplate;
@@ -172,11 +176,23 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
 
         revalidationService.validateAll(preview, selectedItems, freshNow);
 
+        AutoSchedulePricingPreflightService.Evaluation pricingPreflight =
+                pricingPreflightService.evaluate(selectedItems);
+        if (!pricingPreflight.response().complete()) {
+            ErrorCode code = pricingPreflight.response().ambiguousCandidateCount() > 0
+                    ? ErrorCode.PRICING_AMBIGUOUS : ErrorCode.PRICING_INCOMPLETE;
+            throw new BusinessException(
+                    code,
+                    "Không thể áp dụng lịch vì một hoặc nhiều ứng viên chưa có giá đầy đủ.",
+                    pricingPreflight.response());
+        }
+
         // State changes
         preview.markApplying(applyKey);
 
         // Create showtimes
-        List<Showtime> createdShowtimes = showtimeCreationService.createAll(selectedItems, actorId, previewPublicId);
+        List<Showtime> createdShowtimes = showtimeCreationService.createAll(
+                selectedItems, actorId, previewPublicId, pricingPreflight.resolutions());
 
         // Update items
         for (int i = 0; i < selectedItems.size(); i++) {

@@ -3,6 +3,16 @@ import { useOutletContext, useNavigate, useLocation, useSearchParams } from 'rea
 import useAdminShowtimes from '@/features/scheduling/admin/hooks/useAdminShowtimes';
 import ShowtimeTable from '@/features/scheduling/admin/components/ShowtimeTable';
 import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
+import {
+  getBatchStatusReasonPresentation,
+  getShowtimeStatusPresentation,
+} from '@/features/scheduling/admin/utils/schedulingPresentation';
+
+const canConfirmBatchTransition = summary => Boolean(
+  summary?.actionAllowed
+  && Number(summary.eligibleCount) > 0
+  && (!summary.atomic || Number(summary.skippedCount) === 0)
+);
 
 const AdminShowtimePage = () => {
   const { triggerToast } = useOutletContext() || {};
@@ -38,6 +48,7 @@ const AdminShowtimePage = () => {
   const locationStateProcessed = useRef(false);
   const isReady = useRef(false);
   const [isBatchActionLoading, setIsBatchActionLoading] = useState(false);
+  const [batchActionDialog, setBatchActionDialog] = useState(null);
 
   useEffect(() => {
     setBatchId(searchParams.get('batchId') || '');
@@ -101,40 +112,38 @@ const AdminShowtimePage = () => {
 
   const handleTransitionBatch = async (targetStatus) => {
     if (!batchId) return;
-    
-    // confirm
-    if (!window.confirm(`Bạn có chắc chắn muốn chuyển trạng thái toàn bộ đợt này sang ${targetStatus}?`)) return;
 
     setIsBatchActionLoading(true);
     try {
-      const res = await adminShowtimeService.transitionBatchStatus(batchId, { status: targetStatus });
-      if (res?.success) {
-        triggerToast?.(`Chuyển trạng thái đợt thành công!`, 'success');
-        fetchShowtimes();
+      const res = await adminShowtimeService.previewBatchStatus(batchId, targetStatus);
+      if (res?.success && res.data) {
+        setBatchActionDialog({ phase: 'confirm', summary: res.data });
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Lỗi chuyển trạng thái đợt';
+      const msg = err.response?.data?.message || 'Không thể kiểm tra điều kiện mở bán của đợt';
       triggerToast?.(msg, 'error');
     } finally {
       setIsBatchActionLoading(false);
     }
   };
 
-  const handleDeleteBatch = async () => {
-    if (!batchId) return;
-    
-    // confirm
-    if (!window.confirm(`Bạn có chắc chắn muốn XÓA toàn bộ suất chiếu DRAFT trong đợt này? Hành động không thể hoàn tác!`)) return;
-
+  const confirmBatchTransition = async () => {
+    const summary = batchActionDialog?.summary;
+    if (!canConfirmBatchTransition(summary) || !batchId) return;
     setIsBatchActionLoading(true);
     try {
-      const res = await adminShowtimeService.deleteBatch(batchId);
-      if (res?.success) {
-        triggerToast?.(`Xóa đợt thành công!`, 'success');
-        handleClearBatch();
+      const res = await adminShowtimeService.transitionBatchStatus(batchId, {
+        status: summary.targetStatus,
+      });
+      if (res?.success && res.data) {
+        setBatchActionDialog({ phase: 'result', summary: res.data });
+        if (res.data.actionAllowed) {
+          triggerToast?.(`Đã mở bán ${res.data.affectedCount} suất chiếu`, 'success');
+          fetchShowtimes();
+        }
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Lỗi xóa đợt';
+      const msg = err.response?.data?.message || 'Không thể mở bán đợt; không có suất chiếu nào được thay đổi';
       triggerToast?.(msg, 'error');
     } finally {
       setIsBatchActionLoading(false);
@@ -142,6 +151,7 @@ const AdminShowtimePage = () => {
   };
 
   return (
+    <>
     <ShowtimeTable
       showtimes={showtimes}
       cinemas={cinemas}
@@ -169,9 +179,63 @@ const AdminShowtimePage = () => {
       onClearBatch={handleClearBatch}
       onClearFilters={handleClearFilters}
       onTransitionBatch={handleTransitionBatch}
-      onDeleteBatch={handleDeleteBatch}
       isBatchActionLoading={isBatchActionLoading}
     />
+    {batchActionDialog && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div role="dialog" aria-modal="true" aria-labelledby="batch-action-title" className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-white shadow-2xl">
+          <h2 id="batch-action-title" className="text-lg font-black">
+            {batchActionDialog.phase === 'confirm' ? 'Xác nhận mở bán toàn bộ' : 'Kết quả mở bán toàn bộ'}
+          </h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Trạng thái đích: {getShowtimeStatusPresentation(batchActionDialog.summary.targetStatus).label}. Kết quả dựa trên toàn bộ đợt, không phụ thuộc trang đang xem.
+          </p>
+          <dl className="mt-5 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">
+            <dt className="text-zinc-500">Tổng suất chiếu</dt><dd className="font-bold">{batchActionDialog.summary.totalCount}</dd>
+            <dt className="text-zinc-500">Đủ điều kiện</dt><dd className="font-bold text-emerald-300">{batchActionDialog.summary.eligibleCount}</dd>
+            <dt className="text-zinc-500">Đã ở trạng thái đích</dt><dd className="font-bold">{batchActionDialog.summary.alreadyTargetCount}</dd>
+            <dt className="text-zinc-500">Bị chặn</dt><dd className="font-bold text-amber-300">{batchActionDialog.summary.skippedCount}</dd>
+            <dt className="text-zinc-500">Đã thay đổi</dt><dd className="font-bold text-emerald-300">{batchActionDialog.summary.affectedCount}</dd>
+            <dt className="text-zinc-500">Thực thi nguyên tử</dt><dd className="font-bold">{batchActionDialog.summary.atomic ? 'Có' : 'Không'}</dd>
+          </dl>
+          {batchActionDialog.summary.reasonGroups?.length > 0 && (
+            <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+              <p className="text-sm font-bold text-amber-200">Lý do chặn</p>
+              <ul className="mt-2 space-y-1 text-xs text-amber-100">
+                {batchActionDialog.summary.reasonGroups.map((group, index) => {
+                  const presentation = getBatchStatusReasonPresentation(group.reasonCode);
+                  return (
+                    <li key={`${group.reasonCode || 'UNKNOWN'}-${index}`}>
+                      {group.count} suất · {presentation.label}
+                      <details className="mt-1 text-[10px] text-amber-100/70">
+                        <summary className="cursor-pointer">Thông tin kỹ thuật</summary>
+                        <span className="font-mono">
+                          {group.reasonCode || 'NO_REASON_CODE'}: {group.reason || 'No safe reason supplied'}
+                        </span>
+                      </details>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+          {!batchActionDialog.summary.actionAllowed && (
+            <p className="mt-4 text-sm font-bold text-amber-300">Không thể mở bán một phần. Không có suất chiếu nào được thay đổi.</p>
+          )}
+          <div className="mt-6 flex justify-end gap-3">
+            <button type="button" disabled={isBatchActionLoading} onClick={() => setBatchActionDialog(null)} className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-400 disabled:opacity-50">
+              {batchActionDialog.phase === 'confirm' ? 'Hủy' : 'Đóng'}
+            </button>
+            {batchActionDialog.phase === 'confirm' && (
+              <button type="button" disabled={!canConfirmBatchTransition(batchActionDialog.summary) || isBatchActionLoading} onClick={confirmBatchTransition} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950 disabled:opacity-40">
+                {isBatchActionLoading ? 'Đang mở bán…' : 'Mở bán toàn bộ'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

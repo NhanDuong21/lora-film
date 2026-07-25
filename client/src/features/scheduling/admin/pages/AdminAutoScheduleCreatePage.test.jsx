@@ -41,6 +41,7 @@ const baseForm = () => ({
   isReady: false,
   selectionNotice: '',
   movieLoadError: '',
+  retryMovies: vi.fn(),
   dateRangeInfo: {
     dayCount: 7,
     cinemaToday: '2099-07-23',
@@ -73,7 +74,8 @@ describe('AdminAutoScheduleCreatePage', () => {
 
     expect(screen.getByText('Mỗi bản xem trước tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để lập lịch trước cho cả tháng.')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Khoảng đã chọn gồm 8 ngày');
-    expect(screen.getByRole('alert')).toHaveTextContent('2099-08-22 đến 2099-08-28');
+    expect(screen.getByRole('alert')).toHaveTextContent('22/08/2099 – 28/08/2099');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('2099-08-22');
     expect(screen.getByDisplayValue('2099-08-29')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Tạo bản xem trước/i })).toBeDisabled();
   });
@@ -121,9 +123,74 @@ describe('AdminAutoScheduleCreatePage', () => {
 
     expect(screen.getByRole('button', { name: 'Bỏ chọn Phim A IMAX' })).toBeInTheDocument();
     expect(screen.getByText('Cấu hình hợp lệ và sẵn sàng tạo bản xem trước.')).toBeInTheDocument();
+    expect(screen.getByText('22/08/2099 – 28/08/2099')).toBeInTheDocument();
+    expect(screen.queryByText('2099-08-22 → 2099-08-28')).not.toBeInTheDocument();
     const generate = screen.getByRole('button', { name: /Tạo bản xem trước/i });
     expect(generate).toBeEnabled();
     fireEvent.click(generate);
     expect(form.handleSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps main sections open by default, allows manual collapse, and keeps advanced settings collapsed', () => {
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    const scopeToggle = screen.getAllByRole('button', { name: 'Thu gọn' })[0];
+    expect(scopeToggle).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(scopeToggle);
+    expect(scopeToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('4. Thiết lập nâng cao').closest('details')).not.toHaveAttribute('open');
+  });
+
+  it('automatically opens advanced settings when an advanced validation error exists', () => {
+    useAutoScheduleForm.mockReturnValue({
+      ...baseForm(),
+      errors: { previewTtlMinutes: 'Giá trị từ 5 đến 120' },
+    });
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    expect(screen.getByText('4. Thiết lập nâng cao').closest('details')).toHaveAttribute('open');
+    expect(screen.getByText('Giá trị từ 5 đến 120')).toBeInTheDocument();
+  });
+
+  it('distinguishes search, selected-only, initial-empty, and load-failure states with retry', () => {
+    const movie = {
+      publicId: 'movie-1',
+      title: 'Phim A',
+      eligible: true,
+      reasons: [],
+      releaseDate: '2099-09-01',
+      durationMinutes: 110,
+    };
+    const form = {
+      ...baseForm(),
+      movies: [movie],
+      versionsByMovie: {
+        'movie-1': [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE', format: '2D' }],
+      },
+    };
+    useAutoScheduleForm.mockReturnValue(form);
+    const { unmount } = render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm phim' }), { target: { value: 'không tồn tại' } });
+    expect(screen.getByText(/Không tìm thấy phim khớp từ khóa/)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm phim' }), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Chỉ xem đã chọn' }));
+    expect(screen.getByText('Chưa có định dạng nào được chọn để hiển thị.')).toBeInTheDocument();
+    unmount();
+
+    useAutoScheduleForm.mockReturnValue({ ...baseForm(), movies: [] });
+    const initialEmpty = render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+    expect(screen.getByText('Chưa có phim đủ điều kiện trong khoảng ngày đã chọn.')).toBeInTheDocument();
+    initialEmpty.unmount();
+
+    const retryMovies = vi.fn();
+    useAutoScheduleForm.mockReturnValue({
+      ...baseForm(),
+      movieLoadError: 'Không thể xác minh điều kiện phim cho khoảng ngày đã chọn.',
+      retryMovies,
+    });
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Thử tải lại' }));
+    expect(retryMovies).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Không thể tải danh sách phim/)).toBeInTheDocument();
   });
 });

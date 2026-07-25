@@ -11,7 +11,7 @@ public class ShowtimePriceItemRequest {
     private String seatTypeId;
 
     @NotNull(message = "Price is required")
-    @DecimalMin(value = "0.0", message = "Price cannot be negative")
+    @DecimalMin(value = "0.0", inclusive = false, message = "Price must be positive")
     private BigDecimal price;
 
     public String getSeatTypeId() {

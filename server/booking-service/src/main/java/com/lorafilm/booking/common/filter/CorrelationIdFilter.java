@@ -23,7 +23,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     private static final String CORRELATION_HEADER = "X-Correlation-ID";
     private static final String TRACE_HEADER = "X-Trace-ID";
     private static final String UUID_REGEX = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
-    
+
     private final ObjectMapper objectMapper;
 
     public CorrelationIdFilter(ObjectMapper objectMapper) {
@@ -47,7 +47,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         List<String> correlationHeaders = Collections.list(request.getHeaders(CORRELATION_HEADER));
-        
+
         // 1. Validate Duplicated Header
         if (correlationHeaders.size() > 1) {
             writeErrorResponse(response, "DUPLICATED_HEADER", "Duplicated X-Correlation-ID header is not allowed", HttpStatus.BAD_REQUEST);

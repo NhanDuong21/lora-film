@@ -99,11 +99,11 @@ public class MockPaymentController {
         </html>
         """;
 
-        return String.format(html, 
-            booking.getBookingCode(), 
-            booking.getBookingCode(), 
-            booking.getBookingStatus().name(), 
-            booking.getFinalAmount().toString(), 
+        return String.format(html,
+            booking.getBookingCode(),
+            booking.getBookingCode(),
+            booking.getBookingStatus().name(),
+            booking.getFinalAmount().toString(),
             booking.getCurrency()
         );
     }
@@ -159,7 +159,7 @@ public class MockPaymentController {
 
     private PaymentEvent createEvent(String eventType, Booking booking, String paymentStatus, String errorMsg) {
         String txnCode = booking.getPaymentReference() != null ? booking.getPaymentReference() : "MOCK-TXN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        
+
         PaymentEventPayload payload = new PaymentEventPayload(
             System.currentTimeMillis(),
             booking.getId(),

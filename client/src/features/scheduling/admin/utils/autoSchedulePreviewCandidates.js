@@ -1,6 +1,7 @@
 export const CANDIDATE_VIEWS = Object.freeze({
   RECOMMENDED: 'RECOMMENDED',
-  REJECTED: 'REJECTED',
+  UNSELECTED_VALID: 'UNSELECTED_VALID',
+  ISSUES: 'ISSUES',
   ALL: 'ALL',
   CREATED: 'CREATED',
 });
@@ -16,20 +17,34 @@ export const getDefaultCandidateView = capabilities => {
 };
 
 export const getCandidateViewCounts = (items, selectedItemIds) => {
+  const metrics = getCandidateMetrics(items, selectedItemIds);
+
+  return {
+    [CANDIDATE_VIEWS.RECOMMENDED]: metrics.selectedRecommendations,
+    [CANDIDATE_VIEWS.UNSELECTED_VALID]: metrics.validUnselected,
+    [CANDIDATE_VIEWS.ISSUES]: metrics.issueCandidates,
+    [CANDIDATE_VIEWS.ALL]: metrics.totalGenerated,
+    [CANDIDATE_VIEWS.CREATED]: metrics.createdShowtimes,
+  };
+};
+
+export const getCandidateMetrics = (items, selectedItemIds) => {
   const selectedIds = selectedItemIds instanceof Set
     ? selectedItemIds
     : new Set(selectedItemIds || []);
   const source = items || [];
+  const isSelected = item => selectedIds.has(item.itemPublicId);
+  const isApplyIssue = item => item.applyStatus === 'CONFLICT' || item.applyStatus === 'FAILED';
 
   return {
-    [CANDIDATE_VIEWS.RECOMMENDED]: source.filter(item => selectedIds.has(item.itemPublicId)).length,
-    [CANDIDATE_VIEWS.REJECTED]: source.filter(item => (
-      item.validationStatus !== 'VALID'
-      || item.applyStatus === 'CONFLICT'
-      || item.applyStatus === 'FAILED'
-    )).length,
-    [CANDIDATE_VIEWS.ALL]: source.length,
-    [CANDIDATE_VIEWS.CREATED]: source.filter(item => item.applyStatus === 'CREATED').length,
+    totalGenerated: source.length,
+    selectedRecommendations: source.filter(isSelected).length,
+    validUnselected: source.filter(item => item.validationStatus === 'VALID' && !isSelected(item)).length,
+    rejectedCandidates: source.filter(item => item.validationStatus === 'REJECTED').length,
+    applyConflictsFailures: source.filter(isApplyIssue).length,
+    issueCandidates: source.filter(item => item.validationStatus !== 'VALID' || isApplyIssue(item)).length,
+    createdShowtimes: source.filter(item => item.applyStatus === 'CREATED').length,
+    skippedCandidates: source.filter(item => item.applyStatus === 'SKIPPED').length,
   };
 };
 
@@ -42,7 +57,12 @@ export const filterCandidatesByView = (items, view, selectedItemIds) => {
   switch (view) {
     case CANDIDATE_VIEWS.RECOMMENDED:
       return source.filter(item => selectedIds.has(item.itemPublicId));
-    case CANDIDATE_VIEWS.REJECTED:
+    case CANDIDATE_VIEWS.UNSELECTED_VALID:
+      return source.filter(item => (
+        item.validationStatus === 'VALID'
+        && !selectedIds.has(item.itemPublicId)
+      ));
+    case CANDIDATE_VIEWS.ISSUES:
       return source.filter(item => (
         item.validationStatus !== 'VALID'
         || item.applyStatus === 'CONFLICT'

@@ -585,6 +585,7 @@ CREATE TABLE booking_price_snapshots (
         COMMENT 'Thời điểm lưu công thức tính giá',
 
     CONSTRAINT fk_price_snapshot_booking FOREIGN KEY (booking_id) REFERENCES bookings(id),
+    CONSTRAINT uk_price_snapshot_booking UNIQUE (booking_id),
     INDEX idx_price_booking(booking_id)
 )
 ENGINE=InnoDB
