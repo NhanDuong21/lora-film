@@ -7,6 +7,8 @@ import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.entity.Booking;
+import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
+import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
@@ -69,9 +71,11 @@ class BookingServiceTest {
     private BookingMapper bookingMapper = new BookingMapper();
 
     private BookingServiceImpl bookingService;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
+        objectMapper = new ObjectMapper().findAndRegisterModules();
         bookingService = new BookingServiceImpl(
                 bookingRepository,
                 reservationRepository,
@@ -82,7 +86,7 @@ class BookingServiceTest {
                 bookingMapper,
                 foodOrderService,
                 priceSnapshotRepository,
-                new ObjectMapper().findAndRegisterModules());
+                objectMapper);
     }
 
     @Test
@@ -120,6 +124,85 @@ class BookingServiceTest {
         verify(reservationService).convertReservations(captor.capture());
         assertEquals(100L, captor.getValue().getBookingId());
         assertEquals(List.of(21L, 22L), captor.getValue().getReservationIds());
+        verify(showtimeClient).getBookingContext(1001L, List.of(101L, 102L));
+        ArgumentCaptor<BookingPriceSnapshot> snapshotCaptor =
+                ArgumentCaptor.forClass(BookingPriceSnapshot.class);
+        verify(priceSnapshotRepository).save(snapshotCaptor.capture());
+        BookingPriceSnapshot snapshot = snapshotCaptor.getValue();
+        assertEquals("VND", snapshot.getCurrency());
+        assertEquals("showtime-snapshot-v1", snapshot.getPricingEngineVersion());
+        try {
+            BookingPriceSnapshotPayload payload = objectMapper.readValue(
+                    snapshot.getPricingBreakdownJson(), BookingPriceSnapshotPayload.class);
+            assertEquals(new BigDecimal("240000"), payload.authoritativeTicketTotal());
+            assertEquals(List.of(101L, 102L), payload.seats().stream()
+                    .map(BookingPriceSnapshotPayload.SeatPriceLine::seatId).toList());
+            assertEquals(new BigDecimal("240000"), payload.seats().stream()
+                    .map(BookingPriceSnapshotPayload.SeatPriceLine::unitPrice)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    @Test
+    void shouldRejectMixedCurrencySeatLinesBeforePersistingBooking() {
+        Instant now = Instant.now();
+        List<SeatReservation> reservations = List.of(
+                reservation(21L, RESERVATION_PUBLIC_ID_1, 101L, 15L, 1001L, now.plusSeconds(300)),
+                reservation(22L, RESERVATION_PUBLIC_ID_2, 102L, 15L, 1001L, now.plusSeconds(300)));
+        CreateBookingRequest request = new CreateBookingRequest(
+                SHOWTIME_PUBLIC_ID, List.of(RESERVATION_PUBLIC_ID_1, RESERVATION_PUBLIC_ID_2));
+        ShowtimeBookingContext context = showtimeContext(now);
+        context = new ShowtimeBookingContext(
+                context.showtimeId(), context.showtimePublicId(), context.movieId(), context.cinemaId(),
+                context.auditoriumId(), context.status(), context.startsAt(), context.endsAt(),
+                context.paymentExpiresAt(), context.ticketAmount(), context.serviceFee(),
+                context.discountAmount(), context.totalAmount(), context.currency(), context.movieTitle(),
+                context.cinemaName(), context.auditoriumName(),
+                List.of(
+                        context.seats().get(0),
+                        new ShowtimeBookingContext.SeatContext(
+                                102L, "A02", "STANDARD", new BigDecimal("120000"), "USD")));
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(reservationRepository.findAllByPublicIdInForUpdate(request.getReservationPublicIds()))
+                .thenReturn(reservations);
+        when(showtimeClient.getBookingContext(1001L, List.of(101L, 102L))).thenReturn(context);
+
+        assertThrows(com.lorafilm.booking.common.exception.IntegrationException.class,
+                () -> bookingService.createBooking(request));
+
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(priceSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectDuplicateAuthoritativeSnapshotPersistence() {
+        Instant now = Instant.now();
+        List<SeatReservation> reservations = List.of(
+                reservation(21L, RESERVATION_PUBLIC_ID_1, 101L, 15L, 1001L, now.plusSeconds(300)),
+                reservation(22L, RESERVATION_PUBLIC_ID_2, 102L, 15L, 1001L, now.plusSeconds(300)));
+        CreateBookingRequest request = new CreateBookingRequest(
+                SHOWTIME_PUBLIC_ID, List.of(RESERVATION_PUBLIC_ID_1, RESERVATION_PUBLIC_ID_2));
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(reservationRepository.findAllByPublicIdInForUpdate(request.getReservationPublicIds()))
+                .thenReturn(reservations);
+        when(showtimeClient.getBookingContext(1001L, List.of(101L, 102L))).thenReturn(showtimeContext(now));
+        when(bookingCodeGenerator.generate()).thenReturn("LORAFILM-20260720-000001");
+        when(bookingRepository.existsByBookingCode("LORAFILM-20260720-000001")).thenReturn(false);
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(invocation -> {
+            Booking booking = invocation.getArgument(0);
+            booking.setId(100L);
+            return booking;
+        });
+        when(priceSnapshotRepository.existsByBookingId(100L)).thenReturn(true);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> bookingService.createBooking(request));
+
+        assertEquals("BOOKING_PRICE_SNAPSHOT_EXISTS", exception.getErrorCode());
+        verify(priceSnapshotRepository, never()).save(any());
+        verify(reservationService, never()).convertReservations(any());
     }
 
     @Test

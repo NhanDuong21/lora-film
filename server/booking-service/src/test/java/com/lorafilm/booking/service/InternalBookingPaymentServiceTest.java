@@ -105,6 +105,32 @@ class InternalBookingPaymentServiceTest {
     }
 
     @Test
+    void rejectsPaymentResultCurrencyMismatch() {
+        when(eventRepository.findByPublicId("event-1")).thenReturn(Optional.empty());
+        when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
+        InternalPaymentResultRequest original = result(
+                "event-1", "SUCCESS", new BigDecimal("240000.00"));
+        InternalPaymentResultRequest request = new InternalPaymentResultRequest(
+                original.eventId(),
+                original.schemaVersion(),
+                original.paymentId(),
+                original.paymentTransactionCode(),
+                original.paymentMethod(),
+                original.result(),
+                original.amount(),
+                "USD",
+                original.occurredAt(),
+                original.externalTransactionId(),
+                original.reconciliationStatus());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.recordPaymentResult(100L, request));
+
+        assertEquals("PAYMENT_AMOUNT_MISMATCH", exception.getErrorCode());
+    }
+
+    @Test
     void confirmsBookingAndPersistsIdempotencyEvent() {
         when(eventRepository.findByPublicId("event-1")).thenReturn(Optional.empty());
         when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
