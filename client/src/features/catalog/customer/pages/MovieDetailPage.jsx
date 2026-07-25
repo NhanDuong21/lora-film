@@ -56,9 +56,8 @@ export default function MovieDetailPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const today = useMemo(() => vietnamDateKey(), []);
-  const dates = useMemo(() => Array.from({ length: 5 }, (_, index) => addCalendarDays(today, index)), [today]);
   const requestedDate = searchParams.get('date');
-  const [selectedDate, setSelectedDate] = useState(dates.includes(requestedDate) ? requestedDate : dates[0]);
+  const [selectedDate, setSelectedDate] = useState(requestedDate || '');
   const [movie, setMovie] = useState(null);
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +65,14 @@ export default function MovieDetailPage() {
   const [error, setError] = useState(null);
   const [showtimeError, setShowtimeError] = useState(null);
   const [trailer, setTrailer] = useState(null);
+  const availableDates = useMemo(
+    () => [...new Set(
+      options
+        .filter(option => option.status === 'OPEN_FOR_BOOKING' && option.serviceDate)
+        .map(option => option.serviceDate)
+    )].sort(),
+    [options]
+  );
 
   const loadMovie = useCallback(async () => {
     setLoading(true);
@@ -92,8 +99,8 @@ export default function MovieDetailPage() {
     setShowtimeError(null);
     try {
       setOptions(await getBookingOptions(movie.slug, {
-        from: dates[0],
-        to: dates[dates.length - 1],
+        from: today,
+        to: addCalendarDays(today, 13),
         signal
       }));
     } catch (requestError) {
@@ -104,7 +111,7 @@ export default function MovieDetailPage() {
     } finally {
       if (!signal?.aborted) setShowtimeLoading(false);
     }
-  }, [movie, dates]);
+  }, [movie, today]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -112,6 +119,16 @@ export default function MovieDetailPage() {
     loadOptions(controller.signal);
     return () => controller.abort();
   }, [loadOptions]);
+
+  useEffect(() => {
+    if (!availableDates.length) return;
+    const nextDate = availableDates.includes(selectedDate) ? selectedDate : availableDates[0];
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (nextDate !== selectedDate) setSelectedDate(nextDate);
+    if (searchParams.get('date') !== nextDate) {
+      setSearchParams({ date: nextDate }, { replace: true });
+    }
+  }, [availableDates, searchParams, selectedDate, setSearchParams]);
 
   const grouped = useMemo(() => {
     const result = new Map();
@@ -271,7 +288,7 @@ export default function MovieDetailPage() {
           </div>
 
           <div className="mt-7 flex gap-3 overflow-x-auto pb-3">
-            {dates.map((date, index) => (
+            {availableDates.map((date, index) => (
               <button
                 key={date}
                 type="button"
@@ -287,9 +304,11 @@ export default function MovieDetailPage() {
                 }`}
               >
                 <span className="block text-xs uppercase tracking-wide">
-                  {index === 0 ? 'Hôm nay' : index === 1 ? 'Ngày mai' : `Ngày ${index + 1}`}
+                  {date === today ? 'Hôm nay' : index === 1 && availableDates[0] === today ? 'Ngày mai' : formatServiceDate(date)}
                 </span>
-                <span className="mt-1 block text-xs font-medium opacity-80">{formatServiceDate(date)}</span>
+                {date === today || (index === 1 && availableDates[0] === today) ? (
+                  <span className="mt-1 block text-xs font-medium opacity-80">{formatServiceDate(date)}</span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -300,6 +319,11 @@ export default function MovieDetailPage() {
             <div className="my-8 rounded-2xl border border-red-500/20 bg-red-950/20 py-10 text-center text-red-300">
               <p>{showtimeError}</p>
               <button onClick={() => loadOptions()} className={`mt-4 rounded-full border border-red-400/40 px-5 py-2 hover:bg-red-950/50 ${focus}`}>Thử lại</button>
+            </div>
+          ) : !availableDates.length ? (
+            <div className="my-8 rounded-2xl border border-dashed border-white/10 bg-black/20 py-14 text-center text-zinc-400">
+              <Film className="mx-auto mb-3 text-zinc-600" />
+              Phim hiện chưa có suất chiếu mở bán trong phạm vi ngày tìm kiếm.
             </div>
           ) : grouped.length === 0 ? (
             <div className="my-8 rounded-2xl border border-dashed border-white/10 bg-black/20 py-14 text-center text-zinc-400">
