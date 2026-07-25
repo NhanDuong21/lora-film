@@ -86,6 +86,10 @@ public class MovieLifecyclePolicy {
                 && ALLOWED_TRANSITIONS.getOrDefault(currentStatus, Set.of()).contains(targetStatus);
     }
 
+    public LocalDate currentDate() {
+        return LocalDate.now(clock);
+    }
+
     private static Map<MovieStatus, Set<MovieStatus>> buildTransitions() {
         Map<MovieStatus, Set<MovieStatus>> transitions = new EnumMap<>(MovieStatus.class);
         transitions.put(MovieStatus.DRAFT, Set.of(MovieStatus.UPCOMING, MovieStatus.INACTIVE));

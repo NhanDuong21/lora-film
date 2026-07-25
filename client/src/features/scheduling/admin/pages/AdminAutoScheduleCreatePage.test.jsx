@@ -32,6 +32,8 @@ const baseForm = () => ({
   selectedMovieVersionIds: [],
   selectedVersions: [],
   toggleVersion: vi.fn(),
+  selectEligibleMovieVersions: vi.fn(),
+  clearMovieVersions: vi.fn(),
   isLoadingCinemas: false,
   isLoadingAuditoriums: false,
   isLoadingMovies: false,
@@ -102,10 +104,67 @@ describe('AdminAutoScheduleCreatePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xóa chọn' }));
     expect(form.selectAllActiveAuditoriums).toHaveBeenCalledTimes(1);
     expect(form.clearAuditoriums).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Ngoài thời gian phát hành')).toBeInTheDocument();
+    expect(screen.queryByText('Phim chưa phát hành')).not.toBeInTheDocument();
+    expect(screen.queryByText('Khoảng ngày tạo lịch nằm ngoài thời gian phát hành của phim.')).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Bị loại (1)' }));
+    expect(screen.getByText('Phim chưa phát hành')).toBeInTheDocument();
+    expect(screen.getByText('Khoảng ngày tạo lịch nằm ngoài thời gian phát hành của phim.')).toBeInTheDocument();
+    expect(screen.getByText('Chỉ dùng để kiểm tra lý do, không thể chọn định dạng.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Phim chưa phát hành/i }));
     expect(screen.getAllByRole('checkbox', { name: /2D/i }).find(control => control.disabled)).toBeDisabled();
+  });
+
+  it('offers date presets and bulk movie selection actions', () => {
+    const form = baseForm();
+    form.movies = [{
+      publicId: 'movie-1',
+      title: 'Phim A',
+      eligible: true,
+      reasons: [],
+      releaseDate: '2099-09-01',
+      durationMinutes: 110,
+    }];
+    form.versionsByMovie = {
+      'movie-1': [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE', format: '2D' }],
+    };
+    form.selectedMovieVersionIds = ['version-1'];
+    useAutoScheduleForm.mockReturnValue(form);
+
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: '3 ngày' }));
+    expect(form.setScheduleFrom).toHaveBeenCalledWith('2099-08-22');
+    expect(form.setScheduleTo).toHaveBeenCalledWith('2099-08-24');
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn phim đủ điều kiện' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ chọn tất cả' }));
+    expect(form.selectEligibleMovieVersions).toHaveBeenCalledWith(['movie-1']);
+    expect(form.clearMovieVersions).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the primary movie poster and falls back safely when it cannot load', () => {
+    const form = baseForm();
+    form.movies = [{
+      publicId: 'movie-1',
+      title: 'Phim có poster',
+      originalTitle: 'Movie With Poster',
+      primaryPoster: 'https://cdn.example.test/poster.jpg',
+      eligible: true,
+      reasons: [],
+      releaseDate: '2099-09-01',
+      durationMinutes: 110,
+    }];
+    form.versionsByMovie = {
+      'movie-1': [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE', format: '2D' }],
+    };
+    useAutoScheduleForm.mockReturnValue(form);
+
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    const poster = screen.getByRole('img', { name: 'Poster Phim có poster' });
+    expect(poster).toHaveAttribute('src', 'https://cdn.example.test/poster.jpg');
+    fireEvent.error(poster);
+    expect(screen.getByText('Chưa có poster')).toBeInTheDocument();
   });
 
   it('shows selected chips and keeps the primary action beside readiness', () => {
@@ -131,12 +190,12 @@ describe('AdminAutoScheduleCreatePage', () => {
     expect(form.handleSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps main sections open by default, allows manual collapse, and keeps advanced settings collapsed', () => {
+  it('starts with the scope step open and exposes the room/movie steps through the progress nav', () => {
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
     const scopeToggle = screen.getAllByRole('button', { name: 'Thu gọn' })[0];
     expect(scopeToggle).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(scopeToggle);
+    fireEvent.click(screen.getAllByRole('button', { name: /2Phòng chiếu/ })[0]);
     expect(scopeToggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('4. Thiết lập nâng cao').closest('details')).not.toHaveAttribute('open');
   });
@@ -179,7 +238,7 @@ describe('AdminAutoScheduleCreatePage', () => {
 
     useAutoScheduleForm.mockReturnValue({ ...baseForm(), movies: [] });
     const initialEmpty = render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
-    expect(screen.getByText('Chưa có phim đủ điều kiện trong khoảng ngày đã chọn.')).toBeInTheDocument();
+    expect(screen.getByText(/Chưa có phim đủ điều kiện trong khoảng ngày đã chọn/)).toBeInTheDocument();
     initialEmpty.unmount();
 
     const retryMovies = vi.fn();
