@@ -16,7 +16,7 @@ public class MockPaymentAdapter implements PaymentIntegrationPort {
     public PaymentResponseDto requestPayment(PaymentRequestDto request) {
         String txnCode = "MOCK-TXN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         // Redirect url will point to the mock payment endpoint
-        String mockPaymentUrl = "http://localhost:8083/internal/mock/payment/page?bookingCode=" + request.bookingCode();
+        String mockPaymentUrl = "http://localhost:8083/api/mock/payment/page?bookingCode=" + request.bookingCode();
 
         return new PaymentResponseDto(
             System.currentTimeMillis(), // Mock payment ID
