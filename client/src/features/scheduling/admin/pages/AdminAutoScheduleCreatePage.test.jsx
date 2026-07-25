@@ -104,8 +104,13 @@ describe('AdminAutoScheduleCreatePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xóa chọn' }));
     expect(form.selectAllActiveAuditoriums).toHaveBeenCalledTimes(1);
     expect(form.clearAuditoriums).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Ngoài thời gian phát hành')).toBeInTheDocument();
+    expect(screen.queryByText('Phim chưa phát hành')).not.toBeInTheDocument();
+    expect(screen.queryByText('Khoảng ngày tạo lịch nằm ngoài thời gian phát hành của phim.')).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Bị loại (1)' }));
+    expect(screen.getByText('Phim chưa phát hành')).toBeInTheDocument();
+    expect(screen.getByText('Khoảng ngày tạo lịch nằm ngoài thời gian phát hành của phim.')).toBeInTheDocument();
+    expect(screen.getByText('Chỉ dùng để kiểm tra lý do, không thể chọn định dạng.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Phim chưa phát hành/i }));
     expect(screen.getAllByRole('checkbox', { name: /2D/i }).find(control => control.disabled)).toBeDisabled();
   });

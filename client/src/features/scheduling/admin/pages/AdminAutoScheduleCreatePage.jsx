@@ -20,6 +20,16 @@ import { formatPreviewDateRange } from '@/features/scheduling/admin/utils/autoSc
 
 const sectionClassName = 'rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 md:p-6';
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none transition-colors focus:border-brand-orange/60 focus:ring-2 focus:ring-brand-orange/30';
+const eligibilityReasonLabels = {
+  MOVIE_STATUS_NOT_ELIGIBLE: 'Phim phải ở trạng thái Đang chiếu hoặc Sắp chiếu.',
+  MOVIE_DURATION_INVALID: 'Thời lượng phim chưa hợp lệ.',
+  NO_ACTIVE_MOVIE_VERSION: 'Phim chưa có định dạng đang hoạt động.',
+  OUTSIDE_RELEASE_WINDOW: 'Khoảng ngày tạo lịch nằm ngoài thời gian phát hành của phim.',
+};
+
+const getEligibilityReasonLabel = reason => (
+  eligibilityReasonLabels[reason?.code] || reason?.message || reason?.code || 'Không đủ điều kiện tạo lịch.'
+);
 
 const addDays = (dateValue, days) => {
   if (!dateValue) return '';
@@ -59,6 +69,7 @@ const AdminAutoScheduleCreatePage = () => {
   const [expandedMovies, setExpandedMovies] = useState({});
   const [movieSearch, setMovieSearch] = useState('');
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  const [movieEligibilityFilter, setMovieEligibilityFilter] = useState('eligible');
   const [expandedSections, setExpandedSections] = useState({
     scope: true,
     rooms: false,
@@ -126,16 +137,32 @@ const AdminAutoScheduleCreatePage = () => {
     return movies.filter(movie => {
       const versions = versionsByMovie[movie.publicId] || [];
       const matchesSearch = !query || movie.title?.toLocaleLowerCase('vi').includes(query);
+      const matchesEligibility = movieEligibilityFilter === 'eligible' ? movie.eligible : !movie.eligible;
       const matchesSelected = !showSelectedOnly
         || versions.some(version => selectedMovieVersionIds.includes(version.publicId));
-      return matchesSearch && matchesSelected;
+      return matchesSearch && matchesEligibility && matchesSelected;
     });
-  }, [movieSearch, movies, selectedMovieVersionIds, showSelectedOnly, versionsByMovie]);
+  }, [
+    movieEligibilityFilter,
+    movieSearch,
+    movies,
+    selectedMovieVersionIds,
+    showSelectedOnly,
+    versionsByMovie,
+  ]);
+  const movieEligibilityCounts = useMemo(() => movies.reduce((counts, movie) => ({
+    ...counts,
+    [movie.eligible ? 'eligible' : 'ineligible']: counts[movie.eligible ? 'eligible' : 'ineligible'] + 1,
+  }), { eligible: 0, ineligible: 0 }), [movies]);
 
   const handleToggleMovie = movieId => {
     const nextExpanded = !expandedMovies[movieId];
     setExpandedMovies(previous => ({ ...previous, [movieId]: nextExpanded }));
     toggleMovieExpansion(movieId, nextExpanded);
+  };
+  const handleEligibilityFilterChange = filter => {
+    setMovieEligibilityFilter(filter);
+    if (filter === 'ineligible') setShowSelectedOnly(false);
   };
 
   const activeAuditoriumCount = auditoriums.filter(auditorium => auditorium.status === 'ACTIVE').length;
@@ -468,18 +495,59 @@ const AdminAutoScheduleCreatePage = () => {
                   className={`${inputClassName} pl-9`}
                 />
               </div>
-              <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs font-bold text-zinc-300">
-                <input type="checkbox" checked={showSelectedOnly} onChange={event => setShowSelectedOnly(event.target.checked)} className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-brand-orange focus:ring-brand-orange" />
+              <label className={`flex min-h-11 items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs font-bold ${
+                movieEligibilityFilter === 'eligible' ? 'cursor-pointer text-zinc-300' : 'cursor-not-allowed text-zinc-600'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={showSelectedOnly}
+                  disabled={movieEligibilityFilter !== 'eligible'}
+                  onChange={event => setShowSelectedOnly(event.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-brand-orange focus:ring-brand-orange disabled:opacity-40"
+                />
                 Chỉ xem đã chọn
               </label>
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="group" aria-label="Lọc theo điều kiện tạo lịch">
+                <button
+                  type="button"
+                  aria-pressed={movieEligibilityFilter === 'eligible'}
+                  onClick={() => handleEligibilityFilterChange('eligible')}
+                  className={`min-h-9 rounded-lg px-3 text-xs font-black transition-colors ${
+                    movieEligibilityFilter === 'eligible'
+                      ? 'bg-emerald-500/15 text-emerald-300'
+                      : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+                  }`}
+                >
+                  Đủ điều kiện ({movieEligibilityCounts.eligible})
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={movieEligibilityFilter === 'ineligible'}
+                  onClick={() => handleEligibilityFilterChange('ineligible')}
+                  className={`min-h-9 rounded-lg px-3 text-xs font-black transition-colors ${
+                    movieEligibilityFilter === 'ineligible'
+                      ? 'bg-red-500/15 text-red-300'
+                      : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+                  }`}
+                >
+                  Bị loại ({movieEligibilityCounts.ineligible})
+                </button>
+              </div>
+              {movieEligibilityFilter === 'ineligible' && (
+                <p className="text-[11px] text-zinc-500">
+                  Chỉ dùng để kiểm tra lý do, không thể chọn định dạng.
+                </p>
+              )}
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2.5">
               <p className="text-xs text-zinc-500">
-                Hiển thị <span className="font-bold text-zinc-200">{filteredMovies.length}</span>/{movies.length} phim
+                Hiển thị <span className="font-bold text-zinc-200">{filteredMovies.length}</span>/{movieEligibilityCounts[movieEligibilityFilter]} phim
                 <span className="mx-1 text-zinc-700">·</span>
                 Đã chọn <span className="font-bold text-brand-orange">{selectedMovieVersionIds.length}</span> định dạng
               </p>
-              <div className="flex flex-wrap gap-2">
+              {movieEligibilityFilter === 'eligible' && <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => selectEligibleMovieVersions(filteredMovies.map(movie => movie.publicId))}
@@ -496,10 +564,10 @@ const AdminAutoScheduleCreatePage = () => {
                 >
                   Bỏ chọn tất cả
                 </button>
-              </div>
+              </div>}
             </div>
 
-            <details className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+            {movieEligibilityFilter === 'eligible' && <details className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
               <summary className="cursor-pointer text-xs font-black uppercase tracking-wider text-zinc-400">
                 Tóm tắt lựa chọn · <span className="text-brand-orange">{selectedMovieVersionIds.length} định dạng</span>
               </summary>
@@ -523,7 +591,7 @@ const AdminAutoScheduleCreatePage = () => {
                   </div>
                 )}
               </div>
-            </details>
+            </details>}
 
             {(errors.versions || errors.eligibility || movieLoadError) && (
               <div id="versions-error" role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
@@ -545,7 +613,11 @@ const AdminAutoScheduleCreatePage = () => {
               ) : movieSearch.trim() && filteredMovies.length === 0 ? (
                 <p className="py-10 text-center text-sm text-zinc-500 lg:col-span-2">Không tìm thấy phim khớp từ khóa “{movieSearch.trim()}”.</p>
               ) : filteredMovies.length === 0 ? (
-                <p className="py-10 text-center text-sm text-zinc-500 lg:col-span-2">Không có phim phù hợp với bộ lọc hiện tại.</p>
+                <p className="py-10 text-center text-sm text-zinc-500 lg:col-span-2">
+                  {movieEligibilityFilter === 'eligible'
+                    ? 'Không có phim đủ điều kiện trong khoảng ngày này.'
+                    : 'Không có phim nào bị loại trong khoảng ngày này.'}
+                </p>
               ) : filteredMovies.map(movie => {
                 const isExpanded = Boolean(expandedMovies[movie.publicId]);
                 const versions = versionsByMovie[movie.publicId] || [];
@@ -622,7 +694,7 @@ const AdminAutoScheduleCreatePage = () => {
                         )}
                         {!movie.eligible && movie.reasons?.length > 0 && (
                           <span className="mt-3 block border-t border-red-500/15 pt-2 text-[10px] leading-relaxed text-red-300">
-                            {movie.reasons.map(reason => reason.message || reason.code).join(' · ')}
+                            {movie.reasons.map(getEligibilityReasonLabel).join(' · ')}
                           </span>
                         )}
                       </span>
