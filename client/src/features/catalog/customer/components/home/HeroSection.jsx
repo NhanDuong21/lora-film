@@ -19,7 +19,7 @@ const SelectField = ({ label, value, onChange, disabled, children }) => (
       value={value}
       onChange={onChange}
       disabled={disabled}
-      className="w-full appearance-none truncate border-0 bg-transparent p-0 text-xs font-bold text-zinc-200 outline-none focus-visible:text-brand-orange disabled:cursor-not-allowed"
+      className="[color-scheme:dark] w-full appearance-none truncate border-0 bg-transparent p-0 text-xs font-bold text-zinc-200 outline-none focus-visible:text-brand-orange disabled:cursor-not-allowed"
     >
       {children}
     </select>
@@ -98,21 +98,21 @@ export default function Hero() {
 
         <div className="mt-10 flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-2xl backdrop-blur md:flex-row md:items-center">
           <SelectField label="Phim" value={movieSlug} onChange={changeMovie} disabled={loading}>
-            <option value="">Chọn phim…</option>
-            {movies.map(movie => <option key={movie.publicId} value={movie.slug}>{movie.title}</option>)}
+            <option className="bg-zinc-950 text-zinc-100" value="">Chọn phim…</option>
+            {movies.map(movie => <option className="bg-zinc-950 text-zinc-100" key={movie.publicId} value={movie.slug}>{movie.title}</option>)}
           </SelectField>
           <SelectField label="Rạp" value={cinemaId} onChange={changeCinema} disabled={!movieSlug}>
-            <option value="">Chọn rạp…</option>
-            {cinemas.map(cinema => <option key={cinema.id} value={cinema.id}>{cinema.name}</option>)}
+            <option className="bg-zinc-950 text-zinc-100" value="">Chọn rạp…</option>
+            {cinemas.map(cinema => <option className="bg-zinc-950 text-zinc-100" key={cinema.id} value={cinema.id}>{cinema.name}</option>)}
           </SelectField>
           <SelectField label="Ngày phục vụ" value={serviceDate} onChange={changeDate} disabled={!cinemaId}>
-            <option value="">Chọn ngày…</option>
-            {dates.map(date => <option key={date} value={date}>{formatServiceDate(date)}</option>)}
+            <option className="bg-zinc-950 text-zinc-100" value="">Chọn ngày…</option>
+            {dates.map(date => <option className="bg-zinc-950 text-zinc-100" key={date} value={date}>{formatServiceDate(date)}</option>)}
           </SelectField>
           <SelectField label="Suất chiếu" value={showtimeId} onChange={event => setShowtimeId(event.target.value)} disabled={!serviceDate}>
-            <option value="">Chọn suất…</option>
+            <option className="bg-zinc-950 text-zinc-100" value="">Chọn suất…</option>
             {showtimes.map(showtime => (
-              <option key={showtime.showtimePublicId} value={showtime.showtimePublicId}>
+              <option className="bg-zinc-950 text-zinc-100" key={showtime.showtimePublicId} value={showtime.showtimePublicId}>
                 {formatLocalClock(showtime.localStartTime)} · {showtime.versionName || showtime.format}
               </option>
             ))}
@@ -121,7 +121,7 @@ export default function Hero() {
             type="button"
             disabled={!showtimeId}
             onClick={() => navigate(seatSelectionPath(showtimeId))}
-            className="m-3 rounded-full bg-brand-orange px-7 py-3 text-sm font-bold text-white shadow-lg shadow-brand-orange/20 transition-colors hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none"
+            className="m-3 rounded-full border border-transparent bg-brand-orange px-7 py-3 text-sm font-bold text-white shadow-lg shadow-brand-orange/20 transition-colors hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:border-brand-orange/30 disabled:bg-zinc-900 disabled:text-brand-orange/60 disabled:shadow-none"
           >
             Mua vé nhanh
           </button>
