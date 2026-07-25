@@ -25,6 +25,7 @@ public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
     Optional<Auditorium> findByPublicIdAndStatusAndDeletedAtIsNull(String publicId, AuditoriumStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.QueryHints(@jakarta.persistence.QueryHint(name = "jakarta.persistence.lock.timeout", value = "0"))
     @Query("SELECT a FROM Auditorium a WHERE a.publicId = :publicId AND a.deletedAt IS NULL")
     Optional<Auditorium> findByPublicIdAndDeletedAtIsNullForUpdate(@Param("publicId") String publicId);
 
