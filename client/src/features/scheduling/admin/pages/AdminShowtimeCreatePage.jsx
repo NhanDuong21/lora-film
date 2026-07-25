@@ -3,6 +3,7 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Calendar, Clock, Loader2, MapPin, Film, Info } from 'lucide-react';
 import useShowtimeForm from '@/features/scheduling/admin/hooks/useShowtimeForm';
 import SearchableSelect from '@/components/common/SearchableSelect';
+import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const AdminShowtimeCreatePage = () => {
   const { triggerToast } = useOutletContext() || {};
@@ -246,9 +247,9 @@ const AdminShowtimeCreatePage = () => {
               <div className="pt-4 mt-4 border-t border-zinc-800">
                 <span className="text-[10px] text-zinc-500 font-bold uppercase block mb-1">Trạng thái khởi tạo</span>
                 <span className="px-2.5 py-1 text-[10px] font-black border border-zinc-700 bg-zinc-800 text-zinc-300 rounded-full uppercase tracking-wider inline-block">
-                  DRAFT
+                  {getShowtimeStatusPresentation('DRAFT').label}
                 </span>
-                <p className="text-[10px] text-zinc-500 mt-2">Suất chiếu được tạo ở trạng thái nháp. Cần chuyển sang OPEN FOR BOOKING để mở bán.</p>
+                <p className="text-[10px] text-zinc-500 mt-2">Suất chiếu được tạo ở trạng thái Bản nháp. Cần chuyển sang Đang mở bán để bắt đầu nhận đặt vé.</p>
               </div>
 
             </div>

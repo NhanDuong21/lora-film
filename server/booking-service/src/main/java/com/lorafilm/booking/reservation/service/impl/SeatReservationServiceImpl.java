@@ -618,7 +618,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
                 recordOutboxEvent("SeatReservation", reservation.getId(),
                         targetReservationStatus == SeatReservationStatus.RELEASED ? "SEAT_RELEASED" : "SEAT_RESERVATION_EXPIRED",
                         reservation);
-                
+
                 if (targetReservationStatus == SeatReservationStatus.RELEASED) {
                     releasedCount++;
                 } else if (targetReservationStatus == SeatReservationStatus.EXPIRED) {

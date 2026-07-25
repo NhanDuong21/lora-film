@@ -4,6 +4,7 @@ import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.entity.ShowtimeStatusHistory;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.dto.response.ShowtimeStatusHistoryResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeStatusHistoryRepository;
@@ -69,6 +70,13 @@ public class ShowtimeStatusHistoryServiceImpl implements ShowtimeStatusHistorySe
             response.setReason(history.getReason());
             response.setChangedAt(history.getChangedAt());
             response.setChangedBy(history.getChangedBy());
+            boolean isInitialEvent = history.getPreviousStatus() == null;
+            response.setSource(isInitialEvent && showtime.getSource() != null
+                    ? showtime.getSource().name()
+                    : ShowtimeSource.MANUAL.name());
+            response.setPreviewPublicId(showtime.getSource() == ShowtimeSource.AUTO
+                    ? showtime.getBatchId()
+                    : null);
             return response;
         }).collect(Collectors.toList());
     }

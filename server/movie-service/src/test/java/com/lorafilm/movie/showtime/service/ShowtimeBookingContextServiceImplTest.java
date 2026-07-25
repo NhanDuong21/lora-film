@@ -37,7 +37,7 @@ import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
 import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
-import com.lorafilm.movie.showtime.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 
 @ExtendWith(MockitoExtension.class)

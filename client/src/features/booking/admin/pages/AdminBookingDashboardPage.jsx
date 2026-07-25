@@ -24,7 +24,7 @@ export default function AdminBookingDashboardPage() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
-    
+
     try {
       const filters = {
         page,
@@ -108,7 +108,7 @@ export default function AdminBookingDashboardPage() {
 
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-brand-orange selection:text-zinc-950">
-      
+
       {/* Title */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-850 pb-4">
         <div>
@@ -243,7 +243,7 @@ export default function AdminBookingDashboardPage() {
           >
             Xóa bộ lọc
           </button>
-          
+
           <button
             type="submit"
             className="px-6 py-2 bg-brand-orange hover:bg-opacity-90 text-white rounded-xl text-xs font-bold tracking-wider uppercase transition-all shadow-md shadow-brand-orange/15 flex items-center gap-1.5 cursor-pointer"

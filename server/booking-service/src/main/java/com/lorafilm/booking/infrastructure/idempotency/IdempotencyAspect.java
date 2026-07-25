@@ -55,7 +55,7 @@ public class IdempotencyAspect {
         HttpServletRequest request = attributes.getRequest();
         String key = request.getHeader(IDEMPOTENCY_HEADER);
 
-        // If no idempotency key is provided, we proceed without enforcing it or log it. 
+        // If no idempotency key is provided, we proceed without enforcing it or log it.
         // As a production-ready system, we only enforce if the header is present, otherwise we bypass.
         if (key == null || key.trim().isEmpty()) {
             return joinPoint.proceed();

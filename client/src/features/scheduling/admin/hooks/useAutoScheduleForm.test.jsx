@@ -86,6 +86,20 @@ describe('useAutoScheduleForm', () => {
     expect(result.current.selectionNotice).toContain('Đã bỏ 1 định dạng');
   });
 
+  it('exposes an explicit retry for a failed movie eligibility load', async () => {
+    adminAutoScheduleService.getEligibleMovies
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ success: true, data: [eligibleMovie] });
+    const { result } = renderHook(() => useAutoScheduleForm({}));
+
+    await waitFor(() => expect(result.current.movieLoadError).toBeTruthy());
+    act(() => result.current.retryMovies());
+
+    await waitFor(() => expect(result.current.movies).toHaveLength(1));
+    expect(result.current.movieLoadError).toBe('');
+    expect(adminAutoScheduleService.getEligibleMovies).toHaveBeenCalledTimes(2);
+  });
+
   it('blocks an eight-day request before calling the backend', async () => {
     const { result } = renderHook(() => useAutoScheduleForm({}));
     await configure(result, '2099-08-29');

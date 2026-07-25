@@ -218,6 +218,14 @@ export const formatPreviewDateKey = (dateKey, { weekday = false } = {}) => {
   }).format(date);
 };
 
+export const formatPreviewDateRange = (scheduleFrom, scheduleTo) => {
+  const from = formatPreviewDateKey(scheduleFrom);
+  const to = formatPreviewDateKey(scheduleTo);
+  if (from === '—') return to;
+  if (to === '—') return from;
+  return `${from} – ${to}`;
+};
+
 export const formatCinemaTimeRange = (startTime, endTime, timezone) => {
   const startParts = getCinemaTimeParts(startTime, timezone);
   const endParts = getCinemaTimeParts(endTime, timezone);

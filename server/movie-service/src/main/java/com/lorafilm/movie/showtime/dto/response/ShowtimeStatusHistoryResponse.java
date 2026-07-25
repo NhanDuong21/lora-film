@@ -9,6 +9,8 @@ public class ShowtimeStatusHistoryResponse {
     private String reason;
     private Instant changedAt;
     private Long changedBy;
+    private String source;
+    private String previewPublicId;
 
     public ShowtimeStatusHistoryResponse() {}
 
@@ -50,5 +52,21 @@ public class ShowtimeStatusHistoryResponse {
 
     public void setChangedBy(Long changedBy) {
         this.changedBy = changedBy;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
+    }
+
+    public String getPreviewPublicId() {
+        return previewPublicId;
+    }
+
+    public void setPreviewPublicId(String previewPublicId) {
+        this.previewPublicId = previewPublicId;
     }
 }

@@ -56,9 +56,9 @@ describe('preview lifecycle capabilities', () => {
     const expected = {
       [CANDIDATE_APPLY_STATE.PENDING]: 'Đang chờ',
       [CANDIDATE_APPLY_STATE.CREATED]: 'Đã tạo suất chiếu',
-      [CANDIDATE_APPLY_STATE.SKIPPED]: 'Đã bỏ qua',
-      [CANDIDATE_APPLY_STATE.CONFLICT]: 'Xung đột khi áp dụng',
-      [CANDIDATE_APPLY_STATE.FAILED]: 'Áp dụng thất bại',
+      [CANDIDATE_APPLY_STATE.SKIPPED]: 'Không được chọn',
+      [CANDIDATE_APPLY_STATE.CONFLICT]: 'Xung đột',
+      [CANDIDATE_APPLY_STATE.FAILED]: 'Thất bại',
     };
 
     Object.entries(expected).forEach(([state, label]) => {

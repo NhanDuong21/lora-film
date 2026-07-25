@@ -23,6 +23,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     Optional<Booking> findByPublicId(String publicId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.id = :id AND b.isDeleted = false")
+    Optional<Booking> findByIdForPaymentUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM Booking b WHERE b.publicId = :publicId")
     Optional<Booking> findByPublicIdWithLock(@Param("publicId") String publicId);
 

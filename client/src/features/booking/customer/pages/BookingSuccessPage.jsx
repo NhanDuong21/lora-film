@@ -86,9 +86,9 @@ export default function BookingSuccessPage() {
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium print:bg-white print:text-black print:pt-4">
-      
+
       <div className="max-w-4xl mx-auto w-full space-y-8">
-        
+
         {/* Success Announcement Header */}
         <div className="text-center space-y-3 print:hidden">
           <div className="w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-400 mx-auto mb-4 border border-emerald-500/30">
@@ -103,11 +103,11 @@ export default function BookingSuccessPage() {
         {/* Dynamic Tickets list with QR Code */}
         <div className="space-y-6">
           <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 print:hidden">VÉ XEM PHIM CỦA BẠN (TICKET)</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {tickets.map(ticket => (
-              <div 
-                key={ticket.id} 
+              <div
+                key={ticket.id}
                 className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl relative print:bg-white print:text-black print:border-black print:shadow-none"
               >
                 {/* Decorative half-circle cutouts (ticket style) */}
@@ -158,9 +158,9 @@ export default function BookingSuccessPage() {
                 {/* Right Section: Scanning QR Code */}
                 <div className="w-full md:w-44 shrink-0 bg-zinc-950/60 p-6 flex flex-col items-center justify-center text-center gap-3 print:bg-white print:border-t print:border-black">
                   <div className="w-28 aspect-square bg-white rounded-xl p-2 shadow-inner shrink-0 flex items-center justify-center">
-                    <img 
-                      src={getQrCodeUrl(ticket.ticketCode)} 
-                      alt={ticket.ticketCode} 
+                    <img
+                      src={getQrCodeUrl(ticket.ticketCode)}
+                      alt={ticket.ticketCode}
                       className="max-w-full max-h-full"
                     />
                   </div>
@@ -253,7 +253,7 @@ export default function BookingSuccessPage() {
             <Printer className="w-4 h-4" />
             <span>In / Tải PDF Hóa Đơn</span>
           </button>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <Link
               to="/bookings"
@@ -262,7 +262,7 @@ export default function BookingSuccessPage() {
               <ShoppingBag className="w-4 h-4" />
               <span>Lịch sử đặt vé</span>
             </Link>
-            
+
             <Link
               to="/"
               className="bg-brand-orange hover:bg-opacity-95 text-white font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-widest text-center flex items-center justify-center gap-1.5 shadow-lg shadow-brand-orange/20"

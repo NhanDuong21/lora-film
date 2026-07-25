@@ -3,11 +3,12 @@ package com.lorafilm.booking.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.controller.InternalBookingController;
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
-import com.lorafilm.booking.booking.dto.BookingPaymentContextDto;
-import com.lorafilm.booking.booking.dto.BookingPaymentResultRequestDto;
-import com.lorafilm.booking.booking.dto.BookingPaymentResultResponseDto;
+import com.lorafilm.booking.booking.dto.request.InternalPaymentResultRequest;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.service.InternalBookingService;
+import com.lorafilm.booking.booking.service.InternalBookingPaymentService;
+import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
+import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -30,10 +33,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class InternalBookingControllerTest {
 
     private MockMvc mockMvc;
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Mock
     private InternalBookingService internalBookingService;
+    @Mock
+    private InternalBookingPaymentService internalBookingPaymentService;
 
     @InjectMocks
     private InternalBookingController internalBookingController;
@@ -110,31 +115,44 @@ public class InternalBookingControllerTest {
     }
 
     @Test
-    public void getPaymentContext_Success_Returns200() throws Exception {
-        BookingPaymentContextDto response = new BookingPaymentContextDto();
-        response.setBookingId(1001L);
-        response.setBookingStatus("PENDING_PAYMENT");
-        response.setPayable(true);
+    public void getPaymentContext_Success_ReturnsAuthoritativeAmount() throws Exception {
+        InternalPaymentContextResponse response = new InternalPaymentContextResponse(
+                10L,
+                15L,
+                "PENDING_PAYMENT",
+                true,
+                new BigDecimal("240000.00"),
+                "VND",
+                LocalDateTime.now().plusMinutes(15),
+                new InternalPaymentContextResponse.AnalyticsSnapshot(101L, "Superman", 2));
+        when(internalBookingPaymentService.getPaymentContext(10L)).thenReturn(response);
 
-        when(internalBookingService.getPaymentContext(1001L)).thenReturn(response);
-
-        mockMvc.perform(get("/internal/bookings/1001/payment-context")
+        mockMvc.perform(get("/internal/bookings/10/payment-context")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.bookingId").value(1001))
-                .andExpect(jsonPath("$.data.payable").value(true));
+                .andExpect(jsonPath("$.data.amount").value(240000.00))
+                .andExpect(jsonPath("$.data.currency").value("VND"))
+                .andExpect(jsonPath("$.data.analyticsSnapshot.ticketCount").value(2));
     }
 
     @Test
-    public void processPaymentResult_Success_Returns200() throws Exception {
-        BookingPaymentResultRequestDto request = new BookingPaymentResultRequestDto();
-        request.setEventId("event-123");
-        request.setResult("SUCCESS");
-
-        BookingPaymentResultResponseDto response = new BookingPaymentResultResponseDto("event-123", true, false, "BOOKING_CONFIRMED");
-
-        when(internalBookingService.processPaymentResult(eq(1001L), any(BookingPaymentResultRequestDto.class))).thenReturn(response);
+    public void recordPaymentResult_Success_ReturnsAuthoritativeState() throws Exception {
+        InternalPaymentResultRequest request = new InternalPaymentResultRequest(
+                "event-123",
+                "v1",
+                501L,
+                "TX-1001",
+                "VNPAY",
+                "SUCCESS",
+                new BigDecimal("240000.00"),
+                "VND",
+                LocalDateTime.now(),
+                "EXT-999",
+                "MATCHED");
+        InternalPaymentResultResponse response = new InternalPaymentResultResponse(
+                1001L, "event-123", "CONFIRMED", "SUCCESS", false);
+        when(internalBookingPaymentService.recordPaymentResult(
+                eq(1001L), any(InternalPaymentResultRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/internal/bookings/1001/payment-results")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -142,6 +160,8 @@ public class InternalBookingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.eventId").value("event-123"))
-                .andExpect(jsonPath("$.data.result").value("BOOKING_CONFIRMED"));
+                .andExpect(jsonPath("$.data.bookingStatus").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data.paymentStatus").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.idempotent").value(false));
     }
 }

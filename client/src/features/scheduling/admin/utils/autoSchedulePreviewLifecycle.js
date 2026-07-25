@@ -1,3 +1,5 @@
+import { CANDIDATE_APPLY_PRESENTATION } from './schedulingPresentation';
+
 export const PREVIEW_LIFECYCLE_STATUS = Object.freeze({
   GENERATING: 'GENERATING',
   PREVIEWED: 'PREVIEWED',
@@ -16,33 +18,7 @@ export const CANDIDATE_APPLY_STATE = Object.freeze({
   FAILED: 'FAILED',
 });
 
-export const CANDIDATE_APPLY_STATE_META = Object.freeze({
-  [CANDIDATE_APPLY_STATE.PENDING]: {
-    label: 'Đang chờ',
-    description: 'Ứng viên vẫn đang chờ lựa chọn hoặc áp dụng.',
-    tone: 'blue',
-  },
-  [CANDIDATE_APPLY_STATE.CREATED]: {
-    label: 'Đã tạo suất chiếu',
-    description: 'Một suất chiếu chính thức đã được tạo từ ứng viên này.',
-    tone: 'green',
-  },
-  [CANDIDATE_APPLY_STATE.SKIPPED]: {
-    label: 'Đã bỏ qua',
-    description: 'Ứng viên không được chọn khi bản xem trước được áp dụng.',
-    tone: 'zinc',
-  },
-  [CANDIDATE_APPLY_STATE.CONFLICT]: {
-    label: 'Xung đột khi áp dụng',
-    description: 'Ứng viên gặp xung đột trong quá trình áp dụng.',
-    tone: 'red',
-  },
-  [CANDIDATE_APPLY_STATE.FAILED]: {
-    label: 'Áp dụng thất bại',
-    description: 'Không thể tạo suất chiếu từ ứng viên này.',
-    tone: 'red',
-  },
-});
+export const CANDIDATE_APPLY_STATE_META = CANDIDATE_APPLY_PRESENTATION;
 
 const LIFECYCLE_MESSAGES = Object.freeze({
   [PREVIEW_LIFECYCLE_STATUS.GENERATING]: 'Bản xem trước đang được tạo. Dữ liệu lựa chọn chưa sẵn sàng.',

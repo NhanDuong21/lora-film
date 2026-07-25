@@ -22,6 +22,7 @@ import {
   Armchair,
   History,
   Zap,
+  BadgeDollarSign,
   ClipboardList
 } from 'lucide-react';
 
@@ -205,6 +206,13 @@ export default function AdminSidebar({
                     <span>Quản lý suất chiếu</span>
                   </button>
                   <button
+                    onClick={() => handleTabClick('pricing', '#/admin/pricing')}
+                    className={getSubLinkClass('pricing')}
+                  >
+                    <BadgeDollarSign className="w-4 h-4 shrink-0" />
+                    <span>Chính sách giá</span>
+                  </button>
+                  <button
                     onClick={() => handleTabClick('auto-schedule-create', '#/admin/showtime-schedules/create')}
                     className={getSubLinkClass('auto-schedule-create')}
                   >
@@ -216,7 +224,7 @@ export default function AdminSidebar({
                     className={getSubLinkClass('auto-schedule-history')}
                   >
                     <History className="w-4 h-4 shrink-0" />
-                    <span>Lịch sử bản xem trước xếp lịch</span>
+                    <span>Lịch sử bản xem trước</span>
                   </button>
                 </div>
               )}

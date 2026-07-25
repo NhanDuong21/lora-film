@@ -14,9 +14,16 @@ public interface ShowtimePriceRepository extends JpaRepository<ShowtimePrice, Lo
 
     List<ShowtimePrice> findByShowtimeId(Long showtimeId);
 
-    @Query("SELECT sp FROM ShowtimePrice sp JOIN FETCH sp.seatType WHERE sp.showtime.id = :showtimeId")
+    @Query("SELECT sp FROM ShowtimePrice sp JOIN FETCH sp.seatType " +
+           "LEFT JOIN FETCH sp.sourcePolicy LEFT JOIN FETCH sp.sourceRule " +
+           "WHERE sp.showtime.id = :showtimeId ORDER BY sp.seatType.publicId")
     List<ShowtimePrice> findByShowtimeIdWithSeatType(@Param("showtimeId") Long showtimeId);
 
     Optional<ShowtimePrice> findByShowtimeIdAndSeatTypeId(Long showtimeId, Long seatTypeId);
+
+    void deleteByShowtimeId(Long showtimeId);
+
+    @Query("select count(distinct sp.showtime.id) from ShowtimePrice sp where sp.sourcePolicy.publicId = :policyPublicId")
+    long countDistinctShowtimesBySourcePolicyPublicId(@Param("policyPublicId") String policyPublicId);
 
 }
