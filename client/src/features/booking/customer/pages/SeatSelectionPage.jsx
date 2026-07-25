@@ -11,7 +11,7 @@ import {
   sortSeatLegend
 } from '@/features/booking/customer/utils/seatPresentation';
 import { holdSeats } from '../services/seatReservationService';
-import { createBooking } from '../services/bookingService';
+import { createBooking, getBookingHistory, getBookingDetails, getBookingTickets } from '../services/bookingService';
 import BookingStepper from '../components/BookingStepper';
 
 const money = value => value == null
@@ -36,6 +36,72 @@ export default function SeatSelectionPage() {
   const [toastMessage, setToastMessage] = useState('');
   const [showGapModal, setShowGapModal] = useState(false);
   const [reservationLoading, setReservationLoading] = useState(false);
+  const [activeBooking, setActiveBooking] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(null);
+
+  // Check for active booking drafts when layout is loaded
+  useEffect(() => {
+    if (!layout || !layout.showtimeId) return;
+
+    let isMounted = true;
+
+    const checkActiveBooking = async () => {
+      try {
+        const history = await getBookingHistory({ status: 'PENDING_PAYMENT' });
+        if (!isMounted) return;
+
+        const match = history?.content?.find(b => b.showtimeId === layout.showtimeId);
+        if (match) {
+          const details = await getBookingDetails(match.publicId);
+          if (!isMounted) return;
+          const tickets = await getBookingTickets(match.publicId).catch(() => []);
+          if (!isMounted) return;
+          setActiveBooking({ ...details, tickets });
+        }
+      } catch (err) {
+        console.error("Failed to check active bookings:", err);
+      }
+    };
+
+    checkActiveBooking();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [layout]);
+
+  // Expiration countdown logic for active reservation
+  useEffect(() => {
+    if (!activeBooking || !activeBooking.paymentDeadline) return;
+
+    const calculateTimeLeft = () => {
+      const diff = new Date(activeBooking.paymentDeadline) - new Date();
+      if (diff <= 0) {
+        setTimeLeft(0);
+        return;
+      }
+      setTimeLeft(Math.floor(diff / 1000));
+    };
+
+    calculateTimeLeft();
+    const interval = setInterval(calculateTimeLeft, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeBooking]);
+
+  useEffect(() => {
+    if (timeLeft === 0) {
+      setActiveBooking(null);
+      setTimeLeft(null);
+    }
+  }, [timeLeft]);
+
+  const formattedTimeLeft = useMemo(() => {
+    if (timeLeft === null) return null;
+    const mins = String(Math.floor(timeLeft / 60)).padStart(2, '0');
+    const secs = String(timeLeft % 60).padStart(2, '0');
+    return `${mins}:${secs}`;
+  }, [timeLeft]);
 
   const load = useCallback(async signal => {
     if (!showtimePublicId) {
@@ -177,7 +243,7 @@ export default function SeatSelectionPage() {
         seatIds: selectedSeats.map(s => s.id)
       }, uuidv4());
 
-      const reservationPublicIds = holdResponse.publicIds || [];
+      const reservationPublicIds = holdResponse.reservationPublicIds || [];
 
       // Create Booking Draft
       const bookingData = await createBooking({
@@ -287,9 +353,39 @@ export default function SeatSelectionPage() {
           </div>
         </section>
 
+        {/* Active Booking Banner */}
+        {activeBooking && timeLeft > 0 && (
+          <div className="mb-8 bg-zinc-900 border border-brand-orange/30 p-5 rounded-3xl flex flex-col sm:flex-row justify-between items-center gap-4 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-brand-orange/10 p-3 text-brand-orange animate-pulse">
+                <Clock3 className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-brand-orange">Đơn hàng đang xử lý</p>
+                <h3 className="mt-1 text-sm font-bold text-white">
+                  Bạn đang giữ các ghế: <span className="text-brand-orange">{activeBooking.tickets?.map(t => t.seatLabel || t.seatCode)?.join(', ') || '...'}</span>
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">Vui lòng thanh toán hoặc hủy vé cũ trước khi đặt thêm ghế mới.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+              <div className="text-right">
+                <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Thời gian còn lại</span>
+                <span className="text-xl font-black text-brand-orange tracking-widest">{formattedTimeLeft}</span>
+              </div>
+              <button
+                onClick={() => navigate(`/bookings/checkout?bookingId=${activeBooking.publicId}`, { state: { showtime: layout } })}
+                className="bg-brand-orange hover:bg-orange-600 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-brand-orange/20"
+              >
+                Thanh toán ngay
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Warning Toast Alerts */}
         {toastMessage && (
-          <div className="mb-6 bg-red-950/80 border border-red-500/30 text-red-200 px-5 py-4 rounded-2xl flex items-center gap-3 text-sm animate-pulse">
+          <div className="fixed bottom-28 right-6 z-50 max-w-md bg-red-950/90 border border-red-500/30 text-red-200 px-5 py-4 rounded-2xl flex items-center gap-3 text-sm animate-bounce shadow-2xl backdrop-blur-sm">
             <Info size={18} className="text-red-400 shrink-0" />
             <span>{toastMessage}</span>
           </div>

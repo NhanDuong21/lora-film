@@ -188,7 +188,7 @@ export default function BookingCheckoutPage() {
     setPaymentLoading(true);
     try {
       // Initiate payment simulation on mock controller
-      const endpoint = success ? '/internal/mock/payment/success' : '/internal/mock/payment/fail';
+      const endpoint = success ? '/api/mock/payment/success' : '/api/mock/payment/fail';
       await axios.post(endpoint, {
         bookingCode: booking.bookingCode
       });
