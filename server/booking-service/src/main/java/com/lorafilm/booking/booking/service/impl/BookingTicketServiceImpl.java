@@ -78,7 +78,7 @@ public class BookingTicketServiceImpl implements BookingTicketService {
 
         List<BookingTicket> tickets = bookingTicketRepository.findByBookingId(bookingId);
         if (tickets.isEmpty()) {
-            throw new BusinessException("NO_TICKETS_FOUND", "Booking has no tickets to delete/cancel");
+            return;
         }
 
         for (BookingTicket ticket : tickets) {
