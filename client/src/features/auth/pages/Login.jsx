@@ -49,7 +49,11 @@ function Login() {
                     } else if (role === "EMPLOYEE" || role === "STAFF" || role === "ROLE_STAFF") {
                         navigate("/employee");
                     } else {
-                        navigate("/");
+                        const from = location.state?.from;
+                        const redirectTo = from?.pathname
+                            ? `${from.pathname}${from.search || ""}${from.hash || ""}`
+                            : "/";
+                        navigate(redirectTo, { replace: true });
                     }
                 }, 400);
             } else {
