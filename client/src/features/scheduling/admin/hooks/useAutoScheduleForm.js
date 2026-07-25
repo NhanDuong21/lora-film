@@ -177,6 +177,18 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
 
   const clearAuditoriums = useCallback(() => setSelectedAuditoriumIds([]), []);
 
+  const selectEligibleMovieVersions = useCallback((movieIds = movies.map(movie => movie.publicId)) => {
+    const allowedMovieIds = new Set(movieIds);
+    const selectableIds = movies
+      .filter(movie => allowedMovieIds.has(movie.publicId) && movie.eligible)
+      .flatMap(movie => (versionsByMovie[movie.publicId] || [])
+        .filter(version => version.status === 'ACTIVE')
+        .map(version => version.publicId));
+    setSelectedMovieVersionIds(selectableIds);
+  }, [movies, versionsByMovie]);
+
+  const clearMovieVersions = useCallback(() => setSelectedMovieVersionIds([]), []);
+
   const toggleVersion = useCallback(versionId => {
     setSelectedMovieVersionIds(previous => previous.includes(versionId)
       ? previous.filter(id => id !== versionId)
@@ -309,6 +321,8 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
     selectedMovieVersionIds,
     selectedVersions,
     toggleVersion,
+    selectEligibleMovieVersions,
+    clearMovieVersions,
     isLoadingCinemas,
     isLoadingAuditoriums,
     isLoadingMovies,

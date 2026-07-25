@@ -17,9 +17,11 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AdminMovieController.class)
@@ -84,6 +86,57 @@ class AdminMovieSummarySecurityTest {
     @WithMockUser(authorities = "ROLE_ADMIN")
     void tmdbReviewAllowsAdminUsers() throws Exception {
         mockMvc.perform(get("/api/admin/movies/movie-id/tmdb-review"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void bulkApprovalRejectsAnonymousUsers() throws Exception {
+        mockMvc.perform(post("/api/admin/movies/bulk-approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void bulkApprovalAllowsAdminUsers() throws Exception {
+        mockMvc.perform(post("/api/admin/movies/bulk-approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void bulkArchiveRejectsAnonymousUsers() throws Exception {
+        mockMvc.perform(post("/api/admin/movies/bulk-archive-old")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void bulkArchiveAllowsAdminUsers() throws Exception {
+        mockMvc.perform(post("/api/admin/movies/bulk-archive-old")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void queueBreakdownRejectsAnonymousUsers() throws Exception {
+        mockMvc.perform(get("/api/admin/movies/tmdb-queue-breakdown")
+                        .param("status", "DRAFT")
+                        .param("source", "TMDB"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void queueBreakdownAllowsAdminUsers() throws Exception {
+        mockMvc.perform(get("/api/admin/movies/tmdb-queue-breakdown")
+                        .param("status", "DRAFT")
+                        .param("source", "TMDB"))
                 .andExpect(status().isOk());
     }
 }
