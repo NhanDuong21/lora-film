@@ -849,6 +849,9 @@ CREATE TABLE booking_idempotency_keys (
     endpoint VARCHAR(255) NOT NULL
         COMMENT 'Đường dẫn API Endpoint',
 
+    status VARCHAR(50) NOT NULL DEFAULT 'PROCESSING'
+        COMMENT 'Trạng thái xử lý (PROCESSING, COMPLETED, FAILED)',
+
     response_status INT
         COMMENT 'Mã trạng thái HTTP Response trả về lần đầu (200, 201...)',
 
