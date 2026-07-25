@@ -67,6 +67,13 @@ const adminMovieService = {
     return response.data;
   },
 
+  bulkArchiveOldTmdbMovies: async (filter, limit = 100) => {
+    const response = await apiClient.post('/api/admin/movies/bulk-archive-old', filter, {
+      params: { limit }
+    });
+    return response.data;
+  },
+
   deleteMovie: async (publicId) => {
     const response = await apiClient.delete(`/api/admin/movies/${publicId}`);
     return response.data;

@@ -32,6 +32,7 @@ import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResult;
+import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
 import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
@@ -103,7 +104,8 @@ public class MovieServiceImpl implements MovieService {
 
         Specification<Movie> specification = buildAdminMovieSpecification(filter)
                 .and(MovieSpecification.hasStatus(MovieStatus.DRAFT))
-                .and(MovieSpecification.hasTmdbSource(true));
+                .and(MovieSpecification.hasTmdbSource(true))
+                .and(MovieSpecification.releaseDateFrom(lifecyclePolicy.currentDate().plusDays(1)));
         Pageable pageable = PageRequest.of(0, limit, parseSort(filter.getSort()));
         List<Movie> candidates = movieRepository.findAll(specification, pageable).getContent();
         List<MovieBulkApprovalResult> results = new java.util.ArrayList<>();
@@ -166,6 +168,92 @@ public class MovieServiceImpl implements MovieService {
         return new MovieBulkApprovalResponse(
                 candidates.size(),
                 approved,
+                skipped,
+                errors,
+                limit,
+                List.copyOf(results));
+    }
+
+    @Override
+    @Transactional
+    public MovieBulkArchiveResponse bulkArchiveOldTmdbMovies(AdminMovieListQuery filter, int limit) {
+        validateBulkArchiveFilter(filter, limit);
+
+        Specification<Movie> specification = buildAdminMovieSpecification(filter)
+                .and(MovieSpecification.hasStatus(MovieStatus.DRAFT))
+                .and(MovieSpecification.hasTmdbSource(true))
+                .and(MovieSpecification.releaseDateTo(lifecyclePolicy.currentDate()));
+        Pageable pageable = PageRequest.of(0, limit, parseSort(filter.getSort()));
+        List<Movie> candidates = movieRepository.findAll(specification, pageable).getContent();
+        List<MovieBulkApprovalResult> results = new java.util.ArrayList<>();
+
+        for (Movie candidate : candidates) {
+            String publicId = candidate.getPublicId();
+            String title = candidate.getTitle();
+            try {
+                Movie freshMovie = movieRepository.findByPublicIdAndDeletedAtIsNull(publicId).orElse(null);
+                if (freshMovie == null) {
+                    results.add(MovieBulkApprovalResult.skipped(
+                            publicId,
+                            title,
+                            ErrorCode.MOVIE_NOT_FOUND.name(),
+                            "Movie no longer exists or was deleted."));
+                    continue;
+                }
+                if (freshMovie.getStatus() != MovieStatus.DRAFT) {
+                    results.add(MovieBulkApprovalResult.skipped(
+                            publicId,
+                            freshMovie.getTitle(),
+                            "STATUS_CHANGED",
+                            "Movie is no longer waiting for approval."));
+                    continue;
+                }
+                if (freshMovie.getTmdbId() == null) {
+                    results.add(MovieBulkApprovalResult.skipped(
+                            publicId,
+                            freshMovie.getTitle(),
+                            "SOURCE_CHANGED",
+                            "Movie is no longer a TMDB import."));
+                    continue;
+                }
+                if (freshMovie.getReleaseDate() == null
+                        || freshMovie.getReleaseDate().isAfter(lifecyclePolicy.currentDate())) {
+                    results.add(MovieBulkApprovalResult.skipped(
+                            publicId,
+                            freshMovie.getTitle(),
+                            "RELEASE_DATE_CHANGED",
+                            "Movie is no longer an old release eligible for archiving."));
+                    continue;
+                }
+
+                MovieDto archived = transitionMovieStatus(freshMovie, MovieStatus.INACTIVE);
+                results.add(MovieBulkApprovalResult.archived(
+                        publicId,
+                        freshMovie.getTitle(),
+                        archived.getStatus()));
+            } catch (BusinessException exception) {
+                ErrorCode errorCode = exception.getErrorCode();
+                results.add(MovieBulkApprovalResult.skipped(
+                        publicId,
+                        title,
+                        errorCode == null ? "VALIDATION_FAILED" : errorCode.name(),
+                        exception.getMessage()));
+            } catch (RuntimeException exception) {
+                log.error("Bulk TMDB archive failed for movie {}", publicId, exception);
+                results.add(MovieBulkApprovalResult.error(
+                        publicId,
+                        title,
+                        ErrorCode.INTERNAL_SERVER_ERROR.name(),
+                        "Unexpected error while archiving this movie."));
+            }
+        }
+
+        int archived = (int) results.stream().filter(item -> "ARCHIVED".equals(item.outcome())).count();
+        int errors = (int) results.stream().filter(item -> "ERROR".equals(item.outcome())).count();
+        int skipped = results.size() - archived - errors;
+        return new MovieBulkArchiveResponse(
+                candidates.size(),
+                archived,
                 skipped,
                 errors,
                 limit,
@@ -294,6 +382,21 @@ public class MovieServiceImpl implements MovieService {
         }
         if (!"TMDB".equalsIgnoreCase(normalize(filter.getSource()))) {
             throw validationError("Bulk approval requires source=TMDB");
+        }
+    }
+
+    private void validateBulkArchiveFilter(AdminMovieListQuery filter, int limit) {
+        if (filter == null) {
+            throw validationError("Movie filter is required");
+        }
+        if (limit < 1 || limit > 100) {
+            throw validationError("Bulk archive limit must be between 1 and 100");
+        }
+        if (!"DRAFT".equalsIgnoreCase(normalize(filter.getStatus()))) {
+            throw validationError("Bulk archive requires status=DRAFT");
+        }
+        if (!"TMDB".equalsIgnoreCase(normalize(filter.getSource()))) {
+            throw validationError("Bulk archive requires source=TMDB");
         }
     }
 

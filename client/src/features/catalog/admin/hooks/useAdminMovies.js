@@ -57,6 +57,11 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     result: null,
     error: '',
   });
+  const [bulkArchive, setBulkArchive] = useState({
+    isPending: false,
+    result: null,
+    error: '',
+  });
   const requestSequence = useRef(0);
   const hasLoaded = useRef(false);
 
@@ -170,6 +175,24 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     }
   }, [query, refreshAll, triggerToast]);
 
+  const bulkArchiveOldTmdbMovies = useCallback(async (limit = 100) => {
+    setBulkArchive({ isPending: true, result: null, error: '' });
+    try {
+      const envelope = await adminMovieService.bulkArchiveOldTmdbMovies(toMovieApiParams(query), limit);
+      if (envelope?.success !== true || !envelope.data || !Array.isArray(envelope.data.results)) {
+        throw new Error('Phản hồi lưu trữ hàng loạt không đúng định dạng.');
+      }
+      setBulkArchive({ isPending: false, result: envelope.data, error: '' });
+      await refreshAll();
+      return envelope.data;
+    } catch (err) {
+      const message = parseApiError(err);
+      setBulkArchive({ isPending: false, result: null, error: message });
+      triggerToast?.(message, 'error');
+      return null;
+    }
+  }, [query, refreshAll, triggerToast]);
+
   const handleDelete = async (publicId, title) => {
     const shouldDelete = triggerConfirm
       ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)
@@ -207,6 +230,8 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     refreshAll,
     bulkApproval,
     bulkApproveTmdbMovies,
+    bulkArchive,
+    bulkArchiveOldTmdbMovies,
     handleDelete,
     defaults: ADMIN_MOVIE_QUERY_DEFAULTS,
   };

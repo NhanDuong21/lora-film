@@ -9,6 +9,7 @@ import com.lorafilm.movie.movie.domain.enums.AgeRating;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
+import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
 import com.lorafilm.movie.movie.repository.MovieCreditRepository;
@@ -163,6 +164,51 @@ class MovieServiceImplLifecycleTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.bulkApproveTmdbMovies(filter, 100));
+
+        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
+        verify(movieRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void bulkArchiveMovesOnlyOldTmdbDraftsToInactiveAndRevalidates() {
+        Movie old = movie(6L, MovieStatus.DRAFT, 120);
+        old.setTmdbId(1006L);
+        old.setReleaseDate(LocalDate.now().minusDays(1));
+
+        when(movieRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(old)));
+        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-6")).thenReturn(Optional.of(old));
+        when(movieGenreRepository.findByMovieId(6L)).thenReturn(List.of());
+        when(movieRepository.save(old)).thenReturn(old);
+        when(movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                any(), any(), any())).thenReturn(Optional.empty());
+        MovieDto archivedDto = new MovieDto();
+        archivedDto.setStatus(MovieStatus.INACTIVE);
+        when(movieMapper.toDto(any(), anyList(), isNull())).thenReturn(archivedDto);
+
+        AdminMovieListQuery filter = new AdminMovieListQuery();
+        filter.setStatus("DRAFT");
+        filter.setSource("TMDB");
+
+        MovieBulkArchiveResponse response = service.bulkArchiveOldTmdbMovies(filter, 100);
+
+        assertEquals(1, response.requested());
+        assertEquals(1, response.archived());
+        assertEquals(0, response.skipped());
+        assertEquals("ARCHIVED", response.results().get(0).outcome());
+        assertEquals(MovieStatus.INACTIVE, old.getStatus());
+        verify(movieRepository).save(old);
+    }
+
+    @Test
+    void bulkArchiveRejectsAFilterOutsideTheTmdbDraftQueue() {
+        AdminMovieListQuery filter = new AdminMovieListQuery();
+        filter.setStatus("DRAFT");
+        filter.setSource("MANUAL");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.bulkArchiveOldTmdbMovies(filter, 100));
 
         assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
         verify(movieRepository, never()).findAll(any(Specification.class), any(Pageable.class));

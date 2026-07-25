@@ -8,6 +8,7 @@ import MovieFormModal from '@/features/catalog/admin/components/MovieFormModal';
 import MovieSummaryCards from '@/features/catalog/admin/components/MovieSummaryCards';
 import MovieTable from '@/features/catalog/admin/components/MovieTable';
 import MovieBulkApprovalPanel from '@/features/catalog/admin/components/MovieBulkApprovalPanel';
+import MovieBulkArchivePanel from '@/features/catalog/admin/components/MovieBulkArchivePanel';
 import TmdbSyncStatusPanel from '@/features/catalog/admin/components/TmdbSyncStatusPanel';
 import { ADMIN_MOVIE_STATUS_TABS } from '@/features/catalog/admin/config/movieStatusConfig';
 import { ADVANCED_FILTER_KEYS, countAdvancedFilters } from '@/features/catalog/admin/utils/adminMovieQuery';
@@ -72,6 +73,16 @@ export default function AdminMoviePage() {
     if (!confirmed) return;
 
     await adminMovies.bulkApproveTmdbMovies(100);
+  };
+
+  const handleBulkArchive = async () => {
+    const message = 'Đưa các phim TMDB đã phát hành vào trạng thái Không hoạt động? Máy chủ sẽ đọc lại từng phim và chỉ xử lý các phim vẫn là DRAFT, còn tồn tại và có ngày phát hành không quá hôm nay.';
+    const confirmed = triggerConfirm
+      ? await triggerConfirm(message)
+      : window.confirm(message);
+    if (!confirmed) return;
+
+    await adminMovies.bulkArchiveOldTmdbMovies(100);
   };
 
   return (
@@ -172,13 +183,21 @@ export default function AdminMoviePage() {
         />
 
         {isTmdbApprovalQueue && (
-          <MovieBulkApprovalPanel
-            totalElements={adminMovies.totalElements}
-            isPending={adminMovies.bulkApproval.isPending}
-            result={adminMovies.bulkApproval.result}
-            error={adminMovies.bulkApproval.error}
-            onApprove={handleBulkApprove}
-          />
+          <>
+            <MovieBulkArchivePanel
+              isPending={adminMovies.bulkArchive.isPending}
+              result={adminMovies.bulkArchive.result}
+              error={adminMovies.bulkArchive.error}
+              onArchive={handleBulkArchive}
+            />
+            <MovieBulkApprovalPanel
+              totalElements={adminMovies.totalElements}
+              isPending={adminMovies.bulkApproval.isPending}
+              result={adminMovies.bulkApproval.result}
+              error={adminMovies.bulkApproval.error}
+              onApprove={handleBulkApprove}
+            />
+          </>
         )}
 
         <MovieTable

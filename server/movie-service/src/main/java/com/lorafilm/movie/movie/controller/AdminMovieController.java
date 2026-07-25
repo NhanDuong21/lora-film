@@ -5,6 +5,7 @@ import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
+import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
 import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
 import com.lorafilm.movie.movie.dto.MovieRequest;
@@ -133,6 +134,14 @@ public class AdminMovieController {
             @Valid @RequestBody AdminMovieListQuery filter,
             @RequestParam(name = "limit", defaultValue = "100") @Min(1) @Max(100) int limit) {
         return ResponseEntity.ok(ApiResponse.ok(movieService.bulkApproveTmdbMovies(filter, limit)));
+    }
+
+    @PostMapping("/bulk-archive-old")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<MovieBulkArchiveResponse>> bulkArchiveOldTmdbMovies(
+            @Valid @RequestBody AdminMovieListQuery filter,
+            @RequestParam(name = "limit", defaultValue = "100") @Min(1) @Max(100) int limit) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.bulkArchiveOldTmdbMovies(filter, limit)));
     }
 
     @GetMapping("/{publicId}/tmdb-review")

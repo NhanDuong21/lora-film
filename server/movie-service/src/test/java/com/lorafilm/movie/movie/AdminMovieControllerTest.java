@@ -8,6 +8,7 @@ import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResult;
+import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
 import com.lorafilm.movie.movie.dto.MovieSummaryResponse;
 import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
 import com.lorafilm.movie.movie.dto.MovieRequest;
@@ -282,6 +283,34 @@ public class AdminMovieControllerTest {
                 .andExpect(jsonPath("$.data.results[0].outcome").value("APPROVED"))
                 .andExpect(jsonPath("$.data.results[1].outcome").value("SKIPPED"))
                 .andExpect(jsonPath("$.data.results[1].reasonCode").value("MOVIE_PRIMARY_POSTER_REQUIRED"));
+    }
+
+    @Test
+    void bulkArchiveOldTmdbMovies_ReturnsPerMovieResults() throws Exception {
+        MovieBulkArchiveResponse response = new MovieBulkArchiveResponse(
+                1,
+                1,
+                0,
+                0,
+                100,
+                List.of(MovieBulkApprovalResult.archived("movie-1", "Old Movie", MovieStatus.INACTIVE)));
+        when(movieService.bulkArchiveOldTmdbMovies(any(AdminMovieListQuery.class), eq(100))).thenReturn(response);
+
+        mockMvc.perform(post("/api/admin/movies/bulk-archive-old")
+                        .param("limit", "100")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "DRAFT",
+                                  "source": "TMDB"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.requested").value(1))
+                .andExpect(jsonPath("$.data.archived").value(1))
+                .andExpect(jsonPath("$.data.results[0].outcome").value("ARCHIVED"))
+                .andExpect(jsonPath("$.data.results[0].newStatus").value("INACTIVE"));
     }
 
     @Test
