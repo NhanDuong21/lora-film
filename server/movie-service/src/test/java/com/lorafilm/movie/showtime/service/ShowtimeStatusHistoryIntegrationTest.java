@@ -106,6 +106,7 @@ public class ShowtimeStatusHistoryIntegrationTest {
         showtime.setAuditorium(auditorium);
         showtime.setStartTime(Instant.now().plusSeconds(3600));
         showtime.setEndTime(Instant.now().plusSeconds(7200));
+        showtime.setServiceDate(java.time.LocalDate.now());
         showtime.setStatus(ShowtimeStatus.DRAFT);
         showtime.setSource(ShowtimeSource.AUTO);
         showtime.setBatchId("preview-source-1");

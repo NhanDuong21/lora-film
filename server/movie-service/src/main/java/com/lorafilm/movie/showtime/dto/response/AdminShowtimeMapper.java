@@ -13,6 +13,7 @@ public class AdminShowtimeMapper {
         response.setShowtimePublicId(showtime.getPublicId());
         response.setStartTime(showtime.getStartTime());
         response.setEndTime(showtime.getEndTime());
+        response.setServiceDate(showtime.getServiceDate());
         response.setStatus(showtime.getStatus() != null ? showtime.getStatus().name() : null);
         response.setBookingOpenTime(showtime.getBookingOpenTime());
         response.setBookingCloseTime(showtime.getBookingCloseTime());

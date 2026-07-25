@@ -186,6 +186,8 @@ class ShowtimeStatusTransitionIntegrationTest {
         showtime.setAuditorium(auditorium);
         showtime.setStartTime(Instant.parse(start));
         showtime.setEndTime(Instant.parse(start).plusSeconds(5400));
+        showtime.setServiceDate(java.time.LocalDate.ofInstant(
+                Instant.parse(start), java.time.ZoneId.of(cinema.getTimezone())));
         showtime.setStatus(ShowtimeStatus.DRAFT);
         showtime.setSource(ShowtimeSource.AUTO);
         showtime.setBatchId("atomic-batch");

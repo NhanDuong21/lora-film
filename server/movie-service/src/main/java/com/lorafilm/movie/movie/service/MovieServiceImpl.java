@@ -355,6 +355,7 @@ public class MovieServiceImpl implements MovieService {
                 p.setRoleType(c.getRoleType().name());
                 p.setCharacterName(c.getCharacterName());
                 p.setProfileImageUrl(c.getPerson().getProfileImageUrl());
+                p.setDisplayOrder(c.getDisplayOrder());
                 return p;
             }).collect(Collectors.toList());
  
@@ -369,6 +370,7 @@ public class MovieServiceImpl implements MovieService {
                 p.setRoleType(c.getRoleType().name());
                 p.setCharacterName(c.getCharacterName());
                 p.setProfileImageUrl(c.getPerson().getProfileImageUrl());
+                p.setDisplayOrder(c.getDisplayOrder());
                 return p;
             }).collect(Collectors.toList());
  
@@ -381,6 +383,7 @@ public class MovieServiceImpl implements MovieService {
                 p.setRoleType(c.getRoleType().name());
                 p.setCharacterName(c.getCharacterName());
                 p.setProfileImageUrl(c.getPerson().getProfileImageUrl());
+                p.setDisplayOrder(c.getDisplayOrder());
                 return p;
             }).collect(Collectors.toList());
  
@@ -393,6 +396,7 @@ public class MovieServiceImpl implements MovieService {
                 p.setRoleType(c.getRoleType().name());
                 p.setCharacterName(c.getCharacterName());
                 p.setProfileImageUrl(c.getPerson().getProfileImageUrl());
+                p.setDisplayOrder(c.getDisplayOrder());
                 return p;
             }).collect(Collectors.toList());
  

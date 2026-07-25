@@ -29,6 +29,9 @@ import com.lorafilm.movie.showtime.validation.ShowtimeValidationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.List;
@@ -101,6 +104,7 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
         showtime.setAuditorium(auditorium);
         showtime.setStartTime(request.getStartTime());
         showtime.setEndTime(endTime);
+        showtime.setServiceDate(resolveServiceDate(request.getStartTime(), cinema));
         showtime.setStatus(ShowtimeStatus.DRAFT);
         showtime.setCancellationReason(null);
         showtime.setBookingOpenTime(null);
@@ -168,6 +172,10 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
         lockedShowtime.setAuditorium(targetAuditorium);
         lockedShowtime.setStartTime(request.getStartTime());
         lockedShowtime.setEndTime(endTime);
+        if (!Objects.equals(previousCinemaId, cinema.getId())
+                || !Objects.equals(previousStartTime, request.getStartTime())) {
+            lockedShowtime.setServiceDate(resolveServiceDate(request.getStartTime(), cinema));
+        }
 
         showtimeRepository.flush();
 
@@ -209,6 +217,20 @@ public class ShowtimeCommandServiceImpl implements ShowtimeCommandService {
             throw new BusinessException(ErrorCode.INVALID_MOVIE_DURATION, "Invalid movie duration");
         }
         return startTime.plus(duration, ChronoUnit.MINUTES);
+    }
+
+    private LocalDate resolveServiceDate(Instant startTime, Cinema cinema) {
+        if (startTime == null || cinema == null || cinema.getTimezone() == null
+                || cinema.getTimezone().isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Cinema timezone is required to assign the Showtime service date");
+        }
+        try {
+            return startTime.atZone(ZoneId.of(cinema.getTimezone())).toLocalDate();
+        } catch (DateTimeException exception) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Cinema timezone is invalid; Showtime service date cannot be assigned");
+        }
     }
 
     private ShowtimeValidationContext buildContext(Movie movie, MovieVersion movieVersion, Cinema cinema, Auditorium auditorium, Instant startTime, Instant endTime, Long excludedShowtimeId) {

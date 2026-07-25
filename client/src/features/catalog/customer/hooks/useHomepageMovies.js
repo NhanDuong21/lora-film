@@ -31,6 +31,7 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
 
   // Use a ref to prevent race conditions from multiple asynchronous responses
   const lastRequestRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   const fetchMovies = useCallback(async (pageToFetch) => {
     // Defer state updates to microtask to prevent react-hooks/set-state-in-effect
@@ -47,13 +48,17 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
 
     const requestId = `${status}-${pageToFetch}`;
     lastRequestRef.current = requestId;
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const data = await getMovies({
         page: pageToFetch,
         size,
         status,
-        sort
+        sort,
+        signal: controller.signal
       });
 
       // Ignore responses from outdated requests
@@ -64,11 +69,12 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
       if (data) {
         const content = data.data || data.content || [];
         setMovies(content);
-        setPage(data.pageNo !== undefined ? data.pageNo : data.page || 0);
+        const resolvedPage = data.pageNumber ?? data.pageNo ?? data.page ?? pageToFetch;
+        setPage(resolvedPage);
         setTotalPages(data.totalPages || 0);
         setTotalElements(data.totalElements || 0);
-        setFirst(data.first !== undefined ? data.first : true);
-        setLast(data.last !== undefined ? data.last : true);
+        setFirst(data.first ?? resolvedPage === 0);
+        setLast(data.last ?? resolvedPage >= Math.max((data.totalPages || 1) - 1, 0));
 
         // Call optional callback (useful for updating global state)
         if (onDataLoadedRef.current) {
@@ -76,7 +82,7 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
         }
       }
     } catch (err) {
-      if (lastRequestRef.current === requestId) {
+      if (lastRequestRef.current === requestId && err?.name !== 'CanceledError') {
         setError(err.message || "Không thể tải danh sách phim.");
       }
     } finally {
@@ -98,6 +104,7 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
     load();
     return () => {
       active = false;
+      abortControllerRef.current?.abort();
     };
   }, [page, fetchMovies]);
 

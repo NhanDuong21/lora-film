@@ -1,43 +1,52 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-// eslint-disable-next-line no-unused-vars
-import { ArrowLeft, Play, X, AlertCircle, Calendar, Clock, Film, Star } from 'lucide-react';
-import { getMovieById, getShowtimes } from '@/features/catalog/customer/services/movieService';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  formatGenres,
-  formatDuration,
-  formatDate,
-  getAgeRatingLabel,
-  getYoutubeEmbedUrl
-} from '@/utils/formatters';
+  AlertCircle, Building2, CalendarDays, Clock3, Film, Globe2, MapPin, Play, RefreshCw, Users, X
+} from 'lucide-react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { getBookingOptions, getMovieById } from '@/features/catalog/customer/services/movieService';
+import {
+  addCalendarDays,
+  formatLocalClock,
+  formatServiceDate,
+  seatSelectionPath,
+  vietnamDateKey
+} from '@/features/catalog/customer/utils/customerMovieFlow';
+import { formatDuration, formatGenres, getYoutubeEmbedUrl } from '@/utils/formatters';
 
-const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2318181b'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='24' fill='%2352525b'>LORA FILM</text><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%233f3f46'>Không có ảnh bìa</text></svg>";
+const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop stop-color='%2327272a'/><stop offset='1' stop-color='%2309090b'/></linearGradient></defs><rect width='100%25' height='100%25' fill='url(%23g)'/><text x='50%25' y='47%25' text-anchor='middle' fill='%23ff7a00' font-family='sans-serif' font-size='28' font-weight='700'>LoraFilm</text><text x='50%25' y='53%25' text-anchor='middle' fill='%23a1a1aa' font-family='sans-serif' font-size='15'>Không có ảnh bìa</text></svg>";
 
-function MovieDetailSkeleton() {
+const surface = 'rounded-3xl border border-white/10 bg-zinc-900/80 shadow-2xl shadow-black/20';
+const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950';
+const sortedPeople = people => [...(people || [])].sort(
+  (left, right) => (left.displayOrder ?? Number.MAX_SAFE_INTEGER) - (right.displayOrder ?? Number.MAX_SAFE_INTEGER)
+);
+const peopleNames = (people, includeCharacter = false) => sortedPeople(people)
+  .map(person => {
+    if (!person.fullName) return null;
+    return includeCharacter && person.characterName
+      ? `${person.fullName} — ${person.characterName}`
+      : person.fullName;
+  })
+  .filter(Boolean);
+const companyNames = companies => (companies || []).map(company => company.name).filter(Boolean);
+
+function CreditLine({ label, values }) {
+  if (!values.length) return null;
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-10 animate-pulse">
-      {/* Back Button Skeleton */}
-      <div className="h-8 w-24 bg-zinc-900 rounded-full mb-8" />
-      
-      {/* Hero Section Skeleton */}
-      <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
-        {/* Left Poster Skeleton */}
-        <div className="w-full md:w-1/3 max-w-md aspect-[2/3] bg-zinc-900 rounded-2xl" />
-        
-        {/* Right Info Skeleton */}
-        <div className="flex-1 space-y-6">
-          <div className="h-6 w-20 bg-zinc-900 rounded" />
-          <div className="h-10 w-2/3 bg-zinc-900 rounded" />
-          <div className="h-4 w-1/4 bg-zinc-900 rounded" />
-          <div className="h-4 w-1/3 bg-zinc-900 rounded" />
-          <div className="space-y-2">
-            <div className="h-4 w-full bg-zinc-900 rounded" />
-            <div className="h-4 w-full bg-zinc-900 rounded" />
-            <div className="h-4 w-5/6 bg-zinc-900 rounded" />
-          </div>
-          <div className="h-12 w-40 bg-zinc-900 rounded-full" />
-        </div>
-      </div>
+    <div className="border-b border-white/10 py-3 last:border-0">
+      <dt className="text-xs font-black uppercase tracking-wider text-zinc-500">{label}</dt>
+      <dd className="mt-2">
+        <ul className="grid gap-2 md:grid-cols-2">
+          {values.map((value, index) => (
+            <li
+              key={`${value}-${index}`}
+              className="rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2 text-sm leading-5 text-zinc-200"
+            >
+              {value}
+            </li>
+          ))}
+        </ul>
+      </dd>
     </div>
   );
 }
@@ -45,460 +54,309 @@ function MovieDetailSkeleton() {
 export default function MovieDetailPage() {
   const { movieId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const today = useMemo(() => vietnamDateKey(), []);
+  const dates = useMemo(() => Array.from({ length: 5 }, (_, index) => addCalendarDays(today, index)), [today]);
+  const requestedDate = searchParams.get('date');
+  const [selectedDate, setSelectedDate] = useState(dates.includes(requestedDate) ? requestedDate : dates[0]);
   const [movie, setMovie] = useState(null);
+  const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showtimeLoading, setShowtimeLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTrailerUrl, setActiveTrailerUrl] = useState(null);
-  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
+  const [showtimeError, setShowtimeError] = useState(null);
+  const [trailer, setTrailer] = useState(null);
 
-  const [showtimes, setShowtimes] = useState([]);
-  const [loadingShowtimes, setLoadingShowtimes] = useState(false);
-
-  // Generate 5 dates starting from today
-  const dates = useMemo(() => {
-    const list = [];
-    const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-    for (let i = 0; i < 5; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      
-      const label = i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : dayNames[d.getDay()];
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      
-      list.push({
-        label,
-        dateStr: `${dd}/${mm}`,
-        dateQuery: `${yyyy}-${mm}-${dd}`
-      });
-    }
-    return list;
-  }, []);
-
-  const activeDate = dates[selectedDateIndex];
-
-  const fetchMovieDetail = useCallback(async () => {
-    if (!movieId) return;
-    
+  const loadMovie = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getMovieById(movieId);
-      if (!data) {
-        setError("MOVIE_NOT_FOUND");
-      } else {
-        setMovie(data);
-      }
-    } catch (err) {
-      if (err && (err.status === 404 || err.message === 'MOVIE_NOT_FOUND' || err.errorCode === 'MOVIE_NOT_FOUND')) {
-        setError("MOVIE_NOT_FOUND");
-      } else {
-        setError(err.message || "Không thể tải thông tin phim.");
-      }
+      setMovie(await getMovieById(movieId));
+    } catch (requestError) {
+      setError(requestError?.status === 404
+        ? 'Không tìm thấy thông tin phim.'
+        : 'Không thể tải thông tin phim.');
     } finally {
       setLoading(false);
     }
   }, [movieId]);
 
-  const fetchShowtimesData = useCallback(async () => {
-    if (!movie || !activeDate) return;
-    setLoadingShowtimes(true);
-    try {
-      const showtimeData = await getShowtimes({
-        movieSlug: movie.slug,
-        date: activeDate.dateQuery
-      });
-      setShowtimes(showtimeData.data || showtimeData.content || []);
-    } catch (err) {
-      console.error("Failed to load showtimes:", err);
-      setShowtimes([]);
-    } finally {
-      setLoadingShowtimes(false);
-    }
-  }, [movie, activeDate]);
-
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchMovieDetail();
-  }, [fetchMovieDetail]);
+    loadMovie();
+  }, [loadMovie]);
+
+  const loadOptions = useCallback(async signal => {
+    if (!movie?.slug) return;
+    setShowtimeLoading(true);
+    setShowtimeError(null);
+    try {
+      setOptions(await getBookingOptions(movie.slug, {
+        from: dates[0],
+        to: dates[dates.length - 1],
+        signal
+      }));
+    } catch (requestError) {
+      if (requestError?.name !== 'CanceledError') {
+        setOptions([]);
+        setShowtimeError('Không thể tải lịch chiếu. Vui lòng thử lại.');
+      }
+    } finally {
+      if (!signal?.aborted) setShowtimeLoading(false);
+    }
+  }, [movie, dates]);
 
   useEffect(() => {
-    if (movie) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      fetchShowtimesData();
-    }
-  }, [movie, activeDate, fetchShowtimesData]);
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadOptions(controller.signal);
+    return () => controller.abort();
+  }, [loadOptions]);
 
-  // Set document title once movie details are loaded
-  useEffect(() => {
-    if (movie && movie.title) {
-      document.title = `${movie.title} - LoraFilm`;
-    } else {
-      document.title = "LoraFilm - Chi tiết phim";
-    }
-  }, [movie]);
-
-  const handleBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate('/movies');
-    }
-  };
-
-  const handleGoHome = () => {
-    navigate('/');
-  };
-
-  // Group showtimes by cinema, then by movie version format name
-  const showtimesByCinema = useMemo(() => {
-    const grouped = {};
-    showtimes.forEach(st => {
-      const cinemaName = st.cinema?.name || 'Rạp Liên Kết';
-      if (!grouped[cinemaName]) {
-        grouped[cinemaName] = {};
+  const grouped = useMemo(() => {
+    const result = new Map();
+    const unique = new Map(options.map(option => [option.showtimePublicId, option]));
+    for (const option of unique.values()) {
+      if (option.serviceDate !== selectedDate || option.status !== 'OPEN_FOR_BOOKING') continue;
+      if (!result.has(option.cinemaPublicId)) {
+        result.set(option.cinemaPublicId, { cinema: option, versions: new Map() });
       }
-      
-      const formatLabel = st.movieVersion?.versionName || st.movieVersion?.format || '2D Digital';
-      if (!grouped[cinemaName][formatLabel]) {
-        grouped[cinemaName][formatLabel] = [];
+      const cinema = result.get(option.cinemaPublicId);
+      if (!cinema.versions.has(option.movieVersionPublicId)) {
+        cinema.versions.set(option.movieVersionPublicId, { version: option, showtimes: [] });
       }
-      
-      grouped[cinemaName][formatLabel].push(st);
-    });
+      cinema.versions.get(option.movieVersionPublicId).showtimes.push(option);
+    }
+    for (const cinema of result.values()) {
+      for (const version of cinema.versions.values()) {
+        version.showtimes.sort((a, b) => a.localStartTime.localeCompare(b.localStartTime));
+      }
+    }
+    return [...result.values()];
+  }, [options, selectedDate]);
 
-    // Sort times chronologically for each group
-    Object.keys(grouped).forEach(cinema => {
-      Object.keys(grouped[cinema]).forEach(format => {
-        grouped[cinema][format].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-      });
-    });
+  const poster = movie?.primaryPoster || movie?.media?.find(item => item.mediaType === 'POSTER')?.url || FALLBACK_POSTER;
+  const backdrop = movie?.media?.find(item => item.mediaType === 'BACKDROP')?.url;
+  const trailerUrl = movie?.media?.find(item => item.mediaType === 'TRAILER')?.url;
 
-    return grouped;
-  }, [showtimes]);
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-zinc-950 px-6 pt-32 text-center text-zinc-400">
+        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-zinc-700 border-t-brand-orange" />
+        <p className="mt-5">Đang tải thông tin phim…</p>
+      </main>
+    );
+  }
 
-  const posterUrl = useMemo(() => {
-    if (!movie) return FALLBACK_POSTER;
-    return movie.primaryPoster || (movie.media && movie.media.find(m => m.mediaType === 'POSTER')?.url) || FALLBACK_POSTER;
-  }, [movie]);
-
-  const trailerUrl = useMemo(() => {
-    if (!movie) return null;
-    return movie.media && movie.media.find(m => m.mediaType === 'TRAILER')?.url;
-  }, [movie]);
-
-  const directorNames = useMemo(() => {
-    if (!movie || !movie.directors) return 'Đang cập nhật';
-    return movie.directors.map(d => d.fullName).join(', ');
-  }, [movie]);
-
-  const actorNames = useMemo(() => {
-    if (!movie || !movie.actors) return 'Đang cập nhật';
-    return movie.actors.map(a => a.fullName).join(', ');
-  }, [movie]);
-
-  const ageRatingLabelMeta = useMemo(() => {
-    if (!movie) return { label: 'P', bgClass: 'bg-emerald-500 text-black', description: '' };
-    return getAgeRatingLabel(movie.ageRating);
-  }, [movie]);
-
-  const formattedStartTime = (timeString) => {
-    const d = new Date(timeString);
-    return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
-  };
+  if (error || !movie) {
+    return (
+      <main className="min-h-screen bg-zinc-950 px-6 pt-32 text-center text-zinc-100">
+        <AlertCircle className="mx-auto text-red-400" />
+        <h1 className="mt-4 text-xl font-bold">{error}</h1>
+        <button onClick={loadMovie} className={`mt-6 rounded-full bg-brand-orange px-6 py-3 font-bold text-white hover:bg-orange-600 ${focus}`}>
+          <RefreshCw className="mr-2 inline" size={16} /> Thử lại
+        </button>
+      </main>
+    );
+  }
 
   return (
-    <div className="flex flex-col min-h-screen bg-brand-dark text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
-      {/* Cinematic Ambient Backdrop */}
-      {movie && (
-        <div className="absolute top-0 left-0 w-full h-[520px] md:h-[600px] overflow-hidden z-0 pointer-events-none select-none">
-          <img 
-            src={posterUrl} 
-            alt="" 
-            className="w-full h-full object-cover filter blur-2xl scale-110 opacity-20 transform-gpu will-change-transform"
+    <main className="min-h-screen bg-zinc-950 pb-20 text-zinc-100">
+      <section className="relative isolate overflow-hidden border-b border-white/10">
+        {backdrop && <img src={backdrop} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />}
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-zinc-950 via-zinc-950/90 to-zinc-950/60" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-zinc-950 via-transparent to-black/50" />
+        <div className="mx-auto grid max-w-7xl gap-9 px-6 py-12 md:grid-cols-[260px_1fr] lg:py-16">
+          <img
+            src={poster}
+            alt={`Áp phích ${movie.title}`}
+            className="aspect-[2/3] w-full max-w-[260px] justify-self-center rounded-2xl border border-white/10 object-cover shadow-2xl shadow-black/60 md:justify-self-start"
+            onError={event => { event.currentTarget.src = FALLBACK_POSTER; }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/75 to-transparent" />
-          <div className="absolute inset-0 bg-brand-dark/50" />
-        </div>
-      )}
-
-      <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-7xl mx-auto w-full relative z-10">
-        
-        {loading ? (
-          <MovieDetailSkeleton />
-        ) : error ? (
-          /* Error State Panel */
-          <div className="w-full">
-            <div className="pb-6 border-b border-zinc-900 mb-8">
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-2 bg-black/40 hover:bg-brand-orange/25 text-white border border-white/10 hover:border-brand-orange font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Quay lại</span>
-              </button>
+          <div className="self-center">
+            <p className="text-xs font-black uppercase tracking-[.28em] text-brand-orange">LoraFilm giới thiệu</p>
+            <h1 className="mt-3 text-4xl font-black leading-tight text-white md:text-6xl">{movie.title}</h1>
+            {movie.originalTitle && <p className="mt-2 text-lg text-zinc-400">{movie.originalTitle}</p>}
+            <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-zinc-300">
+              {movie.ageRating && <strong className="rounded-md bg-brand-orange px-2.5 py-1 text-xs text-white">{movie.ageRating}</strong>}
+              <span className="flex items-center gap-2"><Clock3 size={16} className="text-brand-orange" />{formatDuration(movie.durationMinutes)}</span>
+              <span className="flex items-center gap-2"><CalendarDays size={16} className="text-brand-orange" />{movie.releaseDate}</span>
             </div>
+            <p className="mt-5 text-sm font-bold text-amber-400">{formatGenres(movie.genres)}</p>
+            <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-300">{movie.synopsis || 'Nội dung phim đang được cập nhật.'}</p>
+            {trailerUrl && (
+              <button
+                onClick={() => setTrailer(getYoutubeEmbedUrl(trailerUrl))}
+                className={`mt-7 flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-3 font-bold text-white hover:border-brand-orange hover:text-brand-orange ${focus}`}
+              >
+                <Play size={17} /> Xem trailer
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
 
-            <div className="flex flex-col items-center justify-center p-12 text-center bg-zinc-900/40 border border-zinc-800 rounded-2xl max-w-xl mx-auto my-12 space-y-4 shadow-2xl">
-              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
-                <AlertCircle className="w-6 h-6 animate-pulse" />
-              </div>
-              <h2 className="text-lg font-bold text-zinc-100">
-                {error === "MOVIE_NOT_FOUND" 
-                  ? "Không tìm thấy phim hoặc phim không còn khả dụng." 
-                  : "Không thể tải thông tin phim."}
-              </h2>
-              <p className="text-xs text-zinc-400">
-                {error === "MOVIE_NOT_FOUND"
-                  ? "Phim có thể đã ngừng chiếu hoặc đường dẫn không chính xác."
-                  : "Vui lòng kiểm tra lại kết nối mạng hoặc thử lại sau."}
-              </p>
-              
-              <div className="flex gap-4 pt-2">
-                {error !== "MOVIE_NOT_FOUND" && (
-                  <button
-                    onClick={fetchMovieDetail}
-                    className="bg-brand-orange hover:bg-opacity-90 text-white font-bold px-5 py-2 rounded-full text-xs transition-all duration-300 cursor-pointer"
-                  >
-                    Thử lại
-                  </button>
-                )}
-                <button
-                  onClick={handleGoHome}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 font-bold px-5 py-2 rounded-full text-xs transition-all duration-300 cursor-pointer"
-                >
-                  Về trang chủ
-                </button>
-              </div>
+      <section className="mx-auto mt-10 max-w-7xl px-6">
+        <div className={`${surface} p-5 md:p-8`}>
+          <div className="flex items-start gap-4">
+            <div className="rounded-xl border border-brand-orange/30 bg-brand-orange/10 p-2.5 text-brand-orange">
+              <Users size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[.22em] text-brand-orange">Thông tin phim</p>
+              <h2 className="mt-2 text-2xl font-black leading-tight text-white">Đội ngũ và thông tin sản xuất</h2>
             </div>
           </div>
-        ) : movie ? (
-          /* Movie Details Render */
-          <div className="w-full">
-            {/* Top Back Action Bar */}
-            <div className="pb-6 border-b border-zinc-900/40 mb-8 flex justify-between items-center">
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-2 bg-black/40 hover:bg-brand-orange/25 text-white border border-white/10 hover:border-brand-orange font-bold px-4 py-2 rounded-full transition-all duration-300 cursor-pointer text-xs"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Quay lại</span>
-              </button>
-            </div>
 
-            {/* Hero / Movie Info Block */}
-            <div className="flex flex-col md:flex-row gap-8 lg:gap-12 mb-16">
-              {/* Left Column: Poster Image */}
-              <div className="w-52 md:w-64 aspect-[2/3] shrink-0 self-center md:self-start">
-                <div className="w-full h-full rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-850 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] relative group">
-                  <img
-                    src={posterUrl}
-                    alt={movie.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = FALLBACK_POSTER;
-                    }}
-                  />
-                  {trailerUrl && (
-                    <button
-                      onClick={() => setActiveTrailerUrl(getYoutubeEmbedUrl(trailerUrl))}
-                      className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                    >
-                      <div className="w-14 h-14 rounded-full bg-brand-orange flex items-center justify-center text-white shadow-lg shadow-brand-orange/30 scale-90 group-hover:scale-100 transition-transform duration-300">
-                        <Play className="w-6 h-6 fill-current ml-1" />
-                      </div>
-                    </button>
-                  )}
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <dl className="rounded-2xl border border-white/10 bg-zinc-950/50 px-5">
+              <CreditLine label="Đạo diễn" values={peopleNames(movie.directors)} />
+              <CreditLine label="Diễn viên — vai diễn" values={peopleNames(movie.actors, true)} />
+              <CreditLine label="Biên kịch" values={peopleNames(movie.writers)} />
+              <CreditLine label="Nhà sản xuất" values={peopleNames(movie.producers)} />
+            </dl>
+
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <Globe2 size={15} className="text-brand-orange" /> Quốc gia
+                  </p>
+                  <p className="mt-2 text-sm font-bold text-zinc-100">{movie.country || 'Đang cập nhật'}</p>
                 </div>
-              </div>
-
-              {/* Right Column: Metadata Details */}
-              <div className="flex-1 flex flex-col justify-start">
-                {/* Age Rating and Genres */}
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <span
-                    className={`text-xs font-mono font-black uppercase tracking-widest border px-3 py-1 rounded shadow-sm ${ageRatingLabelMeta.bgClass}`}
-                    title={ageRatingLabelMeta.description}
-                  >
-                    {ageRatingLabelMeta.label}
-                  </span>
-                  
-                  <span className="text-xs text-zinc-400 font-semibold bg-zinc-900/80 px-3 py-1 rounded border border-zinc-800">
-                    {formatGenres(movie.genres)}
-                  </span>
-                </div>
-
-                {/* Movie Title */}
-                <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight uppercase leading-tight mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)]">
-                  {movie.title}
-                </h1>
-
-                {/* Subtitle */}
-                {movie.originalTitle && (
-                  <h2 className="text-zinc-400 text-sm font-semibold mb-6 italic">
-                    {movie.originalTitle}
-                  </h2>
-                )}
-
-                {/* Meta details list */}
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-400 font-semibold mb-6">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-brand-orange" />
-                    <span>{formatDuration(movie.durationMinutes)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-brand-orange" />
-                    <span>Khởi chiếu: {formatDate(movie.releaseDate)}</span>
-                  </div>
-                </div>
-
-                {/* Description Text */}
-                <div className="mb-8">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500 mb-2">Tóm tắt nội dung</h3>
-                  <p className="text-sm leading-relaxed text-zinc-300 font-normal max-w-3xl whitespace-pre-line drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
-                    {movie.synopsis || "Nội dung phim đang được cập nhật."}
+                <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <Film size={15} className="text-brand-orange" /> Ngôn ngữ
+                  </p>
+                  <p className="mt-2 text-sm font-bold text-zinc-100">
+                    {[...new Set((movie.versions || []).map(version => version.audioLanguage).filter(Boolean))].join(', ') || 'Đang cập nhật'}
                   </p>
                 </div>
-
-                {/* Production Metadata */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-8 mb-8 border-b border-zinc-900/60 text-sm max-w-3xl">
-                  <div>
-                    <span className="text-xs font-black uppercase tracking-widest text-zinc-500 block mb-1">Đạo diễn</span>
-                    <span className="text-zinc-300 font-semibold">{directorNames}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs font-black uppercase tracking-widest text-zinc-500 block mb-1">Diễn viên</span>
-                    <span className="text-zinc-300 font-semibold">{actorNames}</span>
-                  </div>
+              </div>
+              {companyNames(movie.productionCompanies).length > 0 && (
+                <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <Building2 size={15} className="text-brand-orange" /> Đơn vị sản xuất
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-200">{companyNames(movie.productionCompanies).join(', ')}</p>
                 </div>
-
-                {/* Main Action Buttons */}
-                <div className="flex flex-wrap gap-4">
-                  {trailerUrl && (
-                    <button
-                      onClick={() => setActiveTrailerUrl(getYoutubeEmbedUrl(trailerUrl))}
-                      className="group flex items-center gap-2 bg-transparent border border-white hover:border-brand-orange hover:text-brand-orange text-white font-bold px-6 py-3.5 rounded-full transition-all duration-300 cursor-pointer text-xs uppercase tracking-wider"
-                    >
-                      <Play className="w-4 h-4 fill-current group-hover:text-brand-orange" />
-                      Xem Trailer
-                    </button>
+              )}
+              {(companyNames(movie.distributors).length > 0 || companyNames(movie.studios).length > 0) && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {companyNames(movie.distributors).length > 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                      <p className="text-xs font-black uppercase tracking-wider text-zinc-500">Phát hành</p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-200">{companyNames(movie.distributors).join(', ')}</p>
+                    </div>
+                  )}
+                  {companyNames(movie.studios).length > 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+                      <p className="text-xs font-black uppercase tracking-wider text-zinc-500">Hãng phim</p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-200">{companyNames(movie.studios).join(', ')}</p>
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
+          </div>
+        </div>
+      </section>
 
-            {/* Showtime Selection System */}
-            <div className="w-full pt-8 border-t border-zinc-900/40">
-              <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-3xl p-6 md:p-8 backdrop-blur-sm">
-                <h2 className="text-xl font-black uppercase tracking-wider text-white mb-6">
-                  Lịch Chiếu & Đặt Vé
-                </h2>
+      <section className="mx-auto mt-10 max-w-7xl px-6">
+        <div className={`${surface} p-5 md:p-8`}>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[.22em] text-brand-orange">Chọn suất chiếu</p>
+            <h2 className="mt-2 text-2xl font-black text-white md:text-3xl">Lịch chiếu và đặt vé</h2>
+            <p className="mt-2 text-sm text-zinc-400">Ngày hiển thị là ngày phục vụ chính thức của rạp.</p>
+          </div>
 
-                {/* 5-Day Horizontal Calendar Tab Selector */}
-                <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 mb-8">
-                  {dates.map((item, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setSelectedDateIndex(idx)}
-                      className={`flex flex-col items-center justify-center px-5 py-3 rounded-2xl min-w-[90px] border transition-all duration-300 shrink-0 cursor-pointer ${
-                        selectedDateIndex === idx
-                          ? 'bg-brand-orange border-brand-orange text-white font-bold scale-105 shadow-lg shadow-brand-orange/20'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                      }`}
-                    >
-                      <span className="text-[10px] uppercase tracking-wider mb-1">{item.label}</span>
-                      <span className="text-sm font-black">{item.dateStr}</span>
-                    </button>
-                  ))}
-                </div>
+          <div className="mt-7 flex gap-3 overflow-x-auto pb-3">
+            {dates.map((date, index) => (
+              <button
+                key={date}
+                type="button"
+                aria-pressed={selectedDate === date}
+                onClick={() => {
+                  setSelectedDate(date);
+                  setSearchParams({ date }, { replace: true });
+                }}
+                className={`min-w-28 rounded-xl border px-4 py-3 text-left text-sm font-bold transition-colors ${focus} ${
+                  selectedDate === date
+                    ? 'border-brand-orange bg-brand-orange text-white shadow-lg shadow-brand-orange/20'
+                    : 'border-white/10 bg-zinc-950/70 text-zinc-300 hover:border-brand-orange/60 hover:text-white'
+                }`}
+              >
+                <span className="block text-xs uppercase tracking-wide">
+                  {index === 0 ? 'Hôm nay' : index === 1 ? 'Ngày mai' : `Ngày ${index + 1}`}
+                </span>
+                <span className="mt-1 block text-xs font-medium opacity-80">{formatServiceDate(date)}</span>
+              </button>
+            ))}
+          </div>
 
-                {/* Accordions Grouped by Cinema */}
-                {loadingShowtimes ? (
-                  <div className="flex justify-center items-center py-12">
-                    <div className="w-8 h-8 border-2 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                ) : Object.keys(showtimesByCinema).length > 0 ? (
-                  <div className="space-y-6">
-                    {Object.keys(showtimesByCinema).map((cinemaName, cIdx) => (
-                      <div
-                        key={cIdx}
-                        className="bg-zinc-950/40 border border-zinc-850 rounded-2xl p-5 md:p-6"
-                      >
-                        <h3 className="text-sm md:text-base font-bold text-white mb-4 border-l-2 border-brand-orange pl-3 uppercase tracking-wider">
-                          {cinemaName}
-                        </h3>
-
-                        <div className="space-y-4">
-                          {Object.keys(showtimesByCinema[cinemaName]).map((formatLabel, fIdx) => (
-                            <div key={fIdx} className="flex flex-col sm:flex-row sm:items-center gap-4 py-2 border-b border-zinc-900/60 last:border-0">
-                              <span className="text-[10px] font-black text-brand-orange uppercase tracking-widest shrink-0 w-24">
-                                {formatLabel}
-                              </span>
-                              
-                              <div className="flex flex-wrap gap-3">
-                                {showtimesByCinema[cinemaName][formatLabel].map((st) => (
-                                  <button
-                                    key={st.showtimePublicId}
-                                    onClick={() => navigate(`/seat-selection?showtimeId=${st.showtimePublicId}`)}
-                                    className="bg-zinc-900 hover:bg-brand-orange text-zinc-300 hover:text-white border border-zinc-800 hover:border-brand-orange text-xs md:text-sm font-semibold py-2px px-4 py-2 rounded-xl transition-all duration-300 cursor-pointer"
-                                  >
-                                    {formattedStartTime(st.startTime)}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
+          {showtimeLoading ? (
+            <p className="py-14 text-center text-zinc-400">Đang tải lịch chiếu…</p>
+          ) : showtimeError ? (
+            <div className="my-8 rounded-2xl border border-red-500/20 bg-red-950/20 py-10 text-center text-red-300">
+              <p>{showtimeError}</p>
+              <button onClick={() => loadOptions()} className={`mt-4 rounded-full border border-red-400/40 px-5 py-2 hover:bg-red-950/50 ${focus}`}>Thử lại</button>
+            </div>
+          ) : grouped.length === 0 ? (
+            <div className="my-8 rounded-2xl border border-dashed border-white/10 bg-black/20 py-14 text-center text-zinc-400">
+              <Film className="mx-auto mb-3 text-zinc-600" />
+              Không có suất chiếu trong ngày đã chọn.
+            </div>
+          ) : (
+            <div className="mt-7 space-y-5">
+              {grouped.map(({ cinema, versions }) => (
+                <article key={cinema.cinemaPublicId} className="rounded-2xl border border-white/10 bg-zinc-950/55 p-5 md:p-6">
+                  <h3 className="text-xl font-black text-white">{cinema.cinemaName}</h3>
+                  {(cinema.cinemaAddress || cinema.cinemaCity) && (
+                    <p className="mt-2 flex items-center gap-2 text-sm text-zinc-400">
+                      <MapPin size={15} className="text-brand-orange" />
+                      {[cinema.cinemaAddress, cinema.cinemaCity].filter(Boolean).join(', ')}
+                    </p>
+                  )}
+                  <div className="mt-5 divide-y divide-white/10">
+                    {[...versions.values()].map(({ version, showtimes }) => (
+                      <div key={version.movieVersionPublicId} className="grid gap-4 py-5 first:pt-0 last:pb-0 md:grid-cols-[220px_1fr]">
+                        <div>
+                          <strong className="text-sm text-amber-400">{version.versionName || version.format}</strong>
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">
+                            {[version.audioLanguage, version.subtitleLanguage && `Phụ đề ${version.subtitleLanguage}`, version.screenType]
+                              .filter(Boolean).join(' · ')}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {showtimes.map(showtime => (
+                            <button
+                              key={showtime.showtimePublicId}
+                              onClick={() => navigate(seatSelectionPath(showtime.showtimePublicId))}
+                              aria-label={`Chọn suất ${formatLocalClock(showtime.localStartTime)} tại ${cinema.cinemaName}`}
+                              className={`rounded-xl border border-white/15 bg-zinc-900 px-5 py-2.5 font-black text-white transition-colors hover:border-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange ${focus}`}
+                            >
+                              {formatLocalClock(showtime.localStartTime)}
+                            </button>
                           ))}
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-12 text-center bg-zinc-950/20 border border-zinc-900 rounded-2xl max-w-xl mx-auto my-4 space-y-3">
-                    <div className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-500">
-                      <Film className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-sm font-bold text-zinc-300">Không có suất chiếu.</h3>
-                    <p className="text-xs text-zinc-500">
-                      Vui lòng chọn ngày chiếu khác để tìm kiếm vé phim.
-                    </p>
-                  </div>
-                )}
-              </div>
+                </article>
+              ))}
             </div>
-          </div>
-        ) : null}
-      </main>
+          )}
+        </div>
+      </section>
 
-      {/* Cinematic Trailer Popup component */}
-      {activeTrailerUrl && (
-        <div 
-          className="fixed inset-0 bg-zinc-950/95 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all animate-fade-in"
-          onClick={() => setActiveTrailerUrl(null)}
-        >
-          <div 
-            className="relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl animate-scale-in"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setActiveTrailerUrl(null)}
-              className="absolute top-4 right-4 bg-zinc-900/85 text-zinc-400 hover:text-white p-2 rounded-full transition-colors z-20 cursor-pointer"
-              aria-label="Đóng trailer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <iframe
-              src={`${activeTrailerUrl}?autoplay=1&rel=0&modestbranding=1`}
-              title={`${movie?.title || 'LoraFilm'} Trailer`}
-              className="w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            ></iframe>
+      {trailer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm" onClick={() => setTrailer(null)}>
+          <div className="relative aspect-video w-full max-w-4xl" onClick={event => event.stopPropagation()}>
+            <button onClick={() => setTrailer(null)} aria-label="Đóng trailer" className={`absolute right-3 top-3 z-10 rounded-full bg-black/80 p-2 text-white ${focus}`}><X /></button>
+            <iframe src={`${trailer}?autoplay=1`} title={`Trailer ${movie.title}`} className="h-full w-full rounded-2xl border border-white/10" allow="autoplay; encrypted-media" allowFullScreen />
           </div>
         </div>
       )}
-    </div>
+    </main>
   );
 }

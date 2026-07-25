@@ -394,6 +394,7 @@ public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
         showtime.setAuditorium(auditorium);
         showtime.setStartTime(Instant.now().plusSeconds(3600));
         showtime.setEndTime(Instant.now().plusSeconds(7200));
+        showtime.setServiceDate(LocalDate.now());
         showtime.setStatus(com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.DRAFT);
         showtime = showtimeRepository.saveAndFlush(showtime);
 

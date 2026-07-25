@@ -31,6 +31,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
@@ -168,6 +169,7 @@ class ShowtimeCommandServiceIntegrationTest {
         var savedShowtime = showtimeRepository.findByPublicIdAndDeletedAtIsNull(response.getShowtimePublicId()).orElse(null);
         assertNotNull(savedShowtime);
         assertEquals(ShowtimeStatus.DRAFT, savedShowtime.getStatus());
+        assertEquals(LocalDate.of(2026, 8, 3), savedShowtime.getServiceDate());
         
         var history = statusHistoryRepository.findByShowtimeId(savedShowtime.getId());
         assertEquals(1, history.size());

@@ -104,6 +104,8 @@ class ShowtimeRepositoryIntegrationTest {
         st.setMovieVersion(movieVersion);
         st.setStartTime(start);
         st.setEndTime(end);
+        st.setServiceDate(java.time.LocalDate.ofInstant(start,
+                java.time.ZoneId.of(cinema.getTimezone())));
         st.setStatus(ShowtimeStatus.DRAFT);
         st.setPublicId(java.util.UUID.randomUUID().toString());
         return showtimeRepository.save(st);

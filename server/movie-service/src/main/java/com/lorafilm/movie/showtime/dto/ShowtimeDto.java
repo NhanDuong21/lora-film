@@ -1,6 +1,8 @@
 package com.lorafilm.movie.showtime.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public class ShowtimeDto {
     private String showtimePublicId;
@@ -10,6 +12,9 @@ public class ShowtimeDto {
     private ShowtimeAuditoriumDto auditorium;
     private Instant startTime;
     private Instant endTime;
+    private LocalDate serviceDate;
+    private LocalDateTime localStartTime;
+    private LocalDateTime localEndTime;
     private String status;
 
     public ShowtimeDto() {}
@@ -28,6 +33,12 @@ public class ShowtimeDto {
     public void setStartTime(Instant startTime) { this.startTime = startTime; }
     public Instant getEndTime() { return endTime; }
     public void setEndTime(Instant endTime) { this.endTime = endTime; }
+    public LocalDate getServiceDate() { return serviceDate; }
+    public void setServiceDate(LocalDate serviceDate) { this.serviceDate = serviceDate; }
+    public LocalDateTime getLocalStartTime() { return localStartTime; }
+    public void setLocalStartTime(LocalDateTime localStartTime) { this.localStartTime = localStartTime; }
+    public LocalDateTime getLocalEndTime() { return localEndTime; }
+    public void setLocalEndTime(LocalDateTime localEndTime) { this.localEndTime = localEndTime; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
 }
