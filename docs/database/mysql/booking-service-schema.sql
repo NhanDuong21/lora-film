@@ -1247,7 +1247,7 @@ COMMENT='Bộ sinh chuỗi số tự tăng theo ngày dùng tạo mã nghiệp v
 -- =====================================================
 
 -- View tổng quan đơn hàng (Dùng trực tiếp public_id dạng VARCHAR, không cần BIN_TO_UUID)
-CREATE VIEW vw_booking_summary AS
+CREATE OR REPLACE VIEW vw_booking_summary AS
 SELECT
     b.id,
     b.public_id,
@@ -1268,7 +1268,7 @@ FROM bookings b;
 
 
 -- View cho Dashboard Quản trị (Admin)
-CREATE VIEW vw_booking_admin AS
+CREATE OR REPLACE VIEW vw_booking_admin AS
 SELECT
     booking_code,
     user_id,
