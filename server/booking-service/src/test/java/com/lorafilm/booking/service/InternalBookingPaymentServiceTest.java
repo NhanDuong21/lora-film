@@ -52,11 +52,21 @@ class InternalBookingPaymentServiceTest {
     private ObjectMapper objectMapper;
     private Booking booking;
 
+    @Mock
+    private com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService;
+
+    @Mock
+    private com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
+
+    @Mock
+    private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager;
+
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper().findAndRegisterModules();
         service = new InternalBookingPaymentServiceImpl(
-                bookingRepository, snapshotRepository, eventRepository, historyService, objectMapper);
+                bookingRepository, snapshotRepository, eventRepository, historyService, objectMapper,
+                bookingTicketService, outboxService, metricsManager);
         booking = Booking.create(
                 "550e8400-e29b-41d4-a716-446655440000",
                 "LORAFILM-1",

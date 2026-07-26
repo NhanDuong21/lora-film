@@ -111,8 +111,8 @@ export default function AdminMoviePage() {
             aria-pressed={query.status === 'DRAFT' && query.source === 'TMDB'}
             className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold transition-all ${
               query.status === 'DRAFT' && query.source === 'TMDB'
-                ? 'border-sky-500/30 bg-sky-500/20 text-sky-300'
-                : 'border-sky-500/20 bg-sky-500/5 text-sky-400 hover:bg-sky-500/10'
+                ? 'border-brand-orange bg-brand-orange text-white'
+                : 'border-transparent bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
             }`}
           >
             <Cloud className="h-4 w-4" /> Hàng đợi duyệt TMDB
@@ -125,8 +125,8 @@ export default function AdminMoviePage() {
               aria-pressed={query.status === tab.value}
               className={`rounded-xl border px-4 py-2 text-xs font-bold transition-all ${
                 query.status === tab.value
-                  ? 'border-amber-500/30 bg-amber-500/20 text-amber-400'
-                  : 'border-transparent bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800'
+                  ? 'border-zinc-600 bg-zinc-700 text-white'
+                  : 'border-transparent bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
               }`}
             >
               {tab.label}
@@ -134,7 +134,7 @@ export default function AdminMoviePage() {
           ))}
         </div>
 
-        <div className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-zinc-800/60 bg-zinc-900/60 p-4 lg:flex-row lg:items-center">
+        <div className="enterprise-card flex flex-col items-stretch justify-between gap-3 lg:flex-row lg:items-center py-3">
           <div className="relative w-full lg:w-80">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
@@ -142,7 +142,7 @@ export default function AdminMoviePage() {
               value={adminMovies.searchInput}
               onChange={event => adminMovies.setSearchInput(event.target.value)}
               placeholder="Tìm kiếm tên phim..."
-              className="w-full rounded-xl border border-zinc-800 bg-[#050506] py-2.5 pl-9 pr-4 text-xs text-zinc-100 outline-none transition-colors placeholder:text-zinc-500 focus:border-amber-500/50"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-2.5 pl-9 pr-4 text-xs text-zinc-100 outline-none transition-colors placeholder:text-zinc-500 focus-ring"
             />
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -150,9 +150,9 @@ export default function AdminMoviePage() {
               type="button"
               onClick={() => setAdvancedOpen(open => !open)}
               aria-expanded={advancedOpen}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold ${
+              className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold transition-colors ${
                 advancedOpen || advancedFilterCount > 0
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                  ? 'border-brand-orange bg-brand-orange/10 text-brand-orange'
                   : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
               }`}
             >
@@ -162,11 +162,11 @@ export default function AdminMoviePage() {
               aria-label="Số phim mỗi trang"
               value={query.size}
               onChange={event => adminMovies.commitQuery({ size: Number(event.target.value) })}
-              className="rounded-xl border border-zinc-800 bg-[#050506] px-4 py-2.5 text-xs text-zinc-100 outline-none focus:border-amber-500/50"
+              className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-xs text-zinc-100 outline-none focus-ring"
             >
               {[5, 10, 20, 50].map(size => <option key={size} value={size}>{size}/trang</option>)}
             </select>
-            <button type="button" onClick={handleOpenAdd} className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-200 hover:bg-zinc-700">
+            <button type="button" onClick={handleOpenAdd} className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-200 hover:bg-zinc-700 transition-colors">
               <Plus className="h-4 w-4" /> Tạo phim thủ công
             </button>
           </div>

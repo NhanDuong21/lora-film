@@ -75,13 +75,13 @@ export default function MovieSummaryCards({ summary, query, isLoading, isRefresh
               type="button"
               onClick={() => onSelect(card.changes)}
               aria-pressed={active}
-              className={`relative overflow-hidden rounded-2xl border p-4 text-left transition-all ${
+              className={`enterprise-card p-4 text-left transition-all relative overflow-hidden group ${
                 active
                   ? `${card.accent} ring-1 ring-current`
-                  : 'border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900'
+                  : 'hover:border-zinc-700 hover:bg-zinc-800'
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start justify-between gap-3 relative z-10">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-wider opacity-80">{card.label}</p>
                   <p className="mt-2 text-2xl font-black">{summary?.[card.key] ?? 0}</p>

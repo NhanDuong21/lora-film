@@ -7,6 +7,7 @@ import {
   PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle 
 } from 'lucide-react';
 import SystemUpdating from '@/components/common/SystemUpdating';
+import CustomerBookingHistory from '@/features/booking/customer/components/CustomerBookingHistory';
 
 const normalizeDateForInput = (value) => {
   if (!value) return '';
@@ -667,12 +668,12 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               {activeTab === 'history' && (
                 <div className="space-y-6">
                   <div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider mb-1">LỊCH SỬ GIAO DỊCH</h3>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider mb-1">LỊCH SỬ ĐẶT VÉ</h3>
                     <p className="text-zinc-500 text-[10px]">Danh sách các vé và dịch vụ đã mua trực tuyến hoặc tại quầy</p>
                   </div>
 
                   <div className="min-h-[400px]">
-                    <SystemUpdating message="Lịch sử giao dịch sẽ được đồng bộ từ Booking Service sau khi ra mắt." />
+                    <CustomerBookingHistory />
                   </div>
                 </div>
               )}
