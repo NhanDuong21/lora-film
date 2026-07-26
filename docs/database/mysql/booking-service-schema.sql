@@ -440,10 +440,14 @@ CREATE TABLE seat_reservations (
 
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         COMMENT 'Thời điểm cập nhật bản ghi',
+        
+    active_unique_key VARCHAR(255) GENERATED ALWAYS AS (IF(status IN ('HELD', 'BOOKED'), CONCAT(showtime_id, '_', seat_id), NULL)) STORED
+        COMMENT 'Cột ảo để đảm bảo 1 ghế chỉ có tối đa 1 active reservation',
 
     CONSTRAINT uk_reservation_public UNIQUE(public_id),
     CONSTRAINT uk_reservation_code UNIQUE(reservation_code),
     CONSTRAINT fk_reservation_booking FOREIGN KEY (booking_id) REFERENCES bookings(id),
+    CONSTRAINT uk_active_seat_reservation UNIQUE(active_unique_key),
 
     INDEX idx_reservation_user(user_id),
     INDEX idx_reservation_showtime(showtime_id),

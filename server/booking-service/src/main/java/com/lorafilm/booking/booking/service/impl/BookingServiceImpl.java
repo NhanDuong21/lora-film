@@ -292,7 +292,7 @@ public class BookingServiceImpl implements BookingService {
         // Sync status with Food Order is handled automatically inside booking.changeStatus()
 
         if (targetStatus == BookingStatus.CONFIRMED) {
-            generateTicketsForConfirmedBooking(saved.getId());
+            bookingTicketService.generateTicketsForConfirmedBooking(saved.getId());
             if (saved.getFoodOrder() != null) {
                 com.lorafilm.booking.food.event.FoodOrderConfirmedEvent foodEvent = new com.lorafilm.booking.food.event.FoodOrderConfirmedEvent(
                         saved.getId().toString(),
@@ -656,49 +656,6 @@ public class BookingServiceImpl implements BookingService {
         return portResponse;
     }
 
-    public void generateTicketsForConfirmedBooking(Long bookingId) {
-        log.info("Generating tickets for confirmed booking ID: {}", bookingId);
-        if (!bookingTicketRepository.findByBookingId(bookingId).isEmpty()) {
-            log.info("Tickets already generated for booking ID: {}. Skipping.", bookingId);
-            return;
-        }
-
-        Optional<BookingSnapshot> snapshotOpt = bookingSnapshotRepository.findByBookingId(bookingId);
-        if (snapshotOpt.isEmpty()) {
-            log.warn("Snapshot not found for booking ID: {}. Skipping ticket generation.", bookingId);
-            return;
-        }
-        BookingSnapshot snapshot = snapshotOpt.get();
-
-        if (snapshot.getSnapshotJson() == null || snapshot.getSnapshotJson().isBlank()) {
-            log.warn("Snapshot JSON is empty for booking ID: {}. Cannot generate tickets.", bookingId);
-            return;
-        }
-
-        List<ShowtimeBookingContext.SeatContext> seats;
-        try {
-            seats = objectMapper.readValue(snapshot.getSnapshotJson(), new TypeReference<List<ShowtimeBookingContext.SeatContext>>() {});
-        } catch (Exception e) {
-            throw new BusinessException("SNAPSHOT_DESERIALIZATION_FAILED", "Failed to deserialize seat snapshot data: " + e.getMessage());
-        }
-
-        List<CreateTicketRequest> ticketRequests = seats.stream().map(seat -> {
-            CreateTicketRequest req = new CreateTicketRequest();
-            req.setSeatId(seat.seatId());
-            req.setSeatLabel(seat.seatLabel());
-            req.setSeatType(seat.seatType());
-            req.setTicketPrice(seat.price());
-            req.setMovieTitle(snapshot.getMovieTitle());
-            req.setCinemaName(snapshot.getCinemaName());
-            req.setAuditoriumName(snapshot.getAuditoriumName());
-            req.setShowtimeStart(snapshot.getShowtimeStart());
-            req.setShowtimeEnd(snapshot.getShowtimeEnd());
-            return req;
-        }).toList();
-
-        bookingTicketService.createTickets(bookingId, ticketRequests);
-        log.info("Successfully generated {} tickets for booking ID: {}", ticketRequests.size(), bookingId);
-    }
 
     private record ValidatedCreateRequest(String showtimePublicId, List<String> reservationPublicIds) {
     }

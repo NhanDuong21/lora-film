@@ -38,7 +38,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             path = request.getRequestURI();
         }
 
-        if (path != null && path.startsWith("/internal")) {
+        if (path != null && path.toLowerCase().startsWith("/internal")) {
             String tokenHeader = request.getHeader("X-Internal-Token");
             if (tokenHeader == null || tokenHeader.isEmpty()) {
                 tokenHeader = request.getHeader("X-Service-Token");

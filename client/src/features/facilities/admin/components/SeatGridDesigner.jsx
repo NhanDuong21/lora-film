@@ -73,6 +73,7 @@ export default function SeatGridDesigner({
           <div className="space-y-2 w-max">
             {matrix.map((row, rIdx) => {
               const rowLetter = calculateRowLabel(rIdx, skipIO);
+              let seatNumber = 1;
             return (
               <div key={rIdx} className="flex items-center">
                 
@@ -90,20 +91,24 @@ export default function SeatGridDesigner({
                   }}
                 >
                   {row.map((cell, cIdx) => {
-                    // eslint-disable-next-line no-useless-assignment
                     let cellBg = '';
                     let labelColor = 'text-white/60';
                     let content = '';
+                    
+                    let currentSeatNumber = seatNumber;
+                    if (cell.type !== 'AISLE' && cell.type !== 'EXIT') {
+                        seatNumber++;
+                    }
 
                     if (cell.type === 'STANDARD') {
                       cellBg = 'bg-purple-600/10 border border-purple-500/40 hover:bg-purple-600/30 text-purple-400';
-                      content = `${rowLetter}${cIdx + 1}`;
+                      content = `${rowLetter}${currentSeatNumber}`;
                     } else if (cell.type === 'VIP') {
                       cellBg = 'bg-red-500/10 border border-red-500/40 hover:bg-red-500/30 text-red-400';
-                      content = `${rowLetter}${cIdx + 1}`;
+                      content = `${rowLetter}${currentSeatNumber}`;
                     } else if (cell.type === 'COUPLE') {
                       cellBg = 'bg-amber-400/10 border border-amber-400/40 hover:bg-amber-400/30 text-amber-400 font-extrabold';
-                      content = `${rowLetter}${cIdx + 1}`;
+                      content = `${rowLetter}${currentSeatNumber}`;
                     } else if (cell.type === 'DISABLED') {
                       cellBg = 'bg-sky-500/10 border border-sky-500/40 hover:bg-sky-500/30 text-sky-400 font-extrabold';
                       content = `♿`;
@@ -124,7 +129,7 @@ export default function SeatGridDesigner({
                         onMouseDown={() => onCellMouseDown?.(rIdx, cIdx)}
                         onMouseEnter={() => onCellMouseEnter?.(rIdx, cIdx)}
                         className={`w-9 h-9 rounded-lg flex items-center justify-center text-[9px] font-black uppercase tracking-tighter transition-all select-none ${cellBg} ${isDisabled ? 'cursor-default opacity-85' : 'cursor-pointer'}`}
-                        title={`Hàng ${rowLetter} - Ghế ${cIdx + 1} (${cell.type})`}
+                        title={`Hàng ${rowLetter} - Ghế ${cell.type !== 'AISLE' && cell.type !== 'EXIT' ? currentSeatNumber : (cIdx + 1)} (${cell.type})`}
                       >
                         <span className={labelColor}>
                           {content}

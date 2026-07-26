@@ -125,6 +125,18 @@ public class InternalBookingServiceImpl implements InternalBookingService {
                 log.warn("Failed to delete/cancel tickets for bookingId: {}", savedBooking.getId(), e);
             }
         }
+        
+        if (targetStatus == BookingStatus.CONFIRMED) {
+            ticketService.generateTicketsForConfirmedBooking(savedBooking.getId());
+            if (savedBooking.getFoodOrder() != null) {
+                com.lorafilm.booking.food.event.FoodOrderConfirmedEvent foodEvent = new com.lorafilm.booking.food.event.FoodOrderConfirmedEvent(
+                        savedBooking.getId().toString(),
+                        savedBooking.getFoodOrder().getPublicId(),
+                        savedBooking.getFoodOrder().getFinalAmount()
+                );
+                outboxService.createOutboxEvent("FoodOrder", savedBooking.getFoodOrder().getId(), "FOOD_ORDER_CONFIRMED", foodEvent);
+            }
+        }
 
         // Increment Metrics
         if (targetStatus == BookingStatus.CONFIRMED) {

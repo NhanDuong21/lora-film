@@ -16,4 +16,6 @@ public interface BookingTicketService {
     Page<BookingTicketDto> findTickets(Pageable pageable);
 
     List<BookingTicketDto> findByBooking(Long bookingId);
+
+    void generateTicketsForConfirmedBooking(Long bookingId);
 }
