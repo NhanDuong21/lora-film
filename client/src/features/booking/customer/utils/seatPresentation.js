@@ -23,6 +23,20 @@ export const seatStatePresentation = seat => {
   if (seat.blockedForShowtime) {
     return { className: 'border-zinc-600 bg-zinc-900 text-zinc-500 opacity-70', reason: 'bị khóa vận hành', sellable: false };
   }
+  if (seat.reservationStatus === 'HELD') {
+    return {
+      className: 'border-orange-500/70 bg-orange-950 text-orange-200 opacity-80',
+      reason: 'đang được khách khác giữ',
+      sellable: false
+    };
+  }
+  if (seat.reservationStatus === 'BOOKED') {
+    return {
+      className: 'border-red-500/70 bg-red-950 text-red-200 opacity-80',
+      reason: 'đã được đặt',
+      sellable: false
+    };
+  }
   return {
     className: '',
     reason: 'chưa xác nhận tình trạng',

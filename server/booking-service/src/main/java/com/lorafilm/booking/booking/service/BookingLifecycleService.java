@@ -12,6 +12,8 @@ import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
+import com.lorafilm.booking.realtime.SeatAvailabilityEventService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,7 @@ public class BookingLifecycleService {
     private final SeatReservationService reservationService;
     private final SeatReservationRepository reservationRepository;
     private final BookingMetricsManager metricsManager;
+    private SeatAvailabilityEventService seatAvailabilityEventService;
 
     public BookingLifecycleService(
             BookingRepository bookingRepository,
@@ -58,6 +61,11 @@ public class BookingLifecycleService {
         this.reservationService = reservationService;
         this.metricsManager = metricsManager;
         this.reservationRepository = reservationRepository;
+    }
+
+    @Autowired(required = false)
+    public void setSeatAvailabilityEventService(SeatAvailabilityEventService service) {
+        this.seatAvailabilityEventService = service;
     }
 
     @Transactional
@@ -129,6 +137,9 @@ public class BookingLifecycleService {
         booking.changeStatus(BookingStatus.CONFIRMED, receiptAt);
         reservations.forEach(row -> row.setStatus(SeatReservationStatus.BOOKED));
         reservationRepository.saveAll(reservations);
+        if (seatAvailabilityEventService != null) {
+            seatAvailabilityEventService.publish(reservations);
+        }
         Booking saved = bookingRepository.save(booking);
 
         historyService.saveHistory(saved, BookingStatus.PENDING_PAYMENT.name(),

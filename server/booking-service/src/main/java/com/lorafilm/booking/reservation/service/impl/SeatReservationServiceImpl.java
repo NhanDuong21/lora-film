@@ -29,6 +29,7 @@ import com.lorafilm.booking.reservation.mapper.SeatReservationMapper;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import com.lorafilm.booking.reservation.service.RedisLockService;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
+import com.lorafilm.booking.realtime.SeatAvailabilityEventService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -65,6 +66,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
     private final ObjectMapper objectMapper;
     private final com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient;
     private final com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+    private SeatAvailabilityEventService seatAvailabilityEventService;
 
     @Autowired
     public SeatReservationServiceImpl(
@@ -92,6 +94,11 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         this.objectMapper = objectMapper;
         this.movieServiceClient = movieServiceClient;
         this.bookingMetricsManager = bookingMetricsManager;
+    }
+
+    @Autowired(required = false)
+    public void setSeatAvailabilityEventService(SeatAvailabilityEventService service) {
+        this.seatAvailabilityEventService = service;
     }
 
     /** Backwards-compatible constructor for legacy reservation tests/callers. */
@@ -270,6 +277,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
             reservation.setPublicId(pubId);
             reservation.setReservationCode("RES-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
             reservation.setShowtimeId(showtimeId);
+            reservation.setShowtimePublicId(layout.getShowtimePublicId());
             reservation.setSeatId(seatId);
 
             // Bug Fix 7: Use actual seatCode and seatType from movie-service layout if available
@@ -278,6 +286,9 @@ public class SeatReservationServiceImpl implements SeatReservationService {
             String sType = (seatDetail != null && seatDetail.getSeatType() != null) ? seatDetail.getSeatType() : "STANDARD";
             reservation.setSeatLabel(label);
             reservation.setSeatType(sType);
+            if (seatDetail != null) {
+                reservation.setSeatPublicId(seatDetail.getSeatPublicId());
+            }
 
             reservation.setUserId(userId);
             reservation.setReservationSource(ReservationSource.WEB);
@@ -290,6 +301,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         }
 
         List<SeatReservation> savedReservations = seatReservationRepository.saveAll(reservationsToSave);
+        publishSeatAvailability(savedReservations);
         for (SeatReservation saved : savedReservations) {
             reservationIds.add(saved.getId());
 
@@ -357,6 +369,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         }
         if (releasedCount > 0) {
             bookingMetricsManager.incrementSeatRelease(releasedCount);
+            publishSeatAvailability(reservations);
         }
 
         for (Map.Entry<Long, List<Long>> entry : seatsByShowtime.entrySet()) {
@@ -396,6 +409,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         }
         if (releasedCount > 0) {
             bookingMetricsManager.incrementSeatRelease(releasedCount);
+            publishSeatAvailability(reservations);
         }
 
         recordOperationLog(null, "RELEASE_SEATS_INTERNAL", true, (int) (System.currentTimeMillis() - startTime), null, null);
@@ -437,6 +451,7 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         }
         if (expiredCount > 0) {
             bookingMetricsManager.incrementSeatExpired(expiredCount);
+            publishSeatAvailability(reservations);
         }
 
         recordOperationLog(null, "EXPIRE_RESERVATIONS", true, (int) (System.currentTimeMillis() - startTime), null, null);
@@ -652,6 +667,13 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         }
 
         recordOperationLog(bookingId, "HANDLE_BOOKING_STATUS_CHANGE", true, (int) (System.currentTimeMillis() - startTime), null, null);
+        publishSeatAvailability(reservations);
+    }
+
+    private void publishSeatAvailability(List<SeatReservation> reservations) {
+        if (seatAvailabilityEventService != null) {
+            seatAvailabilityEventService.publish(reservations);
+        }
     }
 
     private void recordAuditLog(String actor, String action, String fieldName, String oldValue, String newValue) {

@@ -43,6 +43,7 @@ import com.lorafilm.booking.booking.service.BookingSnapshotService;
 import com.lorafilm.booking.booking.service.BookingTicketService;
 import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import com.lorafilm.booking.realtime.SeatAvailabilityEventService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -59,6 +60,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -93,6 +95,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingPolicyProperties bookingPolicyProperties;
     private final RedisLockService redisLockService;
     private final BookingLifecycleService lifecycleService;
+    private SeatAvailabilityEventService seatAvailabilityEventService;
 
     @Autowired
     public BookingServiceImpl(
@@ -132,6 +135,15 @@ public class BookingServiceImpl implements BookingService {
         this.bookingPolicyProperties = bookingPolicyProperties;
         this.redisLockService = redisLockService;
         this.lifecycleService = lifecycleService;
+    }
+
+    /**
+     * Optional setter keeps legacy unit-test constructors source compatible
+     * while allowing committed seat changes to be projected in production.
+     */
+    @Autowired(required = false)
+    public void setSeatAvailabilityEventService(SeatAvailabilityEventService service) {
+        this.seatAvailabilityEventService = service;
     }
 
     /** Backwards-compatible constructor for existing unit/integration callers. */
@@ -236,11 +248,19 @@ public class BookingServiceImpl implements BookingService {
         // them is part of this transaction; Redis is never used as their owner.
         for (SeatReservation reservation : reservations) {
             reservation.setBookingId(savedBooking.getId());
+            context.seats().stream()
+                    .filter(seat -> Objects.equals(seat.seatId(), reservation.getSeatId()))
+                    .findFirst()
+                    .ifPresent(seat -> {
+                        reservation.setShowtimePublicId(context.showtimePublicId());
+                        reservation.setSeatPublicId(seat.seatPublicId());
+                    });
             if (reservation.getExpiresAt() != null && reservation.getExpiresAt().isAfter(bookingDeadline)) {
                 reservation.setExpiresAt(bookingDeadline);
             }
             reservationRepository.save(reservation);
         }
+        publishSeatAvailability(reservations);
 
         // Create Snapshot
         CreateSnapshotRequest snapshotRequest = new CreateSnapshotRequest();
@@ -334,6 +354,7 @@ public class BookingServiceImpl implements BookingService {
                 throw new BusinessException("BOOKING_SEAT_CONFLICT",
                         "One or more selected seats are no longer available", HttpStatus.CONFLICT);
             }
+            publishSeatAvailability(reservations);
             createBookingSnapshot(saved, context);
             bookingMetricsManager.incrementBookingCreated();
             return bookingMapper.toResponse(saved);
@@ -347,6 +368,7 @@ public class BookingServiceImpl implements BookingService {
 
     private void expireStaleReservationsBeforeInsert(Long showtimeId, List<Long> seatIds, Instant now) {
         List<SeatReservation> existing = reservationRepository.findReservationsForBookingUpdate(showtimeId, seatIds);
+        List<SeatReservation> expiredUnlinked = new ArrayList<>();
         for (SeatReservation reservation : existing) {
             if (reservation.getStatus() == SeatReservationStatus.BOOKED
                     || (reservation.getStatus() == SeatReservationStatus.HELD
@@ -374,9 +396,17 @@ public class BookingServiceImpl implements BookingService {
                 reservation.setStatus(SeatReservationStatus.EXPIRED);
                 reservation.setExpiredReason("Expired before Booking creation");
                 reservationRepository.save(reservation);
+                expiredUnlinked.add(reservation);
             }
         }
         reservationRepository.flush();
+        publishSeatAvailability(expiredUnlinked);
+    }
+
+    private void publishSeatAvailability(List<SeatReservation> reservations) {
+        if (seatAvailabilityEventService != null) {
+            seatAvailabilityEventService.publish(reservations);
+        }
     }
 
     private void createBookingSnapshot(Booking booking, ShowtimeBookingContext context) {
