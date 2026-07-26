@@ -24,7 +24,7 @@ const emptyForm = () => ({
 // A simplified generic section component
 function FormSection({ title, icon, children }) {
   return (
-    <div className="bg-[#050506] border border-zinc-800 rounded-2xl p-6">
+    <div className="enterprise-card p-6">
       <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-4">
         <h2 className="text-sm font-black uppercase tracking-widest text-zinc-100 flex items-center gap-2">
           {icon} {title}
@@ -144,7 +144,7 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[#050506] border border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
         <div className="flex flex-col flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-5 text-zinc-100">
       <div className="flex justify-between items-center border-b border-zinc-800 pb-4 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -157,11 +157,11 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
         </div>
         <div className="flex items-center gap-3">
           <button type="button" onClick={onClose}
-            className="border border-zinc-850 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-305 font-bold py-2 px-5 rounded-xl text-xs transition-colors cursor-pointer">
+            className="border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 font-bold py-2 px-5 rounded-xl text-xs transition-colors cursor-pointer hover-scale">
             Hủy
           </button>
           <button type="button" onClick={handleSave} disabled={isSaving}
-            className="bg-[#ff7a1a] hover:opacity-90 text-zinc-950 font-black py-2 px-6 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50">
+            className="bg-brand-orange hover:opacity-90 text-zinc-950 font-black py-2 px-6 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 hover-scale">
             {isSaving ? (
               <div className="w-4 h-4 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
             ) : (
@@ -172,7 +172,7 @@ export default function MovieFormModal({ selectedMovie, triggerToast, onClose, o
       </div>
 
       <form onSubmit={e => e.preventDefault()} className="pb-16 max-w-4xl mx-auto w-full">
-        <FormSection icon={<Film className="w-4 h-4 text-[#ff7a1a]" />} title="Thông Tin Cơ Bản">
+        <FormSection icon={<Film className="w-4 h-4 text-brand-orange" />} title="Thông Tin Cơ Bản">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Tên phim" required error={formErrors.title}>
               <Input value={formBasic.title} onChange={e => setFormBasic(p => ({ ...p, title: e.target.value }))} />

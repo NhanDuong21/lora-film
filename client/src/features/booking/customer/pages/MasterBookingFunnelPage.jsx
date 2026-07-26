@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Film, Star, ChevronDown, Check, MapPin, AlertCircle } from 'lucide-react';
 import { getMovies, getCinemas, getShowtimes } from '@/features/catalog/customer/services/movieService';
 import { seatSelectionPath } from '@/features/catalog/customer/utils/customerMovieFlow';
+import BookingStepper from '../components/BookingStepper';
 
 export default function MasterBookingFunnelPage() {
   const navigate = useNavigate();
@@ -180,14 +181,15 @@ export default function MasterBookingFunnelPage() {
   }
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-8 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-8 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
+      <div className="max-w-7xl mx-auto">
+        <BookingStepper currentStep={1} />
         
         {/* Header Title */}
-        <div>
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">Mua Vé Nhanh</h1>
-          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
-            Đặt lịch xem phim nhanh chóng qua 3 bước accordion tiện lợi
+        <div className="mb-8">
+          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-white">Mua Vé Trực Tuyến</h1>
+          <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mt-2">
+            Trải nghiệm điện ảnh đỉnh cao, đặt vé dễ dàng qua các bước đơn giản
           </p>
         </div>
 

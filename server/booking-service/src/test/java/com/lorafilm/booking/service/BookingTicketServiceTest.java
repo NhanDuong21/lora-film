@@ -40,6 +40,9 @@ public class BookingTicketServiceTest {
 
     private BookingTicketMapper bookingTicketMapper = new BookingTicketMapper();
 
+    @Mock
+    private com.lorafilm.booking.booking.repository.BookingSnapshotRepository bookingSnapshotRepository;
+
     private BookingTicketServiceImpl bookingTicketService;
 
     private Booking sampleBooking;
@@ -48,7 +51,7 @@ public class BookingTicketServiceTest {
 
     @BeforeEach
     public void setUp() {
-        bookingTicketService = new BookingTicketServiceImpl(bookingTicketRepository, bookingRepository, bookingTicketMapper);
+        bookingTicketService = new BookingTicketServiceImpl(bookingTicketRepository, bookingRepository, bookingTicketMapper, bookingSnapshotRepository, new com.fasterxml.jackson.databind.ObjectMapper());
 
         sampleBooking = new Booking();
         sampleBooking.setId(10L);

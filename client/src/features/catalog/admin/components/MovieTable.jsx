@@ -1,6 +1,6 @@
-import { AlertTriangle, Image as ImageIcon, LayoutList, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Image as ImageIcon, Pencil, RefreshCw, Trash2, Film } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
-import { LazyImage } from '@/components/common/ui/uiKit';
+import { LazyImage, StatusBadge, EmptyState } from '@/components/common/ui/uiKit';
 import { formatDate } from '@/utils/movieHelpers';
 import { getStatusConfig } from '@/features/catalog/admin/config/movieStatusConfig';
 import { getMovieReadinessView } from '@/features/catalog/admin/utils/movieReadiness';
@@ -28,28 +28,28 @@ function Pagination({ currentPage, pageSize, totalElements, totalPages, onPageCh
   }
 
   return (
-    <div className="flex flex-col items-center justify-between gap-4 border-t border-neutral-800 bg-neutral-900/50 p-4 sm:flex-row">
-      <span className="text-xs text-neutral-400">
+    <div className="flex flex-col items-center justify-between gap-4 border-t border-zinc-800 bg-zinc-950 p-4 sm:flex-row">
+      <span className="text-xs text-zinc-400 font-medium">
         Hiển thị {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} / {totalElements} phim
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           disabled={currentPage === 0}
           onClick={() => onPageChange(currentPage - 1)}
-          className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           Trước
         </button>
         {pageItems.map(item => typeof item === 'string' ? (
-          <span key={item} className="flex h-7 w-7 items-center justify-center text-xs text-neutral-500">…</span>
+          <span key={item} className="flex h-7 w-7 items-center justify-center text-xs text-zinc-500 font-bold">…</span>
         ) : (
           <button
             type="button"
             key={item}
             onClick={() => onPageChange(item)}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold transition-colors ${
-              currentPage === item ? 'bg-amber-500 text-black' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold transition-all ${
+              currentPage === item ? 'bg-brand-orange text-white border-brand-orange' : 'text-zinc-400 border border-transparent hover:border-zinc-700 hover:bg-zinc-800 hover:text-white'
             }`}
           >
             {item + 1}
@@ -59,7 +59,7 @@ function Pagination({ currentPage, pageSize, totalElements, totalPages, onPageCh
           type="button"
           disabled={currentPage >= totalPages - 1 || totalPages === 0}
           onClick={() => onPageChange(currentPage + 1)}
-          className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           Sau
         </button>
@@ -99,41 +99,42 @@ export default function MovieTable({
   }
 
   return (
-    <div className="relative shrink-0 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-xl">
+    <div className="enterprise-card p-0 overflow-hidden flex flex-col relative shrink-0">
       {isRefreshing && (
-        <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-center gap-2 bg-amber-500/90 py-1 text-[10px] font-black uppercase tracking-wider text-zinc-950">
+        <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-center gap-2 bg-brand-orange/90 py-1 text-[10px] font-black uppercase tracking-wider text-white">
           <RefreshCw className="h-3 w-3 animate-spin" /> Đang cập nhật
         </div>
       )}
       {error && movies.length > 0 && (
-        <div className="flex items-center justify-between border-b border-red-900/40 bg-red-950/20 px-4 py-2 text-xs text-red-300">
+        <div className="flex items-center justify-between border-b border-red-900/40 bg-red-950/20 px-4 py-2 text-xs text-red-400">
           <span>Không thể làm mới danh sách: {error}</span>
-          <button type="button" onClick={onRetry} className="font-bold underline">Thử lại</button>
+          <button type="button" onClick={onRetry} className="font-bold underline hover:text-red-300">Thử lại</button>
         </div>
       )}
 
-      <div className="max-h-[600px] w-full overflow-auto custom-scrollbar">
+      <div className="w-full overflow-auto custom-scrollbar">
         <table className="w-full whitespace-nowrap text-left border-collapse">
-          <thead className="sticky top-0 z-20 bg-neutral-900">
-            <tr className="border-b border-neutral-800 bg-neutral-900 text-[10px] font-black uppercase tracking-wider text-neutral-400">
-              <th className="w-12 px-5 py-4 text-center">STT</th>
-              <th className="w-16 px-5 py-4 text-center">Poster</th>
-              <th className="px-5 py-4">Tên phim</th>
-              <th className="w-40 px-5 py-4">Dữ liệu</th>
-              <th className="w-32 px-5 py-4 text-center">Thời lượng</th>
-              <th className="w-36 px-5 py-4 text-center">Khởi chiếu</th>
-              <th className="w-32 px-5 py-4 text-center">Trạng thái</th>
-              <th className="w-28 px-5 py-4 text-right">Thao tác</th>
+          <thead className="sticky top-0 z-20 bg-zinc-950">
+            <tr className="border-b border-zinc-800 text-xs font-semibold tracking-wide text-zinc-400">
+              <th className="w-12 px-5 py-3.5 text-center">STT</th>
+              <th className="w-16 px-5 py-3.5 text-center">Poster</th>
+              <th className="px-5 py-3.5">Tên phim</th>
+              <th className="w-40 px-5 py-3.5">Dữ liệu</th>
+              <th className="w-32 px-5 py-3.5 text-center">Thời lượng</th>
+              <th className="w-36 px-5 py-3.5 text-center">Khởi chiếu</th>
+              <th className="w-32 px-5 py-3.5 text-center">Trạng thái</th>
+              <th className="w-28 px-5 py-3.5 text-right">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {movies.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-16 text-center text-neutral-500">
-                  <div className="flex flex-col items-center gap-2">
-                    <LayoutList className="h-10 w-10 text-neutral-700" />
-                    <span className="text-sm">{emptyDatabase ? 'Chưa có phim nào trong hệ thống.' : 'Không có phim phù hợp với bộ lọc.'}</span>
-                  </div>
+                <td colSpan={8} className="py-8">
+                  <EmptyState 
+                    icon={Film}
+                    message={emptyDatabase ? 'Chưa có phim nào trong hệ thống.' : 'Không có phim phù hợp với bộ lọc.'}
+                    description="Vui lòng điều chỉnh bộ lọc hoặc thêm phim mới."
+                  />
                 </td>
               </tr>
             ) : movies.map((movie, index) => {
@@ -196,7 +197,7 @@ export default function MovieTable({
                   <td className="px-5 py-4 text-center text-xs text-zinc-300">{movie.durationMinutes ? `${movie.durationMinutes} phút` : 'Chưa có'}</td>
                   <td className="px-5 py-4 text-center text-xs text-zinc-300">{formatDate(movie.releaseDate)}</td>
                   <td className="px-5 py-4 text-center">
-                    <span className={`rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${statusConfig.colorClass}`}>{statusConfig.label}</span>
+                    <StatusBadge status={statusConfig.value || movie.status} label={statusConfig.label} />
                   </td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">

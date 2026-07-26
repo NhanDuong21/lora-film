@@ -497,6 +497,12 @@ export default function SeatSelectionPage() {
           </div>
 
           <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+            <div className="text-right flex items-center gap-4 border-r border-zinc-800 pr-6 mr-2">
+              <div className="hidden sm:block">
+                <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Tiền Vé</span>
+                <span className="text-lg font-bold text-zinc-300">{money(totalAmount)}</span>
+              </div>
+            </div>
             <div className="text-right">
               <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Tổng thanh toán</span>
               <span className="text-2xl font-black text-brand-orange">{money(totalAmount)}</span>

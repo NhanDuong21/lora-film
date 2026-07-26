@@ -22,7 +22,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import com.lorafilm.booking.booking.entity.BookingSnapshot;
 import com.lorafilm.booking.booking.repository.BookingSnapshotRepository;
-import com.lorafilm.booking.booking.dto.ShowtimeBookingContext;
+import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 

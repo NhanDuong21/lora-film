@@ -178,18 +178,32 @@ export default function AdminLayout({ onBackHome }) {
       {/* Right Column Workspace (Fluid layout) */}
       <div className="flex-1 h-full flex flex-col overflow-hidden">
         
-        {/* Sticky top Navigation Bar (Mobile Only / Minimal) */}
-        <header className="w-full h-16 bg-zinc-900/50 backdrop-blur-md border-b border-zinc-800/60 flex items-center justify-between px-6 shrink-0 z-20">
-          <div className="flex items-center gap-3">
+        {/* Sticky top Navigation Bar */}
+        <header className="w-full h-[72px] bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800 flex items-center justify-between px-8 shrink-0 z-20">
+          <div className="flex items-center gap-4">
             <button 
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 text-zinc-400 hover:text-white"
+              className="lg:hidden p-2 -ml-2 text-zinc-400 hover:text-white transition-colors"
             >
               <Menu className="w-5 h-5" />
             </button>
+            <div className="hidden lg:flex items-center gap-2 text-sm">
+              <span className="text-zinc-500 font-medium tracking-wide">Quản trị viên</span>
+              <span className="text-zinc-600">/</span>
+              <span className="text-zinc-200 font-semibold capitalize">{activeTab.replace('-', ' ')}</span>
+            </div>
           </div>
-          <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest bg-zinc-950 border border-zinc-800 px-3 py-1.5 rounded-full hidden md:block">
-            HỆ THỐNG AN NINH LORAFILM
+          <div className="flex items-center gap-4">
+            <div className="text-[10px] text-brand-orange font-bold uppercase tracking-widest bg-brand-orange/10 border border-brand-orange/20 px-3 py-1.5 rounded-full hidden md:block">
+              Hệ thống an ninh LoraFilm
+            </div>
+            <div className="h-6 w-px bg-zinc-800 hidden md:block"></div>
+            <button className="text-zinc-400 hover:text-white transition-colors p-2" title="Notifications">
+              <div className="relative">
+                <AlertCircle className="w-5 h-5" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-orange rounded-full border-2 border-zinc-950"></span>
+              </div>
+            </button>
           </div>
         </header>
 
