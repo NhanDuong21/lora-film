@@ -82,6 +82,7 @@ public class ShowtimeSeatLayoutQueryTest {
         showtime.setMovieVersion(movieVersion);
         showtime.setCinema(cinema);
         showtime.setAuditorium(auditorium);
+        showtime.setStartTime(java.time.Instant.now().plusSeconds(3600));
 
         seatType = new SeatType();
         seatType.setId(5L);

@@ -46,6 +46,10 @@ public class ShowtimeSpecification {
         return (root, query, cb) -> cb.between(root.get("startTime"), start, end);
     }
 
+    public static Specification<Showtime> startsAfter(Instant instant) {
+        return (root, query, cb) -> cb.greaterThan(root.get("startTime"), instant);
+    }
+
     public static Specification<Showtime> hasFormat(com.lorafilm.movie.movie.domain.enums.MovieFormat format) {
         return (root, query, cb) -> cb.equal(root.get("movieVersion").get("format"), format);
     }
