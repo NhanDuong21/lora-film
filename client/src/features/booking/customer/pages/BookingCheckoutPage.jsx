@@ -542,35 +542,36 @@ export default function BookingCheckoutPage() {
             </div>
 
             {/* Pricing breakdown */}
-            <div className="space-y-3 text-xs py-2">
-              <div className="flex justify-between text-zinc-400">
-                <span>Tiền vé:</span>
-                <span>{formatCurrency(booking.ticketAmount)}</span>
+            <div className="space-y-4 text-xs py-4 border-b border-zinc-800">
+              <div className="flex justify-between items-center text-zinc-300">
+                <span className="font-bold">Tiền vé ({snapshot?.seatCount || visibleSeats.length || 0} ghế):</span>
+                <span className="font-black text-sm">{formatCurrency(booking.ticketAmount)}</span>
               </div>
-              <div className="flex justify-between text-zinc-400">
-                <span>Tiền bắp nước:</span>
-                <span>{formatCurrency(booking.foodOrder ? booking.foodOrder.finalAmount : 0)}</span>
+              <div className="flex justify-between items-center text-zinc-300">
+                <span className="font-bold">Tiền bắp nước:</span>
+                <span className="font-black text-sm">{formatCurrency(booking.foodOrder ? booking.foodOrder.finalAmount : 0)}</span>
               </div>
               {booking.promotionDiscount > 0 && (
-                <div className="flex justify-between text-emerald-500 font-bold">
-                  <span>Khuyến mãi:</span>
+                <div className="flex justify-between items-center text-emerald-400 font-bold bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                  <span>Khuyến mãi / Giảm giá:</span>
                   <span>-{formatCurrency(booking.promotionDiscount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-zinc-500 text-[10px] border-t border-zinc-800 pt-3">
-                <span>VAT (đã bao gồm):</span>
+              <div className="flex justify-between text-zinc-500 text-[10px] pt-1">
+                <span>Thuế GTGT (VAT) đã bao gồm:</span>
                 <span>10%</span>
               </div>
+            </div>
 
-              {/* Grand Total box */}
-              <div className="flex justify-between items-center py-4 px-4 bg-zinc-950/60 rounded-2xl border border-zinc-850 shadow-inner">
-                <div>
-                  <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Tổng số tiền</span>
-                </div>
-                <span className="text-lg md:text-xl font-black text-brand-orange">
-                  {formatCurrency(booking.finalAmount)}
-                </span>
+            {/* Grand Total box */}
+            <div className="flex justify-between items-center py-5 px-5 bg-zinc-950/80 rounded-2xl border border-brand-orange/30 shadow-[0_0_15px_rgba(255,122,0,0.1)]">
+              <div>
+                <span className="text-[10px] text-zinc-400 font-black uppercase tracking-wider block mb-0.5">Tổng số tiền</span>
+                <span className="text-[9px] text-brand-orange/80 font-bold uppercase">Đã bao gồm VAT</span>
               </div>
+              <span className="text-2xl md:text-3xl font-black text-brand-orange tracking-tight">
+                {formatCurrency(booking.finalAmount)}
+              </span>
             </div>
 
             {/* Terms and Conditions for step 4 */}
