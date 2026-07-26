@@ -1850,3 +1850,1179 @@ Một chức năng chỉ được coi là hoàn thành khi:
 - Cross-brand Loyalty.
 - Mobile Push Reminder trước khi điểm hết hạn.
 - Real-time Loyalty Dashboard.
+# 52. Domain-Driven Design (DDD)
+
+## Bounded Context
+
+```text
+                    Cinema Platform
+
+ ┌───────────────────────────────────────────┐
+ │ User Context                              │
+ └───────────────────────────────────────────┘
+
+ ┌───────────────────────────────────────────┐
+ │ Booking Context                           │
+ └───────────────────────────────────────────┘
+
+ ┌───────────────────────────────────────────┐
+ │ Promotion Context                         │
+ └───────────────────────────────────────────┘
+
+ ┌───────────────────────────────────────────┐
+ │ Analytics Context                         │
+ └───────────────────────────────────────────┘
+
+ ┌───────────────────────────────────────────┐
+ │ Score Context                             │
+ │                                           │
+ │ Membership                               │
+ │ Loyalty Point                            │
+ │ Membership Tier                          │
+ │ Point Ledger                             │
+ │ Point Expiration                         │
+ └───────────────────────────────────────────┘
+```
+
+Score Context không được truy cập trực tiếp Database của các Context khác.
+
+---
+
+## Aggregate
+
+### Membership Aggregate
+
+```text
+Membership
+│
+├── Wallet
+├── Tier
+├── Ledger
+├── PointBucket
+└── History
+```
+
+Aggregate Root
+
+```
+Membership
+```
+
+Chỉ Membership được phép thay đổi Wallet.
+
+---
+
+## Entities
+
+| Entity | Description |
+|---------|-------------|
+| Membership | Loyalty Account |
+| Wallet | Điểm hiện tại |
+| Tier | Hạng thành viên |
+| Ledger | Immutable Transaction |
+| Hold | Điểm đang giữ |
+| Expiration Bucket | Bucket hết hạn |
+
+---
+
+## Value Objects
+
+```text
+Point
+
+Money
+
+TierRule
+
+EarnRate
+
+ExpirationDate
+
+PointBalance
+```
+
+Value Object bất biến.
+
+Không có Identity.
+
+---
+
+## Domain Services
+
+```text
+EarnCalculator
+
+TierCalculator
+
+ExpirationService
+
+RedeemValidator
+
+WalletService
+
+ReconciliationService
+```
+
+Không chứa Infrastructure.
+
+---
+
+## Repository
+
+```text
+MembershipRepository
+
+WalletRepository
+
+LedgerRepository
+
+TierRepository
+
+HoldRepository
+```
+
+Repository chỉ truy cập Aggregate.
+
+Không JOIN Domain khác.
+
+---
+
+## Domain Events
+
+```text
+PointEarned
+
+PointRedeemed
+
+PointExpired
+
+PointRevoked
+
+TierUpgraded
+
+TierDowngraded
+
+HoldCreated
+
+HoldReleased
+```
+
+Không publish Infrastructure Event trực tiếp từ Controller.
+
+---
+
+# 53. Domain Invariants
+
+Luôn phải đúng.
+
+## Membership
+
+- Một User chỉ có một Membership.
+- Membership ID không đổi.
+- Membership phải có Wallet.
+
+---
+
+## Wallet
+
+```
+Current >= 0
+
+Hold >= 0
+
+Available >= 0
+
+Lifetime >= Current
+```
+
+---
+
+## Ledger
+
+- Immutable.
+- Không UPDATE.
+- Không DELETE.
+- Có Before/After Balance.
+
+---
+
+## Tier
+
+- Chỉ có một Tier hiện tại.
+- Tier luôn tồn tại.
+- Tier được tính từ Lifetime Point.
+
+---
+
+# 54. Database Constraints
+
+## Unique
+
+```text
+membership.user_id
+
+ledger.idempotency_key
+
+ledger.event_id
+
+tier.name
+```
+
+---
+
+## Foreign Key
+
+```text
+membership -> tier
+
+wallet -> membership
+
+ledger -> membership
+
+hold -> membership
+```
+
+---
+
+## Index
+
+```text
+membership(user_id)
+
+ledger(event_id)
+
+ledger(created_at)
+
+ledger(membership_id)
+
+hold(booking_id)
+
+wallet(membership_id)
+```
+
+---
+
+# 55. Transaction Boundary
+
+Một Transaction chỉ xử lý một nghiệp vụ.
+
+Ví dụ Earn
+
+```text
+BEGIN
+
+Wallet +
+
+Lifetime +
+
+Ledger +
+
+History +
+
+Commit
+
+Publish Event
+```
+
+Nếu lỗi
+
+```
+Rollback
+```
+
+---
+
+# 56. Optimistic Lock
+
+Wallet có Version.
+
+```text
+Wallet
+
+version = 15
+```
+
+Transaction A
+
+↓
+
+Update
+
+↓
+
+Version =16
+
+Transaction B
+
+↓
+
+Version mismatch
+
+↓
+
+Retry
+
+---
+
+Không dùng Pessimistic Lock mặc định.
+
+---
+
+# 57. Distributed Lock
+
+Nếu chạy nhiều instance
+
+```
+Score-1
+
+Score-2
+
+Score-3
+```
+
+thì dùng
+
+```
+Redis Lock
+```
+
+Lock theo
+
+```
+membershipId
+```
+
+Không lock toàn bộ bảng.
+
+---
+
+# 58. Retry Policy
+
+## Retry
+
+| Scenario | Retry |
+|-----------|-------|
+| Kafka Publish | Yes |
+| Redis Timeout | Yes |
+| DB Deadlock | Yes |
+| HTTP Timeout | Yes |
+| Validation | No |
+
+---
+
+Backoff
+
+```
+1s
+
+2s
+
+5s
+
+10s
+```
+
+Sau đó
+
+```
+DLQ
+```
+
+---
+
+# 59. Dead Letter Queue
+
+Nếu Event lỗi nhiều lần
+
+```
+Kafka
+
+↓
+
+Retry
+
+↓
+
+Retry
+
+↓
+
+Retry
+
+↓
+
+DLQ
+```
+
+Admin xử lý sau.
+
+---
+
+# 60. Event Contract
+
+## score.earned
+
+```json
+{
+  "eventId": "...",
+  "membershipId": "...",
+  "userId": "...",
+  "bookingId": "...",
+  "point": 35,
+  "tier": "GOLD",
+  "occurredAt": "..."
+}
+```
+
+---
+
+## score.redeemed
+
+```json
+{
+  "eventId": "...",
+  "membershipId": "...",
+  "bookingId": "...",
+  "point": 120
+}
+```
+
+---
+
+## score.expired
+
+```json
+{
+  "eventId": "...",
+  "membershipId": "...",
+  "expiredPoint": 60
+}
+```
+
+---
+
+## score.adjusted
+
+```json
+{
+  "eventId": "...",
+  "membershipId": "...",
+  "adminId": "...",
+  "type": "MANUAL_ADD",
+  "point": 100
+}
+```
+
+---
+
+# 61. API Versioning
+
+Nguyên tắc
+
+- Không đưa Breaking Change.
+- Internal API và Public API tách riêng.
+- DTO không expose Entity.
+
+Ví dụ
+
+```text
+/api/scores/...
+
+/internal/scores/...
+```
+
+---
+
+# 62. Pagination
+
+Các API History
+
+bắt buộc
+
+```
+page
+
+size
+
+sort
+```
+
+Default
+
+```
+size=20
+```
+
+Maximum
+
+```
+size=100
+```
+
+---
+
+# 63. Filtering
+
+History
+
+Hỗ trợ
+
+- Transaction Type
+- Booking
+- Date Range
+- Tier
+- Adjustment
+- Expiration
+
+---
+
+# 64. Search
+
+Admin
+
+Cho phép tìm
+
+- Membership ID
+- User ID
+- Phone
+- Email
+- Booking ID
+
+Không Search Ledger bằng Full Scan.
+
+---
+
+# 65. Import / Export
+
+Import
+
+```
+CSV
+```
+
+Fields
+
+```text
+membershipId
+
+point
+
+reason
+```
+
+Export
+
+- Ledger
+- History
+- Reconciliation
+- Expiration Report
+
+---
+
+# 66. Capacity Planning
+
+Ước tính
+
+```
+1 triệu User
+
+↓
+
+100 triệu Ledger
+
+↓
+
+500GB Data
+```
+
+Thiết kế
+
+- Partition Ledger theo năm.
+- Archive dữ liệu cũ.
+- Không xóa Ledger.
+
+---
+
+# 67. Data Retention
+
+| Data | Retention |
+|------|-----------|
+| Wallet | Vĩnh viễn |
+| Membership | Vĩnh viễn |
+| Ledger | Vĩnh viễn |
+| Audit | 5 năm |
+| Log | 90 ngày |
+| Cache | TTL |
+
+---
+
+# 68. Backup & Recovery
+
+Database
+
+- Daily Backup
+- PITR (Point In Time Recovery)
+- Verify Backup định kỳ
+
+Recovery
+
+```
+Backup
+
+↓
+
+Restore
+
+↓
+
+Rebuild Cache
+
+↓
+
+Replay Event (nếu cần)
+```
+
+---
+
+# 69. SLA / SLO
+
+| Item | Target |
+|------|--------|
+| Availability | 99.9% |
+| Wallet API | <100ms |
+| Earn | <300ms |
+| Redeem | <300ms |
+| Error Rate | <1% |
+
+---
+
+# 70. Production Checklist
+
+Trước khi Release
+
+- Database Migration hoàn tất.
+- Index đầy đủ.
+- Redis hoạt động.
+- Kafka hoạt động.
+- Health Check PASS.
+- Metrics hoạt động.
+- Logging hoạt động.
+- Alert hoạt động.
+- Backup hoạt động.
+- Swagger cập nhật.
+- API Test PASS.
+- Integration Test PASS.
+- Concurrency Test PASS.
+- Security Review PASS.
+- Performance Test PASS.
+- Code Review PASS.
+# 71. Architecture Decision Records (ADR)
+
+## ADR-001: Một User chỉ có một Membership
+
+### Decision
+
+- Mỗi User sở hữu duy nhất một Membership.
+- Membership không thể chuyển sang User khác.
+- Membership ID là immutable.
+
+### Rationale
+
+- Đơn giản hóa Loyalty.
+- Tránh Merge Wallet.
+- Dễ Audit.
+
+---
+
+## ADR-002: Wallet không lưu History
+
+History và Wallet tách riêng.
+
+Wallet
+
+```
+Current
+Hold
+Lifetime
+```
+
+History
+
+```
+Earn
+
+Redeem
+
+Expire
+
+Adjustment
+```
+
+Lý do
+
+- Wallet luôn nhỏ.
+- Query nhanh.
+- History có thể rất lớn.
+
+---
+
+## ADR-003: Ledger là Immutable
+
+Không UPDATE.
+
+Không DELETE.
+
+Sai dữ liệu
+
+↓
+
+Tạo Transaction mới.
+
+Không sửa Transaction cũ.
+
+---
+
+## ADR-004: Tier tính từ Lifetime Point
+
+Không lưu công thức.
+
+Không hard-code.
+
+Admin chỉ thay Rule.
+
+Tier được tính lại.
+
+---
+
+# 72. Naming Convention
+
+## Database
+
+```
+membership
+
+membership_tier
+
+point_wallet
+
+point_ledger
+
+point_history
+
+point_hold
+```
+
+snake_case.
+
+---
+
+## API
+
+```
+GET
+
+POST
+
+PUT
+```
+
+Không dùng PATCH.
+
+Không dùng động từ.
+
+Đúng
+
+```
+POST /redeem
+
+PUT /tier
+
+GET /history
+```
+
+Sai
+
+```
+/calculatePoint
+
+/updateTier
+
+/getHistory
+```
+
+---
+
+## Event
+
+```
+score.earned
+
+score.redeemed
+
+score.revoked
+
+score.expired
+
+score.adjusted
+```
+
+Tên event luôn ở thì quá khứ.
+
+---
+
+# 73. Error Response Contract
+
+Theo RFC 9457 (Problem Details).
+
+```json
+{
+  "type": "/errors/insufficient-point",
+  "title": "Insufficient Point",
+  "status": 400,
+  "detail": "Current point is not enough.",
+  "instance": "/api/scores/me/redeem",
+  "traceId": "..."
+}
+```
+
+Không trả
+
+```
+"Error"
+
+"Something wrong"
+
+"Internal Error"
+```
+
+---
+
+# 74. Security Checklist
+
+## Customer API
+
+- JWT.
+- Chỉ đọc dữ liệu của chính mình.
+
+---
+
+## Admin API
+
+- JWT.
+- Role.
+- Permission.
+
+---
+
+## Internal API
+
+- Internal Token hoặc mTLS.
+- Không public Internet.
+
+---
+
+## Database
+
+- Không expose trực tiếp.
+- Không cấp quyền UPDATE Ledger bằng SQL.
+
+---
+
+## Sensitive Operation
+
+- Adjustment
+- Import
+- Tier Config
+- Reconciliation
+
+bắt buộc Audit.
+
+---
+
+# 75. Audit Checklist
+
+Mỗi giao dịch phải lưu
+
+- User
+- Membership
+- Booking
+- Before
+- After
+- Point
+- Transaction Type
+- EventId
+- Idempotency Key
+- Request Time
+- Created By
+
+Audit không được chỉnh sửa.
+
+---
+
+# 76. Logging Convention
+
+Level
+
+| Level | Usage |
+|--------|-------|
+| INFO | Business Event |
+| WARN | Validation |
+| ERROR | Unexpected Exception |
+| DEBUG | Local Development |
+
+Không log
+
+- JWT
+- Password
+- OTP
+- Internal Token
+
+Mọi log phải có
+
+```
+TraceId
+
+RequestId
+
+MembershipId
+
+BookingId (nếu có)
+```
+
+---
+
+# 77. Deployment Strategy
+
+Khuyến nghị
+
+Rolling Update.
+
+```
+Score v1
+
+↓
+
+Deploy v2
+
+↓
+
+Health Check
+
+↓
+
+Traffic Switch
+
+↓
+
+Remove v1
+```
+
+Không downtime.
+
+---
+
+# 78. Disaster Recovery
+
+Nếu Redis mất
+
+↓
+
+Đọc Database.
+
+↓
+
+Rebuild Cache.
+
+---
+
+Nếu Kafka mất
+
+↓
+
+Outbox giữ Event.
+
+↓
+
+Kafka hoạt động lại.
+
+↓
+
+Replay Event.
+
+---
+
+Nếu Database Restore
+
+↓
+
+Restore Backup.
+
+↓
+
+Replay Event (nếu cần).
+
+↓
+
+Rebuild Cache.
+
+---
+
+# 79. Risk Register
+
+| Risk | Impact | Solution |
+|------|--------|----------|
+| Double Earn | Cao | Idempotency |
+| Double Redeem | Cao | Distributed Lock |
+| Lost Event | Cao | Outbox |
+| Duplicate Kafka | Trung bình | EventId |
+| Cache Dirty | Trung bình | Cache Aside |
+| DB Deadlock | Trung bình | Retry |
+| Scheduler Fail | Trung bình | Monitoring + Alert |
+| Redis Down | Thấp | DB Fallback |
+
+---
+
+# 80. Non-Functional Requirements
+
+## Availability
+
+>= 99.9%
+
+---
+
+## Scalability
+
+- Stateless.
+- Horizontal Scaling.
+- Redis Cluster.
+- Kafka Cluster.
+
+---
+
+## Reliability
+
+- Retry.
+- Circuit Breaker.
+- Timeout.
+- Fallback.
+
+---
+
+## Maintainability
+
+- DDD.
+- Layered Architecture.
+- Clean Code.
+- SOLID.
+
+---
+
+## Observability
+
+- Metrics.
+- Logs.
+- Trace.
+- Health Check.
+- Alert.
+
+---
+
+# 81. Assumptions
+
+- Booking Service là nguồn xác thực Booking.
+- Promotion Service quyết định Discount.
+- User Service quản lý User.
+- Payment Service quyết định Payment Status.
+- Analytics chỉ đọc Event.
+
+Score không tự kiểm tra các nghiệp vụ ngoài Domain của mình.
+
+---
+
+# 82. Known Limitations
+
+Hiện tại chưa hỗ trợ
+
+- Point Transfer.
+- Family Membership.
+- Multi Wallet.
+- Multi Currency Point.
+- Cross Region Loyalty.
+- Cross Brand Loyalty.
+
+Các tính năng này sẽ được xem xét ở phiên bản sau.
+
+---
+
+# 83. Open Questions
+
+Các vấn đề cần Business xác nhận
+
+### Membership
+
+- Membership có được khôi phục khi User mở khóa?
+- Có hỗ trợ Merge User trong tương lai không?
+
+### Tier
+
+- Có cần Tier theo từng quốc gia?
+- Tier Benefit thuộc Promotion hay Score?
+
+### Point
+
+- Điểm có được tặng thủ công theo Campaign?
+- Có giới hạn Earn mỗi ngày?
+- Có giới hạn Redeem mỗi tháng?
+
+### Expiration
+
+- Có gửi thông báo trước khi hết hạn 30/15/7 ngày?
+- Có cho phép gia hạn điểm không?
+
+### Reconciliation
+
+- Có cần đối soát theo từng rạp?
+- Có cần đối soát theo Payment Gateway?
+
+---
+
+# 84. Business Glossary
+
+| Thuật ngữ | Ý nghĩa |
+|-----------|----------|
+| Membership | Tài khoản Loyalty |
+| Wallet | Ví điểm |
+| Current Point | Điểm khả dụng |
+| Hold Point | Điểm tạm giữ |
+| Lifetime Point | Tổng điểm tích lũy |
+| Earn | Cộng điểm |
+| Redeem | Dùng điểm |
+| Hold | Giữ điểm |
+| Commit | Trừ điểm chính thức |
+| Release | Trả lại điểm giữ |
+| Revoke | Thu hồi điểm đã cộng |
+| Expire | Hết hạn điểm |
+| Ledger | Sổ cái giao dịch |
+| History | Lịch sử hiển thị |
+| Tier | Hạng thành viên |
+| Reconciliation | Đối soát |
+| Idempotency | Chống xử lý trùng |
+
+---
+
+# 85. Conclusion
+
+Score Service là trung tâm quản lý Loyalty của toàn bộ hệ thống rạp chiếu phim.
+
+Các nguyên tắc cốt lõi:
+
+- Một User chỉ có một Membership.
+- Wallet luôn nhất quán với Ledger.
+- Ledger là immutable.
+- Tier được tính từ Lifetime Point.
+- Mọi thay đổi đều được Audit.
+- Mọi giao dịch đều hỗ trợ Idempotency.
+- Mọi tích hợp giữa các service sử dụng Internal API hoặc Kafka Event.
+- Thiết kế theo DDD, đảm bảo khả năng mở rộng, bảo trì và vận hành trong môi trường production.
+
+Tài liệu này là cơ sở để triển khai Database, API, Domain Model, Scheduler, Kafka, Monitoring, Testing và vận hành `score-service` trong hệ thống microservices.
