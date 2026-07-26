@@ -9,6 +9,7 @@ import {
   formatHoldTimeLeft,
   getBookingRecoveryState
 } from '../utils/bookingRecovery';
+import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 import BookingCancellationModal from './BookingCancellationModal';
 
 export default function CustomerBookingHistory() {
@@ -47,7 +48,10 @@ export default function CustomerBookingHistory() {
       });
       setBookingPage(historyData);
     } catch (err) {
-      setError(err.message || err.detail || "Không thể tải lịch sử đặt vé.");
+      setError(getBookingErrorMessage(
+        err,
+        'Không thể tải lịch sử đặt vé. Vui lòng thử lại.'
+      ));
     } finally {
       setLoading(false);
     }
@@ -79,7 +83,10 @@ export default function CustomerBookingHistory() {
       setCancelTarget(null);
     } catch (requestError) {
       setCancelError(
-        `Không thể hủy giữ ghế: ${requestError.message || 'Vui lòng thử lại.'}`
+        getBookingErrorMessage(
+          requestError,
+          'Không thể hủy giữ ghế. Vui lòng thử lại.'
+        )
       );
     } finally {
       setCancellingBookingId(null);
@@ -99,6 +106,10 @@ export default function CustomerBookingHistory() {
     switch (bStatus) {
       case 'CONFIRMED':
         return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+      case 'COMPLETED':
+        return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+      case 'REFUNDED':
+        return 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
       case 'PENDING_PAYMENT':
         return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
       case 'CANCELLED':
@@ -113,10 +124,12 @@ export default function CustomerBookingHistory() {
   const translateStatus = (bStatus) => {
     switch (bStatus) {
       case 'CONFIRMED': return 'Đã thanh toán';
+      case 'COMPLETED': return 'Đã hoàn thành';
+      case 'REFUNDED': return 'Đã hoàn tiền';
       case 'PENDING_PAYMENT': return 'Chờ thanh toán';
       case 'CANCELLED': return 'Đã hủy';
       case 'EXPIRED': return 'Hết hạn';
-      default: return bStatus;
+      default: return 'Đang cập nhật';
     }
   };
 

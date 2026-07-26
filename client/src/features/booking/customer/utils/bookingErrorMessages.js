@@ -1,3 +1,8 @@
+import {
+  getCustomerErrorCode,
+  getCustomerErrorMessage
+} from '@/utils/customerErrorMessages';
+
 const BOOKING_ERROR_MESSAGES = {
   BOOKING_SEAT_CONFLICT: 'Một hoặc nhiều ghế vừa được khách khác giữ. Sơ đồ ghế đã được cập nhật, vui lòng chọn lại.',
   SEAT_003: 'Một hoặc nhiều ghế đang được khách khác giữ. Vui lòng chọn ghế khác.',
@@ -9,25 +14,35 @@ const BOOKING_ERROR_MESSAGES = {
   BOOKING_SHOWTIME_STARTED: 'Suất chiếu đã bắt đầu; không thể giữ ghế.',
   BOOKING_SHOWTIME_ENDED: 'Suất chiếu đã kết thúc.',
   BOOKING_EXPIRED: 'Thời gian giữ ghế đã hết. Vui lòng chọn lại ghế.',
-  BOOKING_IDEMPOTENCY_PAYLOAD_CONFLICT: 'Yêu cầu đặt vé đã thay đổi. Vui lòng làm mới và chọn lại ghế.',
+  BOOKING_NOT_FOUND: 'Không tìm thấy đơn đặt vé này.',
+  BOOKING_OWNER_REQUIRED: 'Bạn không có quyền xem hoặc thay đổi đơn đặt vé này.',
+  BOOKING_NOT_PENDING: 'Đơn không còn ở trạng thái chờ thanh toán.',
+  BOOKING_NOT_MODIFIABLE: 'Đơn không còn cho phép thay đổi bắp nước.',
+  BOOKING_AMOUNT_LOCKED: 'Đơn đã chốt số tiền nên không thể thay đổi bắp nước.',
+  BOOKING_RESERVATIONS_NOT_HELD: 'Ghế của đơn không còn được giữ. Vui lòng chọn lại ghế.',
+  BOOKING_SEAT_SELECTION_REQUIRED: 'Vui lòng chọn ít nhất một ghế.',
+  BOOKING_RESERVATION_OWNER_MISMATCH: 'Bạn không có quyền sử dụng lượt giữ ghế này.',
+  BOOKING_RESERVATION_EXPIRED: 'Lượt giữ ghế đã hết hạn. Vui lòng chọn lại ghế.',
+  FOOD_NOT_FOUND: 'Không tìm thấy món bắp nước đã chọn.',
+  FOOD_NOT_AVAILABLE: 'Món bắp nước này hiện không còn phục vụ.',
+  ORDER_NOT_MODIFIABLE: 'Đơn bắp nước không còn cho phép thay đổi.',
+  DUPLICATE_REQUEST: 'Yêu cầu đang được xử lý. Vui lòng chờ trong giây lát.',
+  PAYMENT_SERVICE_HANDOFF_REQUIRED: 'Hệ thống thanh toán chưa sẵn sàng. Vui lòng thử lại sau.',
+  IDEMPOTENCY_PAYLOAD_CONFLICT: 'Phiên đặt vé cũ không còn phù hợp với ghế bạn vừa chọn. Vui lòng bấm tiếp tục lại.',
+  BOOKING_IDEMPOTENCY_PAYLOAD_CONFLICT: 'Phiên đặt vé cũ không còn phù hợp với ghế bạn vừa chọn. Vui lòng bấm tiếp tục lại.',
   SHOWTIME_002: 'Không thể giữ ghế cho suất chiếu đã bắt đầu.',
   SEAT_COUPLE_PAIR_REQUIRED: 'Vui lòng chọn đủ hai ghế đôi.',
   SHOWTIME_VALIDATION_UNAVAILABLE: 'Không thể xác thực suất chiếu lúc này. Vui lòng thử lại.',
   INTERNAL_SERVER_ERROR: 'Hệ thống đang bận. Vui lòng thử lại sau.'
 };
 
-export const getBookingErrorCode = error => {
-  const payload = error?.response?.data || error;
-  return payload?.errorCode || payload?.code || error?.code;
-};
+export const getBookingErrorCode = getCustomerErrorCode;
 
 export const getBookingErrorMessage = (
   error,
   fallback = 'Không thể giữ ghế. Vui lòng thử lại.'
 ) => {
-  const payload = error?.response?.data || error;
-  const code = getBookingErrorCode(error);
-  return BOOKING_ERROR_MESSAGES[code] || payload?.message || error?.message || fallback;
+  return getCustomerErrorMessage(error, fallback, BOOKING_ERROR_MESSAGES);
 };
 
 export const seatConflictErrorCodes = new Set([

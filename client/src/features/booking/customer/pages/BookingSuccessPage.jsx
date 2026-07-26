@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { CheckCircle, Info, Printer, ArrowRight, ShoppingBag } from 'lucide-react';
 import { getBookingDetails } from '../services/bookingService';
 import BookingStepper from '../components/BookingStepper';
+import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 
 export default function BookingSuccessPage() {
   const location = useLocation();
@@ -30,7 +31,10 @@ export default function BookingSuccessPage() {
       const data = await getBookingDetails(bookingId);
       setBooking(data);
     } catch (err) {
-      setError(err.message || err.detail || "Không thể tải thông tin đơn hàng.");
+      setError(getBookingErrorMessage(
+        err,
+        'Không thể tải thông tin đơn hàng. Vui lòng thử lại.'
+      ));
     } finally {
       setLoading(false);
     }

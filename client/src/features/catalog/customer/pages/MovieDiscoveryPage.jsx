@@ -3,6 +3,7 @@ import {
   Play, RefreshCw, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import TrailerModal from '@/components/common/TrailerModal';
+import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import { getMovies, getGenres } from '@/features/catalog/customer/services/movieService';
 import { getYoutubeEmbedUrl } from '@/utils/formatters';
 
@@ -34,6 +35,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
   const [totalPages, setTotalPages] = useState(0);
 
   const [activeTrailerUrl, setActiveTrailerUrl] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     const fetchGenres = async () => {
@@ -48,6 +50,11 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
         }
       } catch (error) {
         console.error("Failed to fetch genres:", error);
+        setNotice({
+          title: 'Không thể tải thể loại phim',
+          message: 'Danh sách thể loại hiện chưa tải được. Bạn vẫn có thể xem danh sách phim.',
+          variant: 'warning'
+        });
       }
     };
     fetchGenres();
@@ -76,6 +83,11 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
         }
       } catch (error) {
         console.error("Failed to fetch movies:", error);
+        setNotice({
+          title: 'Không thể tải danh sách phim',
+          message: 'Danh sách phim hiện chưa tải được. Vui lòng thử lại sau.',
+          variant: 'error'
+        });
       } finally {
         setLoading(false);
       }
@@ -112,6 +124,14 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
 
   return (
     <div className="bg-brand-dark text-zinc-100 min-h-screen py-8 px-4 md:px-8">
+      {notice && (
+        <CustomerNoticeModal
+          title={notice.title}
+          message={notice.message}
+          variant={notice.variant}
+          onClose={() => setNotice(null)}
+        />
+      )}
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* Header Breadcrumbs block */}

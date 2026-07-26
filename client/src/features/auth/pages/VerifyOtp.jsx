@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { verifyOtp, resendOtp } from "@/features/auth/services/authService";
+import CustomerNoticeModal from "@/components/common/CustomerNoticeModal";
+import { getCustomerErrorMessage } from "@/utils/customerErrorMessages";
 
 function VerifyOtp() {
     const navigate = useNavigate();
@@ -52,7 +54,10 @@ function VerifyOtp() {
                 const resendCooldown = res.data?.resendAvailableIn || 60;
                 setCountdown(resendCooldown);
             } else {
-                setError(res.message || "Gửi lại mã thất bại. Vui lòng thử lại.");
+                setError(getCustomerErrorMessage(
+                    res,
+                    'Gửi lại mã thất bại. Vui lòng thử lại.'
+                ));
             }
         } catch (err) {
             setIsResending(false);
@@ -73,7 +78,10 @@ function VerifyOtp() {
                 return;
             }
 
-            setError(err?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
+            setError(getCustomerErrorMessage(
+                err,
+                'Không thể gửi lại mã OTP. Vui lòng thử lại sau.'
+            ));
         }
     };
 
@@ -117,7 +125,10 @@ function VerifyOtp() {
                     });
                 }, 1500);
             } else {
-                setError(res.message || "Xác thực thất bại. Vui lòng thử lại.");
+                setError(getCustomerErrorMessage(
+                    res,
+                    'Xác thực thất bại. Vui lòng thử lại.'
+                ));
             }
         } catch (err) {
             setIsSubmitting(false);
@@ -128,12 +139,23 @@ function VerifyOtp() {
                 AUTH_ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản tương ứng.",
                 INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
             };
-            setError(errorMap[errorCode] || err?.message || "Lỗi xác thực. Vui lòng thử lại.");
+            setError(errorMap[errorCode] || getCustomerErrorMessage(
+                err,
+                'Lỗi xác thực. Vui lòng thử lại.'
+            ));
         }
     };
 
     return (
         <main className="bg-[#050506] text-white min-h-screen w-full flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden select-none">
+            {error && (
+                <CustomerNoticeModal
+                    title="Không thể xác thực"
+                    message={error}
+                    variant="error"
+                    onClose={() => setError("")}
+                />
+            )}
             <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] bg-brand-orange/10 rounded-full filter blur-[80px] pointer-events-none z-0" />
             <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-brand-orange/5 rounded-full filter blur-[80px] pointer-events-none z-0" />
 
@@ -181,28 +203,6 @@ function VerifyOtp() {
                             <polyline points="20 6 9 17 4 12" />
                         </svg>
                         <span>{success}</span>
-                    </div>
-                )}
-
-                {error && (
-                    <div className="mb-6 bg-red-950/50 border border-red-800/80 rounded-xl p-4 flex items-start gap-3 text-red-200 text-xs leading-relaxed animate-fadeIn">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-4 h-4 shrink-0 text-red-500 mt-0.5"
-                        >
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
-                        </svg>
-                        <span>{error}</span>
                     </div>
                 )}
 

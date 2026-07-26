@@ -13,10 +13,27 @@ describe('booking error messages', () => {
     expect(seatConflictErrorCodes.has(getBookingErrorCode(error))).toBe(true);
   });
 
-  it('supports Axios-shaped errors and preserves unknown messages', () => {
+  it('supports Axios-shaped errors and preserves customer-safe Vietnamese messages', () => {
     expect(getBookingErrorMessage({
       response: { data: { errorCode: 'SEAT_003' } }
     })).toContain('đang được khách khác giữ');
     expect(getBookingErrorMessage({ message: 'Lỗi khác' })).toBe('Lỗi khác');
+  });
+
+  it('translates the backend idempotency conflict instead of leaking English', () => {
+    const message = getBookingErrorMessage({
+      errorCode: 'IDEMPOTENCY_PAYLOAD_CONFLICT',
+      message: 'The idempotency key was reused with a different request payload'
+    });
+
+    expect(message).toContain('Phiên đặt vé cũ');
+    expect(message).not.toContain('idempotency');
+  });
+
+  it('uses the Vietnamese fallback for an unknown raw English error', () => {
+    expect(getBookingErrorMessage(
+      { message: 'Unexpected database constraint violation' },
+      'Không thể tạo đơn. Vui lòng thử lại.'
+    )).toBe('Không thể tạo đơn. Vui lòng thử lại.');
   });
 });

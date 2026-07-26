@@ -4,6 +4,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Phone, Clock, Star, Film, ChevronLeft, ChevronRight, HelpCircle, AlertTriangle } from 'lucide-react';
 import { getCinemaBySlug, getShowtimes, getMovies } from '@/features/catalog/customer/services/movieService';
 import { seatSelectionPath } from '@/features/catalog/customer/utils/customerMovieFlow';
+import { getCustomerErrorMessage } from '@/utils/customerErrorMessages';
+import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 
 const CINEMA_STATIC_DETAILS = {
   'lora-nguyen-du': {
@@ -70,6 +72,7 @@ export default function CinemaDetailPage() {
   const [showtimes, setShowtimes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
   
   const [activeSlide, setActiveSlide] = useState(0);
   const [activeDateIndex, setActiveDateIndex] = useState(0);
@@ -124,6 +127,11 @@ export default function CinemaDetailPage() {
       setMoviesMap(map);
     } catch (e) {
       console.error("Failed to load movies information:", e);
+      setNotice({
+        title: 'Thiếu một phần thông tin phim',
+        message: 'Một số tên hoặc hình ảnh phim có thể chưa hiển thị. Vui lòng thử lại sau.',
+        variant: 'warning'
+      });
     }
   }, []);
 
@@ -142,7 +150,10 @@ export default function CinemaDetailPage() {
       });
       setShowtimes(showtimeData.data || showtimeData.content || []);
     } catch (err) {
-      setError(err.message || "Không thể tải thông tin cụm rạp.");
+      setError(getCustomerErrorMessage(
+        err,
+        'Không thể tải thông tin cụm rạp. Vui lòng thử lại.'
+      ));
     } finally {
       setLoading(false);
     }
@@ -209,7 +220,6 @@ export default function CinemaDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-brand-dark px-4 text-center">
         <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-6">
-          // eslint-disable-next-line no-undef
           <AlertTriangle className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold text-zinc-100 mb-2 font-sans">Không tìm thấy cụm rạp</h2>
@@ -228,6 +238,14 @@ export default function CinemaDetailPage() {
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
+      {notice && (
+        <CustomerNoticeModal
+          title={notice.title}
+          message={notice.message}
+          variant={notice.variant}
+          onClose={() => setNotice(null)}
+        />
+      )}
       
       {/* ❖ TOP BANNER: Carousel */}
       <div className="w-full h-[400px] md:h-[500px] relative overflow-hidden group">

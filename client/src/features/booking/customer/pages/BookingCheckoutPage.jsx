@@ -6,6 +6,7 @@ import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, r
 import BookingStepper from '../components/BookingStepper';
 import BookingCancellationModal from '../components/BookingCancellationModal';
 import BookingNoticeModal from '../components/BookingNoticeModal';
+import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 
 export default function BookingCheckoutPage() {
   const location = useLocation();
@@ -73,7 +74,10 @@ export default function BookingCheckoutPage() {
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
     } catch (err) {
-      setError(err.message || err.detail || "Không thể tải thông tin đặt vé.");
+      setError(getBookingErrorMessage(
+        err,
+        'Không thể tải thông tin đặt vé. Vui lòng thử lại.'
+      ));
     } finally {
       setLoading(false);
     }
@@ -187,7 +191,10 @@ export default function BookingCheckoutPage() {
     } catch (err) {
       setNotice({
         title: 'Không thể cập nhật bắp nước',
-        message: err.message || 'Kết nối không ổn định. Vui lòng thử lại.',
+        message: getBookingErrorMessage(
+          err,
+          'Kết nối không ổn định. Vui lòng thử lại.'
+        ),
         variant: 'error'
       });
     } finally {
@@ -217,7 +224,10 @@ export default function BookingCheckoutPage() {
     } catch (err) {
       setNotice({
         title: 'Không thể chuẩn bị thanh toán',
-        message: err.response?.data?.message || err.message || 'Vui lòng thử lại.',
+        message: getBookingErrorMessage(
+          err,
+          'Không thể chuẩn bị thanh toán. Vui lòng thử lại.'
+        ),
         variant: 'error'
       });
     } finally {
@@ -237,7 +247,10 @@ export default function BookingCheckoutPage() {
       navigate('/movies');
     } catch (requestError) {
       setCancelError(
-        `Không thể hủy đặt vé: ${requestError.message || 'Vui lòng thử lại.'}`
+        getBookingErrorMessage(
+          requestError,
+          'Không thể hủy đặt vé. Vui lòng thử lại.'
+        )
       );
     } finally {
       setCancelling(false);

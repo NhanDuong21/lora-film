@@ -12,6 +12,7 @@ import {
   getBookingRecoveryState
 } from '../utils/bookingRecovery';
 import BookingCancellationModal from './BookingCancellationModal';
+import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 
 export default function ActiveBookingRecoveryBanner() {
   const { isAuthenticated, isInitializing, userRole } = useAuth();
@@ -89,9 +90,10 @@ export default function ActiveBookingRecoveryBanner() {
       setPendingBookings(current =>
         current.filter(booking => (booking.publicId || booking.id) !== publicId));
     } catch (requestError) {
-      setCancelError(
-        `Không thể hủy giữ ghế: ${requestError.message || 'Vui lòng thử lại.'}`
-      );
+      setCancelError(getBookingErrorMessage(
+        requestError,
+        'Không thể hủy giữ ghế. Vui lòng thử lại.'
+      ));
     } finally {
       setCancelling(false);
     }

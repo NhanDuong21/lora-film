@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, RefreshCw, Home } from 'lucide-react';
+import { AlertCircle, RefreshCw, Home } from 'lucide-react';
 import BookingStepper from '../components/BookingStepper';
 
 export default function BookingFailedPage() {

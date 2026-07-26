@@ -20,6 +20,7 @@ import {
   getBookingTickets
 } from '../services/bookingService';
 import BookingCancellationModal from '../components/BookingCancellationModal';
+import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 
 const statusPresentation = {
   PENDING_PAYMENT: {
@@ -106,11 +107,10 @@ export default function BookingDetailPage() {
         bookingStatus: data.bookingStatus ?? data.status
       });
     } catch (requestError) {
-      setError(
-        requestError.message
-        || requestError.detail
-        || 'Không thể tải thông tin chi tiết đặt vé.'
-      );
+      setError(getBookingErrorMessage(
+        requestError,
+        'Không thể tải thông tin chi tiết đặt vé.'
+      ));
     } finally {
       setLoading(false);
     }
@@ -162,7 +162,10 @@ export default function BookingDetailPage() {
       setCancelModalOpen(false);
     } catch (requestError) {
       setCancelError(
-        `Không thể hủy đặt vé: ${requestError.message || 'Vui lòng thử lại.'}`
+        getBookingErrorMessage(
+          requestError,
+          'Không thể hủy đặt vé. Vui lòng thử lại.'
+        )
       );
     } finally {
       setCancelling(false);
@@ -207,7 +210,7 @@ export default function BookingDetailPage() {
   const tickets = Array.isArray(booking.tickets) ? booking.tickets : [];
   const currentStatus = booking.bookingStatus || booking.status;
   const status = statusPresentation[currentStatus] || {
-    label: currentStatus,
+    label: 'Đang cập nhật',
     className: 'border-zinc-700 bg-zinc-800 text-zinc-300',
     title: 'Trạng thái đơn đã được cập nhật',
     description: 'Xem thông tin chi tiết của đơn bên dưới.'

@@ -1,4 +1,8 @@
 import apiClient from "@/services/apiClient";
+import {
+  clearAllBookingCreationAttempts,
+  clearBookingCreationAttempt
+} from '../utils/bookingCreationIdempotency';
 
 export const BOOKING_CHANGED_EVENT = "lorafilm:booking-changed";
 
@@ -61,6 +65,7 @@ export const createBooking = async ({ showtimePublicId, seatPublicIds, reservati
     headers: { "Idempotency-Key": idempotencyKey }
   });
   const booking = response.data.data;
+  clearBookingCreationAttempt(showtimePublicId);
   emitBookingChanged({ action: "CREATED", publicId: booking?.publicId });
   return booking;
 };
@@ -143,6 +148,7 @@ export const cancelBooking = async (bookingId, reason = "") => {
     headers: { "Idempotency-Key": idempotencyKey }
   });
   const booking = response.data.data;
+  clearAllBookingCreationAttempts();
   emitBookingChanged({ action: "CANCELLED", publicId: bookingId });
   return booking;
 };
@@ -157,7 +163,7 @@ export const cancelBooking = async (bookingId, reason = "") => {
  */
 // Payment provider initiation is intentionally owned by Payment Service.
 export const initiatePayment = async () => {
-  const error = new Error("PAYMENT_SERVICE_HANDOFF_REQUIRED");
+  const error = new Error("Hệ thống thanh toán chưa sẵn sàng.");
   error.code = "PAYMENT_SERVICE_HANDOFF_REQUIRED";
   throw error;
 };

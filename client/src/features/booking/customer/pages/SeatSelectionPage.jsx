@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, Info, MapPin, Monitor, ShieldAlert
+  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, ShieldAlert
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
@@ -19,8 +19,13 @@ import {
   getBookingErrorMessage,
   seatConflictErrorCodes
 } from '../utils/bookingErrorMessages';
+import {
+  clearBookingCreationAttempt,
+  getOrCreateBookingCreationKey
+} from '../utils/bookingCreationIdempotency';
 import { createBooking, getBookingHistory, getBookingDetails, getBookingTickets } from '../services/bookingService';
 import { getSeatAvailability } from '../services/seatReservationService';
+import BookingNoticeModal from '../components/BookingNoticeModal';
 import BookingStepper from '../components/BookingStepper';
 
 const money = value => value == null
@@ -42,15 +47,17 @@ export default function SeatSelectionPage() {
 
   // Seat Selection States
   const [selectedSeats, setSelectedSeats] = useState([]);
-  const [toastMessage, setToastMessage] = useState('');
+  const [notice, setNotice] = useState(null);
   const [showGapModal, setShowGapModal] = useState(false);
   const [reservationLoading, setReservationLoading] = useState(false);
   const [activeBooking, setActiveBooking] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
 
-  const showToast = useCallback((message) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(''), 4000);
+  const showNotice = useCallback((message, {
+    title = 'Không thể tiếp tục',
+    variant = 'warning'
+  } = {}) => {
+    setNotice({ message, title, variant });
   }, []);
 
   // Check for active booking drafts when layout is loaded
@@ -208,7 +215,10 @@ export default function SeatSelectionPage() {
       setSelectedSeats(previous => {
         const next = previous.filter(seat => !unavailableIds.has(seat.publicId));
         if (next.length !== previous.length) {
-          showToast('Một hoặc nhiều ghế vừa được khách khác giữ. Vui lòng chọn ghế khác.');
+          showNotice(
+            'Một hoặc nhiều ghế vừa được khách khác giữ. Sơ đồ ghế đã được cập nhật, vui lòng chọn ghế khác.',
+            { title: 'Ghế vừa có người giữ' }
+          );
         }
         return next;
       });
@@ -225,7 +235,7 @@ export default function SeatSelectionPage() {
       socket.off('seat:availability-changed', onAvailabilityChanged);
       socket.disconnect();
     };
-  }, [showtimePublicId, showToast]);
+  }, [showtimePublicId, showNotice]);
 
   const rows = useMemo(() => {
     const grouped = new Map();
@@ -253,17 +263,18 @@ export default function SeatSelectionPage() {
     if (isSelected) {
       // Deselect
       setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId));
-      setToastMessage('');
     } else {
       // Select
       const maxSeats = Number(layout?.maxSeatsPerBooking || 8);
       if (selectedSeats.length + 1 > maxSeats) {
-        showToast(`Bạn chỉ được chọn tối đa ${maxSeats} ghế cho mỗi giao dịch!`);
+        showNotice(
+          `Bạn chỉ được chọn tối đa ${maxSeats} ghế cho mỗi giao dịch.`,
+          { title: 'Đã đạt giới hạn số ghế' }
+        );
         return;
       }
 
       setSelectedSeats(prev => [...prev, seat]);
-      setToastMessage('');
     }
   };
 
@@ -314,15 +325,18 @@ export default function SeatSelectionPage() {
     setShowGapModal(false);
     setReservationLoading(true);
     try {
-      const storageKey = `booking:create:${layout.showtimePublicId}`;
-      const idempotencyKey = sessionStorage.getItem(storageKey) || crypto.randomUUID();
-      sessionStorage.setItem(storageKey, idempotencyKey);
+      const seatPublicIds = selectedSeats.map(seat => seat.publicId);
+      const idempotencyKey = getOrCreateBookingCreationKey({
+        showtimePublicId: layout.showtimePublicId,
+        seatPublicIds
+      });
 
       const bookingData = await createBooking({
         showtimePublicId: layout.showtimePublicId,
-        seatPublicIds: selectedSeats.map(s => s.publicId),
+        seatPublicIds,
         idempotencyKey
       });
+      clearBookingCreationAttempt(layout.showtimePublicId);
 
       // Navigate to checkout/F&B page
       navigate(`/bookings/checkout?bookingId=${bookingData.publicId}`, {
@@ -352,7 +366,27 @@ export default function SeatSelectionPage() {
       if (seatConflictErrorCodes.has(errorCode)) {
         await refreshAvailability().catch(() => {});
       }
-      showToast(getBookingErrorMessage(err, 'Không thể giữ ghế hoặc tạo đơn hàng. Vui lòng thử lại!'));
+      if (
+        errorCode === 'IDEMPOTENCY_PAYLOAD_CONFLICT'
+        || errorCode === 'BOOKING_IDEMPOTENCY_PAYLOAD_CONFLICT'
+      ) {
+        clearBookingCreationAttempt(layout.showtimePublicId);
+      }
+      showNotice(
+        getBookingErrorMessage(
+          err,
+          'Không thể giữ ghế hoặc tạo đơn hàng. Vui lòng thử lại.'
+        ),
+        {
+          title: (
+            errorCode === 'IDEMPOTENCY_PAYLOAD_CONFLICT'
+            || errorCode === 'BOOKING_IDEMPOTENCY_PAYLOAD_CONFLICT'
+          )
+            ? 'Phiên đặt vé đã thay đổi'
+            : 'Không thể giữ ghế',
+          variant: 'error'
+        }
+      );
     } finally {
       setReservationLoading(false);
     }
@@ -457,14 +491,6 @@ export default function SeatSelectionPage() {
                 Thanh toán ngay
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Warning Toast Alerts */}
-        {toastMessage && (
-          <div className="fixed bottom-28 right-6 z-50 max-w-md bg-red-950/90 border border-red-500/30 text-red-200 px-5 py-4 rounded-2xl flex items-center gap-3 text-sm animate-bounce shadow-2xl backdrop-blur-sm">
-            <Info size={18} className="text-red-400 shrink-0" />
-            <span>{toastMessage}</span>
           </div>
         )}
 
@@ -599,6 +625,15 @@ export default function SeatSelectionPage() {
           </div>
         </section>
       </div>
+
+      {notice && (
+        <BookingNoticeModal
+          title={notice.title}
+          message={notice.message}
+          variant={notice.variant}
+          onClose={() => setNotice(null)}
+        />
+      )}
 
       {/* Single Seat Gap Warning Modal */}
       {showGapModal && (
