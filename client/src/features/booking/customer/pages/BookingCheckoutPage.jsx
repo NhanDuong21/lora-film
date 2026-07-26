@@ -1,12 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, AlertTriangle, Search, ShieldCheck, Check } from 'lucide-react';
+import { Clock, AlertTriangle, Search, ShieldCheck, CreditCard } from 'lucide-react';
 import { getBookingDetails, cancelBooking, finalizeCheckout } from '../services/bookingService';
 import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 import BookingStepper from '../components/BookingStepper';
 import BookingCancellationModal from '../components/BookingCancellationModal';
 import BookingNoticeModal from '../components/BookingNoticeModal';
 import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
+import {
+  createPaymentHandoff,
+  getOrCreatePaymentAttemptKey
+} from '../services/paymentHandoffService';
 
 export default function BookingCheckoutPage() {
   const location = useLocation();
@@ -42,6 +46,7 @@ export default function BookingCheckoutPage() {
   
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(null);
@@ -202,8 +207,8 @@ export default function BookingCheckoutPage() {
     }
   };
 
-  // Finalize checkout and hand the public Booking ID to Payment Service.
-  const handleSimulatePayment = async () => {
+  // Lock Booking-owned amount, then let Payment Service create the attempt.
+  const handleStartPayment = async () => {
     if (!termsAgreed) {
       setNotice({
         title: 'Chưa đồng ý điều khoản',
@@ -216,10 +221,26 @@ export default function BookingCheckoutPage() {
     try {
       const finalized = await finalizeCheckout(bookingId);
       setBooking(prev => ({ ...prev, ...finalized }));
+      const idempotencyKey = getOrCreatePaymentAttemptKey(
+        bookingId,
+        selectedPaymentMethod
+      );
+      const payment = await createPaymentHandoff({
+        bookingPublicId: bookingId,
+        paymentMethod: selectedPaymentMethod,
+        idempotencyKey
+      });
+
+      if (payment?.paymentUrl) {
+        window.location.assign(payment.paymentUrl);
+        return;
+      }
+
       setNotice({
-        title: 'Đơn đã sẵn sàng thanh toán',
-        message: 'Số tiền đã được khóa. Đơn đang chờ chuyển sang Payment Service.',
-        variant: 'success'
+        title: 'Đã tạo yêu cầu thanh toán',
+        message: 'Payment Service đã tiếp nhận yêu cầu. Bạn có thể tiếp tục theo dõi trạng thái của giao dịch.',
+        variant: 'success',
+        redirectTo: `/bookings/${bookingId}`
       });
     } catch (err) {
       setNotice({
@@ -469,64 +490,69 @@ export default function BookingCheckoutPage() {
                 )}
               </div>
             ) : (
-              /* Step 4: Payment Placeholder */
+              /* Step 4: Payment Service handoff */
               <div className="space-y-8">
-                {/* Simulated Payment Methods */}
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Phương Thức Thanh Toán</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Hệ thống thanh toán giả lập dành cho thử nghiệm</p>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Payment Service sẽ xác thực lại số tiền và thời hạn của đơn</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 opacity-50">
-                    <div className="border border-zinc-800 rounded-2xl p-5 flex items-center gap-4 bg-zinc-900/30 cursor-not-allowed">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethod('VNPAY')}
+                      className={`border rounded-2xl p-5 flex items-center gap-4 text-left transition-colors ${
+                        selectedPaymentMethod === 'VNPAY'
+                          ? 'border-brand-orange bg-brand-orange/10'
+                          : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
+                      }`}
+                    >
                       <div className="w-12 aspect-[4/3] bg-white rounded-lg p-1.5 flex items-center justify-center">
                         <img src="https://sandbox.vnpayment.vn/paymentv2/Images/brands/logo.svg" alt="VNPay Logo" className="max-h-full max-w-full object-contain" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-zinc-400">VNPay (Coming Soon)</h4>
+                        <h4 className="text-xs font-black text-zinc-200">VNPay</h4>
                         <p className="text-[9px] text-zinc-650 mt-0.5">Hỗ trợ ngân hàng nội địa & quốc tế</p>
                       </div>
-                    </div>
+                    </button>
 
-                    <div className="border border-zinc-800 rounded-2xl p-5 flex items-center gap-4 bg-zinc-900/30 cursor-not-allowed">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethod('MOMO')}
+                      className={`border rounded-2xl p-5 flex items-center gap-4 text-left transition-colors ${
+                        selectedPaymentMethod === 'MOMO'
+                          ? 'border-brand-orange bg-brand-orange/10'
+                          : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
+                      }`}
+                    >
                       <div className="w-12 aspect-[4/3] bg-pink-100 rounded-lg p-2 flex items-center justify-center">
                         <img src="https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png" alt="Momo Logo" className="max-h-full max-w-full object-contain" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-zinc-400">MoMo (Coming Soon)</h4>
+                        <h4 className="text-xs font-black text-zinc-200">MoMo</h4>
                         <p className="text-[9px] text-zinc-650 mt-0.5">Thanh toán nhanh qua ví điện tử</p>
                       </div>
-                    </div>
+                    </button>
                   </div>
                 </div>
 
-                {/* Direct Simulation Actions */}
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
-                    <h2 className="text-lg font-black text-white uppercase tracking-wider">Giả Lập Quy Trình Thanh Toán</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Lựa chọn kết quả thanh toán mong muốn dưới đây</p>
+                    <h2 className="text-lg font-black text-white uppercase tracking-wider">Chuyển sang thanh toán</h2>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">
+                      LoraFilm không gửi số tiền từ trình duyệt; Payment Service lấy số tiền đã khóa trực tiếp từ Booking Service
+                    </p>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <button
-                      onClick={handleSimulatePayment}
-                      disabled={paymentLoading || isExpired}
-                      className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-black font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <Check className="w-4 h-4 stroke-[3]" />
-                      <span>Giả lập Thanh toán Thành công</span>
-                    </button>
-
-                    <button
-                      onClick={handleSimulatePayment}
-                      disabled={paymentLoading || isExpired}
-                      className="flex-1 py-4 bg-red-500 hover:bg-red-650 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>Giả lập Thanh toán Thất bại</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleStartPayment}
+                    disabled={paymentLoading || isExpired}
+                    className="w-full py-4 bg-brand-orange hover:bg-opacity-95 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>{paymentLoading ? 'Đang tạo giao dịch...' : `Thanh toán qua ${selectedPaymentMethod}`}</span>
+                  </button>
                 </div>
               </div>
             )}

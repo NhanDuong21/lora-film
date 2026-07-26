@@ -13,8 +13,7 @@ import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -54,11 +53,13 @@ public class BookingPaymentClientTest {
               "success": true,
               "data": {
                 "bookingId": 1001,
+                "bookingPublicId": "550e8400-e29b-41d4-a716-446655440000",
                 "accountId": 15,
-                "bookingStatus": "RESERVED",
+                "bookingStatus": "PENDING_PAYMENT",
                 "payable": true,
                 "amount": 150000,
                 "currency": "VND",
+                "amountLockedAt": "%s",
                 "expiresAt": "%s",
                 "analyticsSnapshot": {
                   "movieId": 1,
@@ -67,7 +68,7 @@ public class BookingPaymentClientTest {
                 }
               }
             }
-            """.formatted(LocalDateTime.now().plusMinutes(15).format(DateTimeFormatter.ISO_DATE_TIME));
+            """.formatted(Instant.now().minusSeconds(10), Instant.now().plusSeconds(900));
 
         mockWebServer.enqueue(new MockResponse()
                 .setBody(json)

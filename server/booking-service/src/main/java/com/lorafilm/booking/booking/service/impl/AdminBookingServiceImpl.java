@@ -179,14 +179,10 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         BookingStatus oldStatus = booking.getBookingStatus();
         BookingStatus newStatus = request.getStatus();
 
-        if (newStatus == BookingStatus.CONFIRMED) {
-            throw new BusinessException("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED",
-                    "Booking confirmation is performed only by a validated Payment result",
-                    org.springframework.http.HttpStatus.GONE);
-        }
+        validateAdminLifecycleCommand(oldStatus, newStatus);
         if (lifecycleService != null) {
             Booking saved = lifecycleService.transition(booking, newStatus,
-                    request.getReason(), request.getSource());
+                    request.getReason(), "ADMIN");
             if (request.getNote() != null) {
                 saved.setNote(request.getNote());
                 saved = bookingRepository.save(saved);
@@ -214,7 +210,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
                     request.getReason() != null ? request.getReason() : "Admin lifecycle status change");
         }
 
-        historyService.saveHistory(savedBooking, oldStatus.name(), newStatus.name(), request.getReason(), request.getSource(), "ADMIN");
+        historyService.saveHistory(savedBooking, oldStatus.name(), newStatus.name(), request.getReason(), "ADMIN", "ADMIN");
         auditService.logAudit(savedBooking.getId(), "ADMIN", "CHANGE_STATUS", "bookingStatus", oldStatus.name(), newStatus.name(), null, null, null, null);
         operationLogService.logOperation(savedBooking.getId(), "CHANGE_STATUS", "ADMIN", true, 0L, null, null, request.getReason());
         outboxService.createOutboxEvent("BOOKING", savedBooking.getId(), "BOOKING_" + newStatus.name(), savedBooking);
@@ -245,5 +241,51 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         }
 
         return bookingMapper.toAdminResponse(savedBooking);
+    }
+
+    private void validateAdminLifecycleCommand(
+            BookingStatus currentStatus,
+            BookingStatus targetStatus) {
+        if (currentStatus == targetStatus) {
+            throw new BusinessException(
+                    "SAME_STATUS_TRANSITION",
+                    "Booking is already in status: " + targetStatus,
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+        if (targetStatus == BookingStatus.CONFIRMED) {
+            throw new BusinessException(
+                    "CONFIRM_VIA_PAYMENT_RESULT_REQUIRED",
+                    "Booking confirmation is performed only by a validated Payment result",
+                    org.springframework.http.HttpStatus.GONE);
+        }
+        if (targetStatus == BookingStatus.REFUNDED) {
+            throw new BusinessException(
+                    "REFUND_VIA_PAYMENT_RESULT_REQUIRED",
+                    "Booking refund state is performed only by an authoritative Payment refund result",
+                    org.springframework.http.HttpStatus.GONE);
+        }
+        if (targetStatus == BookingStatus.EXPIRED) {
+            throw new BusinessException(
+                    "BOOKING_EXPIRY_SYSTEM_OWNED",
+                    "Booking expiration is owned by the stored deadline and expiration lifecycle",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+        if (targetStatus == BookingStatus.PENDING_PAYMENT) {
+            throw new BusinessException(
+                    "BOOKING_PENDING_STATE_IMMUTABLE",
+                    "Admin cannot move a Booking back to pending payment",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+
+        boolean allowed = (currentStatus == BookingStatus.PENDING_PAYMENT
+                && targetStatus == BookingStatus.CANCELLED)
+                || (currentStatus == BookingStatus.CONFIRMED
+                && targetStatus == BookingStatus.COMPLETED);
+        if (!allowed) {
+            throw new BusinessException(
+                    "ADMIN_LIFECYCLE_COMMAND_NOT_ALLOWED",
+                    "Admin command is not allowed from " + currentStatus + " to " + targetStatus,
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
     }
 }

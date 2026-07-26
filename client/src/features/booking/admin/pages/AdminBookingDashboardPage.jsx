@@ -8,13 +8,13 @@ import {
 import { getBookings, updateBookingStatus } from '../services/adminBookingService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
-import { parseApiError } from '@/utils/apiErrorHandler';
+import { getBookingErrorMessage } from '../../customer/utils/bookingErrorMessages';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import { EmptyState, StatusBadge } from '@/components/common/ui/uiKit';
 
 export default function AdminBookingDashboardPage() {
   const navigate = useNavigate();
-  const { triggerToast, triggerConfirm } = useOutletContext() || {};
+  const { triggerToast, triggerConfirm, triggerAlert } = useOutletContext() || {};
 
   // API Filter States (Sent to Backend)
   const [bookingCode, setBookingCode] = useState('');
@@ -116,7 +116,7 @@ export default function AdminBookingDashboardPage() {
       const response = await getBookings(filters);
       setBookingPage(response);
     } catch (err) {
-      setError(parseApiError(err) || "Không thể tải danh sách đơn hàng.");
+      setError(getBookingErrorMessage(err, "Không thể tải danh sách đơn hàng."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -250,26 +250,26 @@ export default function AdminBookingDashboardPage() {
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
     if (triggerToast) triggerToast(`Đã sao chép mã đặt vé: ${code}`, 'info');
-    else alert(`Đã sao chép: ${code}`);
+    else if (triggerAlert) triggerAlert(`Đã sao chép mã đặt vé: ${code}`);
   };
 
   const handleCancelBooking = async (publicId, bookingCode) => {
     const confirmMessage = `Bạn có chắc chắn muốn hủy đơn hàng ${bookingCode} không? Tất cả ghế và vé đi kèm sẽ bị giải phóng.`;
     const shouldCancel = triggerConfirm 
       ? await triggerConfirm(confirmMessage) 
-      : window.confirm(confirmMessage);
+      : false;
 
     if (!shouldCancel) return;
 
     try {
       await updateBookingStatus(publicId, 'CANCELLED', 'Admin dashboard manual cancellation');
       if (triggerToast) triggerToast(`Hủy đơn đặt vé ${bookingCode} thành công.`, 'success');
-      else alert('Đã hủy đơn thành công');
+      else if (triggerAlert) triggerAlert(`Hủy đơn đặt vé ${bookingCode} thành công.`);
       fetchBookingsList();
     } catch (err) {
-      const msg = parseApiError(err) || 'Không thể hủy đơn hàng';
+      const msg = getBookingErrorMessage(err, 'Không thể hủy đơn hàng.');
       if (triggerToast) triggerToast(msg, 'error');
-      else alert(msg);
+      else if (triggerAlert) triggerAlert(msg);
     }
   };
 
@@ -882,7 +882,7 @@ export default function AdminBookingDashboardPage() {
                             <span>Xem</span>
                           </button>
 
-                          {(b.bookingStatus === 'PENDING_PAYMENT' || b.bookingStatus === 'CONFIRMED') && (
+                          {b.bookingStatus === 'PENDING_PAYMENT' && (
                             <button
                               onClick={() => handleCancelBooking(b.publicId, b.bookingCode)}
                               className="border border-red-950 bg-red-950/20 hover:border-red-500 hover:text-white p-2 rounded-xl text-red-400 transition-all cursor-pointer text-[9px] uppercase font-bold flex items-center gap-1"

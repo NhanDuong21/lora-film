@@ -1,20 +1,21 @@
 package com.project.paymentservice.client.booking;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public class BookingPaymentResultRequest {
     private String eventId;
     private String schemaVersion;
     private Long paymentId;
+    private String paymentPublicId;
     private String paymentTransactionCode;
+    private String paymentProvider;
     private String paymentMethod;
     private String result;
     private BigDecimal amount;
     private String currency;
-    private LocalDateTime occurredAt;
+    private Instant occurredAt;
     private String externalTransactionId;
-    private String reconciliationStatus;
 
     // Getters and Setters
 
@@ -42,12 +43,28 @@ public class BookingPaymentResultRequest {
         this.paymentId = paymentId;
     }
 
+    public String getPaymentPublicId() {
+        return paymentPublicId;
+    }
+
+    public void setPaymentPublicId(String paymentPublicId) {
+        this.paymentPublicId = paymentPublicId;
+    }
+
     public String getPaymentTransactionCode() {
         return paymentTransactionCode;
     }
 
     public void setPaymentTransactionCode(String paymentTransactionCode) {
         this.paymentTransactionCode = paymentTransactionCode;
+    }
+
+    public String getPaymentProvider() {
+        return paymentProvider;
+    }
+
+    public void setPaymentProvider(String paymentProvider) {
+        this.paymentProvider = paymentProvider;
     }
 
     public String getPaymentMethod() {
@@ -82,11 +99,11 @@ public class BookingPaymentResultRequest {
         this.currency = currency;
     }
 
-    public LocalDateTime getOccurredAt() {
+    public Instant getOccurredAt() {
         return occurredAt;
     }
 
-    public void setOccurredAt(LocalDateTime occurredAt) {
+    public void setOccurredAt(Instant occurredAt) {
         this.occurredAt = occurredAt;
     }
 
@@ -98,11 +115,4 @@ public class BookingPaymentResultRequest {
         this.externalTransactionId = externalTransactionId;
     }
 
-    public String getReconciliationStatus() {
-        return reconciliationStatus;
-    }
-
-    public void setReconciliationStatus(String reconciliationStatus) {
-        this.reconciliationStatus = reconciliationStatus;
-    }
 }

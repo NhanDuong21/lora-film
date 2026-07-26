@@ -1,190 +1,108 @@
-# Sequence Diagrams
+# Booking lifecycle sequence
 
-> **Normative production correction (2026-07-26):** This document's earlier
-> draft paragraphs are historical. The effective flow is atomic `POST
-> /api/bookings`: Redis only serializes the short database write section and is
-> released after commit/rollback; MySQL `seat_reservations` rows,
-> `status`, `expiresAt`, and `uk_active_seat_reservation` own the long-lived
-> HELD/BOOKED seat state. No Redis TTL, restart, or cleanup can make an active
-> database reservation available. Payment SUCCESS, not `/confirm`, performs
-> HELD→BOOKED.
->
-> Before inserting a new Booking, Booking Service also locks and checks the
-> customer's existing `PENDING_PAYMENT` rows for that Showtime. An unexpired
-> row returns `BOOKING_ACTIVE_SHOWTIME_EXISTS`; an elapsed row is transitioned
-> to `EXPIRED` before replacement. The generated database unique key
-> `(user_id, showtime_id)` for `PENDING_PAYMENT` rows resolves concurrent
-> requests that both observed no existing row. The customer UI then offers
-> either continuing the existing checkout or cancelling it before choosing
-> again.
+This document is normative for Booking Service as of 2026-07-27.
 
-## Booking Flow
+## Ownership
 
-> Đây là draft flow cho **Booking module** trong hệ thống đặt vé xem phim online.
-> Flow này mô tả quá trình user chọn phim, suất chiếu, ghế, giữ ghế tạm thời, thanh toán, lưu booking và gửi thông báo sau khi booking thành công.
+- Movie Service owns Showtime/seat identity, sellability, and authoritative seat prices.
+- Booking Service owns the Booking aggregate, immutable price snapshot, checkout amount lock, hold deadline, and seat lifecycle.
+- MySQL `seat_reservations` plus `uk_active_seat_reservation` are the only long-lived capacity authority.
+- Redis only reduces contention during the short creation transaction. Its keys are released after commit or rollback.
+- Payment Service owns payment attempts, provider integration, callbacks, and refund settlement.
+- Payment `SUCCESS` is the only command that confirms a Booking.
 
-## Diagram liên quan
+## Create and hold
 
 ```text
-docs/architecture/diagrams/booking-sequence.puml
-docs/architecture/diagrams/booking-sequence.drawio
-docs/architecture/diagrams/booking-sequence.png
+Customer
+  -> Gateway: POST /api/bookings
+     { showtimePublicId, seatPublicIds }
+  -> Booking: validate customer/idempotency/configured seat limit
+  -> Movie: validate public Showtime + exact public seat set + prices
+  -> Booking: deadline = min(receipt time + hold duration, Showtime start)
+  -> Redis: acquire deterministically sorted seat mutexes with one owner token
+  -> MySQL transaction:
+       lock relevant reservation/customer rows
+       expire stale linked or compatibility holds
+       create PENDING_PAYMENT Booking
+       create immutable Booking price/presentation snapshots
+       create linked HELD seat_reservations
+       create history/audit/outbox/idempotency response
+       flush active-seat unique constraint
+  -> Redis (finally): compare-and-delete only locks owned by this request
+  -> Customer: Booking response with public IDs, server amount, and UTC deadline
 ```
 
-## Mục đích
+After the response there is no Redis seat key to maintain. Clearing or restarting
+Redis cannot release a `HELD` or `BOOKED` database reservation.
 
-Tài liệu này mô tả luồng đặt vé chính của hệ thống, bao gồm:
-
-* User chọn phim, suất chiếu và ghế
-* Frontend gửi request giữ ghế đến API Gateway
-* Booking Service kiểm tra trạng thái ghế
-* Redis giữ ghế tạm thời
-* Payment Service xử lý thanh toán
-* Booking Service lưu booking vào MySQL
-* Kafka publish event booking confirmed
-* Notification Service nhận event và gửi thông báo
-
-## Mô tả flow
-
-### Bước 1: User chọn phim, suất chiếu và ghế
-
-User thao tác trên React Frontend để chọn phim, suất chiếu và ghế muốn đặt.
-
-### Bước 2: Frontend gửi request giữ ghế đến API Gateway
-
-Sau khi user chọn ghế, React Frontend gửi request đến API Gateway để yêu cầu giữ ghế tạm thời.
-
-Ví dụ endpoint:
+## Checkout and payment handoff
 
 ```text
-POST /api/bookings/hold-seats
+Customer -> Booking: mutate F&B while amountLockedAt is null
+Customer -> Booking: POST /api/bookings/{bookingPublicId}/finalize-checkout
+Booking -> MySQL: set amountLockedAt once; keep the original expiresAt
+Customer -> Payment: POST /api/payments
+                    { bookingPublicId, paymentMethod }
+Payment -> Booking: GET /internal/bookings/{bookingPublicId}/payment-context
+Booking -> Payment: locked amount/currency, amountLockedAt, expiresAt (UTC)
 ```
 
-Request có thể gồm:
+The browser never supplies amount, currency, status, or expiry to Payment.
+Finalization, retry, failed attempts, and idempotent replay never extend the
+Booking deadline.
 
-```json
-{
-  "userId": "USER_ID",
-  "movieId": "MOVIE_ID",
-  "showtimeId": "SHOWTIME_ID",
-  "seatIds": ["A1", "A2"]
-}
-```
-
-### Bước 3: API Gateway route request đến Booking Service
-
-API Gateway nhận request từ frontend và chuyển tiếp request đến Booking Service.
-
-Booking Service chịu trách nhiệm xử lý nghiệp vụ đặt vé và trạng thái ghế.
-
-### Bước 4: Booking Service kiểm tra trạng thái ghế
-
-Booking Service kiểm tra các ghế được chọn có còn trống không.
-
-Các điều kiện cần kiểm tra:
-
-* Ghế có tồn tại trong phòng chiếu không
-* Ghế có thuộc đúng suất chiếu không
-* Ghế đã được đặt chưa
-* Ghế có đang bị user khác giữ tạm thời không
-
-### Bước 5: Redis giữ ghế tạm thời
-
-Nếu ghế còn trống, Booking Service lưu trạng thái giữ ghế tạm thời vào Redis.
-
-Redis có thể dùng TTL để tự động hết hạn giữ ghế.
-
-Ví dụ:
+## Payment result
 
 ```text
-seat_hold:showtimeId:A1 -> userId
-TTL: 5 minutes
+Payment -> Booking:
+  POST /internal/bookings/{bookingPublicId}/payment-results
+  X-Internal-Token: dedicated Payment-to-Booking token
+
+Booking transaction on SUCCESS received before expiresAt:
+  persist normalized event receipt
+  PENDING_PAYMENT -> CONFIRMED
+  HELD reservations -> BOOKED
+  create tickets/history/audit/outbox
 ```
 
-Nếu user không thanh toán trong thời gian giữ ghế, ghế sẽ tự động được mở lại.
+- `FAILED`, `CANCELLED`, `TIMEOUT`, and `PENDING` attempts are audit records;
+  while the original deadline remains live the Booking stays retryable.
+- Exact duplicate `eventId` plus normalized payload returns the stored result
+  idempotently.
+- Reusing an `eventId` with a changed payload returns HTTP 409.
+- Late, amount/currency-mismatched, non-payable, or conflicting `SUCCESS`
+  persists both the receipt and a reconciliation task, then returns HTTP 409.
+- Provider `occurredAt` is audit data. Server receipt time decides lateness.
 
-### Bước 6: User xác nhận thanh toán
-
-Sau khi ghế được giữ thành công, user xác nhận thanh toán trên frontend.
-
-Frontend gửi request thanh toán đến API Gateway.
-
-Ví dụ endpoint:
+## Cancellation and expiration
 
 ```text
-POST /api/bookings/confirm
+Customer/Admin cancellation of PENDING_PAYMENT:
+  Booking -> CANCELLED
+  HELD -> RELEASED
+
+Scheduler or command-time stale check:
+  Booking -> EXPIRED
+  HELD -> EXPIRED
 ```
 
-### Bước 7: Payment Service xử lý thanh toán
+Both flows are MySQL-only and make the generated active-seat key null. A new
+Booking can then reserve the seat. A confirmed `BOOKED` reservation remains
+unavailable through completion and refund.
 
-Booking Service gửi yêu cầu thanh toán sang Payment Service.
+## Refund result
 
-Payment Service xử lý thanh toán dựa trên tổng tiền booking.
+```text
+Payment -> Booking:
+  POST /internal/bookings/{bookingPublicId}/refund-results
 
-Nếu thanh toán thất bại, hệ thống trả lỗi về frontend và có thể release ghế đang giữ.
-
-Nếu thanh toán thành công, Booking Service tiếp tục lưu booking chính thức.
-
-### Bước 8: Booking Service lưu booking vào MySQL
-
-Sau khi thanh toán thành công, Booking Service lưu thông tin booking vào MySQL.
-
-Dữ liệu booking có thể gồm:
-
-```json
-{
-  "bookingId": "BOOKING_ID",
-  "userId": "USER_ID",
-  "movieId": "MOVIE_ID",
-  "showtimeId": "SHOWTIME_ID",
-  "seatIds": ["A1", "A2"],
-  "totalAmount": 200000,
-  "paymentStatus": "PAID",
-  "bookingStatus": "CONFIRMED"
-}
+REFUND_SUCCESS for CONFIRMED:
+  Booking -> REFUNDED
+  tickets -> refunded
+  seat reservations remain BOOKED
 ```
 
-### Bước 9: Kafka publish event booking confirmed
-
-Sau khi booking được lưu thành công, Booking Service publish event `BookingConfirmed` vào Kafka.
-
-Ví dụ event:
-
-```json
-{
-  "eventName": "BookingConfirmed",
-  "bookingId": "BOOKING_ID",
-  "userId": "USER_ID",
-  "showtimeId": "SHOWTIME_ID",
-  "seatIds": ["A1", "A2"],
-  "totalAmount": 200000,
-  "confirmedAt": "2026-06-04T10:00:00"
-}
-```
-
-### Bước 10: Notification Service nhận event và gửi thông báo
-
-Notification Service consume event `BookingConfirmed` từ Kafka.
-
-Sau đó Notification Service gửi thông báo cho user, ví dụ:
-
-* Email xác nhận đặt vé
-* Thông báo trong hệ thống
-* Push notification nếu sau này có mobile app
-
-## Ghi chú
-
-* Đây là draft flow cho Booking module.
-* Redis được dùng để giữ ghế tạm thời và tránh nhiều user đặt cùng một ghế.
-* MySQL được dùng để lưu booking chính thức sau khi thanh toán thành công.
-* Kafka được dùng để publish event sau khi booking confirmed.
-* Notification Service xử lý gửi thông báo bất đồng bộ sau khi nhận event từ Kafka.
-* Code PlantUML để vẽ diagram nằm trong file `booking-sequence.puml`.
-# Revised reservation sequence (2026-07-26)
-
-The canonical flow is `POST /api/bookings` with public Showtime/seat IDs.
-Movie validates the authoritative seat/pricing context, Booking acquires
-short-lived ordered Redis mutexes, then one MySQL transaction writes the
-`PENDING_PAYMENT` Booking and `HELD` reservation rows. Redis is released after
-commit/rollback and never represents the hold. Payment SUCCESS later changes
-`HELD` to `BOOKED`; expiry/cancel changes `HELD` to an inactive state.
+Direct confirmation and direct refund mutation routes are tombstones. Admin can
+cancel a pending order or complete a confirmed order, but cannot manufacture
+Payment success, refund settlement, or expiry.

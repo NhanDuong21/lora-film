@@ -9,5 +9,7 @@ public interface InternalBookingPaymentService {
     InternalPaymentContextResponse getPaymentContext(String bookingPublicId);
     InternalPaymentResultResponse recordPaymentResult(Long bookingId, InternalPaymentResultRequest request);
     InternalPaymentResultResponse recordPaymentResult(String bookingPublicId, InternalPaymentResultRequest request);
-    void finalizeCheckout(Long bookingId);
+    InternalPaymentResultResponse recordRefundResult(
+            String bookingPublicId,
+            InternalPaymentResultRequest request);
 }

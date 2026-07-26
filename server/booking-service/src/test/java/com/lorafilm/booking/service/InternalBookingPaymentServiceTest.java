@@ -9,39 +9,49 @@ import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.booking.service.BookingStatusHistoryService;
 import com.lorafilm.booking.booking.service.impl.InternalBookingPaymentServiceImpl;
 import com.lorafilm.booking.common.exception.BusinessException;
+import com.lorafilm.booking.common.exception.PaymentResultConflictException;
+import com.lorafilm.booking.infrastructure.entity.BookingReconciliationTask;
+import com.lorafilm.booking.infrastructure.repository.BookingReconciliationTaskRepository;
 import com.lorafilm.booking.payment.entity.BookingPaymentEvent;
-import com.lorafilm.booking.payment.enums.PaymentEventType;
 import com.lorafilm.booking.payment.repository.BookingPaymentEventRepository;
+import com.lorafilm.booking.payment.repository.BookingRefundRepository;
 import com.lorafilm.booking.reservation.entity.SeatReservation;
 import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
-import com.lorafilm.booking.infrastructure.repository.BookingReconciliationTaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class InternalBookingPaymentServiceTest {
+
+    private static final String BOOKING_PUBLIC_ID = "550e8400-e29b-41d4-a716-446655440000";
+    private static final String PAYMENT_PUBLIC_ID = "660e8400-e29b-41d4-a716-446655440000";
 
     @Mock
     private BookingRepository bookingRepository;
@@ -51,33 +61,43 @@ class InternalBookingPaymentServiceTest {
     private BookingPaymentEventRepository eventRepository;
     @Mock
     private BookingStatusHistoryService historyService;
-
-    private InternalBookingPaymentServiceImpl service;
-    private ObjectMapper objectMapper;
-    private Booking booking;
-
     @Mock
     private com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService;
-
     @Mock
     private com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
-
     @Mock
     private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager;
     @Mock
     private SeatReservationRepository reservationRepository;
     @Mock
     private BookingReconciliationTaskRepository reconciliationTaskRepository;
+    @Mock
+    private BookingRefundRepository refundRepository;
+    @Mock
+    private BookingLifecycleService lifecycleService;
+
+    private InternalBookingPaymentServiceImpl service;
+    private ObjectMapper objectMapper;
+    private Booking booking;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper().findAndRegisterModules();
         service = new InternalBookingPaymentServiceImpl(
-                bookingRepository, snapshotRepository, eventRepository, historyService, objectMapper,
-                bookingTicketService, outboxService, metricsManager,
-                reservationRepository, reconciliationTaskRepository);
+                bookingRepository,
+                snapshotRepository,
+                eventRepository,
+                historyService,
+                objectMapper,
+                bookingTicketService,
+                outboxService,
+                metricsManager,
+                reservationRepository,
+                reconciliationTaskRepository,
+                refundRepository,
+                lifecycleService);
         booking = Booking.create(
-                "550e8400-e29b-41d4-a716-446655440000",
+                BOOKING_PUBLIC_ID,
                 "LORAFILM-1",
                 15L,
                 1001L,
@@ -98,92 +118,239 @@ class InternalBookingPaymentServiceTest {
     }
 
     @Test
-    void returnsStoredBookingAmountAndSnapshotAnalytics() throws Exception {
+    void returnsStoredBookingAmountPublicIdentityAndUtcInstants() throws Exception {
         when(bookingRepository.findById(100L)).thenReturn(Optional.of(booking));
         when(snapshotRepository.findByBookingId(100L)).thenReturn(Optional.of(snapshot()));
-        when(reservationRepository.findAllByBookingId(100L)).thenReturn(List.of(heldReservation()));
+        when(reservationRepository.findAllByBookingId(100L))
+                .thenReturn(List.of(heldReservation()));
 
         var context = service.getPaymentContext(100L);
 
+        assertEquals(BOOKING_PUBLIC_ID, context.bookingPublicId());
         assertEquals(new BigDecimal("240000.00"), context.amount());
         assertEquals("VND", context.currency());
+        assertEquals(booking.getAmountLockedAt(), context.amountLockedAt());
+        assertEquals(booking.getExpiresAt(), context.expiresAt());
         assertTrue(context.payable());
         assertEquals("Superman", context.analyticsSnapshot().movieTitle());
         assertEquals(2, context.analyticsSnapshot().ticketCount());
     }
 
     @Test
-    void rejectsPaymentResultAmountMismatch() {
-        when(eventRepository.findByPublicId("event-1")).thenReturn(Optional.empty());
-        when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
-        InternalPaymentResultRequest request = result("event-1", "SUCCESS", new BigDecimal("239999"));
+    void rejectsUnfinalizedBookingContext() {
+        booking.setAmountLockedAt(null);
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(booking));
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.recordPaymentResult(100L, request));
+                () -> service.getPaymentContext(100L));
 
-        assertEquals("PAYMENT_AMOUNT_MISMATCH", exception.getErrorCode());
+        assertEquals("BOOKING_NOT_PAYABLE", exception.getErrorCode());
     }
 
     @Test
-    void rejectsPaymentResultCurrencyMismatch() {
-        when(eventRepository.findByPublicId("event-1")).thenReturn(Optional.empty());
+    void amountMismatchPersistsReceiptAndReconciliationWithoutChangingLifecycle() {
+        InternalPaymentResultRequest request = result(
+                UUID.randomUUID().toString(),
+                "SUCCESS",
+                new BigDecimal("239999"));
+        when(eventRepository.findByPublicId(request.eventId())).thenReturn(Optional.empty());
         when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
-        InternalPaymentResultRequest original = result(
-                "event-1", "SUCCESS", new BigDecimal("240000.00"));
-        InternalPaymentResultRequest request = new InternalPaymentResultRequest(
-                original.eventId(),
-                original.schemaVersion(),
-                original.paymentId(),
-                original.paymentTransactionCode(),
-                original.paymentMethod(),
-                original.result(),
-                original.amount(),
-                "USD",
-                original.occurredAt(),
-                original.externalTransactionId(),
-                original.reconciliationStatus());
+        when(reconciliationTaskRepository.save(any(BookingReconciliationTask.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        BusinessException exception = assertThrows(
-                BusinessException.class,
+        PaymentResultConflictException exception = assertThrows(
+                PaymentResultConflictException.class,
                 () -> service.recordPaymentResult(100L, request));
 
         assertEquals("PAYMENT_AMOUNT_MISMATCH", exception.getErrorCode());
+        assertEquals(BookingStatus.PENDING_PAYMENT, booking.getBookingStatus());
+        verify(eventRepository).saveAndFlush(any(BookingPaymentEvent.class));
+        verify(reconciliationTaskRepository).save(any(BookingReconciliationTask.class));
+        verify(lifecycleService, never()).confirmPayment(any(), any(), anyString());
     }
 
     @Test
-    void confirmsBookingAndPersistsIdempotencyEvent() {
-        when(eventRepository.findByPublicId("event-1")).thenReturn(Optional.empty());
+    void confirmsBookingAndPersistsOriginalResponse() {
+        InternalPaymentResultRequest request = result(
+                UUID.randomUUID().toString(),
+                "SUCCESS",
+                new BigDecimal("240000.00"));
+        when(eventRepository.findByPublicId(request.eventId())).thenReturn(Optional.empty());
         when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
-        when(reservationRepository.findAllByBookingId(100L)).thenReturn(List.of(heldReservation()));
-        InternalPaymentResultRequest request = result("event-1", "SUCCESS", new BigDecimal("240000.00"));
+        when(reservationRepository.findAllByBookingId(100L))
+                .thenReturn(List.of(heldReservation()));
+        when(lifecycleService.confirmPayment(any(Booking.class), any(Instant.class), anyString()))
+                .thenAnswer(invocation -> {
+                    Booking candidate = invocation.getArgument(0);
+                    candidate.changeStatus(BookingStatus.CONFIRMED, invocation.getArgument(1));
+                    return candidate;
+                });
 
         var response = service.recordPaymentResult(100L, request);
 
         assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
         assertEquals(PaymentStatus.SUCCESS, booking.getPaymentStatus());
+        assertEquals(BOOKING_PUBLIC_ID, response.bookingPublicId());
+        assertEquals(PAYMENT_PUBLIC_ID, response.paymentPublicId());
+        assertTrue(response.accepted());
         assertFalse(response.idempotent());
-        verify(eventRepository).save(any(BookingPaymentEvent.class));
+        ArgumentCaptor<BookingPaymentEvent> eventCaptor =
+                ArgumentCaptor.forClass(BookingPaymentEvent.class);
+        verify(eventRepository).saveAndFlush(eventCaptor.capture());
+        assertNotNull(eventCaptor.getValue().getPayloadHash());
+        assertNotNull(eventCaptor.getValue().getResponsePayload());
     }
 
     @Test
-    void replaysSameEventWithoutApplyingStatusAgain() {
-        BookingPaymentEvent event = new BookingPaymentEvent();
-        event.setPublicId("event-1");
-        event.setBooking(booking);
-        event.setPaymentId(900L);
-        event.setPaymentMethod("MOCK");
-        event.setEventType(PaymentEventType.PAYMENT_SUCCESS);
-        event.setAmount(new BigDecimal("240000.00"));
-        event.setCurrency("VND");
+    void replaysExactEventFromStoredResponseWithoutApplyingLifecycleAgain() throws Exception {
+        String eventId = UUID.randomUUID().toString();
+        InternalPaymentResultRequest request = result(
+                eventId,
+                "SUCCESS",
+                new BigDecimal("240000.00"));
+        BookingPaymentEvent event = acceptedLegacyEvent(eventId, request);
+        event.setResponsePayload(objectMapper.writeValueAsString(
+                new com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse(
+                        100L,
+                        BOOKING_PUBLIC_ID,
+                        null,
+                        PAYMENT_PUBLIC_ID,
+                        eventId,
+                        "CONFIRMED",
+                        "SUCCESS",
+                        true,
+                        false,
+                        false,
+                        null)));
         when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
-        when(eventRepository.findByPublicId("event-1")).thenReturn(Optional.of(event));
+        when(eventRepository.findByPublicId(eventId)).thenReturn(Optional.of(event));
 
-        var response = service.recordPaymentResult(
-                100L, result("event-1", "SUCCESS", new BigDecimal("240000.00")));
+        var response = service.recordPaymentResult(100L, request);
 
         assertTrue(response.idempotent());
-        assertEquals(BookingStatus.PENDING_PAYMENT, booking.getBookingStatus());
+        assertEquals("CONFIRMED", response.bookingStatus());
+        verify(lifecycleService, never()).confirmPayment(any(), any(), anyString());
+    }
+
+    @Test
+    void sameEventWithChangedExternalReferenceConflicts() {
+        String eventId = UUID.randomUUID().toString();
+        InternalPaymentResultRequest original = result(
+                eventId,
+                "SUCCESS",
+                new BigDecimal("240000.00"));
+        BookingPaymentEvent event = acceptedLegacyEvent(eventId, original);
+        when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
+        when(eventRepository.findByPublicId(eventId)).thenReturn(Optional.of(event));
+
+        InternalPaymentResultRequest changed = new InternalPaymentResultRequest(
+                original.eventId(),
+                original.schemaVersion(),
+                original.paymentId(),
+                original.paymentPublicId(),
+                original.paymentTransactionCode(),
+                original.paymentProvider(),
+                original.paymentMethod(),
+                original.result(),
+                original.amount(),
+                original.currency(),
+                original.occurredAt(),
+                "DIFFERENT-EXTERNAL-ID");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.recordPaymentResult(100L, changed));
+
+        assertEquals("PAYMENT_EVENT_ID_REUSED", exception.getErrorCode());
+    }
+
+    @Test
+    void lateSuccessCreatesOneReplayableReconciliationReceipt() {
+        booking.setExpiresAt(Instant.now().minusSeconds(1));
+        String eventId = UUID.randomUUID().toString();
+        InternalPaymentResultRequest request = result(
+                eventId,
+                "SUCCESS",
+                new BigDecimal("240000.00"));
+        when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
+        when(eventRepository.findByPublicId(eventId))
+                .thenReturn(Optional.empty());
+        when(reconciliationTaskRepository.save(any(BookingReconciliationTask.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentResultConflictException first = assertThrows(
+                PaymentResultConflictException.class,
+                () -> service.recordPaymentResult(100L, request));
+
+        assertEquals("LATE_PAYMENT_SUCCESS", first.getErrorCode());
+        verify(eventRepository).saveAndFlush(any(BookingPaymentEvent.class));
+        verify(reconciliationTaskRepository).save(any(BookingReconciliationTask.class));
+    }
+
+    @Test
+    void failedAttemptDoesNotExtendDeadlineAndSuccessCanRetryBeforeIt() {
+        Instant originalDeadline = booking.getExpiresAt();
+        InternalPaymentResultRequest failed = result(
+                UUID.randomUUID().toString(),
+                "FAILED",
+                new BigDecimal("240000.00"));
+        InternalPaymentResultRequest success = result(
+                UUID.randomUUID().toString(),
+                "SUCCESS",
+                new BigDecimal("240000.00"));
+        when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
+        when(eventRepository.findByPublicId(failed.eventId())).thenReturn(Optional.empty());
+        when(eventRepository.findByPublicId(success.eventId())).thenReturn(Optional.empty());
+        when(reservationRepository.findAllByBookingId(100L))
+                .thenReturn(List.of(heldReservation()));
+        when(lifecycleService.confirmPayment(any(Booking.class), any(Instant.class), anyString()))
+                .thenAnswer(invocation -> {
+                    Booking candidate = invocation.getArgument(0);
+                    candidate.changeStatus(BookingStatus.CONFIRMED, invocation.getArgument(1));
+                    return candidate;
+                });
+
+        service.recordPaymentResult(100L, failed);
+        assertEquals(PaymentStatus.FAILED, booking.getPaymentStatus());
+        assertEquals(originalDeadline, booking.getExpiresAt());
+
+        service.recordPaymentResult(100L, success);
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
+        assertEquals(originalDeadline, booking.getExpiresAt());
+    }
+
+    @Test
+    void refundSuccessUsesLifecycleAndNeverReleasesBookedCapacity() {
+        booking.changeStatus(BookingStatus.CONFIRMED, Instant.now());
+        booking.setPaymentStatus(PaymentStatus.SUCCESS);
+        SeatReservation booked = heldReservation();
+        booked.setStatus(SeatReservationStatus.BOOKED);
+        InternalPaymentResultRequest refund = result(
+                UUID.randomUUID().toString(),
+                "REFUND_SUCCESS",
+                new BigDecimal("240000.00"));
+        when(bookingRepository.findByPublicIdWithLock(BOOKING_PUBLIC_ID))
+                .thenReturn(Optional.of(booking));
+        when(eventRepository.findByPublicId(refund.eventId())).thenReturn(Optional.empty());
+        when(lifecycleService.transition(
+                any(Booking.class),
+                org.mockito.ArgumentMatchers.eq(BookingStatus.REFUNDED),
+                anyString(),
+                anyString()))
+                .thenAnswer(invocation -> {
+                    Booking candidate = invocation.getArgument(0);
+                    candidate.changeStatus(BookingStatus.REFUNDED, Instant.now());
+                    return candidate;
+                });
+
+        service.recordRefundResult(BOOKING_PUBLIC_ID, refund);
+
+        assertEquals(BookingStatus.REFUNDED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
+        assertEquals(SeatReservationStatus.BOOKED, booked.getStatus());
+        verify(reservationRepository, never()).saveAll(any());
+        verify(refundRepository, atLeastOnce()).save(any());
     }
 
     private BookingPriceSnapshot snapshot() throws Exception {
@@ -207,19 +374,44 @@ class InternalBookingPaymentServiceTest {
         return snapshot;
     }
 
-    private InternalPaymentResultRequest result(String eventId, String result, BigDecimal amount) {
+    private InternalPaymentResultRequest result(
+            String eventId,
+            String result,
+            BigDecimal amount) {
         return new InternalPaymentResultRequest(
                 eventId,
                 "1.0",
-                900L,
+                null,
+                PAYMENT_PUBLIC_ID,
                 "PAY-900",
-                "MOCK",
+                "VNPAY",
+                "QR_CODE",
                 result,
                 amount,
                 "VND",
-                LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC),
-                "EXT-900",
-                "MATCHED");
+                Instant.now(),
+                "EXT-900");
+    }
+
+    private BookingPaymentEvent acceptedLegacyEvent(
+            String eventId,
+            InternalPaymentResultRequest request) {
+        BookingPaymentEvent event = new BookingPaymentEvent();
+        event.setPublicId(eventId);
+        event.setBooking(booking);
+        event.setPaymentId(request.paymentId());
+        event.setPaymentPublicId(request.paymentPublicId());
+        event.setSchemaVersion(request.schemaVersion());
+        event.setTransactionId(request.paymentTransactionCode());
+        event.setGatewayTransactionId(request.externalTransactionId());
+        event.setPaymentProvider(request.paymentProvider());
+        event.setPaymentMethod(request.paymentMethod());
+        event.setEventType(com.lorafilm.booking.payment.enums.PaymentEventType.PAYMENT_SUCCESS);
+        event.setAmount(request.amount());
+        event.setCurrency(request.currency());
+        event.setProcessingOutcome("ACCEPTED");
+        event.setOccurredAt(request.occurredAt());
+        return event;
     }
 
     private SeatReservation heldReservation() {

@@ -1,21 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
-import { 
-  ArrowLeft, Sliders, History, FileText, AlertTriangle, ShoppingCart, 
-  User, Calendar, Building, CreditCard, Film, Armchair, 
-  CheckCircle, Clock, Activity, FileCheck, HelpCircle
+import {
+  ArrowLeft, Sliders, History, AlertTriangle, ShoppingCart,
+  User, CreditCard, Film, Armchair, Activity, FileCheck, HelpCircle
 } from 'lucide-react';
 import { getBookingDetail, updateBookingStatus, getBookingFoods } from '../services/adminBookingService';
 import { getUserProfile } from '@/features/auth/services/userService';
 import { useAuth } from '@/contexts/AuthContext';
 import { LazyImage } from '@/components/common/ui/uiKit';
-import { parseApiError } from '@/utils/apiErrorHandler';
+import { getBookingErrorMessage } from '../../customer/utils/bookingErrorMessages';
 
 export default function AdminBookingDetailPage() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { triggerToast } = useOutletContext() || {};
+  const { triggerToast, triggerConfirm, triggerAlert } = useOutletContext() || {};
 
   const isAdmin = user?.role === 'ADMIN';
 
@@ -42,7 +41,7 @@ export default function AdminBookingDetailPage() {
     try {
       const data = await getBookingDetail(bookingId);
       setBooking(data);
-      setTargetStatus(data.bookingStatus);
+      setTargetStatus('');
       
       // Fetch Customer profile
       if (data?.userId) {
@@ -69,7 +68,7 @@ export default function AdminBookingDetailPage() {
       }
 
     } catch (err) {
-      setError(parseApiError(err) || "Không thể tải chi tiết đơn hàng.");
+      setError(getBookingErrorMessage(err, "Không thể tải chi tiết đơn hàng."));
     } finally {
       setLoading(false);
     }
@@ -80,34 +79,53 @@ export default function AdminBookingDetailPage() {
     fetchDetails();
   }, [fetchDetails]);
 
-  // Handle manual status changes
+  const allowedAdminActions = (() => {
+    if (booking?.bookingStatus === 'PENDING_PAYMENT') {
+      return [{ status: 'CANCELLED', label: 'Hủy đơn và trả ghế' }];
+    }
+    if (booking?.bookingStatus === 'CONFIRMED') {
+      return [{ status: 'COMPLETED', label: 'Đánh dấu đã hoàn thành' }];
+    }
+    return [];
+  })();
+
+  const notify = (message, type = 'info') => {
+    if (triggerToast) {
+      triggerToast(message, type);
+    } else if (triggerAlert) {
+      triggerAlert(message);
+    }
+  };
+
+  // Admin executes explicit lifecycle commands; Payment owns confirmation and refund.
   const handleStatusUpdate = async (e) => {
     e.preventDefault();
     if (!targetStatus) return;
-    if (targetStatus === booking.bookingStatus) {
-      if (triggerToast) triggerToast("Vui lòng chọn trạng thái khác trạng thái hiện tại.", 'warning');
-      else alert("Vui lòng chọn trạng thái khác trạng thái hiện tại.");
-      return;
-    }
 
-    const confirmMessage = `Bạn có chắc chắn muốn thay đổi trạng thái đơn hàng sang ${translateStatus(targetStatus)} không?`;
-    if (!confirm(confirmMessage)) {
+    const confirmMessage = `Xác nhận thực hiện “${translateStatus(targetStatus)}” cho đơn ${booking.bookingCode}?`;
+    const confirmed = triggerConfirm
+      ? await triggerConfirm(confirmMessage)
+      : false;
+    if (!confirmed) {
       return;
     }
 
     setUpdating(true);
     try {
-      await updateBookingStatus(bookingId, targetStatus, changeReason || "Admin manual update");
+      await updateBookingStatus(
+        bookingId,
+        targetStatus,
+        changeReason || 'Quản trị viên thực hiện lệnh vòng đời'
+      );
       setChangeReason('');
-      if (triggerToast) triggerToast("Cập nhật trạng thái đơn hàng thành công.", 'success');
-      else alert("Cập nhật trạng thái đơn hàng thành công.");
+      setTargetStatus('');
+      notify("Cập nhật trạng thái đơn hàng thành công.", 'success');
       
       // Reload details
       fetchDetails();
     } catch (err) {
-      const msg = parseApiError(err) || "Lỗi cập nhật trạng thái đơn hàng";
-      if (triggerToast) triggerToast(msg, 'error');
-      else alert(msg);
+      const msg = getBookingErrorMessage(err, "Không thể cập nhật trạng thái đơn hàng.");
+      notify(msg, 'error');
     } finally {
       setUpdating(false);
     }
@@ -134,6 +152,26 @@ export default function AdminBookingDetailPage() {
       case 'EXPIRED': return 'text-zinc-500 border-zinc-700 bg-zinc-800/40';
       case 'REFUNDED': return 'text-purple-400 border-purple-400 bg-purple-500/10';
       default: return 'text-zinc-400 border-zinc-800 bg-zinc-900';
+    }
+  };
+
+  const translatePaymentStatus = (paymentStatus) => {
+    switch (paymentStatus) {
+      case 'SUCCESS': return 'Thành công';
+      case 'FAILED': return 'Thất bại';
+      case 'REFUNDED': return 'Đã hoàn tiền';
+      case 'PENDING': return 'Đang chờ';
+      default: return 'Chưa ghi nhận';
+    }
+  };
+
+  const translateTicketStatus = (ticketStatus) => {
+    switch (ticketStatus) {
+      case 'ACTIVE': return 'Có hiệu lực';
+      case 'USED': return 'Đã sử dụng';
+      case 'CANCELLED': return 'Đã hủy';
+      case 'REFUNDED': return 'Đã hoàn tiền';
+      default: return ticketStatus || 'Chưa ghi nhận';
     }
   };
 
@@ -258,17 +296,17 @@ export default function AdminBookingDetailPage() {
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Cổng thanh toán:</span>
-                  <span className="font-bold text-zinc-100">{booking.paymentMethodSnapshot || 'Momo/VNPay'}</span>
+                  <span className="font-bold text-zinc-100">{booking.paymentMethodSnapshot || 'Chưa ghi nhận'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Nhà cung cấp:</span>
-                  <span className="font-mono text-zinc-300">{booking.paymentProvider || 'E-Wallet/ATM'}</span>
+                  <span className="font-mono text-zinc-300">{booking.paymentProvider || 'Chưa ghi nhận'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Trạng thái GD:</span>
                   <span className={`font-bold uppercase ${
                     booking.paymentStatus === 'SUCCESS' ? 'text-emerald-400' : 'text-amber-400'
-                  }`}>{booking.paymentStatus || 'SUCCESS'}</span>
+                  }`}>{translatePaymentStatus(booking.paymentStatus)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Tham chiếu GD:</span>
@@ -290,7 +328,7 @@ export default function AdminBookingDetailPage() {
               <div className="w-24 h-36 rounded-2xl overflow-hidden shrink-0 border border-zinc-800 shadow-xl bg-zinc-950">
                 <LazyImage
                   src={snapshot?.moviePoster}
-                  alt={snapshot?.movieTitle || 'Movie Poster'}
+                  alt={snapshot?.movieTitle || 'Áp phích phim chưa có dữ liệu'}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -299,17 +337,27 @@ export default function AdminBookingDetailPage() {
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs text-zinc-400">
                 <div>
                   <span className="text-zinc-500 font-bold block text-[10px] uppercase">Phim Chiếu</span>
-                  <span className="text-white font-extrabold text-sm block mt-1">{snapshot?.movieTitle || 'Tiêu đề phim'}</span>
-                  <span className="text-[10px] text-zinc-550 mt-1 block">Tên gốc: {snapshot?.originalTitle || 'N/A'}</span>
-                  <span className="text-[10px] text-zinc-550 mt-0.5 block">Thời lượng: {snapshot?.duration || '120'} phút | Phân loại: <span className="text-amber-400 font-extrabold">{snapshot?.ageRating || 'P'}</span></span>
+                  <span className="text-white font-extrabold text-sm block mt-1">{snapshot?.movieTitle || 'Chưa có dữ liệu phim'}</span>
+                  {snapshot?.originalTitle && (
+                    <span className="text-[10px] text-zinc-550 mt-1 block">Tên gốc: {snapshot.originalTitle}</span>
+                  )}
+                  {(snapshot?.duration || snapshot?.ageRating) && (
+                    <span className="text-[10px] text-zinc-550 mt-0.5 block">
+                      {snapshot?.duration ? `Thời lượng: ${snapshot.duration} phút` : ''}
+                      {snapshot?.duration && snapshot?.ageRating ? ' | ' : ''}
+                      {snapshot?.ageRating && (
+                        <>Phân loại: <span className="text-amber-400 font-extrabold">{snapshot.ageRating}</span></>
+                      )}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className="text-zinc-500 font-bold block text-[10px] uppercase">Lịch Suất Chiếu</span>
                   <span className="text-white font-extrabold text-sm block mt-1">
                     {snapshot?.showtimeStart ? new Date(snapshot.showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''} | {snapshot?.showtimeStart ? new Date(snapshot.showtimeStart).toLocaleDateString('vi-VN') : ''}
                   </span>
-                  <span className="text-[10px] text-zinc-550 mt-1 block">Rạp chiếu: <span className="text-zinc-300 font-bold">{snapshot?.cinemaName || 'Cụm rạp'}</span></span>
-                  <span className="text-[10px] text-zinc-550 mt-0.5 block">Phòng chiếu: <span className="text-zinc-300 font-bold">{snapshot?.auditoriumName || 'Phòng'}</span></span>
+                  <span className="text-[10px] text-zinc-550 mt-1 block">Rạp chiếu: <span className="text-zinc-300 font-bold">{snapshot?.cinemaName || 'Chưa có dữ liệu'}</span></span>
+                  <span className="text-[10px] text-zinc-550 mt-0.5 block">Phòng chiếu: <span className="text-zinc-300 font-bold">{snapshot?.auditoriumName || 'Chưa có dữ liệu'}</span></span>
                 </div>
               </div>
             </div>
@@ -330,7 +378,7 @@ export default function AdminBookingDetailPage() {
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded ${
                       t.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
                     }`}>
-                      {t.status}
+                      {translateTicketStatus(t.status)}
                     </span>
                   </div>
                 ))}
@@ -375,17 +423,13 @@ export default function AdminBookingDetailPage() {
                   ))}
                 </div>
                 
-                {/* Kitchen Status Placeholder */}
                 <div className="bg-zinc-950/50 border border-zinc-850 p-4 rounded-2xl flex items-center justify-between text-xs mt-2">
                   <div className="flex items-center gap-2.5">
-                    <Activity className="w-4 h-4 text-amber-400 animate-pulse" />
-                    <div>
-                      <span className="text-zinc-400 font-bold block">Trạng thái chuẩn bị (Kitchen Status)</span>
-                      <span className="text-[9px] text-zinc-550 block">Quầy bắp nước đang chuẩn bị đóng gói combo</span>
-                    </div>
+                    <Activity className="w-4 h-4 text-zinc-500" />
+                    <span className="text-zinc-400 font-bold">Trạng thái đơn bắp nước do Booking Service ghi nhận</span>
                   </div>
-                  <span className="text-[9px] bg-amber-500/10 text-amber-400 font-black px-2 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
-                    {foodOrder.status === 'CONFIRMED' ? 'Đang chuẩn bị' : 'Đã giao / Chờ'}
+                  <span className="text-[9px] bg-zinc-800 text-zinc-300 font-black px-2 py-0.5 rounded border border-zinc-700 uppercase tracking-wider">
+                    {foodOrder.status || 'Chưa ghi nhận'}
                   </span>
                 </div>
               </div>
@@ -457,13 +501,17 @@ export default function AdminBookingDetailPage() {
                 </div>
                 <div className="flex justify-between text-zinc-450 border-t border-zinc-850/50 pt-2 text-[10px]">
                   <span>Thuế suất (VAT) & Phí dịch vụ:</span>
-                  <span>+{formatCurrency(booking.taxAmount + booking.serviceFee)}</span>
+                  <span>+{formatCurrency(
+                    (booking.taxAmount || 0) + (booking.serviceFee || 0)
+                  )}</span>
                 </div>
                 
                 {(booking.promotionDiscount > 0 || booking.voucherDiscount > 0) && (
                   <div className="flex justify-between text-emerald-500 font-bold">
                     <span>Khuyến mãi / Giảm giá:</span>
-                    <span>-{formatCurrency(booking.promotionDiscount + booking.voucherDiscount)}</span>
+                    <span>-{formatCurrency(
+                      (booking.promotionDiscount || 0) + (booking.voucherDiscount || 0)
+                    )}</span>
                   </div>
                 )}
 
@@ -483,22 +531,27 @@ export default function AdminBookingDetailPage() {
 
               {isAdmin ? (
                 <form onSubmit={handleStatusUpdate} className="space-y-4 text-xs">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-zinc-500 font-bold uppercase">Chọn trạng thái đích</label>
-                    <select
-                      value={targetStatus}
-                      onChange={(e) => setTargetStatus(e.target.value)}
-                      className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200"
-                    >
-                      <option value="PENDING_PAYMENT">Chờ thanh toán (Pending)</option>
-                      <option value="CONFIRMED">Đã xác nhận (Confirmed)</option>
-                      <option value="COMPLETED">Đã hoàn thành (Completed)</option>
-                      <option value="CANCELLED">Hủy bỏ giao dịch (Cancelled)</option>
-                      <option value="EXPIRED">Đã hết hạn giữ (Expired)</option>
-                      <option value="REFUNDED">Đã hoàn tiền (Refunded)</option>
-                    </select>
-                  </div>
+                  {allowedAdminActions.length > 0 ? (
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-zinc-500 font-bold uppercase">Thao tác được phép</label>
+                      <select
+                        value={targetStatus}
+                        onChange={(e) => setTargetStatus(e.target.value)}
+                        className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200"
+                      >
+                        <option value="">Chọn thao tác</option>
+                        {allowedAdminActions.map(action => (
+                          <option key={action.status} value={action.status}>{action.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-[10px] leading-relaxed text-zinc-500">
+                      Trạng thái hiện tại không có thao tác thủ công. Xác nhận và hoàn tiền chỉ được áp dụng từ kết quả hợp lệ của Payment Service; hết hạn do Booking Service quản lý.
+                    </div>
+                  )}
 
+                  {allowedAdminActions.length > 0 && (
                   <div className="space-y-1">
                     <label className="text-[10px] text-zinc-500 font-bold uppercase">Lý do điều chỉnh (Audit)</label>
                     <textarea
@@ -510,12 +563,13 @@ export default function AdminBookingDetailPage() {
                       required
                     />
                   </div>
+                  )}
 
                   <button
                     type="submit"
-                    disabled={updating || targetStatus === booking.bookingStatus}
+                    disabled={updating || !targetStatus}
                     className={`w-full py-3.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors ${
-                      targetStatus !== booking.bookingStatus && !updating
+                      targetStatus && !updating
                         ? 'bg-[#ff7a1a] hover:bg-opacity-90 text-zinc-950 cursor-pointer'
                         : 'bg-zinc-850 text-zinc-600 border border-zinc-800 cursor-not-allowed'
                     }`}

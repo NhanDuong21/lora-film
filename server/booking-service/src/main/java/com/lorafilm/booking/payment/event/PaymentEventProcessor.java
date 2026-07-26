@@ -8,8 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 
 /**
  * Delivery adapter for payment events.
@@ -31,38 +29,46 @@ public class PaymentEventProcessor {
     }
 
     public void process(PaymentEvent event, String rawPayload) {
-        if (event == null || event.payload() == null || event.payload().bookingId() == null) {
+        if (event == null || event.payload() == null
+                || (event.payload().bookingPublicId() == null
+                && event.payload().bookingId() == null)) {
             log.warn("Ignoring payment event without a Booking id: {}", event == null ? null : event.eventId());
             return;
         }
 
         String result = normalizeResult(event.eventType(), event.payload().paymentStatus());
-        // Refund settlement is intentionally owned by Payment.  Recording a
-        // refund does not release BOOKED capacity, so there is no lifecycle
-        // command to execute for this event in Booking.
-        if ("REFUNDED".equals(result)) {
-            log.info("Ignoring refund lifecycle mutation for Booking {}", event.payload().bookingId());
-            return;
-        }
-
         BigDecimal amount = event.payload().amount() == null
                 ? BigDecimal.ZERO : event.payload().amount();
-        LocalDateTime occurredAt = event.occurredAt() == null
-                ? null : LocalDateTime.ofInstant(event.occurredAt(), ZoneOffset.UTC);
         InternalPaymentResultRequest request = new InternalPaymentResultRequest(
                 event.eventId(),
-                event.schemaVersion(),
+                event.schemaVersion() == null ? "1.0" : event.schemaVersion(),
                 event.payload().paymentId(),
+                event.payload().paymentPublicId(),
                 event.payload().transactionCode(),
+                event.payload().paymentProvider(),
                 event.payload().paymentMethod(),
                 result,
                 amount,
                 event.payload().currency(),
-                occurredAt,
-                event.payload().externalTransactionId(),
-                null);
-        paymentService.recordPaymentResult(event.payload().bookingId(), request);
-        log.debug("Delegated payment event {} for Booking {}", event.eventId(), event.payload().bookingId());
+                event.occurredAt(),
+                event.payload().externalTransactionId());
+
+        boolean refundResult = "REFUND_SUCCESS".equals(result) || "REFUND_FAILED".equals(result);
+        if (event.payload().bookingPublicId() != null) {
+            if (refundResult) {
+                paymentService.recordRefundResult(event.payload().bookingPublicId(), request);
+            } else {
+                paymentService.recordPaymentResult(event.payload().bookingPublicId(), request);
+            }
+        } else {
+            paymentService.recordPaymentResult(event.payload().bookingId(), request);
+        }
+        log.debug(
+                "Delegated payment event {} for Booking {}",
+                event.eventId(),
+                event.payload().bookingPublicId() == null
+                        ? event.payload().bookingId()
+                        : event.payload().bookingPublicId());
     }
 
     private String normalizeResult(String eventType, String paymentStatus) {
@@ -73,7 +79,8 @@ public class PaymentEventProcessor {
             case "PAYMENT_CANCELLED" -> "CANCELLED";
             case "PAYMENT_EXPIRED", "PAYMENT_TIMEOUT" -> "TIMEOUT";
             case "PAYMENT_PENDING", "PAYMENT_REQUESTED", "PAYMENT_CREATED" -> "PENDING";
-            case "PAYMENT_REFUNDED", "REFUND_SUCCESS" -> "REFUNDED";
+            case "PAYMENT_REFUNDED", "REFUND_SUCCESS" -> "REFUND_SUCCESS";
+            case "REFUND_FAILED" -> "REFUND_FAILED";
             default -> paymentStatus == null ? "PENDING" : paymentStatus.trim().toUpperCase();
         };
     }

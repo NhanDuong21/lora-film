@@ -36,4 +36,20 @@ describe('booking error messages', () => {
       'Không thể tạo đơn. Vui lòng thử lại.'
     )).toBe('Không thể tạo đơn. Vui lòng thử lại.');
   });
+
+  it('localizes Booking admin lifecycle conflicts without exposing backend text', () => {
+    const message = getBookingErrorMessage({
+      response: {
+        status: 409,
+        data: {
+          errorCode: 'ADMIN_LIFECYCLE_COMMAND_NOT_ALLOWED',
+          message: 'Admin command is not allowed from CANCELLED to COMPLETED'
+        }
+      }
+    });
+
+    expect(message).toBe(
+      'Không thể thực hiện thao tác này với trạng thái hiện tại của đơn.'
+    );
+  });
 });

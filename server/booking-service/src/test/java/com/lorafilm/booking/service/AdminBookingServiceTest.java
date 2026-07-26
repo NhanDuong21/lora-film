@@ -131,6 +131,63 @@ public class AdminBookingServiceTest {
     }
 
     @Test
+    public void updateBookingStatus_Refunded_IsPaymentTombstone() {
+        ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CONFIRMED);
+        UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(
+                BookingStatus.REFUNDED, "Admin requested refund", "ADMIN", null);
+        when(bookingRepository.findByPublicId(
+                "550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> adminBookingService.updateBookingStatus(
+                        "550e8400-e29b-41d4-a716-446655440000", request));
+
+        assertEquals("REFUND_VIA_PAYMENT_RESULT_REQUIRED", exception.getErrorCode());
+        verify(bookingRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    public void updateBookingStatus_PendingToCancelled_IsAllowedAdminCommand() {
+        UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(
+                BookingStatus.CANCELLED, "Khách yêu cầu hủy", "UNTRUSTED_SOURCE", null);
+        when(bookingRepository.findByPublicId(
+                "550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.save(any(Booking.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingAdminResponse response = adminBookingService.updateBookingStatus(
+                "550e8400-e29b-41d4-a716-446655440000", request);
+
+        assertEquals(BookingStatus.CANCELLED, response.getBookingStatus());
+        verify(historyService).saveHistory(
+                any(Booking.class),
+                eq(BookingStatus.PENDING_PAYMENT.name()),
+                eq(BookingStatus.CANCELLED.name()),
+                eq("Khách yêu cầu hủy"),
+                eq("ADMIN"),
+                eq("ADMIN"));
+    }
+
+    @Test
+    public void updateBookingStatus_ConfirmedToCompleted_IsAllowedAdminCommand() {
+        ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CONFIRMED);
+        UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(
+                BookingStatus.COMPLETED, "Suất chiếu hoàn tất", "ADMIN", null);
+        when(bookingRepository.findByPublicId(
+                "550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.save(any(Booking.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingAdminResponse response = adminBookingService.updateBookingStatus(
+                "550e8400-e29b-41d4-a716-446655440000", request);
+
+        assertEquals(BookingStatus.COMPLETED, response.getBookingStatus());
+    }
+
+    @Test
     public void updateBookingStatus_InvalidTransition_ThrowsException() {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(BookingStatus.CONFIRMED, "Retry", "ADMIN", null);
         ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CANCELLED);

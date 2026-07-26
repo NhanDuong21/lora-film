@@ -669,6 +669,12 @@ CREATE TABLE booking_payment_events (
     payment_id BIGINT
         COMMENT 'ID giao dịch ở Payment Service',
 
+    payment_public_id VARCHAR(36)
+        COMMENT 'UUID công khai của giao dịch ở Payment Service; authoritative cho contract mới',
+
+    schema_version VARCHAR(20) NOT NULL DEFAULT '1.0'
+        COMMENT 'Phiên bản normalized Payment result contract',
+
     transaction_id VARCHAR(100)
         COMMENT 'Mã giao dịch nội bộ hệ thống thanh toán',
 
@@ -706,6 +712,18 @@ CREATE TABLE booking_payment_events (
     response_payload JSON
         COMMENT 'Dữ liệu phản hồi nhận từ Cổng thanh toán',
 
+    payload_hash VARCHAR(64)
+        COMMENT 'SHA-256 của normalized Payment result để phát hiện eventId reuse',
+
+    processing_outcome VARCHAR(40) NOT NULL DEFAULT 'ACCEPTED'
+        COMMENT 'Kết quả Booking xử lý receipt: ACCEPTED hoặc RECONCILIATION_REQUIRED',
+
+    processing_error_code VARCHAR(100)
+        COMMENT 'Mã lỗi nghiệp vụ ổn định nếu receipt bị từ chối',
+
+    reconciliation_task_public_id VARCHAR(36)
+        COMMENT 'UUID task đối soát được tạo cho receipt bất thường',
+
     status ENUM('PENDING', 'SUCCESS', 'FAILED') NOT NULL DEFAULT 'PENDING'
         COMMENT 'Trạng thái xử lý sự kiện',
 
@@ -719,10 +737,12 @@ CREATE TABLE booking_payment_events (
     CONSTRAINT fk_payment_event_booking FOREIGN KEY (booking_id) REFERENCES bookings(id),
 
     INDEX idx_payment_booking(booking_id),
+    INDEX idx_payment_public(payment_public_id),
     INDEX idx_payment_transaction(transaction_id),
     INDEX idx_payment_gateway(gateway_transaction_id),
     INDEX idx_payment_event(event_type),
-    INDEX idx_payment_booking_event(booking_id, event_type)
+    INDEX idx_payment_booking_event(booking_id, event_type),
+    INDEX idx_payment_processing(processing_outcome, created_at)
 )
 ENGINE=InnoDB
 COMMENT='Lịch sử nhật ký các sự kiện tương tác với Cổng thanh toán';
@@ -1063,6 +1083,9 @@ CREATE TABLE booking_reconciliation_tasks (
     booking_id BIGINT NOT NULL
         COMMENT 'Mã đơn hàng liên kết (FK)',
 
+    payment_event_id BIGINT
+        COMMENT 'Payment receipt gắn với task; nullable chỉ để tương thích dữ liệu lịch sử',
+
     payment_reference VARCHAR(100)
         COMMENT 'Mã đối soát từ cổng thanh toán',
 
@@ -1071,6 +1094,12 @@ CREATE TABLE booking_reconciliation_tasks (
 
     actual_amount DECIMAL(12,2)
         COMMENT 'Số tiền thực tế ngân hàng/cổng thanh toán báo về',
+
+    expected_currency VARCHAR(10)
+        COMMENT 'Currency được khóa tại Booking',
+
+    actual_currency VARCHAR(10)
+        COMMENT 'Currency Payment Service gửi về',
 
     reconciliation_status ENUM('PENDING', 'MATCHED', 'MISMATCH', 'FAILED') NOT NULL DEFAULT 'PENDING'
         COMMENT 'Trạng thái đối soát: Chờ đối soát, Khớp tiền, Lệch tiền, Thất bại',
@@ -1088,7 +1117,9 @@ CREATE TABLE booking_reconciliation_tasks (
         COMMENT 'Thời điểm cập nhật',
 
     CONSTRAINT uk_reconciliation_public UNIQUE(public_id),
+    CONSTRAINT uk_reconciliation_payment_event UNIQUE(payment_event_id),
     CONSTRAINT fk_reconciliation_booking FOREIGN KEY (booking_id) REFERENCES bookings(id),
+    CONSTRAINT fk_reconciliation_payment_event FOREIGN KEY (payment_event_id) REFERENCES booking_payment_events(id),
     INDEX idx_reconciliation_status(reconciliation_status),
     INDEX idx_reconciliation_booking(booking_id),
     INDEX idx_reconciliation_pending(reconciliation_status, created_at)

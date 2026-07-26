@@ -1,17 +1,19 @@
 package com.project.paymentservice.client.booking;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public class BookingPaymentContext {
 
     private Long bookingId;
+    private String bookingPublicId;
     private Long accountId;
     private String bookingStatus;
     private Boolean payable;
     private BigDecimal amount;
     private String currency;
-    private LocalDateTime expiresAt;
+    private Instant amountLockedAt;
+    private Instant expiresAt;
     private AnalyticsSnapshotData analyticsSnapshot;
 
     public BookingPaymentContext() {
@@ -19,6 +21,9 @@ public class BookingPaymentContext {
 
     public Long getBookingId() { return bookingId; }
     public void setBookingId(Long bookingId) { this.bookingId = bookingId; }
+
+    public String getBookingPublicId() { return bookingPublicId; }
+    public void setBookingPublicId(String bookingPublicId) { this.bookingPublicId = bookingPublicId; }
 
     public Long getAccountId() { return accountId; }
     public void setAccountId(Long accountId) { this.accountId = accountId; }
@@ -35,8 +40,11 @@ public class BookingPaymentContext {
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
 
-    public LocalDateTime getExpiresAt() { return expiresAt; }
-    public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
+    public Instant getAmountLockedAt() { return amountLockedAt; }
+    public void setAmountLockedAt(Instant amountLockedAt) { this.amountLockedAt = amountLockedAt; }
+
+    public Instant getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
 
     public AnalyticsSnapshotData getAnalyticsSnapshot() { return analyticsSnapshot; }
     public void setAnalyticsSnapshot(AnalyticsSnapshotData analyticsSnapshot) { this.analyticsSnapshot = analyticsSnapshot; }
