@@ -15,6 +15,7 @@ import com.lorafilm.booking.food.service.FoodBookingFacadeService;
 import com.lorafilm.booking.security.service.SecurityContextService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -40,8 +41,9 @@ public class FoodBookingFacadeServiceImpl implements FoodBookingFacadeService {
     @Transactional(readOnly = true)
     public FoodOrderResponse getFoodOrder(String bookingPublicId) {
         Booking booking = getBooking(bookingPublicId);
+        validateBookingOwnership(booking);
         if (booking.getFoodOrder() == null) {
-            throw new NotFoundException("FoodOrder", "bookingId", bookingPublicId);
+            return null;
         }
         return FoodMapper.INSTANCE.toFoodOrderResponse(booking.getFoodOrder());
     }
@@ -94,12 +96,7 @@ public class FoodBookingFacadeServiceImpl implements FoodBookingFacadeService {
     }
 
     private void validateBookingStatus(Booking booking) {
-        if (securityContextService != null
-                && securityContextService.getCurrentUserId() != null
-                && !securityContextService.getCurrentUserId().equals(booking.getUserId())
-                && !securityContextService.isAdmin()) {
-            throw new BusinessException("BOOKING_OWNER_REQUIRED", "You do not own this booking");
-        }
+        validateBookingOwnership(booking);
         if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BusinessException("BOOKING_NOT_MODIFIABLE", "Food cannot be modified because booking status is " + booking.getBookingStatus());
         }
@@ -108,6 +105,16 @@ public class FoodBookingFacadeServiceImpl implements FoodBookingFacadeService {
         }
         if (booking.getExpiresAt() == null || !booking.getExpiresAt().isAfter(java.time.Instant.now())) {
             throw new BusinessException("BOOKING_EXPIRED", "The Booking payment deadline has passed");
+        }
+    }
+
+    private void validateBookingOwnership(Booking booking) {
+        if (securityContextService != null
+                && securityContextService.getCurrentUserId() != null
+                && !securityContextService.getCurrentUserId().equals(booking.getUserId())
+                && !securityContextService.isAdmin()) {
+            throw new BusinessException(
+                    "BOOKING_OWNER_REQUIRED", "You do not own this booking", HttpStatus.FORBIDDEN);
         }
     }
 }
