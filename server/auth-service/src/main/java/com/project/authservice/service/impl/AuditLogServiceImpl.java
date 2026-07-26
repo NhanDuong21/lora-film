@@ -59,4 +59,9 @@ public class AuditLogServiceImpl implements AuditLogService {
             log.error("Failed to write audit log for accountId={}, action={}: {}", accountId, action, e.getMessage());
         }
     }
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<AuditLog> getAuditLogs(org.springframework.data.domain.Pageable pageable) {
+        return auditLogRepository.findAll(pageable);
+    }
 }

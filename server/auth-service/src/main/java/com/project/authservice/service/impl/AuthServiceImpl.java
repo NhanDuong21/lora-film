@@ -7,10 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,15 +70,20 @@ public class AuthServiceImpl implements AuthService {
 	private final AuthAccountEventPublisher eventPublisher;
 	private final StringRedisTemplate redisTemplate;
 	private final ObjectMapper objectMapper;
+	private final com.project.authservice.repository.UserSessionRepository userSessionRepository;
+	private final com.project.authservice.repository.LoginHistoryRepository loginHistoryRepository;
+	private final com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository;
 	
-	private final ConcurrentHashMap<String, CompletableFuture<ValidationResult>> pendingRequests = new ConcurrentHashMap<>();
 
 	public AuthServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository,
 			PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
 			CccdCheckClient cccdCheckClient,
 			VerificationService verificationService, AuditLogService auditLogService,
 			RefreshTokenRepository refreshTokenRepository, HttpServletRequest servletRequest,
-			AuthAccountEventPublisher eventPublisher, StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
+			AuthAccountEventPublisher eventPublisher, StringRedisTemplate redisTemplate, ObjectMapper objectMapper,
+			com.project.authservice.repository.UserSessionRepository userSessionRepository,
+			com.project.authservice.repository.LoginHistoryRepository loginHistoryRepository,
+			com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository) {
 		this.accountRepository = accountRepository;
 		this.roleRepository = roleRepository;
 		this.passwordEncoder = passwordEncoder;
@@ -94,18 +96,48 @@ public class AuthServiceImpl implements AuthService {
 		this.eventPublisher = eventPublisher;
 		this.redisTemplate = redisTemplate;
 		this.objectMapper = objectMapper;
+		this.userSessionRepository = userSessionRepository;
+		this.loginHistoryRepository = loginHistoryRepository;
+		this.passwordResetTokenRepository = passwordResetTokenRepository;
 	}
 
-	/**
-	 * Registers a new user account.
-	 *
-	 * @param request registration request
-	 * @return register response
-	 */
+	@Transactional
 	public void completeValidation(String requestId, ValidationResult result) {
-		CompletableFuture<ValidationResult> future = pendingRequests.get(requestId);
-		if (future != null) {
-			future.complete(result);
+		String tempKey = "temp_request:" + requestId;
+		String json = redisTemplate.opsForValue().get(tempKey);
+		if (json == null) {
+			log.warn("Temp request not found or expired for requestId={}", requestId);
+			return;
+		}
+
+		try {
+			PendingRegistrationData data = objectMapper.readValue(json, PendingRegistrationData.class);
+			RegisterRequest request = data.getRequest();
+			String email = request.getEmail();
+
+			if ("SUCCESS".equalsIgnoreCase(result.getStatus())) {
+				Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
+						.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
+
+				Account existingAccount = accountRepository.findByEmail(email).orElse(null);
+				Account account = existingAccount != null ? existingAccount : new Account();
+				account.setEmail(email);
+				account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+				account.setRole(role);
+				account.setAccountStatus(com.project.authservice.enums.AccountStatus.PENDING);
+				accountRepository.save(account);
+
+				String pendingKey = "pending_registration:" + email;
+				redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
+				verificationService.sendOtp(new SendOtpRequest(email));
+			} else {
+				// Mark as failed in Redis so polling client knows
+				redisTemplate.opsForValue().set("temp_request_result:" + requestId, result.getErrorCode(), Duration.ofMinutes(15));
+			}
+		} catch (Exception e) {
+			log.error("Failed to complete validation for requestId={}", requestId, e);
+		} finally {
+			redisTemplate.delete(tempKey);
 		}
 	}
 
@@ -185,76 +217,9 @@ public class AuthServiceImpl implements AuthService {
 				throw new RuntimeException("Internal error processing registration");
 			}
 
-			CompletableFuture<ValidationResult> future = new CompletableFuture<>();
-			pendingRequests.put(requestId, future);
-
-			try {
-				eventPublisher.publishRegistrationValidationRequested(request, requestId);
-				
-				ValidationResult result = future.get(10, TimeUnit.SECONDS);
-				if ("SUCCESS".equalsIgnoreCase(result.getStatus())) {
-					Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
-							.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
-
-					Account account = existingAccount != null ? existingAccount : new Account();
-					account.setEmail(email);
-					account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-					account.setRole(role);
-					account.setAccountStatus(com.project.authservice.enums.AccountStatus.PENDING);
-					accountRepository.save(account);
-
-					String pendingKey = "pending_registration:" + email;
-					redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
-					verificationService.sendOtp(new SendOtpRequest(email));
-					redisTemplate.delete("temp_request:" + requestId);
-					
-					return new RegistrationInitiatedResponse(requestId, "Registration successful, please check your email for OTP");
-				} else {
-					redisTemplate.delete("temp_request:" + requestId);
-                    
-                    String message = "Registration information (Phone number or CCCD) already exists.";
-                    if ("PHONE_NUMBER_AND_CCCD_RESERVED".equals(result.getErrorCode())) {
-                        message = "Phone number and CCCD are currently reserved by another pending registration. Please try again later.";
-                    } else if ("PHONE_NUMBER_RESERVED".equals(result.getErrorCode())) {
-                        message = "Phone number is currently reserved by another pending registration. Please try again later.";
-                    } else if ("CCCD_RESERVED".equals(result.getErrorCode())) {
-                        message = "CCCD is currently reserved by another pending registration. Please try again later.";
-                    } else if ("PHONE_NUMBER_AND_CCCD_ALREADY_EXIST".equals(result.getErrorCode())) {
-                        message = "Phone number and CCCD already exist.";
-                    } else if ("PHONE_NUMBER_ALREADY_EXISTS".equals(result.getErrorCode())) {
-                        message = "Phone number already exists.";
-                    } else if ("CCCD_ALREADY_EXISTS".equals(result.getErrorCode())) {
-                        message = "CCCD already exists.";
-                    }
-                    
-                    java.util.List<com.project.authservice.common.ApiResponse.ValidationError> validationErrors = null;
-                    if ("PHONE_NUMBER_AND_CCCD_ALREADY_EXIST".equals(result.getErrorCode()) || "PHONE_NUMBER_AND_CCCD_RESERVED".equals(result.getErrorCode())) {
-                        validationErrors = java.util.Arrays.asList(
-                            new com.project.authservice.common.ApiResponse.ValidationError("phoneNumber", "Duplicate", "Phone number already exists or is reserved."),
-                            new com.project.authservice.common.ApiResponse.ValidationError("cccd", "Duplicate", "CCCD already exists or is reserved.")
-                        );
-                        // Also change the errorCode to VALIDATION_ERROR so the frontend handles it like standard validation errors
-                        throw new RegistrationConflictException(message, "VALIDATION_ERROR", result.getRetryAfterSeconds(), validationErrors);
-                    }
-
-                    if (result.getRetryAfterSeconds() != null) {
-                        throw new RegistrationConflictException(message, result.getErrorCode(), result.getRetryAfterSeconds());
-                    }
-					throw new RegistrationConflictException(message, result.getErrorCode() != null ? result.getErrorCode() : "BUSINESS_ERROR", null);
-				}
-			} catch (TimeoutException e) {
-				redisTemplate.delete("temp_request:" + requestId);
-				throw new RuntimeException("System overload. Failed to validate registration. Please try again later.", e);
-			} catch (RegistrationConflictException | RegistrationAlreadyPendingException e) {
-				throw e;
-			} catch (DuplicateResourceException e) {
-				throw e;
-			} catch (Exception e) {
-				redisTemplate.delete("temp_request:" + requestId);
-				throw new RuntimeException("System overload. Failed to validate registration. Please try again later.", e);
-			} finally {
-				pendingRequests.remove(requestId);
-			}
+			eventPublisher.publishRegistrationValidationRequested(request, requestId);
+			
+			return new RegistrationInitiatedResponse(requestId, "Registration is processing. Please check status shortly via Polling API.");
 		} catch (DuplicateResourceException e) {
 			auditLogService.log(null, "REGISTER_FAILED_DUPLICATE", servletRequest);
 			throw e;
@@ -350,15 +315,7 @@ public class AuthServiceImpl implements AuthService {
 			throw new AccountInactiveException();
 		}
 
-		// 5. Generate JWT
-		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(),
-				account.getRole().getRoleName());
-
-		// 6. Revoke any existing active refresh tokens issued from the same
-		// browser/device.
-		// Device identity is determined by matching the User-Agent header against the
-		// user_agent stored in the audit_logs entry that was written during the
-		// original login.
+		// 5. Revoke any existing active refresh tokens issued from the same browser/device.
 		String currentUserAgent = servletRequest.getHeader("User-Agent");
 		if (currentUserAgent != null && !currentUserAgent.isBlank()) {
 			List<RefreshToken> sameDeviceTokens = refreshTokenRepository
@@ -366,28 +323,107 @@ public class AuthServiceImpl implements AuthService {
 			if (!sameDeviceTokens.isEmpty()) {
 				sameDeviceTokens.forEach(t -> t.setIsRevoked(true));
 				refreshTokenRepository.saveAll(sameDeviceTokens);
-				log.info("Revoked {} active refresh token(s) for account {} from the same device (User-Agent match)",
+				log.info("Revoked {} active refresh token(s) for account {} from the same device",
 						sameDeviceTokens.size(), email);
 			}
 		}
 
-		// 7. Generate new Refresh Token
+		// 6. Generate Tokens
+		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), account.getRole().getRoleName());
 		String plainRefreshToken = UUID.randomUUID().toString();
+		String refreshTokenHash = RefreshTokenHashUtil.hash(plainRefreshToken);
+
+		LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
 		RefreshToken refreshToken = new RefreshToken();
 		refreshToken.setAccount(account);
-		refreshToken.setToken(RefreshTokenHashUtil.hash(plainRefreshToken));
-		refreshToken.setExpiryDate(LocalDateTime.now().plusDays(7));
+		refreshToken.setToken(refreshTokenHash);
+		refreshToken.setExpiryDate(expiresAt);
 		refreshToken.setIsRevoked(false);
-
-		// 8. Save new Refresh Token
 		refreshTokenRepository.save(refreshToken);
+
+		// 7. Save User Session
+		String sessionId = UUID.randomUUID().toString();
+		com.project.authservice.entity.UserSession userSession = com.project.authservice.entity.UserSession.builder()
+				.id(sessionId)
+				.account(account)
+				.accessTokenHash(RefreshTokenHashUtil.hash(accessToken))
+				.ipAddress(servletRequest.getRemoteAddr())
+				.userAgent(currentUserAgent)
+				.expiresAt(LocalDateTime.now().plusHours(24)) // 24 hours matches JWT expiration
+				.isActive(true)
+				.build();
+		userSessionRepository.save(userSession);
+
+		// 8. Save Login History
+		com.project.authservice.entity.LoginHistory loginHistory = com.project.authservice.entity.LoginHistory.builder()
+				.account(account)
+				.ipAddress(servletRequest.getRemoteAddr())
+				.userAgent(currentUserAgent)
+				.status("SUCCESS")
+				.build();
+		loginHistoryRepository.save(loginHistory);
 
 		// 9. Write Audit Log
 		auditLogService.log(account.getId(), "LOGIN_SUCCESS", servletRequest);
-
 		log.info("User {} logged in successfully", email);
 
 		// 10. Return response
+		long expiresInSeconds = jwtUtil.getJwtExpirationMs() / 1000;
+		return new JwtResponse(
+				accessToken,
+				plainRefreshToken,
+				expiresInSeconds,
+				account.getEmail(),
+				account.getRole().getRoleName(),
+				account.getId());
+	}
+
+	@Override
+	@Transactional
+	public JwtResponse loginOAuth2(Account account, HttpServletRequest request) {
+		String email = account.getEmail();
+
+		// Generate Tokens
+		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), account.getRole().getRoleName());
+		String plainRefreshToken = UUID.randomUUID().toString();
+		String refreshTokenHash = RefreshTokenHashUtil.hash(plainRefreshToken);
+
+		LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
+		RefreshToken refreshToken = new RefreshToken();
+		refreshToken.setAccount(account);
+		refreshToken.setToken(refreshTokenHash);
+		refreshToken.setExpiryDate(expiresAt);
+		refreshToken.setIsRevoked(false);
+		refreshTokenRepository.save(refreshToken);
+
+		String currentUserAgent = request.getHeader("User-Agent");
+
+		// Save User Session
+		String sessionId = UUID.randomUUID().toString();
+		com.project.authservice.entity.UserSession userSession = com.project.authservice.entity.UserSession.builder()
+				.id(sessionId)
+				.account(account)
+				.accessTokenHash(RefreshTokenHashUtil.hash(accessToken))
+				.ipAddress(request.getRemoteAddr())
+				.userAgent(currentUserAgent)
+				.expiresAt(LocalDateTime.now().plusHours(24))
+				.isActive(true)
+				.build();
+		userSessionRepository.save(userSession);
+
+		// Save Login History
+		com.project.authservice.entity.LoginHistory loginHistory = com.project.authservice.entity.LoginHistory.builder()
+				.account(account)
+				.ipAddress(request.getRemoteAddr())
+				.userAgent(currentUserAgent)
+				.status("SUCCESS")
+				.build();
+		loginHistoryRepository.save(loginHistory);
+
+		// Write Audit Log
+		auditLogService.log(account.getId(), "OAUTH2_LOGIN_SUCCESS", request);
+		log.info("User {} logged in via OAuth2 successfully", email);
+
 		long expiresInSeconds = jwtUtil.getJwtExpirationMs() / 1000;
 		return new JwtResponse(
 				accessToken,
@@ -486,5 +522,113 @@ public class AuthServiceImpl implements AuthService {
 			auditLogService.log(accountId, "REFRESH_TOKEN_FAILED", servletRequest);
 			throw e;
 		}
+	}
+
+
+	@Override
+	@Transactional
+	public void logout(String token) {
+		String email = jwtUtil.extractUsername(token);
+		log.info("Logout request for email={}", email);
+		
+		// 1. Blacklist token in Redis
+		long exp = jwtUtil.extractExpiration(token).getTime();
+		long now = System.currentTimeMillis();
+		if (exp > now) {
+			redisTemplate.opsForValue().set("blacklist:" + token, "revoked", Duration.ofMillis(exp - now));
+		}
+		
+		// 2. Invalidate session
+		String tokenHash = RefreshTokenHashUtil.hash(token);
+		userSessionRepository.findByAccessTokenHash(tokenHash)
+			.ifPresent(session -> {
+				session.setIsActive(false);
+				userSessionRepository.save(session);
+			});
+			
+		// 3. Log Audit
+		Account account = accountRepository.findByEmail(email).orElse(null);
+		if (account != null) {
+			auditLogService.log(account.getId(), "LOGOUT_SUCCESS", servletRequest);
+		}
+	}
+
+	@Override
+	@Transactional
+	public void logoutAll(String email) {
+		log.info("LogoutAll request for email={}", email);
+		Account account = accountRepository.findByEmail(email)
+			.orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+			
+		// Invalidate all active sessions
+		userSessionRepository.revokeAllForAccount(account.getId());
+		
+		// Invalidate all refresh tokens
+		java.util.List<com.project.authservice.entity.RefreshToken> activeTokens = refreshTokenRepository.findActiveTokensByAccountId(account.getId());
+		activeTokens.forEach(t -> t.setIsRevoked(true));
+		refreshTokenRepository.saveAll(activeTokens);
+		
+		auditLogService.log(account.getId(), "LOGOUT_ALL_SUCCESS", servletRequest);
+	}
+	@Override
+	@Transactional
+	public void forgotPassword(com.project.authservice.dto.request.ForgotPasswordRequest request) {
+		log.info("Forgot password requested for email={}", request.getEmail());
+		Account account = accountRepository.findByEmail(request.getEmail())
+				.orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+		
+		String token = UUID.randomUUID().toString();
+		com.project.authservice.entity.PasswordResetToken resetToken = com.project.authservice.entity.PasswordResetToken.builder()
+				.account(account)
+				.token(token)
+				.expiresAt(LocalDateTime.now().plusMinutes(15))
+				.used(false)
+				.build();
+		passwordResetTokenRepository.save(resetToken);
+		
+		// In a real system, send email here
+		log.info("Password reset token generated for email={}: {}", request.getEmail(), token);
+	}
+
+	@Override
+	@Transactional
+	public void resetPassword(com.project.authservice.dto.request.ResetPasswordRequest request) {
+		log.info("Reset password requested");
+		com.project.authservice.entity.PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(request.getToken())
+				.orElseThrow(() -> new RuntimeException("Invalid token"));
+				
+		if (resetToken.getUsed() || resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+			throw new RuntimeException("Token expired or already used");
+		}
+		
+		Account account = resetToken.getAccount();
+		account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+		accountRepository.save(account);
+		
+		resetToken.setUsed(true);
+		passwordResetTokenRepository.save(resetToken);
+		
+		// Revoke all sessions for security
+		userSessionRepository.revokeAllForAccount(account.getId());
+		auditLogService.log(account.getId(), "PASSWORD_RESET_SUCCESS", servletRequest);
+	}
+
+	@Override
+	@Transactional
+	public void changePassword(com.project.authservice.dto.request.ChangePasswordRequest request, String email) {
+		log.info("Change password requested for email={}", email);
+		Account account = accountRepository.findByEmail(email)
+				.orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+				
+		if (!passwordEncoder.matches(request.getOldPassword(), account.getPasswordHash())) {
+			throw new RuntimeException("Old password incorrect");
+		}
+		
+		account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+		accountRepository.save(account);
+		
+		// Revoke all sessions except current one (if we had session ID, but let's just revoke all for security)
+		userSessionRepository.revokeAllForAccount(account.getId());
+		auditLogService.log(account.getId(), "PASSWORD_CHANGED", servletRequest);
 	}
 }
