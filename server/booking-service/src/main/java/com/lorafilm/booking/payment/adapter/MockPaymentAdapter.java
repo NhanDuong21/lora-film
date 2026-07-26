@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 @Component
-@Profile({"local", "test"})
+@Profile({"local", "test", "default"})
 public class MockPaymentAdapter implements PaymentIntegrationPort {
 
     @Override

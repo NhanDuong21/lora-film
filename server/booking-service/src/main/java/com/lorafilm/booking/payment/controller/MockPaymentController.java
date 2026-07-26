@@ -27,7 +27,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/mock/payment")
-@Profile({"local", "test"})
+@Profile({"local", "test", "default"})
 public class MockPaymentController {
 
     private static final Logger log = LoggerFactory.getLogger(MockPaymentController.class);
