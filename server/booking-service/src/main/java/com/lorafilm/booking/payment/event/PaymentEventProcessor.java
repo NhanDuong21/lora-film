@@ -1,5 +1,13 @@
 package com.lorafilm.booking.payment.event;
 
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.audit.entity.BookingAuditLog;
 import com.lorafilm.booking.audit.entity.BookingOperationLog;
 import com.lorafilm.booking.audit.repository.BookingAuditLogRepository;
@@ -9,31 +17,19 @@ import com.lorafilm.booking.booking.entity.BookingStatusHistory;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.repository.BookingRepository;
-import com.lorafilm.booking.booking.repository.BookingStatusHistoryRepository;
-import com.lorafilm.booking.common.exception.BusinessException;
-import com.lorafilm.booking.booking.service.BookingTicketService;
 import com.lorafilm.booking.booking.repository.BookingSnapshotRepository;
+import com.lorafilm.booking.booking.repository.BookingStatusHistoryRepository;
 import com.lorafilm.booking.booking.repository.BookingTicketRepository;
-import com.lorafilm.booking.booking.entity.BookingSnapshot;
+import com.lorafilm.booking.booking.service.BookingTicketService;
+import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.food.event.FoodOrderConfirmedEvent;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.lorafilm.booking.payment.entity.BookingPaymentEvent;
 import com.lorafilm.booking.payment.enums.PaymentEventStatus;
 import com.lorafilm.booking.payment.enums.PaymentEventType;
 import com.lorafilm.booking.payment.event.contract.PaymentEvent;
 import com.lorafilm.booking.payment.repository.BookingPaymentEventRepository;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.UUID;
-import java.util.List;
-import java.util.Optional;
 
 @Service
 public class PaymentEventProcessor {
@@ -164,7 +160,6 @@ public class PaymentEventProcessor {
             Booking savedBooking = bookingRepository.save(booking);
 
             // Sync with food order status is handled automatically inside booking.changeStatus()
-
             if (savedBooking.getBookingStatus() == BookingStatus.CONFIRMED) {
                 bookingTicketService.generateTicketsForConfirmedBooking(savedBooking.getId());
                 if (savedBooking.getFoodOrder() != null) {
@@ -176,63 +171,71 @@ public class PaymentEventProcessor {
                     outboxService.createOutboxEvent("FoodOrder", savedBooking.getFoodOrder().getId(), "FOOD_ORDER_CONFIRMED", foodEvent);
                 }
 
+                // Sync seat reservations status
+                if (targetBookingStatus == BookingStatus.CANCELLED || targetBookingStatus == BookingStatus.EXPIRED) {
+                    seatReservationService.handleBookingStatusChange(savedBooking.getId(), targetBookingStatus, reason);
+                }
 
-            // Sync seat reservations status
-            if (targetBookingStatus == BookingStatus.CANCELLED || targetBookingStatus == BookingStatus.EXPIRED) {
-                seatReservationService.handleBookingStatusChange(savedBooking.getId(), targetBookingStatus, reason);
+                // 3. Persist Booking Status History
+                BookingStatusHistory history = new BookingStatusHistory();
+                history.setBooking(savedBooking);
+                history.setFromStatus(oldStatus.name());
+                history.setToStatus(targetBookingStatus.name());
+                history.setReason(reason);
+                history.setSource("PAYMENT_EVENT_CONSUMER");
+                history.setChangedBy(event.producer());
+                statusHistoryRepository.save(history);
+
+                // 4. Persist Audit Log
+                BookingAuditLog auditLog = new BookingAuditLog();
+                auditLog.setPublicId(UUID.randomUUID().toString());
+                auditLog.setBookingId(savedBooking.getId());
+                auditLog.setActor(event.producer());
+                auditLog.setAction("UPDATE_STATUS_VIA_PAYMENT");
+                auditLog.setFieldName("bookingStatus");
+                auditLog.setOldValue(oldStatus.name());
+                auditLog.setNewValue(targetBookingStatus.name());
+                auditLog.setRequestId(event.correlationId());
+                auditLog.setTraceId(event.eventId());
+                auditLogRepository.save(auditLog);
+
+                // 5. Create Outbox Event
+                String outboxEventType = "BOOKING_" + targetBookingStatus.name();
+                outboxService.createOutboxEvent("BOOKING", savedBooking.getId(), outboxEventType, savedBooking);
             }
 
-            // 3. Persist Booking Status History
-            BookingStatusHistory history = new BookingStatusHistory();
-            history.setBooking(savedBooking);
-            history.setFromStatus(oldStatus.name());
-            history.setToStatus(targetBookingStatus.name());
-            history.setReason(reason);
-            history.setSource("PAYMENT_EVENT_CONSUMER");
-            history.setChangedBy(event.producer());
-            statusHistoryRepository.save(history);
-
-            // 4. Persist Audit Log
-            BookingAuditLog auditLog = new BookingAuditLog();
-            auditLog.setPublicId(UUID.randomUUID().toString());
-            auditLog.setBookingId(savedBooking.getId());
-            auditLog.setActor(event.producer());
-            auditLog.setAction("UPDATE_STATUS_VIA_PAYMENT");
-            auditLog.setFieldName("bookingStatus");
-            auditLog.setOldValue(oldStatus.name());
-            auditLog.setNewValue(targetBookingStatus.name());
-            auditLog.setRequestId(event.correlationId());
-            auditLog.setTraceId(event.eventId());
-            auditLogRepository.save(auditLog);
-
-            // 5. Create Outbox Event
-            String outboxEventType = "BOOKING_" + targetBookingStatus.name();
-            outboxService.createOutboxEvent("BOOKING", savedBooking.getId(), outboxEventType, savedBooking);
+            // 6. Persist Operation Log
+            BookingOperationLog opLog = new BookingOperationLog();
+            opLog.setPublicId(UUID.randomUUID().toString());
+            opLog.setBookingId(bookingId);
+            opLog.setOperationType("PROCESS_PAYMENT_EVENT_" + event.eventType());
+            opLog.setRequestId(event.correlationId());
+            opLog.setTraceId(event.eventId());
+            opLog.setActor(event.producer());
+            opLog.setExecutionTimeMs(System.currentTimeMillis() - startTime);
+            opLog.setSuccess(true);
+            operationLogRepository.save(opLog);
         }
-
-        // 6. Persist Operation Log
-        BookingOperationLog opLog = new BookingOperationLog();
-        opLog.setPublicId(UUID.randomUUID().toString());
-        opLog.setBookingId(bookingId);
-        opLog.setOperationType("PROCESS_PAYMENT_EVENT_" + event.eventType());
-        opLog.setRequestId(event.correlationId());
-        opLog.setTraceId(event.eventId());
-        opLog.setActor(event.producer());
-        opLog.setExecutionTimeMs(System.currentTimeMillis() - startTime);
-        opLog.setSuccess(true);
-        operationLogRepository.save(opLog);
     }
 
     private PaymentEventType mapToDbEventType(String eventType) {
         return switch (eventType) {
-            case "PAYMENT_REQUESTED" -> PaymentEventType.PAYMENT_CREATED;
-            case "PAYMENT_PENDING" -> PaymentEventType.PAYMENT_PENDING;
-            case "PAYMENT_SUCCESS" -> PaymentEventType.PAYMENT_SUCCESS;
-            case "PAYMENT_FAILED" -> PaymentEventType.PAYMENT_FAILED;
-            case "PAYMENT_CANCELLED" -> PaymentEventType.PAYMENT_CANCELLED;
-            case "PAYMENT_EXPIRED" -> PaymentEventType.PAYMENT_TIMEOUT;
-            case "PAYMENT_REFUNDED" -> PaymentEventType.REFUND_SUCCESS;
-            default -> PaymentEventType.valueOf(eventType);
+            case "PAYMENT_REQUESTED" ->
+                PaymentEventType.PAYMENT_CREATED;
+            case "PAYMENT_PENDING" ->
+                PaymentEventType.PAYMENT_PENDING;
+            case "PAYMENT_SUCCESS" ->
+                PaymentEventType.PAYMENT_SUCCESS;
+            case "PAYMENT_FAILED" ->
+                PaymentEventType.PAYMENT_FAILED;
+            case "PAYMENT_CANCELLED" ->
+                PaymentEventType.PAYMENT_CANCELLED;
+            case "PAYMENT_EXPIRED" ->
+                PaymentEventType.PAYMENT_TIMEOUT;
+            case "PAYMENT_REFUNDED" ->
+                PaymentEventType.REFUND_SUCCESS;
+            default ->
+                PaymentEventType.valueOf(eventType);
         };
     }
 
@@ -241,9 +244,12 @@ public class PaymentEventProcessor {
             return PaymentEventStatus.PENDING;
         }
         return switch (status.toUpperCase()) {
-            case "SUCCESS" -> PaymentEventStatus.SUCCESS;
-            case "FAILED", "EXPIRED", "CANCELLED" -> PaymentEventStatus.FAILED;
-            default -> PaymentEventStatus.PENDING;
+            case "SUCCESS" ->
+                PaymentEventStatus.SUCCESS;
+            case "FAILED", "EXPIRED", "CANCELLED" ->
+                PaymentEventStatus.FAILED;
+            default ->
+                PaymentEventStatus.PENDING;
         };
     }
 
