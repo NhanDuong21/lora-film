@@ -6,13 +6,14 @@ import {
   User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight, 
   PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle 
 } from 'lucide-react';
-import SystemUpdating from '@/components/common/SystemUpdating';
 import CustomerBookingHistory from '@/features/booking/customer/components/CustomerBookingHistory';
 
 const normalizeDateForInput = (value) => {
   if (!value) return '';
   return String(value).substring(0, 10);
 };
+
+const hasImageSource = value => typeof value === 'string' && value.trim().length > 0;
 
 export default function CustomerProfileView({ onBackHome, initialTab = 'info' }) {
   const navigate = useNavigate();
@@ -302,15 +303,19 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               {/* User Avatar + Metadata Header */}
               <div className="flex items-center gap-4 pb-6 border-b border-zinc-800/80">
                 <div className="relative w-16 h-16 shrink-0 rounded-full border-2 border-brand-orange overflow-hidden bg-zinc-950 group">
-                  <img 
-                    src={avatarUrl} 
-                    alt={fullName} 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
-                    }}
-                  />
+                  {hasImageSource(avatarUrl) ? (
+                    <img
+                      src={avatarUrl}
+                      alt={fullName}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                  ) : (
+                    <User className="h-full w-full p-4 text-zinc-600" aria-label="Chưa có ảnh đại diện" />
+                  )}
                   {/* Camera overlay */}
                   <button 
                     type="button"
@@ -832,15 +837,19 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               {/* Preview image */}
               <div className="flex justify-center">
                 <div className="w-24 h-24 rounded-full border border-zinc-700 overflow-hidden bg-zinc-950">
-                  <img 
-                    src={tempAvatarUrl} 
-                    alt="Preview avatar" 
-                    className="w-full h-full object-cover" 
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
-                    }}
-                  />
+                  {hasImageSource(tempAvatarUrl) ? (
+                    <img
+                      src={tempAvatarUrl}
+                      alt="Preview avatar"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                  ) : (
+                    <User className="h-full w-full p-6 text-zinc-600" aria-label="Chưa có ảnh xem trước" />
+                  )}
                 </div>
               </div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Search, Info, AlertTriangle, ArrowUpDown } from 'lucide-react';
+import { ChevronRight, Search, Info, AlertTriangle, ArrowUpDown, Film } from 'lucide-react';
 import { getBookingHistory } from '../services/bookingService';
 
 export default function CustomerBookingHistory() {
@@ -42,6 +42,8 @@ export default function CustomerBookingHistory() {
   }, [page, size, status, fromDate, toDate, sortField, sortDirection]);
 
   useEffect(() => {
+    // The effect owns loading history whenever its memoized query changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchHistory();
   }, [fetchHistory]);
 
