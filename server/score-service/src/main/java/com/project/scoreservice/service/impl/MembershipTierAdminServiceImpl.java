@@ -32,28 +32,33 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
     @Override
     @Transactional
     public AdminMembershipTierResponse createTier(CreateMembershipTierRequest request) {
-        String normalizedName = request.getTierName().trim().toUpperCase();
+        String normalizedCode = request.getTierCode().trim().toUpperCase();
+        String normalizedName = request.getTierName().trim();
 
-        // 1. Validate Tier Name uniqueness
+        if (membershipTierRepository.findByTierCode(normalizedCode).isPresent()) {
+            throw new BusinessException("Membership tier code already exists: " + normalizedCode, "SCORE_TIER_CODE_ALREADY_EXISTS", HttpStatus.CONFLICT);
+        }
+
         if (membershipTierRepository.findByTierName(normalizedName).isPresent()) {
             throw new BusinessException("Membership tier name already exists: " + normalizedName, "SCORE_TIER_NAME_ALREADY_EXISTS", HttpStatus.CONFLICT);
         }
 
-        // 2. Validate Tier Threshold uniqueness
-        if (membershipTierRepository.findByMinPoints(request.getMinPoints()).isPresent()) {
-            throw new BusinessException("Membership tier threshold already exists: " + request.getMinPoints(), "SCORE_TIER_THRESHOLD_CONFLICT", HttpStatus.CONFLICT);
+        if (membershipTierRepository.findByMinAccumulatedPoints(request.getMinAccumulatedPoints()).isPresent()) {
+            throw new BusinessException("Membership tier threshold already exists: " + request.getMinAccumulatedPoints(), "SCORE_TIER_THRESHOLD_CONFLICT", HttpStatus.CONFLICT);
         }
 
-        // 3. Earning rate validation (decimal range checking)
         if (request.getEarningRate().compareTo(BigDecimal.ZERO) <= 0 || request.getEarningRate().compareTo(BigDecimal.ONE) > 0) {
             throw new BusinessException("Earning rate must be between 0 and 1", "SCORE_TIER_CONFIGURATION_INVALID", HttpStatus.BAD_REQUEST);
         }
 
         MembershipTier tier = new MembershipTier(
                 null,
+                normalizedCode,
                 normalizedName,
-                request.getMinPoints(),
+                request.getMinAccumulatedPoints(),
                 request.getEarningRate(),
+                request.getPriority(),
+                request.getActive() != null ? request.getActive() : true,
                 request.getDescription(),
                 null,
                 null
@@ -67,7 +72,7 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
     @Override
     @Transactional(readOnly = true)
     public List<AdminMembershipTierResponse> getTiers() {
-        List<MembershipTier> tiers = membershipTierRepository.findAllByOrderByMinPointsAsc();
+        List<MembershipTier> tiers = membershipTierRepository.findAllByOrderByMinAccumulatedPointsAsc();
         return tiers.stream()
                 .map(tier -> {
                     long userCount = userScoreRepository.countByCurrentTier(tier);
@@ -92,46 +97,58 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
         MembershipTier tier = membershipTierRepository.findById(tierId)
                 .orElseThrow(() -> new BusinessException("Membership tier not found", "SCORE_TIER_NOT_FOUND", HttpStatus.NOT_FOUND));
 
-        String normalizedName = request.getTierName().trim().toUpperCase();
+        if (request.getTierCode() != null && !tier.getTierCode().equals(request.getTierCode().trim().toUpperCase())) {
+            String normalizedCode = request.getTierCode().trim().toUpperCase();
+            if (membershipTierRepository.findByTierCode(normalizedCode).isPresent()) {
+                throw new BusinessException("Membership tier code already exists: " + normalizedCode, "SCORE_TIER_CODE_ALREADY_EXISTS", HttpStatus.CONFLICT);
+            }
+            tier.setTierCode(normalizedCode);
+        }
 
-        // 1. Validate Tier Name uniqueness if changed
-        if (!tier.getTierName().equals(normalizedName)) {
-            Optional<MembershipTier> existingByName = membershipTierRepository.findByTierName(normalizedName);
-            if (existingByName.isPresent()) {
+        if (request.getTierName() != null && !tier.getTierName().equals(request.getTierName().trim())) {
+            String normalizedName = request.getTierName().trim();
+            if (membershipTierRepository.findByTierName(normalizedName).isPresent()) {
                 throw new BusinessException("Membership tier name already exists: " + normalizedName, "SCORE_TIER_NAME_ALREADY_EXISTS", HttpStatus.CONFLICT);
             }
+            tier.setTierName(normalizedName);
         }
 
-        boolean thresholdChanged = !tier.getMinPoints().equals(request.getMinPoints());
-
-        // 2. Validate Tier Threshold if changed
-        if (thresholdChanged) {
-            Optional<MembershipTier> existingWithPoints = membershipTierRepository.findByMinPoints(request.getMinPoints());
-            if (existingWithPoints.isPresent()) {
-                throw new BusinessException("Membership tier threshold already exists: " + request.getMinPoints(), "SCORE_TIER_THRESHOLD_CONFLICT", HttpStatus.CONFLICT);
+        boolean thresholdChanged = false;
+        if (request.getMinAccumulatedPoints() != null && !tier.getMinAccumulatedPoints().equals(request.getMinAccumulatedPoints())) {
+            thresholdChanged = true;
+            if (membershipTierRepository.findByMinAccumulatedPoints(request.getMinAccumulatedPoints()).isPresent()) {
+                throw new BusinessException("Membership tier threshold already exists: " + request.getMinAccumulatedPoints(), "SCORE_TIER_THRESHOLD_CONFLICT", HttpStatus.CONFLICT);
             }
 
-            // 3. Lowest tier protection check
-            if (tier.getMinPoints() == 0 && request.getMinPoints() > 0) {
-                // Check if another tier has minPoints = 0
+            if (tier.getMinAccumulatedPoints() == 0 && request.getMinAccumulatedPoints() > 0) {
                 List<MembershipTier> allTiers = membershipTierRepository.findAll();
                 boolean otherZeroExists = allTiers.stream()
-                        .anyMatch(t -> !t.getId().equals(tierId) && t.getMinPoints() == 0);
+                        .anyMatch(t -> !t.getId().equals(tierId) && t.getMinAccumulatedPoints() == 0);
                 if (!otherZeroExists) {
-                    throw new BusinessException("Cannot update the only tier with minPoints = 0 to a positive value", "SCORE_TIER_CONFIGURATION_INVALID", HttpStatus.CONFLICT);
+                    throw new BusinessException("Cannot update the only tier with minAccumulatedPoints = 0 to a positive value", "SCORE_TIER_CONFIGURATION_INVALID", HttpStatus.CONFLICT);
                 }
             }
+            tier.setMinAccumulatedPoints(request.getMinAccumulatedPoints());
         }
 
-        // 4. Earning rate validation
-        if (request.getEarningRate().compareTo(BigDecimal.ZERO) <= 0 || request.getEarningRate().compareTo(BigDecimal.ONE) > 0) {
-            throw new BusinessException("Earning rate must be between 0 and 1", "SCORE_TIER_CONFIGURATION_INVALID", HttpStatus.BAD_REQUEST);
+        if (request.getEarningRate() != null) {
+            if (request.getEarningRate().compareTo(BigDecimal.ZERO) <= 0 || request.getEarningRate().compareTo(BigDecimal.ONE) > 0) {
+                throw new BusinessException("Earning rate must be between 0 and 1", "SCORE_TIER_CONFIGURATION_INVALID", HttpStatus.BAD_REQUEST);
+            }
+            tier.setEarningRate(request.getEarningRate());
         }
 
-        tier.setTierName(normalizedName);
-        tier.setMinPoints(request.getMinPoints());
-        tier.setEarningRate(request.getEarningRate());
-        tier.setDescription(request.getDescription());
+        if (request.getPriority() != null) {
+            tier.setPriority(request.getPriority());
+        }
+
+        if (request.getActive() != null) {
+            tier.setActive(request.getActive());
+        }
+
+        if (request.getDescription() != null) {
+            tier.setDescription(request.getDescription());
+        }
 
         membershipTierRepository.saveAndFlush(tier);
 
@@ -143,9 +160,12 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
     private AdminMembershipTierResponse mapToAdminResponse(MembershipTier tier, long userCount, boolean recalculationRequired) {
         return new AdminMembershipTierResponse(
                 tier.getId(),
+                tier.getTierCode(),
                 tier.getTierName(),
-                tier.getMinPoints(),
+                tier.getMinAccumulatedPoints(),
                 tier.getEarningRate(),
+                tier.getPriority(),
+                tier.getActive(),
                 tier.getDescription(),
                 userCount,
                 recalculationRequired,

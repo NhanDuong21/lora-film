@@ -17,6 +17,8 @@ import { adminConcessionRoutes } from "@/features/concessions-sales/admin/routes
 import { employeeConcessionRoutes } from "@/features/concessions-sales/employee/routes";
 import { adminStaffRoutes } from "@/features/internal-staff/admin/routes";
 import { employeeStaffRoutes } from "@/features/internal-staff/employee/routes";
+import { customerScoreRoutes } from "@/features/score/customer/routes";
+import { adminScoreRoutes } from "@/features/score/admin/routes";
 
 // Layouts
 import MainLayout from "@/components/layout/MainLayout";
@@ -41,6 +43,9 @@ function AppRoutes() {
                     ))}
                     {customerBookingRoutes.map((route, index) => (
                         <Route key={`book-${index}`} path={route.path} element={route.element} />
+                    ))}
+                    {customerScoreRoutes.map((route, index) => (
+                        <Route key={`score-cust-${index}`} path={route.path} element={route.element} />
                     ))}
                 </Route>
 
@@ -88,6 +93,9 @@ function AppRoutes() {
                     ))}
                     {adminBookingRoutes.map((route, index) => (
                         <Route key={`book-adm-${index}`} path={route.path} element={route.element} />
+                    ))}
+                    {adminScoreRoutes.map((route, index) => (
+                        <Route key={`score-adm-${index}`} path={route.path} element={route.element} />
                     ))}
                 </Route>
             </Routes>
