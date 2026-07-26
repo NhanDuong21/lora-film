@@ -11,6 +11,7 @@ import adminCinemaService from '@/features/facilities/admin/services/adminCinema
 import { useAuth } from '@/contexts/AuthContext';
 import { parseApiError } from '@/utils/apiErrorHandler';
 import SkeletonTable from '@/components/common/SkeletonTable';
+import { EmptyState, StatusBadge } from '@/components/common/ui/uiKit';
 
 export default function AdminBookingDashboardPage() {
   const navigate = useNavigate();
@@ -628,23 +629,23 @@ export default function AdminBookingDashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <div className="space-y-1">
             <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã đặt vé (Booking Code)</label>
-            <input
+              <input
               type="text"
               placeholder="Nhập mã đặt vé..."
               value={bookingCode}
               onChange={(e) => setBookingCode(e.target.value)}
-              className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-xs focus-ring text-zinc-100 placeholder:text-zinc-500"
             />
           </div>
 
           <div className="space-y-1">
             <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã khách hàng (User ID)</label>
-            <input
+              <input
               type="number"
               placeholder="VD: 1, 2"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-xs focus-ring text-zinc-100 placeholder:text-zinc-500"
             />
           </div>
 
@@ -671,7 +672,7 @@ export default function AdminBookingDashboardPage() {
               <select
                 value={sortField}
                 onChange={(e) => setSortField(e.target.value)}
-                className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200 outline-none"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-xs focus-ring text-zinc-100 outline-none"
               >
                 <option value="createdAt">Ngày tạo</option>
                 <option value="bookingCode">Mã đặt vé</option>
@@ -681,7 +682,7 @@ export default function AdminBookingDashboardPage() {
               <button
                 type="button"
                 onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
-                className="bg-[#050506] border border-zinc-800 p-2 rounded-xl text-zinc-400 hover:text-white transition-colors"
+                className="bg-zinc-900 border border-zinc-800 px-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
                 title="Đổi chiều sắp xếp"
               >
                 <ArrowUpDown className="w-4 h-4" />
@@ -699,7 +700,7 @@ export default function AdminBookingDashboardPage() {
               <select
                 value={selectedMovieId}
                 onChange={(e) => setSelectedMovieId(e.target.value)}
-                className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200 outline-none"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-xs focus-ring text-zinc-100 outline-none"
               >
                 <option value="ALL">Tất cả phim</option>
                 {moviesList.map(m => (
@@ -1024,12 +1025,10 @@ export default function AdminBookingDashboardPage() {
                       {/* Booking Status / Payment Status */}
                       <td className="p-4">
                         <div className="flex flex-col gap-1 items-start">
-                          <span className={`text-[8.5px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${getStatusBadgeStyle(b.bookingStatus)}`}>
-                            {translateStatus(b.bookingStatus)}
-                          </span>
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                            b.paymentStatus === 'SUCCESS' ? 'text-emerald-500 bg-emerald-500/5' : 
-                            b.paymentStatus === 'PENDING' ? 'text-amber-500 bg-amber-500/5' : 'text-red-500 bg-red-500/5'
+                          <StatusBadge status={b.bookingStatus} label={translateStatus(b.bookingStatus)} />
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 ${
+                            b.paymentStatus === 'SUCCESS' ? 'text-emerald-500 bg-emerald-500/10' : 
+                            b.paymentStatus === 'PENDING' ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10'
                           }`}>
                             <CreditCard className="w-2.5 h-2.5" />
                             <span>{b.paymentStatus}</span>
@@ -1074,8 +1073,12 @@ export default function AdminBookingDashboardPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan="9" className="p-12 text-center text-zinc-500 italic">
-                    Không tìm thấy đơn hàng nào khớp với các bộ lọc tìm kiếm
+                  <td colSpan="9" className="p-8">
+                    <EmptyState 
+                      icon={ShoppingCart} 
+                      message="Không tìm thấy đơn hàng" 
+                      description="Không tìm thấy đơn hàng nào khớp với các bộ lọc tìm kiếm." 
+                    />
                   </td>
                 </tr>
               )}

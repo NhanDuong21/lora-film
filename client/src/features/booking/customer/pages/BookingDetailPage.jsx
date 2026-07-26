@@ -352,6 +352,55 @@ export default function BookingDetailPage() {
                         <span className="text-white font-extrabold print:text-black">
                           {showtimeDate ? showtimeDate.toLocaleDateString('vi-VN') : ''}
                         </span>
+                  </span>
+                  <span className="text-[10px] text-zinc-500 block">Vé giải phóng về sơ đồ ghế</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tickets and QR Section */}
+        {tickets.length > 0 && (
+          <div className="space-y-6">
+            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 print:hidden">THÔNG TIN VÉ XEM PHIM (TICKETS)</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {tickets.map(ticket => (
+                <div
+                  key={ticket.id}
+                  className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col sm:flex-row shadow-2xl relative print:bg-white print:text-black print:border-black print:shadow-none"
+                >
+                  <div className="hidden sm:block absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 print:hidden"></div>
+                  <div className="hidden sm:block absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 print:hidden"></div>
+
+                  <div className="flex-grow p-6 space-y-4 sm:border-r sm:border-dashed sm:border-zinc-800 print:border-black">
+                    <div className="space-y-1">
+                      <span className="text-[9px] bg-brand-orange/15 text-brand-orange border border-brand-orange/20 px-2 py-0.5 rounded font-black uppercase tracking-wider print:border-black">
+                        {ticket.movieFormat || '2D Digital'}
+                      </span>
+                      <h3 className="text-sm font-black text-white leading-snug pt-1 print:text-black">{ticket.movieTitle}</h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-[10px] text-zinc-400 print:text-black">
+                      <div>
+                        <span className="text-zinc-500 font-bold block">RẠP</span>
+                        <span className="text-white font-extrabold print:text-black">{ticket.cinemaName}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 font-bold block">PHÒNG</span>
+                        <span className="text-white font-extrabold print:text-black">{ticket.auditoriumName}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 font-bold block">SUẤT CHIẾU</span>
+                        <span className="text-brand-orange font-black print:text-black">
+                          {showtimeDate ? showtimeDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 font-bold block">NGÀY CHIẾU</span>
+                        <span className="text-white font-extrabold print:text-black">
+                          {showtimeDate ? showtimeDate.toLocaleDateString('vi-VN') : ''}
+                        </span>
                       </div>
                       <div>
                         <span className="text-zinc-500 font-bold block">GHẾ</span>
@@ -380,43 +429,47 @@ export default function BookingDetailPage() {
           </div>
         )}
 
-        {/* Invoice Summary */}
+        {/* Separate Food Order Section */}
+        {foodOrder && foodOrder.items && foodOrder.items.length > 0 && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 md:p-8 space-y-6 print:border-black print:bg-white print:text-black">
+            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 print:text-black">BẮP NƯỚC ĐI KÈM (F&B)</h2>
+            <div className="space-y-4 border-t border-zinc-800 pt-4 print:border-black">
+              {foodOrder.items.map(item => (
+                <div key={item.id} className="flex justify-between items-center bg-zinc-950/40 p-4 rounded-2xl border border-zinc-850 print:bg-white print:border-black">
+                  <div className="space-y-1">
+                    <span className="font-bold text-white text-sm print:text-black">{item.productName}</span>
+                    <p className="text-[10px] text-zinc-500">Số lượng: x{item.quantity} | Đơn giá: {formatCurrency(item.unitPrice)}</p>
+                  </div>
+                  <span className="text-white font-bold print:text-black">{formatCurrency(item.finalAmount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Price Breakdown / Invoice Summary */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 md:p-8 space-y-6 print:border-black print:bg-white print:text-black">
           <div className="border-b border-zinc-800 pb-4 flex justify-between items-center print:border-black">
-            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400">HÓA ĐƠN CHI TIẾT</h2>
+            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 print:text-black">CHI TIẾT THANH TOÁN (PRICE BREAKDOWN)</h2>
           </div>
 
           <div className="space-y-4">
             <div className="flex justify-between items-start text-xs border-b border-zinc-800 pb-4 border-dashed print:border-black">
-              <div className="space-y-1">
-                <span className="font-bold text-white print:text-black">Giá vé xem phim</span>
-                <p className="text-[10px] text-zinc-500">Giữ vị trí ghế trên sơ đồ phòng chiếu</p>
-              </div>
+              <span className="font-bold text-zinc-300 print:text-black">Tiền vé xem phim</span>
               <span className="text-white font-bold print:text-black">{formatCurrency(booking.ticketAmount)}</span>
             </div>
 
-            {/* Food items order summary details */}
             {foodOrder && foodOrder.items && foodOrder.items.length > 0 && (
               <div className="flex justify-between items-start text-xs border-b border-zinc-800 pb-4 border-dashed print:border-black">
-                <div className="space-y-1.5 flex-grow pr-6">
-                  <span className="font-bold text-white print:text-black">Bắp nước ăn kèm</span>
-                  <div className="space-y-1 text-[10px] text-zinc-500">
-                    {foodOrder.items.map(item => (
-                      <div key={item.id} className="flex justify-between">
-                        <span>{item.productName} (x{item.quantity})</span>
-                        <span>{formatCurrency(item.finalAmount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <span className="text-white font-bold print:text-black shrink-0">{formatCurrency(foodOrder.finalAmount)}</span>
+                <span className="font-bold text-zinc-300 print:text-black">Tiền bắp nước</span>
+                <span className="text-white font-bold print:text-black">{formatCurrency(foodOrder.finalAmount)}</span>
               </div>
             )}
 
             {/* Promo discount */}
             {booking.promotionDiscount > 0 && (
               <div className="flex justify-between items-start text-xs border-b border-zinc-800 pb-4 border-dashed print:border-black">
-                <span className="font-bold text-emerald-500">Mã giảm giá áp dụng</span>
+                <span className="font-bold text-emerald-500">Khuyến mãi & Giảm giá</span>
                 <span className="text-emerald-500 font-bold">-{formatCurrency(booking.promotionDiscount)}</span>
               </div>
             )}
@@ -434,11 +487,12 @@ export default function BookingDetailPage() {
             </div>
 
             {/* Total Cost */}
-            <div className="flex justify-between items-center py-4 px-6 bg-zinc-950/60 rounded-2xl border border-zinc-850 shadow-inner print:bg-white print:border-black">
+            <div className="flex justify-between items-center py-5 px-6 bg-zinc-950/80 rounded-2xl border border-brand-orange/30 shadow-[0_0_15px_rgba(255,122,0,0.1)] print:bg-white print:border-black print:shadow-none">
               <div>
-                <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Tổng số tiền thanh toán</span>
+                <span className="text-[10px] text-zinc-400 font-black uppercase tracking-wider block mb-0.5 print:text-zinc-600">Tổng số tiền thanh toán</span>
+                <span className="text-[9px] text-brand-orange/80 font-bold uppercase print:text-black">Đã bao gồm VAT</span>
               </div>
-              <span className="text-xl md:text-2xl font-black text-brand-orange">
+              <span className="text-2xl md:text-3xl font-black text-brand-orange print:text-black">
                 {formatCurrency(booking.finalAmount)}
               </span>
             </div>
