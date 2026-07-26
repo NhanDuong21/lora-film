@@ -12,6 +12,9 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 	Optional<RefreshToken> findByToken(String token);
 
 	void deleteByAccountId(Long accountId);
+	
+	@Query("SELECT r FROM RefreshToken r WHERE r.account.id = :accountId AND r.isRevoked = false")
+	List<RefreshToken> findActiveTokensByAccountId(@Param("accountId") Long accountId);
 
 	/**
 	 * Finds all active (non-revoked) refresh tokens for a given account that were
