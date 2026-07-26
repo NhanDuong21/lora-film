@@ -121,6 +121,7 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
                     defaultZero(pricing.totalAmount),
                     pricing.currency,
                     movie.title,
+                    movie.posterUrl,
                     cinema.name,
                     auditorium.name,
                     seatContexts);
@@ -139,6 +140,7 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
     private static class ResourcePayload {
         public Long id;
         public String title;
+        public String posterUrl;
         public String name;
     }
 

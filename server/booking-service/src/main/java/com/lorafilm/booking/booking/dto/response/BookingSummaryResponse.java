@@ -12,9 +12,14 @@ public record BookingSummaryResponse(
         String publicId,
         String bookingCode,
         Long showtimeId,
+        String showtimePublicId,
         BookingStatus status,
+        BigDecimal ticketAmount,
+        BigDecimal foodAmount,
         BigDecimal totalAmount,
         String currency,
         Instant expiredAt,
-        Instant createdAt) {
+        Instant createdAt,
+        BookingPresentationResponse presentation,
+        BookingFoodResponse food) {
 }

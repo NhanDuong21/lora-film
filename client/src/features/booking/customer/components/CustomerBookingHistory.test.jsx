@@ -15,9 +15,27 @@ const bookingPage = {
       publicId: '11111111-1111-4111-8111-111111111111',
       bookingCode: 'BK-ACTIVE',
       status: 'PENDING_PAYMENT',
+      ticketAmount: 170000,
+      foodAmount: 25000,
       totalAmount: 195000,
       expiredAt: '2099-07-26T12:05:00Z',
-      createdAt: '2026-07-26T12:00:00Z'
+      createdAt: '2026-07-26T12:00:00Z',
+      presentation: {
+        movieTitle: 'Mưa đỏ',
+        moviePosterUrl: 'https://cdn.lorafilm.test/mua-do.jpg',
+        cinemaName: 'LoraFilm Sense City Cần Thơ',
+        auditoriumName: 'Phòng 3',
+        showtimeStart: '2099-07-26T13:00:00Z',
+        seats: [
+          { seatPublicId: 'seat-a1', label: 'A1', type: 'STANDARD', price: 85000 },
+          { seatPublicId: 'seat-a2', label: 'A2', type: 'STANDARD', price: 85000 }
+        ]
+      },
+      food: {
+        totalQuantity: 1,
+        totalAmount: 25000,
+        items: [{ name: 'Bắp rang', quantity: 1, unitPrice: 25000, totalAmount: 25000 }]
+      }
     },
     {
       publicId: '22222222-2222-4222-8222-222222222222',
@@ -66,6 +84,12 @@ describe('CustomerBookingHistory pending recovery actions', () => {
     );
     expect(screen.getAllByRole('button', { name: /hủy giữ ghế/i })).toHaveLength(1);
     expect(screen.getByText(/thời gian giữ ghế đã kết thúc/i)).toBeInTheDocument();
+    expect(screen.getByText('Mưa đỏ')).toBeInTheDocument();
+    expect(screen.getByText(/LoraFilm Sense City Cần Thơ · Phòng 3/)).toBeInTheDocument();
+    expect(screen.getByText('A1, A2')).toBeInTheDocument();
+    expect(screen.getByText('Bắp rang x1')).toBeInTheDocument();
+    expect(screen.getByText('170.000đ')).toBeInTheDocument();
+    expect(screen.getByText('25.000đ')).toBeInTheDocument();
   });
 
   it('cancels the active hold and refreshes the history', async () => {

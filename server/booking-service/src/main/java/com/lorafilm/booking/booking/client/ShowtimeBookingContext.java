@@ -20,6 +20,7 @@ public record ShowtimeBookingContext(
         BigDecimal totalAmount,
         String currency,
         String movieTitle,
+        String moviePosterUrl,
         String cinemaName,
         String auditoriumName,
         List<SeatContext> seats) {

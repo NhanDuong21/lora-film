@@ -21,7 +21,7 @@ export default function CustomerBookingHistory() {
   // New features: Date range and sorting
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [sortField, setSortField] = useState('createdAt'); // 'createdAt', 'finalAmount'
+  const [sortField, setSortField] = useState('createdAt'); // 'createdAt', 'totalAmount'
   const [sortDirection, setSortDirection] = useState('desc'); // 'asc', 'desc'
 
   const [bookingPage, setBookingPage] = useState(null);
@@ -125,7 +125,9 @@ export default function CustomerBookingHistory() {
     if (!searchQuery) return list;
     return list.filter(b =>
       (b.bookingCode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (b.movieTitle || '').toLowerCase().includes(searchQuery.toLowerCase())
+      (b.movieTitle || b.presentation?.movieTitle || b.snapshot?.movieTitle || '')
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase())
     );
   }, [bookingPage, searchQuery]);
 
@@ -202,7 +204,7 @@ export default function CustomerBookingHistory() {
               className="bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-brand-orange"
             >
               <option value="createdAt">Ngày đặt (Mới - Cũ)</option>
-              <option value="finalAmount">Giá trị đơn hàng</option>
+              <option value="totalAmount">Giá trị đơn hàng</option>
             </select>
             <button
               type="button"
@@ -242,6 +244,21 @@ export default function CustomerBookingHistory() {
               const recovery = getBookingRecoveryState(b, nowMs);
               const displayStatus = recovery.isExpiredPending ? 'EXPIRED' : bookingStatus;
               const amount = b.finalAmount ?? b.totalAmount ?? 0;
+              const presentation = b.presentation || b.snapshot || {};
+              const movieTitle = b.movieTitle || presentation.movieTitle;
+              const posterUrl = b.posterUrl
+                || presentation.moviePosterUrl
+                || presentation.moviePoster;
+              const cinemaName = b.cinemaName || presentation.cinemaName;
+              const auditoriumName = b.auditoriumName || presentation.auditoriumName;
+              const showtimeStart = b.showtimeStart || presentation.showtimeStart;
+              const seatNames = b.seatLabel
+                || b.seatNames
+                || presentation.seats?.map(seat => seat.label).filter(Boolean).join(', ');
+              const food = b.food || b.foodOrder;
+              const foodNames = b.foodNames
+                || food?.items?.map(item =>
+                  `${item.name || item.productName} x${item.quantity}`).join(', ');
 
               return (
                 <div
@@ -250,11 +267,17 @@ export default function CustomerBookingHistory() {
                 >
                   <div className="flex flex-col sm:flex-row gap-4">
                     {/* Poster Placeholder */}
-                    <div className="w-full sm:w-24 h-32 sm:h-auto bg-zinc-800 rounded-xl overflow-hidden shrink-0 flex items-center justify-center border border-zinc-750">
-                      {b.posterUrl ? (
-                        <img src={b.posterUrl} alt={b.movieTitle} className="w-full h-full object-cover" />
-                      ) : (
-                        <Film className="w-8 h-8 text-zinc-600" />
+                    <div className="relative w-full sm:w-24 h-32 sm:h-auto bg-zinc-800 rounded-xl overflow-hidden shrink-0 flex items-center justify-center border border-zinc-750">
+                      <Film className="w-8 h-8 text-zinc-600" />
+                      {posterUrl && (
+                        <img
+                          src={posterUrl}
+                          alt={`Poster ${movieTitle || 'phim'}`}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onError={event => {
+                            event.currentTarget.style.display = 'none';
+                          }}
+                        />
                       )}
                     </div>
                     
@@ -264,7 +287,9 @@ export default function CustomerBookingHistory() {
                           <span className="text-xs text-brand-orange font-black tracking-wider uppercase">
                             {b.bookingCode}
                           </span>
-                          <h3 className="text-sm font-black text-white line-clamp-2 leading-snug mt-1">{b.movieTitle || 'Đơn đặt vé'}</h3>
+                          <h3 className="text-sm font-black text-white line-clamp-2 leading-snug mt-1">
+                            {movieTitle || 'Thông tin phim đang được cập nhật'}
+                          </h3>
                         </div>
                         <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap ${getStatusBadgeStyle(displayStatus)}`}>
                           {translateStatus(displayStatus)}
@@ -274,24 +299,26 @@ export default function CustomerBookingHistory() {
                       <div className="flex flex-col gap-1 text-[10px] text-zinc-400 font-semibold">
                         <div className="flex items-center gap-1.5">
                           <span className="text-zinc-500 w-16">Rạp:</span>
-                          <span className="text-zinc-300">{b.cinemaName} - {b.auditoriumName}</span>
+                          <span className="text-zinc-300">
+                            {[cinemaName, auditoriumName].filter(Boolean).join(' · ') || 'Chưa có thông tin'}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-zinc-500 w-16">Suất chiếu:</span>
                           <span className="text-zinc-300">
-                            {b.showtimeStart ? new Date(b.showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''} 
-                            {' • '} 
-                            {b.showtimeStart ? new Date(b.showtimeStart).toLocaleDateString('vi-VN') : ''}
+                            {showtimeStart
+                              ? `${new Date(showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} · ${new Date(showtimeStart).toLocaleDateString('vi-VN')}`
+                              : 'Chưa có thông tin'}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-zinc-500 w-16">Ghế:</span>
-                          <span className="text-zinc-300">{b.seatLabel || b.seatNames || 'N/A'}</span>
+                          <span className="text-zinc-300">{seatNames || 'Chưa có thông tin'}</span>
                         </div>
-                        {(b.foodNames || b.foodAmount > 0) && (
+                        {(foodNames || b.foodAmount > 0) && (
                           <div className="flex items-center gap-1.5">
                             <span className="text-zinc-500 w-16">Bắp nước:</span>
-                            <span className="text-zinc-300 line-clamp-1">{b.foodNames || 'Đã đặt bắp nước'}</span>
+                            <span className="text-zinc-300 line-clamp-1">{foodNames || 'Đã đặt bắp nước'}</span>
                           </div>
                         )}
                       </div>

@@ -5,9 +5,11 @@ import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
+import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
+import com.lorafilm.booking.booking.entity.BookingSnapshot;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
@@ -182,7 +184,7 @@ class BookingServiceTest {
                 context.auditoriumId(), context.status(), context.startsAt(), context.endsAt(),
                 context.paymentExpiresAt(), context.ticketAmount(), context.serviceFee(),
                 context.discountAmount(), context.totalAmount(), context.currency(), context.movieTitle(),
-                context.cinemaName(), context.auditoriumName(),
+                context.moviePosterUrl(), context.cinemaName(), context.auditoriumName(),
                 List.of(
                         context.seats().get(0),
                         new ShowtimeBookingContext.SeatContext(
@@ -197,6 +199,54 @@ class BookingServiceTest {
 
         verify(bookingRepository, never()).saveAndFlush(any());
         verify(priceSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldReturnCustomerPresentationFromImmutableSnapshots() throws Exception {
+        Instant now = Instant.now();
+        Booking booking = existingBooking(now.plusSeconds(900));
+        booking.setId(100L);
+        booking.setCreatedAt(now);
+
+        BookingSnapshot displaySnapshot = new BookingSnapshot();
+        displaySnapshot.setMovieTitle("Superman");
+        displaySnapshot.setMoviePoster("https://cdn.lorafilm.test/superman-poster.jpg");
+        displaySnapshot.setCinemaName("Lora Cinema");
+        displaySnapshot.setAuditoriumName("Phòng 1");
+        displaySnapshot.setShowtimeStart(now.plusSeconds(1800));
+
+        ShowtimeBookingContext context = showtimeContext(now);
+        BookingPriceSnapshotPayload pricePayload = new BookingPriceSnapshotPayload(
+                context.showtimeId(),
+                context.showtimePublicId(),
+                now,
+                context.currency(),
+                context.movieId(),
+                context.movieTitle(),
+                context.ticketAmount(),
+                context.seats().stream()
+                        .map(seat -> new BookingPriceSnapshotPayload.SeatPriceLine(
+                                seat.seatId(), seat.seatLabel(), seat.seatType(),
+                                seat.price(), seat.seatPublicId()))
+                        .toList());
+        BookingPriceSnapshot priceSnapshot = new BookingPriceSnapshot();
+        priceSnapshot.setPricingBreakdownJson(objectMapper.writeValueAsString(pricePayload));
+
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(bookingRepository.findByPublicId(booking.getPublicId())).thenReturn(Optional.of(booking));
+        when(bookingSnapshotRepository.findByBookingId(100L)).thenReturn(Optional.of(displaySnapshot));
+        when(priceSnapshotRepository.findByBookingId(100L)).thenReturn(Optional.of(priceSnapshot));
+
+        BookingDetailResponse response = bookingService.findById(booking.getPublicId());
+
+        assertEquals("Superman", response.presentation().movieTitle());
+        assertEquals("https://cdn.lorafilm.test/superman-poster.jpg",
+                response.presentation().moviePosterUrl());
+        assertEquals(List.of("A01", "A02"), response.presentation().seats().stream()
+                .map(seat -> seat.label())
+                .toList());
+        assertEquals(new BigDecimal("240000"), response.ticketAmount());
+        assertEquals(BigDecimal.ZERO, response.food().totalAmount());
     }
 
     @Test
@@ -294,6 +344,7 @@ class BookingServiceTest {
                 new BigDecimal("240000"),
                 "VND",
                 "Superman",
+                "https://cdn.lorafilm.test/superman-poster.jpg",
                 "Lora Cinema",
                 "Room 1",
                 List.of(

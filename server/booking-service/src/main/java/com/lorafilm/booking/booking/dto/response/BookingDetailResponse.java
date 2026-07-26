@@ -39,5 +39,7 @@ public record BookingDetailResponse(
         String cancelReasonDetail,
         String note,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        BookingPresentationResponse presentation,
+        BookingFoodResponse food) {
 }

@@ -10,10 +10,13 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.lorafilm.movie.common.enums.ActionStatus;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import com.lorafilm.movie.seat.service.SeatService;
@@ -40,17 +43,20 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
     private final ShowtimeRepository showtimeRepository;
     private final ShowtimePriceRepository showtimePriceRepository;
     private final ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository;
+    private final MovieMediaRepository movieMediaRepository;
     private final SeatService seatService;
     private final ShowtimeMapper showtimeMapper;
 
     public ShowtimeBookingContextServiceImpl(ShowtimeRepository showtimeRepository,
                                ShowtimePriceRepository showtimePriceRepository,
                                ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository,
+                               MovieMediaRepository movieMediaRepository,
                                SeatService seatService,
                                ShowtimeMapper showtimeMapper) {
         this.showtimeRepository = showtimeRepository;
         this.showtimePriceRepository = showtimePriceRepository;
         this.showtimeBlockedSeatRepository = showtimeBlockedSeatRepository;
+        this.movieMediaRepository = movieMediaRepository;
         this.seatService = seatService;
         this.showtimeMapper = showtimeMapper;
     }
@@ -147,6 +153,9 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         movieDto.setPublicId(showtime.getMovie().getPublicId());
         movieDto.setSlug(showtime.getMovie().getSlug());
         movieDto.setTitle(showtime.getMovie().getTitle());
+        movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                        showtime.getMovie().getId(), MovieMediaType.POSTER, ActiveStatus.ACTIVE)
+                .ifPresent(media -> movieDto.setPosterUrl(media.getUrl()));
         response.setMovie(movieDto);
 
         ShowtimeMovieVersionDto versionDto = new ShowtimeMovieVersionDto();

@@ -97,7 +97,10 @@ public class BookingMapper {
                 booking.getCreatedAt());
     }
 
-    public com.lorafilm.booking.booking.dto.response.BookingSummaryResponse toSummaryResponse(Booking booking) {
+    public com.lorafilm.booking.booking.dto.response.BookingSummaryResponse toSummaryResponse(
+            Booking booking,
+            com.lorafilm.booking.booking.dto.response.BookingPresentationResponse presentation,
+            com.lorafilm.booking.booking.dto.response.BookingFoodResponse food) {
         if (booking == null) {
             return null;
         }
@@ -105,14 +108,22 @@ public class BookingMapper {
                 booking.getPublicId(),
                 booking.getBookingCode(),
                 booking.getShowtimeId(),
+                booking.getShowtimePublicId(),
                 booking.getBookingStatus(),
+                booking.getTicketAmount(),
+                booking.getFoodAmount(),
                 booking.getFinalAmount(),
                 booking.getCurrency(),
                 booking.getExpiresAt(),
-                booking.getCreatedAt());
+                booking.getCreatedAt(),
+                presentation,
+                food);
     }
 
-    public com.lorafilm.booking.booking.dto.response.BookingDetailResponse toDetailResponse(Booking booking) {
+    public com.lorafilm.booking.booking.dto.response.BookingDetailResponse toDetailResponse(
+            Booking booking,
+            com.lorafilm.booking.booking.dto.response.BookingPresentationResponse presentation,
+            com.lorafilm.booking.booking.dto.response.BookingFoodResponse food) {
         if (booking == null) {
             return null;
         }
@@ -146,6 +157,8 @@ public class BookingMapper {
                 booking.getCancelReasonDetail(),
                 booking.getNote(),
                 booking.getCreatedAt(),
-                booking.getUpdatedAt());
+                booking.getUpdatedAt(),
+                presentation,
+                food);
     }
 }

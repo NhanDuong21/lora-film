@@ -8,6 +8,30 @@ const emitBookingChanged = detail => {
   }
 };
 
+const normalizeCustomerBooking = booking => {
+  if (!booking) return booking;
+  const presentation = booking.presentation || booking.snapshot || {};
+  const seats = Array.isArray(presentation.seats) ? presentation.seats : [];
+  const food = booking.food || booking.foodOrder || null;
+  const foodItems = Array.isArray(food?.items) ? food.items : [];
+
+  return {
+    ...booking,
+    snapshot: presentation,
+    foodOrder: food,
+    movieTitle: presentation.movieTitle,
+    posterUrl: presentation.moviePosterUrl || presentation.moviePoster,
+    cinemaName: presentation.cinemaName,
+    auditoriumName: presentation.auditoriumName,
+    showtimeStart: presentation.showtimeStart,
+    showtimeEnd: presentation.showtimeEnd,
+    seatNames: seats.map(seat => seat.label).filter(Boolean).join(', '),
+    foodNames: foodItems
+      .map(item => `${item.name || item.productName} x${item.quantity}`)
+      .join(', ')
+  };
+};
+
 const uuidv4 = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -55,7 +79,7 @@ export const finalizeCheckout = async (bookingId) => {
  */
 export const getBookingDetails = async (bookingId) => {
   const response = await apiClient.get(`/api/bookings/${bookingId}`);
-  return response.data.data;
+  return normalizeCustomerBooking(response.data.data);
 };
 
 /**
@@ -65,7 +89,7 @@ export const getBookingDetails = async (bookingId) => {
  */
 export const getBookingByCode = async (bookingCode) => {
   const response = await apiClient.get(`/api/bookings/code/${bookingCode}`);
-  return response.data.data;
+  return normalizeCustomerBooking(response.data.data);
 };
 
 /**
@@ -92,11 +116,15 @@ export const getBookingTickets = async (bookingId) => {
 export const getBookingHistory = async ({ page = 0, size = 10, status, fromDate, toDate, sort = "createdAt,desc" }) => {
   const params = { page, size, sort };
   if (status) params.status = status;
-  if (fromDate) params.fromDate = fromDate;
-  if (toDate) params.toDate = toDate;
+  if (fromDate) params.fromDate = new Date(`${fromDate}T00:00:00`).toISOString();
+  if (toDate) params.toDate = new Date(`${toDate}T23:59:59.999`).toISOString();
 
   const response = await apiClient.get("/api/bookings", { params });
-  return response.data.data;
+  const responsePage = response.data.data;
+  return {
+    ...responsePage,
+    content: (responsePage?.content || []).map(normalizeCustomerBooking)
+  };
 };
 
 /**

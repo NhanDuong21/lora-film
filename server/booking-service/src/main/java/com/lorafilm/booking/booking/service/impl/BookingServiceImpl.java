@@ -8,6 +8,8 @@ import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
+import com.lorafilm.booking.booking.dto.response.BookingFoodResponse;
+import com.lorafilm.booking.booking.dto.response.BookingPresentationResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
 import com.lorafilm.booking.booking.entity.Booking;
@@ -266,6 +268,7 @@ public class BookingServiceImpl implements BookingService {
         CreateSnapshotRequest snapshotRequest = new CreateSnapshotRequest();
         snapshotRequest.setMovieId(context.movieId());
         snapshotRequest.setMovieTitle(context.movieTitle());
+        snapshotRequest.setMoviePoster(context.moviePosterUrl());
         snapshotRequest.setShowtimeId(context.showtimeId());
         snapshotRequest.setShowtimeStart(context.startsAt());
         snapshotRequest.setShowtimeEnd(context.endsAt());
@@ -413,6 +416,7 @@ public class BookingServiceImpl implements BookingService {
         CreateSnapshotRequest snapshotRequest = new CreateSnapshotRequest();
         snapshotRequest.setMovieId(context.movieId());
         snapshotRequest.setMovieTitle(context.movieTitle());
+        snapshotRequest.setMoviePoster(context.moviePosterUrl());
         snapshotRequest.setShowtimeId(context.showtimeId());
         snapshotRequest.setShowtimeStart(context.startsAt());
         snapshotRequest.setShowtimeEnd(context.endsAt());
@@ -510,7 +514,7 @@ public class BookingServiceImpl implements BookingService {
         MDC.put("bookingId", publicId);
         Booking booking = getBooking(publicId);
         requireOwnerOrAdmin(booking, currentUserId);
-        return bookingMapper.toDetailResponse(booking);
+        return toCustomerDetailResponse(booking);
     }
 
     @Override
@@ -521,7 +525,7 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new BookingNotFoundException(bookingCode));
         MDC.put("bookingId", booking.getPublicId());
         requireOwnerOrAdmin(booking, currentUserId);
-        return bookingMapper.toDetailResponse(booking);
+        return toCustomerDetailResponse(booking);
     }
 
     @Override
@@ -532,7 +536,7 @@ public class BookingServiceImpl implements BookingService {
         }
         validateDateRange(fromDate, toDate);
         return bookingRepository.findAll(buildSpecification(null, status, fromDate, toDate), pageable)
-                .map(bookingMapper::toSummaryResponse);
+                .map(this::toCustomerSummaryResponse);
     }
 
     @Override
@@ -544,7 +548,91 @@ public class BookingServiceImpl implements BookingService {
         }
         validateDateRange(fromDate, toDate);
         return bookingRepository.findAll(buildSpecification(userId, status, fromDate, toDate), pageable)
-                .map(bookingMapper::toSummaryResponse);
+                .map(this::toCustomerSummaryResponse);
+    }
+
+    private BookingSummaryResponse toCustomerSummaryResponse(Booking booking) {
+        return bookingMapper.toSummaryResponse(
+                booking,
+                buildPresentation(booking),
+                buildFoodPresentation(booking));
+    }
+
+    private BookingDetailResponse toCustomerDetailResponse(Booking booking) {
+        return bookingMapper.toDetailResponse(
+                booking,
+                buildPresentation(booking),
+                buildFoodPresentation(booking));
+    }
+
+    private BookingPresentationResponse buildPresentation(Booking booking) {
+        Optional<BookingSnapshot> displaySnapshot = bookingSnapshotRepository.findByBookingId(booking.getId());
+        List<BookingPresentationResponse.SeatLine> seats = readSeatPriceLines(booking.getId());
+
+        if (seats.isEmpty()) {
+            seats = reservationRepository.findAllByBookingId(booking.getId()).stream()
+                    .map(reservation -> new BookingPresentationResponse.SeatLine(
+                            reservation.getSeatPublicId(),
+                            reservation.getSeatLabel(),
+                            reservation.getSeatType(),
+                            null))
+                    .toList();
+        }
+
+        BookingSnapshot snapshot = displaySnapshot.orElse(null);
+        return new BookingPresentationResponse(
+                snapshot == null ? null : snapshot.getMovieTitle(),
+                snapshot == null ? null : snapshot.getMoviePoster(),
+                snapshot == null ? null : snapshot.getShowtimeStart(),
+                snapshot == null ? null : snapshot.getShowtimeEnd(),
+                snapshot == null ? null : snapshot.getCinemaName(),
+                snapshot == null ? null : snapshot.getAuditoriumName(),
+                seats);
+    }
+
+    private List<BookingPresentationResponse.SeatLine> readSeatPriceLines(Long bookingId) {
+        return priceSnapshotRepository.findByBookingId(bookingId)
+                .map(BookingPriceSnapshot::getPricingBreakdownJson)
+                .filter(json -> json != null && !json.isBlank())
+                .map(json -> {
+                    try {
+                        BookingPriceSnapshotPayload payload = objectMapper.readValue(
+                                json, BookingPriceSnapshotPayload.class);
+                        if (payload.seats() == null) {
+                            return List.<BookingPresentationResponse.SeatLine>of();
+                        }
+                        return payload.seats().stream()
+                                .map(seat -> new BookingPresentationResponse.SeatLine(
+                                        seat.seatPublicId(),
+                                        seat.seatLabel(),
+                                        seat.seatType(),
+                                        seat.unitPrice()))
+                                .toList();
+                    } catch (JsonProcessingException exception) {
+                        log.warn("Cannot read price snapshot for bookingId={}", bookingId, exception);
+                        return List.<BookingPresentationResponse.SeatLine>of();
+                    }
+                })
+                .orElseGet(List::of);
+    }
+
+    private BookingFoodResponse buildFoodPresentation(Booking booking) {
+        if (booking.getFoodOrder() == null) {
+            return new BookingFoodResponse(0, BigDecimal.ZERO, List.of());
+        }
+        var foodOrder = booking.getFoodOrder();
+        List<BookingFoodResponse.Item> items = foodOrder.getItems().stream()
+                .map(item -> new BookingFoodResponse.Item(
+                        item.getProductName(),
+                        item.getProductImage(),
+                        item.getQuantity(),
+                        item.getUnitPrice(),
+                        item.getFinalAmount()))
+                .toList();
+        return new BookingFoodResponse(
+                foodOrder.getTotalQuantity(),
+                foodOrder.getFinalAmount(),
+                items);
     }
 
     @Override
