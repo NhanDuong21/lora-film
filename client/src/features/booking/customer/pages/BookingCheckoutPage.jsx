@@ -225,13 +225,13 @@ export default function BookingCheckoutPage() {
     }
   };
 
-  const handleCancelBooking = async reason => {
+  const handleCancelBooking = async () => {
     setCancelling(true);
     setCancelError('');
     try {
       await cancelBooking(
         bookingId,
-        reason || 'Khách hàng chủ động hủy đặt chỗ tại checkout'
+        'Khách hàng chủ động hủy đặt chỗ tại checkout'
       );
       setCancelModalOpen(false);
       navigate('/movies');

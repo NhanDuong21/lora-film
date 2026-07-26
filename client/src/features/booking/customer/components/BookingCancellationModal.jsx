@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { AlertTriangle, LoaderCircle, TicketX, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
@@ -9,7 +9,6 @@ export default function BookingCancellationModal({
   onClose,
   onConfirm
 }) {
-  const [reason, setReason] = useState('');
   const keepButtonRef = useRef(null);
 
   useEffect(() => {
@@ -30,7 +29,7 @@ export default function BookingCancellationModal({
 
   const handleSubmit = event => {
     event.preventDefault();
-    if (!pending) onConfirm(reason.trim());
+    if (!pending) onConfirm();
   };
 
   return createPortal(
@@ -73,7 +72,7 @@ export default function BookingCancellationModal({
             </button>
           </div>
 
-          <div className="space-y-5 px-6 py-5">
+          <div className="px-6 py-5">
             <div
               id="booking-cancel-description"
               className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4"
@@ -93,28 +92,10 @@ export default function BookingCancellationModal({
               </div>
             </div>
 
-            <label className="block">
-              <span className="text-xs font-black uppercase tracking-wider text-zinc-400">
-                Lý do hủy <span className="font-medium normal-case text-zinc-600">(không bắt buộc)</span>
-              </span>
-              <textarea
-                value={reason}
-                disabled={pending}
-                maxLength={255}
-                rows={3}
-                onChange={event => setReason(event.target.value)}
-                placeholder="Ví dụ: Tôi muốn chọn lại suất chiếu khác"
-                className="mt-2 w-full resize-none rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-red-400 disabled:opacity-60"
-              />
-              <span className="mt-1 block text-right text-[10px] text-zinc-600">
-                {reason.length}/255
-              </span>
-            </label>
-
             {error && (
               <div
                 role="alert"
-                className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300"
+                className="mt-5 rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300"
               >
                 {error}
               </div>

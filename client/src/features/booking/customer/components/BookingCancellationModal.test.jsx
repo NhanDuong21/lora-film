@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import BookingCancellationModal from './BookingCancellationModal';
 
 describe('BookingCancellationModal', () => {
-  it('explains the consequences and submits the optional reason', () => {
+  it('explains the consequences and confirms without requesting a reason', () => {
     const onConfirm = vi.fn();
     render(
       <BookingCancellationModal
@@ -16,12 +16,10 @@ describe('BookingCancellationModal', () => {
     expect(screen.getByRole('dialog', { name: 'Xác nhận hủy giữ ghế' }))
       .toHaveAttribute('aria-modal', 'true');
     expect(screen.getByText(/ghế sẽ được trả lại ngay/i)).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText(/chọn lại suất chiếu khác/i), {
-      target: { value: 'Đổi suất chiếu' }
-    });
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy' }));
 
-    expect(onConfirm).toHaveBeenCalledWith('Đổi suất chiếu');
+    expect(onConfirm).toHaveBeenCalledWith();
   });
 
   it('renders API errors and locks dismissal while processing', () => {

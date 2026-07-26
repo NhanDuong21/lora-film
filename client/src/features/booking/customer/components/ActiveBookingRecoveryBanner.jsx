@@ -74,7 +74,7 @@ export default function ActiveBookingRecoveryBanner() {
       left.recovery.deadlineMs - right.recovery.deadlineMs)[0] || null,
   [nowMs, pendingBookings]);
 
-  const handleCancel = async reason => {
+  const handleCancel = async () => {
     if (!activeRecovery || cancelling) return;
 
     const publicId = activeRecovery.booking.publicId || activeRecovery.booking.id;
@@ -83,7 +83,7 @@ export default function ActiveBookingRecoveryBanner() {
     try {
       await cancelBooking(
         publicId,
-        reason || 'Khách hàng chủ động hủy giữ ghế từ thẻ khôi phục'
+        'Khách hàng chủ động hủy giữ ghế từ thẻ khôi phục'
       );
       setCancelModalOpen(false);
       setPendingBookings(current =>

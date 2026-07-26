@@ -67,11 +67,11 @@ export default function BookingDetailPage() {
     return () => clearInterval(interval);
   }, [booking]);
 
-  const handleCancel = async reason => {
+  const handleCancel = async () => {
     setCancelling(true);
     setCancelError('');
     try {
-      await cancelBooking(bookingId, reason || "Khách hàng chủ động hủy");
+      await cancelBooking(bookingId, "Khách hàng chủ động hủy");
       // Refresh details
       const freshData = await getBookingDetails(bookingId);
       setBooking(prev => ({

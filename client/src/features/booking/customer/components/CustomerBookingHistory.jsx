@@ -64,7 +64,7 @@ export default function CustomerBookingHistory() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const handleCancelHold = async reason => {
+  const handleCancelHold = async () => {
     const publicId = cancelTarget?.publicId || cancelTarget?.id;
     if (!publicId || cancellingBookingId) return;
 
@@ -73,7 +73,7 @@ export default function CustomerBookingHistory() {
     try {
       await cancelBooking(
         publicId,
-        reason || 'Khách hàng chủ động hủy giữ ghế từ lịch sử đặt vé'
+        'Khách hàng chủ động hủy giữ ghế từ lịch sử đặt vé'
       );
       await fetchHistory();
       setCancelTarget(null);

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BookingCheckoutPage from './BookingCheckoutPage';
@@ -65,19 +65,19 @@ describe('BookingCheckoutPage cancellation', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: /hủy giao dịch/i }));
-    expect(screen.getByRole('dialog', { name: /xác nhận hủy giữ ghế/i }))
-      .toBeInTheDocument();
+    const cancellationDialog = screen.getByRole('dialog', {
+      name: /xác nhận hủy giữ ghế/i
+    });
+    expect(cancellationDialog).toBeInTheDocument();
     expect(screen.getByText(/ghế sẽ được trả lại ngay/i)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText(/chọn lại suất chiếu khác/i), {
-      target: { value: 'Chọn nhầm suất chiếu' }
-    });
+    expect(within(cancellationDialog).queryByRole('textbox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy' }));
 
     await waitFor(() => {
       expect(cancelBooking).toHaveBeenCalledWith(
         '11111111-1111-4111-8111-111111111111',
-        'Chọn nhầm suất chiếu'
+        'Khách hàng chủ động hủy đặt chỗ tại checkout'
       );
     });
   });
