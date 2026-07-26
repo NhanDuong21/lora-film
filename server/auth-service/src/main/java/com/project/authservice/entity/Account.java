@@ -66,6 +66,10 @@ public class Account {
 	@Column(name = "updated_by")
 	private Long updatedBy;
 
+	@Builder.Default
+	@Column(name = "is_deleted", nullable = false)
+	private Boolean isDeleted = false;
+
 	@PrePersist
 	void prePersist() {
 		LocalDateTime now = LocalDateTime.now();
