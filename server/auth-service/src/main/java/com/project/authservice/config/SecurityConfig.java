@@ -26,7 +26,13 @@ public class SecurityConfig {
 	 * @throws Exception when security configuration fails
 	 */
 	@Bean
-	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	public SecurityFilterChain securityFilterChain(
+			HttpSecurity http, 
+			com.project.authservice.security.JwtAuthenticationFilter jwtAuthenticationFilter,
+			com.project.authservice.security.oauth2.CustomOAuth2UserService customOAuth2UserService,
+			com.project.authservice.security.oauth2.OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
+			com.project.authservice.security.oauth2.OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler
+	) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -38,7 +44,15 @@ public class SecurityConfig {
 				.httpBasic(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
 				.logout(AbstractHttpConfigurer::disable)
-				.cors(Customizer.withDefaults());
+				.cors(Customizer.withDefaults())
+				.oauth2Login(oauth2 -> oauth2
+						.userInfoEndpoint(userInfo -> userInfo
+								.userService(customOAuth2UserService)
+						)
+						.successHandler(oAuth2AuthenticationSuccessHandler)
+						.failureHandler(oAuth2AuthenticationFailureHandler)
+				)
+				.addFilterBefore(jwtAuthenticationFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
 		return http.build();
 	}
 
