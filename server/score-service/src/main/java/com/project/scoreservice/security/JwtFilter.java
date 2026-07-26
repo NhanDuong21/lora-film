@@ -41,33 +41,53 @@ public class JwtFilter extends OncePerRequestFilter {
  
             if (StringUtils.hasText(jwt) && jwtProvider.validateToken(jwt)) {
                 Claims claims = jwtProvider.getClaimsFromToken(jwt);
-                String role = claims.get("role", String.class);
                 
                 List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
-                if (role == null) {
-                    role = "ROLE_USER"; // default fallback
-                } else if (!role.startsWith("ROLE_")) {
-                    role = "ROLE_" + role;
+                
+                // [TEMP - TO BE REMOVED WHEN RBAC IS IMPLEMENTED]: Basic role extraction supporting single role or roles list
+                Object roleClaim = claims.get("role");
+                if (roleClaim != null && StringUtils.hasText(roleClaim.toString())) {
+                    String role = roleClaim.toString();
+                    String roleAuth = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+                    authorities.add(new SimpleGrantedAuthority(roleAuth));
+                    authorities.add(new SimpleGrantedAuthority(role)); // Add raw name as well for flexibility
                 }
-                authorities.add(new SimpleGrantedAuthority(role));
+                
+                Object rolesClaim = claims.get("roles");
+                if (rolesClaim instanceof List<?> list) {
+                    for (Object r : list) {
+                        if (r != null && StringUtils.hasText(r.toString())) {
+                            String roleStr = r.toString();
+                            String roleAuth = roleStr.startsWith("ROLE_") ? roleStr : "ROLE_" + roleStr;
+                            authorities.add(new SimpleGrantedAuthority(roleAuth));
+                            authorities.add(new SimpleGrantedAuthority(roleStr));
+                        }
+                    }
+                }
+                
+                if (authorities.isEmpty()) {
+                    authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                    authorities.add(new SimpleGrantedAuthority("USER"));
+                }
 
-                // Map roles to granular permissions
-                if ("ROLE_ADMIN".equalsIgnoreCase(role)) {
-                    authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
-                    authorities.add(new SimpleGrantedAuthority("SCORE_ADJUST"));
-                    authorities.add(new SimpleGrantedAuthority("SCORE_MANAGE"));
-                    authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_READ"));
-                    authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_MANAGE"));
-                } else if ("ROLE_SCORE_MANAGE".equalsIgnoreCase(role)) {
-                    authorities.add(new SimpleGrantedAuthority("SCORE_MANAGE"));
-                    authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
-                } else if ("ROLE_SCORE_ADJUST".equalsIgnoreCase(role)) {
-                    authorities.add(new SimpleGrantedAuthority("SCORE_ADJUST"));
-                    authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
-                } else if ("ROLE_MEMBERSHIP_TIER_MANAGE".equalsIgnoreCase(role)) {
-                    authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_MANAGE"));
-                    authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_READ"));
-                }
+                // [TODO - RE-ENABLE WHEN RBAC IS READY]: Map roles to granular permissions for Score Service
+                // String roleStr = claims.get("role", String.class);
+                // if ("ROLE_ADMIN".equalsIgnoreCase(roleStr)) {
+                //     authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
+                //     authorities.add(new SimpleGrantedAuthority("SCORE_ADJUST"));
+                //     authorities.add(new SimpleGrantedAuthority("SCORE_MANAGE"));
+                //     authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_READ"));
+                //     authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_MANAGE"));
+                // } else if ("ROLE_SCORE_MANAGE".equalsIgnoreCase(roleStr)) {
+                //     authorities.add(new SimpleGrantedAuthority("SCORE_MANAGE"));
+                //     authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
+                // } else if ("ROLE_SCORE_ADJUST".equalsIgnoreCase(roleStr)) {
+                //     authorities.add(new SimpleGrantedAuthority("SCORE_ADJUST"));
+                //     authorities.add(new SimpleGrantedAuthority("SCORE_READ"));
+                // } else if ("ROLE_MEMBERSHIP_TIER_MANAGE".equalsIgnoreCase(roleStr)) {
+                //     authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_MANAGE"));
+                //     authorities.add(new SimpleGrantedAuthority("MEMBERSHIP_TIER_READ"));
+                // }
  
                 Object userIdVal = claims.get("userId");
                 String principal = userIdVal != null ? userIdVal.toString() : claims.getSubject();

@@ -175,7 +175,7 @@ public class PaymentEventProcessor {
                     );
                     outboxService.createOutboxEvent("FoodOrder", savedBooking.getFoodOrder().getId(), "FOOD_ORDER_CONFIRMED", foodEvent);
                 }
-
+            }
 
             // Sync seat reservations status
             if (targetBookingStatus == BookingStatus.CANCELLED || targetBookingStatus == BookingStatus.EXPIRED) {

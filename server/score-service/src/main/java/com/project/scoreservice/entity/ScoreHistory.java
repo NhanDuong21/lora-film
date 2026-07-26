@@ -16,7 +16,7 @@ public class ScoreHistory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "transaction_uuid", nullable = false, length = 36)
+    @Column(name = "transaction_uuid", nullable = false, length = 36, columnDefinition = "CHAR(36)")
     private String transactionUuid;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -103,17 +103,17 @@ public class ScoreHistory {
     @Column(name = "approval_id")
     private Long approvalId;
 
-    @Column(name = "case_id", length = 80)
+    @Column(name = "case_id", length = 100)
     private String caseId;
 
-    @Column(name = "batch_id", length = 80)
+    @Column(name = "batch_id", length = 100)
     private String batchId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "reconciliation_status", nullable = false, length = 30)
     private ReconciliationStatus reconciliationStatus = ReconciliationStatus.NONE;
 
-    @Column(name = "metadata", columnDefinition = "TEXT")
+    @Column(name = "metadata", columnDefinition = "JSON")
     private String metadata;
 
     @Column(name = "occurred_at", nullable = false)
