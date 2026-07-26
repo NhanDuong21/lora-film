@@ -2,24 +2,19 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { 
   Search, SlidersHorizontal, Eye, RefreshCw, ShoppingCart, 
-  CheckCircle, XCircle, AlertCircle, Clock, Copy, FileDown, 
-  ArrowUpDown, User, Film, Building, CreditCard, Gift, History
+  XCircle, AlertCircle, Copy, FileDown, ArrowUpDown, User,
+  Film, Building, CreditCard
 } from 'lucide-react';
-import { getBookings, getBookingMonitoringSummary, updateBookingStatus } from '../services/adminBookingService';
+import { getBookings, updateBookingStatus } from '../services/adminBookingService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
-import { useAuth } from '@/contexts/AuthContext';
 import { parseApiError } from '@/utils/apiErrorHandler';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import { EmptyState, StatusBadge } from '@/components/common/ui/uiKit';
 
 export default function AdminBookingDashboardPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { triggerToast, triggerConfirm } = useOutletContext() || {};
-
-  // Check if current user is Admin
-  const isAdmin = user?.role === 'ADMIN';
 
   // API Filter States (Sent to Backend)
   const [bookingCode, setBookingCode] = useState('');
@@ -28,7 +23,7 @@ export default function AdminBookingDashboardPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(0);
-  const [size, setSize] = useState(10);
+  const size = 10;
 
   // Sorting
   const [sortField, setSortField] = useState('createdAt');
@@ -46,7 +41,6 @@ export default function AdminBookingDashboardPage() {
 
   // Data States
   const [bookingPage, setBookingPage] = useState(null);
-  const [monitoringSummary, setMonitoringSummary] = useState(null);
   const [moviesList, setMoviesList] = useState([]);
   const [cinemasList, setCinemasList] = useState([]);
   
@@ -59,7 +53,7 @@ export default function AdminBookingDashboardPage() {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Table Column Widths (Resize Mock state)
+  // Resizable table column widths
   const [colWidths, setColWidths] = useState({
     code: 120,
     customer: 100,
@@ -102,16 +96,6 @@ export default function AdminBookingDashboardPage() {
     }
   }, []);
 
-  // Fetch Summary stats
-  const fetchSummaryStats = useCallback(async () => {
-    try {
-      const summary = await getBookingMonitoringSummary();
-      setMonitoringSummary(summary);
-    } catch (err) {
-      console.warn("Could not fetch monitoring stats:", err);
-    }
-  }, []);
-
   // Fetch Bookings List
   const fetchBookingsList = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -140,13 +124,14 @@ export default function AdminBookingDashboardPage() {
   }, [page, size, bookingCode, userId, status, fromDate, toDate]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLookups();
   }, [fetchLookups]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBookingsList();
-    fetchSummaryStats();
-  }, [fetchBookingsList, fetchSummaryStats]);
+  }, [fetchBookingsList]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -229,13 +214,9 @@ export default function AdminBookingDashboardPage() {
     });
   }, [bookingPage, selectedMovieId, selectedCinemaId, minPrice, maxPrice, paymentStatusFilter, hasFoodFilter, hasPromotionFilter, sortField, sortDirection]);
 
-  // Aggregate stats from processed bookings list for cards
+  // Context cards reflect only the rows currently visible in this table.
   const aggregatedStats = useMemo(() => {
-    const list = bookingPage?.content || [];
-    let totalRev = 0;
-    let ticketRev = 0;
-    let foodRev = 0;
-    
+    const list = processedBookings;
     let pending = 0;
     let confirmed = 0;
     let completed = 0;
@@ -244,10 +225,6 @@ export default function AdminBookingDashboardPage() {
     let refunded = 0;
 
     list.forEach(b => {
-      totalRev += (b.finalAmount || 0);
-      ticketRev += (b.ticketAmount || 0);
-      foodRev += (b.foodAmount || 0);
-
       switch (b.bookingStatus) {
         case 'PENDING_PAYMENT': pending++; break;
         case 'CONFIRMED': confirmed++; break;
@@ -260,9 +237,6 @@ export default function AdminBookingDashboardPage() {
     });
 
     return {
-      totalRevenue: totalRev,
-      ticketRevenue: ticketRev,
-      foodRevenue: foodRev,
       pending,
       confirmed,
       completed,
@@ -271,35 +245,7 @@ export default function AdminBookingDashboardPage() {
       refunded,
       totalCount: list.length
     };
-  }, [bookingPage]);
-
-  // Generate Booking Trend Data for custom SVG curve (7 days back)
-  const trendPoints = useMemo(() => {
-    const list = bookingPage?.content || [];
-    const dateMap = {};
-    
-    // Seed last 7 days
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-      dateMap[dateStr] = 0;
-    }
-
-    list.forEach(b => {
-      const dateStr = new Date(b.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-      if (dateMap[dateStr] !== undefined) {
-        dateMap[dateStr]++;
-      }
-    });
-
-    return Object.keys(dateMap).map((date, index) => ({
-      x: (index * 80) + 40,
-      y: 150 - (dateMap[date] * 12), // scale booking count
-      label: date,
-      value: dateMap[date]
-    }));
-  }, [bookingPage]);
+  }, [processedBookings]);
 
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
@@ -320,7 +266,6 @@ export default function AdminBookingDashboardPage() {
       if (triggerToast) triggerToast(`Hủy đơn đặt vé ${bookingCode} thành công.`, 'success');
       else alert('Đã hủy đơn thành công');
       fetchBookingsList();
-      fetchSummaryStats();
     } catch (err) {
       const msg = parseApiError(err) || 'Không thể hủy đơn hàng';
       if (triggerToast) triggerToast(msg, 'error');
@@ -420,25 +365,6 @@ export default function AdminBookingDashboardPage() {
     }
   };
 
-  const getStatusBadgeStyle = (bStatus) => {
-    switch (bStatus) {
-      case 'CONFIRMED':
-        return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-      case 'COMPLETED':
-        return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
-      case 'PENDING_PAYMENT':
-        return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-      case 'CANCELLED':
-        return 'bg-red-500/10 text-red-400 border border-red-500/20';
-      case 'EXPIRED':
-        return 'bg-zinc-800 text-zinc-500 border border-zinc-700';
-      case 'REFUNDED':
-        return 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
-      default:
-        return 'bg-zinc-800 text-zinc-400';
-    }
-  };
-
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-[#ff7a1a] selection:text-zinc-950">
 
@@ -449,7 +375,7 @@ export default function AdminBookingDashboardPage() {
             QUẢN LÝ ĐƠN HÀNG ĐẶT VÉ
           </h1>
           <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
-            Hệ thống quản lý, giám sát giao dịch, bắp nước, kiểm toán và cập nhật trạng thái hóa đơn đặt chỗ
+            Tra cứu và xử lý dữ liệu Booking trực tiếp từ Booking Service
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -458,10 +384,10 @@ export default function AdminBookingDashboardPage() {
             className="bg-zinc-900 border border-zinc-850 hover:border-zinc-700 px-4 py-2 rounded-xl text-zinc-300 hover:text-white transition-all text-xs flex items-center gap-2 cursor-pointer font-bold"
           >
             <FileDown className="w-4 h-4 text-emerald-400" />
-            <span>Xuất báo cáo (CSV)</span>
+            <span>Xuất dữ liệu trang (CSV)</span>
           </button>
           <button
-            onClick={() => { fetchBookingsList(true); fetchSummaryStats(); }}
+            onClick={() => fetchBookingsList(true)}
             disabled={refreshing}
             className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-2.5 rounded-xl text-zinc-400 hover:text-white transition-all text-xs flex items-center gap-2 cursor-pointer"
           >
@@ -471,140 +397,35 @@ export default function AdminBookingDashboardPage() {
         </div>
       </div>
 
-      {/* Analytics Dashboard Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left 2 Columns: KPI Summaries & charts */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* KPI Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase block">Tổng đơn (Trang)</span>
-              <span className="text-xl font-black text-white mt-1">{aggregatedStats.totalCount}</span>
-              <span className="text-[9px] text-zinc-500 mt-1 block">Xác nhận: <span className="text-emerald-400 font-bold">{aggregatedStats.confirmed + aggregatedStats.completed}</span></span>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-400 font-bold uppercase block text-amber-500">Chờ thanh toán</span>
-              <span className="text-xl font-black text-amber-400 mt-1">{aggregatedStats.pending}</span>
-              <span className="text-[9px] text-zinc-500 mt-1 block">Hết hạn: <span className="text-zinc-400 font-bold">{aggregatedStats.expired}</span></span>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-400 font-bold uppercase block text-[#ff7a1a]">Doanh Thu (Trang)</span>
-              <span className="text-xl font-black text-[#ff7a1a] mt-1 truncate">{formatCurrency(aggregatedStats.totalRevenue)}</span>
-              <span className="text-[9px] text-zinc-500 mt-1 block">Bắp nước: <span className="text-amber-300 font-bold">{formatCurrency(aggregatedStats.foodRevenue)}</span></span>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-400 font-bold uppercase block text-red-500">Hủy / Hoàn Tiền</span>
-              <span className="text-xl font-black text-red-400 mt-1">{aggregatedStats.cancelled + aggregatedStats.refunded}</span>
-              <span className="text-[9px] text-zinc-500 mt-1 block">Hoàn: <span className="text-purple-400 font-bold">{aggregatedStats.refunded}</span></span>
-            </div>
-          </div>
-
-          {/* Booking Trend Custom SVG Curve Chart */}
-          <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-5 md:p-6 shadow-xl space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-white">Xu hướng Đặt Vé (Tuần này)</h3>
-                <p className="text-[9px] text-zinc-550 font-bold mt-0.5">Thống kê số lượng đơn hàng mới phát sinh theo ngày</p>
-              </div>
-              <span className="text-[9px] bg-[#ff7a1a]/10 border border-[#ff7a1a]/30 text-[#ff7a1a] font-bold px-2 py-0.5 rounded uppercase">Biểu đồ động</span>
-            </div>
-            <div className="w-full overflow-x-auto select-none pt-2">
-              <svg className="w-[600px] h-[180px] mx-auto overflow-visible">
-                {/* Grid Lines */}
-                <line x1="40" y1="30" x2="520" y2="30" stroke="#27272a" strokeDasharray="3" />
-                <line x1="40" y1="70" x2="520" y2="70" stroke="#27272a" strokeDasharray="3" />
-                <line x1="40" y1="110" x2="520" y2="110" stroke="#27272a" strokeDasharray="3" />
-                <line x1="40" y1="150" x2="520" y2="150" stroke="#3f3f46" strokeWidth="1.5" />
-
-                {/* Draw curve path */}
-                {trendPoints.length > 1 && (
-                  <path
-                    d={`M ${trendPoints.map(p => `${p.x} ${p.y}`).join(' L ')}`}
-                    fill="none"
-                    stroke="#ff7a1a"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                )}
-
-                {/* Connection points with popover values */}
-                {trendPoints.map((p, i) => (
-                  <g key={i} className="group cursor-pointer">
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r="5.5"
-                      fill="#09090b"
-                      stroke="#ff7a1a"
-                      strokeWidth="3.5"
-                      className="transition-transform group-hover:scale-150"
-                    />
-                    {/* Tooltip showing amount */}
-                    <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
-                      <rect x={p.x - 20} y={p.y - 28} width="40" height="18" rx="4" fill="#ff7a1a" />
-                      <text x={p.x} y={p.y - 16} fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">
-                        {p.value} đơn
-                      </text>
-                    </g>
-                    {/* Date label */}
-                    <text x={p.x} y="170" fill="#71717a" fontSize="9" fontWeight="bold" textAnchor="middle">
-                      {p.label}
-                    </text>
-                  </g>
-                ))}
-              </svg>
-            </div>
-          </div>
+      {/* These counters are derived only from the API rows visible in the current table. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+          <span className="block text-[10px] font-bold uppercase text-zinc-500">Đơn đang hiển thị</span>
+          <span className="mt-1 text-xl font-black text-white">{aggregatedStats.totalCount}</span>
+          <span className="mt-1 block text-[9px] text-zinc-500">
+            Kết quả từ API: <strong className="text-zinc-300">{bookingPage?.totalElements ?? 0}</strong>
+          </span>
         </div>
-
-        {/* Right 1 Column: System Monitoring Summary Panel */}
-        <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-5 md:p-6 shadow-xl flex flex-col justify-between space-y-4">
-          <div>
-            <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
-              <span className="text-xs font-black uppercase tracking-wider text-white">Giám Sát Hệ Thống</span>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-            </div>
-            <p className="text-[9px] text-zinc-550 font-semibold mt-2">
-              Dữ liệu tải từ API Monitoring với cơ chế Cache 10s TTL chống quá tải
-            </p>
-          </div>
-
-          <div className="space-y-3.5 flex-1 justify-center flex flex-col">
-            <div className="flex justify-between items-center border-b border-zinc-850 pb-2.5">
-              <span className="text-xs text-zinc-400 flex items-center gap-2">
-                <History className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Đặt vé hôm nay (Hồ Chí Minh)</span>
-              </span>
-              <span className="text-sm font-black text-white">{monitoringSummary?.bookingToday ?? '0'}</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-zinc-850 pb-2.5">
-              <span className="text-xs text-zinc-400 flex items-center gap-2">
-                <XCircle className="w-4 h-4 text-red-500 shrink-0" />
-                <span>Giao dịch lỗi (Thanh toán hỏng)</span>
-              </span>
-              <span className="text-sm font-black text-red-400">{monitoringSummary?.paymentFailed ?? '0'}</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-zinc-850 pb-2.5">
-              <span className="text-xs text-zinc-400 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>Số lượng đơn hết hạn chờ</span>
-              </span>
-              <span className="text-sm font-black text-amber-400">{monitoringSummary?.expiredBooking ?? '0'}</span>
-            </div>
-            <div className="flex justify-between items-center pb-1">
-              <span className="text-xs text-zinc-400 flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-sky-400 shrink-0" />
-                <span>Tiến trình đồng bộ bù lỗi (Kafka)</span>
-              </span>
-              <span className="text-sm font-black text-sky-400">{monitoringSummary?.pendingRetry ?? '0'} tác vụ</span>
-            </div>
-          </div>
-
-          <div className="pt-2 text-[9px] text-zinc-500 border-t border-zinc-850 italic text-center">
-            Hạ tầng Microservices kết nối Kafka Outbox & Redis Lock
-          </div>
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+          <span className="block text-[10px] font-bold uppercase text-amber-500">Chờ thanh toán trên trang</span>
+          <span className="mt-1 text-xl font-black text-amber-400">{aggregatedStats.pending}</span>
+          <span className="mt-1 block text-[9px] text-zinc-500">Chỉ tính các dòng đang hiển thị</span>
+        </div>
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+          <span className="block text-[10px] font-bold uppercase text-emerald-500">Đã xác nhận / hoàn thành</span>
+          <span className="mt-1 text-xl font-black text-emerald-400">
+            {aggregatedStats.confirmed + aggregatedStats.completed}
+          </span>
+          <span className="mt-1 block text-[9px] text-zinc-500">Chỉ tính các dòng đang hiển thị</span>
+        </div>
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+          <span className="block text-[10px] font-bold uppercase text-red-500">Không còn hoạt động</span>
+          <span className="mt-1 text-xl font-black text-red-400">
+            {aggregatedStats.cancelled + aggregatedStats.expired + aggregatedStats.refunded}
+          </span>
+          <span className="mt-1 block text-[9px] text-zinc-500">
+            Hủy, hết hạn hoặc hoàn tiền trên trang
+          </span>
         </div>
       </div>
 
@@ -613,7 +434,7 @@ export default function AdminBookingDashboardPage() {
         <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="w-4 h-4 text-[#ff7a1a]" />
-            <span className="text-xs font-black uppercase tracking-wider text-white">Bộ lọc tra cứu chuyên sâu</span>
+            <span className="text-xs font-black uppercase tracking-wider text-white">Bộ lọc dữ liệu đơn hàng</span>
           </div>
           <button
             type="button"
@@ -693,7 +514,11 @@ export default function AdminBookingDashboardPage() {
 
         {/* Collapsible Advanced Filters Section */}
         {advancedOpen && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-zinc-800/40 animate-fade-in">
+          <>
+            <p className="border-t border-zinc-800/40 pt-3 text-[10px] font-semibold text-amber-300/80">
+              Các bộ lọc mở rộng bên dưới chỉ áp dụng cho dữ liệu của trang hiện tại.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
             {/* Filter by Movie */}
             <div className="space-y-1">
               <label className="text-[9px] text-zinc-500 font-bold uppercase">Phim chiếu</label>
@@ -809,7 +634,8 @@ export default function AdminBookingDashboardPage() {
                 <option value="NO">Giữ nguyên giá gốc</option>
               </select>
             </div>
-          </div>
+            </div>
+          </>
         )}
 
         {/* Action Buttons */}
