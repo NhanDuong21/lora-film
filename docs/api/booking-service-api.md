@@ -7,6 +7,15 @@
 > short-creation mutex released after transaction completion. Booking owns the
 > configurable 900-second deadline (capped by showtime start), and Payment
 > SUCCESS is the only confirmation authority.
+>
+> **Single-active-order policy (2026-07-27):** one customer may have at most
+> one non-deleted `PENDING_PAYMENT` Booking for the same Showtime. A second
+> `POST /api/bookings` returns HTTP 409 with
+> `BOOKING_ACTIVE_SHOWTIME_EXISTS`. The database constraint
+> `uk_active_customer_showtime_booking` is the final concurrency authority.
+> The client may discover the existing order through
+> `GET /api/bookings/active?showtimePublicId={uuid}`, but cannot override this
+> rule. A Booking for a different Showtime remains allowed.
 
 ## 1. Thông Tin Chung
 

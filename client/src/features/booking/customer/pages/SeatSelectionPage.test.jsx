@@ -3,7 +3,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SeatSelectionPage from './SeatSelectionPage';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
-import { createBooking, getBookingHistory } from '../services/bookingService';
+import {
+  cancelBooking,
+  createBooking,
+  getActiveBookingForShowtime,
+  getBookingDetails
+} from '../services/bookingService';
 import { getSeatAvailability } from '../services/seatReservationService';
 
 const socket = {
@@ -19,10 +24,10 @@ vi.mock('@/features/catalog/customer/services/movieService', () => ({
 }));
 
 vi.mock('../services/bookingService', () => ({
+  cancelBooking: vi.fn(),
   createBooking: vi.fn(),
+  getActiveBookingForShowtime: vi.fn(),
   getBookingDetails: vi.fn(),
-  getBookingHistory: vi.fn(),
-  getBookingTickets: vi.fn()
 }));
 
 vi.mock('../services/seatReservationService', () => ({
@@ -42,7 +47,8 @@ describe('SeatSelectionPage customer errors', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
-    getBookingHistory.mockResolvedValue({ content: [] });
+    getActiveBookingForShowtime.mockResolvedValue(null);
+    cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
     getSeatAvailability.mockResolvedValue({
       maxSeatsPerBooking: 8,
       occupiedSeats: []
@@ -99,5 +105,109 @@ describe('SeatSelectionPage customer errors', () => {
     await waitFor(() => {
       expect(sessionStorage.getItem('booking:create:showtime-public-9')).toBeNull();
     });
+  });
+
+  it('prevents a second order and offers resume or cancel for the active showtime', async () => {
+    getActiveBookingForShowtime.mockResolvedValue({
+      publicId: 'booking-active-1',
+      bookingCode: 'LORAFILM-000001',
+      expiredAt: '2099-07-27T19:45:00Z'
+    });
+    getBookingDetails.mockResolvedValue({
+      publicId: 'booking-active-1',
+      bookingCode: 'LORAFILM-000001',
+      paymentDeadline: '2099-07-27T19:45:00Z',
+      seatNames: 'B1, B2'
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/booking/seats?showtimeId=showtime-public-9']}>
+        <SeatSelectionPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/Bạn đang giữ các ghế/i)).toHaveTextContent('B1, B2');
+    fireEvent.click(screen.getByRole('button', { name: /Ghế A1/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+
+    const dialog = await screen.findByRole('alertdialog', {
+      name: /Bạn đã có đơn giữ ghế/i
+    });
+    expect(within(dialog).getByRole('button', { name: /Tiếp tục thanh toán/i }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /Hủy đơn cũ để chọn lại/i }))
+      .toBeInTheDocument();
+    expect(createBooking).not.toHaveBeenCalled();
+  });
+
+  it('cancels the old active order from the conflict popup before allowing a new choice', async () => {
+    getActiveBookingForShowtime.mockResolvedValue({
+      publicId: 'booking-active-1',
+      bookingCode: 'LORAFILM-000001',
+      expiredAt: '2099-07-27T19:45:00Z'
+    });
+    getBookingDetails.mockResolvedValue({
+      publicId: 'booking-active-1',
+      bookingCode: 'LORAFILM-000001',
+      paymentDeadline: '2099-07-27T19:45:00Z',
+      seatNames: 'B1, B2'
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/booking/seats?showtimeId=showtime-public-9']}>
+        <SeatSelectionPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText(/Bạn đang giữ các ghế/i);
+    fireEvent.click(screen.getByRole('button', { name: /Ghế A1/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /Hủy đơn cũ để chọn lại/i }));
+
+    await waitFor(() => {
+      expect(cancelBooking).toHaveBeenCalledWith('booking-active-1');
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Bạn đang giữ các ghế/i)).not.toBeInTheDocument();
+  });
+
+  it('recovers a backend race into the same Vietnamese active-order popup', async () => {
+    getActiveBookingForShowtime
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        publicId: 'booking-race-winner',
+        bookingCode: 'LORAFILM-000002',
+        expiredAt: '2099-07-27T19:45:00Z'
+      });
+    getBookingDetails.mockResolvedValue({
+      publicId: 'booking-race-winner',
+      bookingCode: 'LORAFILM-000002',
+      paymentDeadline: '2099-07-27T19:45:00Z',
+      seatNames: 'C1, C2'
+    });
+    createBooking.mockRejectedValue({
+      errorCode: 'BOOKING_ACTIVE_SHOWTIME_EXISTS',
+      message: 'The customer already has an active Booking for this showtime'
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/booking/seats?showtimeId=showtime-public-9']}>
+        <SeatSelectionPage />
+      </MemoryRouter>
+    );
+
+    const seatButton = await screen.findByRole('button', { name: /Ghế A1/i });
+    await waitFor(() => expect(getActiveBookingForShowtime).toHaveBeenCalledTimes(1));
+    fireEvent.click(seatButton);
+    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+
+    const dialog = await screen.findByRole('alertdialog', {
+      name: /Bạn đã có đơn giữ ghế/i
+    });
+    expect(within(dialog).getByText(/Mỗi khách chỉ có thể giữ một đơn/i))
+      .toBeInTheDocument();
+    expect(within(dialog).queryByText(/already has an active Booking/i))
+      .not.toBeInTheDocument();
   });
 });

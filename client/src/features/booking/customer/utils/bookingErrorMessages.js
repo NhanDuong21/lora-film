@@ -14,6 +14,7 @@ const BOOKING_ERROR_MESSAGES = {
   BOOKING_SHOWTIME_STARTED: 'Suất chiếu đã bắt đầu; không thể giữ ghế.',
   BOOKING_SHOWTIME_ENDED: 'Suất chiếu đã kết thúc.',
   BOOKING_EXPIRED: 'Thời gian giữ ghế đã hết. Vui lòng chọn lại ghế.',
+  BOOKING_ACTIVE_SHOWTIME_EXISTS: 'Bạn đã có một đơn đang giữ ghế cho suất chiếu này. Vui lòng tiếp tục thanh toán hoặc hủy đơn cũ trước khi chọn lại.',
   BOOKING_NOT_FOUND: 'Không tìm thấy đơn đặt vé này.',
   BOOKING_OWNER_REQUIRED: 'Bạn không có quyền xem hoặc thay đổi đơn đặt vé này.',
   BOOKING_NOT_PENDING: 'Đơn không còn ở trạng thái chờ thanh toán.',

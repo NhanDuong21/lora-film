@@ -23,8 +23,14 @@ import {
   clearBookingCreationAttempt,
   getOrCreateBookingCreationKey
 } from '../utils/bookingCreationIdempotency';
-import { createBooking, getBookingHistory, getBookingDetails, getBookingTickets } from '../services/bookingService';
+import {
+  cancelBooking,
+  createBooking,
+  getActiveBookingForShowtime,
+  getBookingDetails
+} from '../services/bookingService';
 import { getSeatAvailability } from '../services/seatReservationService';
+import ActiveBookingConflictModal from '../components/ActiveBookingConflictModal';
 import BookingNoticeModal from '../components/BookingNoticeModal';
 import BookingStepper from '../components/BookingStepper';
 
@@ -52,6 +58,9 @@ export default function SeatSelectionPage() {
   const [reservationLoading, setReservationLoading] = useState(false);
   const [activeBooking, setActiveBooking] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
+  const [activeConflictOpen, setActiveConflictOpen] = useState(false);
+  const [activeConflictError, setActiveConflictError] = useState(null);
+  const [cancellingActiveBooking, setCancellingActiveBooking] = useState(false);
 
   const showNotice = useCallback((message, {
     title = 'Không thể tiếp tục',
@@ -60,36 +69,38 @@ export default function SeatSelectionPage() {
     setNotice({ message, title, variant });
   }, []);
 
-  // Check for active booking drafts when layout is loaded
-  useEffect(() => {
-    if (!layout || !layout.showtimeId) return;
-
-    let isMounted = true;
-
-    const checkActiveBooking = async () => {
-      try {
-        const history = await getBookingHistory({ status: 'PENDING_PAYMENT' });
-        if (!isMounted) return;
-
-        const match = history?.content?.find(b => b.showtimeId === layout.showtimeId);
-        if (match) {
-          const details = await getBookingDetails(match.publicId);
-          if (!isMounted) return;
-          const tickets = await getBookingTickets(match.publicId).catch(() => []);
-          if (!isMounted) return;
-          setActiveBooking({ ...details, tickets });
-        }
-      } catch (err) {
-        console.error("Failed to check active bookings:", err);
-      }
+  const loadActiveBooking = useCallback(async targetShowtimePublicId => {
+    if (!targetShowtimePublicId) return null;
+    const active = await getActiveBookingForShowtime(targetShowtimePublicId);
+    if (!active) {
+      setActiveBooking(null);
+      return null;
+    }
+    const details = await getBookingDetails(active.publicId);
+    const normalized = {
+      ...active,
+      ...details,
+      paymentDeadline: details.paymentDeadline || active.expiredAt
     };
+    setActiveBooking(normalized);
+    return normalized;
+  }, []);
 
-    checkActiveBooking();
+  // Read the server-authoritative active Booking instead of searching one page of history.
+  useEffect(() => {
+    let isMounted = true;
+    if (!layout?.showtimePublicId) return undefined;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadActiveBooking(layout.showtimePublicId).catch(errorValue => {
+      if (isMounted) {
+        console.error('Không thể kiểm tra đơn đang giữ ghế:', errorValue);
+      }
+    });
     return () => {
       isMounted = false;
     };
-  }, [layout]);
+  }, [layout?.showtimePublicId, loadActiveBooking]);
 
   // Expiration countdown logic for active reservation
   useEffect(() => {
@@ -314,6 +325,11 @@ export default function SeatSelectionPage() {
   // Handle proceed to food selection & checkout
   const handleContinue = async () => {
     if (selectedSeats.length === 0) return;
+    if (activeBooking && timeLeft > 0) {
+      setActiveConflictError(null);
+      setActiveConflictOpen(true);
+      return;
+    }
     if (checkSingleSeatGap()) {
       setShowGapModal(true);
       return;
@@ -363,6 +379,19 @@ export default function SeatSelectionPage() {
       });
     } catch (err) {
       const errorCode = getBookingErrorCode(err);
+      if (errorCode === 'BOOKING_ACTIVE_SHOWTIME_EXISTS') {
+        clearBookingCreationAttempt(layout.showtimePublicId);
+        try {
+          const existingBooking = await loadActiveBooking(layout.showtimePublicId);
+          if (existingBooking) {
+            setActiveConflictError(null);
+            setActiveConflictOpen(true);
+            return;
+          }
+        } catch {
+          // Fall through to the translated modal when the recovery read also fails.
+        }
+      }
       if (seatConflictErrorCodes.has(errorCode)) {
         await refreshAvailability().catch(() => {});
       }
@@ -389,6 +418,35 @@ export default function SeatSelectionPage() {
       );
     } finally {
       setReservationLoading(false);
+    }
+  };
+
+  const resumeActiveBooking = () => {
+    if (!activeBooking?.publicId) return;
+    setActiveConflictOpen(false);
+    navigate(`/bookings/checkout?bookingId=${activeBooking.publicId}`, {
+      state: { showtime: layout }
+    });
+  };
+
+  const cancelActiveBookingAndChooseAgain = async () => {
+    if (!activeBooking?.publicId || cancellingActiveBooking) return;
+    setCancellingActiveBooking(true);
+    setActiveConflictError(null);
+    try {
+      await cancelBooking(activeBooking.publicId);
+      clearBookingCreationAttempt(layout.showtimePublicId);
+      setActiveBooking(null);
+      setTimeLeft(null);
+      setActiveConflictOpen(false);
+      await refreshAvailability();
+    } catch (cancelError) {
+      setActiveConflictError(getBookingErrorMessage(
+        cancelError,
+        'Không thể hủy đơn đang giữ ghế. Vui lòng thử lại.'
+      ));
+    } finally {
+      setCancellingActiveBooking(false);
     }
   };
 
@@ -474,7 +532,7 @@ export default function SeatSelectionPage() {
               <div>
                 <p className="text-xs font-black uppercase tracking-wider text-brand-orange">Đơn hàng đang xử lý</p>
                 <h3 className="mt-1 text-sm font-bold text-white">
-                  Bạn đang giữ các ghế: <span className="text-brand-orange">{activeBooking.tickets?.map(t => t.seatLabel || t.seatCode)?.join(', ') || '...'}</span>
+                  Bạn đang giữ các ghế: <span className="text-brand-orange">{activeBooking.seatNames || 'Đang cập nhật'}</span>
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1">Vui lòng thanh toán hoặc hủy vé cũ trước khi đặt thêm ghế mới.</p>
               </div>
@@ -485,7 +543,7 @@ export default function SeatSelectionPage() {
                 <span className="text-xl font-black text-brand-orange tracking-widest">{formattedTimeLeft}</span>
               </div>
               <button
-                onClick={() => navigate(`/bookings/checkout?bookingId=${activeBooking.publicId}`, { state: { showtime: layout } })}
+                onClick={resumeActiveBooking}
                 className="bg-brand-orange hover:bg-orange-600 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-brand-orange/20"
               >
                 Thanh toán ngay
@@ -632,6 +690,24 @@ export default function SeatSelectionPage() {
           message={notice.message}
           variant={notice.variant}
           onClose={() => setNotice(null)}
+        />
+      )}
+
+      {activeConflictOpen && activeBooking && (
+        <ActiveBookingConflictModal
+          bookingCode={activeBooking.bookingCode}
+          seatNames={activeBooking.seatNames}
+          timeLeft={formattedTimeLeft}
+          error={activeConflictError}
+          pending={cancellingActiveBooking}
+          onClose={() => {
+            if (!cancellingActiveBooking) {
+              setActiveConflictError(null);
+              setActiveConflictOpen(false);
+            }
+          }}
+          onResume={resumeActiveBooking}
+          onCancel={cancelActiveBookingAndChooseAgain}
         />
       )}
 

@@ -8,6 +8,15 @@
 > HELD/BOOKED seat state. No Redis TTL, restart, or cleanup can make an active
 > database reservation available. Payment SUCCESS, not `/confirm`, performs
 > HELD→BOOKED.
+>
+> Before inserting a new Booking, Booking Service also locks and checks the
+> customer's existing `PENDING_PAYMENT` rows for that Showtime. An unexpired
+> row returns `BOOKING_ACTIVE_SHOWTIME_EXISTS`; an elapsed row is transitioned
+> to `EXPIRED` before replacement. The generated database unique key
+> `(user_id, showtime_id)` for `PENDING_PAYMENT` rows resolves concurrent
+> requests that both observed no existing row. The customer UI then offers
+> either continuing the existing checkout or cancelling it before choosing
+> again.
 
 ## Booking Flow
 

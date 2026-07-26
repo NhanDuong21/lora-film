@@ -114,6 +114,25 @@ public class CustomerBookingController {
         return ResponseEntity.ok(ApiResponse.success("Bookings retrieved successfully", response));
     }
 
+    @GetMapping("/active")
+    @Operation(
+            summary = "Get my active booking for a showtime",
+            description = "Returns the unexpired PENDING_PAYMENT booking that prevents creating a second order")
+    public ResponseEntity<ApiResponse<BookingResponse>> getActiveBooking(
+            @RequestParam
+            @Pattern(regexp = ValidationConstants.UUID_PATTERN,
+                    message = "showtimePublicId must be a valid UUID")
+            String showtimePublicId) {
+        BookingResponse activeBooking = bookingService
+                .findActiveByShowtime(showtimePublicId)
+                .orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(
+                activeBooking == null
+                        ? "Không có đơn giữ ghế đang hoạt động cho suất chiếu này"
+                        : "Đã tải đơn giữ ghế đang hoạt động",
+                activeBooking));
+    }
+
     @GetMapping("/{publicId}")
     @Operation(summary = "Get booking detail", description = "Only the booking owner or an administrator can view it")
     public ResponseEntity<ApiResponse<BookingDetailResponse>> getBookingDetail(

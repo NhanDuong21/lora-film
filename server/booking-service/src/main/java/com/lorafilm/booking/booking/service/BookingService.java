@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
+import java.util.Optional;
 
 public interface BookingService {
 
@@ -28,6 +29,8 @@ public interface BookingService {
     BookingDetailResponse findById(String publicId);
 
     BookingDetailResponse findByCode(String bookingCode);
+
+    Optional<BookingResponse> findActiveByShowtime(String showtimePublicId);
 
     Page<BookingSummaryResponse> findAll(
             BookingStatus status, Instant fromDate, Instant toDate, Pageable pageable);

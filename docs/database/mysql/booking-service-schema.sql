@@ -128,6 +128,15 @@ CREATE TABLE bookings (
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE
         COMMENT 'Cờ đánh dấu xóa mềm (Soft delete)',
 
+    active_customer_showtime_key VARCHAR(100) GENERATED ALWAYS AS (
+        IF(
+            booking_status = 'PENDING_PAYMENT' AND is_deleted = FALSE,
+            CONCAT(user_id, '_', showtime_id),
+            NULL
+        )
+    ) STORED
+        COMMENT 'Database guard: one active pending Booking per customer and Showtime',
+
     created_by VARCHAR(100)
         COMMENT 'Người/Hệ thống tạo đơn',
 
@@ -149,6 +158,7 @@ CREATE TABLE bookings (
     -- Ràng buộc duy nhất
     CONSTRAINT uk_booking_public UNIQUE(public_id),
     CONSTRAINT uk_booking_code UNIQUE(booking_code),
+    CONSTRAINT uk_active_customer_showtime_booking UNIQUE(active_customer_showtime_key),
 
     -- Ràng buộc kiểm tra số tiền hợp lệ (không âm)
     CONSTRAINT chk_booking_ticket_amount CHECK (ticket_amount >= 0),

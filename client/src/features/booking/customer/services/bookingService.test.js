@@ -3,6 +3,7 @@ import apiClient from '@/services/apiClient';
 import {
   cancelBooking,
   createBooking,
+  getActiveBookingForShowtime,
   getBookingHistory
 } from './bookingService';
 
@@ -96,5 +97,23 @@ describe('bookingService customer history normalization', () => {
 
     expect(sessionStorage.getItem('booking:create:showtime-1')).toBeNull();
     expect(sessionStorage.getItem('booking:create:showtime-2')).toBeNull();
+  });
+
+  it('reads the server-authoritative active booking for one showtime', async () => {
+    apiClient.get.mockResolvedValue({
+      data: {
+        data: {
+          publicId: 'booking-active-1',
+          bookingCode: 'LORAFILM-000001'
+        }
+      }
+    });
+
+    const result = await getActiveBookingForShowtime('showtime-public-1');
+
+    expect(result.publicId).toBe('booking-active-1');
+    expect(apiClient.get).toHaveBeenCalledWith('/api/bookings/active', {
+      params: { showtimePublicId: 'showtime-public-1' }
+    });
   });
 });

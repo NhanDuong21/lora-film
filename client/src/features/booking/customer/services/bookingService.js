@@ -88,6 +88,17 @@ export const getBookingDetails = async (bookingId) => {
 };
 
 /**
+ * Return the current customer's unexpired PENDING_PAYMENT booking for a Showtime.
+ * The server is authoritative; this endpoint is not a client-side uniqueness guard.
+ */
+export const getActiveBookingForShowtime = async (showtimePublicId) => {
+  const response = await apiClient.get('/api/bookings/active', {
+    params: { showtimePublicId }
+  });
+  return response.data?.data || null;
+};
+
+/**
  * Find booking details by booking code
  * @param {string} bookingCode - The booking code string
  * @returns {Promise<Object>} Booking detail response

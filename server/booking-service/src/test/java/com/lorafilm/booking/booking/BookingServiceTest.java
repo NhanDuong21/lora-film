@@ -30,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -112,7 +113,7 @@ class BookingServiceTest {
     }
 
         @Test
-        void shouldCreateBookingFromValidReservations() {
+    void shouldCreateBookingFromValidReservations() {
                 Instant now = Instant.now();
                 List<SeatReservation> reservations = List.of(
                                 reservation(21L, RESERVATION_PUBLIC_ID_1, 101L, 15L, 1001L, now.plusSeconds(300)),
@@ -199,6 +200,120 @@ class BookingServiceTest {
 
         verify(bookingRepository, never()).saveAndFlush(any());
         verify(priceSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectSecondActiveBookingForSameCustomerAndShowtime() {
+        Instant now = Instant.now();
+        CreateBookingRequest request = new CreateBookingRequest(
+                SHOWTIME_PUBLIC_ID, List.of(RESERVATION_PUBLIC_ID_1));
+        SeatReservation requestedReservation = reservation(
+                21L, RESERVATION_PUBLIC_ID_1, 101L, 15L, 1001L, now.plusSeconds(300));
+        Booking activeBooking = existingBooking(now.plusSeconds(600));
+
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(reservationRepository.findAllByPublicIdInForUpdate(request.getReservationPublicIds()))
+                .thenReturn(List.of(requestedReservation));
+        when(showtimeClient.getBookingContext(1001L, List.of(101L)))
+                .thenReturn(singleSeatShowtimeContext(now));
+        when(bookingRepository.findPendingByUserAndShowtimeForUpdate(
+                15L, 1001L, BookingStatus.PENDING_PAYMENT))
+                .thenReturn(List.of(activeBooking));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> bookingService.createBooking(request));
+
+        assertEquals("BOOKING_ACTIVE_SHOWTIME_EXISTS", exception.getErrorCode());
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(priceSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldExpireStaleBookingBeforeCreatingReplacementForSameShowtime() {
+        Instant now = Instant.now();
+        CreateBookingRequest request = new CreateBookingRequest(
+                SHOWTIME_PUBLIC_ID, List.of(RESERVATION_PUBLIC_ID_1));
+        SeatReservation requestedReservation = reservation(
+                21L, RESERVATION_PUBLIC_ID_1, 101L, 15L, 1001L, now.plusSeconds(300));
+        Booking staleBooking = existingBooking(now.minusSeconds(1));
+        staleBooking.setId(91L);
+
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(reservationRepository.findAllByPublicIdInForUpdate(request.getReservationPublicIds()))
+                .thenReturn(List.of(requestedReservation));
+        when(showtimeClient.getBookingContext(1001L, List.of(101L)))
+                .thenReturn(singleSeatShowtimeContext(now));
+        when(bookingRepository.findPendingByUserAndShowtimeForUpdate(
+                15L, 1001L, BookingStatus.PENDING_PAYMENT))
+                .thenReturn(List.of(staleBooking));
+        when(bookingCodeGenerator.generate()).thenReturn("LORAFILM-20260720-000002");
+        when(bookingRepository.existsByBookingCode("LORAFILM-20260720-000002")).thenReturn(false);
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(invocation -> {
+            Booking replacement = invocation.getArgument(0);
+            replacement.setId(100L);
+            replacement.setCreatedAt(now);
+            return replacement;
+        });
+        when(priceSnapshotRepository.existsByBookingId(100L)).thenReturn(false);
+
+        BookingResponse response = bookingService.createBooking(request);
+
+        assertEquals(BookingStatus.EXPIRED, staleBooking.getBookingStatus());
+        assertEquals(BookingStatus.PENDING_PAYMENT, response.status());
+        verify(reservationService).handleBookingStatusChange(
+                91L,
+                BookingStatus.EXPIRED,
+                "Expired before creating a replacement Booking for the same showtime");
+        verify(bookingRepository).flush();
+    }
+
+    @Test
+    void shouldTranslateDatabaseUniqueCollisionIntoActiveBookingConflict() {
+        Instant now = Instant.now();
+        CreateBookingRequest request = new CreateBookingRequest(
+                SHOWTIME_PUBLIC_ID, List.of(RESERVATION_PUBLIC_ID_1));
+
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(reservationRepository.findAllByPublicIdInForUpdate(request.getReservationPublicIds()))
+                .thenReturn(List.of(reservation(
+                        21L, RESERVATION_PUBLIC_ID_1, 101L, 15L, 1001L, now.plusSeconds(300))));
+        when(showtimeClient.getBookingContext(1001L, List.of(101L)))
+                .thenReturn(singleSeatShowtimeContext(now));
+        when(bookingCodeGenerator.generate()).thenReturn("LORAFILM-20260720-000003");
+        when(bookingRepository.existsByBookingCode("LORAFILM-20260720-000003")).thenReturn(false);
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenThrow(
+                new DataIntegrityViolationException(
+                        "Duplicate entry for key 'uk_active_customer_showtime_booking'"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> bookingService.createBooking(request));
+
+        assertEquals("BOOKING_ACTIVE_SHOWTIME_EXISTS", exception.getErrorCode());
+        verify(priceSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldReturnOnlyCurrentCustomersActiveBookingForShowtime() {
+        Instant now = Instant.now();
+        Booking activeBooking = existingBooking(now.plusSeconds(600));
+        activeBooking.setShowtimePublicId(SHOWTIME_PUBLIC_ID);
+
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(bookingRepository.findActiveByUserAndShowtimePublicId(
+                eq(15L),
+                eq(SHOWTIME_PUBLIC_ID),
+                eq(BookingStatus.PENDING_PAYMENT),
+                any(Instant.class)))
+                .thenReturn(List.of(activeBooking));
+
+        Optional<BookingResponse> response = bookingService.findActiveByShowtime(SHOWTIME_PUBLIC_ID);
+
+        assertEquals(activeBooking.getPublicId(), response.orElseThrow().publicId());
+        verify(bookingRepository).findActiveByUserAndShowtimePublicId(
+                eq(15L),
+                eq(SHOWTIME_PUBLIC_ID),
+                eq(BookingStatus.PENDING_PAYMENT),
+                any(Instant.class));
     }
 
     @Test
@@ -350,6 +465,30 @@ class BookingServiceTest {
                 List.of(
                         new ShowtimeBookingContext.SeatContext(101L, "A01", "STANDARD", new BigDecimal("120000"), "VND"),
                         new ShowtimeBookingContext.SeatContext(102L, "A02", "STANDARD", new BigDecimal("120000"), "VND")));
+    }
+
+    private ShowtimeBookingContext singleSeatShowtimeContext(Instant now) {
+        ShowtimeBookingContext fullContext = showtimeContext(now);
+        return new ShowtimeBookingContext(
+                fullContext.showtimeId(),
+                fullContext.showtimePublicId(),
+                fullContext.movieId(),
+                fullContext.cinemaId(),
+                fullContext.auditoriumId(),
+                fullContext.status(),
+                fullContext.startsAt(),
+                fullContext.endsAt(),
+                fullContext.paymentExpiresAt(),
+                new BigDecimal("120000"),
+                fullContext.serviceFee(),
+                fullContext.discountAmount(),
+                new BigDecimal("120000"),
+                fullContext.currency(),
+                fullContext.movieTitle(),
+                fullContext.moviePosterUrl(),
+                fullContext.cinemaName(),
+                fullContext.auditoriumName(),
+                List.of(fullContext.seats().getFirst()));
     }
 
         private Booking existingBooking(Instant expiresAt) {

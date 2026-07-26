@@ -221,7 +221,9 @@ public class BookingServiceImpl implements BookingService {
         ShowtimeBookingContext context = showtimeClient.getBookingContext(showtimeId, seatIds);
         validateShowtimeContext(context, showtimeId, validatedRequest.showtimePublicId(), seatIds);
 
-        Instant bookingDeadline = calculateDeadline(Instant.now(), context.startsAt(),
+        Instant now = Instant.now();
+        enforceSingleActiveBooking(currentUserId, context.showtimeId(), now);
+        Instant bookingDeadline = calculateDeadline(now, context.startsAt(),
                 reservations.stream().map(SeatReservation::getExpiresAt).filter(Objects::nonNull).min(Instant::compareTo).orElse(null));
         Booking booking = Booking.create(
                 UUID.randomUUID().toString(),
@@ -242,7 +244,7 @@ public class BookingServiceImpl implements BookingService {
                 null);
         booking.setShowtimePublicId(context.showtimePublicId());
 
-        Booking savedBooking = bookingRepository.saveAndFlush(booking);
+        Booking savedBooking = saveNewPendingBooking(booking);
         persistAuthoritativePriceSnapshot(savedBooking, context);
         MDC.put("bookingId", savedBooking.getPublicId());
         List<Long> reservationIds = reservations.stream().map(SeatReservation::getId).toList();
@@ -321,18 +323,19 @@ public class BookingServiceImpl implements BookingService {
         }
         registerRedisCleanup(context.showtimeId(), seatIds, ownerToken);
         try {
-            Instant deadline = calculateDeadline(Instant.now(), context.startsAt(), null);
-            expireStaleReservationsBeforeInsert(context.showtimeId(), seatIds, Instant.now());
+            Instant now = Instant.now();
+            Instant deadline = calculateDeadline(now, context.startsAt(), null);
+            enforceSingleActiveBooking(userId, context.showtimeId(), now);
+            expireStaleReservationsBeforeInsert(context.showtimeId(), seatIds, now);
             Booking booking = Booking.create(
                     UUID.randomUUID().toString(), generateUniqueBookingCode(), userId,
                     context.showtimeId(), context.movieId(), context.cinemaId(), context.auditoriumId(),
                     context.ticketAmount(), BigDecimal.ZERO, context.serviceFee(), BigDecimal.ZERO,
                     context.discountAmount(), BigDecimal.ZERO, context.currency(), deadline, null);
             booking.setShowtimePublicId(context.showtimePublicId());
-            Booking saved = bookingRepository.saveAndFlush(booking);
+            Booking saved = saveNewPendingBooking(booking);
             persistAuthoritativePriceSnapshot(saved, context);
 
-            Instant now = Instant.now();
             List<SeatReservation> reservations = context.seats().stream().map(seat -> {
                 SeatReservation reservation = new SeatReservation();
                 reservation.setPublicId(UUID.randomUUID().toString());
@@ -367,6 +370,71 @@ public class BookingServiceImpl implements BookingService {
             }
             throw failure;
         }
+    }
+
+    private void enforceSingleActiveBooking(Long userId, Long showtimeId, Instant now) {
+        List<Booking> pendingBookings = bookingRepository.findPendingByUserAndShowtimeForUpdate(
+                userId, showtimeId, BookingStatus.PENDING_PAYMENT);
+        Optional<Booking> activeBooking = pendingBookings.stream()
+                .filter(booking -> booking.getExpiresAt() == null
+                        || booking.getExpiresAt().isAfter(now))
+                .findFirst();
+        if (activeBooking.isPresent()) {
+            throw new BusinessException(
+                    "BOOKING_ACTIVE_SHOWTIME_EXISTS",
+                    "Bạn đã có một đơn đang giữ ghế cho suất chiếu này",
+                    HttpStatus.CONFLICT);
+        }
+
+        for (Booking staleBooking : pendingBookings) {
+            if (lifecycleService != null) {
+                lifecycleService.transition(
+                        staleBooking,
+                        BookingStatus.EXPIRED,
+                        "Expired before creating a replacement Booking for the same showtime",
+                        "BOOKING_CREATION");
+            } else {
+                staleBooking.changeStatus(BookingStatus.EXPIRED, now);
+                bookingRepository.save(staleBooking);
+                reservationService.handleBookingStatusChange(
+                        staleBooking.getId(),
+                        BookingStatus.EXPIRED,
+                        "Expired before creating a replacement Booking for the same showtime");
+            }
+        }
+        if (!pendingBookings.isEmpty()) {
+            bookingRepository.flush();
+        }
+    }
+
+    private Booking saveNewPendingBooking(Booking booking) {
+        try {
+            return bookingRepository.saveAndFlush(booking);
+        } catch (DataIntegrityViolationException conflict) {
+            if (isActiveCustomerShowtimeConstraint(conflict)) {
+                throw new BusinessException(
+                        "BOOKING_ACTIVE_SHOWTIME_EXISTS",
+                        "Bạn đã có một đơn đang giữ ghế cho suất chiếu này",
+                        HttpStatus.CONFLICT);
+            }
+            throw conflict;
+        }
+    }
+
+    private boolean isActiveCustomerShowtimeConstraint(Throwable failure) {
+        Throwable current = failure;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null) {
+                String normalized = message.toLowerCase(java.util.Locale.ROOT);
+                if (normalized.contains("uk_active_customer_showtime_booking")
+                        || normalized.contains("active_customer_showtime_key")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private void expireStaleReservationsBeforeInsert(Long showtimeId, List<Long> seatIds, Instant now) {
@@ -494,6 +562,20 @@ public class BookingServiceImpl implements BookingService {
         throw new BusinessException("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED",
                 "Booking confirmation is performed only by a validated Payment result",
                 HttpStatus.GONE);
+    }
+
+    @Override
+    public Optional<BookingResponse> findActiveByShowtime(String showtimePublicId) {
+        Long currentUserId = requireAuthenticatedUser();
+        String normalizedShowtimePublicId = normalizeShowtimePublicId(showtimePublicId);
+        return bookingRepository.findActiveByUserAndShowtimePublicId(
+                        currentUserId,
+                        normalizedShowtimePublicId,
+                        BookingStatus.PENDING_PAYMENT,
+                        Instant.now())
+                .stream()
+                .findFirst()
+                .map(bookingMapper::toResponse);
     }
 
     @Override
