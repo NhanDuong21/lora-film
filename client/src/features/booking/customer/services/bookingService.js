@@ -1,5 +1,13 @@
 import apiClient from "@/services/apiClient";
 
+export const BOOKING_CHANGED_EVENT = "lorafilm:booking-changed";
+
+const emitBookingChanged = detail => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(BOOKING_CHANGED_EVENT, { detail }));
+  }
+};
+
 const uuidv4 = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -28,12 +36,16 @@ export const createBooking = async ({ showtimePublicId, seatPublicIds, reservati
   }, {
     headers: { "Idempotency-Key": idempotencyKey }
   });
-  return response.data.data;
+  const booking = response.data.data;
+  emitBookingChanged({ action: "CREATED", publicId: booking?.publicId });
+  return booking;
 };
 
 export const finalizeCheckout = async (bookingId) => {
   const response = await apiClient.post(`/api/bookings/${bookingId}/finalize-checkout`);
-  return response.data.data;
+  const booking = response.data.data;
+  emitBookingChanged({ action: "FINALIZED", publicId: booking?.publicId || bookingId });
+  return booking;
 };
 
 /**
@@ -102,7 +114,9 @@ export const cancelBooking = async (bookingId, reason = "") => {
     },
     headers: { "Idempotency-Key": idempotencyKey }
   });
-  return response.data.data;
+  const booking = response.data.data;
+  emitBookingChanged({ action: "CANCELLED", publicId: bookingId });
+  return booking;
 };
 
 /**

@@ -4,6 +4,8 @@ import { Clock, AlertTriangle, Search, ShieldCheck, Check } from 'lucide-react';
 import { getBookingDetails, cancelBooking, finalizeCheckout } from '../services/bookingService';
 import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 import BookingStepper from '../components/BookingStepper';
+import BookingCancellationModal from '../components/BookingCancellationModal';
+import BookingNoticeModal from '../components/BookingNoticeModal';
 
 export default function BookingCheckoutPage() {
   const location = useLocation();
@@ -28,6 +30,10 @@ export default function BookingCheckoutPage() {
   // Cart operations loading states
   const [cartUpdatingId, setCartUpdatingId] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [notice, setNotice] = useState(null);
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,10 +107,15 @@ export default function BookingCheckoutPage() {
   // Handle countdown expiration
   useEffect(() => {
     if (timeLeft === 0) {
-      alert("Thời gian giữ ghế đã hết hạn. Đơn hàng của bạn đã bị hủy.");
-      navigate('/movies?error=expired');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNotice({
+        title: 'Thời gian giữ ghế đã kết thúc',
+        message: 'Đơn không còn khả dụng để thanh toán và ghế sẽ được trả lại cho khách hàng khác.',
+        variant: 'warning',
+        redirectTo: '/movies?error=expired'
+      });
     }
-  }, [timeLeft, navigate]);
+  }, [timeLeft]);
 
   // Concession categories
   const categories = useMemo(() => {
@@ -174,7 +185,11 @@ export default function BookingCheckoutPage() {
         };
       });
     } catch (err) {
-      alert("Không thể cập nhật giỏ hàng bắp nước: " + (err.message || "Lỗi kết nối"));
+      setNotice({
+        title: 'Không thể cập nhật bắp nước',
+        message: err.message || 'Kết nối không ổn định. Vui lòng thử lại.',
+        variant: 'error'
+      });
     } finally {
       setCartUpdatingId(null);
     }
@@ -183,18 +198,49 @@ export default function BookingCheckoutPage() {
   // Finalize checkout and hand the public Booking ID to Payment Service.
   const handleSimulatePayment = async () => {
     if (!termsAgreed) {
-      alert("Bạn phải đồng ý với Điều khoản & Điều kiện trước khi thanh toán.");
+      setNotice({
+        title: 'Chưa đồng ý điều khoản',
+        message: 'Bạn cần đồng ý với Điều khoản và Quy định của LoraFilm trước khi tiếp tục thanh toán.',
+        variant: 'warning'
+      });
       return;
     }
     setPaymentLoading(true);
     try {
       const finalized = await finalizeCheckout(bookingId);
       setBooking(prev => ({ ...prev, ...finalized }));
-      alert(`Booking is ready for Payment Service: ${bookingId}`);
+      setNotice({
+        title: 'Đơn đã sẵn sàng thanh toán',
+        message: 'Số tiền đã được khóa. Đơn đang chờ chuyển sang Payment Service.',
+        variant: 'success'
+      });
     } catch (err) {
-      alert("Lỗi khi thực hiện giả lập thanh toán: " + (err.response?.data?.message || err.message));
+      setNotice({
+        title: 'Không thể chuẩn bị thanh toán',
+        message: err.response?.data?.message || err.message || 'Vui lòng thử lại.',
+        variant: 'error'
+      });
     } finally {
       setPaymentLoading(false);
+    }
+  };
+
+  const handleCancelBooking = async reason => {
+    setCancelling(true);
+    setCancelError('');
+    try {
+      await cancelBooking(
+        bookingId,
+        reason || 'Khách hàng chủ động hủy đặt chỗ tại checkout'
+      );
+      setCancelModalOpen(false);
+      navigate('/movies');
+    } catch (requestError) {
+      setCancelError(
+        `Không thể hủy đặt vé: ${requestError.message || 'Vui lòng thử lại.'}`
+      );
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -252,6 +298,32 @@ export default function BookingCheckoutPage() {
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
+      {notice && (
+        <BookingNoticeModal
+          title={notice.title}
+          message={notice.message}
+          variant={notice.variant}
+          onClose={() => {
+            const redirectTo = notice.redirectTo;
+            setNotice(null);
+            if (redirectTo) navigate(redirectTo);
+          }}
+        />
+      )}
+
+      {cancelModalOpen && (
+        <BookingCancellationModal
+          bookingCode={booking.bookingCode}
+          error={cancelError}
+          pending={cancelling}
+          onClose={() => {
+            setCancelError('');
+            setCancelModalOpen(false);
+          }}
+          onConfirm={handleCancelBooking}
+        />
+      )}
+
       <div className="max-w-7xl mx-auto w-full">
         {/* Booking Stepper */}
         <BookingStepper currentStep={step} />
@@ -607,16 +679,10 @@ export default function BookingCheckoutPage() {
               )}
 
               <button
-                disabled={paymentLoading || isExpired}
-                onClick={async () => {
-                  if (confirm("Bạn có chắc chắn muốn hủy đơn hàng này không?")) {
-                    try {
-                      await cancelBooking(bookingId, "Khách hàng chủ động hủy đặt chỗ");
-                      navigate('/movies');
-                    } catch (e) {
-                      alert("Không thể hủy đặt vé: " + e.message);
-                    }
-                  }
+                disabled={paymentLoading || isExpired || cancelling}
+                onClick={() => {
+                  setCancelError('');
+                  setCancelModalOpen(true);
                 }}
                 className="w-full py-2.5 text-center text-zinc-600 hover:text-red-400 font-semibold text-[10px] uppercase tracking-wider transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 block"
               >

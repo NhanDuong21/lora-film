@@ -10,6 +10,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('../services/bookingService', () => ({
+  BOOKING_CHANGED_EVENT: 'lorafilm:booking-changed',
   cancelBooking: vi.fn(),
   getBookingHistory: vi.fn()
 }));
@@ -41,8 +42,6 @@ describe('ActiveBookingRecoveryBanner', () => {
       ]
     });
     cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -73,11 +72,14 @@ describe('ActiveBookingRecoveryBanner', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: /hủy giữ ghế/i }));
+    expect(screen.getByRole('dialog', { name: /xác nhận hủy giữ ghế/i }))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy' }));
 
     await waitFor(() => {
       expect(cancelBooking).toHaveBeenCalledWith(
         activeBooking.publicId,
-        'Khách hàng chủ động hủy giữ ghế từ trang chủ'
+        'Khách hàng chủ động hủy giữ ghế từ thẻ khôi phục'
       );
     });
   });

@@ -9,6 +9,7 @@ import {
   formatHoldTimeLeft,
   getBookingRecoveryState
 } from '../utils/bookingRecovery';
+import BookingCancellationModal from './BookingCancellationModal';
 
 export default function CustomerBookingHistory() {
   // Filters state
@@ -28,6 +29,8 @@ export default function CustomerBookingHistory() {
   const [error, setError] = useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [cancellingBookingId, setCancellingBookingId] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelError, setCancelError] = useState('');
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -61,19 +64,23 @@ export default function CustomerBookingHistory() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const handleCancelHold = async booking => {
-    const publicId = booking.publicId || booking.id;
+  const handleCancelHold = async reason => {
+    const publicId = cancelTarget?.publicId || cancelTarget?.id;
     if (!publicId || cancellingBookingId) return;
-    if (!window.confirm('Bạn có chắc muốn hủy giữ ghế này không? Ghế sẽ được trả lại ngay.')) {
-      return;
-    }
 
     setCancellingBookingId(publicId);
+    setCancelError('');
     try {
-      await cancelBooking(publicId, 'Khách hàng chủ động hủy giữ ghế từ lịch sử đặt vé');
+      await cancelBooking(
+        publicId,
+        reason || 'Khách hàng chủ động hủy giữ ghế từ lịch sử đặt vé'
+      );
       await fetchHistory();
+      setCancelTarget(null);
     } catch (requestError) {
-      window.alert(`Không thể hủy giữ ghế: ${requestError.message || 'Vui lòng thử lại.'}`);
+      setCancelError(
+        `Không thể hủy giữ ghế: ${requestError.message || 'Vui lòng thử lại.'}`
+      );
     } finally {
       setCancellingBookingId(null);
     }
@@ -124,6 +131,19 @@ export default function CustomerBookingHistory() {
 
   return (
     <div className="space-y-6">
+      {cancelTarget && (
+        <BookingCancellationModal
+          bookingCode={cancelTarget.bookingCode}
+          error={cancelError}
+          pending={cancellingBookingId !== null}
+          onClose={() => {
+            setCancelError('');
+            setCancelTarget(null);
+          }}
+          onConfirm={handleCancelHold}
+        />
+      )}
+
       {/* Filters and Tabs bar */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-zinc-800 pb-4">
         <div className="flex gap-2 overflow-x-auto py-1 w-full xl:w-auto scrollbar-none">
@@ -331,7 +351,10 @@ export default function CustomerBookingHistory() {
                             <button
                               type="button"
                               disabled={cancellingBookingId === publicId}
-                              onClick={() => handleCancelHold(b)}
+                              onClick={() => {
+                                setCancelError('');
+                                setCancelTarget(b);
+                              }}
                               className="flex items-center gap-1.5 rounded-lg border border-red-500/20 px-3 py-2 text-[9px] font-black uppercase tracking-wider text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-wait disabled:opacity-60"
                             >
                               <Trash2 className="h-3.5 w-3.5" />

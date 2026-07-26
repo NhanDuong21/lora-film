@@ -2,17 +2,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Clock3, CreditCard, TicketCheck, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { cancelBooking, getBookingHistory } from '../services/bookingService';
+import {
+  BOOKING_CHANGED_EVENT,
+  cancelBooking,
+  getBookingHistory
+} from '../services/bookingService';
 import {
   formatHoldTimeLeft,
   getBookingRecoveryState
 } from '../utils/bookingRecovery';
+import BookingCancellationModal from './BookingCancellationModal';
 
 export default function ActiveBookingRecoveryBanner() {
   const { isAuthenticated, isInitializing, userRole } = useAuth();
   const [pendingBookings, setPendingBookings] = useState([]);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [cancelling, setCancelling] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelError, setCancelError] = useState('');
   const normalizedRole = userRole?.replace(/^ROLE_/, '');
   const canLoadBookings = isAuthenticated
     && !isInitializing
@@ -44,7 +51,11 @@ export default function ActiveBookingRecoveryBanner() {
     if (!canLoadBookings) return undefined;
 
     const refreshTimer = window.setInterval(loadPendingBookings, 30_000);
-    return () => window.clearInterval(refreshTimer);
+    window.addEventListener(BOOKING_CHANGED_EVENT, loadPendingBookings);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener(BOOKING_CHANGED_EVENT, loadPendingBookings);
+    };
   }, [canLoadBookings, loadPendingBookings]);
 
   useEffect(() => {
@@ -63,21 +74,24 @@ export default function ActiveBookingRecoveryBanner() {
       left.recovery.deadlineMs - right.recovery.deadlineMs)[0] || null,
   [nowMs, pendingBookings]);
 
-  const handleCancel = async () => {
+  const handleCancel = async reason => {
     if (!activeRecovery || cancelling) return;
-    if (!window.confirm('Bạn có chắc muốn hủy giữ ghế này không? Ghế sẽ được trả lại ngay.')) {
-      return;
-    }
 
     const publicId = activeRecovery.booking.publicId || activeRecovery.booking.id;
     setCancelling(true);
+    setCancelError('');
     try {
-      await cancelBooking(publicId, 'Khách hàng chủ động hủy giữ ghế từ trang chủ');
+      await cancelBooking(
+        publicId,
+        reason || 'Khách hàng chủ động hủy giữ ghế từ thẻ khôi phục'
+      );
+      setCancelModalOpen(false);
       setPendingBookings(current =>
         current.filter(booking => (booking.publicId || booking.id) !== publicId));
-      await loadPendingBookings();
     } catch (requestError) {
-      window.alert(`Không thể hủy giữ ghế: ${requestError.message || 'Vui lòng thử lại.'}`);
+      setCancelError(
+        `Không thể hủy giữ ghế: ${requestError.message || 'Vui lòng thử lại.'}`
+      );
     } finally {
       setCancelling(false);
     }
@@ -89,10 +103,11 @@ export default function ActiveBookingRecoveryBanner() {
   const publicId = booking.publicId || booking.id;
 
   return (
-    <aside
-      aria-label="Đơn đặt vé đang giữ ghế"
-      className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-md rounded-2xl border border-amber-400/30 bg-zinc-950/95 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-xl sm:left-auto sm:right-6 sm:mx-0 sm:w-[390px]"
-    >
+    <>
+      <aside
+        aria-label="Đơn đặt vé đang giữ ghế"
+        className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-md rounded-2xl border border-amber-400/30 bg-zinc-950/95 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-xl sm:left-auto sm:right-6 sm:mx-0 sm:w-[390px]"
+      >
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-brand-orange/15 p-2.5 text-brand-orange">
           <TicketCheck className="h-5 w-5" />
@@ -127,13 +142,30 @@ export default function ActiveBookingRecoveryBanner() {
         <button
           type="button"
           disabled={cancelling}
-          onClick={handleCancel}
+          onClick={() => {
+            setCancelError('');
+            setCancelModalOpen(true);
+          }}
           className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/25 px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-wait disabled:opacity-60"
         >
           <Trash2 className="h-4 w-4" />
           {cancelling ? 'Đang hủy...' : 'Hủy giữ ghế'}
         </button>
       </div>
-    </aside>
+      </aside>
+
+      {cancelModalOpen && (
+        <BookingCancellationModal
+          bookingCode={booking.bookingCode}
+          error={cancelError}
+          pending={cancelling}
+          onClose={() => {
+            setCancelError('');
+            setCancelModalOpen(false);
+          }}
+          onConfirm={handleCancel}
+        />
+      )}
+    </>
   );
 }

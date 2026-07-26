@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Printer, ArrowLeft, Trash2, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { getBookingDetails, getBookingTickets, cancelBooking } from '../services/bookingService';
 import { getBookingFoodOrder } from '../services/foodService';
+import BookingCancellationModal from '../components/BookingCancellationModal';
 
 export default function BookingDetailPage() {
   const { bookingId } = useParams();
@@ -14,6 +15,8 @@ export default function BookingDetailPage() {
   const [error, setError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -64,11 +67,9 @@ export default function BookingDetailPage() {
     return () => clearInterval(interval);
   }, [booking]);
 
-  const handleCancel = async () => {
-    const reason = prompt("Vui lòng nhập lý do hủy đặt vé:");
-    if (reason === null) return; // Cancel prompt
-
+  const handleCancel = async reason => {
     setCancelling(true);
+    setCancelError('');
     try {
       await cancelBooking(bookingId, reason || "Khách hàng chủ động hủy");
       // Refresh details
@@ -81,8 +82,9 @@ export default function BookingDetailPage() {
         expiresAt: freshData.expiresAt ?? freshData.expiredAt ?? freshData.paymentDeadline,
         bookingStatus: freshData.bookingStatus ?? freshData.status
       }));
+      setCancelModalOpen(false);
     } catch (err) {
-      alert("Không thể hủy đặt vé: " + (err.message || "Lỗi kết nối"));
+      setCancelError(`Không thể hủy đặt vé: ${err.message || 'Lỗi kết nối'}`);
     } finally {
       setCancelling(false);
     }
@@ -166,6 +168,18 @@ export default function BookingDetailPage() {
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium print:bg-white print:text-black print:pt-4">
+      {cancelModalOpen && (
+        <BookingCancellationModal
+          bookingCode={booking.bookingCode}
+          error={cancelError}
+          pending={cancelling}
+          onClose={() => {
+            setCancelError('');
+            setCancelModalOpen(false);
+          }}
+          onConfirm={handleCancel}
+        />
+      )}
 
       <div className="max-w-5xl mx-auto w-full space-y-8">
 
@@ -232,7 +246,10 @@ export default function BookingDetailPage() {
             {canRecover && (
               <button
                 disabled={cancelling}
-                onClick={handleCancel}
+                onClick={() => {
+                  setCancelError('');
+                  setCancelModalOpen(true);
+                }}
                 className="bg-transparent hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 text-red-400 font-bold px-6 py-3.5 rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
               >
                 <Trash2 className="w-4 h-4" />

@@ -44,8 +44,6 @@ describe('CustomerBookingHistory pending recovery actions', () => {
     vi.clearAllMocks();
     getBookingHistory.mockResolvedValue(bookingPage);
     cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -78,6 +76,9 @@ describe('CustomerBookingHistory pending recovery actions', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: /hủy giữ ghế/i }));
+    expect(screen.getByRole('dialog', { name: /xác nhận hủy giữ ghế/i }))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy' }));
 
     await waitFor(() => {
       expect(cancelBooking).toHaveBeenCalledWith(
