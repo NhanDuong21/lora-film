@@ -49,15 +49,13 @@ public class InternalSeatReservationControllerTest {
     private com.lorafilm.booking.common.filter.RequestLoggingFilter requestLoggingFilter;
 
     @Test
-    public void convertReservation_Success_Returns200() throws Exception {
+    public void convertReservation_DeprecatedMutationReturnsGone() throws Exception {
         ConvertReservationRequest request = new ConvertReservationRequest(50L, List.of(101L));
-
-        doNothing().when(seatReservationService).convertReservations(any());
 
         mockMvc.perform(post("/internal/seat-reservations/convert")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+                .andExpect(status().isGone());
     }
 
     @Test

@@ -18,7 +18,6 @@ import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingSpecification;
 import com.lorafilm.booking.booking.service.BookingService;
-import com.lorafilm.booking.common.constant.BookingConstants;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.exception.ForbiddenException;
@@ -35,11 +34,14 @@ import com.lorafilm.booking.reservation.entity.SeatReservation;
 import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
+import com.lorafilm.booking.reservation.service.RedisLockService;
+import com.lorafilm.booking.config.BookingPolicyProperties;
 import com.lorafilm.booking.security.service.SecurityContextService;
 import com.lorafilm.booking.booking.dto.CreateSnapshotRequest;
 import com.lorafilm.booking.booking.dto.CreateTicketRequest;
 import com.lorafilm.booking.booking.service.BookingSnapshotService;
 import com.lorafilm.booking.booking.service.BookingTicketService;
+import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +52,10 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -80,13 +86,15 @@ public class BookingServiceImpl implements BookingService {
     private final ObjectMapper objectMapper;
     private final BookingSnapshotRepository bookingSnapshotRepository;
     private final BookingTicketRepository bookingTicketRepository;
-    private final com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort;
-    private final com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository;
     private final com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
     private final BookingMetricsManager bookingMetricsManager;
     private final BookingTicketService bookingTicketService;
     private final BookingSnapshotService bookingSnapshotService;
+    private final BookingPolicyProperties bookingPolicyProperties;
+    private final RedisLockService redisLockService;
+    private final BookingLifecycleService lifecycleService;
 
+    @Autowired
     public BookingServiceImpl(
             BookingRepository bookingRepository,
             SeatReservationRepository reservationRepository,
@@ -99,12 +107,13 @@ public class BookingServiceImpl implements BookingService {
             ObjectMapper objectMapper,
             BookingSnapshotRepository bookingSnapshotRepository,
             BookingTicketRepository bookingTicketRepository,
-            com.lorafilm.booking.payment.port.PaymentIntegrationPort paymentIntegrationPort,
-            com.lorafilm.booking.payment.repository.BookingPaymentEventRepository paymentEventRepository,
             com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
             BookingMetricsManager bookingMetricsManager,
             BookingTicketService bookingTicketService,
-            BookingSnapshotService bookingSnapshotService) {
+            BookingSnapshotService bookingSnapshotService,
+            BookingPolicyProperties bookingPolicyProperties,
+            RedisLockService redisLockService,
+            BookingLifecycleService lifecycleService) {
         this.bookingRepository = bookingRepository;
         this.reservationRepository = reservationRepository;
         this.reservationService = reservationService;
@@ -116,12 +125,65 @@ public class BookingServiceImpl implements BookingService {
         this.objectMapper = objectMapper;
         this.bookingSnapshotRepository = bookingSnapshotRepository;
         this.bookingTicketRepository = bookingTicketRepository;
-        this.paymentIntegrationPort = paymentIntegrationPort;
-        this.paymentEventRepository = paymentEventRepository;
         this.outboxService = outboxService;
         this.bookingMetricsManager = bookingMetricsManager;
         this.bookingTicketService = bookingTicketService;
         this.bookingSnapshotService = bookingSnapshotService;
+        this.bookingPolicyProperties = bookingPolicyProperties;
+        this.redisLockService = redisLockService;
+        this.lifecycleService = lifecycleService;
+    }
+
+    /** Backwards-compatible constructor for existing unit/integration callers. */
+    public BookingServiceImpl(
+            BookingRepository bookingRepository,
+            SeatReservationRepository reservationRepository,
+            SeatReservationService reservationService,
+            ShowtimeClient showtimeClient,
+            SecurityContextService securityContextService,
+            BookingCodeGenerator bookingCodeGenerator,
+            BookingMapper bookingMapper,
+            BookingPriceSnapshotRepository priceSnapshotRepository,
+            ObjectMapper objectMapper,
+            BookingSnapshotRepository bookingSnapshotRepository,
+            BookingTicketRepository bookingTicketRepository,
+            com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
+            BookingMetricsManager bookingMetricsManager,
+            BookingTicketService bookingTicketService,
+            BookingSnapshotService bookingSnapshotService,
+            BookingPolicyProperties bookingPolicyProperties,
+            RedisLockService redisLockService) {
+        this(bookingRepository, reservationRepository, reservationService, showtimeClient,
+                securityContextService, bookingCodeGenerator, bookingMapper, priceSnapshotRepository,
+                objectMapper, bookingSnapshotRepository, bookingTicketRepository, outboxService,
+                bookingMetricsManager, bookingTicketService, bookingSnapshotService,
+                bookingPolicyProperties, redisLockService, null);
+    }
+
+    /** Backwards-compatible constructor for existing unit/integration callers. */
+    public BookingServiceImpl(
+            BookingRepository bookingRepository,
+            SeatReservationRepository reservationRepository,
+            SeatReservationService reservationService,
+            ShowtimeClient showtimeClient,
+            SecurityContextService securityContextService,
+            BookingCodeGenerator bookingCodeGenerator,
+            BookingMapper bookingMapper,
+            BookingPriceSnapshotRepository priceSnapshotRepository,
+            ObjectMapper objectMapper,
+            BookingSnapshotRepository bookingSnapshotRepository,
+            BookingTicketRepository bookingTicketRepository,
+            com.lorafilm.booking.payment.port.PaymentIntegrationPort ignoredPaymentIntegrationPort,
+            com.lorafilm.booking.payment.repository.BookingPaymentEventRepository ignoredPaymentEventRepository,
+            com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
+            BookingMetricsManager bookingMetricsManager,
+            BookingTicketService bookingTicketService,
+            BookingSnapshotService bookingSnapshotService) {
+        this(bookingRepository, reservationRepository, reservationService, showtimeClient,
+                securityContextService, bookingCodeGenerator, bookingMapper, priceSnapshotRepository,
+                objectMapper, bookingSnapshotRepository, bookingTicketRepository,
+                outboxService, bookingMetricsManager, bookingTicketService,
+                bookingSnapshotService, new BookingPolicyProperties(), null, null);
     }
 
     @Override
@@ -132,6 +194,10 @@ public class BookingServiceImpl implements BookingService {
         MDC.put("action", "CREATE_BOOKING");
         ValidatedCreateRequest validatedRequest = validateCreateRequest(request);
 
+        if (validatedRequest.seatPublicIds() != null) {
+            return createAtomicBookingFromSeats(currentUserId, validatedRequest);
+        }
+
         List<SeatReservation> reservations = reservationRepository
                 .findAllByPublicIdInForUpdate(validatedRequest.reservationPublicIds());
         Long showtimeId = validateReservations(
@@ -141,6 +207,8 @@ public class BookingServiceImpl implements BookingService {
         ShowtimeBookingContext context = showtimeClient.getBookingContext(showtimeId, seatIds);
         validateShowtimeContext(context, showtimeId, validatedRequest.showtimePublicId(), seatIds);
 
+        Instant bookingDeadline = calculateDeadline(Instant.now(), context.startsAt(),
+                reservations.stream().map(SeatReservation::getExpiresAt).filter(Objects::nonNull).min(Instant::compareTo).orElse(null));
         Booking booking = Booking.create(
                 UUID.randomUUID().toString(),
                 generateUniqueBookingCode(),
@@ -156,14 +224,23 @@ public class BookingServiceImpl implements BookingService {
                 context.discountAmount(),
                 BigDecimal.ZERO,
                 context.currency(),
-                context.paymentExpiresAt(),
+                bookingDeadline,
                 null);
+        booking.setShowtimePublicId(context.showtimePublicId());
 
         Booking savedBooking = bookingRepository.saveAndFlush(booking);
         persistAuthoritativePriceSnapshot(savedBooking, context);
         MDC.put("bookingId", savedBooking.getPublicId());
         List<Long> reservationIds = reservations.stream().map(SeatReservation::getId).toList();
-        reservationService.convertReservations(new ConvertReservationRequest(savedBooking.getId(), reservationIds));
+        // Compatibility reservations remain HELD until Payment SUCCESS.  Linking
+        // them is part of this transaction; Redis is never used as their owner.
+        for (SeatReservation reservation : reservations) {
+            reservation.setBookingId(savedBooking.getId());
+            if (reservation.getExpiresAt() != null && reservation.getExpiresAt().isAfter(bookingDeadline)) {
+                reservation.setExpiresAt(bookingDeadline);
+            }
+            reservationRepository.save(reservation);
+        }
 
         // Create Snapshot
         CreateSnapshotRequest snapshotRequest = new CreateSnapshotRequest();
@@ -189,6 +266,167 @@ public class BookingServiceImpl implements BookingService {
         return bookingMapper.toResponse(savedBooking);
     }
 
+    private BookingResponse createAtomicBookingFromSeats(Long userId, ValidatedCreateRequest request) {
+        ShowtimeBookingContext context = showtimeClient.getBookingContextByPublicId(
+                request.showtimePublicId(), request.seatPublicIds());
+        if (context == null || context.startsAt() == null || !context.startsAt().isAfter(Instant.now())) {
+            throw new BusinessException("BOOKING_SHOWTIME_NOT_OPEN", "Showtime has already started", HttpStatus.CONFLICT);
+        }
+        List<Long> seatIds = context.seats().stream().map(ShowtimeBookingContext.SeatContext::seatId).toList();
+        Set<String> requestedPublicIds = new HashSet<>(request.seatPublicIds());
+        Set<String> returnedPublicIds = context.seats().stream()
+                .map(ShowtimeBookingContext.SeatContext::seatPublicId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (returnedPublicIds.size() != requestedPublicIds.size()
+                || !returnedPublicIds.equals(requestedPublicIds)) {
+            throw new IntegrationException("Movie Service returned mismatched public seat information");
+        }
+        validateShowtimeContext(context, context.showtimeId(), request.showtimePublicId(), seatIds);
+        if (seatIds.size() > bookingPolicyProperties.getMaxSeatsPerBooking()) {
+            throw new BusinessException("BOOKING_TOO_MANY_SEATS",
+                    "A booking cannot contain more than " + bookingPolicyProperties.getMaxSeatsPerBooking() + " seats",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        String ownerToken = UUID.randomUUID().toString();
+        boolean locked = redisLockService == null || redisLockService.acquireHoldLocks(
+                context.showtimeId(), seatIds, ownerToken, bookingPolicyProperties.getCreationLockTtlSeconds());
+        if (!locked) {
+            throw new BusinessException("BOOKING_SEAT_CONFLICT",
+                    "One or more seats are currently being booked", HttpStatus.CONFLICT);
+        }
+        registerRedisCleanup(context.showtimeId(), seatIds, ownerToken);
+        try {
+            Instant deadline = calculateDeadline(Instant.now(), context.startsAt(), null);
+            expireStaleReservationsBeforeInsert(context.showtimeId(), seatIds, Instant.now());
+            Booking booking = Booking.create(
+                    UUID.randomUUID().toString(), generateUniqueBookingCode(), userId,
+                    context.showtimeId(), context.movieId(), context.cinemaId(), context.auditoriumId(),
+                    context.ticketAmount(), BigDecimal.ZERO, context.serviceFee(), BigDecimal.ZERO,
+                    context.discountAmount(), BigDecimal.ZERO, context.currency(), deadline, null);
+            booking.setShowtimePublicId(context.showtimePublicId());
+            Booking saved = bookingRepository.saveAndFlush(booking);
+            persistAuthoritativePriceSnapshot(saved, context);
+
+            Instant now = Instant.now();
+            List<SeatReservation> reservations = context.seats().stream().map(seat -> {
+                SeatReservation reservation = new SeatReservation();
+                reservation.setPublicId(UUID.randomUUID().toString());
+                reservation.setReservationCode("RES-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+                reservation.setUserId(userId);
+                reservation.setShowtimeId(context.showtimeId());
+                reservation.setShowtimePublicId(context.showtimePublicId());
+                reservation.setSeatId(seat.seatId());
+                reservation.setSeatPublicId(seat.seatPublicId());
+                reservation.setSeatLabel(seat.seatLabel());
+                reservation.setSeatType(seat.seatType());
+                reservation.setReservationSource(com.lorafilm.booking.reservation.enums.ReservationSource.WEB);
+                reservation.setStatus(SeatReservationStatus.HELD);
+                reservation.setReservedAt(now);
+                reservation.setExpiresAt(deadline);
+                reservation.setBookingId(saved.getId());
+                return reservation;
+            }).toList();
+            try {
+                reservationRepository.saveAllAndFlush(reservations);
+            } catch (DataIntegrityViolationException conflict) {
+                throw new BusinessException("BOOKING_SEAT_CONFLICT",
+                        "One or more selected seats are no longer available", HttpStatus.CONFLICT);
+            }
+            createBookingSnapshot(saved, context);
+            bookingMetricsManager.incrementBookingCreated();
+            return bookingMapper.toResponse(saved);
+        } catch (RuntimeException failure) {
+            if (redisLockService != null && !TransactionSynchronizationManager.isSynchronizationActive()) {
+                redisLockService.releaseLocks(context.showtimeId(), seatIds, ownerToken);
+            }
+            throw failure;
+        }
+    }
+
+    private void expireStaleReservationsBeforeInsert(Long showtimeId, List<Long> seatIds, Instant now) {
+        List<SeatReservation> existing = reservationRepository.findReservationsForBookingUpdate(showtimeId, seatIds);
+        for (SeatReservation reservation : existing) {
+            if (reservation.getStatus() == SeatReservationStatus.BOOKED
+                    || (reservation.getStatus() == SeatReservationStatus.HELD
+                    && reservation.getExpiresAt() != null
+                    && reservation.getExpiresAt().isAfter(now))) {
+                throw new BusinessException("BOOKING_SEAT_CONFLICT",
+                        "One or more selected seats are no longer available", HttpStatus.CONFLICT);
+            }
+            if (reservation.getStatus() != SeatReservationStatus.HELD) {
+                continue;
+            }
+            if (reservation.getBookingId() != null) {
+                bookingRepository.findById(reservation.getBookingId()).ifPresent(staleBooking -> {
+                    if (staleBooking.getBookingStatus() == BookingStatus.PENDING_PAYMENT
+                            && staleBooking.getExpiresAt() != null
+                            && !staleBooking.getExpiresAt().isAfter(now)) {
+                        staleBooking.changeStatus(BookingStatus.EXPIRED, now);
+                        bookingRepository.save(staleBooking);
+                        reservationService.handleBookingStatusChange(
+                                staleBooking.getId(), BookingStatus.EXPIRED,
+                                "Expired while a new Booking acquired the database seat lock");
+                    }
+                });
+            } else {
+                reservation.setStatus(SeatReservationStatus.EXPIRED);
+                reservation.setExpiredReason("Expired before Booking creation");
+                reservationRepository.save(reservation);
+            }
+        }
+        reservationRepository.flush();
+    }
+
+    private void createBookingSnapshot(Booking booking, ShowtimeBookingContext context) {
+        CreateSnapshotRequest snapshotRequest = new CreateSnapshotRequest();
+        snapshotRequest.setMovieId(context.movieId());
+        snapshotRequest.setMovieTitle(context.movieTitle());
+        snapshotRequest.setShowtimeId(context.showtimeId());
+        snapshotRequest.setShowtimeStart(context.startsAt());
+        snapshotRequest.setShowtimeEnd(context.endsAt());
+        snapshotRequest.setCinemaId(context.cinemaId());
+        snapshotRequest.setCinemaName(context.cinemaName());
+        snapshotRequest.setAuditoriumId(context.auditoriumId());
+        snapshotRequest.setAuditoriumName(context.auditoriumName());
+        snapshotRequest.setSeatCount(context.seats().size());
+        try {
+            snapshotRequest.setSnapshotJson(objectMapper.writeValueAsString(context.seats()));
+        } catch (Exception e) {
+            throw new IntegrationException("Failed to serialize seat snapshot", e);
+        }
+        bookingSnapshotService.createSnapshot(booking.getId(), snapshotRequest);
+    }
+
+    private Instant calculateDeadline(Instant now, Instant showtimeStart, Instant existingDeadline) {
+        if (showtimeStart == null || !showtimeStart.isAfter(now)) {
+            throw new BusinessException("BOOKING_SHOWTIME_STARTED", "Showtime start must be in the future", HttpStatus.CONFLICT);
+        }
+        Instant configured = now.plusSeconds(bookingPolicyProperties.getHoldDurationSeconds());
+        Instant deadline = configured.isBefore(showtimeStart) ? configured : showtimeStart;
+        return existingDeadline == null || existingDeadline.isBefore(deadline)
+                ? existingDeadline == null ? deadline : existingDeadline
+                : deadline;
+    }
+
+    private void registerRedisCleanup(Long showtimeId, List<Long> seatIds, String ownerToken) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (redisLockService != null) {
+                        redisLockService.releaseLocks(showtimeId, seatIds, ownerToken);
+                    }
+                }
+            });
+        } else {
+            if (redisLockService != null) {
+                redisLockService.releaseLocks(showtimeId, seatIds, ownerToken);
+            }
+        }
+    }
+
     @Override
     @Transactional
     public BookingResponse cancelBooking(String publicId, CancelBookingRequest request) {
@@ -202,6 +440,10 @@ public class BookingServiceImpl implements BookingService {
                 ? "USER_CANCEL"
                 : request.getReasonCode().trim();
         String reasonDetail = request == null ? null : request.getReasonDetail();
+        if (lifecycleService != null) {
+            return bookingMapper.toResponse(lifecycleService.cancel(
+                    booking, reasonCode, reasonDetail, "CUSTOMER"));
+        }
         booking.cancel(reasonCode, reasonDetail, Instant.now());
         Booking saved = bookingRepository.save(booking);
         reservationService.handleBookingStatusChange(saved.getId(), BookingStatus.CANCELLED,
@@ -215,7 +457,9 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public BookingResponse confirmBooking(String publicId) {
-        return changeStatusInternal(publicId, BookingStatus.CONFIRMED);
+        throw new BusinessException("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED",
+                "Booking confirmation is performed only by a validated Payment result",
+                HttpStatus.GONE);
     }
 
     @Override
@@ -286,6 +530,11 @@ public class BookingServiceImpl implements BookingService {
         MDC.put("bookingId", publicId);
         MDC.put("action", "CHANGE_BOOKING_STATUS");
         Booking booking = getBooking(publicId);
+        if (lifecycleService != null) {
+            return bookingMapper.toResponse(lifecycleService.transition(
+                    booking, targetStatus, "Booking status changed to " + targetStatus,
+                    "BOOKING_SERVICE"));
+        }
         booking.changeStatus(targetStatus, Instant.now());
         Booking saved = bookingRepository.save(booking);
 
@@ -307,11 +556,16 @@ public class BookingServiceImpl implements BookingService {
                 || targetStatus == BookingStatus.REFUNDED) {
             reservationService.handleBookingStatusChange(saved.getId(), targetStatus,
                     "Booking status changed to " + targetStatus);
-            // Cancel tickets
+            // Preserve ticket rows and mark them with the appropriate terminal
+            // state for audit/reconciliation.
             try {
-                bookingTicketService.deleteTickets(saved.getId());
+                if (targetStatus == BookingStatus.REFUNDED) {
+                    bookingTicketService.refundTickets(saved.getId());
+                } else {
+                    bookingTicketService.deleteTickets(saved.getId());
+                }
             } catch (Exception e) {
-                log.warn("Failed to delete/cancel tickets for bookingId: {}", saved.getId(), e);
+                log.warn("Failed to update tickets for bookingId: {}", saved.getId(), e);
             }
         }
 
@@ -334,18 +588,22 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("BOOKING_INVALID_REQUEST", "Create booking request is required");
         }
         String showtimePublicId = normalizeShowtimePublicId(request.getShowtimePublicId());
+        List<String> seatPublicIds = request.getSeatPublicIds();
         List<String> reservationPublicIds = request.getReservationPublicIds();
-        if (reservationPublicIds == null || reservationPublicIds.isEmpty()) {
-            throw new BusinessException("BOOKING_RESERVATION_REQUIRED", "At least one reservation is required");
+        if ((seatPublicIds == null || seatPublicIds.isEmpty())
+                == (reservationPublicIds == null || reservationPublicIds.isEmpty())) {
+            throw new BusinessException("BOOKING_SEAT_SELECTION_REQUIRED",
+                    "Provide either seatPublicIds or deprecated reservationPublicIds");
         }
-        if (reservationPublicIds.size() > BookingConstants.DEFAULT_MAX_TICKETS_PER_BOOKING) {
+        List<String> selected = seatPublicIds != null && !seatPublicIds.isEmpty() ? seatPublicIds : reservationPublicIds;
+        if (selected.size() > bookingPolicyProperties.getMaxSeatsPerBooking()) {
             throw new BusinessException("BOOKING_TOO_MANY_RESERVATIONS",
-                    "A booking cannot contain more than 8 reservations");
+                    "A booking cannot contain more than " + bookingPolicyProperties.getMaxSeatsPerBooking() + " seats");
         }
 
         List<String> normalizedPublicIds;
         try {
-            normalizedPublicIds = reservationPublicIds.stream()
+            normalizedPublicIds = selected.stream()
                     .map(this::normalizeReservationPublicId)
                     .toList();
         } catch (IllegalArgumentException | NullPointerException ex) {
@@ -360,7 +618,9 @@ public class BookingServiceImpl implements BookingService {
                     "BOOKING_DUPLICATE_RESERVATION",
                     "Duplicate reservation public IDs are not allowed");
         }
-        return new ValidatedCreateRequest(showtimePublicId, normalizedPublicIds);
+        return new ValidatedCreateRequest(showtimePublicId,
+                seatPublicIds != null && !seatPublicIds.isEmpty() ? normalizedPublicIds : null,
+                reservationPublicIds != null && !reservationPublicIds.isEmpty() ? normalizedPublicIds : null);
     }
 
     private String normalizeShowtimePublicId(String publicId) {
@@ -452,8 +712,8 @@ public class BookingServiceImpl implements BookingService {
         if (context.endsAt() == null || !context.endsAt().isAfter(now)) {
             throw new BusinessException("BOOKING_SHOWTIME_ENDED", "Showtime has already ended");
         }
-        if (context.paymentExpiresAt() == null || !context.paymentExpiresAt().isAfter(now)) {
-            throw new IntegrationException("Movie Service returned an invalid payment deadline");
+        if (context.startsAt() == null || !context.startsAt().isAfter(now)) {
+            throw new IntegrationException("Movie Service returned an invalid showtime start");
         }
         if (context.seats() == null) {
             throw new IntegrationException("Movie Service returned incomplete seat information");
@@ -518,7 +778,8 @@ public class BookingServiceImpl implements BookingService {
                 context.ticketAmount(),
                 context.seats().stream()
                         .map(seat -> new BookingPriceSnapshotPayload.SeatPriceLine(
-                                seat.seatId(), seat.seatLabel(), seat.seatType(), seat.price()))
+                                seat.seatId(), seat.seatLabel(), seat.seatType(), seat.price(),
+                                seat.seatPublicId()))
                         .toList());
         BookingPriceSnapshot snapshot = new BookingPriceSnapshot();
         snapshot.setBooking(booking);
@@ -600,63 +861,24 @@ public class BookingServiceImpl implements BookingService {
                 .and(BookingSpecification.createdTo(toDate));
     }
 
+    private record ValidatedCreateRequest(String showtimePublicId,
+                                          List<String> seatPublicIds,
+                                          List<String> reservationPublicIds) {
+    }
+
     @Override
     @Transactional
-    public com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId,
-            com.lorafilm.booking.payment.dto.InitiatePaymentRequest request) {
+    public BookingResponse finalizeCheckout(String publicId) {
         Long currentUserId = requireAuthenticatedUser();
         Booking booking = getBooking(publicId);
         requireOwnerOrAdmin(booking, currentUserId);
-
         if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
-            throw new BusinessException("BOOKING_INVALID_STATUS",
-                    "Payment can only be initiated for bookings in PENDING_PAYMENT status");
+            throw new BusinessException("BOOKING_NOT_PENDING", "Only pending Bookings can be finalized", HttpStatus.CONFLICT);
         }
-
-        // Call port to request payment
-        com.lorafilm.booking.payment.dto.PaymentRequestDto portRequest = new com.lorafilm.booking.payment.dto.PaymentRequestDto(
-                booking.getId(),
-                booking.getBookingCode(),
-                booking.getFinalAmount(),
-                booking.getCurrency(),
-                request.paymentMethod(),
-                request.paymentProvider(),
-                booking.getUserId(),
-                booking.getExpiresAt());
-
-        com.lorafilm.booking.payment.dto.PaymentResponseDto portResponse = paymentIntegrationPort
-                .requestPayment(portRequest);
-
-        // Update booking metadata snapshot
-        booking.setPaymentMethodSnapshot(request.paymentMethod());
-        booking.setPaymentProvider(request.paymentProvider());
-        booking.setPaymentReference(portResponse.transactionCode());
-        bookingRepository.save(booking);
-
-        // Record a PAYMENT_REQUESTED snapshot
-        com.lorafilm.booking.payment.entity.BookingPaymentEvent paymentEvent = new com.lorafilm.booking.payment.entity.BookingPaymentEvent();
-        paymentEvent.setPublicId(UUID.randomUUID().toString());
-        paymentEvent.setBooking(booking);
-        paymentEvent.setPaymentId(portResponse.paymentId());
-        paymentEvent.setTransactionId(portResponse.transactionCode());
-        paymentEvent.setGatewayTransactionId(portResponse.externalTransactionId());
-        paymentEvent.setPaymentProvider(request.paymentProvider());
-        paymentEvent.setPaymentMethod(request.paymentMethod());
-        paymentEvent.setEventType(com.lorafilm.booking.payment.enums.PaymentEventType.PAYMENT_CREATED);
-        paymentEvent.setAmount(booking.getFinalAmount());
-        paymentEvent.setCurrency(booking.getCurrency());
-        paymentEvent.setStatus(com.lorafilm.booking.payment.enums.PaymentEventStatus.PENDING);
-        paymentEvent.setOccurredAt(Instant.now());
-        paymentEvent.setRequestPayload("{\"bookingId\":" + booking.getId() + ",\"action\":\"INITIATE_PAYMENT\"}");
-        paymentEventRepository.save(paymentEvent);
-
-        // Create Outbox Event: BOOKING_PAYMENT_RECEIVED
-        outboxService.createOutboxEvent("BOOKING", booking.getId(), "BOOKING_PAYMENT_RECEIVED", booking);
-
-        return portResponse;
-    }
-
-
-    private record ValidatedCreateRequest(String showtimePublicId, List<String> reservationPublicIds) {
+        if (booking.getExpiresAt() == null || !Instant.now().isBefore(booking.getExpiresAt())) {
+            throw new BusinessException("BOOKING_EXPIRED", "The Booking payment deadline has passed", HttpStatus.CONFLICT);
+        }
+        booking.lockAmount(Instant.now());
+        return bookingMapper.toResponse(bookingRepository.save(booking));
     }
 }

@@ -118,19 +118,16 @@ public class AdminBookingServiceTest {
     }
 
     @Test
-    public void updateBookingStatus_Success_FlowExecuted() {
+    public void updateBookingStatus_Confirmed_IsPaymentTombstone() {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(BookingStatus.CONFIRMED, "Payment done", "ADMIN", "Note");
 
         when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
-        when(bookingRepository.save(any())).thenReturn(sampleBooking);
 
-        BookingAdminResponse response = adminBookingService.updateBookingStatus("550e8400-e29b-41d4-a716-446655440000", request);
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> adminBookingService.updateBookingStatus("550e8400-e29b-41d4-a716-446655440000", request));
 
-        assertNotNull(response);
-        verify(historyService).saveHistory(eq(sampleBooking), eq("PENDING_PAYMENT"), eq("CONFIRMED"), eq("Payment done"), eq("ADMIN"), eq("ADMIN"));
-        verify(auditService).logAudit(eq(10L), eq("ADMIN"), eq("CHANGE_STATUS"), eq("bookingStatus"), eq("PENDING_PAYMENT"), eq("CONFIRMED"), any(), any(), any(), any());
-        verify(operationLogService).logOperation(eq(10L), eq("CHANGE_STATUS"), eq("ADMIN"), eq(true), eq(0L), any(), any(), eq("Payment done"));
-        verify(outboxService).createOutboxEvent(eq("BOOKING"), eq(10L), eq("BOOKING_CONFIRMED"), eq(sampleBooking));
+        assertEquals("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED", exception.getErrorCode());
+        verify(bookingRepository, org.mockito.Mockito.never()).save(any());
     }
 
     @Test
@@ -142,7 +139,7 @@ public class AdminBookingServiceTest {
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 adminBookingService.updateBookingStatus("550e8400-e29b-41d4-a716-446655440000", request));
-        assertEquals("CANNOT_CONFIRM_CANCELLED", ex.getErrorCode());
+        assertEquals("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED", ex.getErrorCode());
     }
 
     @Test

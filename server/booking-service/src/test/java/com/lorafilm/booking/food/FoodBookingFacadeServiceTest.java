@@ -46,6 +46,7 @@ class FoodBookingFacadeServiceTest {
         booking.setUserId(1L);
         booking.setCinemaId(1L);
         booking.setShowtimeId(1L);
+        booking.setExpiresAt(java.time.Instant.now().plusSeconds(900));
 
         when(bookingRepository.findByPublicIdWithLock(bookingPublicId)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));

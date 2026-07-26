@@ -10,6 +10,10 @@ public class BookingContextRequest {
 
     public BookingContextRequest() {}
 
+    public BookingContextRequest(List<Long> seatIds) {
+        this.seatIds = seatIds;
+    }
+
     public List<Long> getSeatIds() {
         return seatIds;
     }

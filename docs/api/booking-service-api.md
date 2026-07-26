@@ -1,5 +1,13 @@
 # Booking Service API Specification
 
+> **Normative production correction (2026-07-26):** Sections that describe
+> Redis as the long-lived seat source, a five-minute reservation TTL, or direct
+> confirmation are historical draft material. The implemented contract is
+> MySQL-only for reservation lifetime; Redis is an optional, token-owned
+> short-creation mutex released after transaction completion. Booking owns the
+> configurable 900-second deadline (capped by showtime start), and Payment
+> SUCCESS is the only confirmation authority.
+
 ## 1. Thông Tin Chung
 
 | Mục            | Nội dung                                        |
@@ -604,7 +612,8 @@ Thời gian chờ thanh toán:
 Cấu hình:
 
 ```properties
-booking.payment-timeout-minutes=15
+booking.hold-duration-seconds=${BOOKING_HOLD_DURATION_SECONDS:900}
+booking.creation-lock-ttl-seconds=${BOOKING_CREATION_LOCK_TTL_SECONDS:30}
 ```
 
 Khi tạo booking:
@@ -2514,3 +2523,36 @@ Booking Service Owner đã review và xác nhận:
 | 22/06/2026 | Cập nhật contract theo review của Booking Service Owner: đổi thời điểm tạo ticket, bổ sung Idempotency-Key, expiration worker, schema alignment, Optimistic Locking và webhook security direction | Dương Thiện Nhân |
 
 Các thay đổi schema chỉ được ghi nhận là hoàn tất tại tài liệu sau khi Schema Alignment MR tương ứng được merge.
+# Production lifecycle correction (2026-07-26)
+
+`seat_reservations` in MySQL, its status/expiry columns, and
+`uk_active_seat_reservation` are the only long-lived seat authority. Redis is
+an optional short critical-section mutex for atomic Booking creation: keys are
+acquired in deterministic order, the database transaction commits or rolls
+back, and only the current owner token is deleted in `afterCompletion`. Redis
+TTL, restart, or cleanup never changes database availability. Booking owns
+`booking.hold-duration-seconds` (default 900) and
+`booking.max-seats-per-booking` (default 8); the deadline is
+`min(now + hold duration, showtime start)`.
+
+## Endpoint disposition
+
+| Endpoint family | Final disposition |
+|---|---|
+| `POST /api/bookings`, booking reads, cancel, tickets | Retained; canonical public IDs and lifecycle guards |
+| `POST /api/bookings/{publicId}/finalize-checkout` | Canonical amount-lock boundary |
+| `POST /api/bookings/{publicId}/payment` | Deprecated tombstone (`410 PAYMENT_SERVICE_HANDOFF_REQUIRED`) |
+| `POST /api/seat-reservations` and release/read adapters | Deprecated compatibility adapters; server limits, Movie validation, owner checks, DB uniqueness |
+| `POST /api/seat-reservations/{publicId}/extend` | Deprecated immutable-deadline response (`409 RESERVATION_DEADLINE_IMMUTABLE`) |
+| `GET /api/seat-reservations/showtimes/{showtimePublicId}/availability` | Canonical DB-only availability read |
+| `/internal/seat-reservations/convert`, `/release`, `/expire` | Runtime mutation tombstones; canonical Booking lifecycle is required |
+| `/internal/bookings/{publicId}/confirm` | Deprecated tombstone (`410 CONFIRM_VIA_PAYMENT_RESULT_REQUIRED`) |
+| Numeric and public-ID Payment context/result routes | Retained as canonical/compatibility adapters |
+| `/api/mock/payment/**` | Removed with Booking-side provider/mock implementation |
+> **Normative production correction (2026-07-26):** Sections that describe
+> Redis as the long-lived seat source, a five-minute reservation TTL, or direct
+> confirmation are historical draft material. The implemented contract is
+> MySQL-only for reservation lifetime; Redis is an optional, token-owned
+> short-creation mutex released after transaction completion. Booking owns the
+> configurable 900-second deadline (capped by showtime start), and Payment
+> SUCCESS is the only confirmation authority.

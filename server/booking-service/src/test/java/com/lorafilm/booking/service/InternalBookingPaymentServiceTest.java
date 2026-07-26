@@ -15,6 +15,10 @@ import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.payment.entity.BookingPaymentEvent;
 import com.lorafilm.booking.payment.enums.PaymentEventType;
 import com.lorafilm.booking.payment.repository.BookingPaymentEventRepository;
+import com.lorafilm.booking.reservation.entity.SeatReservation;
+import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
+import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
+import com.lorafilm.booking.infrastructure.repository.BookingReconciliationTaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,13 +64,18 @@ class InternalBookingPaymentServiceTest {
 
     @Mock
     private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager;
+    @Mock
+    private SeatReservationRepository reservationRepository;
+    @Mock
+    private BookingReconciliationTaskRepository reconciliationTaskRepository;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper().findAndRegisterModules();
         service = new InternalBookingPaymentServiceImpl(
                 bookingRepository, snapshotRepository, eventRepository, historyService, objectMapper,
-                bookingTicketService, outboxService, metricsManager);
+                bookingTicketService, outboxService, metricsManager,
+                reservationRepository, reconciliationTaskRepository);
         booking = Booking.create(
                 "550e8400-e29b-41d4-a716-446655440000",
                 "LORAFILM-1",
@@ -85,12 +94,14 @@ class InternalBookingPaymentServiceTest {
                 Instant.now().plusSeconds(900),
                 null);
         booking.setId(100L);
+        booking.lockAmount(Instant.now());
     }
 
     @Test
     void returnsStoredBookingAmountAndSnapshotAnalytics() throws Exception {
         when(bookingRepository.findById(100L)).thenReturn(Optional.of(booking));
         when(snapshotRepository.findByBookingId(100L)).thenReturn(Optional.of(snapshot()));
+        when(reservationRepository.findAllByBookingId(100L)).thenReturn(List.of(heldReservation()));
 
         var context = service.getPaymentContext(100L);
 
@@ -144,6 +155,7 @@ class InternalBookingPaymentServiceTest {
     void confirmsBookingAndPersistsIdempotencyEvent() {
         when(eventRepository.findByPublicId("event-1")).thenReturn(Optional.empty());
         when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
+        when(reservationRepository.findAllByBookingId(100L)).thenReturn(List.of(heldReservation()));
         InternalPaymentResultRequest request = result("event-1", "SUCCESS", new BigDecimal("240000.00"));
 
         var response = service.recordPaymentResult(100L, request);
@@ -208,5 +220,12 @@ class InternalBookingPaymentServiceTest {
                 LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC),
                 "EXT-900",
                 "MATCHED");
+    }
+
+    private SeatReservation heldReservation() {
+        SeatReservation reservation = new SeatReservation();
+        reservation.setStatus(SeatReservationStatus.HELD);
+        reservation.setExpiresAt(booking.getExpiresAt());
+        return reservation;
     }
 }

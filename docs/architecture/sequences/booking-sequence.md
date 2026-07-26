@@ -1,5 +1,14 @@
 # Sequence Diagrams
 
+> **Normative production correction (2026-07-26):** This document's earlier
+> draft paragraphs are historical. The effective flow is atomic `POST
+> /api/bookings`: Redis only serializes the short database write section and is
+> released after commit/rollback; MySQL `seat_reservations` rows,
+> `status`, `expiresAt`, and `uk_active_seat_reservation` own the long-lived
+> HELD/BOOKED seat state. No Redis TTL, restart, or cleanup can make an active
+> database reservation available. Payment SUCCESS, not `/confirm`, performs
+> HELD→BOOKED.
+
 ## Booking Flow
 
 > Đây là draft flow cho **Booking module** trong hệ thống đặt vé xem phim online.
@@ -162,3 +171,11 @@ Sau đó Notification Service gửi thông báo cho user, ví dụ:
 * Kafka được dùng để publish event sau khi booking confirmed.
 * Notification Service xử lý gửi thông báo bất đồng bộ sau khi nhận event từ Kafka.
 * Code PlantUML để vẽ diagram nằm trong file `booking-sequence.puml`.
+# Revised reservation sequence (2026-07-26)
+
+The canonical flow is `POST /api/bookings` with public Showtime/seat IDs.
+Movie validates the authoritative seat/pricing context, Booking acquires
+short-lived ordered Redis mutexes, then one MySQL transaction writes the
+`PENDING_PAYMENT` Booking and `HELD` reservation rows. Redis is released after
+commit/rollback and never represents the hold. Payment SUCCESS later changes
+`HELD` to `BOOKED`; expiry/cancel changes `HELD` to an inactive state.

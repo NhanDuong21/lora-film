@@ -16,7 +16,6 @@ import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.service.impl.BookingServiceImpl;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.util.BookingCodeGenerator;
-import com.lorafilm.booking.reservation.dto.ConvertReservationRequest;
 import com.lorafilm.booking.reservation.entity.SeatReservation;
 import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
@@ -141,10 +140,11 @@ class BookingServiceTest {
         assertEquals("550e8400-e29b-41d4-a716-446655440000", response.publicId());
         assertEquals(BookingStatus.PENDING_PAYMENT, response.status());
         assertEquals(new BigDecimal("240000.00"), response.totalAmount());
-        ArgumentCaptor<ConvertReservationRequest> captor = ArgumentCaptor.forClass(ConvertReservationRequest.class);
-        verify(reservationService).convertReservations(captor.capture());
-        assertEquals(100L, captor.getValue().getBookingId());
-        assertEquals(List.of(21L, 22L), captor.getValue().getReservationIds());
+        verify(reservationService, never()).convertReservations(any());
+        assertEquals(100L, reservations.get(0).getBookingId());
+        assertEquals(SeatReservationStatus.HELD, reservations.get(0).getStatus());
+        assertEquals(100L, reservations.get(1).getBookingId());
+        assertEquals(SeatReservationStatus.HELD, reservations.get(1).getStatus());
         verify(showtimeClient).getBookingContext(1001L, List.of(101L, 102L));
         ArgumentCaptor<BookingPriceSnapshot> snapshotCaptor =
                 ArgumentCaptor.forClass(BookingPriceSnapshot.class);

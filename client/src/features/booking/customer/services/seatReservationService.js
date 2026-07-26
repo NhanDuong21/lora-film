@@ -42,3 +42,15 @@ export const extendReservation = async (reservationPublicId) => {
   const response = await apiClient.post(`/api/seat-reservations/${reservationPublicId}/extend`);
   return response.data;
 };
+
+/**
+ * Read Booking's database-backed seat availability overlay.
+ * Redis is intentionally not consulted by this read.
+ */
+export const getSeatAvailability = async (showtimePublicId, { signal } = {}) => {
+  const response = await apiClient.get(
+    `/api/seat-reservations/showtimes/${encodeURIComponent(showtimePublicId)}/availability`,
+    { signal }
+  );
+  return response.data;
+};

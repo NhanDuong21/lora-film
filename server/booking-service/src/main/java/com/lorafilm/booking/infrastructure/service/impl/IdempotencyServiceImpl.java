@@ -42,6 +42,19 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<BookingIdempotencyKey> checkKey(
+            String idempotencyKey, Long userId, String endpoint) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return Optional.empty();
+        }
+        return idempotencyKeyRepository.findByUserIdAndEndpointAndIdempotencyKey(
+                userId != null ? userId : 0L,
+                endpoint != null ? endpoint : "",
+                idempotencyKey);
+    }
+
+    @Override
     @Transactional
     public BookingIdempotencyKey startProcessing(
             String idempotencyKey, Long userId, String endpoint, String httpMethod, Object requestBody) {
@@ -60,10 +73,17 @@ public class IdempotencyServiceImpl implements IdempotencyService {
         keyRecord.setUserId(userId != null ? userId : 0L);
         keyRecord.setEndpoint(endpoint != null ? endpoint : "");
         keyRecord.setStatus(IdempotencyStatus.PROCESSING);
+        keyRecord.setLockedUntil(now.plus(120, ChronoUnit.SECONDS));
         keyRecord.setExpiresAt(expiresAt);
 
         log.debug("Creating IdempotencyKey record with key: {}", idempotencyKey);
-        return idempotencyKeyRepository.save(keyRecord);
+        BookingIdempotencyKey saved = idempotencyKeyRepository.save(keyRecord);
+        // Flush the scoped unique claim before the reservation transaction
+        // starts; this turns a concurrent claim into a deterministic conflict.
+        idempotencyKeyRepository.flush();
+        // A few lightweight repository doubles return null for save; the
+        // managed entity is still the correct result.
+        return saved != null ? saved : keyRecord;
     }
 
     @Override
@@ -88,6 +108,30 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
     @Override
     @Transactional
+    public void completeProcessing(
+            String idempotencyKey, Long userId, String endpoint,
+            int responseStatus, Object responseBody) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return;
+        }
+        idempotencyKeyRepository.findByUserIdAndEndpointAndIdempotencyKey(
+                userId != null ? userId : 0L,
+                endpoint != null ? endpoint : "",
+                idempotencyKey).ifPresent(keyRecord -> {
+            keyRecord.setStatus(IdempotencyStatus.COMPLETED);
+            keyRecord.setResponseStatus(responseStatus);
+            keyRecord.setLockedUntil(null);
+            try {
+                keyRecord.setResponseBody(objectMapper.writeValueAsString(responseBody));
+            } catch (Exception ex) {
+                log.error("Failed to serialize response body for idempotency key {}: ", idempotencyKey, ex);
+            }
+            idempotencyKeyRepository.save(keyRecord);
+        });
+    }
+
+    @Override
+    @Transactional
     public void failProcessing(String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             return;
@@ -95,8 +139,25 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
         idempotencyKeyRepository.findByIdempotencyKey(idempotencyKey).ifPresent(keyRecord -> {
             keyRecord.setStatus(IdempotencyStatus.FAILED);
+            keyRecord.setLockedUntil(null);
             idempotencyKeyRepository.save(keyRecord);
             log.debug("Failed IdempotencyKey record with key: {}", idempotencyKey);
+        });
+    }
+
+    @Override
+    @Transactional
+    public void failProcessing(String idempotencyKey, Long userId, String endpoint) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return;
+        }
+        idempotencyKeyRepository.findByUserIdAndEndpointAndIdempotencyKey(
+                userId != null ? userId : 0L,
+                endpoint != null ? endpoint : "",
+                idempotencyKey).ifPresent(keyRecord -> {
+            keyRecord.setStatus(IdempotencyStatus.FAILED);
+            keyRecord.setLockedUntil(null);
+            idempotencyKeyRepository.save(keyRecord);
         });
     }
 

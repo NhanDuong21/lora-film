@@ -13,6 +13,11 @@ public interface BookingTicketService {
 
     void deleteTickets(Long bookingId);
 
+    /**
+     * Marks issued tickets as REFUNDED while retaining their audit rows.
+     */
+    void refundTickets(Long bookingId);
+
     Page<BookingTicketDto> findTickets(Pageable pageable);
 
     List<BookingTicketDto> findByBooking(Long bookingId);

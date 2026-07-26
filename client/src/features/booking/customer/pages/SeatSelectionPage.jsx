@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, Info, MapPin, Monitor, ShieldAlert, Check
+  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, Info, MapPin, Monitor, ShieldAlert
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
@@ -10,8 +10,8 @@ import {
   seatTypePresentation,
   sortSeatLegend
 } from '@/features/booking/customer/utils/seatPresentation';
-import { holdSeats } from '../services/seatReservationService';
 import { createBooking, getBookingHistory, getBookingDetails, getBookingTickets } from '../services/bookingService';
+import { getSeatAvailability } from '../services/seatReservationService';
 import BookingStepper from '../components/BookingStepper';
 
 const money = value => value == null
@@ -91,6 +91,8 @@ export default function SeatSelectionPage() {
 
   useEffect(() => {
     if (timeLeft === 0) {
+      // The countdown owns cleanup when the persisted deadline is reached.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveBooking(null);
       setTimeLeft(null);
     }
@@ -112,8 +114,28 @@ export default function SeatSelectionPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getSeatLayout(showtimePublicId, { signal });
-      setLayout(data);
+      const [data, availability] = await Promise.all([
+        getSeatLayout(showtimePublicId, { signal }),
+        getSeatAvailability(showtimePublicId, { signal })
+      ]);
+      const occupiedByPublicId = new Map(
+        (availability?.occupiedSeats || []).map(item => [item.seatPublicId, item])
+      );
+      setLayout({
+        ...data,
+        maxSeatsPerBooking: Number(availability?.maxSeatsPerBooking || 8),
+        seats: (data?.seats || []).map(seat => {
+          const reservation = occupiedByPublicId.get(seat.publicId);
+          return reservation
+            ? {
+              ...seat,
+              reservationStatus: reservation.status,
+              reservationExpiresAt: reservation.expiresAt,
+              sellable: false
+            }
+            : seat;
+        })
+      });
     } catch (requestError) {
       if (requestError?.name !== 'CanceledError') {
         setError('Suất chiếu này không còn mở bán hoặc không thể tải sơ đồ ghế.');
@@ -125,6 +147,8 @@ export default function SeatSelectionPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    // Fetch both the static Movie layout and Booking's DB availability overlay.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(controller.signal);
     return () => controller.abort();
   }, [load]);
@@ -171,8 +195,9 @@ export default function SeatSelectionPage() {
       const seatsToSelect = pairedSeat ? [seat, pairedSeat] : [seat];
       const neededSlots = seatsToSelect.length;
 
-      if (selectedSeats.length + neededSlots > 8) {
-        showToast('Bạn chỉ được chọn tối đa 8 ghế cho mỗi giao dịch!');
+      const maxSeats = Number(layout?.maxSeatsPerBooking || 8);
+      if (selectedSeats.length + neededSlots > maxSeats) {
+        showToast(`Bạn chỉ được chọn tối đa ${maxSeats} ghế cho mỗi giao dịch!`);
         return;
       }
 
@@ -188,7 +213,7 @@ export default function SeatSelectionPage() {
 
   // Check for single seat gaps in rows
   const checkSingleSeatGap = () => {
-    for (const [label, rowSeats] of rows) {
+    for (const [, rowSeats] of rows) {
       const seatsWithSelection = rowSeats.map(seat => {
         let seatStatus = 'AVAILABLE';
         if (seat.blockedForShowtime) {
@@ -233,22 +258,14 @@ export default function SeatSelectionPage() {
     setShowGapModal(false);
     setReservationLoading(true);
     try {
-      const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-      });
+      const storageKey = `booking:create:${layout.showtimePublicId}`;
+      const idempotencyKey = sessionStorage.getItem(storageKey) || crypto.randomUUID();
+      sessionStorage.setItem(storageKey, idempotencyKey);
 
-      const holdResponse = await holdSeats({
-        showtimeId: layout.showtimeId,
-        seatIds: selectedSeats.map(s => s.id)
-      }, uuidv4());
-
-      const reservationPublicIds = holdResponse.reservationPublicIds || [];
-
-      // Create Booking Draft
       const bookingData = await createBooking({
         showtimePublicId: layout.showtimePublicId,
-        reservationPublicIds
+        seatPublicIds: selectedSeats.map(s => s.publicId),
+        idempotencyKey
       });
 
       // Navigate to checkout/F&B page

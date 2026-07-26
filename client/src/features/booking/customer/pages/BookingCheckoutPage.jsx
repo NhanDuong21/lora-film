@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, AlertTriangle, ChevronRight, Search, ShieldCheck, Check, Info } from 'lucide-react';
-import { getBookingDetails, cancelBooking } from '../services/bookingService';
+import { Clock, AlertTriangle, Search, ShieldCheck, Check } from 'lucide-react';
+import { getBookingDetails, cancelBooking, finalizeCheckout } from '../services/bookingService';
 import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 import BookingStepper from '../components/BookingStepper';
-import axios from 'axios';
 
 export default function BookingCheckoutPage() {
   const location = useLocation();
@@ -75,6 +74,8 @@ export default function BookingCheckoutPage() {
   }, [bookingId, bookingDraft.showtime]);
 
   useEffect(() => {
+    // Data loading is intentionally triggered when the public Booking ID changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
 
@@ -179,26 +180,17 @@ export default function BookingCheckoutPage() {
     }
   };
 
-  // Simulate payment status
-  const handleSimulatePayment = async (success = true) => {
-    if (!termsAgreed && success) {
+  // Finalize checkout and hand the public Booking ID to Payment Service.
+  const handleSimulatePayment = async () => {
+    if (!termsAgreed) {
       alert("Bạn phải đồng ý với Điều khoản & Điều kiện trước khi thanh toán.");
       return;
     }
     setPaymentLoading(true);
     try {
-      // Initiate payment simulation on mock controller
-      const endpoint = success ? '/api/mock/payment/success' : '/api/mock/payment/fail';
-      await axios.post(endpoint, {
-        bookingCode: booking.bookingCode
-      });
-
-      // Redirect accordingly
-      if (success) {
-        navigate(`/bookings/success?bookingId=${bookingId}`);
-      } else {
-        navigate(`/bookings/failed?bookingId=${bookingId}`);
-      }
+      const finalized = await finalizeCheckout(bookingId);
+      setBooking(prev => ({ ...prev, ...finalized }));
+      alert(`Booking is ready for Payment Service: ${bookingId}`);
     } catch (err) {
       alert("Lỗi khi thực hiện giả lập thanh toán: " + (err.response?.data?.message || err.message));
     } finally {
@@ -431,7 +423,7 @@ export default function BookingCheckoutPage() {
 
                   <div className="flex flex-col sm:flex-row gap-4">
                     <button
-                      onClick={() => handleSimulatePayment(true)}
+                      onClick={handleSimulatePayment}
                       disabled={paymentLoading || isExpired}
                       className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-black font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
                     >
@@ -440,7 +432,7 @@ export default function BookingCheckoutPage() {
                     </button>
 
                     <button
-                      onClick={() => handleSimulatePayment(false)}
+                      onClick={handleSimulatePayment}
                       disabled={paymentLoading || isExpired}
                       className="flex-1 py-4 bg-red-500 hover:bg-red-650 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
                     >

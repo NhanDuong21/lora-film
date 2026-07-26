@@ -14,13 +14,22 @@ import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.service.BookingStatusHistoryService;
 import com.lorafilm.booking.booking.service.InternalBookingPaymentService;
+import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
+import com.lorafilm.booking.common.exception.LatePaymentSuccessException;
 import com.lorafilm.booking.payment.entity.BookingPaymentEvent;
 import com.lorafilm.booking.payment.enums.PaymentEventStatus;
 import com.lorafilm.booking.payment.enums.PaymentEventType;
 import com.lorafilm.booking.payment.repository.BookingPaymentEventRepository;
+import com.lorafilm.booking.reservation.entity.SeatReservation;
+import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
+import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
+import com.lorafilm.booking.infrastructure.entity.BookingReconciliationTask;
+import com.lorafilm.booking.infrastructure.enums.ReconciliationStatus;
+import com.lorafilm.booking.infrastructure.repository.BookingReconciliationTaskRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +51,34 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     private final com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService;
     private final com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
     private final com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager;
+    private final SeatReservationRepository reservationRepository;
+    private final BookingReconciliationTaskRepository reconciliationTaskRepository;
+    private final BookingLifecycleService lifecycleService;
+
+    @Autowired
+    public InternalBookingPaymentServiceImpl(BookingRepository bookingRepository,
+                                             BookingPriceSnapshotRepository priceSnapshotRepository,
+                                             BookingPaymentEventRepository paymentEventRepository,
+                                             BookingStatusHistoryService historyService,
+                                             ObjectMapper objectMapper,
+                                             com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService,
+                                             com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
+                                             com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager,
+                                             SeatReservationRepository reservationRepository,
+                                             BookingReconciliationTaskRepository reconciliationTaskRepository,
+                                             BookingLifecycleService lifecycleService) {
+        this.bookingRepository = bookingRepository;
+        this.priceSnapshotRepository = priceSnapshotRepository;
+        this.paymentEventRepository = paymentEventRepository;
+        this.historyService = historyService;
+        this.objectMapper = objectMapper;
+        this.bookingTicketService = bookingTicketService;
+        this.outboxService = outboxService;
+        this.metricsManager = metricsManager;
+        this.reservationRepository = reservationRepository;
+        this.reconciliationTaskRepository = reconciliationTaskRepository;
+        this.lifecycleService = lifecycleService;
+    }
 
     public InternalBookingPaymentServiceImpl(BookingRepository bookingRepository,
                                              BookingPriceSnapshotRepository priceSnapshotRepository,
@@ -51,14 +88,24 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                                              com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService,
                                              com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
                                              com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager) {
-        this.bookingRepository = bookingRepository;
-        this.priceSnapshotRepository = priceSnapshotRepository;
-        this.paymentEventRepository = paymentEventRepository;
-        this.historyService = historyService;
-        this.objectMapper = objectMapper;
-        this.bookingTicketService = bookingTicketService;
-        this.outboxService = outboxService;
-        this.metricsManager = metricsManager;
+        this(bookingRepository, priceSnapshotRepository, paymentEventRepository, historyService,
+                objectMapper, bookingTicketService, outboxService, metricsManager, null, null, null);
+    }
+
+    /** Compatibility constructor for tests/callers that provide the repositories explicitly. */
+    public InternalBookingPaymentServiceImpl(BookingRepository bookingRepository,
+                                             BookingPriceSnapshotRepository priceSnapshotRepository,
+                                             BookingPaymentEventRepository paymentEventRepository,
+                                             BookingStatusHistoryService historyService,
+                                             ObjectMapper objectMapper,
+                                             com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService,
+                                             com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
+                                             com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager,
+                                             SeatReservationRepository reservationRepository,
+                                             BookingReconciliationTaskRepository reconciliationTaskRepository) {
+        this(bookingRepository, priceSnapshotRepository, paymentEventRepository, historyService,
+                objectMapper, bookingTicketService, outboxService, metricsManager,
+                reservationRepository, reconciliationTaskRepository, null);
     }
 
     @Override
@@ -71,8 +118,10 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
         boolean payable = booking.getBookingStatus() == BookingStatus.PENDING_PAYMENT
                 && booking.getExpiresAt() != null
                 && booking.getExpiresAt().isAfter(now)
+                && booking.getAmountLockedAt() != null
                 && booking.getFinalAmount() != null
-                && booking.getFinalAmount().signum() > 0;
+                && booking.getFinalAmount().signum() > 0
+                && hasLiveHeldReservations(booking.getId(), now);
         if (!payable) {
             throw new BusinessException(
                     "BOOKING_NOT_PAYABLE",
@@ -93,7 +142,15 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
+    public InternalPaymentContextResponse getPaymentContext(String bookingPublicId) {
+        Booking booking = bookingRepository.findByPublicId(bookingPublicId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingPublicId));
+        return getPaymentContext(booking.getId());
+    }
+
+    @Override
+    @Transactional(noRollbackFor = LatePaymentSuccessException.class)
     public InternalPaymentResultResponse recordPaymentResult(Long bookingId,
                                                              InternalPaymentResultRequest request) {
         String result = normalizeResult(request.result());
@@ -121,6 +178,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
 
         if ("SUCCESS".equals(result)) {
             if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
+                createReconciliation(booking, request, "CONFLICTING_SUCCESS_AFTER_CONFIRMATION");
                 throw new BusinessException(
                         "BOOKING_ALREADY_PAID",
                         "Booking is already confirmed by another payment",
@@ -128,39 +186,40 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
             }
             if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT
                     || booking.getExpiresAt() == null
-                    || !occurredAt.isBefore(booking.getExpiresAt())) {
-                throw new BusinessException(
-                        "BOOKING_NOT_PAYABLE",
-                        "Expired or non-pending Booking cannot be confirmed",
-                        HttpStatus.CONFLICT);
+                    || booking.getAmountLockedAt() == null
+                    || !Instant.now().isBefore(booking.getExpiresAt())) {
+                createReconciliation(booking, request, "LATE_OR_NON_PENDING_SUCCESS");
+                throw new LatePaymentSuccessException(
+                        "Expired or non-pending Booking cannot be confirmed");
             }
-            booking.changeStatus(BookingStatus.CONFIRMED, occurredAt);
             booking.setPaymentStatus(PaymentStatus.SUCCESS);
             booking.setPaymentReference(reference(request));
             booking.setPaymentMethodSnapshot(request.paymentMethod());
-            historyService.saveHistory(
-                    booking, BookingStatus.PENDING_PAYMENT.name(), BookingStatus.CONFIRMED.name(),
-                    "Authoritative payment result", "PAYMENT_SERVICE", String.valueOf(request.paymentId()));
-            
-            bookingTicketService.generateTicketsForConfirmedBooking(booking.getId());
-            if (booking.getFoodOrder() != null) {
-                com.lorafilm.booking.food.event.FoodOrderConfirmedEvent foodEvent = new com.lorafilm.booking.food.event.FoodOrderConfirmedEvent(
-                        booking.getId().toString(),
-                        booking.getFoodOrder().getPublicId(),
-                        booking.getFoodOrder().getFinalAmount()
-                );
-                outboxService.createOutboxEvent("FoodOrder", booking.getFoodOrder().getId(), "FOOD_ORDER_CONFIRMED", foodEvent);
+            if (lifecycleService != null) {
+                booking = lifecycleService.confirmPayment(
+                        booking, Instant.now(), "PAYMENT_SERVICE");
+            } else {
+                // Compatibility constructor fallback for isolated legacy tests.
+                booking.changeStatus(BookingStatus.CONFIRMED, Instant.now());
+                confirmReservations(booking.getId(), Instant.now());
+                historyService.saveHistory(
+                        booking, BookingStatus.PENDING_PAYMENT.name(), BookingStatus.CONFIRMED.name(),
+                        "Authoritative payment result", "PAYMENT_SERVICE", String.valueOf(request.paymentId()));
+                bookingTicketService.generateTicketsForConfirmedBooking(booking.getId());
+                metricsManager.incrementBookingConfirmed();
+                metricsManager.incrementPaymentSuccess();
             }
-            metricsManager.incrementBookingConfirmed();
-            metricsManager.incrementPaymentSuccess();
         } else if ("FAILED".equals(result) || "CANCELLED".equals(result) || "TIMEOUT".equals(result)) {
             if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
-                throw new BusinessException(
-                        "BOOKING_ALREADY_PAID",
-                        "A failed payment cannot replace a successful payment",
-                        HttpStatus.CONFLICT);
+                // Preserve the confirmed Booking and record the later failure
+                // for audit/deduplication.  A failed delivery can never
+                // downgrade a successful payment.
+            } else if (booking.getBookingStatus() == BookingStatus.REFUNDED
+                    || booking.getBookingStatus() == BookingStatus.COMPLETED) {
+                // Terminal post-confirmation states are likewise immutable.
+            } else {
+                booking.setPaymentStatus(PaymentStatus.FAILED);
             }
-            booking.setPaymentStatus(PaymentStatus.FAILED);
             if ("TIMEOUT".equals(result)) {
                 metricsManager.incrementPaymentFailed();
             }
@@ -170,6 +229,73 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
         BookingPaymentEvent event = toEvent(booking, request, result, occurredAt);
         paymentEventRepository.save(event);
         return response(booking, request.eventId(), false);
+    }
+
+    @Override
+    @Transactional(noRollbackFor = LatePaymentSuccessException.class)
+    public InternalPaymentResultResponse recordPaymentResult(String bookingPublicId,
+                                                             InternalPaymentResultRequest request) {
+        Booking booking = bookingRepository.findByPublicIdWithLock(bookingPublicId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingPublicId));
+        return recordPaymentResult(booking.getId(), request);
+    }
+
+    @Override
+    @Transactional
+    public void finalizeCheckout(Long bookingId) {
+        Booking booking = bookingRepository.findByIdForPaymentUpdate(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(String.valueOf(bookingId)));
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
+            throw new BusinessException("BOOKING_NOT_PENDING", "Only pending Bookings can be finalized", HttpStatus.CONFLICT);
+        }
+        if (booking.getExpiresAt() == null || !Instant.now().isBefore(booking.getExpiresAt())) {
+            throw new BusinessException("BOOKING_EXPIRED", "The Booking payment deadline has passed", HttpStatus.CONFLICT);
+        }
+        booking.lockAmount(Instant.now());
+        bookingRepository.save(booking);
+    }
+
+    private void confirmReservations(Long bookingId, Instant now) {
+        if (reservationRepository == null) {
+            return;
+        }
+        List<SeatReservation> reservations = reservationRepository.findAllByBookingId(bookingId);
+        if (reservations.isEmpty() || reservations.stream().anyMatch(reservation ->
+                reservation.getStatus() != SeatReservationStatus.HELD
+                        || reservation.getExpiresAt() == null
+                        || !reservation.getExpiresAt().isAfter(now))) {
+            throw new BusinessException("BOOKING_RESERVATIONS_NOT_HELD",
+                    "All Booking seats must remain HELD until payment succeeds", HttpStatus.CONFLICT);
+        }
+        reservations.forEach(reservation -> reservation.setStatus(SeatReservationStatus.BOOKED));
+        reservationRepository.saveAll(reservations);
+    }
+
+    private boolean hasLiveHeldReservations(Long bookingId, Instant now) {
+        if (reservationRepository == null) {
+            return true;
+        }
+        List<SeatReservation> reservations = reservationRepository.findAllByBookingId(bookingId);
+        return !reservations.isEmpty() && reservations.stream().allMatch(reservation ->
+                reservation.getStatus() == SeatReservationStatus.HELD
+                        && reservation.getExpiresAt() != null
+                        && reservation.getExpiresAt().isAfter(now));
+    }
+
+    private void createReconciliation(Booking booking, InternalPaymentResultRequest request, String reason) {
+        if (reconciliationTaskRepository == null) {
+            return;
+        }
+        BookingReconciliationTask task = new BookingReconciliationTask();
+        task.setPublicId(java.util.UUID.randomUUID().toString());
+        task.setBooking(booking);
+        task.setPaymentReference(reference(request));
+        task.setExpectedAmount(booking.getFinalAmount());
+        task.setActualAmount(request.amount());
+        task.setReconciliationStatus(ReconciliationStatus.PENDING);
+        task.setReason(reason);
+        task.setCheckedAt(Instant.now());
+        reconciliationTaskRepository.save(task);
     }
 
     private BookingPaymentEvent toEvent(Booking booking,

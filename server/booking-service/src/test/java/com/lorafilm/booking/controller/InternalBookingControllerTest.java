@@ -49,20 +49,14 @@ public class InternalBookingControllerTest {
     }
 
     @Test
-    public void confirmBooking_Success_Returns200() throws Exception {
-        BookingAdminResponse response = new BookingAdminResponse();
-        response.setId(10L);
-        response.setPublicId("550e8400-e29b-41d4-a716-446655440000");
-        response.setBookingCode("BK1001");
-        response.setBookingStatus(BookingStatus.CONFIRMED);
-
-        when(internalBookingService.confirmBooking("550e8400-e29b-41d4-a716-446655440000")).thenReturn(response);
-
-        mockMvc.perform(post("/internal/bookings/550e8400-e29b-41d4-a716-446655440000/confirm")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.bookingStatus").value("CONFIRMED"));
+    public void confirmBooking_IsPaymentResultTombstone() {
+        com.lorafilm.booking.common.exception.BusinessException exception =
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        com.lorafilm.booking.common.exception.BusinessException.class,
+                        () -> internalBookingController.confirmBooking(
+                                "550e8400-e29b-41d4-a716-446655440000"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "CONFIRM_VIA_PAYMENT_RESULT_REQUIRED", exception.getErrorCode());
     }
 
     @Test

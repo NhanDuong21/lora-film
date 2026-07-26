@@ -31,6 +31,8 @@ CREATE TABLE bookings (
     showtime_id BIGINT NOT NULL
         COMMENT 'ID suất chiếu (Liên kết tới Movie/Showtime Service)',
 
+    showtime_public_id VARCHAR(36),
+
     movie_id BIGINT NOT NULL
         COMMENT 'ID phim tại thời điểm đặt vé (Snapshot)',
 
@@ -93,6 +95,8 @@ CREATE TABLE bookings (
 
     expires_at DATETIME NOT NULL
         COMMENT 'Thời điểm đơn hàng hết hạn giữ chỗ nếu không thanh toán',
+
+    amount_locked_at DATETIME,
 
     confirmed_at DATETIME
         COMMENT 'Thời điểm đơn hàng được xác nhận thanh toán thành công',
@@ -157,10 +161,12 @@ CREATE TABLE bookings (
     -- Các Chỉ mục (Indexes) hỗ trợ tìm kiếm nhanh
     INDEX idx_booking_user(user_id),
     INDEX idx_booking_showtime(showtime_id),
+    INDEX idx_booking_showtime_public(showtime_public_id),
     INDEX idx_booking_status(booking_status),
     INDEX idx_booking_payment(payment_status),
     INDEX idx_booking_created(created_at),
     INDEX idx_booking_status_expires(booking_status, expires_at),
+    INDEX idx_booking_payment_ready(booking_status, amount_locked_at, expires_at),
     
     -- Composite Indexes tối ưu truy vấn phức hợp thường gặp
     INDEX idx_booking_user_status(user_id, booking_status),
@@ -191,6 +197,8 @@ CREATE TABLE booking_tickets (
 
     seat_id BIGINT NOT NULL
         COMMENT 'ID ghế trong hệ thống rạp',
+
+    seat_public_id VARCHAR(36),
 
     seat_label VARCHAR(20) NOT NULL
         COMMENT 'Tên hiển thị của ghế (Ví dụ: A12, VIP-F05)',
@@ -402,7 +410,11 @@ CREATE TABLE seat_reservations (
     showtime_id BIGINT NOT NULL
         COMMENT 'ID suất chiếu',
 
-    seat_id BIGINT NOT NULL
+    seat_id BIGINT NOT NULL,
+
+    showtime_public_id VARCHAR(36),
+
+    seat_public_id VARCHAR(36)
         COMMENT 'ID ghế đang chọn',
 
     seat_label VARCHAR(20) NOT NULL
@@ -451,6 +463,9 @@ CREATE TABLE seat_reservations (
 
     INDEX idx_reservation_user(user_id),
     INDEX idx_reservation_showtime(showtime_id),
+    INDEX idx_reservation_booking(booking_id),
+    INDEX idx_reservation_showtime_public_status(showtime_public_id, status, expires_at),
+    INDEX idx_reservation_seat_public(seat_public_id),
     INDEX idx_reservation_seat(seat_id),
     INDEX idx_reservation_status(status),
     INDEX idx_reservation_expire(expires_at),
@@ -775,10 +790,12 @@ CREATE TABLE booking_outbox_events (
     aggregate_type VARCHAR(100) NOT NULL
         COMMENT 'Tên Aggregate (Ví dụ: BOOKING, TICKET)',
 
-    aggregate_id BIGINT NOT NULL
+    aggregate_id BIGINT NOT NULL,
+
+    aggregate_public_id VARCHAR(36)
         COMMENT 'ID của Aggregate liên quan',
 
-    event_id CHAR(36) NOT NULL
+    event_id VARCHAR(36) NOT NULL
         COMMENT 'UUID duy nhất của Event (Chống gửi trùng)',
 
     event_type VARCHAR(100) NOT NULL
@@ -819,6 +836,7 @@ CREATE TABLE booking_outbox_events (
     INDEX idx_outbox_retry(next_retry_at),
     INDEX idx_outbox_type(event_type),
     INDEX idx_outbox_aggregate(aggregate_type, aggregate_id),
+    INDEX idx_outbox_aggregate_public(aggregate_type, aggregate_public_id),
     INDEX idx_outbox_publish(status, next_retry_at)
 )
 ENGINE=InnoDB
@@ -829,7 +847,7 @@ CREATE TABLE booking_inbox_events (
     id BIGINT PRIMARY KEY AUTO_INCREMENT
         COMMENT 'Khóa chính tự tăng',
 
-    event_id CHAR(36) NOT NULL
+    event_id VARCHAR(36) NOT NULL
         COMMENT 'UUID duy nhất của Event nhận được từ Service khác',
 
     source_service VARCHAR(100) NOT NULL
@@ -890,7 +908,11 @@ CREATE TABLE booking_idempotency_keys (
     response_status INT
         COMMENT 'Mã trạng thái HTTP Response trả về lần đầu (200, 201...)',
 
-    response_body JSON
+    response_body JSON,
+
+    locked_until DATETIME,
+
+    resource_public_id VARCHAR(36)
         COMMENT 'Nội dung Response đã trả về trước đó để cache lại trả về cho Client',
 
     expires_at DATETIME NOT NULL
@@ -899,9 +921,11 @@ CREATE TABLE booking_idempotency_keys (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         COMMENT 'Thời điểm ghi nhận',
 
-    CONSTRAINT uk_idempotency_key UNIQUE(idempotency_key),
+    CONSTRAINT uk_idempotency_scope UNIQUE(user_id, endpoint, idempotency_key),
     INDEX idx_idempotency_user(user_id),
-    INDEX idx_idempotency_expire(expires_at)
+    INDEX idx_idempotency_expire(expires_at),
+    INDEX idx_idempotency_status_expire(status, expires_at),
+    INDEX idx_idempotency_resource(resource_public_id)
 )
 ENGINE=InnoDB
 COMMENT='Lưu trữ Idempotency Key để chặn trùng lặp API Request trùng lặp';
@@ -976,7 +1000,7 @@ CREATE TABLE booking_dead_letter_events (
     public_id VARCHAR(36) NOT NULL
         COMMENT 'UUID dead letter dạng VARCHAR(36)',
 
-    event_id CHAR(36) NOT NULL
+    event_id VARCHAR(36) NOT NULL
         COMMENT 'UUID sự kiện bị lỗi',
 
     source_table VARCHAR(100) NOT NULL
@@ -1170,6 +1194,8 @@ COMMENT='Nhật ký kiểm toán (Audit Trail) - Truy vết lịch sử chỉnh 
 
 
 CREATE TABLE booking_scheduler_locks (
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     id BIGINT PRIMARY KEY AUTO_INCREMENT
         COMMENT 'Khóa chính tự tăng',
 
@@ -1228,10 +1254,13 @@ SELECT
     b.booking_code,
     b.user_id,
     b.showtime_id,
+    b.showtime_public_id,
     b.final_amount,
     b.currency,
     b.booking_status,
     b.payment_status,
+    b.amount_locked_at,
+    b.expires_at,
     b.created_at,
     (SELECT COUNT(*) FROM booking_tickets bt WHERE bt.booking_id = b.id) AS total_ticket,
     COALESCE((SELECT total_quantity FROM booking_food_orders fo WHERE fo.booking_id = b.id LIMIT 1), 0) AS total_food
@@ -1251,6 +1280,8 @@ SELECT
     final_amount,
     currency,
     expires_at,
+    showtime_public_id,
+    amount_locked_at,
     created_at
 FROM bookings;
 

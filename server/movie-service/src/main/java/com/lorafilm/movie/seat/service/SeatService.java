@@ -13,4 +13,5 @@ public interface SeatService {
 
     List<Seat> getSeatsByAuditoriumId(Long auditoriumId);
     List<Seat> getSeatsByIds(List<Long> seatIds);
+    List<Seat> getSeatsByPublicIds(List<String> seatPublicIds);
 }

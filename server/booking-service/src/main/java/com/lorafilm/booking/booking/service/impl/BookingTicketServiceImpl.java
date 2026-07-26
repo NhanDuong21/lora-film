@@ -101,6 +101,26 @@ public class BookingTicketServiceImpl implements BookingTicketService {
     }
 
     @Override
+    @Transactional
+    public void refundTickets(Long bookingId) {
+        if (bookingId == null) {
+            throw new BusinessException("INVALID_BOOKING_ID", "Booking ID cannot be null");
+        }
+        if (!bookingRepository.existsById(bookingId)) {
+            throw new BookingNotFoundException(bookingId);
+        }
+
+        List<BookingTicket> tickets = bookingTicketRepository.findByBookingId(bookingId);
+        if (tickets.isEmpty()) {
+            return;
+        }
+        for (BookingTicket ticket : tickets) {
+            ticket.setStatus(TicketStatus.REFUNDED);
+        }
+        bookingTicketRepository.saveAll(tickets);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Page<BookingTicketDto> findTickets(Pageable pageable) {
         return bookingTicketRepository.findAll(pageable).map(bookingTicketMapper::toDto);

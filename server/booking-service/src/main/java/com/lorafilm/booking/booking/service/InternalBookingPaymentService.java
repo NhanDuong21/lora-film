@@ -6,5 +6,8 @@ import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
 
 public interface InternalBookingPaymentService {
     InternalPaymentContextResponse getPaymentContext(Long bookingId);
+    InternalPaymentContextResponse getPaymentContext(String bookingPublicId);
     InternalPaymentResultResponse recordPaymentResult(Long bookingId, InternalPaymentResultRequest request);
+    InternalPaymentResultResponse recordPaymentResult(String bookingPublicId, InternalPaymentResultRequest request);
+    void finalizeCheckout(Long bookingId);
 }

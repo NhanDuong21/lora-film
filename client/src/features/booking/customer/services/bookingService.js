@@ -15,17 +15,24 @@ const uuidv4 = () => {
  * Create a new booking from active seat reservations
  * @param {Object} data - Create booking request
  * @param {string} data.showtimePublicId - Showtime UUID
- * @param {Array<string>} data.reservationPublicIds - List of active reservation UUIDs
+ * @param {Array<string>} data.seatPublicIds - Canonical public seat UUIDs
  * @param {string} [data.idempotencyKey] - UUID idempotency key for this logical booking request
  * @returns {Promise<Object>} The booking response
  */
-export const createBooking = async ({ showtimePublicId, reservationPublicIds, idempotencyKey = uuidv4() }) => {
+export const createBooking = async ({ showtimePublicId, seatPublicIds, reservationPublicIds, idempotencyKey = uuidv4() }) => {
+  const payload = { showtimePublicId };
+  if (Array.isArray(seatPublicIds) && seatPublicIds.length > 0) payload.seatPublicIds = seatPublicIds;
+  if (Array.isArray(reservationPublicIds) && reservationPublicIds.length > 0) payload.reservationPublicIds = reservationPublicIds;
   const response = await apiClient.post("/api/bookings", {
-    showtimePublicId,
-    reservationPublicIds
+    ...payload
   }, {
     headers: { "Idempotency-Key": idempotencyKey }
   });
+  return response.data.data;
+};
+
+export const finalizeCheckout = async (bookingId) => {
+  const response = await apiClient.post(`/api/bookings/${bookingId}/finalize-checkout`);
   return response.data.data;
 };
 
@@ -106,10 +113,9 @@ export const cancelBooking = async (bookingId, reason = "") => {
  * @param {string} [payload.paymentProvider] - Payment provider
  * @returns {Promise<Object>} Payment response containing paymentUrl
  */
-export const initiatePayment = async (bookingId, { paymentMethod, paymentProvider = paymentMethod }) => {
-  const response = await apiClient.post(`/api/bookings/${bookingId}/payment`, {
-    paymentMethod,
-    paymentProvider
-  });
-  return response.data.data;
+// Payment provider initiation is intentionally owned by Payment Service.
+export const initiatePayment = async () => {
+  const error = new Error("PAYMENT_SERVICE_HANDOFF_REQUIRED");
+  error.code = "PAYMENT_SERVICE_HANDOFF_REQUIRED";
+  throw error;
 };

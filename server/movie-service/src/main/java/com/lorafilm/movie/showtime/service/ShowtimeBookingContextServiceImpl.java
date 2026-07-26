@@ -116,6 +116,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
 
             BookingContextSeatDto seatDto = new BookingContextSeatDto();
             seatDto.setSeatId(seat.getId());
+            seatDto.setSeatPublicId(seat.getPublicId());
             seatDto.setSeatCode(seat.getSeatCode());
             seatDto.setSeatType(seat.getSeatType().getCode().name());
             seatDto.setPrice(showtimePrice.getPrice());
@@ -135,6 +136,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         showtimeDto.setId(showtime.getId());
         showtimeDto.setPublicId(showtime.getPublicId());
         showtimeDto.setStatus(showtime.getStatus().name());
+        showtimeDto.setServiceDate(showtime.getServiceDate());
         
         java.time.ZoneId zoneId = java.time.ZoneId.of(showtime.getCinema().getTimezone());
         showtimeDto.setStartAt(OffsetDateTime.ofInstant(showtime.getStartTime(), zoneId));
@@ -180,6 +182,25 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         response.setBookingExpiredAt(OffsetDateTime.now().plusMinutes(15));
 
         return response;
+    }
+
+    @Override
+    public BookingContextResponse getBookingContextByPublicId(String showtimePublicId, List<String> seatPublicIds) {
+        Showtime showtime = showtimeRepository.findByPublicIdAndDeletedAtIsNull(showtimePublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
+        if (seatPublicIds == null || seatPublicIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Seat public IDs cannot be empty");
+        }
+        Set<String> unique = new java.util.HashSet<>(seatPublicIds);
+        if (unique.size() != seatPublicIds.size()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Duplicate seat public IDs are not allowed");
+        }
+        List<Seat> seats = seatService.getSeatsByPublicIds(seatPublicIds);
+        if (seats.size() != seatPublicIds.size()) {
+            throw new ResourceNotFoundException("One or more seats not found");
+        }
+        return getBookingContext(showtime.getId(),
+                new BookingContextRequest(seats.stream().map(Seat::getId).toList()));
     }
 
     // removed getActiveShowtime

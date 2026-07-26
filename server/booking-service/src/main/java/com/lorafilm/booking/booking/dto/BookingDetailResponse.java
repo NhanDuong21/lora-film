@@ -14,6 +14,7 @@ public class BookingDetailResponse {
     private String bookingCode;
     private Long userId;
     private Long showtimeId;
+    private String showtimePublicId;
     private Long movieId;
     private Long cinemaId;
     private Long auditoriumId;
@@ -31,6 +32,7 @@ public class BookingDetailResponse {
     private String paymentProvider;
     private String paymentReference;
     private Instant expiresAt;
+    private Instant amountLockedAt;
     private Instant confirmedAt;
     private Instant completedAt;
     private Instant cancelledAt;
@@ -86,6 +88,14 @@ public class BookingDetailResponse {
 
     public void setShowtimeId(Long showtimeId) {
         this.showtimeId = showtimeId;
+    }
+
+    public String getShowtimePublicId() {
+        return showtimePublicId;
+    }
+
+    public void setShowtimePublicId(String showtimePublicId) {
+        this.showtimePublicId = showtimePublicId;
     }
 
     public Long getMovieId() {
@@ -222,6 +232,14 @@ public class BookingDetailResponse {
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public Instant getAmountLockedAt() {
+        return amountLockedAt;
+    }
+
+    public void setAmountLockedAt(Instant amountLockedAt) {
+        this.amountLockedAt = amountLockedAt;
     }
 
     public Instant getConfirmedAt() {

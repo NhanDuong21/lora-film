@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 
 public class BookingContextSeatDto {
     private Long seatId;
+    private String seatPublicId;
     private String seatCode;
     private String seatType;
     private BigDecimal price;
@@ -17,6 +18,14 @@ public class BookingContextSeatDto {
 
     public void setSeatId(Long seatId) {
         this.seatId = seatId;
+    }
+
+    public String getSeatPublicId() {
+        return seatPublicId;
+    }
+
+    public void setSeatPublicId(String seatPublicId) {
+        this.seatPublicId = seatPublicId;
     }
 
     public String getSeatCode() {

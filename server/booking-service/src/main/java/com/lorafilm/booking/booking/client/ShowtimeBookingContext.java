@@ -24,9 +24,14 @@ public record ShowtimeBookingContext(
         String auditoriumName,
         List<SeatContext> seats) {
 
-    public record SeatContext(Long seatId, String seatLabel, String seatType, BigDecimal price, String currency) {
+    public record SeatContext(Long seatId, String seatPublicId, String seatLabel, String seatType,
+                               BigDecimal price, String currency) {
+        public SeatContext(Long seatId, String seatLabel, String seatType, BigDecimal price, String currency) {
+            this(seatId, null, seatLabel, seatType, price, currency);
+        }
+
         public SeatContext(Long seatId, String seatLabel, String seatType, BigDecimal price) {
-            this(seatId, seatLabel, seatType, price, null);
+            this(seatId, null, seatLabel, seatType, price, null);
         }
     }
 }

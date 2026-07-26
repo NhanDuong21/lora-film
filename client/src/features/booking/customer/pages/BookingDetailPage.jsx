@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Printer, ArrowLeft, Trash2, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { getBookingDetails, getBookingTickets, cancelBooking, initiatePayment } from '../services/bookingService';
+import { getBookingDetails, getBookingTickets, cancelBooking, finalizeCheckout } from '../services/bookingService';
 import { getBookingFoodOrder } from '../services/foodService';
 
 export default function BookingDetailPage() {
@@ -92,15 +92,8 @@ export default function BookingDetailPage() {
   const handlePayNow = async () => {
     setPaymentLoading(true);
     try {
-      const response = await initiatePayment(bookingId, {
-        paymentMethod: booking.paymentMethodSnapshot || 'VNPAY',
-        channel: "Web Portal Detail View"
-      });
-      if (response && response.paymentUrl) {
-        window.location.href = response.paymentUrl;
-      } else {
-        alert("Không thể khởi tạo thanh toán.");
-      }
+      await finalizeCheckout(bookingId);
+      alert(`Booking is ready for Payment Service: ${bookingId}`);
     } catch (err) {
       alert("Lỗi thanh toán: " + (err.message || "Lỗi kết nối"));
     } finally {
@@ -302,12 +295,12 @@ export default function BookingDetailPage() {
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-xs font-bold text-white block">
-                    {currentStatus === 'CANCELLED' ? 'Đã hủy đơn' : 'Giao dịch hết hạn'}
-                  </span>
-                  <span className="text-[10px] text-zinc-500 block">Vé giải phóng về sơ đồ ghế</span>
-                </div>
-              </div>
-            )}
+                     {currentStatus === 'CANCELLED' ? 'Đã hủy đơn' : 'Giao dịch hết hạn'}
+                   </span>
+                   <span className="text-[10px] text-zinc-500 block">Seat hold released</span>
+                 </div>
+                 </div>
+             )}
           </div>
         </div>
 
@@ -352,13 +345,14 @@ export default function BookingDetailPage() {
                         <span className="text-white font-extrabold print:text-black">
                           {showtimeDate ? showtimeDate.toLocaleDateString('vi-VN') : ''}
                         </span>
-                  </span>
-                  <span className="text-[10px] text-zinc-500 block">Vé giải phóng về sơ đồ ghế</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Tickets and QR Section */}
         {tickets.length > 0 && (
@@ -478,11 +472,11 @@ export default function BookingDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-zinc-400 py-2 print:text-black">
               <div>
                 <span className="text-zinc-500 font-bold block text-[9px] uppercase">Cổng giao dịch</span>
-                <span className="text-zinc-200 font-bold print:text-black">{booking.paymentMethodSnapshot || 'MOCK_PAY'}</span>
+                <span className="text-zinc-200 font-bold print:text-black">{booking.paymentMethodSnapshot || 'Chưa ghi nhận'}</span>
               </div>
               <div>
                 <span className="text-zinc-500 font-bold block text-[9px] uppercase">Mã tham chiếu ngân hàng</span>
-                <span className="text-zinc-200 font-bold print:text-black">{booking.paymentReference || 'MOCK-TXN-REFERENCE'}</span>
+                <span className="text-zinc-200 font-bold print:text-black">{booking.paymentReference || 'Chưa ghi nhận'}</span>
               </div>
             </div>
 

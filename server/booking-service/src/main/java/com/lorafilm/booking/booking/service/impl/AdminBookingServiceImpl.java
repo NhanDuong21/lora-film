@@ -19,11 +19,14 @@ import com.lorafilm.booking.booking.service.BookingSnapshotService;
 import com.lorafilm.booking.booking.service.BookingStatusHistoryService;
 import com.lorafilm.booking.booking.service.BookingStatusTransitionService;
 import com.lorafilm.booking.booking.service.BookingTicketService;
+import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.response.PagedResponse;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import com.lorafilm.booking.reservation.service.SeatReservationService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -53,7 +56,10 @@ public class AdminBookingServiceImpl implements AdminBookingService {
     private final BookingTicketService ticketService;
     private final BookingSnapshotService snapshotService;
     private final BookingMetricsManager bookingMetricsManager;
+    private final SeatReservationService reservationService;
+    private final BookingLifecycleService lifecycleService;
 
+    @Autowired
     public AdminBookingServiceImpl(BookingRepository bookingRepository,
                                   BookingMapper bookingMapper,
                                   BookingStatusTransitionService statusTransitionService,
@@ -63,7 +69,9 @@ public class AdminBookingServiceImpl implements AdminBookingService {
                                   BookingOutboxService outboxService,
                                   BookingTicketService ticketService,
                                   BookingSnapshotService snapshotService,
-                                  BookingMetricsManager bookingMetricsManager) {
+                                  BookingMetricsManager bookingMetricsManager,
+                                  SeatReservationService reservationService,
+                                  BookingLifecycleService lifecycleService) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.statusTransitionService = statusTransitionService;
@@ -74,6 +82,24 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         this.ticketService = ticketService;
         this.snapshotService = snapshotService;
         this.bookingMetricsManager = bookingMetricsManager;
+        this.reservationService = reservationService;
+        this.lifecycleService = lifecycleService;
+    }
+
+    /** Backwards-compatible constructor for existing unit callers. */
+    public AdminBookingServiceImpl(BookingRepository bookingRepository,
+                                  BookingMapper bookingMapper,
+                                  BookingStatusTransitionService statusTransitionService,
+                                  BookingStatusHistoryService historyService,
+                                  BookingAuditService auditService,
+                                  BookingOperationLogService operationLogService,
+                                  BookingOutboxService outboxService,
+                                  BookingTicketService ticketService,
+                                  BookingSnapshotService snapshotService,
+                                  BookingMetricsManager bookingMetricsManager) {
+        this(bookingRepository, bookingMapper, statusTransitionService, historyService,
+                auditService, operationLogService, outboxService, ticketService,
+                snapshotService, bookingMetricsManager, null, null);
     }
 
     @Override
@@ -153,6 +179,20 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         BookingStatus oldStatus = booking.getBookingStatus();
         BookingStatus newStatus = request.getStatus();
 
+        if (newStatus == BookingStatus.CONFIRMED) {
+            throw new BusinessException("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED",
+                    "Booking confirmation is performed only by a validated Payment result",
+                    org.springframework.http.HttpStatus.GONE);
+        }
+        if (lifecycleService != null) {
+            Booking saved = lifecycleService.transition(booking, newStatus,
+                    request.getReason(), request.getSource());
+            if (request.getNote() != null) {
+                saved.setNote(request.getNote());
+                saved = bookingRepository.save(saved);
+            }
+            return bookingMapper.toAdminResponse(saved);
+        }
         statusTransitionService.validateTransition(oldStatus, newStatus);
 
         Instant now = Instant.now();
@@ -168,17 +208,28 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 
         Booking savedBooking = bookingRepository.save(booking);
 
+        if (reservationService != null
+                && (newStatus == BookingStatus.CANCELLED || newStatus == BookingStatus.EXPIRED)) {
+            reservationService.handleBookingStatusChange(savedBooking.getId(), newStatus,
+                    request.getReason() != null ? request.getReason() : "Admin lifecycle status change");
+        }
+
         historyService.saveHistory(savedBooking, oldStatus.name(), newStatus.name(), request.getReason(), request.getSource(), "ADMIN");
         auditService.logAudit(savedBooking.getId(), "ADMIN", "CHANGE_STATUS", "bookingStatus", oldStatus.name(), newStatus.name(), null, null, null, null);
         operationLogService.logOperation(savedBooking.getId(), "CHANGE_STATUS", "ADMIN", true, 0L, null, null, request.getReason());
         outboxService.createOutboxEvent("BOOKING", savedBooking.getId(), "BOOKING_" + newStatus.name(), savedBooking);
 
-        // Cancel/Delete tickets if cancelling/refunding/expiring
+        // Preserve ticket rows and mark them with the appropriate terminal
+        // state for audit/reconciliation.
         if (newStatus == BookingStatus.CANCELLED || newStatus == BookingStatus.EXPIRED || newStatus == BookingStatus.REFUNDED) {
             try {
-                ticketService.deleteTickets(savedBooking.getId());
+                if (newStatus == BookingStatus.REFUNDED) {
+                    ticketService.refundTickets(savedBooking.getId());
+                } else {
+                    ticketService.deleteTickets(savedBooking.getId());
+                }
             } catch (Exception e) {
-                log.warn("Failed to delete/cancel tickets for bookingId: {}", savedBooking.getId(), e);
+                log.warn("Failed to update tickets for bookingId: {}", savedBooking.getId(), e);
             }
         }
 

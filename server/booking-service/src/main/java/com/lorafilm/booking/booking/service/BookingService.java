@@ -17,6 +17,8 @@ public interface BookingService {
 
     BookingResponse cancelBooking(String publicId, CancelBookingRequest request);
 
+    BookingResponse finalizeCheckout(String publicId);
+
     BookingResponse confirmBooking(String publicId);
 
     BookingResponse expireBooking(String publicId);
@@ -34,6 +36,4 @@ public interface BookingService {
             Long userId, BookingStatus status, Instant fromDate, Instant toDate, Pageable pageable);
 
     BookingResponse changeStatus(String publicId, BookingStatus targetStatus);
-
-    com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId, com.lorafilm.booking.payment.dto.InitiatePaymentRequest request);
 }
