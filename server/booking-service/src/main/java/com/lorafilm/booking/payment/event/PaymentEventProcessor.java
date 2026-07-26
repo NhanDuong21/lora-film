@@ -167,7 +167,7 @@ public class PaymentEventProcessor {
 
             if (savedBooking.getBookingStatus() == BookingStatus.CONFIRMED) {
                 bookingTicketService.generateTicketsForConfirmedBooking(savedBooking.getId());
-            }    if (savedBooking.getFoodOrder() != null) {
+                if (savedBooking.getFoodOrder() != null) {
                     FoodOrderConfirmedEvent foodEvent = new FoodOrderConfirmedEvent(
                             savedBooking.getId().toString(),
                             savedBooking.getFoodOrder().getPublicId(),
