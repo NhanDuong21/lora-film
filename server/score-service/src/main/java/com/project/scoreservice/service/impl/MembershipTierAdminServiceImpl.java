@@ -83,9 +83,8 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
 
     @Override
     @Transactional(readOnly = true)
-    public AdminMembershipTierResponse getTierDetail(Integer tierId) {
-        MembershipTier tier = membershipTierRepository.findById(tierId)
-                .orElseThrow(() -> new BusinessException("Membership tier not found", "SCORE_TIER_NOT_FOUND", HttpStatus.NOT_FOUND));
+    public AdminMembershipTierResponse getTierDetail(String tierIdOrCode) {
+        MembershipTier tier = findTierByIdOrCode(tierIdOrCode);
 
         long userCount = userScoreRepository.countByCurrentTier(tier);
         return mapToAdminResponse(tier, userCount, false);
@@ -93,9 +92,8 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
 
     @Override
     @Transactional
-    public AdminMembershipTierResponse updateTier(Integer tierId, UpdateMembershipTierRequest request) {
-        MembershipTier tier = membershipTierRepository.findById(tierId)
-                .orElseThrow(() -> new BusinessException("Membership tier not found", "SCORE_TIER_NOT_FOUND", HttpStatus.NOT_FOUND));
+    public AdminMembershipTierResponse updateTier(String tierIdOrCode, UpdateMembershipTierRequest request) {
+        MembershipTier tier = findTierByIdOrCode(tierIdOrCode);
 
         if (request.getTierCode() != null && !tier.getTierCode().equals(request.getTierCode().trim().toUpperCase())) {
             String normalizedCode = request.getTierCode().trim().toUpperCase();
@@ -123,7 +121,7 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
             if (tier.getMinAccumulatedPoints() == 0 && request.getMinAccumulatedPoints() > 0) {
                 List<MembershipTier> allTiers = membershipTierRepository.findAll();
                 boolean otherZeroExists = allTiers.stream()
-                        .anyMatch(t -> !t.getId().equals(tierId) && t.getMinAccumulatedPoints() == 0);
+                        .anyMatch(t -> !t.getId().equals(tier.getId()) && t.getMinAccumulatedPoints() == 0);
                 if (!otherZeroExists) {
                     throw new BusinessException("Cannot update the only tier with minAccumulatedPoints = 0 to a positive value", "SCORE_TIER_CONFIGURATION_INVALID", HttpStatus.CONFLICT);
                 }
@@ -172,5 +170,21 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
                 tier.getCreatedAt(),
                 tier.getUpdatedAt()
         );
+    }
+
+    private MembershipTier findTierByIdOrCode(String idOrCode) {
+        if (idOrCode == null) {
+            throw new BusinessException("Membership tier ID or code is required", "SCORE_TIER_INVALID_PARAM", HttpStatus.BAD_REQUEST);
+        }
+        try {
+            Integer id = Integer.parseInt(idOrCode);
+            java.util.Optional<MembershipTier> byId = membershipTierRepository.findById(id);
+            if (byId.isPresent()) {
+                return byId.get();
+            }
+        } catch (NumberFormatException ignored) {
+        }
+        return membershipTierRepository.findByTierCode(idOrCode.trim().toUpperCase())
+                .orElseThrow(() -> new BusinessException("Membership tier not found: " + idOrCode, "SCORE_TIER_NOT_FOUND", HttpStatus.NOT_FOUND));
     }
 }

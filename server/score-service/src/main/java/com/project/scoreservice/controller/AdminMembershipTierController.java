@@ -41,19 +41,19 @@ public class AdminMembershipTierController {
     }
 
     @GetMapping("/{tierId}")
-    @Operation(summary = "Get membership tier detail", description = "Retrieve detail of a membership tier configuration by ID.")
+    @Operation(summary = "Get membership tier detail", description = "Retrieve detail of a membership tier configuration by ID or code.")
     public ResponseEntity<ApiResponse<AdminMembershipTierResponse>> getTierDetail(
-            @PathVariable Integer tierId) {
-        AdminMembershipTierResponse response = membershipTierAdminService.getTierDetail(tierId);
+            @PathVariable("tierId") String tierIdOrCode) {
+        AdminMembershipTierResponse response = membershipTierAdminService.getTierDetail(tierIdOrCode);
         return ResponseEntity.ok(ApiResponse.success("Membership tier retrieved successfully", response));
     }
 
     @PutMapping("/{tierId}")
-    @Operation(summary = "Update membership tier", description = "Update an existing membership tier configuration by ID.")
+    @Operation(summary = "Update membership tier", description = "Update an existing membership tier configuration by ID or code.")
     public ResponseEntity<ApiResponse<AdminMembershipTierResponse>> updateTier(
-            @PathVariable Integer tierId,
+            @PathVariable("tierId") String tierIdOrCode,
             @Valid @RequestBody UpdateMembershipTierRequest request) {
-        AdminMembershipTierResponse response = membershipTierAdminService.updateTier(tierId, request);
+        AdminMembershipTierResponse response = membershipTierAdminService.updateTier(tierIdOrCode, request);
         return ResponseEntity.ok(ApiResponse.success("Membership tier updated successfully", response));
     }
 }
