@@ -14,4 +14,6 @@ public interface FoodOrderRepository extends JpaRepository<FoodOrder, Long> {
 
     @Query("SELECT f FROM FoodOrder f WHERE f.booking.id = :bookingId")
     Optional<FoodOrder> findByBookingId(@Param("bookingId") Long bookingId);
+
+    Optional<FoodOrder> findByUserIdAndStatusAndBookingIsNull(Long userId, com.lorafilm.booking.food.enums.FoodOrderStatus status);
 }

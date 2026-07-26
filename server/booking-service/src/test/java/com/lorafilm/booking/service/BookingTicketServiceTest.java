@@ -132,4 +132,13 @@ public class BookingTicketServiceTest {
         assertEquals(TicketStatus.CANCELLED, sampleTicket.getStatus());
         verify(bookingTicketRepository).saveAll(anyList());
     }
+
+    @Test
+    public void deleteTickets_NoTickets_NoAction() {
+        when(bookingRepository.existsById(10L)).thenReturn(true);
+        when(bookingTicketRepository.findByBookingId(10L)).thenReturn(Collections.emptyList());
+
+        // Should not throw any exception and should just return
+        bookingTicketService.deleteTickets(10L);
+    }
 }

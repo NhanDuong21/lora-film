@@ -124,7 +124,17 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
     @Override
     public SeatLayoutDto getSeatLayout(String publicId) {
         Showtime showtime = getCustomerVisibleShowtime(publicId);
+        return buildSeatLayoutDto(showtime);
+    }
 
+    @Override
+    public SeatLayoutDto getSeatLayout(Long showtimeId) {
+        Showtime showtime = showtimeRepository.findById(showtimeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
+        return buildSeatLayoutDto(showtime);
+    }
+
+    private SeatLayoutDto buildSeatLayoutDto(Showtime showtime) {
         List<Seat> seats = seatService.getSeatsByAuditoriumId(showtime.getAuditorium().getId());
         List<ShowtimePrice> prices = showtimePriceRepository.findByShowtimeId(showtime.getId());
         List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActionStatus.ACTIVE);
@@ -147,6 +157,7 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
             boolean isBlocked = blockedSeatMap.containsKey(seat.getId());
 
             SeatLayoutDto.SeatPriceDto dto = new SeatLayoutDto.SeatPriceDto();
+            dto.setId(seat.getId());
             dto.setPublicId(seat.getPublicId());
             dto.setSeatCode(seat.getSeatCode());
             dto.setRowLabel(seat.getRowLabel());

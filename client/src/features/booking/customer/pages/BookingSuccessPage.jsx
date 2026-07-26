@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, Info, Calendar, MapPin, Printer, ArrowRight, ShoppingBag, ShieldCheck } from 'lucide-react';
+import { CheckCircle, Info, Printer, ArrowRight, ShoppingBag } from 'lucide-react';
 import { getBookingDetails } from '../services/bookingService';
+import BookingStepper from '../components/BookingStepper';
 
 export default function BookingSuccessPage() {
   const location = useLocation();
@@ -36,6 +37,7 @@ export default function BookingSuccessPage() {
   }, [bookingId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBooking();
   }, [fetchBooking]);
 
@@ -88,6 +90,7 @@ export default function BookingSuccessPage() {
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium print:bg-white print:text-black print:pt-4">
 
       <div className="max-w-4xl mx-auto w-full space-y-8">
+        <BookingStepper currentStep={5} />
 
         {/* Success Announcement Header */}
         <div className="text-center space-y-3 print:hidden">

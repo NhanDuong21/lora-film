@@ -20,6 +20,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/api/mock/payment': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        secure: false,
+      },
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,

@@ -165,9 +165,9 @@ public class PaymentEventProcessor {
 
             // Sync with food order status is handled automatically inside booking.changeStatus()
 
-            if (targetBookingStatus == BookingStatus.CONFIRMED) {
-                generateTicketsForConfirmedBooking(savedBooking.getId());
-                if (savedBooking.getFoodOrder() != null) {
+            if (savedBooking.getBookingStatus() == BookingStatus.CONFIRMED) {
+                bookingTicketService.generateTicketsForConfirmedBooking(savedBooking.getId());
+            }    if (savedBooking.getFoodOrder() != null) {
                     FoodOrderConfirmedEvent foodEvent = new FoodOrderConfirmedEvent(
                             savedBooking.getId().toString(),
                             savedBooking.getFoodOrder().getPublicId(),
@@ -247,43 +247,4 @@ public class PaymentEventProcessor {
         };
     }
 
-    private void generateTicketsForConfirmedBooking(Long bookingId) {
-        if (!bookingTicketRepository.findByBookingId(bookingId).isEmpty()) {
-            return;
-        }
-
-        Optional<BookingSnapshot> snapshotOpt = bookingSnapshotRepository.findByBookingId(bookingId);
-        if (snapshotOpt.isEmpty()) {
-            log.warn("Snapshot not found for booking ID: {}. Skipping ticket generation.", bookingId);
-            return;
-        }
-        BookingSnapshot snapshot = snapshotOpt.get();
-
-        if (snapshot.getSnapshotJson() == null || snapshot.getSnapshotJson().isBlank()) {
-            return;
-        }
-
-        List<com.lorafilm.booking.booking.client.ShowtimeBookingContext.SeatContext> seats;
-        try {
-            seats = objectMapper.readValue(snapshot.getSnapshotJson(), new TypeReference<List<com.lorafilm.booking.booking.client.ShowtimeBookingContext.SeatContext>>() {});
-        } catch (Exception e) {
-            throw new BusinessException("SNAPSHOT_DESERIALIZATION_FAILED", "Failed to deserialize seat snapshot data: " + e.getMessage());
-        }
-
-        List<com.lorafilm.booking.booking.dto.CreateTicketRequest> ticketRequests = seats.stream().map(seat -> {
-            com.lorafilm.booking.booking.dto.CreateTicketRequest req = new com.lorafilm.booking.booking.dto.CreateTicketRequest();
-            req.setSeatId(seat.seatId());
-            req.setSeatLabel(seat.seatLabel());
-            req.setSeatType(seat.seatType());
-            req.setTicketPrice(seat.price());
-            req.setMovieTitle(snapshot.getMovieTitle());
-            req.setCinemaName(snapshot.getCinemaName());
-            req.setAuditoriumName(snapshot.getAuditoriumName());
-            req.setShowtimeStart(snapshot.getShowtimeStart());
-            req.setShowtimeEnd(snapshot.getShowtimeEnd());
-            return req;
-        }).toList();
-
-        bookingTicketService.createTickets(bookingId, ticketRequests);
-    }
 }

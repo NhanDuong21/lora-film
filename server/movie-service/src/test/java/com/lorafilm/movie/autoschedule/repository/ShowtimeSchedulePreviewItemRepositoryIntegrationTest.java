@@ -48,19 +48,34 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
 @org.springframework.context.annotation.Import(com.lorafilm.movie.common.config.AuditConfig.class)
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:mysql://127.0.0.1:3307/movie_db_test?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true",
-    "spring.datasource.username=root",
-    "spring.datasource.password=12345678",
-    "spring.datasource.driverClassName=com.mysql.cj.jdbc.Driver",
-    "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect",
-    "spring.jpa.hibernate.ddl-auto=update"
-})
+@Testcontainers(disabledWithoutDocker = true)
 public class ShowtimeSchedulePreviewItemRepositoryIntegrationTest {
+
+    @Container
+    private static final MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0.36")
+            .withDatabaseName("movie_db_test")
+            .withUsername("root")
+            .withPassword("12345678");
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", mysql::getJdbcUrl);
+        registry.add("spring.datasource.username", mysql::getUsername);
+        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("spring.datasource.driver-class-name", mysql::getDriverClassName);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
+    }
 
     @Autowired
     private ShowtimeSchedulePreviewItemRepository itemRepository;

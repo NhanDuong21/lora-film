@@ -136,6 +136,7 @@ public class CustomerBookingController {
 
     @DeleteMapping("/{publicId}")
     @Operation(summary = "Cancel booking", description = "Only a PENDING_PAYMENT booking can be cancelled")
+    @Idempotent
     public ResponseEntity<ApiResponse<BookingResponse>> cancelBooking(
             @PathVariable
             @Parameter(description = "Booking publicId (UUID), not the internal database id",
@@ -149,6 +150,7 @@ public class CustomerBookingController {
 
     @PostMapping("/{publicId}/payment")
     @Operation(summary = "Initiate payment", description = "Requests payment initiation for a PENDING_PAYMENT booking")
+    @Idempotent
     public ResponseEntity<ApiResponse<com.lorafilm.booking.payment.dto.PaymentResponseDto>> initiatePayment(
             @PathVariable
             @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")

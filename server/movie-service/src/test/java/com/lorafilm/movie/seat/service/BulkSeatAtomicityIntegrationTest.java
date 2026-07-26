@@ -102,7 +102,8 @@ public class BulkSeatAtomicityIntegrationTest {
 
         assertThat(seatRepository.count()).isEqualTo(initialCount + 1);
 
-        BulkCreateSeatsRequest failingRequest = new BulkCreateSeatsRequest(List.of(seat1, seat2));
+        BulkSeatItemRequest seat2Invalid = new BulkSeatItemRequest(seatTypePublicId, "TOOLONG", 2, "A2", 1, 2, null, com.lorafilm.movie.seat.domain.enums.SeatStatus.ACTIVE);
+        BulkCreateSeatsRequest failingRequest = new BulkCreateSeatsRequest(List.of(seat1, seat2Invalid));
 
         assertThatThrownBy(() -> seatService.bulkCreateSeats(auditoriumPublicId, failingRequest));
 

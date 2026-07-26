@@ -1,16 +1,30 @@
 import apiClient from "@/services/apiClient";
 
+const uuidv4 = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 /**
  * Create a new booking from active seat reservations
  * @param {Object} data - Create booking request
  * @param {string} data.showtimePublicId - Showtime UUID
  * @param {Array<string>} data.reservationPublicIds - List of active reservation UUIDs
+ * @param {string} [data.idempotencyKey] - UUID idempotency key for this logical booking request
  * @returns {Promise<Object>} The booking response
  */
-export const createBooking = async ({ showtimePublicId, reservationPublicIds }) => {
+export const createBooking = async ({ showtimePublicId, reservationPublicIds, idempotencyKey = uuidv4() }) => {
   const response = await apiClient.post("/api/bookings", {
     showtimePublicId,
     reservationPublicIds
+  }, {
+    headers: { "Idempotency-Key": idempotencyKey }
   });
   return response.data.data;
 };
@@ -33,6 +47,16 @@ export const getBookingDetails = async (bookingId) => {
 export const getBookingByCode = async (bookingCode) => {
   const response = await apiClient.get(`/api/bookings/code/${bookingCode}`);
   return response.data.data;
+};
+
+/**
+ * Get tickets issued for a confirmed booking.
+ * @param {string} bookingId - Booking UUID
+ * @returns {Promise<Array>} Ticket list
+ */
+export const getBookingTickets = async (bookingId) => {
+  const response = await apiClient.get(`/api/bookings/${bookingId}/tickets`);
+  return response.data.data || [];
 };
 
 /**
@@ -63,8 +87,13 @@ export const getBookingHistory = async ({ page = 0, size = 10, status, fromDate,
  * @returns {Promise<Object>} Cancelled booking response
  */
 export const cancelBooking = async (bookingId, reason = "") => {
+  const idempotencyKey = uuidv4();
   const response = await apiClient.delete(`/api/bookings/${bookingId}`, {
-    data: { reason }
+    data: {
+      reasonCode: "USER_CANCEL",
+      reasonDetail: reason
+    },
+    headers: { "Idempotency-Key": idempotencyKey }
   });
   return response.data.data;
 };
@@ -74,13 +103,13 @@ export const cancelBooking = async (bookingId, reason = "") => {
  * @param {string} bookingId - Booking UUID
  * @param {Object} payload - Payment payload
  * @param {string} payload.paymentMethod - e.g., "MOMO", "VNPAY"
- * @param {string} [payload.channel] - Channel description
+ * @param {string} [payload.paymentProvider] - Payment provider
  * @returns {Promise<Object>} Payment response containing paymentUrl
  */
-export const initiatePayment = async (bookingId, { paymentMethod, channel = "Web Client" }) => {
+export const initiatePayment = async (bookingId, { paymentMethod, paymentProvider = paymentMethod }) => {
   const response = await apiClient.post(`/api/bookings/${bookingId}/payment`, {
     paymentMethod,
-    channel
+    paymentProvider
   });
   return response.data.data;
 };

@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public record CustomerSeatLayoutResponse(
+        Long showtimeId,
         String showtimePublicId,
         LocalDate serviceDate,
         Instant startTime,
@@ -25,6 +26,7 @@ public record CustomerSeatLayoutResponse(
     public record CinemaContext(String publicId, String slug, String name, String timezone) {}
     public record AuditoriumContext(String publicId, String name, String screenType, String soundType) {}
     public record CustomerSeat(
+            Long id,
             String publicId,
             String seatCode,
             String rowLabel,
@@ -38,5 +40,6 @@ public record CustomerSeatLayoutResponse(
             String operationalStatus,
             boolean blockedForShowtime,
             boolean priced,
-            boolean sellable) {}
+            boolean sellable,
+            String pairGroup) {}
 }

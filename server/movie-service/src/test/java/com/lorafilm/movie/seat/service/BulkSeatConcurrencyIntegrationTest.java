@@ -39,7 +39,7 @@ public class BulkSeatConcurrencyIntegrationTest {
     @Autowired
     private SeatRepository seatRepository;
 
-    @Autowired
+    @org.springframework.boot.test.mock.mockito.SpyBean
     private AuditoriumRepository auditoriumRepository;
 
     @Autowired
@@ -95,6 +95,28 @@ public class BulkSeatConcurrencyIntegrationTest {
 
     @Test
     void shouldPreventConcurrentBulkSeatCreation() throws InterruptedException {
+        Auditorium lockedAuditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNull(auditoriumPublicId).orElseThrow();
+        java.util.concurrent.atomic.AtomicBoolean lockAcquired = new java.util.concurrent.atomic.AtomicBoolean(false);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            if (lockAcquired.compareAndSet(false, true)) {
+                if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                    org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                        new org.springframework.transaction.support.TransactionSynchronization() {
+                            @Override
+                            public void afterCompletion(int status) {
+                                lockAcquired.set(false);
+                            }
+                        }
+                    );
+                } else {
+                    lockAcquired.set(false);
+                }
+                return java.util.Optional.of(lockedAuditorium);
+            } else {
+                throw new org.springframework.dao.CannotAcquireLockException("Lock acquisition timeout");
+            }
+        }).when(auditoriumRepository).findByPublicIdAndDeletedAtIsNullForUpdate(org.mockito.ArgumentMatchers.anyString());
+
         int numberOfThreads = 3;
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
         CountDownLatch startLatch = new CountDownLatch(1);

@@ -60,8 +60,11 @@ public class RetryTaskScheduler {
                     paymentEventConsumer.consume(task.getPayload());
                     task.setStatus(RetryTaskStatus.SUCCESS);
                     log.info("Successfully executed retry task publicId: {}", task.getPublicId());
-                } else {
+                } else if (task.getTaskType() == RetryTaskType.OUTBOX_PUBLISH) {
+                    log.info("Ignored OUTBOX_PUBLISH task as it is handled by OutboxEventPublisherScheduler");
                     task.setStatus(RetryTaskStatus.SUCCESS);
+                } else {
+                    throw new UnsupportedOperationException("Task type " + task.getTaskType() + " is not yet implemented");
                 }
                 retryTaskRepository.save(task);
 

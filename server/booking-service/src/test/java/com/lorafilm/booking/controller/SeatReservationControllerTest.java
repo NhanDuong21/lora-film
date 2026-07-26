@@ -72,7 +72,9 @@ public class SeatReservationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.reservationIds[0]").value(101))
-                .andExpect(jsonPath("$.reservationIds[1]").value(102));
+                .andExpect(jsonPath("$.reservationIds[1]").value(102))
+                .andExpect(jsonPath("$.reservationPublicIds").isArray())
+                .andExpect(jsonPath("$.reservationPublicIds[0]").exists());
     }
 
     @Test
@@ -95,7 +97,8 @@ public class SeatReservationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reservationIds[0]").value(101));
+                .andExpect(jsonPath("$.reservationIds[0]").value(101))
+                .andExpect(jsonPath("$.reservationPublicIds").isArray());
     }
 
     @Test

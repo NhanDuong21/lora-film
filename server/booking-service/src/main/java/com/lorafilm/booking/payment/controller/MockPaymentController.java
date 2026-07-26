@@ -26,8 +26,8 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/internal/mock/payment")
-@Profile({"local", "test"})
+@RequestMapping("/api/mock/payment")
+@Profile({"local", "test", "default"})
 public class MockPaymentController {
 
     private static final Logger log = LoggerFactory.getLogger(MockPaymentController.class);
@@ -61,7 +61,7 @@ public class MockPaymentController {
                 h2 { color: #bb86fc; margin-bottom: 20px; }
                 p { margin: 10px 0; font-size: 16px; }
                 .amount { font-size: 24px; font-weight: bold; color: #03dac6; margin: 20px 0; }
-                .btn { display: block; width: 100%; padding: 12px; margin: 12px 0; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+                .btn { display: block; width: 100%%; padding: 12px; margin: 12px 0; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
                 .btn-success { background: #03dac6; color: #000; }
                 .btn-success:hover { background: #018786; }
                 .btn-fail { background: #cf6679; color: #fff; }
@@ -72,7 +72,7 @@ public class MockPaymentController {
             <script>
                 async function sendSimulation(type) {
                     try {
-                        const response = await fetch('/internal/mock/payment/' + type, {
+                        const response = await fetch('/api/mock/payment/' + type, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ bookingCode: '%s' })
@@ -121,7 +121,7 @@ public class MockPaymentController {
             return ResponseEntity.ok(ApiResponse.success("SUCCESS payment simulation processed successfully", Map.of("bookingCode", bookingCode)));
         } catch (Exception e) {
             log.error("Failed to process success simulation", e);
-            throw new RuntimeException(e);
+            throw new IllegalArgumentException(e.getClass().getName() + ": " + e.getMessage() + " | Cause: " + (e.getCause() != null ? e.getCause().getMessage() : "none"));
         }
     }
 
@@ -137,7 +137,7 @@ public class MockPaymentController {
             return ResponseEntity.ok(ApiResponse.success("FAILED payment simulation processed successfully", Map.of("bookingCode", bookingCode)));
         } catch (Exception e) {
             log.error("Failed to process fail simulation", e);
-            throw new RuntimeException(e);
+            throw new IllegalArgumentException(e.getClass().getName() + ": " + e.getMessage() + " | Cause: " + (e.getCause() != null ? e.getCause().getMessage() : "none"));
         }
     }
 
@@ -153,7 +153,7 @@ public class MockPaymentController {
             return ResponseEntity.ok(ApiResponse.success("EXPIRED payment simulation processed successfully", Map.of("bookingCode", bookingCode)));
         } catch (Exception e) {
             log.error("Failed to process expire simulation", e);
-            throw new RuntimeException(e);
+            throw new IllegalArgumentException(e.getClass().getName() + ": " + e.getMessage() + " | Cause: " + (e.getCause() != null ? e.getCause().getMessage() : "none"));
         }
     }
 

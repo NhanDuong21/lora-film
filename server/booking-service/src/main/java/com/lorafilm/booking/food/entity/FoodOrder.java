@@ -11,9 +11,12 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import com.lorafilm.booking.booking.entity.Booking;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigDecimal;
@@ -29,9 +32,13 @@ public class FoodOrder extends BaseEntity {
     @Column(name = "public_id", length = 36, nullable = false, unique = true)
     private String publicId;
 
+    @JsonIgnore
     @OneToOne(fetch = jakarta.persistence.FetchType.LAZY)
-    @JoinColumn(name = "booking_id", nullable = false)
+    @JoinColumn(name = "booking_id", nullable = true)
     private Booking booking;
+
+    @Column(name = "user_id")
+    private Long userId;
 
     @OneToMany(mappedBy = "foodOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FoodOrderItem> items = new ArrayList<>();
@@ -51,6 +58,19 @@ public class FoodOrder extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private FoodOrderStatus status = FoodOrderStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", nullable = false)
+    private PaymentStatus paymentStatus = PaymentStatus.PENDING;
+
+    @Column(name = "payment_method_snapshot", length = 50)
+    private String paymentMethodSnapshot;
+
+    @Column(name = "payment_provider", length = 50)
+    private String paymentProvider;
+
+    @Column(name = "payment_reference", length = 100)
+    private String paymentReference;
 
     @LastModifiedDate
     @Column(name = "updated_at")
@@ -77,6 +97,14 @@ public class FoodOrder extends BaseEntity {
 
     public void setBooking(Booking booking) {
         this.booking = booking;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public List<FoodOrderItem> getItems() {
@@ -125,6 +153,38 @@ public class FoodOrder extends BaseEntity {
 
     public void setStatus(FoodOrderStatus status) {
         this.status = status;
+    }
+
+    public PaymentStatus getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public void setPaymentStatus(PaymentStatus paymentStatus) {
+        this.paymentStatus = paymentStatus;
+    }
+
+    public String getPaymentMethodSnapshot() {
+        return paymentMethodSnapshot;
+    }
+
+    public void setPaymentMethodSnapshot(String paymentMethodSnapshot) {
+        this.paymentMethodSnapshot = paymentMethodSnapshot;
+    }
+
+    public String getPaymentProvider() {
+        return paymentProvider;
+    }
+
+    public void setPaymentProvider(String paymentProvider) {
+        this.paymentProvider = paymentProvider;
+    }
+
+    public String getPaymentReference() {
+        return paymentReference;
+    }
+
+    public void setPaymentReference(String paymentReference) {
+        this.paymentReference = paymentReference;
     }
 
     public Instant getUpdatedAt() {

@@ -440,10 +440,14 @@ CREATE TABLE seat_reservations (
 
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         COMMENT 'Thời điểm cập nhật bản ghi',
+        
+    active_unique_key VARCHAR(255) GENERATED ALWAYS AS (IF(status IN ('HELD', 'BOOKED'), CONCAT(showtime_id, '_', seat_id), NULL)) STORED
+        COMMENT 'Cột ảo để đảm bảo 1 ghế chỉ có tối đa 1 active reservation',
 
     CONSTRAINT uk_reservation_public UNIQUE(public_id),
     CONSTRAINT uk_reservation_code UNIQUE(reservation_code),
     CONSTRAINT fk_reservation_booking FOREIGN KEY (booking_id) REFERENCES bookings(id),
+    CONSTRAINT uk_active_seat_reservation UNIQUE(active_unique_key),
 
     INDEX idx_reservation_user(user_id),
     INDEX idx_reservation_showtime(showtime_id),
@@ -461,6 +465,22 @@ COMMENT='Quản lý việc giữ ghế tạm thời trong lúc khách hàng thao
 -- 6. ĐƠN ĐẶT ĐỒ ĂN / NƯỚC UỐNG (FOOD ORDERS & ITEMS)
 -- =====================================================
 
+CREATE TABLE booking_food_catalog_items (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Khóa chính tự tăng',
+    code VARCHAR(50) NOT NULL UNIQUE COMMENT 'Mã sản phẩm',
+    name VARCHAR(255) NOT NULL COMMENT 'Tên sản phẩm',
+    product_type ENUM('FOOD', 'DRINK', 'COMBO') NOT NULL COMMENT 'Loại sản phẩm: Đồ ăn, Nước uống, Combo',
+    image_url VARCHAR(500) COMMENT 'Đường dẫn ảnh sản phẩm',
+    price DECIMAL(12,2) NOT NULL COMMENT 'Giá bán',
+    active BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Cờ kích hoạt',
+    sellable BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Cho phép bán',
+    deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Đã xóa mềm',
+    disabled BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Bị vô hiệu hóa',
+    currency VARCHAR(10) NOT NULL DEFAULT 'VND' COMMENT 'Loại tiền tệ',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Thời điểm tạo',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Thời điểm cập nhật'
+) ENGINE=InnoDB COMMENT='Bảng danh mục đồ ăn, thức uống và combo thực tế (Catalog)';
+
 CREATE TABLE booking_food_orders (
     id BIGINT PRIMARY KEY AUTO_INCREMENT
         COMMENT 'Khóa chính tự tăng',
@@ -468,8 +488,11 @@ CREATE TABLE booking_food_orders (
     public_id VARCHAR(36) NOT NULL
         COMMENT 'UUID đơn đồ ăn dạng VARCHAR(36)',
 
-    booking_id BIGINT NOT NULL
-        COMMENT 'Mã đơn đặt vé liên kết (FK)',
+    booking_id BIGINT NULL
+        COMMENT 'Mã đơn đặt vé liên kết (FK) (NULL nếu là đơn rời)',
+
+    user_id BIGINT NULL
+        COMMENT 'Mã khách hàng (Dùng khi mua rời không qua booking)',
 
     total_quantity INT NOT NULL DEFAULT 0
         COMMENT 'Tổng số lượng các món đồ ăn/nước uống',
@@ -485,6 +508,18 @@ CREATE TABLE booking_food_orders (
 
     status ENUM('PENDING', 'CONFIRMED', 'CANCELLED', 'REFUNDED') NOT NULL DEFAULT 'PENDING'
         COMMENT 'Trạng thái đơn đồ ăn',
+
+    payment_status ENUM('PENDING', 'SUCCESS', 'FAILED', 'REFUNDED') NOT NULL DEFAULT 'PENDING'
+        COMMENT 'Trạng thái giao dịch thanh toán của đơn đồ ăn',
+
+    payment_method_snapshot VARCHAR(50)
+        COMMENT 'Phương thức thanh toán (Ví dụ: CREDIT_CARD, MOMO)',
+
+    payment_provider VARCHAR(50)
+        COMMENT 'Đơn vị cung cấp cổng thanh toán (Ví dụ: Stripe, MoMo)',
+
+    payment_reference VARCHAR(100)
+        COMMENT 'Mã giao dịch tham chiếu từ phía Cổng thanh toán',
 
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         COMMENT 'Thời điểm tạo',
@@ -848,6 +883,9 @@ CREATE TABLE booking_idempotency_keys (
 
     endpoint VARCHAR(255) NOT NULL
         COMMENT 'Đường dẫn API Endpoint',
+
+    status VARCHAR(50) NOT NULL DEFAULT 'PROCESSING'
+        COMMENT 'Trạng thái xử lý (PROCESSING, COMPLETED, FAILED)',
 
     response_status INT
         COMMENT 'Mã trạng thái HTTP Response trả về lần đầu (200, 201...)',

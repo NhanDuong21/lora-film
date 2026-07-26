@@ -39,17 +39,26 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     private final BookingPaymentEventRepository paymentEventRepository;
     private final BookingStatusHistoryService historyService;
     private final ObjectMapper objectMapper;
+    private final com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService;
+    private final com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
+    private final com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager;
 
     public InternalBookingPaymentServiceImpl(BookingRepository bookingRepository,
                                              BookingPriceSnapshotRepository priceSnapshotRepository,
                                              BookingPaymentEventRepository paymentEventRepository,
                                              BookingStatusHistoryService historyService,
-                                             ObjectMapper objectMapper) {
+                                             ObjectMapper objectMapper,
+                                             com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService,
+                                             com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService,
+                                             com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager metricsManager) {
         this.bookingRepository = bookingRepository;
         this.priceSnapshotRepository = priceSnapshotRepository;
         this.paymentEventRepository = paymentEventRepository;
         this.historyService = historyService;
         this.objectMapper = objectMapper;
+        this.bookingTicketService = bookingTicketService;
+        this.outboxService = outboxService;
+        this.metricsManager = metricsManager;
     }
 
     @Override
@@ -132,6 +141,18 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
             historyService.saveHistory(
                     booking, BookingStatus.PENDING_PAYMENT.name(), BookingStatus.CONFIRMED.name(),
                     "Authoritative payment result", "PAYMENT_SERVICE", String.valueOf(request.paymentId()));
+            
+            bookingTicketService.generateTicketsForConfirmedBooking(booking.getId());
+            if (booking.getFoodOrder() != null) {
+                com.lorafilm.booking.food.event.FoodOrderConfirmedEvent foodEvent = new com.lorafilm.booking.food.event.FoodOrderConfirmedEvent(
+                        booking.getId().toString(),
+                        booking.getFoodOrder().getPublicId(),
+                        booking.getFoodOrder().getFinalAmount()
+                );
+                outboxService.createOutboxEvent("FoodOrder", booking.getFoodOrder().getId(), "FOOD_ORDER_CONFIRMED", foodEvent);
+            }
+            metricsManager.incrementBookingConfirmed();
+            metricsManager.incrementPaymentSuccess();
         } else if ("FAILED".equals(result) || "CANCELLED".equals(result) || "TIMEOUT".equals(result)) {
             if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
                 throw new BusinessException(
@@ -140,6 +161,9 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                         HttpStatus.CONFLICT);
             }
             booking.setPaymentStatus(PaymentStatus.FAILED);
+            if ("TIMEOUT".equals(result)) {
+                metricsManager.incrementPaymentFailed();
+            }
         }
 
         bookingRepository.save(booking);
