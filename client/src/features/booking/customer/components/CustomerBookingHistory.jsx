@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Search, Info, AlertTriangle, ArrowUpDown, Film } from 'lucide-react';
-import { getBookingHistory } from '../services/bookingService';
+import {
+  AlertTriangle, ArrowUpDown, ChevronRight, Clock3, CreditCard, Film, Info,
+  Search, Trash2
+} from 'lucide-react';
+import { cancelBooking, getBookingHistory } from '../services/bookingService';
+import {
+  formatHoldTimeLeft,
+  getBookingRecoveryState
+} from '../utils/bookingRecovery';
 
 export default function CustomerBookingHistory() {
   // Filters state
@@ -19,6 +26,8 @@ export default function CustomerBookingHistory() {
   const [bookingPage, setBookingPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [cancellingBookingId, setCancellingBookingId] = useState(null);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -46,6 +55,29 @@ export default function CustomerBookingHistory() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchHistory();
   }, [fetchHistory]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const handleCancelHold = async booking => {
+    const publicId = booking.publicId || booking.id;
+    if (!publicId || cancellingBookingId) return;
+    if (!window.confirm('Bạn có chắc muốn hủy giữ ghế này không? Ghế sẽ được trả lại ngay.')) {
+      return;
+    }
+
+    setCancellingBookingId(publicId);
+    try {
+      await cancelBooking(publicId, 'Khách hàng chủ động hủy giữ ghế từ lịch sử đặt vé');
+      await fetchHistory();
+    } catch (requestError) {
+      window.alert(`Không thể hủy giữ ghế: ${requestError.message || 'Vui lòng thử lại.'}`);
+    } finally {
+      setCancellingBookingId(null);
+    }
+  };
 
   const handleStatusTabChange = (newStatus) => {
     setStatus(newStatus);
@@ -186,6 +218,9 @@ export default function CustomerBookingHistory() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredBookings.map(b => {
               const bookingStatus = b.bookingStatus || b.status;
+              const publicId = b.publicId || b.id;
+              const recovery = getBookingRecoveryState(b, nowMs);
+              const displayStatus = recovery.isExpiredPending ? 'EXPIRED' : bookingStatus;
               const amount = b.finalAmount ?? b.totalAmount ?? 0;
 
               return (
@@ -211,8 +246,8 @@ export default function CustomerBookingHistory() {
                           </span>
                           <h3 className="text-sm font-black text-white line-clamp-2 leading-snug mt-1">{b.movieTitle || 'Đơn đặt vé'}</h3>
                         </div>
-                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap ${getStatusBadgeStyle(bookingStatus)}`}>
-                          {translateStatus(bookingStatus)}
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap ${getStatusBadgeStyle(displayStatus)}`}>
+                          {translateStatus(displayStatus)}
                         </span>
                       </div>
 
@@ -245,6 +280,24 @@ export default function CustomerBookingHistory() {
 
                   {/* Financial Breakdown & Actions */}
                   <div className="border-t border-zinc-800/80 pt-4 space-y-3">
+                    {recovery.canRecover && (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] font-bold text-amber-300">
+                        <span className="flex items-center gap-1.5">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          Ghế đang được giữ
+                        </span>
+                        <span className="font-black tracking-wider">
+                          {formatHoldTimeLeft(recovery.remainingSeconds)}
+                        </span>
+                      </div>
+                    )}
+
+                    {recovery.isExpiredPending && (
+                      <p className="rounded-xl border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-[10px] font-bold text-zinc-400">
+                        Thời gian giữ ghế đã kết thúc. Bạn không thể tiếp tục thanh toán đơn này.
+                      </p>
+                    )}
+
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] text-zinc-400">
                       <div>
                         <span className="text-zinc-600 font-bold block uppercase">Tiền vé</span>
@@ -260,18 +313,40 @@ export default function CustomerBookingHistory() {
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-xs pt-2">
+                    <div className="flex flex-wrap justify-between items-center gap-2 text-xs pt-2">
                       <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">
                         Lập ngày: {new Date(b.createdAt).toLocaleDateString('vi-VN')}
                       </span>
 
-                      <Link
-                        to={`/bookings/${b.publicId || b.id}`}
-                        className="flex items-center gap-1 text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg font-black tracking-widest uppercase text-[9px] transition-colors"
-                      >
-                        <span>Chi tiết</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </Link>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {recovery.canRecover && (
+                          <>
+                            <Link
+                              to={`/bookings/checkout?bookingId=${publicId}`}
+                              className="flex items-center gap-1.5 rounded-lg bg-brand-orange px-3 py-2 text-[9px] font-black uppercase tracking-wider text-white transition-colors hover:bg-orange-600"
+                            >
+                              <CreditCard className="h-3.5 w-3.5" />
+                              Tiếp tục thanh toán
+                            </Link>
+                            <button
+                              type="button"
+                              disabled={cancellingBookingId === publicId}
+                              onClick={() => handleCancelHold(b)}
+                              className="flex items-center gap-1.5 rounded-lg border border-red-500/20 px-3 py-2 text-[9px] font-black uppercase tracking-wider text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-wait disabled:opacity-60"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              {cancellingBookingId === publicId ? 'Đang hủy...' : 'Hủy giữ ghế'}
+                            </button>
+                          </>
+                        )}
+                        <Link
+                          to={`/bookings/${publicId}`}
+                          className="flex items-center gap-1 text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-black tracking-widest uppercase text-[9px] transition-colors"
+                        >
+                          <span>Chi tiết</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </div>

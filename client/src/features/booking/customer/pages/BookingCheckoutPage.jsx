@@ -240,7 +240,9 @@ export default function BookingCheckoutPage() {
   }
 
   const { snapshot } = booking;
-  const isExpired = timeLeft === 0;
+  const bookingStatus = booking.bookingStatus || booking.status;
+  const isPending = bookingStatus === 'PENDING_PAYMENT';
+  const isExpired = timeLeft === 0 || !isPending;
   const draftSeats = bookingDraft.selectedSeats || [];
   const visibleSeats = booking.tickets?.length ? booking.tickets : draftSeats;
   const showtimeStart = snapshot?.showtimeStart || snapshot?.startTime;
@@ -605,7 +607,7 @@ export default function BookingCheckoutPage() {
               )}
 
               <button
-                disabled={paymentLoading}
+                disabled={paymentLoading || isExpired}
                 onClick={async () => {
                   if (confirm("Bạn có chắc chắn muốn hủy đơn hàng này không?")) {
                     try {
@@ -616,7 +618,7 @@ export default function BookingCheckoutPage() {
                     }
                   }
                 }}
-                className="w-full py-2.5 text-center text-zinc-600 hover:text-red-400 font-semibold text-[10px] uppercase tracking-wider transition-colors cursor-pointer block"
+                className="w-full py-2.5 text-center text-zinc-600 hover:text-red-400 font-semibold text-[10px] uppercase tracking-wider transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 block"
               >
                 Hủy giao dịch
               </button>

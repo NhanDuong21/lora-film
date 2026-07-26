@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Printer, ArrowLeft, Trash2, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { getBookingDetails, getBookingTickets, cancelBooking, finalizeCheckout } from '../services/bookingService';
+import { getBookingDetails, getBookingTickets, cancelBooking } from '../services/bookingService';
 import { getBookingFoodOrder } from '../services/foodService';
 
 export default function BookingDetailPage() {
@@ -13,7 +13,6 @@ export default function BookingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
-  const [paymentLoading, setPaymentLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
 
   const fetchDetail = useCallback(async () => {
@@ -89,16 +88,8 @@ export default function BookingDetailPage() {
     }
   };
 
-  const handlePayNow = async () => {
-    setPaymentLoading(true);
-    try {
-      await finalizeCheckout(bookingId);
-      alert(`Booking is ready for Payment Service: ${bookingId}`);
-    } catch (err) {
-      alert("Lỗi thanh toán: " + (err.message || "Lỗi kết nối"));
-    } finally {
-      setPaymentLoading(false);
-    }
+  const handlePayNow = () => {
+    navigate(`/bookings/checkout?bookingId=${encodeURIComponent(bookingId)}`);
   };
 
   // Format countdown string
@@ -171,6 +162,7 @@ export default function BookingDetailPage() {
   const currentStatus = booking.bookingStatus || booking.status;
   const isPending = currentStatus === 'PENDING_PAYMENT';
   const showTimer = isPending && timeLeft !== null && timeLeft > 0;
+  const canRecover = isPending && timeLeft !== null && timeLeft > 0;
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium print:bg-white print:text-black print:pt-4">
@@ -227,9 +219,9 @@ export default function BookingDetailPage() {
               </div>
             )}
 
-            {isPending && timeLeft !== 0 && (
+            {canRecover && (
               <button
-                disabled={paymentLoading || cancelling}
+                disabled={cancelling}
                 onClick={handlePayNow}
                 className="bg-brand-orange hover:bg-opacity-95 text-white font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-brand-orange/20"
               >
@@ -237,9 +229,9 @@ export default function BookingDetailPage() {
               </button>
             )}
 
-            {isPending && (
+            {canRecover && (
               <button
-                disabled={cancelling || paymentLoading}
+                disabled={cancelling}
                 onClick={handleCancel}
                 className="bg-transparent hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 text-red-400 font-bold px-6 py-3.5 rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
               >
@@ -249,6 +241,12 @@ export default function BookingDetailPage() {
             )}
           </div>
         </div>
+
+        {isPending && timeLeft === 0 && (
+          <div className="rounded-2xl border border-zinc-700 bg-zinc-900/70 px-5 py-4 text-sm text-zinc-300 print:hidden">
+            Thời gian giữ ghế đã kết thúc. Đơn này không còn khả dụng để thanh toán hoặc hủy.
+          </div>
+        )}
 
         {/* Timeline Status Trace */}
         <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6 print:hidden">
