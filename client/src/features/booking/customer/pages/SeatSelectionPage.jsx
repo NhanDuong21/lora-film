@@ -242,40 +242,27 @@ export default function SeatSelectionPage() {
       ]);
   }, [layout]);
 
-  // Handle seat click selection (with couple seat pairing rules)
+  // Handle one sellable seat per click. Couple seats are represented by one
+  // seat item in the customer booking flow; their neighbour is independent.
   const handleSeatClick = (seat) => {
     if (!seat.sellable || seat.blockedForShowtime || seat.operationalStatus !== 'ACTIVE') return;
 
     const isSelected = selectedSeats.some(s => s.publicId === seat.publicId);
 
     // Find if this is a couple seat / has a pair group
-    let pairedSeat = null;
-    if (seat.pairGroup) {
-      pairedSeat = layout?.seats?.find(
-        s => s.pairGroup === seat.pairGroup && s.publicId !== seat.publicId
-      );
-    }
-
     if (isSelected) {
       // Deselect
-      if (pairedSeat) {
-        setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId && s.publicId !== pairedSeat.publicId));
-      } else {
-        setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId));
-      }
+      setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId));
       setToastMessage('');
     } else {
       // Select
-      const seatsToSelect = pairedSeat ? [seat, pairedSeat] : [seat];
-      const neededSlots = seatsToSelect.length;
-
       const maxSeats = Number(layout?.maxSeatsPerBooking || 8);
-      if (selectedSeats.length + neededSlots > maxSeats) {
+      if (selectedSeats.length + 1 > maxSeats) {
         showToast(`Bạn chỉ được chọn tối đa ${maxSeats} ghế cho mỗi giao dịch!`);
         return;
       }
 
-      setSelectedSeats(prev => [...prev, ...seatsToSelect]);
+      setSelectedSeats(prev => [...prev, seat]);
       setToastMessage('');
     }
   };
