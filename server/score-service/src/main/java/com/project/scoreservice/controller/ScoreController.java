@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/api/scores/me")
+@RequestMapping({"/api/scores/me", "/api/scores"})
 @Tag(name = "Customer Score Balance", description = "Endpoints for logged-in customer's score balance and history")
 public class ScoreController {
 
@@ -70,5 +70,13 @@ public class ScoreController {
         Page<ScoreHistoryResponse> springPage = scoreService.getUserHistory(userId, page, size, transactionType, bookingId, from, to, sort);
         PageResponse<ScoreHistoryResponse> response = new PageResponse<>(springPage);
         return ResponseEntity.ok(ApiResponse.success("Score history retrieved successfully", response));
+    }
+
+    @PostMapping("/redeem-preview")
+    @Operation(summary = "Preview point redemption", description = "Check if customer is eligible to redeem specified points and calculate discount amount")
+    public ResponseEntity<ApiResponse<RedeemPreviewResponse>> previewRedeem(@RequestBody RedeemPreviewRequest request) {
+        Long userId = getCurrentUserId();
+        RedeemPreviewResponse response = scoreService.previewRedeem(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Redeem preview calculated successfully", response));
     }
 }

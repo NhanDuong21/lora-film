@@ -11,4 +11,10 @@ public interface ScoreService {
     UserScoreResponse getUserTier(Long userId);
     InternalUserScoreResponse getInternalUserScore(Long userId);
     Page<ScoreHistoryResponse> getUserHistory(Long userId, int page, int size, ScoreTransactionType transactionType, Long bookingId, LocalDateTime from, LocalDateTime to, String sort);
+
+    ScoreEarnResponse earnPoints(ScoreEarnRequest request);
+    RedeemPreviewResponse previewRedeem(Long userId, RedeemPreviewRequest request);
+    ScoreHoldResponse holdPoints(ScoreHoldRequest request);
+    ScoreCommitResponse commitPoints(ScoreCommitRequest request);
+    ScoreReleaseResponse releasePoints(ScoreReleaseRequest request);
 }

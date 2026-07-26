@@ -33,14 +33,14 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
     @Transactional
     public AdminMembershipTierResponse createTier(CreateMembershipTierRequest request) {
         String normalizedCode = request.getTierCode().trim().toUpperCase();
-        String normalizedName = request.getTierName().trim();
-
-        if (membershipTierRepository.findByTierCode(normalizedCode).isPresent()) {
-            throw new BusinessException("Membership tier code already exists: " + normalizedCode, "SCORE_TIER_CODE_ALREADY_EXISTS", HttpStatus.CONFLICT);
-        }
+        String normalizedName = request.getTierName().trim().toUpperCase();
 
         if (membershipTierRepository.findByTierName(normalizedName).isPresent()) {
             throw new BusinessException("Membership tier name already exists: " + normalizedName, "SCORE_TIER_NAME_ALREADY_EXISTS", HttpStatus.CONFLICT);
+        }
+
+        if (membershipTierRepository.findByTierCode(normalizedCode).isPresent()) {
+            throw new BusinessException("Membership tier code already exists: " + normalizedCode, "SCORE_TIER_CODE_ALREADY_EXISTS", HttpStatus.CONFLICT);
         }
 
         if (membershipTierRepository.findByMinAccumulatedPoints(request.getMinAccumulatedPoints()).isPresent()) {
@@ -103,8 +103,8 @@ public class MembershipTierAdminServiceImpl implements MembershipTierAdminServic
             tier.setTierCode(normalizedCode);
         }
 
-        if (request.getTierName() != null && !tier.getTierName().equals(request.getTierName().trim())) {
-            String normalizedName = request.getTierName().trim();
+        if (request.getTierName() != null && !tier.getTierName().equals(request.getTierName().trim().toUpperCase())) {
+            String normalizedName = request.getTierName().trim().toUpperCase();
             if (membershipTierRepository.findByTierName(normalizedName).isPresent()) {
                 throw new BusinessException("Membership tier name already exists: " + normalizedName, "SCORE_TIER_NAME_ALREADY_EXISTS", HttpStatus.CONFLICT);
             }

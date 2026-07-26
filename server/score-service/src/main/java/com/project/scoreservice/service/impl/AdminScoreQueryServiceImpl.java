@@ -104,6 +104,10 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
         if (sort != null && !sort.isEmpty()) {
             String[] sortParts = sort.split(",");
             sortField = sortParts[0];
+            List<String> allowedSortFields = List.of("occurredAt", "createdAt", "actualPointChange", "balanceAfter", "bookingId", "id", "transactionType");
+            if (!allowedSortFields.contains(sortField)) {
+                throw new BusinessException("Invalid sort field: " + sortField, "SCORE_INVALID_QUERY", HttpStatus.BAD_REQUEST);
+            }
             String sortDir = sortParts.length > 1 ? sortParts[1] : "desc";
             if ("asc".equalsIgnoreCase(sortDir)) {
                 direction = Sort.Direction.ASC;

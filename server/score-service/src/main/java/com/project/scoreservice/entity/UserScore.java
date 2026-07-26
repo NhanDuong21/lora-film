@@ -75,6 +75,10 @@ public class UserScore {
         this.updatedAt = updatedAt;
     }
 
+    public UserScore(Long userId, Integer currentPoints, Integer accumulatedPoints, MembershipTier currentTier, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this(userId, currentPoints, 0, accumulatedPoints, currentTier, UserScoreStatus.ACTIVE, 0, null, null, null, 0L, createdAt, updatedAt);
+    }
+
     public Long getUserId() {
         return userId;
     }

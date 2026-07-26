@@ -26,6 +26,16 @@ public class UpdateMembershipTierRequest {
     public UpdateMembershipTierRequest() {
     }
 
+    public UpdateMembershipTierRequest(String tierName, Integer minAccumulatedPoints, BigDecimal earningRate, String description) {
+        this.tierName = tierName;
+        this.tierCode = tierName != null ? tierName.trim().toUpperCase().replace(" ", "_") : null;
+        this.minAccumulatedPoints = minAccumulatedPoints;
+        this.earningRate = earningRate;
+        this.description = description;
+        this.priority = 10;
+        this.isActive = true;
+    }
+
     public String getTierCode() {
         return tierCode;
     }
