@@ -4,8 +4,8 @@ const data = (response) => response.data.data;
 
 export const getDashboard = async () => data(await apiClient.get('/api/users/dashboard'));
 export const getCustomers = async (params = {}) => data(await apiClient.get('/api/users/customers', { params }));
-export const setCustomerBlocked = async (accountId, blocked) =>
-  data(await apiClient.put(`/api/users/customers/${accountId}/${blocked ? 'block' : 'unblock'}`));
+export const setCustomerBlocked = async (customerId, blocked) =>
+  data(await apiClient.put(`/api/users/customers/${customerId}/${blocked ? 'block' : 'unblock'}`));
 export const getEmployees = async (params = {}) => data(await apiClient.get('/api/users/employees', { params }));
 export const createEmployee = async (payload) => data(await apiClient.post('/api/users/employees', payload));
 export const updateEmployee = async (accountId, payload) =>
@@ -48,3 +48,5 @@ export const createPayroll = async (payload) => data(await apiClient.post('/api/
 export const updatePayroll = async (id, payload) => data(await apiClient.put(`/api/users/payrolls/${id}`, payload));
 export const changePayrollStatus = async (id, action) =>
   data(await apiClient.put(`/api/users/payrolls/${id}/${action}`));
+export const getMyPayrolls = async (params = {}) =>
+  data(await apiClient.get('/api/users/payrolls/me', { params }));
