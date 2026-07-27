@@ -15,14 +15,17 @@ export default function PaymentReturnPage() {
   const verified = params.get('verified');
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
+  const [pollingTimedOut, setPollingTimedOut] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const view = useMemo(() => {
     if (!paymentPublicId || error || verified === 'false') return 'error';
     if (status?.reconciliationStatus === 'REQUIRED' || status?.reconciliationStatus === 'IN_REVIEW') return 'review';
     if (status?.status === 'SUCCESS' && status?.bookingDeliveryStatus === 'DELIVERED') return 'success';
     if (TERMINAL.has(status?.status)) return 'failed';
+    if (pollingTimedOut) return 'delayed';
     return 'waiting';
-  }, [error, paymentPublicId, status, verified]);
+  }, [error, paymentPublicId, pollingTimedOut, status, verified]);
 
   useEffect(() => {
     if (!paymentPublicId) {
@@ -46,7 +49,11 @@ export default function PaymentReturnPage() {
           || current.reconciliationStatus === 'REQUIRED'
           || current.reconciliationStatus === 'IN_REVIEW'
           || (current.status === 'SUCCESS' && current.bookingDeliveryStatus === 'DELIVERED');
-        if (!done && attempts < 60) timer = window.setTimeout(poll, 2000);
+        if (!done && attempts < 60) {
+          timer = window.setTimeout(poll, 2000);
+        } else if (!done) {
+          setPollingTimedOut(true);
+        }
       } catch (requestError) {
         if (active) setError(paymentErrorMessage(requestError));
       }
@@ -57,7 +64,7 @@ export default function PaymentReturnPage() {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [bookingPublicId, paymentPublicId, provider]);
+  }, [bookingPublicId, paymentPublicId, provider, retryNonce]);
 
   const content = {
     waiting: {
@@ -79,6 +86,11 @@ export default function PaymentReturnPage() {
       icon: <Clock3 className="h-12 w-12 text-amber-400" />,
       title: 'Giao dịch đang được đối soát',
       text: 'Nhà cung cấp đã ghi nhận kết quả nhưng đơn cần được kiểm tra thêm. Vui lòng không thanh toán lại.',
+    },
+    delayed: {
+      icon: <Clock3 className="h-12 w-12 text-amber-400" />,
+      title: 'Việc xác nhận đang lâu hơn dự kiến',
+      text: 'Giao dịch chưa có kết luận cuối cùng. Vui lòng không thanh toán lại; bạn có thể kiểm tra lại ngay hoặc xem trạng thái trong chi tiết đơn.',
     },
     error: {
       icon: <AlertTriangle className="h-12 w-12 text-red-400" />,
@@ -104,6 +116,15 @@ export default function PaymentReturnPage() {
           <p className="mt-5 break-all font-mono text-xs text-zinc-600">Mã giao dịch: {paymentPublicId}</p>
         )}
         <div className="mt-8 flex flex-wrap justify-center gap-3">
+          {view === 'delayed' && (
+            <button type="button" onClick={() => {
+              setPollingTimedOut(false);
+              setRetryNonce((value) => value + 1);
+            }}
+              className="rounded-xl bg-brand-orange px-6 py-3 text-sm font-black text-white">
+              Kiểm tra lại
+            </button>
+          )}
           {targetBooking && (
             <button type="button" onClick={() => navigate(`/bookings/${targetBooking}`)}
               className="rounded-xl bg-brand-orange px-6 py-3 text-sm font-black text-white">

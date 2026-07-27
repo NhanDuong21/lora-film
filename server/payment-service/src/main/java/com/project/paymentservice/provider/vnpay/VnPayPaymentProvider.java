@@ -60,10 +60,16 @@ public class VnPayPaymentProvider implements PaymentProvider {
     }
 
     @Override
+    public int recoveryRetryDelaySeconds() {
+        return properties.getQueryRetryDelaySeconds();
+    }
+
+    @Override
     public PaymentSession createSession(PaymentSessionRequest request) {
         Instant now = Instant.now();
         Instant expiry = request.getExpiresAt().isBefore(now.plusSeconds(900))
                 ? request.getExpiresAt() : now.plusSeconds(900);
+        String providerTransactionCode = providerTransactionCode(request);
         TreeMap<String, String> fields = new TreeMap<>();
         fields.put("vnp_Version", properties.getVersion());
         fields.put("vnp_Command", properties.getCommand());
@@ -71,7 +77,7 @@ public class VnPayPaymentProvider implements PaymentProvider {
         fields.put("vnp_Amount", request.getAmount().movePointRight(2)
                 .setScale(0, RoundingMode.UNNECESSARY).toPlainString());
         fields.put("vnp_CurrCode", request.getCurrency());
-        fields.put("vnp_TxnRef", request.getPaymentTransactionCode());
+        fields.put("vnp_TxnRef", providerTransactionCode);
         fields.put("vnp_OrderInfo", safeDescription(request));
         fields.put("vnp_OrderType", properties.getOrderType());
         fields.put("vnp_Locale", "vn");
@@ -85,8 +91,8 @@ public class VnPayPaymentProvider implements PaymentProvider {
         String paymentUrl = properties.getPaymentUrl() + "?" + query
                 + "&vnp_SecureHash=" + signature;
         PaymentSession session = new PaymentSession(
-                request.getPaymentTransactionCode(),
-                request.getPaymentTransactionCode(),
+                providerTransactionCode,
+                providerTransactionCode,
                 paymentUrl,
                 expiry);
         session.setSanitizedProviderSummary(json(Map.of(
@@ -153,8 +159,7 @@ public class VnPayPaymentProvider implements PaymentProvider {
                 return Optional.empty();
             }
             ProviderCallbackResult result = verifyQueryResponse(resultValues);
-            if (!result.isSignatureValid()
-                    || !transactionCode.equals(result.getProviderOrderId())) {
+            if (!queryResponseIsTrusted(payment, transactionCode, resultValues, result)) {
                 return Optional.empty();
             }
             String transactionStatus = resultValues.getOrDefault(
@@ -250,8 +255,10 @@ public class VnPayPaymentProvider implements PaymentProvider {
         String transactionStatus = value(values, "vnp_TransactionStatus");
 
         ProviderCallbackResult result = new ProviderCallbackResult();
-        result.setSignatureValid(ProviderCrypto.constantTimeEquals(
-                expected, values.get("vnp_SecureHash")));
+        String secureHash = values.get("vnp_SecureHash");
+        result.setSignatureValid(secureHash != null
+                && !secureHash.isBlank()
+                && ProviderCrypto.constantTimeEquals(expected, secureHash));
         result.setProviderOrderId(values.get("vnp_TxnRef"));
         result.setExternalTransactionId(values.get("vnp_TransactionNo"));
         result.setResponseCode(transactionStatus);
@@ -272,6 +279,38 @@ public class VnPayPaymentProvider implements PaymentProvider {
         sanitized.remove("vnp_SecureHash");
         result.setSanitizedPayload(json(sanitized));
         return result;
+    }
+
+    private boolean queryResponseIsTrusted(
+            Payment payment,
+            String transactionCode,
+            Map<String, String> values,
+            ProviderCallbackResult result) {
+        if (!result.isSignatureValid()
+                || !properties.getTmnCode().equals(values.get("vnp_TmnCode"))
+                || !transactionCode.equals(result.getProviderOrderId())) {
+            return false;
+        }
+        String command = value(values, "vnp_Command");
+        if (!command.isBlank() && !"querydr".equalsIgnoreCase(command)) {
+            return false;
+        }
+        if (value(values, "vnp_ResponseId").isBlank()
+                || value(values, "vnp_TransactionNo").isBlank()) {
+            return false;
+        }
+        if (payment.getAmount() == null
+                || payment.getCurrency() == null
+                || !"VND".equalsIgnoreCase(payment.getCurrency())) {
+            return false;
+        }
+        try {
+            java.math.BigDecimal providerAmount = new java.math.BigDecimal(
+                    value(values, "vnp_Amount")).movePointLeft(2);
+            return providerAmount.compareTo(payment.getAmount()) == 0;
+        } catch (NumberFormatException exception) {
+            return false;
+        }
     }
 
     private String originalTransactionDate(Payment payment) {
@@ -338,6 +377,18 @@ public class VnPayPaymentProvider implements PaymentProvider {
             description = "Thanh toan don " + request.getPaymentTransactionCode();
         }
         return description.length() > 255 ? description.substring(0, 255) : description;
+    }
+
+    private String providerTransactionCode(PaymentSessionRequest request) {
+        String value = request.getPaymentTransactionCode() == null
+                ? "" : request.getPaymentTransactionCode().replaceAll("[^A-Za-z0-9]", "");
+        if (value.isBlank() && request.getPaymentPublicId() != null) {
+            value = request.getPaymentPublicId().replaceAll("[^A-Za-z0-9]", "");
+        }
+        if (value.isBlank()) {
+            throw new IllegalArgumentException("VNPay transaction reference must not be blank");
+        }
+        return value.length() > 100 ? value.substring(0, 100) : value;
     }
 
     private String normalizeIp(String value) {

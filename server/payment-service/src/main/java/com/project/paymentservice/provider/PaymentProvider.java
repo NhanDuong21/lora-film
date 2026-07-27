@@ -15,4 +15,8 @@ public interface PaymentProvider {
     default Optional<ProviderCallbackResult> queryStatus(Payment payment) {
         return Optional.empty();
     }
+
+    default int recoveryRetryDelaySeconds() {
+        return 0;
+    }
 }

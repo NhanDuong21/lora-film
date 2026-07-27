@@ -203,7 +203,8 @@ public class PaymentTransactionService {
     @Transactional
     public void deferUncertainStatus(Long paymentId, Instant nextCheckAt) {
         Payment payment = lock(paymentId);
-        if (payment.getStatus() == PaymentStatus.PROCESSING
+        if ((payment.getStatus() == PaymentStatus.PROCESSING
+                || payment.getStatus() == PaymentStatus.EXPIRED)
                 && payment.getSettlementHoldUntil() != null) {
             payment.setSettlementHoldUntil(nextCheckAt);
             paymentRepository.save(payment);
@@ -412,6 +413,10 @@ public class PaymentTransactionService {
             return payment;
         }
         if (!transitionService.isActive(previous)) {
+            payment.setProviderResponseCode(result.getResponseCode());
+            payment.setExternalTransactionId(result.getExternalTransactionId());
+            payment.setSettlementHoldUntil(null);
+            paymentRepository.save(payment);
             return payment;
         }
         PaymentStatus terminal = "CANCELLED".equals(result.getResult())

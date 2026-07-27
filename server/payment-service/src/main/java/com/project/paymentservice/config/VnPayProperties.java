@@ -1,8 +1,11 @@
 package com.project.paymentservice.config;
 
+import jakarta.validation.constraints.Min;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 @ConfigurationProperties(prefix = "payment.providers.vnpay")
+@Validated
 public class VnPayProperties {
     private boolean enabled;
     private String tmnCode;
@@ -16,6 +19,8 @@ public class VnPayProperties {
     private String queryIpAddress = "127.0.0.1";
     private int connectTimeoutMillis = 5000;
     private int readTimeoutMillis = 10000;
+    @Min(30)
+    private int queryRetryDelaySeconds = 900;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -41,4 +46,6 @@ public class VnPayProperties {
     public void setConnectTimeoutMillis(int value) { this.connectTimeoutMillis = value; }
     public int getReadTimeoutMillis() { return readTimeoutMillis; }
     public void setReadTimeoutMillis(int value) { this.readTimeoutMillis = value; }
+    public int getQueryRetryDelaySeconds() { return queryRetryDelaySeconds; }
+    public void setQueryRetryDelaySeconds(int value) { this.queryRetryDelaySeconds = value; }
 }

@@ -8,7 +8,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -28,11 +27,8 @@ public class PaymentExpiryScheduler {
             initialDelayString = "${payment.runtime.expiry-initial-delay-millis:5000}")
     public void expirePastDeadlineAttempts() {
         Instant now = Instant.now();
-        List<Payment> due = new ArrayList<>();
-        due.addAll(paymentRepository.findByStatusAndBookingExpiresAtBefore(
-                PaymentStatus.PENDING, now, PageRequest.of(0, 50)).getContent());
-        due.addAll(paymentRepository.findByStatusAndBookingExpiresAtBefore(
-                PaymentStatus.PROCESSING, now, PageRequest.of(0, 50)).getContent());
+        List<Payment> due = paymentRepository.findByStatusAndBookingExpiresAtBefore(
+                PaymentStatus.PENDING, now, PageRequest.of(0, 50)).getContent();
         due.forEach(payment -> transactionService.expireAttempt(payment.getId(), now));
     }
 }

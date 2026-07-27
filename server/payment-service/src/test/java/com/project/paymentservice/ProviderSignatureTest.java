@@ -44,6 +44,8 @@ class ProviderSignatureTest {
         PaymentSessionRequest request = request();
         PaymentSession session = provider.createSession(request);
         assertTrue(session.getPaymentUrl().contains("vnp_Amount=15000000"));
+        assertEquals("PAY0001", session.getProviderOrderId());
+        assertTrue(session.getProviderOrderId().matches("[A-Za-z0-9]+"));
         assertTrue(session.getExpiresAt().compareTo(request.getExpiresAt()) <= 0);
 
         Map<String, String> callback = new TreeMap<>();
@@ -51,7 +53,7 @@ class ProviderSignatureTest {
         callback.put("vnp_ResponseCode", "00");
         callback.put("vnp_TransactionStatus", "00");
         callback.put("vnp_TransactionNo", "998877");
-        callback.put("vnp_TxnRef", "PAY-0001");
+        callback.put("vnp_TxnRef", session.getProviderOrderId());
         callback.put("vnp_SecureHash", hmac(
                 "HmacSHA512", secret, canonicalUrlEncoded(callback)));
 
@@ -122,7 +124,7 @@ class ProviderSignatureTest {
             responseValues.put("vnp_ResponseCode", "00");
             responseValues.put("vnp_Message", "Success");
             responseValues.put("vnp_TmnCode", "TESTCODE");
-            responseValues.put("vnp_TxnRef", "PAY-0001");
+            responseValues.put("vnp_TxnRef", "PAY0001");
             responseValues.put("vnp_Amount", "15000000");
             responseValues.put("vnp_BankCode", "NCB");
             responseValues.put("vnp_PayDate", "20260727210500");
@@ -154,7 +156,9 @@ class ProviderSignatureTest {
 
             Payment payment = new Payment();
             payment.setPaymentTransactionCode("PAY-0001");
-            payment.setProviderOrderId("PAY-0001");
+            payment.setProviderOrderId("PAY0001");
+            payment.setAmount(new BigDecimal("150000"));
+            payment.setCurrency("VND");
             payment.setLatestProviderSummarySanitized(
                     "{\"provider\":\"VNPAY\",\"createDate\":\"20260727210000\"}");
 
@@ -163,7 +167,7 @@ class ProviderSignatureTest {
             assertTrue(queried.isPresent());
             assertTrue(queried.get().isSignatureValid());
             assertEquals("SUCCESS", queried.get().getResult());
-            assertEquals("PAY-0001", queried.get().getProviderOrderId());
+            assertEquals("PAY0001", queried.get().getProviderOrderId());
             assertEquals(0, new BigDecimal("150000").compareTo(queried.get().getAmount()));
 
             Map<String, String> sent = capturedRequest.get();

@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -38,8 +39,11 @@ public class PaymentProviderRecoveryScheduler {
             initialDelayString = "${payment.runtime.provider-recovery-initial-delay-millis:5000}")
     public void recoverUncertainProviderSessions() {
         Instant now = Instant.now();
-        List<Payment> due = paymentRepository.findByStatusAndSettlementHoldUntilBefore(
-                PaymentStatus.PROCESSING, now, PageRequest.of(0, 20)).getContent();
+        List<Payment> due = new ArrayList<>();
+        due.addAll(paymentRepository.findByStatusAndSettlementHoldUntilBefore(
+                PaymentStatus.PROCESSING, now, PageRequest.of(0, 20)).getContent());
+        due.addAll(paymentRepository.findByStatusAndSettlementHoldUntilBefore(
+                PaymentStatus.EXPIRED, now, PageRequest.of(0, 20)).getContent());
         for (Payment payment : due) {
             PaymentProvider provider;
             try {
@@ -54,8 +58,11 @@ public class PaymentProviderRecoveryScheduler {
                 transactionService.applyProviderResult(
                         payment.getProviderCode(), result.get(), null);
             } else {
+                int retryDelaySeconds = Math.max(
+                        properties.getSettlementHoldSeconds(),
+                        provider.recoveryRetryDelaySeconds());
                 transactionService.deferUncertainStatus(
-                        payment.getId(), now.plusSeconds(properties.getSettlementHoldSeconds()));
+                        payment.getId(), now.plusSeconds(retryDelaySeconds));
             }
         }
     }
