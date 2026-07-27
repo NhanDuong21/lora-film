@@ -59,7 +59,7 @@ public class UserProfileCreatedConsumer {
                 return;
             }
 
-            if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.VERIFIED || account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
+            if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.ACTIVE || account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
                 account.setAccountStatus(com.project.authservice.enums.AccountStatus.ACTIVE);
                 accountRepository.save(account);
                 log.info("Account {} successfully activated.", accountId);

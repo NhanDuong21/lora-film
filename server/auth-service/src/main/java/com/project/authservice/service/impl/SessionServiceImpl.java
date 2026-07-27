@@ -25,7 +25,7 @@ public class SessionServiceImpl implements SessionService {
         Account account = accountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
         
-        return userSessionRepository.findByAccountIdAndIsActiveTrue(account.getId())
+        return userSessionRepository.findByAccountIdAndIsOnlineTrue(account.getId())
                 .stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
@@ -33,7 +33,7 @@ public class SessionServiceImpl implements SessionService {
 
     @Override
     @Transactional
-    public void revokeSession(String sessionId, String email) {
+    public void revokeSession(Long sessionId, String email) {
         Account account = accountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
         

@@ -25,7 +25,7 @@ public class PermissionController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<PermissionDto>> getPermissionById(@PathVariable Integer id) {
+    public ResponseEntity<ApiResponse<PermissionDto>> getPermissionById(@PathVariable Long id) {
         log.info("Get permission by id called: {}", id);
         return ResponseEntity.ok(ApiResponse.success("Success", permissionService.getPermissionById(id)));
     }
@@ -39,14 +39,14 @@ public class PermissionController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<PermissionDto>> updatePermission(@PathVariable Integer id, @RequestBody PermissionDto request) {
+    public ResponseEntity<ApiResponse<PermissionDto>> updatePermission(@PathVariable Long id, @RequestBody PermissionDto request) {
         log.info("Update permission called: {}", id);
         return ResponseEntity.ok(ApiResponse.success("Permission updated successfully", permissionService.updatePermission(id, request)));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deletePermission(@PathVariable Integer id) {
+    public ResponseEntity<ApiResponse<Void>> deletePermission(@PathVariable Long id) {
         log.info("Delete permission called: {}", id);
         permissionService.deletePermission(id);
         return ResponseEntity.ok(ApiResponse.success("Permission deleted successfully", null));

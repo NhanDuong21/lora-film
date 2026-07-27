@@ -66,12 +66,12 @@ public class UserLifecycleConsumer {
 
     private AccountStatus targetStatus(String eventType, String sourceStatus, AccountStatus current) {
         return switch (eventType) {
-            case "CUSTOMER_BLOCKED" -> AccountStatus.BLOCKED;
-            case "CUSTOMER_UNBLOCKED" -> current == AccountStatus.BLOCKED ? AccountStatus.ACTIVE : null;
+            case "CUSTOMER_BLOCKED" -> AccountStatus.LOCKED;
+            case "CUSTOMER_UNBLOCKED" -> current == AccountStatus.LOCKED ? AccountStatus.ACTIVE : null;
             case "EMPLOYEE_RESIGNED" -> AccountStatus.INACTIVE;
             case "EMPLOYEE_UPDATED" -> switch (sourceStatus) {
-                case "SUSPENDED" -> AccountStatus.SUSPENDED;
-                case "ACTIVE" -> current == AccountStatus.SUSPENDED ? AccountStatus.ACTIVE : null;
+                case "SUSPENDED" -> AccountStatus.LOCKED;
+                case "ACTIVE" -> current == AccountStatus.LOCKED ? AccountStatus.ACTIVE : null;
                 default -> null;
             };
             default -> null;

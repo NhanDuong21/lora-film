@@ -2,10 +2,10 @@ package com.project.authservice.dto;
 
 
 public class PermissionDto {
-    private Integer id;
+    private Long id;
     private String permissionCode;
     private String description;
-    public Integer getId() {
+    public Long getId() {
         return this.id;
     }
     public String getPermissionCode() {
@@ -14,7 +14,7 @@ public class PermissionDto {
     public String getDescription() {
         return this.description;
     }
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
     public void setPermissionCode(String permissionCode) {
@@ -25,7 +25,7 @@ public class PermissionDto {
     }
     public PermissionDto() {
     }
-    public PermissionDto(Integer id, String permissionCode, String description) {
+    public PermissionDto(Long id, String permissionCode, String description) {
         this.id = id;
         this.permissionCode = permissionCode;
         this.description = description;
@@ -34,11 +34,11 @@ public class PermissionDto {
         return new PermissionDtoBuilder();
     }
     public static class PermissionDtoBuilder {
-        private Integer id;
+        private Long id;
         private String permissionCode;
         private String description;
         PermissionDtoBuilder() {}
-        public PermissionDtoBuilder id(Integer id) {
+        public PermissionDtoBuilder id(Long id) {
             this.id = id;
             return this;
         }

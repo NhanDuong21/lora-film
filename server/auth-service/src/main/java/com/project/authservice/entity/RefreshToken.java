@@ -25,26 +25,23 @@ public class RefreshToken {
 	@JoinColumn(name = "account_id", nullable = false)
 	private Account account;
 
-	@Column(name = "token_hash", nullable = false, unique = true, length = 255)
+	@Column(name = "token_hash", nullable = false, unique = true, length = 64, columnDefinition = "char(64)")
 	private String token;
 
-	@Column(name = "expiry_date", nullable = false)
+	@Column(name = "device_id", length = 120)
+	private String deviceId;
+
+	@Column(name = "expires_at", nullable = false)
 	private LocalDateTime expiryDate;
 
-	@Column(name = "is_revoked", nullable = false)
+	@Column(name = "revoked", nullable = false)
 	private Boolean isRevoked = false;
+
+	@Column(name = "revoked_at")
+	private LocalDateTime revokedAt;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
-
-	@Column(name = "created_by")
-	private Long createdBy;
-
-	@Column(name = "updated_at")
-	private LocalDateTime updatedAt;
-
-	@Column(name = "updated_by")
-	private Long updatedBy;
 
 	@PrePersist
 	void prePersist() {
@@ -55,125 +52,71 @@ public class RefreshToken {
 			isRevoked = false;
 		}
 	}
-    public Long getId() {
-        return this.id;
-    }
-    public Account getAccount() {
-        return this.account;
-    }
-    public String getToken() {
-        return this.token;
-    }
-    public LocalDateTime getExpiryDate() {
-        return this.expiryDate;
-    }
-    public Boolean getIsRevoked() {
-        return this.isRevoked;
-    }
-    public LocalDateTime getCreatedAt() {
-        return this.createdAt;
-    }
-    public Long getCreatedBy() {
-        return this.createdBy;
-    }
-    public LocalDateTime getUpdatedAt() {
-        return this.updatedAt;
-    }
-    public Long getUpdatedBy() {
-        return this.updatedBy;
-    }
-    public void setId(Long id) {
-        this.id = id;
-    }
-    public void setAccount(Account account) {
-        this.account = account;
-    }
-    public void setToken(String token) {
-        this.token = token;
-    }
-    public void setExpiryDate(LocalDateTime expiryDate) {
-        this.expiryDate = expiryDate;
-    }
-    public void setIsRevoked(Boolean isRevoked) {
-        this.isRevoked = isRevoked;
-    }
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-    public void setCreatedBy(Long createdBy) {
-        this.createdBy = createdBy;
-    }
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-    public void setUpdatedBy(Long updatedBy) {
-        this.updatedBy = updatedBy;
-    }
-    public RefreshToken() {
-    }
-    public RefreshToken(Long id, Account account, String token, LocalDateTime expiryDate, Boolean isRevoked, LocalDateTime createdAt, Long createdBy, LocalDateTime updatedAt, Long updatedBy) {
+
+    public Long getId() { return this.id; }
+    public void setId(Long id) { this.id = id; }
+
+    public Account getAccount() { return this.account; }
+    public void setAccount(Account account) { this.account = account; }
+
+    public String getToken() { return this.token; }
+    public void setToken(String token) { this.token = token; }
+
+    public String getDeviceId() { return this.deviceId; }
+    public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
+
+    public LocalDateTime getExpiryDate() { return this.expiryDate; }
+    public void setExpiryDate(LocalDateTime expiryDate) { this.expiryDate = expiryDate; }
+    
+    public LocalDateTime getExpiresAt() { return this.expiryDate; }
+    public void setExpiresAt(LocalDateTime expiresAt) { this.expiryDate = expiresAt; }
+
+    public Boolean getIsRevoked() { return this.isRevoked; }
+    public void setIsRevoked(Boolean isRevoked) { this.isRevoked = isRevoked; }
+
+    public LocalDateTime getRevokedAt() { return this.revokedAt; }
+    public void setRevokedAt(LocalDateTime revokedAt) { this.revokedAt = revokedAt; }
+
+    public LocalDateTime getCreatedAt() { return this.createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public RefreshToken() {}
+
+    public RefreshToken(Long id, Account account, String token, String deviceId, LocalDateTime expiryDate, Boolean isRevoked, LocalDateTime revokedAt, LocalDateTime createdAt) {
         this.id = id;
         this.account = account;
         this.token = token;
+        this.deviceId = deviceId;
         this.expiryDate = expiryDate;
         this.isRevoked = isRevoked;
+        this.revokedAt = revokedAt;
         this.createdAt = createdAt;
-        this.createdBy = createdBy;
-        this.updatedAt = updatedAt;
-        this.updatedBy = updatedBy;
     }
+
     public static RefreshTokenBuilder builder() {
         return new RefreshTokenBuilder();
     }
+
     public static class RefreshTokenBuilder {
         private Long id;
         private Account account;
         private String token;
+        private String deviceId;
         private LocalDateTime expiryDate;
         private Boolean isRevoked;
+        private LocalDateTime revokedAt;
         private LocalDateTime createdAt;
-        private Long createdBy;
-        private LocalDateTime updatedAt;
-        private Long updatedBy;
         RefreshTokenBuilder() {}
-        public RefreshTokenBuilder id(Long id) {
-            this.id = id;
-            return this;
-        }
-        public RefreshTokenBuilder account(Account account) {
-            this.account = account;
-            return this;
-        }
-        public RefreshTokenBuilder token(String token) {
-            this.token = token;
-            return this;
-        }
-        public RefreshTokenBuilder expiryDate(LocalDateTime expiryDate) {
-            this.expiryDate = expiryDate;
-            return this;
-        }
-        public RefreshTokenBuilder isRevoked(Boolean isRevoked) {
-            this.isRevoked = isRevoked;
-            return this;
-        }
-        public RefreshTokenBuilder createdAt(LocalDateTime createdAt) {
-            this.createdAt = createdAt;
-            return this;
-        }
-        public RefreshTokenBuilder createdBy(Long createdBy) {
-            this.createdBy = createdBy;
-            return this;
-        }
-        public RefreshTokenBuilder updatedAt(LocalDateTime updatedAt) {
-            this.updatedAt = updatedAt;
-            return this;
-        }
-        public RefreshTokenBuilder updatedBy(Long updatedBy) {
-            this.updatedBy = updatedBy;
-            return this;
-        }
+        public RefreshTokenBuilder id(Long id) { this.id = id; return this; }
+        public RefreshTokenBuilder account(Account account) { this.account = account; return this; }
+        public RefreshTokenBuilder token(String token) { this.token = token; return this; }
+        public RefreshTokenBuilder deviceId(String deviceId) { this.deviceId = deviceId; return this; }
+        public RefreshTokenBuilder expiryDate(LocalDateTime expiryDate) { this.expiryDate = expiryDate; return this; }
+        public RefreshTokenBuilder isRevoked(Boolean isRevoked) { this.isRevoked = isRevoked; return this; }
+        public RefreshTokenBuilder revokedAt(LocalDateTime revokedAt) { this.revokedAt = revokedAt; return this; }
+        public RefreshTokenBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public RefreshToken build() {
-            return new RefreshToken(this.id, this.account, this.token, this.expiryDate, this.isRevoked, this.createdAt, this.createdBy, this.updatedAt, this.updatedBy);
+            return new RefreshToken(this.id, this.account, this.token, this.deviceId, this.expiryDate, this.isRevoked, this.revokedAt, this.createdAt);
         }
     }
 }

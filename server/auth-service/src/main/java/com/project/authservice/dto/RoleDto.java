@@ -4,11 +4,11 @@ package com.project.authservice.dto;
 import java.util.Set;
 
 public class RoleDto {
-    private Integer id;
+    private Long id;
     private String roleName;
     private String description;
     private Set<PermissionDto> permissions;
-    public Integer getId() {
+    public Long getId() {
         return this.id;
     }
     public String getRoleName() {
@@ -20,7 +20,7 @@ public class RoleDto {
     public Set<PermissionDto> getPermissions() {
         return this.permissions;
     }
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
     public void setRoleName(String roleName) {
@@ -34,7 +34,7 @@ public class RoleDto {
     }
     public RoleDto() {
     }
-    public RoleDto(Integer id, String roleName, String description, Set<PermissionDto> permissions) {
+    public RoleDto(Long id, String roleName, String description, Set<PermissionDto> permissions) {
         this.id = id;
         this.roleName = roleName;
         this.description = description;
@@ -44,12 +44,12 @@ public class RoleDto {
         return new RoleDtoBuilder();
     }
     public static class RoleDtoBuilder {
-        private Integer id;
+        private Long id;
         private String roleName;
         private String description;
         private Set<PermissionDto> permissions;
         RoleDtoBuilder() {}
-        public RoleDtoBuilder id(Integer id) {
+        public RoleDtoBuilder id(Long id) {
             this.id = id;
             return this;
         }

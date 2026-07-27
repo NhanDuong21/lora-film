@@ -25,7 +25,7 @@ public class RoleController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<RoleDto>> getRoleById(@PathVariable Integer id) {
+    public ResponseEntity<ApiResponse<RoleDto>> getRoleById(@PathVariable Long id) {
         log.info("Get role by id called: {}", id);
         return ResponseEntity.ok(ApiResponse.success("Success", roleService.getRoleById(id)));
     }
@@ -39,14 +39,14 @@ public class RoleController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<RoleDto>> updateRole(@PathVariable Integer id, @RequestBody RoleDto request) {
+    public ResponseEntity<ApiResponse<RoleDto>> updateRole(@PathVariable Long id, @RequestBody RoleDto request) {
         log.info("Update role called: {}", id);
         return ResponseEntity.ok(ApiResponse.success("Role updated successfully", roleService.updateRole(id, request)));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deleteRole(@PathVariable Integer id) {
+    public ResponseEntity<ApiResponse<Void>> deleteRole(@PathVariable Long id) {
         log.info("Delete role called: {}", id);
         roleService.deleteRole(id);
         return ResponseEntity.ok(ApiResponse.success("Role deleted successfully", null));

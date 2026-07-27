@@ -4,13 +4,13 @@ package com.project.authservice.dto;
 import java.time.LocalDateTime;
 
 public class SessionDto {
-    private String id;
+    private Long id;
     private String ipAddress;
     private String userAgent;
     private LocalDateTime createdAt;
     private LocalDateTime expiresAt;
     private Boolean isActive;
-    public String getId() {
+    public Long getId() {
         return this.id;
     }
     public String getIpAddress() {
@@ -28,7 +28,7 @@ public class SessionDto {
     public Boolean getIsActive() {
         return this.isActive;
     }
-    public void setId(String id) {
+    public void setId(Long id) {
         this.id = id;
     }
     public void setIpAddress(String ipAddress) {
@@ -48,7 +48,7 @@ public class SessionDto {
     }
     public SessionDto() {
     }
-    public SessionDto(String id, String ipAddress, String userAgent, LocalDateTime createdAt, LocalDateTime expiresAt, Boolean isActive) {
+    public SessionDto(Long id, String ipAddress, String userAgent, LocalDateTime createdAt, LocalDateTime expiresAt, Boolean isActive) {
         this.id = id;
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;
@@ -60,14 +60,14 @@ public class SessionDto {
         return new SessionDtoBuilder();
     }
     public static class SessionDtoBuilder {
-        private String id;
+        private Long id;
         private String ipAddress;
         private String userAgent;
         private LocalDateTime createdAt;
         private LocalDateTime expiresAt;
         private Boolean isActive;
         SessionDtoBuilder() {}
-        public SessionDtoBuilder id(String id) {
+        public SessionDtoBuilder id(Long id) {
             this.id = id;
             return this;
         }

@@ -45,6 +45,9 @@ class AuthControllerTest {
     @MockBean
     private com.project.authservice.security.JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @MockBean
+    private com.project.authservice.util.JwtUtil jwtUtil;
+
     @Autowired
     private ObjectMapper objectMapper;
 

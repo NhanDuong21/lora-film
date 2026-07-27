@@ -124,7 +124,7 @@ public class AuthServiceImpl implements AuthService {
 				account.setEmail(email);
 				account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 				account.setRole(role);
-				account.setAccountStatus(com.project.authservice.enums.AccountStatus.PENDING);
+				account.setAccountStatus(com.project.authservice.enums.AccountStatus.INACTIVE);
 				accountRepository.save(account);
 
 				String pendingKey = "pending_registration:" + email;
@@ -149,7 +149,7 @@ public class AuthServiceImpl implements AuthService {
 
 			Account existingAccount = accountRepository.findByEmail(email).orElse(null);
 			if (existingAccount != null) {
-				if (existingAccount.getAccountStatus() != com.project.authservice.enums.AccountStatus.PENDING) {
+				if (existingAccount.getAccountStatus() != com.project.authservice.enums.AccountStatus.INACTIVE) {
 					log.warn("Email already registered and verified: {}", email);
 					throw new EmailAlreadyExistsException();
 				} else {
@@ -205,6 +205,8 @@ public class AuthServiceImpl implements AuthService {
 				throw new InvalidBirthdayFormatException("You must be 13 years old or older.");
 			}
 
+			request.setPassword(passwordEncoder.encode(request.getPassword()));
+
 			String requestId = UUID.randomUUID().toString();
 			PendingRegistrationData pendingData = new PendingRegistrationData(request, cccdInfo);
 			String json;
@@ -257,7 +259,7 @@ public class AuthServiceImpl implements AuthService {
 				.orElseThrow(() -> new ResourceNotFoundException("Account not found for email: " + email));
 
 		// Update status to VERIFIED (OTP is correct, waiting for User Profile creation)
-		savedAccount.setAccountStatus(com.project.authservice.enums.AccountStatus.VERIFIED);
+		savedAccount.setAccountStatus(com.project.authservice.enums.AccountStatus.ACTIVE);
 		accountRepository.save(savedAccount);
 
 		log.info("Account verified successfully for email={} with accountId={}", email, savedAccount.getId());
@@ -302,7 +304,7 @@ public class AuthServiceImpl implements AuthService {
 		}
 
 		// 3. Check account status
-		if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
+		if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
 			log.warn("Login failed: account is not verified for email {}", email);
 			auditLogService.log(account.getId(), "LOGIN_FAILED_NOT_VERIFIED", servletRequest);
 			throw new AccountNotVerifiedException(account.getId());
@@ -342,11 +344,9 @@ public class AuthServiceImpl implements AuthService {
 		refreshTokenRepository.save(refreshToken);
 
 		// 7. Save User Session
-		String sessionId = UUID.randomUUID().toString();
 		com.project.authservice.entity.UserSession userSession = com.project.authservice.entity.UserSession.builder()
-				.id(sessionId)
 				.account(account)
-				.accessTokenHash(RefreshTokenHashUtil.hash(accessToken))
+				.refreshToken(refreshToken)
 				.ipAddress(servletRequest.getRemoteAddr())
 				.userAgent(currentUserAgent)
 				.expiresAt(LocalDateTime.now().plusHours(24)) // 24 hours matches JWT expiration
@@ -462,7 +462,7 @@ public class AuthServiceImpl implements AuthService {
 				throw new InvalidRefreshTokenException("Account not found");
 			}
 
-			if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
+			if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
 				throw new AccountNotVerifiedException(account.getId());
 			}
 
@@ -534,17 +534,13 @@ public class AuthServiceImpl implements AuthService {
 		// 1. Blacklist token in Redis
 		long exp = jwtUtil.extractExpiration(token).getTime();
 		long now = System.currentTimeMillis();
+		String tokenHash = RefreshTokenHashUtil.hash(token);
 		if (exp > now) {
-			redisTemplate.opsForValue().set("blacklist:" + token, "revoked", Duration.ofMillis(exp - now));
+			redisTemplate.opsForValue().set("blacklist:" + tokenHash, "revoked", Duration.ofMillis(exp - now));
 		}
 		
 		// 2. Invalidate session
-		String tokenHash = RefreshTokenHashUtil.hash(token);
-		userSessionRepository.findByAccessTokenHash(tokenHash)
-			.ifPresent(session -> {
-				session.setIsActive(false);
-				userSessionRepository.save(session);
-			});
+		// Access tokens are now solely managed by Redis Blacklist. Database session is linked to refresh token.
 			
 		// 3. Log Audit
 		Account account = accountRepository.findByEmail(email).orElse(null);
@@ -577,27 +573,28 @@ public class AuthServiceImpl implements AuthService {
 		Account account = accountRepository.findByEmail(request.getEmail())
 				.orElseThrow(() -> new ResourceNotFoundException("Account not found"));
 		
-		String token = UUID.randomUUID().toString();
+		String otp = String.format("%06d", new java.util.Random().nextInt(999999));
 		com.project.authservice.entity.PasswordResetToken resetToken = com.project.authservice.entity.PasswordResetToken.builder()
 				.account(account)
-				.token(token)
-				.expiresAt(LocalDateTime.now().plusMinutes(15))
-				.used(false)
+				.otpCode(otp)
+				.expiredAt(LocalDateTime.now().plusMinutes(15))
+				.isUsed(false)
+				.attempts(0)
 				.build();
 		passwordResetTokenRepository.save(resetToken);
 		
 		// In a real system, send email here
-		log.info("Password reset token generated for email={}: {}", request.getEmail(), token);
+		log.info("Password reset OTP generated for email={}: {}", request.getEmail(), otp);
 	}
 
 	@Override
 	@Transactional
 	public void resetPassword(com.project.authservice.dto.request.ResetPasswordRequest request) {
 		log.info("Reset password requested");
-		com.project.authservice.entity.PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(request.getToken())
+		com.project.authservice.entity.PasswordResetToken resetToken = passwordResetTokenRepository.findByOtpCode(request.getToken())
 				.orElseThrow(() -> new RuntimeException("Invalid token"));
 				
-		if (resetToken.getUsed() || resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+		if (resetToken.getIsUsed() || resetToken.getExpiredAt().isBefore(LocalDateTime.now())) {
 			throw new RuntimeException("Token expired or already used");
 		}
 		
@@ -605,7 +602,8 @@ public class AuthServiceImpl implements AuthService {
 		account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
 		accountRepository.save(account);
 		
-		resetToken.setUsed(true);
+		resetToken.setIsUsed(true);
+		resetToken.setUsedAt(LocalDateTime.now());
 		passwordResetTokenRepository.save(resetToken);
 		
 		// Revoke all sessions for security

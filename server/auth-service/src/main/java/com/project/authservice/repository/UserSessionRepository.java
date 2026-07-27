@@ -10,23 +10,21 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface UserSessionRepository extends JpaRepository<UserSession, String> {
+public interface UserSessionRepository extends JpaRepository<UserSession, Long> {
     
-    List<UserSession> findByAccountIdAndIsActiveTrue(Long accountId);
+    List<UserSession> findByAccountIdAndIsOnlineTrue(Long accountId);
     
-    Optional<UserSession> findByIdAndAccountId(String id, Long accountId);
-    
-    Optional<UserSession> findByAccessTokenHash(String accessTokenHash);
+    Optional<UserSession> findByIdAndAccountId(Long id, Long accountId);
     
     @Modifying
-    @Query("UPDATE UserSession s SET s.isActive = false WHERE s.id = :sessionId")
-    void revokeSession(String sessionId);
+    @Query("UPDATE UserSession s SET s.isOnline = false WHERE s.id = :sessionId")
+    void revokeSession(Long sessionId);
 
     @Modifying
-    @Query("UPDATE UserSession s SET s.isActive = false WHERE s.account.id = :accountId AND s.id != :excludeSessionId")
-    void revokeAllExcept(Long accountId, String excludeSessionId);
+    @Query("UPDATE UserSession s SET s.isOnline = false WHERE s.account.id = :accountId AND s.id != :excludeSessionId")
+    void revokeAllExcept(Long accountId, Long excludeSessionId);
     
     @Modifying
-    @Query("UPDATE UserSession s SET s.isActive = false WHERE s.account.id = :accountId")
+    @Query("UPDATE UserSession s SET s.isOnline = false WHERE s.account.id = :accountId")
     void revokeAllForAccount(Long accountId);
 }

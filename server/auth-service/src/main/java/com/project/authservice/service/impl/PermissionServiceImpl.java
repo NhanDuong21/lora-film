@@ -28,7 +28,7 @@ public class PermissionServiceImpl implements PermissionService {
 
     @Override
     @Transactional(readOnly = true)
-    public PermissionDto getPermissionById(Integer id) {
+    public PermissionDto getPermissionById(Long id) {
         Permission permission = permissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission not found"));
         return mapToDto(permission);
@@ -48,7 +48,7 @@ public class PermissionServiceImpl implements PermissionService {
 
     @Override
     @Transactional
-    public PermissionDto updatePermission(Integer id, PermissionDto request) {
+    public PermissionDto updatePermission(Long id, PermissionDto request) {
         Permission permission = permissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission not found"));
         permission.setPermissionCode(request.getPermissionCode());
@@ -60,7 +60,7 @@ public class PermissionServiceImpl implements PermissionService {
 
     @Override
     @Transactional
-    public void deletePermission(Integer id) {
+    public void deletePermission(Long id) {
         Permission permission = permissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission not found"));
         permissionRepository.delete(permission);

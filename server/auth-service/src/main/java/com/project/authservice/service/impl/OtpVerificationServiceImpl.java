@@ -123,7 +123,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         log.info("OTP generated for email={}", email);
 
-        if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
+        if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
             String name = "Khách hàng";
             String pendingKey = "pending_registration:" + email;
             String pendingJson = redisTemplate.opsForValue().get(pendingKey);

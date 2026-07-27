@@ -28,7 +28,7 @@ public class SessionController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<Void>> revokeSession(@PathVariable String id, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<ApiResponse<Void>> revokeSession(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         log.info("Revoke session id={} called for user={}", id, userDetails.getUsername());
         sessionService.revokeSession(id, userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success("Session revoked successfully", null));

@@ -47,7 +47,7 @@ class AccountServiceImplTest {
 
     @Test
     void activatingBlockedAccountPublishesUnlockedLifecycleEvent() {
-        Account account = account(10L, role(1, "CUSTOMER"), AccountStatus.BLOCKED);
+        Account account = account(10L, role(1L, "CUSTOMER"), AccountStatus.LOCKED);
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
         when(accountRepository.save(account)).thenReturn(account);
 
@@ -58,11 +58,11 @@ class AccountServiceImplTest {
 
     @Test
     void roleChangePublishesRemovalAndAssignmentAndRevokesCredentials() {
-        Role customer = role(1, "CUSTOMER");
-        Role manager = role(2, "MANAGER");
+        Role customer = role(1L, "CUSTOMER");
+        Role manager = role(2L, "MANAGER");
         Account account = account(10L, customer, AccountStatus.ACTIVE);
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
-        when(roleRepository.findById(2)).thenReturn(Optional.of(manager));
+        when(roleRepository.findById(2L)).thenReturn(Optional.of(manager));
         when(accountRepository.save(account)).thenReturn(account);
 
         service.updateAccountRole(10L, 2);
@@ -73,10 +73,10 @@ class AccountServiceImplTest {
 
     @Test
     void duplicateRoleAssignmentIsRejectedWithoutWritesOrEvents() {
-        Role customer = role(1, "CUSTOMER");
+        Role customer = role(1L, "CUSTOMER");
         Account account = account(10L, customer, AccountStatus.ACTIVE);
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
-        when(roleRepository.findById(1)).thenReturn(Optional.of(customer));
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(customer));
 
         assertThatThrownBy(() -> service.updateAccountRole(10L, 1))
                 .isInstanceOf(BusinessException.class)
@@ -91,12 +91,12 @@ class AccountServiceImplTest {
                 .id(id)
                 .email("member@example.com")
                 .passwordHash("hash")
-                .role(role)
-                .accountStatus(status)
+                .roles(new java.util.HashSet<>(java.util.List.of(role)))
+                .status(status)
                 .build();
     }
 
-    private Role role(Integer id, String name) {
+    private Role role(Long id, String name) {
         return Role.builder().id(id).roleName(name).build();
     }
 }

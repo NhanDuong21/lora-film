@@ -4,11 +4,11 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import com.project.authservice.enums.AuthProvider;
 
 @Entity
-@Table(name = "account_providers", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_account_providers_identity", columnNames = {"provider", "provider_user_id"}),
-        @UniqueConstraint(name = "uk_account_providers_account_provider", columnNames = {"account_id", "provider"})
+@Table(name = "oauth_accounts", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_provider_user", columnNames = {"provider", "provider_user_id"})
 })
 public class AccountProvider {
     @Id
@@ -19,22 +19,29 @@ public class AccountProvider {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
-    @Column(name = "provider", nullable = false, length = 30)
-    private String provider;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provider", nullable = false)
+    private AuthProvider provider;
 
     @Column(name = "provider_user_id", nullable = false, length = 255)
     private String providerUserId;
 
+    @Column(name = "provider_email", length = 255)
+    private String providerEmail;
+
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "linked_at", nullable = false, updatable = false)
+    private LocalDateTime linkedAt;
 
     public Long getId() { return id; }
     public Account getAccount() { return account; }
     public void setAccount(Account account) { this.account = account; }
-    public String getProvider() { return provider; }
-    public void setProvider(String provider) { this.provider = provider; }
+    public AuthProvider getProvider() { return provider; }
+    public void setProvider(AuthProvider provider) { this.provider = provider; }
     public String getProviderUserId() { return providerUserId; }
     public void setProviderUserId(String providerUserId) { this.providerUserId = providerUserId; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
+    public String getProviderEmail() { return providerEmail; }
+    public void setProviderEmail(String providerEmail) { this.providerEmail = providerEmail; }
+    public LocalDateTime getLinkedAt() { return linkedAt; }
+    public void setLinkedAt(LocalDateTime linkedAt) { this.linkedAt = linkedAt; }
 }

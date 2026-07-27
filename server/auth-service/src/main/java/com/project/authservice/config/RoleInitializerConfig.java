@@ -32,7 +32,7 @@ public class RoleInitializerConfig {
                 roleRepository.findByRoleName(cleanRoleName).ifPresentOrElse(
                         role -> log.info("Role {} already exists.", cleanRoleName),
                         () -> {
-                            roleRepository.save(Role.builder().roleName(cleanRoleName).build());
+                            roleRepository.save(Role.builder().code(cleanRoleName).roleName(cleanRoleName).build());
                             log.info("Created new role: {}", cleanRoleName);
                         }
                 );

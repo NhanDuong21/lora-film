@@ -57,7 +57,7 @@ public class AccountServiceImpl implements AccountService {
         account = accountRepository.save(account);
         
         // If locked/inactive, revoke all sessions
-        if (status == AccountStatus.BLOCKED || status == AccountStatus.INACTIVE || status == AccountStatus.SUSPENDED) {
+        if (status == AccountStatus.LOCKED || status == AccountStatus.INACTIVE) {
             userSessionRepository.revokeAllForAccount(account.getId());
         }
         
@@ -71,8 +71,12 @@ public class AccountServiceImpl implements AccountService {
         Account account = accountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
                 
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository.findById(roleId.longValue())
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
+                
+        if (account.getRole() != null && account.getRole().getId().equals(role.getId())) {
+            throw new com.project.authservice.exception.BusinessException("Role is already assigned to this account");
+        }
                 
         account.setRole(role);
         account = accountRepository.save(account);

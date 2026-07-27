@@ -5,8 +5,8 @@ import java.util.List;
 
 public interface PermissionService {
     List<PermissionDto> getAllPermissions();
-    PermissionDto getPermissionById(Integer id);
+    PermissionDto getPermissionById(Long id);
     PermissionDto createPermission(PermissionDto request);
-    PermissionDto updatePermission(Integer id, PermissionDto request);
-    void deletePermission(Integer id);
+    PermissionDto updatePermission(Long id, PermissionDto request);
+    void deletePermission(Long id);
 }

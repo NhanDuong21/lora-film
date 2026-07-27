@@ -31,7 +31,7 @@ public class CredentialRevocationService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void revokeAll(Long accountId) {
-        sessionRepository.findByAccountIdAndIsActiveTrue(accountId).forEach(this::revoke);
+        sessionRepository.findByAccountIdAndIsOnlineTrue(accountId).forEach(this::revoke);
         var tokens = refreshTokenRepository.findActiveTokensByAccountId(accountId);
         tokens.forEach(token -> token.setIsRevoked(true));
         refreshTokenRepository.saveAll(tokens);
