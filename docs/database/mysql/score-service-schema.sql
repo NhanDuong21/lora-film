@@ -32,7 +32,34 @@ CREATE TABLE `membership_tiers`
         ON UPDATE CURRENT_TIMESTAMP,
 
     UNIQUE KEY `uk_membership_tier_code`
-        (`tier_code`)
+);
+
+-- =====================================================
+-- MEMBERSHIP TIER HISTORIES
+-- =====================================================
+
+CREATE TABLE `membership_tier_histories`
+(
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT
+        COMMENT 'History ID',
+
+    `user_id` BIGINT NOT NULL
+        COMMENT 'Reference User Score',
+
+    `old_tier_code` VARCHAR(30) NULL
+        COMMENT 'Previous tier code',
+
+    `new_tier_code` VARCHAR(30) NOT NULL
+        COMMENT 'New tier code',
+
+    `reason` VARCHAR(255) NOT NULL
+        COMMENT 'Reason for tier change',
+
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    KEY `idx_membership_tier_histories_user` (`user_id`),
+    CONSTRAINT `fk_tier_histories_user`
+        FOREIGN KEY (`user_id`) REFERENCES `user_scores` (`user_id`)
 );
 
 -- =====================================================
