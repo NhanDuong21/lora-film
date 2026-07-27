@@ -2,18 +2,25 @@ package com.project.scoreservice.service.impl;
 
 import com.project.scoreservice.dto.*;
 import com.project.scoreservice.entity.MembershipTier;
+import com.project.scoreservice.entity.MembershipTierHistory;
+import com.project.scoreservice.entity.PointExpirationBucket;
 import com.project.scoreservice.entity.ScoreHistory;
 import com.project.scoreservice.entity.ScoreHold;
 import com.project.scoreservice.entity.UserScore;
+import com.project.scoreservice.enumtype.PointExpirationBucketStatus;
+import com.project.scoreservice.enumtype.ReconciliationStatus;
 import com.project.scoreservice.enumtype.ScoreHoldStatus;
 import com.project.scoreservice.enumtype.ScoreTransactionType;
 import com.project.scoreservice.enumtype.UserScoreStatus;
 import com.project.scoreservice.exception.BusinessException;
+import com.project.scoreservice.repository.MembershipTierHistoryRepository;
 import com.project.scoreservice.repository.MembershipTierRepository;
+import com.project.scoreservice.repository.PointExpirationBucketRepository;
 import com.project.scoreservice.repository.ScoreHistoryRepository;
 import com.project.scoreservice.repository.ScoreHoldRepository;
 import com.project.scoreservice.repository.UserScoreRepository;
 import com.project.scoreservice.service.ScoreService;
+import java.time.LocalDate;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,15 +46,21 @@ public class ScoreServiceImpl implements ScoreService {
     private final MembershipTierRepository membershipTierRepository;
     private final ScoreHistoryRepository scoreHistoryRepository;
     private final ScoreHoldRepository scoreHoldRepository;
+    private final PointExpirationBucketRepository pointExpirationBucketRepository;
+    private final MembershipTierHistoryRepository membershipTierHistoryRepository;
 
     public ScoreServiceImpl(UserScoreRepository userScoreRepository,
                             MembershipTierRepository membershipTierRepository,
                             ScoreHistoryRepository scoreHistoryRepository,
-                            ScoreHoldRepository scoreHoldRepository) {
+                            ScoreHoldRepository scoreHoldRepository,
+                            PointExpirationBucketRepository pointExpirationBucketRepository,
+                            MembershipTierHistoryRepository membershipTierHistoryRepository) {
         this.userScoreRepository = userScoreRepository;
         this.membershipTierRepository = membershipTierRepository;
         this.scoreHistoryRepository = scoreHistoryRepository;
         this.scoreHoldRepository = scoreHoldRepository;
+        this.pointExpirationBucketRepository = pointExpirationBucketRepository;
+        this.membershipTierHistoryRepository = membershipTierHistoryRepository;
     }
 
     @Override
@@ -320,6 +333,33 @@ public class ScoreServiceImpl implements ScoreService {
                 .build();
         scoreHistoryRepository.save(history);
 
+        if (earnedPoints > 0) {
+            PointExpirationBucket bucket = PointExpirationBucket.builder()
+                    .userScore(userScore)
+                    .scoreHistory(history)
+                    .bookingId(request.bookingId())
+                    .earnedPoints(earnedPoints)
+                    .remainingPoints(earnedPoints)
+                    .expiredPoints(0)
+                    .consumedPoints(0)
+                    .expirationDate(LocalDate.now().plusYears(1))
+                    .status(PointExpirationBucketStatus.ACTIVE)
+                    .tierSnapshot(userScore.getCurrentTier().getTierCode())
+                    .eventId(request.eventId())
+                    .build();
+            pointExpirationBucketRepository.save(bucket);
+        }
+
+        if (tierChanged) {
+            MembershipTierHistory tierHistory = MembershipTierHistory.builder()
+                    .userScore(userScore)
+                    .oldTierCode(previousTierCode)
+                    .newTierCode(newTier.getTierCode())
+                    .reason("Upgraded tier due to earning points from booking " + request.bookingId())
+                    .build();
+            membershipTierHistoryRepository.save(tierHistory);
+        }
+
         return new ScoreEarnResponse(
                 earnedPoints,
                 oldBalance,
@@ -512,6 +552,8 @@ public class ScoreServiceImpl implements ScoreService {
         hold.setCommittedAt(LocalDateTime.now());
         scoreHoldRepository.save(hold);
 
+        consumePointsFromBuckets(userScore.getUserId(), pointsToCommit);
+
         ScoreHistory history = ScoreHistory.builder()
                 .transactionUuid(UUID.randomUUID().toString())
                 .userScore(userScore)
@@ -622,5 +664,496 @@ public class ScoreServiceImpl implements ScoreService {
                 ScoreHoldStatus.RELEASED.name(),
                 false
         );
+    }
+
+    private void consumePointsFromBuckets(Long userId, int pointsToConsume) {
+        if (pointsToConsume <= 0) return;
+        List<PointExpirationBucket> activeBuckets = pointExpirationBucketRepository
+                .findWithLockByUserIdAndStatusIn(userId, List.of(PointExpirationBucketStatus.ACTIVE, PointExpirationBucketStatus.PARTIAL));
+        int remaining = pointsToConsume;
+        for (PointExpirationBucket bucket : activeBuckets) {
+            if (remaining <= 0) break;
+            int canConsume = Math.min(bucket.getRemainingPoints(), remaining);
+            bucket.setRemainingPoints(bucket.getRemainingPoints() - canConsume);
+            bucket.setConsumedPoints(bucket.getConsumedPoints() + canConsume);
+            if (bucket.getRemainingPoints() == 0) {
+                bucket.setStatus(PointExpirationBucketStatus.CONSUMED);
+            } else {
+                bucket.setStatus(PointExpirationBucketStatus.PARTIAL);
+            }
+            pointExpirationBucketRepository.save(bucket);
+            remaining -= canConsume;
+        }
+    }
+
+    @Override
+    @Transactional
+    public ScoreRedeemResponse redeemPoints(ScoreRedeemRequest request) {
+        if (request.userId() == null || request.bookingId() == null || request.points() == null || request.points() <= 0
+                || request.eventId() == null || request.eventId().trim().isEmpty()) {
+            throw new BusinessException("Invalid redeem request", "VALIDATION_ERROR", HttpStatus.BAD_REQUEST);
+        }
+
+        Optional<ScoreHistory> existingOpt = scoreHistoryRepository.findByIdempotencyKey(request.idempotencyKey());
+        if (existingOpt.isEmpty() && request.eventId() != null && !request.eventId().isEmpty()) {
+            existingOpt = scoreHistoryRepository.findByEventId(request.eventId());
+        }
+        if (existingOpt.isPresent()) {
+            ScoreHistory sh = existingOpt.get();
+            int pts = sh.getActualPointChange() != null ? Math.abs(sh.getActualPointChange()) : Math.abs(sh.getPointChange());
+            if (!sh.getUserScore().getUserId().equals(request.userId()) ||
+                !sh.getBookingId().equals(request.bookingId()) ||
+                !sh.getEventId().equals(request.eventId()) ||
+                pts != request.points()) {
+                throw new BusinessException("Idempotency conflict", "SCORE_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT);
+            }
+
+            return new ScoreRedeemResponse(
+                    sh.getUserScore().getUserId(),
+                    sh.getBookingId(),
+                    pts,
+                    pts * 1000,
+                    sh.getBalanceAfter(),
+                    sh.getAccumulatedAfter(),
+                    true
+            );
+        }
+
+        UserScore userScore = userScoreRepository.findWithLockByUserId(request.userId())
+                .orElseGet(() -> getOrInitializeUserScore(request.userId()));
+
+        if (userScore.getStatus() == UserScoreStatus.LOCKED) {
+            throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
+        }
+
+        int availablePoints = userScore.getCurrentPoints() - userScore.getHeldPoints();
+        if (availablePoints < request.points()) {
+            java.util.Map<String, Object> errData = java.util.Map.of(
+                    "availablePoints", availablePoints,
+                    "requestedPoints", request.points()
+            );
+            throw new BusinessException("Insufficient available points for redemption", "SCORE_INSUFFICIENT_BALANCE", HttpStatus.CONFLICT, errData);
+        }
+
+        int oldBalance = userScore.getCurrentPoints();
+        userScore.setCurrentPoints(oldBalance - request.points());
+        userScore.setLastRedeemAt(LocalDateTime.now());
+        userScoreRepository.save(userScore);
+
+        consumePointsFromBuckets(userScore.getUserId(), request.points());
+
+        ScoreHistory history = ScoreHistory.builder()
+                .transactionUuid(UUID.randomUUID().toString())
+                .userScore(userScore)
+                .bookingId(request.bookingId())
+                .eventId(request.eventId())
+                .idempotencyKey(request.idempotencyKey())
+                .transactionType(ScoreTransactionType.REDEEM_FOR_BOOKING)
+                .pointChange(-request.points())
+                .actualPointChange(-request.points())
+                .balanceBefore(oldBalance)
+                .balanceAfter(userScore.getCurrentPoints())
+                .accumulatedBefore(userScore.getAccumulatedPoints())
+                .accumulatedAfter(userScore.getAccumulatedPoints())
+                .description("Redeemed points for booking " + request.bookingId())
+                .build();
+        scoreHistoryRepository.save(history);
+
+        return new ScoreRedeemResponse(
+                userScore.getUserId(),
+                request.bookingId(),
+                request.points(),
+                request.points() * 1000,
+                userScore.getCurrentPoints(),
+                userScore.getAccumulatedPoints(),
+                false
+        );
+    }
+
+    @Override
+    @Transactional
+    public ScoreRefundResponse refundRedeem(ScoreRefundRequest request) {
+        if (request.userId() == null || request.pointsToRefund() == null || request.pointsToRefund() <= 0
+                || request.eventId() == null || request.eventId().trim().isEmpty()
+                || request.idempotencyKey() == null || request.idempotencyKey().trim().isEmpty()) {
+            throw new BusinessException("Invalid refund request", "VALIDATION_ERROR", HttpStatus.BAD_REQUEST);
+        }
+
+        Optional<ScoreHistory> existingOpt = scoreHistoryRepository.findByIdempotencyKey(request.idempotencyKey());
+        if (existingOpt.isEmpty() && request.eventId() != null && !request.eventId().isEmpty()) {
+            existingOpt = scoreHistoryRepository.findByEventId(request.eventId());
+        }
+        if (existingOpt.isPresent()) {
+            ScoreHistory sh = existingOpt.get();
+            return new ScoreRefundResponse(
+                    sh.getUserScore().getUserId(),
+                    sh.getBookingId(),
+                    Math.abs(sh.getPointChange()),
+                    sh.getBalanceAfter(),
+                    sh.getAccumulatedAfter(),
+                    sh.getReferenceHistory() != null ? sh.getReferenceHistory().getId() : null,
+                    true
+            );
+        }
+
+        ScoreHistory orig = null;
+        if (request.originalRedeemEventId() != null && !request.originalRedeemEventId().isEmpty()) {
+            orig = scoreHistoryRepository.findByEventId(request.originalRedeemEventId()).orElse(null);
+        }
+        if (orig == null && request.bookingId() != null) {
+            List<ScoreHistory> byBooking = scoreHistoryRepository.findByBookingId(request.bookingId());
+            orig = byBooking.stream()
+                    .filter(sh -> sh.getTransactionType() == ScoreTransactionType.REDEEM || sh.getTransactionType() == ScoreTransactionType.REDEEM_FOR_BOOKING)
+                    .findFirst().orElse(null);
+        }
+        if (orig == null) {
+            throw new BusinessException("Original transaction not found", "SCORE_ORIGINAL_TRANSACTION_NOT_FOUND", HttpStatus.NOT_FOUND);
+        }
+        if (orig.getTransactionType() != ScoreTransactionType.REDEEM && orig.getTransactionType() != ScoreTransactionType.REDEEM_FOR_BOOKING) {
+            throw new BusinessException("Invalid transaction type for refund", "SCORE_INVALID_TRANSACTION_TYPE", HttpStatus.BAD_REQUEST);
+        }
+        if (!orig.getUserScore().getUserId().equals(request.userId()) || (orig.getBookingId() != null && !orig.getBookingId().equals(request.bookingId()))) {
+            throw new BusinessException("Transaction mismatch", "SCORE_TRANSACTION_MISMATCH", HttpStatus.BAD_REQUEST);
+        }
+
+        UserScore userScore = userScoreRepository.findWithLockByUserId(request.userId())
+                .orElseGet(() -> getOrInitializeUserScore(request.userId()));
+
+        if (userScore.getStatus() == UserScoreStatus.LOCKED) {
+            throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
+        }
+
+        List<ScoreHistory> refunds = scoreHistoryRepository.findByReferenceHistory(orig);
+        int alreadyRefunded = 0;
+        for (ScoreHistory r : refunds) {
+            if (r.getTransactionType() == ScoreTransactionType.REFUND_REDEEM) {
+                alreadyRefunded += Math.abs(r.getPointChange());
+            }
+        }
+        int origRedeemed = Math.abs(orig.getPointChange());
+        if (alreadyRefunded >= origRedeemed) {
+            throw new BusinessException("Score already refunded", "SCORE_ALREADY_REFUNDED", HttpStatus.CONFLICT);
+        }
+        if (alreadyRefunded + request.pointsToRefund() > origRedeemed) {
+            throw new BusinessException("Refund amount exceeds redeemed amount", "SCORE_INVALID_REFUND_AMOUNT", HttpStatus.BAD_REQUEST);
+        }
+
+
+        int oldBalance = userScore.getCurrentPoints();
+        int oldAccumulated = userScore.getAccumulatedPoints();
+        userScore.setCurrentPoints(oldBalance + request.pointsToRefund());
+        userScoreRepository.save(userScore);
+
+        PointExpirationBucket newBucket = PointExpirationBucket.builder()
+                .userScore(userScore)
+                .scoreHistory(orig)
+                .bookingId(request.bookingId())
+                .earnedPoints(request.pointsToRefund())
+                .remainingPoints(request.pointsToRefund())
+                .expiredPoints(0)
+                .consumedPoints(0)
+                .expirationDate(LocalDate.now().plusYears(1))
+                .status(PointExpirationBucketStatus.ACTIVE)
+                .tierSnapshot(userScore.getCurrentTier().getTierCode())
+                .eventId(request.eventId())
+                .build();
+        pointExpirationBucketRepository.save(newBucket);
+
+        ScoreHistory history = ScoreHistory.builder()
+                .transactionUuid(UUID.randomUUID().toString())
+                .userScore(userScore)
+                .bookingId(request.bookingId())
+                .eventId(request.eventId())
+                .idempotencyKey(request.idempotencyKey())
+                .transactionType(ScoreTransactionType.REFUND_REDEEM)
+                .pointChange(request.pointsToRefund())
+                .actualPointChange(request.pointsToRefund())
+                .balanceBefore(oldBalance)
+                .balanceAfter(userScore.getCurrentPoints())
+                .accumulatedBefore(oldAccumulated)
+                .accumulatedAfter(userScore.getAccumulatedPoints())
+                .referenceHistory(orig)
+                .reason(request.reason())
+                .description(request.reason() != null ? request.reason() : "Refunded redeemed points for booking " + request.bookingId())
+                .build();
+
+        scoreHistoryRepository.save(history);
+
+        return new ScoreRefundResponse(
+                userScore.getUserId(),
+                request.bookingId(),
+                request.pointsToRefund(),
+                userScore.getCurrentPoints(),
+                userScore.getAccumulatedPoints(),
+                orig.getId(),
+                false
+        );
+    }
+
+    @Override
+    @Transactional
+    public ScoreRevokeResponse revokeEarn(ScoreRevokeRequest request) {
+        if (request.userId() == null || request.pointsToRevoke() == null || request.pointsToRevoke() <= 0
+                || request.eventId() == null || request.eventId().trim().isEmpty()
+                || request.idempotencyKey() == null || request.idempotencyKey().trim().isEmpty()) {
+            throw new BusinessException("Invalid revoke request", "VALIDATION_ERROR", HttpStatus.BAD_REQUEST);
+        }
+
+        Optional<ScoreHistory> existingOpt = scoreHistoryRepository.findByIdempotencyKey(request.idempotencyKey());
+        if (existingOpt.isEmpty() && request.eventId() != null && !request.eventId().isEmpty()) {
+            existingOpt = scoreHistoryRepository.findByEventId(request.eventId());
+        }
+        if (existingOpt.isPresent()) {
+            ScoreHistory sh = existingOpt.get();
+            UserScore us = sh.getUserScore();
+            int reqPts = sh.getRequestedPointChange() != null ? Math.abs(sh.getRequestedPointChange()) : Math.abs(sh.getPointChange());
+            if (!sh.getUserScore().getUserId().equals(request.userId()) ||
+                (sh.getBookingId() != null && !sh.getBookingId().equals(request.bookingId())) ||
+                !sh.getEventId().equals(request.eventId()) ||
+                reqPts != request.pointsToRevoke()) {
+                throw new BusinessException("Idempotency conflict", "SCORE_IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT);
+            }
+
+            int dedPts = Math.abs(sh.getPointChange());
+            int outPts = sh.getOutstandingAfter();
+            return new ScoreRevokeResponse(
+                    us.getUserId(),
+                    reqPts,
+                    dedPts,
+                    outPts,
+                    sh.getBalanceAfter(),
+                    sh.getAccumulatedAfter(),
+                    us.getCurrentTier().getTierCode(),
+                    us.getCurrentTier().getTierCode(),
+                    false,
+                    sh.getReconciliationStatus() != null ? sh.getReconciliationStatus().name() : "NONE",
+                    outPts > 0,
+                    true
+            );
+        }
+
+        ScoreHistory orig = null;
+        if (request.originalEarnHistoryId() != null) {
+            orig = scoreHistoryRepository.findById(request.originalEarnHistoryId()).orElse(null);
+        }
+        if (orig == null && request.originalEarnEventId() != null && !request.originalEarnEventId().isEmpty()) {
+            orig = scoreHistoryRepository.findByEventId(request.originalEarnEventId()).orElse(null);
+        }
+        if (orig == null && request.bookingId() != null) {
+            List<ScoreHistory> byBooking = scoreHistoryRepository.findByBookingId(request.bookingId());
+            orig = byBooking.stream()
+                    .filter(sh -> sh.getTransactionType() == ScoreTransactionType.EARN || sh.getTransactionType() == ScoreTransactionType.EARN_BY_BOOKING)
+                    .findFirst().orElse(null);
+        }
+        if (orig == null) {
+            throw new BusinessException("Original earn transaction invalid", "SCORE_ORIGINAL_TRANSACTION_INVALID", HttpStatus.CONFLICT);
+        }
+        if (orig.getTransactionType() != ScoreTransactionType.EARN && orig.getTransactionType() != ScoreTransactionType.EARN_BY_BOOKING) {
+            throw new BusinessException("Wrong transaction type", "SCORE_ORIGINAL_TRANSACTION_INVALID", HttpStatus.CONFLICT);
+        }
+        if (!orig.getUserScore().getUserId().equals(request.userId()) || (orig.getBookingId() != null && !orig.getBookingId().equals(request.bookingId()))) {
+            throw new BusinessException("User or booking mismatch", "SCORE_ORIGINAL_TRANSACTION_MISMATCH", HttpStatus.CONFLICT);
+        }
+
+        UserScore userScore = userScoreRepository.findWithLockByUserId(request.userId())
+                .orElseGet(() -> getOrInitializeUserScore(request.userId()));
+
+        if (userScore.getStatus() == UserScoreStatus.LOCKED) {
+            throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
+        }
+
+        List<ScoreHistory> revokes = scoreHistoryRepository.findByReferenceHistory(orig);
+        int alreadyRevoked = 0;
+        for (ScoreHistory r : revokes) {
+            if (r.getTransactionType() == ScoreTransactionType.REVOKE_EARN || r.getTransactionType() == ScoreTransactionType.REVOKE_EARN_BY_REFUND) {
+                int val = r.getRequestedPointChange() != null ? Math.abs(r.getRequestedPointChange()) : Math.abs(r.getPointChange());
+                alreadyRevoked += val;
+            }
+        }
+        int origPoints = orig.getActualPointChange() != null ? orig.getActualPointChange() : orig.getPointChange();
+        if (alreadyRevoked >= origPoints) {
+            throw new BusinessException("Revoke already processed", "SCORE_REVOKE_ALREADY_PROCESSED", HttpStatus.CONFLICT);
+        }
+        if (alreadyRevoked + request.pointsToRevoke() > origPoints) {
+            throw new BusinessException("Revoke amount exceeds original earn", "SCORE_REVOKE_AMOUNT_EXCEEDS_ORIGINAL", HttpStatus.CONFLICT);
+        }
+
+
+        int toRevoke = request.pointsToRevoke();
+        int deductedPoints = Math.min(userScore.getCurrentPoints(), toRevoke);
+        int outstandingPoints = toRevoke - deductedPoints;
+
+        int oldBalance = userScore.getCurrentPoints();
+        int oldAccumulated = userScore.getAccumulatedPoints();
+        int oldOutstanding = userScore.getOutstandingPoints();
+        MembershipTier oldTier = userScore.getCurrentTier();
+        String previousTierCode = oldTier.getTierCode();
+
+        userScore.setCurrentPoints(oldBalance - deductedPoints);
+        userScore.setAccumulatedPoints(Math.max(0, oldAccumulated - toRevoke));
+        userScore.setOutstandingPoints(oldOutstanding + outstandingPoints);
+
+        boolean tierChanged = false;
+        List<MembershipTier> allTiers = membershipTierRepository.findAll();
+        MembershipTier newTier = oldTier;
+        MembershipTier bestTier = null;
+        for (MembershipTier t : allTiers) {
+            if (Boolean.TRUE.equals(t.getActive()) && userScore.getAccumulatedPoints() >= t.getMinAccumulatedPoints()) {
+                if (bestTier == null || t.getMinAccumulatedPoints() >= bestTier.getMinAccumulatedPoints()) {
+                    bestTier = t;
+                }
+            }
+        }
+        if (bestTier != null && !bestTier.getTierCode().equals(previousTierCode)) {
+            userScore.setCurrentTier(bestTier);
+            newTier = bestTier;
+            tierChanged = true;
+        }
+        userScoreRepository.save(userScore);
+
+        if (tierChanged) {
+            MembershipTierHistory th = MembershipTierHistory.builder()
+                    .userScore(userScore)
+                    .oldTierCode(previousTierCode)
+                    .newTierCode(newTier.getTierCode())
+                    .reason("Downgraded tier due to earn revoke for booking " + request.bookingId())
+                    .build();
+            membershipTierHistoryRepository.save(th);
+        }
+
+        Optional<PointExpirationBucket> bucketOpt = pointExpirationBucketRepository.findWithLockByHistoryId(orig.getId());
+        if (bucketOpt.isPresent()) {
+            PointExpirationBucket bucket = bucketOpt.get();
+            int consumeFromBucket = Math.min(bucket.getRemainingPoints(), toRevoke);
+            bucket.setRemainingPoints(bucket.getRemainingPoints() - consumeFromBucket);
+            bucket.setConsumedPoints(bucket.getConsumedPoints() + consumeFromBucket);
+            if (bucket.getRemainingPoints() == 0) {
+                bucket.setStatus(PointExpirationBucketStatus.CONSUMED);
+            } else {
+                bucket.setStatus(PointExpirationBucketStatus.PARTIAL);
+            }
+            pointExpirationBucketRepository.save(bucket);
+        }
+
+        ReconciliationStatus reconStatus = outstandingPoints > 0 ? ReconciliationStatus.PENDING : ReconciliationStatus.NONE;
+        boolean requiresManual = outstandingPoints > 0;
+
+        ScoreHistory history = ScoreHistory.builder()
+                .transactionUuid(UUID.randomUUID().toString())
+                .userScore(userScore)
+                .bookingId(request.bookingId())
+                .eventId(request.eventId())
+                .idempotencyKey(request.idempotencyKey())
+                .transactionType(ScoreTransactionType.REVOKE_EARN_BY_REFUND)
+                .pointChange(-deductedPoints)
+                .actualPointChange(-deductedPoints)
+                .requestedPointChange(-toRevoke)
+                .balanceBefore(oldBalance)
+                .balanceAfter(userScore.getCurrentPoints())
+                .accumulatedBefore(oldAccumulated)
+                .accumulatedAfter(userScore.getAccumulatedPoints())
+                .outstandingBefore(oldOutstanding)
+                .outstandingAfter(userScore.getOutstandingPoints())
+                .referenceHistory(orig)
+                .reconciliationStatus(reconStatus)
+                .reason(request.reason())
+                .description(request.reason() != null ? request.reason() : "Revoked points for booking " + request.bookingId())
+                .build();
+
+        scoreHistoryRepository.save(history);
+
+        return new ScoreRevokeResponse(
+                userScore.getUserId(),
+                toRevoke,
+                deductedPoints,
+                outstandingPoints,
+                userScore.getCurrentPoints(),
+                userScore.getAccumulatedPoints(),
+                previousTierCode,
+                newTier.getTierCode(),
+                tierChanged,
+                reconStatus.name(),
+                requiresManual,
+                false
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExpiringPointResponse> getExpiringPoints(Long userId) {
+        List<PointExpirationBucket> buckets = pointExpirationBucketRepository.findByUserScore_UserIdOrderByExpirationDateAsc(userId);
+        return buckets.stream()
+                .map(b -> new ExpiringPointResponse(
+                        b.getId(),
+                        b.getEarnedPoints(),
+                        b.getRemainingPoints(),
+                        b.getExpirationDate(),
+                        b.getStatus().name(),
+                        b.getBookingId(),
+                        b.getCreatedAt()
+                )).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TierHistoryItemResponse> getTierHistory(Long userId) {
+        List<MembershipTierHistory> histories = membershipTierHistoryRepository.findByUserScore_UserIdOrderByCreatedAtDesc(userId);
+        return histories.stream()
+                .map(h -> new TierHistoryItemResponse(
+                        h.getId(),
+                        h.getOldTierCode(),
+                        h.getNewTierCode(),
+                        h.getReason(),
+                        h.getCreatedAt()
+                )).toList();
+    }
+
+    @Override
+    @Transactional
+    public void expirePoints() {
+        List<PointExpirationBucket> expiredBuckets = pointExpirationBucketRepository.findByStatusInAndExpirationDateBefore(
+                List.of(PointExpirationBucketStatus.ACTIVE, PointExpirationBucketStatus.PARTIAL),
+                LocalDate.now()
+        );
+        for (PointExpirationBucket b : expiredBuckets) {
+            if (b.getRemainingPoints() > 0) {
+                UserScore us = userScoreRepository.findWithLockByUserId(b.getUserScore().getUserId()).orElse(null);
+                if (us != null && us.getCurrentPoints() > 0) {
+                    int toExpire = Math.min(us.getCurrentPoints(), b.getRemainingPoints());
+                    int oldBal = us.getCurrentPoints();
+                    us.setCurrentPoints(oldBal - toExpire);
+                    us.setLastExpireAt(LocalDateTime.now());
+                    userScoreRepository.save(us);
+
+                    b.setExpiredPoints(b.getExpiredPoints() + toExpire);
+                    b.setRemainingPoints(0);
+                    b.setStatus(PointExpirationBucketStatus.EXPIRED);
+                    pointExpirationBucketRepository.save(b);
+
+                    ScoreHistory history = ScoreHistory.builder()
+                            .transactionUuid(UUID.randomUUID().toString())
+                            .userScore(us)
+                            .bookingId(b.getBookingId())
+                            .eventId("expire-" + b.getId() + "-" + LocalDate.now())
+                            .idempotencyKey("idem-expire-" + b.getId() + "-" + LocalDate.now())
+                            .transactionType(ScoreTransactionType.EXPIRED)
+                            .pointChange(-toExpire)
+                            .actualPointChange(-toExpire)
+                            .balanceBefore(oldBal)
+                            .balanceAfter(us.getCurrentPoints())
+                            .accumulatedBefore(us.getAccumulatedPoints())
+                            .accumulatedAfter(us.getAccumulatedPoints())
+                            .description("Expired points from bucket " + b.getId())
+                            .build();
+                    scoreHistoryRepository.save(history);
+                } else {
+                    b.setStatus(PointExpirationBucketStatus.EXPIRED);
+                    pointExpirationBucketRepository.save(b);
+                }
+            } else {
+                b.setStatus(PointExpirationBucketStatus.EXPIRED);
+                pointExpirationBucketRepository.save(b);
+            }
+        }
     }
 }

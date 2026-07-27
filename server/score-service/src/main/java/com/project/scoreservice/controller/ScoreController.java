@@ -79,4 +79,21 @@ public class ScoreController {
         RedeemPreviewResponse response = scoreService.previewRedeem(userId, request);
         return ResponseEntity.ok(ApiResponse.success("Redeem preview calculated successfully", response));
     }
+
+    @GetMapping("/expiring")
+    @Operation(summary = "Get expiring points", description = "Retrieve list of point buckets that are active and when they will expire")
+    public ResponseEntity<ApiResponse<java.util.List<ExpiringPointResponse>>> getExpiringPoints() {
+        Long userId = getCurrentUserId();
+        java.util.List<ExpiringPointResponse> response = scoreService.getExpiringPoints(userId);
+        return ResponseEntity.ok(ApiResponse.success("Expiring points retrieved successfully", response));
+    }
+
+    @GetMapping("/tier-history")
+    @Operation(summary = "Get membership tier history", description = "Retrieve chronological list of membership tier changes for the customer")
+    public ResponseEntity<ApiResponse<java.util.List<TierHistoryItemResponse>>> getTierHistory() {
+        Long userId = getCurrentUserId();
+        java.util.List<TierHistoryItemResponse> response = scoreService.getTierHistory(userId);
+        return ResponseEntity.ok(ApiResponse.success("Tier history retrieved successfully", response));
+    }
 }
+

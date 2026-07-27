@@ -49,13 +49,22 @@ public class AdminScoreControllerIntegrationTest {
     @Autowired
     private ScoreHistoryRepository scoreHistoryRepository;
 
+    @Autowired
+    private com.project.scoreservice.repository.PointExpirationBucketRepository pointExpirationBucketRepository;
+
+    @Autowired
+    private com.project.scoreservice.repository.MembershipTierHistoryRepository membershipTierHistoryRepository;
+
     private MembershipTier silver;
     private MembershipTier gold;
 
     @BeforeEach
     void setUp() {
+        pointExpirationBucketRepository.deleteAll();
+        membershipTierHistoryRepository.deleteAll();
         scoreHistoryRepository.deleteAll();
         userScoreRepository.deleteAll();
+
 
         silver = membershipTierRepository.findByTierName("SILVER")
                 .orElseGet(() -> membershipTierRepository.save(new MembershipTier(null, "SILVER", 0, new BigDecimal("0.05"), "Silver tier", null, null)));

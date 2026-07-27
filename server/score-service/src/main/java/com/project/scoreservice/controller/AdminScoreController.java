@@ -20,9 +20,11 @@ import java.time.LocalDateTime;
 public class AdminScoreController {
 
     private final AdminScoreQueryService adminScoreQueryService;
+    private final com.project.scoreservice.service.ScoreService scoreService;
 
-    public AdminScoreController(AdminScoreQueryService adminScoreQueryService) {
+    public AdminScoreController(AdminScoreQueryService adminScoreQueryService, com.project.scoreservice.service.ScoreService scoreService) {
         this.adminScoreQueryService = adminScoreQueryService;
+        this.scoreService = scoreService;
     }
 
     @GetMapping("/{userId}")
@@ -51,4 +53,19 @@ public class AdminScoreController {
         PageResponse<AdminScoreHistoryItemResponse> response = new PageResponse<>(springPage);
         return ResponseEntity.ok(ApiResponse.success("Score history retrieved successfully", response));
     }
+
+    @GetMapping("/{userId}/expiring")
+    @Operation(summary = "Get user expiring points", description = "Retrieve expiring point buckets of a user for admin auditing.")
+    public ResponseEntity<ApiResponse<java.util.List<ExpiringPointResponse>>> getUserExpiringPoints(@PathVariable Long userId) {
+        java.util.List<ExpiringPointResponse> response = scoreService.getExpiringPoints(userId);
+        return ResponseEntity.ok(ApiResponse.success("Expiring points retrieved successfully", response));
+    }
+
+    @GetMapping("/{userId}/tier-history")
+    @Operation(summary = "Get user tier history", description = "Retrieve membership tier history of a user for admin auditing.")
+    public ResponseEntity<ApiResponse<java.util.List<TierHistoryItemResponse>>> getUserTierHistory(@PathVariable Long userId) {
+        java.util.List<TierHistoryItemResponse> response = scoreService.getTierHistory(userId);
+        return ResponseEntity.ok(ApiResponse.success("Tier history retrieved successfully", response));
+    }
 }
+

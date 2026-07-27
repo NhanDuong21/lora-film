@@ -53,4 +53,29 @@ public class InternalScoreController {
         ScoreReleaseResponse response = scoreService.releasePoints(request);
         return ResponseEntity.ok(ApiResponse.success("Points released successfully", response));
     }
+
+    @PostMapping({"/redeem", "/scores/redeem"})
+    @Operation(summary = "Redeem points directly", description = "Directly redeem points for a booking without hold")
+    public ResponseEntity<ApiResponse<ScoreRedeemResponse>> redeemPoints(@RequestBody ScoreRedeemRequest request) {
+        ScoreRedeemResponse response = scoreService.redeemPoints(request);
+        String msg = Boolean.TRUE.equals(response.idempotent()) ? "Score redeem event was already processed" : "Score redeemed successfully";
+        return ResponseEntity.ok(ApiResponse.success(msg, response));
+    }
+
+    @PostMapping({"/refund-redeem", "/scores/refund-redeem"})
+    @Operation(summary = "Refund redeemed points", description = "Refund points that were previously redeemed for a booking")
+    public ResponseEntity<ApiResponse<ScoreRefundResponse>> refundRedeem(@RequestBody ScoreRefundRequest request) {
+        ScoreRefundResponse response = scoreService.refundRedeem(request);
+        return ResponseEntity.ok(ApiResponse.success("Redeemed score refunded successfully", response));
+    }
+
+    @PostMapping({"/revoke-earn", "/scores/revoke-earn"})
+    @Operation(summary = "Revoke earned points", description = "Revoke points previously awarded for an earn transaction")
+    public ResponseEntity<ApiResponse<ScoreRevokeResponse>> revokeEarn(@RequestBody ScoreRevokeRequest request) {
+        ScoreRevokeResponse response = scoreService.revokeEarn(request);
+        org.springframework.http.HttpStatus status = Boolean.TRUE.equals(response.idempotent()) ? org.springframework.http.HttpStatus.OK : org.springframework.http.HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(ApiResponse.success("Points revoked successfully", response));
+    }
 }
+
+

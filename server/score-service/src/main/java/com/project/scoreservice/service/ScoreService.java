@@ -17,4 +17,13 @@ public interface ScoreService {
     ScoreHoldResponse holdPoints(ScoreHoldRequest request);
     ScoreCommitResponse commitPoints(ScoreCommitRequest request);
     ScoreReleaseResponse releasePoints(ScoreReleaseRequest request);
+
+    ScoreRedeemResponse redeemPoints(ScoreRedeemRequest request);
+    ScoreRefundResponse refundRedeem(ScoreRefundRequest request);
+    ScoreRevokeResponse revokeEarn(ScoreRevokeRequest request);
+
+    java.util.List<ExpiringPointResponse> getExpiringPoints(Long userId);
+    java.util.List<TierHistoryItemResponse> getTierHistory(Long userId);
+    void expirePoints();
 }
+
