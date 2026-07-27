@@ -5,15 +5,7 @@ import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Embeddable
 public class RolePermissionId implements Serializable {
 
@@ -35,4 +27,22 @@ public class RolePermissionId implements Serializable {
 	public int hashCode() {
 		return Objects.hash(roleId, permissionId);
 	}
+    public Integer getRoleId() {
+        return this.roleId;
+    }
+    public Integer getPermissionId() {
+        return this.permissionId;
+    }
+    public void setRoleId(Integer roleId) {
+        this.roleId = roleId;
+    }
+    public void setPermissionId(Integer permissionId) {
+        this.permissionId = permissionId;
+    }
+    public RolePermissionId() {
+    }
+    public RolePermissionId(Integer roleId, Integer permissionId) {
+        this.roleId = roleId;
+        this.permissionId = permissionId;
+    }
 }

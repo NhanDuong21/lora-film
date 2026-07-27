@@ -7,17 +7,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 @Entity
 @Table(name = "roles_permissions")
 public class RolePermission {
@@ -34,4 +24,53 @@ public class RolePermission {
 	@MapsId("permissionId")
 	@JoinColumn(name = "permission_id")
 	private Permission permission;
+    public RolePermissionId getId() {
+        return this.id;
+    }
+    public Role getRole() {
+        return this.role;
+    }
+    public Permission getPermission() {
+        return this.permission;
+    }
+    public void setId(RolePermissionId id) {
+        this.id = id;
+    }
+    public void setRole(Role role) {
+        this.role = role;
+    }
+    public void setPermission(Permission permission) {
+        this.permission = permission;
+    }
+    public RolePermission() {
+    }
+    public RolePermission(RolePermissionId id, Role role, Permission permission) {
+        this.id = id;
+        this.role = role;
+        this.permission = permission;
+    }
+    public static RolePermissionBuilder builder() {
+        return new RolePermissionBuilder();
+    }
+    public static class RolePermissionBuilder {
+        private RolePermissionId id;
+        private Role role;
+        private Permission permission;
+        RolePermissionBuilder() {}
+        public RolePermissionBuilder id(RolePermissionId id) {
+            this.id = id;
+            return this;
+        }
+        public RolePermissionBuilder role(Role role) {
+            this.role = role;
+            return this;
+        }
+        public RolePermissionBuilder permission(Permission permission) {
+            this.permission = permission;
+            return this;
+        }
+        public RolePermission build() {
+            return new RolePermission(this.id, this.role, this.permission);
+        }
+    }
 }

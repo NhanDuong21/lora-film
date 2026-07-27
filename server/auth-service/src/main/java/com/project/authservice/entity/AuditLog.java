@@ -12,17 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 @Entity
 @Table(name = "audit_logs")
 public class AuditLog {
@@ -62,4 +52,125 @@ public class AuditLog {
 			createdAt = LocalDateTime.now();
 		}
 	}
+    public Long getId() {
+        return this.id;
+    }
+    public Account getAccount() {
+        return this.account;
+    }
+    public String getAction() {
+        return this.action;
+    }
+    public String getIpAddress() {
+        return this.ipAddress;
+    }
+    public String getUserAgent() {
+        return this.userAgent;
+    }
+    public LocalDateTime getCreatedAt() {
+        return this.createdAt;
+    }
+    public Long getCreatedBy() {
+        return this.createdBy;
+    }
+    public LocalDateTime getUpdatedAt() {
+        return this.updatedAt;
+    }
+    public Long getUpdatedBy() {
+        return this.updatedBy;
+    }
+    public void setId(Long id) {
+        this.id = id;
+    }
+    public void setAccount(Account account) {
+        this.account = account;
+    }
+    public void setAction(String action) {
+        this.action = action;
+    }
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
+    }
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+    public AuditLog() {
+    }
+    public AuditLog(Long id, Account account, String action, String ipAddress, String userAgent, LocalDateTime createdAt, Long createdBy, LocalDateTime updatedAt, Long updatedBy) {
+        this.id = id;
+        this.account = account;
+        this.action = action;
+        this.ipAddress = ipAddress;
+        this.userAgent = userAgent;
+        this.createdAt = createdAt;
+        this.createdBy = createdBy;
+        this.updatedAt = updatedAt;
+        this.updatedBy = updatedBy;
+    }
+    public static AuditLogBuilder builder() {
+        return new AuditLogBuilder();
+    }
+    public static class AuditLogBuilder {
+        private Long id;
+        private Account account;
+        private String action;
+        private String ipAddress;
+        private String userAgent;
+        private LocalDateTime createdAt;
+        private Long createdBy;
+        private LocalDateTime updatedAt;
+        private Long updatedBy;
+        AuditLogBuilder() {}
+        public AuditLogBuilder id(Long id) {
+            this.id = id;
+            return this;
+        }
+        public AuditLogBuilder account(Account account) {
+            this.account = account;
+            return this;
+        }
+        public AuditLogBuilder action(String action) {
+            this.action = action;
+            return this;
+        }
+        public AuditLogBuilder ipAddress(String ipAddress) {
+            this.ipAddress = ipAddress;
+            return this;
+        }
+        public AuditLogBuilder userAgent(String userAgent) {
+            this.userAgent = userAgent;
+            return this;
+        }
+        public AuditLogBuilder createdAt(LocalDateTime createdAt) {
+            this.createdAt = createdAt;
+            return this;
+        }
+        public AuditLogBuilder createdBy(Long createdBy) {
+            this.createdBy = createdBy;
+            return this;
+        }
+        public AuditLogBuilder updatedAt(LocalDateTime updatedAt) {
+            this.updatedAt = updatedAt;
+            return this;
+        }
+        public AuditLogBuilder updatedBy(Long updatedBy) {
+            this.updatedBy = updatedBy;
+            return this;
+        }
+        public AuditLog build() {
+            return new AuditLog(this.id, this.account, this.action, this.ipAddress, this.userAgent, this.createdAt, this.createdBy, this.updatedAt, this.updatedBy);
+        }
+    }
 }
