@@ -12,20 +12,20 @@ public class FoodCatalogItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 50)
     private String code;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String name;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "product_type", nullable = false)
     private ProductType type;
 
-    @Column(name = "image_url")
+    @Column(name = "image_url", length = 500)
     private String imageUrl;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
 
     @Column(nullable = false)
@@ -40,7 +40,7 @@ public class FoodCatalogItem {
     @Column(nullable = false)
     private boolean disabled;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 10)
     private String currency;
 
     public FoodCatalogItem() {

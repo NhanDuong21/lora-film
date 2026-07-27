@@ -9,4 +9,5 @@ public interface FoodCatalogClient {
     FoodCatalogItem addProduct(FoodCatalogItem item);
     FoodCatalogItem updateProduct(Long id, FoodCatalogItem updated);
     boolean deleteProduct(Long id);
+    FoodCatalogItem restoreProduct(Long id);
 }
