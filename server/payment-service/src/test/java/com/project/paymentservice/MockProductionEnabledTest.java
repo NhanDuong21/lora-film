@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @TestPropertySource(properties = {
-    "payment.mock.enabled=true"
+    "payment.providers.mock.enabled=true"
 })
 public class MockProductionEnabledTest {
 
@@ -20,12 +20,12 @@ public class MockProductionEnabledTest {
     @Test
     void mockProviderShouldExistWhenEnabled() {
         assertTrue(applicationContext.containsBean("mockPaymentProvider"), 
-                "MockPaymentProvider bean should exist when payment.mock.enabled is true");
+                "MockPaymentProvider bean should exist when payment.providers.mock.enabled is true");
     }
 
     @Test
     void mockCallbackShouldExistWhenEnabled() {
         assertTrue(applicationContext.containsBean("mockCallbackController"), 
-                "MockCallbackController bean should exist when payment.mock.enabled is true");
+                "MockCallbackController bean should exist when payment.providers.mock.enabled is true");
     }
 }

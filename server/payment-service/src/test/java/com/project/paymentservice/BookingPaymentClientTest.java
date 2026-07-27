@@ -63,8 +63,16 @@ public class BookingPaymentClientTest {
                 "expiresAt": "%s",
                 "analyticsSnapshot": {
                   "movieId": 1,
+                  "moviePublicId": "cbd7d8ee-58c2-4ab7-918e-8a6fbfa5cefd",
                   "movieTitle": "Dune 2",
-                  "ticketCount": 2
+                  "showtimePublicId": "1ec78c74-c105-4072-830b-21bd118835aa",
+                  "cinemaPublicId": "cf805e59-691a-41f3-bc27-fc84ac7a9d27",
+                  "ticketCount": 2,
+                  "ticketAmount": 150000,
+                  "foodAmount": 0,
+                  "discountAmount": 0,
+                  "totalAmount": 150000,
+                  "currency": "VND"
                 }
               }
             }
@@ -91,7 +99,11 @@ public class BookingPaymentClientTest {
                 .map(java.lang.reflect.Field::getName)
                 .toList();
 
-        assertEquals(java.util.Set.of("bookingId", "paymentMethod"), new java.util.HashSet<>(fieldNames));
+        assertEquals(
+                java.util.Set.of("bookingId", "bookingPublicId", "paymentMethod"),
+                new java.util.HashSet<>(fieldNames));
+        assertFalse(fieldNames.contains("amount"));
+        assertFalse(fieldNames.contains("currency"));
     }
 
     @Test

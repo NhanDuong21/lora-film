@@ -143,6 +143,15 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
         return buildPaymentContext(booking);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public InternalPaymentContextResponse getPaymentContextByCode(String bookingCode) {
+        Booking booking = bookingRepository.findByBookingCode(bookingCode)
+                .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()))
+                .orElseThrow(() -> new BookingNotFoundException(bookingCode));
+        return buildPaymentContext(booking);
+    }
+
     private InternalPaymentContextResponse buildPaymentContext(Booking booking) {
         Instant now = Instant.now();
         boolean payable = booking.getBookingStatus() == BookingStatus.PENDING_PAYMENT
@@ -170,7 +179,22 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                 booking.getAmountLockedAt(),
                 booking.getExpiresAt(),
                 new InternalPaymentContextResponse.AnalyticsSnapshot(
-                        snapshot.movieId(), snapshot.movieTitle(), snapshot.seats().size()));
+                        snapshot.movieId(),
+                        snapshot.moviePublicId(),
+                        snapshot.movieTitle(),
+                        booking.getShowtimePublicId(),
+                        snapshot.cinemaPublicId(),
+                        snapshot.seats().size(),
+                        booking.getTicketAmount(),
+                        booking.getFoodAmount(),
+                        defaultAmount(booking.getPromotionDiscount())
+                                .add(defaultAmount(booking.getVoucherDiscount())),
+                        booking.getFinalAmount(),
+                        normalizeCurrency(booking.getCurrency())));
+    }
+
+    private BigDecimal defaultAmount(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     @Override

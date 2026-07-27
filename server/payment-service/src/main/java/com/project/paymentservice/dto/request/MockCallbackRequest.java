@@ -1,17 +1,16 @@
 package com.project.paymentservice.dto.request;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public class MockCallbackRequest {
 
-    @Schema(description = "ID of the payment to callback for", example = "1")
-    @NotNull(message = "paymentId is required")
+    @Schema(description = "Deprecated numeric payment ID; the canonical route identifies the payment")
     private Long paymentId;
 
     @Schema(description = "Status to simulate", example = "SUCCESS", allowableValues = {"SUCCESS", "FAILED"})
-    @NotNull(message = "simulatedStatus is required")
+    @NotBlank(message = "Trạng thái giả lập không được để trống")
     private String simulatedStatus;
 
     public MockCallbackRequest() {

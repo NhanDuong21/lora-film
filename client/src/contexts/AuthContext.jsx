@@ -176,7 +176,11 @@ export function AuthProvider({ children }) {
       email: email,
       role: userRole,
       fullName: profile?.fullName || email?.split('@')[0] || 'User',
-      permissions: userRole === 'ADMIN' ? ['PERM_ROOT_ACCESS'] : [],
+      permissions: (userRole || '').replace(/^ROLE_/, '') === 'ADMIN'
+        ? ['PERM_ROOT_ACCESS']
+        : (userRole || '').replace(/^ROLE_/, '') === 'ACCOUNTANT'
+          ? ['PERM_VIEW_FINANCE']
+          : [],
       profilePending: profilePending,
       profileLoading: profileLoading,
       ...profile

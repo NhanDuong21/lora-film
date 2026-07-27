@@ -15,6 +15,36 @@ public record InternalPaymentContextResponse(
         Instant expiresAt,
         AnalyticsSnapshot analyticsSnapshot
 ) {
-    public record AnalyticsSnapshot(Long movieId, String movieTitle, Integer ticketCount) {
+    public record AnalyticsSnapshot(
+            Long movieId,
+            String moviePublicId,
+            String movieTitle,
+            String showtimePublicId,
+            String cinemaPublicId,
+            Integer ticketCount,
+            BigDecimal ticketAmount,
+            BigDecimal foodAmount,
+            BigDecimal discountAmount,
+            BigDecimal totalAmount,
+            String currency) {
+        /**
+         * Compatibility constructor for existing Booking controller/service tests and
+         * one-release numeric Payment adapters. New runtime responses use the complete
+         * immutable analytics snapshot above.
+         */
+        public AnalyticsSnapshot(Long movieId, String movieTitle, Integer ticketCount) {
+            this(
+                    movieId,
+                    null,
+                    movieTitle,
+                    null,
+                    null,
+                    ticketCount,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
     }
 }

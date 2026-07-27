@@ -133,6 +133,8 @@ class InternalBookingPaymentServiceTest {
         assertEquals(booking.getExpiresAt(), context.expiresAt());
         assertTrue(context.payable());
         assertEquals("Superman", context.analyticsSnapshot().movieTitle());
+        assertEquals("movie-public-101", context.analyticsSnapshot().moviePublicId());
+        assertEquals("cinema-public-201", context.analyticsSnapshot().cinemaPublicId());
         assertEquals(2, context.analyticsSnapshot().ticketCount());
     }
 
@@ -360,7 +362,9 @@ class InternalBookingPaymentServiceTest {
                 Instant.now(),
                 "VND",
                 101L,
+                "movie-public-101",
                 "Superman",
+                "cinema-public-201",
                 new BigDecimal("240000"),
                 List.of(
                         new BookingPriceSnapshotPayload.SeatPriceLine(

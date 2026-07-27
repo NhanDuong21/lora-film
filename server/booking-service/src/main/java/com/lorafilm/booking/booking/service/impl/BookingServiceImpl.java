@@ -977,7 +977,9 @@ public class BookingServiceImpl implements BookingService {
                 Instant.now(),
                 context.currency(),
                 context.movieId(),
+                context.moviePublicId(),
                 context.movieTitle(),
+                context.cinemaPublicId(),
                 context.ticketAmount(),
                 context.seats().stream()
                         .map(seat -> new BookingPriceSnapshotPayload.SeatPriceLine(

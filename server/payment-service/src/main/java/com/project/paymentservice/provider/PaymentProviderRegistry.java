@@ -1,35 +1,38 @@
 package com.project.paymentservice.provider;
 
-import com.project.paymentservice.enumtype.PaymentMethod;
+import com.project.paymentservice.enumtype.ProviderCode;
 import com.project.paymentservice.exception.BusinessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Component
 public class PaymentProviderRegistry {
-
-    private final Map<PaymentMethod, PaymentProvider> providers;
+    private final Map<ProviderCode, PaymentProvider> providers = new EnumMap<>(ProviderCode.class);
 
     public PaymentProviderRegistry(List<PaymentProvider> providerList) {
-        this.providers = providerList.stream()
-                .collect(Collectors.toMap(PaymentProvider::supportedMethod, Function.identity()));
+        for (PaymentProvider provider : providerList) {
+            PaymentProvider previous = providers.put(provider.providerCode(), provider);
+            if (previous != null) {
+                throw new IllegalStateException("Duplicate provider bean: " + provider.providerCode());
+            }
+        }
     }
 
-    public PaymentProvider getProvider(PaymentMethod method) {
-        PaymentProvider provider = providers.get(method);
+    public PaymentProvider getProvider(ProviderCode code) {
+        PaymentProvider provider = providers.get(code);
         if (provider == null) {
-            throw new BusinessException("VALIDATION_ERROR",
-                    "Unsupported payment method: " + method, HttpStatus.BAD_REQUEST);
+            throw new BusinessException("PAYMENT_PROVIDER_DISABLED",
+                    "Phương thức thanh toán này chưa được cấu hình",
+                    HttpStatus.SERVICE_UNAVAILABLE);
         }
         return provider;
     }
 
-    public boolean isSupported(PaymentMethod method) {
-        return providers.containsKey(method);
+    public boolean isSupported(ProviderCode code) {
+        return providers.containsKey(code);
     }
 }

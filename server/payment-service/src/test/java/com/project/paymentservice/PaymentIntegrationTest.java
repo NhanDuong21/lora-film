@@ -29,7 +29,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
@@ -69,23 +69,18 @@ public class PaymentIntegrationTest {
     @MockBean
     private BookingPaymentClient bookingClient;
 
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
         when(currentUserProvider.getCurrentUserId()).thenReturn(15L);
-        snapshotRepository.deleteAllInBatch();
-        paymentLogRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @AfterEach
     void tearDown() {
-        snapshotRepository.deleteAllInBatch();
-        paymentLogRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     private BookingPaymentContext mockValidContext() {
@@ -103,7 +98,7 @@ public class PaymentIntegrationTest {
         snapshot.setMovieTitle("Dune 2");
         snapshot.setTicketCount(2);
         context.setAnalyticsSnapshot(snapshot);
-        return context;
+        return TestFixtures.complete(context);
     }
 
     @Test
@@ -118,8 +113,9 @@ public class PaymentIntegrationTest {
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.paymentMethod").value("MOCK"))
-                .andExpect(jsonPath("$.data.status").value("PENDING"));
+                .andExpect(jsonPath("$.data.paymentMethod").value("ONLINE"))
+                .andExpect(jsonPath("$.data.provider").value("MOCK"))
+                .andExpect(jsonPath("$.data.status").value("PROCESSING"));
 
         assertEquals(1, paymentRepository.count());
         assertEquals(1, guardRepository.count());
@@ -183,10 +179,12 @@ public class PaymentIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         Long paymentId = objectMapper.readTree(resp).get("data").get("paymentId").asLong();
+        String paymentPublicId = objectMapper.readTree(resp)
+                .get("data").get("paymentPublicId").asText();
 
         MockCallbackRequest cbReq = new MockCallbackRequest(paymentId, "SUCCESS");
 
-        mockMvc.perform(post("/api/payments/callback/mock")
+        mockMvc.perform(post("/api/payments/mock/" + paymentPublicId + "/complete")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(cbReq)))
                 .andExpect(status().isOk());
@@ -207,9 +205,9 @@ public class PaymentIntegrationTest {
         p.setPaymentTransactionCode("TXN-123");
         p.setAmount(new BigDecimal("100"));
         p.setPaymentMethod(PaymentMethod.MOCK);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        p.setExpiresAt(Instant.now().plusSeconds(600));
         p.setAttemptNumber(1);
-        p = paymentRepository.save(p);
+        p = paymentRepository.save(TestFixtures.complete(p));
 
         mockMvc.perform(get("/api/payments/" + p.getId()))
                 .andExpect(status().isOk())
@@ -225,11 +223,12 @@ public class PaymentIntegrationTest {
         p.setPaymentTransactionCode("TXN-456");
         p.setAmount(new BigDecimal("100"));
         p.setPaymentMethod(PaymentMethod.MOCK);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        p.setExpiresAt(Instant.now().plusSeconds(600));
         p.setAttemptNumber(1);
-        p = paymentRepository.save(p);
+        p = paymentRepository.save(TestFixtures.complete(p));
 
         BookingPaymentGuard g = new BookingPaymentGuard();
+        g.setBookingPublicId(p.getBookingPublicId());
         g.setBookingId(1001L);
         g.setActivePaymentId(p.getId());
         guardRepository.save(g);
