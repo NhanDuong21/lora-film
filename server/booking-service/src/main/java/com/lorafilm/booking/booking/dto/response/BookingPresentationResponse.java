@@ -7,6 +7,9 @@ import java.util.List;
 public record BookingPresentationResponse(
         String movieTitle,
         String moviePosterUrl,
+        String originalTitle,
+        Integer duration,
+        String ageRating,
         Instant showtimeStart,
         Instant showtimeEnd,
         String cinemaName,

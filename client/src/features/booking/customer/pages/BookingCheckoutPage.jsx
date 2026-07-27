@@ -12,6 +12,8 @@ import {
   getOrCreatePaymentAttemptKey
 } from '../services/paymentHandoffService';
 
+const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
+
 export default function BookingCheckoutPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -69,11 +71,11 @@ export default function BookingCheckoutPage() {
       }
       setBooking({
         ...bookingData,
-        foodOrder,
-        finalAmount: bookingData.finalAmount ?? bookingData.totalAmount ?? 0,
-        ticketAmount: bookingData.ticketAmount ?? bookingData.totalAmount ?? 0,
+        foodOrder: foodOrder ?? bookingData.foodOrder ?? bookingData.food ?? null,
+        finalAmount: bookingData.totalAmount ?? bookingData.finalAmount ?? 0,
+        ticketAmount: bookingData.ticketAmount ?? 0,
         expiresAt: bookingData.expiresAt ?? bookingData.expiredAt ?? bookingData.paymentDeadline,
-        snapshot: bookingData.snapshot ?? bookingDraft.showtime ?? null
+        snapshot: bookingData.snapshot ?? bookingData.presentation ?? bookingDraft.showtime ?? null
       });
 
       const concessionsData = await getConcessions();
@@ -177,22 +179,23 @@ export default function BookingCheckoutPage() {
         const freshBooking = await getBookingDetails(bookingId);
         setBooking(prev => ({
           ...prev,
+          ...freshBooking,
+          snapshot: freshBooking.snapshot || prev.snapshot,
           foodOrder: freshBooking.foodOrder,
-          finalAmount: freshBooking.finalAmount
+          finalAmount: freshBooking.totalAmount ?? freshBooking.finalAmount ?? prev.finalAmount
         }));
         setCartUpdatingId(null);
         return;
       }
 
-      setBooking(prev => {
-        const foodAmount = updatedFoodOrder ? updatedFoodOrder.finalAmount : 0;
-        const total = (prev.ticketAmount || 0) + foodAmount - (prev.promotionDiscount || 0);
-        return {
-          ...prev,
-          foodOrder: updatedFoodOrder,
-          finalAmount: total
-        };
-      });
+      const freshBooking = await getBookingDetails(bookingId);
+      setBooking(prev => ({
+        ...prev,
+        ...freshBooking,
+        snapshot: freshBooking.snapshot || prev.snapshot,
+        foodOrder: updatedFoodOrder || freshBooking.foodOrder,
+        finalAmount: freshBooking.totalAmount ?? freshBooking.finalAmount ?? prev.finalAmount
+      }));
     } catch (err) {
       setNotice({
         title: 'Không thể cập nhật bắp nước',
@@ -324,11 +327,35 @@ export default function BookingCheckoutPage() {
   const isPending = bookingStatus === 'PENDING_PAYMENT';
   const isExpired = timeLeft === 0 || !isPending;
   const draftSeats = bookingDraft.selectedSeats || [];
-  const visibleSeats = booking.tickets?.length ? booking.tickets : draftSeats;
+  const snapshotSeats = Array.isArray(snapshot?.seats) ? snapshot.seats : [];
+  const visibleSeats = snapshotSeats.length
+    ? snapshotSeats
+    : booking.tickets?.length
+      ? booking.tickets
+      : draftSeats;
+  const selectedFoodItems = Array.isArray(booking.foodOrder?.items)
+    ? booking.foodOrder.items
+    : [];
   const showtimeStart = snapshot?.showtimeStart || snapshot?.startTime;
   const movie = snapshot?.movie || {};
   const cinema = snapshot?.cinema || {};
   const auditorium = snapshot?.auditorium || {};
+  const movieTitle = snapshot?.movieTitle || movie?.title || booking.movieTitle || 'Thông tin phim đang cập nhật';
+  const moviePosterUrl = snapshot?.moviePosterUrl
+    || snapshot?.moviePoster
+    || movie?.posterUrl
+    || booking.posterUrl
+    || null;
+  const seatLabel = seat => seat.label || seat.seatLabel || seat.seatCode || 'Chưa rõ';
+  const seatType = seat => seat.type || seat.seatType;
+  const foodItemName = item => item.productName || item.name || 'Bắp nước';
+  const foodItemAmount = item => item.finalAmount
+    ?? item.totalAmount
+    ?? ((item.unitPrice || 0) * (item.quantity || 0));
+  const foodAmount = booking.foodOrder?.finalAmount
+    ?? booking.foodOrder?.totalAmount
+    ?? booking.foodAmount
+    ?? 0;
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
@@ -425,16 +452,18 @@ export default function BookingCheckoutPage() {
                       return (
                         <div key={item.id} className="bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700/80 rounded-2xl p-4 flex gap-4 transition-all relative overflow-hidden">
                           {/* Concession Image */}
-                          <div className="w-20 aspect-square rounded-xl bg-zinc-950/60 overflow-hidden border border-zinc-800 shrink-0">
-                            <img
-                              src={item.imageUrl}
-                              alt={item.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%231f2937'><rect width='100%' height='100%'/></svg>";
-                              }}
-                            />
+                          <div className="relative w-20 aspect-square rounded-xl bg-zinc-950/60 overflow-hidden border border-zinc-800 shrink-0 flex items-center justify-center">
+                            <span className="px-2 text-center text-[8px] font-bold text-zinc-600">Chưa có ảnh</span>
+                            {item.imageUrl && (
+                              <img
+                                src={item.imageUrl}
+                                alt={item.name}
+                                className="absolute inset-0 w-full h-full object-cover"
+                                onError={(event) => {
+                                  event.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            )}
                           </div>
                           {/* Meta and selector */}
                           <div className="flex-grow flex flex-col justify-between py-0.5 space-y-3">
@@ -573,23 +602,33 @@ export default function BookingCheckoutPage() {
 
             {/* Movie Poster & Meta details */}
             <div className="flex gap-4 items-start pb-6 border-b border-zinc-800">
-              <div className="w-16 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0">
+              <div className="w-20 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 flex items-center justify-center">
                 <img
-                  src={snapshot?.moviePoster}
-                  alt={snapshot?.movieTitle}
+                  src={moviePosterUrl || FALLBACK_POSTER}
+                  alt={`Áp phích phim ${movieTitle}`}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%2318181b'><rect width='100%' height='100%'/></svg>";
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = FALLBACK_POSTER;
                   }}
                 />
               </div>
-              <div className="space-y-1.5 flex-grow">
-                <h3 className="text-sm font-black text-white line-clamp-2 leading-snug">{snapshot?.movieTitle}</h3>
+              <div className="space-y-2 flex-grow min-w-0">
+                <span className="text-[9px] font-black uppercase tracking-widest text-brand-orange">Thông tin suất chiếu</span>
+                <h3 className="text-base font-black text-white leading-snug">{movieTitle}</h3>
+                {snapshot?.originalTitle && (
+                  <p className="text-[10px] text-zinc-500 line-clamp-1">{snapshot.originalTitle}</p>
+                )}
                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-semibold">
-                  <span>{snapshot?.duration || movie?.durationMinutes || '--'} phút</span>
-                  <span>•</span>
-                  <span className="text-brand-yellow font-black border border-brand-yellow/30 px-1 py-0.2 rounded text-[8px]">{snapshot?.ageRating || movie?.ageRating || 'P'}</span>
+                  {(snapshot?.duration || movie?.durationMinutes) && (
+                    <span>{snapshot?.duration || movie?.durationMinutes} phút</span>
+                  )}
+                  {(snapshot?.duration || movie?.durationMinutes) && (snapshot?.ageRating || movie?.ageRating) && <span>•</span>}
+                  {(snapshot?.ageRating || movie?.ageRating) && (
+                    <span className="text-brand-yellow font-black border border-brand-yellow/30 px-1.5 py-0.5 rounded text-[8px]">
+                      {snapshot?.ageRating || movie?.ageRating}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -598,46 +637,59 @@ export default function BookingCheckoutPage() {
             <div className="space-y-3 py-2 text-xs border-b border-zinc-800">
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Cụm rạp</span>
-                <span className="text-white font-bold text-right">{snapshot?.cinemaName || cinema?.name || `Rạp #${booking.cinemaId || '--'}`}</span>
+                <span className="text-white font-bold text-right">{snapshot?.cinemaName || cinema?.name || 'Chưa có thông tin rạp'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Phòng chiếu</span>
-                <span className="text-zinc-200 font-bold text-right">{snapshot?.auditoriumName || auditorium?.name || `Phòng #${booking.auditoriumId || '--'}`}</span>
+                <span className="text-zinc-200 font-bold text-right">{snapshot?.auditoriumName || auditorium?.name || 'Chưa có thông tin phòng'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Suất chiếu</span>
                 <span className="text-white font-bold text-right">
-                  {showtimeStart ? new Date(showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''} | {showtimeStart ? new Date(showtimeStart).toLocaleDateString('vi-VN') : ''}
+                  {showtimeStart
+                    ? `${new Date(showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} · ${new Date(showtimeStart).toLocaleDateString('vi-VN')}`
+                    : 'Chưa có thông tin'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Số lượng ghế</span>
-                <span className="text-brand-orange font-black text-right">{snapshot?.seatCount || visibleSeats.length || '--'} ghế</span>
+                <span className="text-brand-orange font-black text-right">{visibleSeats.length} ghế</span>
               </div>
             </div>
 
             {/* Selected Seats */}
             <div className="py-2 border-b border-zinc-800 space-y-2">
               <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Các vị trí ghế</span>
-              <div className="flex flex-wrap gap-1.5">
-                {visibleSeats.map((t, index) => (
-                  <span key={t.id || t.publicId || index} className="text-[10px] bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded font-black">
-                    {t.seatLabel || t.seatCode} {t.seatType ? `(${t.seatType})` : ''}
-                  </span>
-                ))}
-              </div>
+              {visibleSeats.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {visibleSeats.map((seat, index) => (
+                    <span
+                      key={seat.seatPublicId || seat.id || seat.publicId || index}
+                      className="rounded-lg border border-brand-orange/20 bg-brand-orange/10 px-2.5 py-1 text-[10px] font-black text-brand-orange"
+                    >
+                      {seatLabel(seat)}
+                      {seatType(seat) ? ` · ${seatType(seat)}` : ''}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-red-400">Không tìm thấy dữ liệu ghế của đơn. Vui lòng tải lại trang.</p>
+              )}
             </div>
 
             {/* Food items breakdown */}
             <div className="py-2 border-b border-zinc-800 space-y-3">
               <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Bắp nước đã chọn</span>
-              {booking.foodOrder && booking.foodOrder.items && booking.foodOrder.items.length > 0 ? (
+              {selectedFoodItems.length > 0 ? (
                 <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                  {booking.foodOrder.items.map(item => (
-                    <div key={item.id} className="flex justify-between text-[11px]">
-                      <span className="text-zinc-400 line-clamp-1 max-w-[150px]">{item.productName}</span>
-                      <span className="text-zinc-500 font-bold">x{item.quantity}</span>
-                      <span className="text-zinc-200 font-bold">{formatCurrency(item.finalAmount)}</span>
+                  {selectedFoodItems.map((item, index) => (
+                    <div
+                      key={item.id || item.productId || `${foodItemName(item)}-${index}`}
+                      className="grid grid-cols-[minmax(0,1fr)_36px_78px] items-center gap-2 text-[11px]"
+                    >
+                      <span className="truncate text-zinc-300" title={foodItemName(item)}>{foodItemName(item)}</span>
+                      <span className="text-center font-bold text-zinc-500">x{item.quantity}</span>
+                      <span className="text-right font-bold text-zinc-100">{formatCurrency(foodItemAmount(item))}</span>
                     </div>
                   ))}
                 </div>
@@ -649,12 +701,12 @@ export default function BookingCheckoutPage() {
             {/* Pricing breakdown */}
             <div className="space-y-4 text-xs py-4 border-b border-zinc-800">
               <div className="flex justify-between items-center text-zinc-300">
-                <span className="font-bold">Tiền vé ({snapshot?.seatCount || visibleSeats.length || 0} ghế):</span>
+                <span className="font-bold">Tiền vé ({visibleSeats.length} ghế):</span>
                 <span className="font-black text-sm">{formatCurrency(booking.ticketAmount)}</span>
               </div>
               <div className="flex justify-between items-center text-zinc-300">
                 <span className="font-bold">Tiền bắp nước:</span>
-                <span className="font-black text-sm">{formatCurrency(booking.foodOrder ? booking.foodOrder.finalAmount : 0)}</span>
+                <span className="font-black text-sm">{formatCurrency(foodAmount)}</span>
               </div>
               {booking.promotionDiscount > 0 && (
                 <div className="flex justify-between items-center text-emerald-400 font-bold bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">

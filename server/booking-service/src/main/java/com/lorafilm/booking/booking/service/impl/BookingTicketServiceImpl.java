@@ -137,10 +137,6 @@ public class BookingTicketServiceImpl implements BookingTicketService {
         }
 
         List<BookingTicket> tickets = bookingTicketRepository.findByBookingId(bookingId);
-        if (tickets.isEmpty()) {
-            throw new BusinessException("NO_TICKETS_FOUND", "Booking has no tickets");
-        }
-
         return tickets.stream().map(bookingTicketMapper::toDto).collect(Collectors.toList());
     }
 

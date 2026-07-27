@@ -48,17 +48,31 @@ describe('BookingCheckoutPage cancellation', () => {
       status: 'PENDING_PAYMENT',
       paymentDeadline: '2099-07-26T12:05:00Z',
       ticketAmount: 285000,
-      totalAmount: 285000,
+      totalAmount: 335000,
       snapshot: {
         movieTitle: 'Phim thử nghiệm',
-        moviePoster: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+        moviePosterUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+        originalTitle: 'Test Movie',
+        duration: 120,
+        ageRating: 'T13',
         cinemaName: 'LoraFilm',
         auditoriumName: 'Phòng 1',
-        seatCount: 1,
-        showtimeStart: '2099-07-26T13:00:00Z'
+        showtimeStart: '2099-07-26T13:00:00Z',
+        seats: [
+          { seatPublicId: 'seat-d6', label: 'D6', type: 'VIP', price: 142500 },
+          { seatPublicId: 'seat-d7', label: 'D7', type: 'VIP', price: 142500 }
+        ]
       }
     });
-    getBookingFoodOrder.mockResolvedValue({ items: [], finalAmount: 0 });
+    getBookingFoodOrder.mockResolvedValue({
+      items: [{
+        id: 10,
+        productName: 'Bắp rang lớn',
+        quantity: 1,
+        finalAmount: 50000
+      }],
+      finalAmount: 50000
+    });
     getConcessions.mockResolvedValue([]);
     finalizeCheckout.mockResolvedValue({});
     cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
@@ -125,5 +139,27 @@ describe('BookingCheckoutPage cancellation', () => {
     expect(finalizeCheckout.mock.invocationCallOrder[0])
       .toBeLessThan(createPaymentHandoff.mock.invocationCallOrder[0]);
     expect(screen.queryByText(/mô phỏng thanh toán/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the authoritative movie, seats, food lines and price breakdown', async () => {
+    render(
+      <MemoryRouter initialEntries={[
+        '/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111'
+      ]}>
+        <BookingCheckoutPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Phim thử nghiệm')).toBeInTheDocument();
+    expect(screen.getByRole('img', {
+      name: 'Áp phích phim Phim thử nghiệm'
+    })).toHaveAttribute('src', expect.stringContaining('data:image/gif'));
+    expect(screen.getByText(/D6 · VIP/)).toBeInTheDocument();
+    expect(screen.getByText(/D7 · VIP/)).toBeInTheDocument();
+    expect(screen.getByText('Tiền vé (2 ghế):')).toBeInTheDocument();
+    expect(screen.getByText('Bắp rang lớn')).toBeInTheDocument();
+    expect(screen.getAllByText('50.000đ')).toHaveLength(2);
+    expect(screen.getByText('335.000đ')).toBeInTheDocument();
+    expect(screen.queryByText(/Tiền vé \(0 ghế\)/)).not.toBeInTheDocument();
   });
 });

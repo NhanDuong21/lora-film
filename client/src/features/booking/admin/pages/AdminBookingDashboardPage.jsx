@@ -288,8 +288,8 @@ export default function AdminBookingDashboardPage() {
     const rows = processedBookings.map(b => [
       b.bookingCode,
       b.userId,
-      moviesLookup[b.movieId] || `Phim #${b.movieId}`,
-      cinemasLookup[b.cinemaId] || `Rạp #${b.cinemaId}`,
+      b.movieTitle || moviesLookup[b.movieId] || 'Chưa có tên phim',
+      b.cinemaName || cinemasLookup[b.cinemaId] || 'Chưa có tên rạp',
       b.ticketAmount,
       b.foodAmount,
       b.promotionDiscount + b.voucherDiscount,
@@ -365,6 +365,16 @@ export default function AdminBookingDashboardPage() {
     }
   };
 
+  const translatePaymentStatus = (paymentStatus) => {
+    switch (paymentStatus) {
+      case 'SUCCESS': return 'Đã thanh toán';
+      case 'FAILED': return 'Thanh toán thất bại';
+      case 'REFUNDED': return 'Đã hoàn tiền';
+      case 'PENDING': return 'Chưa thanh toán';
+      default: return 'Chưa ghi nhận';
+    }
+  };
+
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-[#ff7a1a] selection:text-zinc-950">
 
@@ -375,7 +385,7 @@ export default function AdminBookingDashboardPage() {
             QUẢN LÝ ĐƠN HÀNG ĐẶT VÉ
           </h1>
           <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
-            Tra cứu và xử lý dữ liệu Booking trực tiếp từ Booking Service
+            Tra cứu đơn, kiểm tra ghế và thực hiện các thao tác vận hành được phép
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -449,7 +459,7 @@ export default function AdminBookingDashboardPage() {
         {/* Primary Filter Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <div className="space-y-1">
-            <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã đặt vé (Booking Code)</label>
+            <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã đặt vé</label>
               <input
               type="text"
               placeholder="Nhập mã đặt vé..."
@@ -460,7 +470,7 @@ export default function AdminBookingDashboardPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã khách hàng (User ID)</label>
+            <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã khách hàng</label>
               <input
               type="number"
               placeholder="VD: 1, 2"
@@ -479,7 +489,7 @@ export default function AdminBookingDashboardPage() {
             >
               <option value="ALL">Tất cả</option>
               <option value="PENDING_PAYMENT">Chờ thanh toán</option>
-              <option value="CONFIRMED">Đã xác nhận (Paid)</option>
+              <option value="CONFIRMED">Đã xác nhận thanh toán</option>
               <option value="COMPLETED">Đã hoàn thành</option>
               <option value="CANCELLED">Đã hủy</option>
               <option value="EXPIRED">Đã hết hạn</option>
@@ -599,11 +609,11 @@ export default function AdminBookingDashboardPage() {
                 onChange={(e) => setPaymentStatusFilter(e.target.value)}
                 className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200 outline-none"
               >
-                <option value="ALL">Tất cả cổng</option>
-                <option value="PENDING">Chờ xử lý (Pending)</option>
-                <option value="SUCCESS">Thành công (Success)</option>
-                <option value="FAILED">Thất bại (Failed)</option>
-                <option value="REFUNDED">Hoàn tiền (Refunded)</option>
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="PENDING">Chưa thanh toán</option>
+                <option value="SUCCESS">Đã thanh toán</option>
+                <option value="FAILED">Thanh toán thất bại</option>
+                <option value="REFUNDED">Đã hoàn tiền</option>
               </select>
             </div>
 
@@ -710,7 +720,7 @@ export default function AdminBookingDashboardPage() {
                 {/* Amounts Column */}
                 <th className="p-4 relative" style={{ width: colWidths.amounts }}>
                   <div className="flex items-center gap-1.5 cursor-pointer select-none" onClick={() => handleSort('finalAmount')}>
-                    <span>Chi tiết tiền vé</span>
+                    <span>Giá trị đơn</span>
                     {sortField === 'finalAmount' && (sortDirection === 'asc' ? ' ▲' : ' ▼')}
                   </div>
                   <div onMouseDown={(e) => startResize('amounts', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#ff7a1a] opacity-0 hover:opacity-100 transition-opacity" />
@@ -719,7 +729,7 @@ export default function AdminBookingDashboardPage() {
                 {/* Status Column */}
                 <th className="p-4 relative" style={{ width: colWidths.status }}>
                   <div className="flex items-center gap-1.5 cursor-pointer select-none" onClick={() => handleSort('bookingStatus')}>
-                    <span>Hóa đơn</span>
+                    <span>Trạng thái đơn</span>
                     {sortField === 'bookingStatus' && (sortDirection === 'asc' ? ' ▲' : ' ▼')}
                   </div>
                   <div onMouseDown={(e) => startResize('status', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#ff7a1a] opacity-0 hover:opacity-100 transition-opacity" />
@@ -765,8 +775,10 @@ export default function AdminBookingDashboardPage() {
                 </tr>
               ) : processedBookings.length > 0 ? (
                 processedBookings.map(b => {
-                  const movieName = moviesLookup[b.movieId] || `Mã phim: ${b.movieId}`;
-                  const cinemaName = cinemasLookup[b.cinemaId] || `Cụm rạp: ${b.cinemaId}`;
+                  const movieName = b.movieTitle || moviesLookup[b.movieId] || 'Chưa có tên phim';
+                  const cinemaName = b.cinemaName || cinemasLookup[b.cinemaId] || 'Chưa có tên rạp';
+                  const auditoriumName = b.auditoriumName || 'Chưa có tên phòng';
+                  const showtimeStart = b.showtimeStart ? new Date(b.showtimeStart) : null;
                   const hasFood = b.foodAmount > 0;
                   const discount = (b.promotionDiscount || 0) + (b.voucherDiscount || 0);
 
@@ -792,7 +804,7 @@ export default function AdminBookingDashboardPage() {
                       <td className="p-4 font-semibold text-zinc-400">
                         <div className="flex items-center gap-1">
                           <User className="w-3.5 h-3.5 text-zinc-650" />
-                          <span className="truncate">KH #{b.userId}</span>
+                          <span className="truncate">Khách hàng #{b.userId}</span>
                         </div>
                       </td>
 
@@ -808,8 +820,8 @@ export default function AdminBookingDashboardPage() {
                       <td className="p-4 font-semibold text-zinc-400 truncate">
                         <div className="flex items-center gap-1">
                           <Building className="w-3.5 h-3.5 text-zinc-650 shrink-0" />
-                          <span className="truncate" title={`${cinemaName} | Phòng #${b.auditoriumId}`}>
-                            {cinemaName} | P.{b.auditoriumId}
+                          <span className="truncate" title={`${cinemaName} · ${auditoriumName}`}>
+                            {cinemaName} · {auditoriumName}
                           </span>
                         </div>
                       </td>
@@ -817,8 +829,17 @@ export default function AdminBookingDashboardPage() {
                       {/* Showtime */}
                       <td className="p-4 text-[10px] text-zinc-400">
                         <div className="flex flex-col">
-                          <span className="font-bold text-zinc-300">Suất #{b.showtimeId}</span>
-                          <span className="text-[9px] text-zinc-500 font-bold uppercase mt-0.5">Giữ vé: {new Date(b.expiresAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="font-bold text-zinc-300">
+                            {showtimeStart
+                              ? `${showtimeStart.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} · ${showtimeStart.toLocaleDateString('vi-VN')}`
+                              : 'Chưa có giờ chiếu'}
+                          </span>
+                          <span className="mt-0.5 text-[9px] font-bold uppercase text-zinc-500">
+                            {b.seatCount ? `${b.seatCount} ghế` : 'Chưa có số ghế'}
+                            {b.expiresAt
+                              ? ` · Giữ đến ${new Date(b.expiresAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+                              : ''}
+                          </span>
                         </div>
                       </td>
 
@@ -857,7 +878,7 @@ export default function AdminBookingDashboardPage() {
                             b.paymentStatus === 'PENDING' ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10'
                           }`}>
                             <CreditCard className="w-2.5 h-2.5" />
-                            <span>{b.paymentStatus}</span>
+                            <span>{translatePaymentStatus(b.paymentStatus)}</span>
                           </span>
                         </div>
                       </td>

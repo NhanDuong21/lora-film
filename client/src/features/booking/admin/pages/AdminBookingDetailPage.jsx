@@ -175,6 +175,22 @@ export default function AdminBookingDetailPage() {
     }
   };
 
+  const translateHistoryReason = (history) => {
+    const reason = history?.reason || '';
+    if (reason.startsWith('Booking status changed to ')) {
+      return `Hệ thống chuyển đơn sang trạng thái ${translateStatus(history.toStatus).toLowerCase()}`;
+    }
+    return reason || 'Không ghi nhận lý do';
+  };
+
+  const translateAuditActor = (value) => {
+    if (!value || value === 'SYSTEM' || value === 'CRON') return 'Hệ thống';
+    if (value === 'ADMIN') return 'Quản trị viên';
+    if (value === 'BOOKING_SERVICE') return 'Booking Service';
+    if (value === 'PAYMENT_SERVICE') return 'Payment Service';
+    return value;
+  };
+
   const formatCurrency = (val) => {
     return (val || 0).toLocaleString('vi-VN') + 'đ';
   };
@@ -209,6 +225,7 @@ export default function AdminBookingDetailPage() {
   }
 
   const { snapshot, tickets = [], statusHistories = [] } = booking;
+  const seatLines = tickets.length > 0 ? tickets : (snapshot?.seats || []);
 
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-[#ff7a1a] selection:text-zinc-950">
@@ -275,14 +292,14 @@ export default function AdminBookingDetailPage() {
                     <span className="font-mono text-zinc-300">{customer.phoneNumber || 'Không có số'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-zinc-500">Mã Account ID:</span>
+                    <span className="text-zinc-500">Mã khách hàng:</span>
                     <span className="font-bold text-zinc-400">#{booking.userId}</span>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2 text-xs">
                   <p className="text-zinc-400">Không tìm thấy thông tin khách hàng chi tiết.</p>
-                  <p className="text-zinc-550">Tài khoản Account ID: <span className="font-bold">#{booking.userId}</span></p>
+                  <p className="text-zinc-550">Mã khách hàng: <span className="font-bold">#{booking.userId}</span></p>
                 </div>
               )}
             </div>
@@ -320,7 +337,7 @@ export default function AdminBookingDetailPage() {
           <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 md:p-8 space-y-6">
             <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
               <Film className="w-4 h-4 text-[#ff7a1a]" />
-              <span className="text-xs font-black uppercase tracking-wider text-white">Thông tin Suất chiếu & Ghế đặt (Snapshot)</span>
+              <span className="text-xs font-black uppercase tracking-wider text-white">Thông tin suất chiếu và ghế của đơn</span>
             </div>
 
             <div className="flex flex-col md:flex-row gap-6">
@@ -362,27 +379,45 @@ export default function AdminBookingDetailPage() {
               </div>
             </div>
 
-            {/* List of seats and generated tickets code */}
+            {/* Seats are always visible; ticket codes appear only after Payment confirmation. */}
             <div className="space-y-3 pt-2">
-              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Danh sách vé & Ghế phát hành</span>
+              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">
+                Ghế của đơn {tickets.length > 0 ? '& vé đã phát hành' : '(đang giữ, chưa phát hành vé)'}
+              </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {tickets.map(t => (
-                  <div key={t.id} className="bg-zinc-950 border border-zinc-850 rounded-2xl p-4 flex justify-between items-center text-xs">
+                {seatLines.map((seat, index) => {
+                  const hasTicket = Boolean(seat.ticketCode);
+                  const label = seat.seatLabel || seat.label || 'Chưa rõ';
+                  const type = seat.seatType || seat.type;
+                  return (
+                  <div key={seat.id || seat.seatPublicId || index} className="bg-zinc-950 border border-zinc-850 rounded-2xl p-4 flex justify-between items-center text-xs">
                     <div>
                       <div className="flex items-center gap-1.5">
                         <Armchair className="w-3.5 h-3.5 text-[#ff7a1a]" />
-                        <span className="text-zinc-100 font-extrabold block">Ghế {t.seatLabel} ({t.seatType})</span>
+                        <span className="text-zinc-100 font-extrabold block">
+                          Ghế {label}{type ? ` (${type})` : ''}
+                        </span>
                       </div>
-                      <span className="text-[9px] text-zinc-550 font-bold mt-1 block font-mono">MÃ VÉ: {t.ticketCode}</span>
+                      <span className="text-[9px] text-zinc-550 font-bold mt-1 block font-mono">
+                        {hasTicket ? `MÃ VÉ: ${seat.ticketCode}` : 'Vé được phát hành sau khi thanh toán thành công'}
+                      </span>
                     </div>
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded ${
-                      t.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
+                      hasTicket && seat.status === 'ACTIVE'
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : 'bg-amber-500/10 text-amber-400'
                     }`}>
-                      {translateTicketStatus(t.status)}
+                      {hasTicket ? translateTicketStatus(seat.status) : 'Đang giữ'}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
+              {seatLines.length === 0 && (
+                <p className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-[10px] text-zinc-500">
+                  Chưa có dữ liệu ghế trong snapshot của đơn này.
+                </p>
+              )}
             </div>
           </div>
 
@@ -391,7 +426,7 @@ export default function AdminBookingDetailPage() {
             <div className="border-b border-zinc-800 pb-3 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4 text-[#ff7a1a]" />
-                <span className="text-xs font-black uppercase tracking-wider text-white">Danh sách bắp nước phục vụ (Concessions)</span>
+                <span className="text-xs font-black uppercase tracking-wider text-white">Bắp nước mua kèm</span>
               </div>
               <span className="text-[9px] text-zinc-500">Đơn hàng: {foodOrder ? `#${foodOrder.publicId.slice(0, 8)}` : 'Không có'}</span>
             </div>
@@ -444,7 +479,7 @@ export default function AdminBookingDetailPage() {
           <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 md:p-8 space-y-6">
             <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
               <History className="w-4 h-4 text-[#ff7a1a]" />
-              <span className="text-xs font-black uppercase tracking-wider text-white">Lịch sử Chuyển đổi trạng thái (Audit Log)</span>
+              <span className="text-xs font-black uppercase tracking-wider text-white">Lịch sử trạng thái đơn</span>
             </div>
 
             {statusHistories.length > 0 ? (
@@ -465,8 +500,12 @@ export default function AdminBookingDetailPage() {
                     </div>
 
                     <div className="text-[10px] text-zinc-500 font-semibold space-y-0.5">
-                      <div>Lý do ghi nhận: <span className="text-zinc-400 font-bold italic">"{log.reason || 'Không ghi nhận lý do'}"</span></div>
-                      <div>Tác nhân: <span className="text-zinc-400">{log.changedBy || 'Hệ thống'}</span> (Kênh: <span className="text-zinc-550">{log.source || 'CRON'}</span>)</div>
+                      <div>Lý do ghi nhận: <span className="text-zinc-400 font-bold italic">“{translateHistoryReason(log)}”</span></div>
+                      <div>
+                        Thực hiện bởi: <span className="text-zinc-400">{translateAuditActor(log.changedBy)}</span>
+                        {' · '}
+                        Nguồn: <span className="text-zinc-550">{translateAuditActor(log.source)}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -486,7 +525,7 @@ export default function AdminBookingDetailPage() {
             {/* Price Summary card */}
             <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4 shadow-2xl">
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-white">Chi tiết Doanh Thu</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-white">Chi tiết giá trị đơn</h3>
                 <FileCheck className="w-4 h-4 text-emerald-400" />
               </div>
 
@@ -496,7 +535,7 @@ export default function AdminBookingDetailPage() {
                   <span className="font-semibold text-zinc-200">{formatCurrency(booking.ticketAmount)}</span>
                 </div>
                 <div className="flex justify-between text-zinc-400">
-                  <span>Tiền bắp nước (Foods):</span>
+                  <span>Tiền bắp nước:</span>
                   <span className="font-semibold text-zinc-200">{formatCurrency(booking.foodAmount || 0)}</span>
                 </div>
                 <div className="flex justify-between text-zinc-450 border-t border-zinc-850/50 pt-2 text-[10px]">
@@ -516,7 +555,7 @@ export default function AdminBookingDetailPage() {
                 )}
 
                 <div className="flex justify-between items-center py-4 px-4 bg-zinc-950/60 rounded-2xl border border-zinc-850 shadow-inner mt-2">
-                  <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider">Tổng cộng thu</span>
+                  <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider">Tổng giá trị đơn</span>
                   <span className="text-lg font-black text-[#ff7a1a]">{formatCurrency(booking.finalAmount)}</span>
                 </div>
               </div>
@@ -553,7 +592,7 @@ export default function AdminBookingDetailPage() {
 
                   {allowedAdminActions.length > 0 && (
                   <div className="space-y-1">
-                    <label className="text-[10px] text-zinc-500 font-bold uppercase">Lý do điều chỉnh (Audit)</label>
+                    <label className="text-[10px] text-zinc-500 font-bold uppercase">Lý do điều chỉnh</label>
                     <textarea
                       placeholder="Nhập lý do thay đổi trạng thái..."
                       value={changeReason}

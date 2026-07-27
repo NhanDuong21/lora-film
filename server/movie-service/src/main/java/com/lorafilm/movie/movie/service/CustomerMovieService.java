@@ -46,20 +46,42 @@ public class CustomerMovieService {
     }
 
     public PageResponse<MovieDto> getMoviesByStatus(String statusStr, String keyword, Pageable pageable) {
-        MovieStatus status;
-        if ("now-showing".equalsIgnoreCase(statusStr)) {
-            status = MovieStatus.NOW_SHOWING;
+        return getMoviesByStatus(statusStr, keyword, null, pageable);
+    }
+
+    public PageResponse<MovieDto> getMoviesByStatus(
+            String statusStr,
+            String keyword,
+            String genrePublicId,
+            Pageable pageable) {
+        Specification<Movie> spec = Specification.where(
+                com.lorafilm.movie.movie.repository.MovieSpecification.isNotDeleted());
+
+        if (statusStr == null || statusStr.isBlank() || "all".equalsIgnoreCase(statusStr)) {
+            spec = spec.and(
+                    com.lorafilm.movie.movie.repository.MovieSpecification.isPubliclyVisible());
+        } else if ("now-showing".equalsIgnoreCase(statusStr)) {
+            spec = spec.and(
+                    com.lorafilm.movie.movie.repository.MovieSpecification.hasStatus(
+                            MovieStatus.NOW_SHOWING));
         } else if ("coming-soon".equalsIgnoreCase(statusStr)) {
-            status = MovieStatus.UPCOMING;
+            spec = spec.and(
+                    com.lorafilm.movie.movie.repository.MovieSpecification.hasStatus(
+                            MovieStatus.UPCOMING));
         } else {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Invalid status query. Must be now-showing or coming-soon.", null);
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Invalid status query. Must be all, now-showing or coming-soon.",
+                    null);
         }
 
-        Specification<Movie> spec = Specification.where(com.lorafilm.movie.movie.repository.MovieSpecification.isNotDeleted())
-                .and(com.lorafilm.movie.movie.repository.MovieSpecification.hasStatus(status));
-                
         if (keyword != null && !keyword.trim().isEmpty()) {
             spec = spec.and(com.lorafilm.movie.movie.repository.MovieSpecification.hasKeyword(keyword.trim()));
+        }
+        if (genrePublicId != null && !genrePublicId.isBlank()) {
+            spec = spec.and(
+                    com.lorafilm.movie.movie.repository.MovieSpecification.hasGenrePublicId(
+                            genrePublicId.trim()));
         }
 
         Page<Movie> moviePage = movieRepository.findAll(spec, pageable);

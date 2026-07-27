@@ -43,8 +43,8 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
         const genresData = await getGenres();
         if (genresData && Array.isArray(genresData)) {
           const formattedGenres = genresData.map(g => ({
-            label: g.genreName,
-            value: g.id
+            label: g.name || g.genreName,
+            value: g.publicId || g.id
           }));
           setGenres([{ label: 'Tất cả thể loại', value: 'ALL' }, ...formattedGenres]);
         }
@@ -227,7 +227,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                 {movies.map((movie) => {
                   return (
                     <div 
-                      key={movie.id}
+                      key={movie.publicId || movie.id || movie.slug}
                       className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-3xl p-4 flex gap-4 md:gap-6 shadow-xl transition-all duration-300 relative group overflow-hidden"
                     >
                       {/* Image Block (Left Aspect Ratio container) */}
@@ -366,7 +366,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               <div className="space-y-4">
                 {movies.slice(0, 3).map((movie) => (
                   <div 
-                    key={movie.id}
+                    key={movie.publicId || movie.id || movie.slug}
                     className="flex gap-3 hover:bg-white/5 p-1.5 rounded-xl transition-colors cursor-pointer group"
                   >
                     <div className="w-12 h-18 rounded-lg overflow-hidden shrink-0 bg-zinc-950 border border-zinc-800">

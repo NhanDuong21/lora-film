@@ -34,6 +34,11 @@ describe('AdminBookingDashboardPage data provenance', () => {
         cinemaId: 31,
         auditoriumId: 4,
         showtimeId: 81,
+        movieTitle: 'Nhà Có Năm Nàng Tiên',
+        cinemaName: 'LoraFilm Hải Châu',
+        auditoriumName: '4DX 01',
+        showtimeStart: '2099-07-27T12:30:00Z',
+        seatCount: 2,
         ticketAmount: 190000,
         foodAmount: 0,
         promotionDiscount: 0,
@@ -61,6 +66,11 @@ describe('AdminBookingDashboardPage data provenance', () => {
     );
 
     expect(await screen.findByText('BOOKING-FROM-API')).toBeInTheDocument();
+    expect(screen.getByText('Nhà Có Năm Nàng Tiên')).toBeInTheDocument();
+    expect(screen.getByText(/LoraFilm Hải Châu · 4DX 01/)).toBeInTheDocument();
+    expect(screen.getByText(/2 ghế/)).toBeInTheDocument();
+    expect(screen.getByText('Chưa thanh toán')).toBeInTheDocument();
+    expect(screen.queryByText(/Mã phim: 91/)).not.toBeInTheDocument();
     expect(screen.getByText('Chờ thanh toán trên trang')).toBeInTheDocument();
     expect(screen.queryByText(/Xu hướng Đặt Vé/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Giám Sát Hệ Thống/i)).not.toBeInTheDocument();

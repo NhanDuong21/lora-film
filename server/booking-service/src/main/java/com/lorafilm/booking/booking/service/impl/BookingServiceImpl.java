@@ -665,6 +665,9 @@ public class BookingServiceImpl implements BookingService {
         return new BookingPresentationResponse(
                 snapshot == null ? null : snapshot.getMovieTitle(),
                 snapshot == null ? null : snapshot.getMoviePoster(),
+                snapshot == null ? null : snapshot.getOriginalTitle(),
+                snapshot == null ? null : snapshot.getDuration(),
+                snapshot == null ? null : snapshot.getAgeRating(),
                 snapshot == null ? null : snapshot.getShowtimeStart(),
                 snapshot == null ? null : snapshot.getShowtimeEnd(),
                 snapshot == null ? null : snapshot.getCinemaName(),

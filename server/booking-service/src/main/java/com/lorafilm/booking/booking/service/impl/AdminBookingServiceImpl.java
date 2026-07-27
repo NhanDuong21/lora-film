@@ -6,8 +6,6 @@ import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.dto.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.BookingFilterRequest;
 import com.lorafilm.booking.booking.dto.BookingSnapshotDto;
-import com.lorafilm.booking.booking.dto.BookingStatusHistoryDto;
-import com.lorafilm.booking.booking.dto.BookingTicketDto;
 import com.lorafilm.booking.booking.dto.UpdateBookingStatusRequest;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
@@ -38,7 +36,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -111,7 +108,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Booking> bookingPage = bookingRepository.findAll(BookingSpecification.filterBy(filter), pageable);
 
-        List<BookingAdminResponse> content = bookingPage.map(bookingMapper::toAdminResponse).getContent();
+        List<BookingAdminResponse> content = bookingPage.map(this::toAdminSummary).getContent();
 
         return new PagedResponse<>(
                 content,
@@ -137,28 +134,26 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         BookingDetailResponse detailResponse = bookingMapper.toAdminDetailResponse(booking);
         Long dbBookingId = booking.getId();
 
-        try {
-            BookingSnapshotDto snapshot = snapshotService.findByBooking(dbBookingId);
-            detailResponse.setSnapshot(snapshot);
-        } catch (BusinessException e) {
-            detailResponse.setSnapshot(null);
-        }
-
-        try {
-            List<BookingTicketDto> tickets = ticketService.findByBooking(dbBookingId);
-            detailResponse.setTickets(tickets);
-        } catch (BusinessException e) {
-            detailResponse.setTickets(Collections.emptyList());
-        }
-
-        try {
-            List<BookingStatusHistoryDto> statusHistories = historyService.findByBooking(dbBookingId);
-            detailResponse.setStatusHistories(statusHistories);
-        } catch (BusinessException e) {
-            detailResponse.setStatusHistories(Collections.emptyList());
-        }
+        detailResponse.setSnapshot(snapshotService.findByBooking(dbBookingId));
+        detailResponse.setTickets(ticketService.findByBooking(dbBookingId));
+        detailResponse.setStatusHistories(historyService.findByBooking(dbBookingId));
 
         return detailResponse;
+    }
+
+    private BookingAdminResponse toAdminSummary(Booking booking) {
+        BookingAdminResponse response = bookingMapper.toAdminResponse(booking);
+        BookingSnapshotDto snapshot = snapshotService.findByBooking(booking.getId());
+        if (snapshot == null) {
+            return response;
+        }
+        response.setMovieTitle(snapshot.getMovieTitle());
+        response.setMoviePosterUrl(snapshot.getMoviePoster());
+        response.setCinemaName(snapshot.getCinemaName());
+        response.setAuditoriumName(snapshot.getAuditoriumName());
+        response.setShowtimeStart(snapshot.getShowtimeStart());
+        response.setSeatCount(snapshot.getSeatCount());
+        return response;
     }
 
     @Override

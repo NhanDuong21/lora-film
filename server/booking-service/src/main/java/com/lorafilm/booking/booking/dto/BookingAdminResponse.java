@@ -17,6 +17,12 @@ public class BookingAdminResponse {
     private Long movieId;
     private Long cinemaId;
     private Long auditoriumId;
+    private String movieTitle;
+    private String moviePosterUrl;
+    private String cinemaName;
+    private String auditoriumName;
+    private Instant showtimeStart;
+    private Integer seatCount;
     private BigDecimal ticketAmount;
     private BigDecimal foodAmount;
     private BigDecimal serviceFee;
@@ -106,6 +112,54 @@ public class BookingAdminResponse {
 
     public void setAuditoriumId(Long auditoriumId) {
         this.auditoriumId = auditoriumId;
+    }
+
+    public String getMovieTitle() {
+        return movieTitle;
+    }
+
+    public void setMovieTitle(String movieTitle) {
+        this.movieTitle = movieTitle;
+    }
+
+    public String getMoviePosterUrl() {
+        return moviePosterUrl;
+    }
+
+    public void setMoviePosterUrl(String moviePosterUrl) {
+        this.moviePosterUrl = moviePosterUrl;
+    }
+
+    public String getCinemaName() {
+        return cinemaName;
+    }
+
+    public void setCinemaName(String cinemaName) {
+        this.cinemaName = cinemaName;
+    }
+
+    public String getAuditoriumName() {
+        return auditoriumName;
+    }
+
+    public void setAuditoriumName(String auditoriumName) {
+        this.auditoriumName = auditoriumName;
+    }
+
+    public Instant getShowtimeStart() {
+        return showtimeStart;
+    }
+
+    public void setShowtimeStart(Instant showtimeStart) {
+        this.showtimeStart = showtimeStart;
+    }
+
+    public Integer getSeatCount() {
+        return seatCount;
+    }
+
+    public void setSeatCount(Integer seatCount) {
+        this.seatCount = seatCount;
     }
 
     public BigDecimal getTicketAmount() {

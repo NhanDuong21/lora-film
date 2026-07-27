@@ -56,6 +56,16 @@ public class BookingSnapshotServiceTest {
         sampleSnapshot.setId(100L);
         sampleSnapshot.setBooking(sampleBooking);
         sampleSnapshot.setMovieTitle("Avatar 2");
+        sampleSnapshot.setSnapshotJson("""
+                [{
+                  "seatId": 101,
+                  "seatPublicId": "seat-public-101",
+                  "seatLabel": "D6",
+                  "seatType": "VIP",
+                  "price": 130000,
+                  "currency": "VND"
+                }]
+                """);
     }
 
     @Test
@@ -68,6 +78,8 @@ public class BookingSnapshotServiceTest {
 
         assertNotNull(result);
         assertEquals("Avatar 2", result.getMovieTitle());
+        assertEquals(1, result.getSeats().size());
+        assertEquals("D6", result.getSeats().get(0).seatLabel());
         verify(bookingSnapshotRepository).save(any());
     }
 
@@ -93,12 +105,12 @@ public class BookingSnapshotServiceTest {
     }
 
     @Test
-    public void findByBooking_NoSnapshot_ThrowsException() {
+    public void findByBooking_NoSnapshot_ReturnsNull() {
         when(bookingRepository.existsById(10L)).thenReturn(true);
         when(bookingSnapshotRepository.findByBookingId(10L)).thenReturn(Optional.empty());
 
-        BusinessException ex = assertThrows(BusinessException.class, () ->
-                bookingSnapshotService.findByBooking(10L));
-        assertEquals("NO_SNAPSHOT_FOUND", ex.getErrorCode());
+        BookingSnapshotDto result = bookingSnapshotService.findByBooking(10L);
+
+        org.junit.jupiter.api.Assertions.assertNull(result);
     }
 }

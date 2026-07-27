@@ -112,4 +112,19 @@ describe('CustomerBookingHistory pending recovery actions', () => {
       expect(getBookingHistory).toHaveBeenCalledTimes(2);
     });
   });
+
+  it('presents each history filter with a clear accessible label', async () => {
+    render(
+      <MemoryRouter>
+        <CustomerBookingHistory />
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Mưa đỏ');
+    expect(screen.getByLabelText(/Tìm theo mã đơn hoặc tên phim/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Từ ngày/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Đến ngày/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Sắp xếp danh sách/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Đổi chiều sắp xếp/i })).toHaveTextContent('Mới nhất');
+  });
 });

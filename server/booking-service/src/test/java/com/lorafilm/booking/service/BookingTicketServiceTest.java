@@ -116,13 +116,14 @@ public class BookingTicketServiceTest {
     }
 
     @Test
-    public void findByBooking_NoTickets_ThrowsException() {
+    public void findByBooking_NoTickets_ReturnsEmptyCollection() {
         when(bookingRepository.existsById(10L)).thenReturn(true);
         when(bookingTicketRepository.findByBookingId(10L)).thenReturn(Collections.emptyList());
 
-        BusinessException ex = assertThrows(BusinessException.class, () ->
-                bookingTicketService.findByBooking(10L));
-        assertEquals("NO_TICKETS_FOUND", ex.getErrorCode());
+        List<BookingTicketDto> result = bookingTicketService.findByBooking(10L);
+
+        assertNotNull(result);
+        assertEquals(0, result.size());
     }
 
     @Test

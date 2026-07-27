@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  AlertTriangle, ArrowUpDown, ChevronRight, Clock3, CreditCard, Film, Info,
-  Search, Trash2
+  AlertTriangle, ArrowUpDown, CalendarDays, ChevronRight, Clock3, CreditCard,
+  Film, Info, Search, SlidersHorizontal, Trash2
 } from 'lucide-react';
 import { cancelBooking, getBookingHistory } from '../services/bookingService';
 import {
@@ -159,73 +159,96 @@ export default function CustomerBookingHistory() {
         />
       )}
 
-      {/* Filters and Tabs bar */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-zinc-800 pb-4">
-        <div className="flex gap-2 overflow-x-auto py-1 w-full xl:w-auto scrollbar-none">
-          {['ALL', 'PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => handleStatusTabChange(tab)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                status === tab
-                  ? 'bg-brand-orange text-white'
-                  : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-850'
-              }`}
-            >
-              {tab === 'ALL' ? 'TẤT CẢ' : translateStatus(tab)}
-            </button>
-          ))}
+      {/* Filters and status tabs */}
+      <div className="space-y-4 border-b border-zinc-800 pb-5">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-500">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-brand-orange" />
+            Trạng thái giao dịch
+          </div>
+          <div className="flex w-full gap-2 overflow-x-auto py-1 scrollbar-none">
+            {['ALL', 'PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'].map(tab => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => handleStatusTabChange(tab)}
+                className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer ${
+                  status === tab
+                    ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/10'
+                    : 'border border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                }`}
+              >
+                {tab === 'ALL' ? 'Tất cả' : translateStatus(tab)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 w-full xl:w-auto items-center">
-          {/* Quick search input */}
-          <div className="relative w-full sm:w-auto sm:min-w-[200px] shrink-0">
-            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Mã đặt vé / Phim..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-brand-orange placeholder:text-zinc-650"
-            />
-          </div>
-          
-          {/* Date Range filter */}
-          <div className="flex items-center gap-2">
-            <input 
-              type="date"
-              value={fromDate}
-              onChange={(e) => { setFromDate(e.target.value); setPage(0); }}
-              className="bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-brand-orange"
-              title="Từ ngày"
-            />
-            <span className="text-zinc-600 font-bold">-</span>
-            <input 
-              type="date"
-              value={toDate}
-              onChange={(e) => { setToDate(e.target.value); setPage(0); }}
-              className="bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-brand-orange"
-              title="Đến ngày"
-            />
-          </div>
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="min-w-[230px] flex-[2_1_280px] space-y-1.5">
+              <span className="block text-[10px] font-bold text-zinc-500">Tìm theo mã đơn hoặc tên phim</span>
+              <span className="relative block">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="search"
+                  placeholder="Ví dụ: LORAFILM-... hoặc tên phim"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 pl-9 pr-4 text-xs text-zinc-200 outline-none transition-colors placeholder:text-zinc-650 focus:border-brand-orange"
+                />
+              </span>
+            </label>
 
-          {/* Sorting */}
-          <div className="flex gap-2">
-            <select
-              value={sortField}
-              onChange={(e) => { setSortField(e.target.value); setPage(0); }}
-              className="bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-brand-orange"
-            >
-              <option value="createdAt">Ngày đặt (Mới - Cũ)</option>
-              <option value="totalAmount">Giá trị đơn hàng</option>
-            </select>
+            <label className="min-w-[145px] flex-[1_1_160px] space-y-1.5">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500">
+                <CalendarDays className="h-3 w-3" />
+                Từ ngày
+              </span>
+              <input
+                type="date"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(e) => { setFromDate(e.target.value); setPage(0); }}
+                className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-200 outline-none transition-colors focus:border-brand-orange"
+              />
+            </label>
+
+            <label className="min-w-[145px] flex-[1_1_160px] space-y-1.5">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500">
+                <CalendarDays className="h-3 w-3" />
+                Đến ngày
+              </span>
+              <input
+                type="date"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(e) => { setToDate(e.target.value); setPage(0); }}
+                className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-200 outline-none transition-colors focus:border-brand-orange"
+              />
+            </label>
+
+            <label className="min-w-[190px] flex-[1.4_1_210px] space-y-1.5">
+              <span className="block text-[10px] font-bold text-zinc-500">Sắp xếp danh sách</span>
+              <select
+                value={sortField}
+                onChange={(e) => { setSortField(e.target.value); setPage(0); }}
+                className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-200 outline-none transition-colors focus:border-brand-orange"
+              >
+                <option value="createdAt">Ngày đặt</option>
+                <option value="totalAmount">Giá trị đơn hàng</option>
+              </select>
+            </label>
+
             <button
               type="button"
               onClick={() => { setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc'); setPage(0); }}
-              className="bg-zinc-900 border border-zinc-850 p-2 rounded-xl text-zinc-400 hover:text-white transition-colors"
+              className="flex h-10 min-w-[116px] items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-[10px] font-bold text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+              aria-label="Đổi chiều sắp xếp"
               title="Đổi chiều sắp xếp"
             >
-              <ArrowUpDown className="w-4 h-4" />
+              <ArrowUpDown className="h-4 w-4 text-brand-orange" />
+              {sortDirection === 'desc' ? 'Mới nhất' : 'Cũ nhất'}
             </button>
           </div>
         </div>

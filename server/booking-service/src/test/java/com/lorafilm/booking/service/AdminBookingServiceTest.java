@@ -5,6 +5,7 @@ import com.lorafilm.booking.audit.service.BookingOperationLogService;
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.dto.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.BookingFilterRequest;
+import com.lorafilm.booking.booking.dto.BookingSnapshotDto;
 import com.lorafilm.booking.booking.dto.UpdateBookingStatusRequest;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
@@ -31,6 +32,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -108,13 +110,42 @@ public class AdminBookingServiceTest {
     }
 
     @Test
+    public void findBookings_UsesPersistedSnapshotForOperationalLabels() {
+        BookingFilterRequest filter = new BookingFilterRequest();
+        filter.setPage(0);
+        filter.setSize(10);
+        BookingSnapshotDto snapshot = new BookingSnapshotDto();
+        snapshot.setMovieTitle("Nhà Có Năm Nàng Tiên");
+        snapshot.setMoviePoster("https://cdn.example/poster.jpg");
+        snapshot.setCinemaName("LoraFilm Hải Châu");
+        snapshot.setAuditoriumName("4DX 01");
+        snapshot.setShowtimeStart(java.time.Instant.parse("2026-07-27T12:30:00Z"));
+        snapshot.setSeatCount(2);
+
+        when(bookingRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleBooking)));
+        when(snapshotService.findByBooking(10L)).thenReturn(snapshot);
+
+        BookingAdminResponse result = adminBookingService.findBookings(filter).getContent().get(0);
+
+        assertEquals("Nhà Có Năm Nàng Tiên", result.getMovieTitle());
+        assertEquals("LoraFilm Hải Châu", result.getCinemaName());
+        assertEquals("4DX 01", result.getAuditoriumName());
+        assertEquals(2, result.getSeatCount());
+    }
+
+    @Test
     public void getBookingDetail_Success() {
         when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
+        when(ticketService.findByBooking(10L)).thenReturn(Collections.emptyList());
+        when(historyService.findByBooking(10L)).thenReturn(Collections.emptyList());
 
         BookingDetailResponse result = adminBookingService.getBookingDetail("550e8400-e29b-41d4-a716-446655440000");
 
         assertNotNull(result);
         assertEquals("BK1001", result.getBookingCode());
+        assertEquals(Collections.emptyList(), result.getTickets());
+        assertEquals(Collections.emptyList(), result.getStatusHistories());
     }
 
     @Test
