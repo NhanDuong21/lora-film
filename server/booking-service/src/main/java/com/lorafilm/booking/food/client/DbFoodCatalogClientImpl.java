@@ -1,6 +1,8 @@
 package com.lorafilm.booking.food.client;
 
+import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.food.repository.FoodCatalogItemRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,29 +35,46 @@ public class DbFoodCatalogClientImpl implements FoodCatalogClient {
     @Override
     @Transactional
     public FoodCatalogItem addProduct(FoodCatalogItem item) {
+        normalize(item);
+        if (foodCatalogItemRepository.findByCodeIgnoreCase(item.getCode()).isPresent()) {
+            throw new BusinessException(
+                    "CONCESSION_CODE_EXISTS",
+                    "A concession product with this code already exists",
+                    HttpStatus.CONFLICT);
+        }
         if (item.getCurrency() == null) {
             item.setCurrency("VND");
         }
+        item.setDeleted(false);
+        item.setDisabled(false);
         return foodCatalogItemRepository.save(item);
     }
 
     @Override
     @Transactional
     public FoodCatalogItem updateProduct(Long id, FoodCatalogItem updated) {
+        normalize(updated);
         return foodCatalogItemRepository.findById(id)
                 .map(existing -> {
-                    existing.setCode(updated.getCode());
+                    if (existing.isDeleted()) {
+                        throw new BusinessException(
+                                "CONCESSION_ARCHIVED",
+                                "Archived concession products must be restored before editing",
+                                HttpStatus.CONFLICT);
+                    }
+                    if (!existing.getCode().equalsIgnoreCase(updated.getCode())) {
+                        throw new BusinessException(
+                                "CONCESSION_CODE_IMMUTABLE",
+                                "Product code cannot be changed after creation",
+                                HttpStatus.CONFLICT);
+                    }
                     existing.setName(updated.getName());
                     existing.setType(updated.getType());
                     existing.setImageUrl(updated.getImageUrl());
                     existing.setPrice(updated.getPrice());
                     existing.setActive(updated.isActive());
                     existing.setSellable(updated.isSellable());
-                    existing.setDeleted(updated.isDeleted());
-                    existing.setDisabled(updated.isDisabled());
-                    if (updated.getCurrency() != null) {
-                        existing.setCurrency(updated.getCurrency());
-                    }
+                    existing.setCurrency("VND");
                     return foodCatalogItemRepository.save(existing);
                 })
                 .orElse(null);
@@ -73,5 +92,30 @@ public class DbFoodCatalogClientImpl implements FoodCatalogClient {
                     return true;
                 })
                 .orElse(false);
+    }
+
+    @Override
+    @Transactional
+    public FoodCatalogItem restoreProduct(Long id) {
+        return foodCatalogItemRepository.findById(id)
+                .map(existing -> {
+                    if (!existing.isDeleted()) {
+                        return existing;
+                    }
+                    existing.setDeleted(false);
+                    existing.setDisabled(false);
+                    existing.setActive(false);
+                    existing.setSellable(false);
+                    return foodCatalogItemRepository.save(existing);
+                })
+                .orElse(null);
+    }
+
+    private void normalize(FoodCatalogItem item) {
+        item.setCode(item.getCode().trim().toUpperCase());
+        item.setName(item.getName().trim());
+        item.setImageUrl(item.getImageUrl() == null || item.getImageUrl().isBlank()
+                ? null
+                : item.getImageUrl().trim());
     }
 }
