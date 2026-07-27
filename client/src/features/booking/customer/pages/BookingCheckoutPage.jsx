@@ -12,7 +12,10 @@ import {
   createPaymentHandoff,
   getOrCreatePaymentAttemptKey
 } from '../services/paymentHandoffService';
-import { paymentErrorMessage } from '@/features/payment/services/paymentService';
+import {
+  paymentErrorCode,
+  paymentErrorMessage
+} from '@/features/payment/services/paymentService';
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
 
@@ -258,10 +261,31 @@ export default function BookingCheckoutPage() {
         redirectTo: `/bookings/${bookingId}`
       });
     } catch (err) {
+      const errorCode = paymentErrorCode(err);
+      const bookingUnavailable = [
+        'BOOKING_CANCELLED',
+        'BOOKING_PAYMENT_DEADLINE_EXPIRED',
+        'BOOKING_SEATS_NOT_HELD'
+      ].includes(errorCode);
+      const alreadyPaid = [
+        'BOOKING_ALREADY_PAID',
+        'PAYMENT_ALREADY_SUCCESS'
+      ].includes(errorCode);
       setNotice({
-        title: 'Không thể chuẩn bị thanh toán',
+        title: errorCode === 'BOOKING_CANCELLED'
+          ? 'Đơn đã được hủy'
+          : errorCode === 'BOOKING_PAYMENT_DEADLINE_EXPIRED'
+            ? 'Đã hết thời gian giữ ghế'
+            : alreadyPaid
+              ? 'Đơn đã được thanh toán'
+              : 'Không thể chuẩn bị thanh toán',
         message: paymentErrorMessage(err),
-        variant: 'error'
+        variant: alreadyPaid ? 'success' : 'error',
+        redirectTo: bookingUnavailable
+          ? '/movies'
+          : alreadyPaid
+            ? `/bookings/${bookingId}`
+            : undefined
       });
     } finally {
       setPaymentLoading(false);

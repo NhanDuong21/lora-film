@@ -125,6 +125,27 @@ public class BookingPaymentClientTest {
     }
 
     @Test
+    void getPaymentContext_PreservesCancelledReasonFromBooking() {
+        mockWebServer.enqueue(new MockResponse()
+                .setResponseCode(409)
+                .addHeader("Content-Type", "application/json")
+                .setBody("""
+                        {
+                          "success": false,
+                          "errorCode": "BOOKING_CANCELLED",
+                          "message": "Đơn đặt vé đã được hủy và ghế đã được trả lại"
+                        }
+                        """));
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> client.getPaymentContext(1001L));
+
+        assertEquals("BOOKING_CANCELLED", ex.getErrorCode());
+        assertEquals(HttpStatus.CONFLICT, ex.getHttpStatus());
+    }
+
+    @Test
     void getPaymentContext_Timeout() {
         // Enqueue no response, rely on client timeout (1000ms connect, 2000ms read)
         // Since it's a real connection to mockWebServer that hangs, we can mock a delayed response

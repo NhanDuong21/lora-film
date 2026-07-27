@@ -130,7 +130,10 @@ public class PaymentTransactionService {
     }
 
     @Transactional
-    public Payment finalizeProviderSession(Long paymentId, PaymentSession session) {
+    public Payment finalizeProviderSession(
+            Long paymentId,
+            PaymentSession session,
+            Instant nextProviderStatusCheckAt) {
         Payment payment = lock(paymentId);
         if (payment.getStatus() == PaymentStatus.PROCESSING
                 && payment.getProviderOrderId() != null) {
@@ -142,6 +145,7 @@ public class PaymentTransactionService {
         payment.setProviderSessionExpiresAt(min(session.getExpiresAt(), payment.getBookingExpiresAt()));
         payment.setLatestProviderSummarySanitized(
                 session.getSanitizedProviderSummary() == null ? "{}" : session.getSanitizedProviderSummary());
+        payment.setSettlementHoldUntil(nextProviderStatusCheckAt);
         payment.setStatus(PaymentStatus.PROCESSING);
         paymentRepository.save(payment);
         logService.log(payment.getId(), PaymentLogEventType.PROVIDER_SESSION_CREATED,
@@ -201,6 +205,15 @@ public class PaymentTransactionService {
         Payment payment = lock(paymentId);
         if (payment.getStatus() == PaymentStatus.PROCESSING
                 && payment.getSettlementHoldUntil() != null) {
+            payment.setSettlementHoldUntil(nextCheckAt);
+            paymentRepository.save(payment);
+        }
+    }
+
+    @Transactional
+    public void scheduleProviderStatusCheck(Long paymentId, Instant nextCheckAt) {
+        Payment payment = lock(paymentId);
+        if (payment.getStatus() == PaymentStatus.PROCESSING) {
             payment.setSettlementHoldUntil(nextCheckAt);
             paymentRepository.save(payment);
         }

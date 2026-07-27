@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paymentErrorMessage } from './paymentService';
+import { paymentErrorCode, paymentErrorMessage } from './paymentService';
 
 describe('paymentErrorMessage', () => {
   it('maps known backend error codes to clear Vietnamese guidance', () => {
@@ -10,6 +10,12 @@ describe('paymentErrorMessage', () => {
     expect(paymentErrorMessage({
       errorCode: 'PAYMENT_PROVIDER_SESSION_ACTIVE'
     })).toContain('Phiên thanh toán đang hoạt động');
+
+    const cancelled = {
+      response: { data: { errorCode: 'BOOKING_CANCELLED' } }
+    };
+    expect(paymentErrorCode(cancelled)).toBe('BOOKING_CANCELLED');
+    expect(paymentErrorMessage(cancelled)).toContain('ghế đã được trả lại');
   });
 
   it('never exposes an unknown English backend message to customers', () => {

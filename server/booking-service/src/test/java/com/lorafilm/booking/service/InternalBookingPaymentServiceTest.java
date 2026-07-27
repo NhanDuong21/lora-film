@@ -147,7 +147,35 @@ class InternalBookingPaymentServiceTest {
                 BusinessException.class,
                 () -> service.getPaymentContext(100L));
 
-        assertEquals("BOOKING_NOT_PAYABLE", exception.getErrorCode());
+        assertEquals("BOOKING_AMOUNT_NOT_LOCKED", exception.getErrorCode());
+    }
+
+    @Test
+    void reportsCancelledBookingContextWithCustomerSafeReason() {
+        booking.changeStatus(BookingStatus.CANCELLED, Instant.now());
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(booking));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.getPaymentContext(100L));
+
+        assertEquals("BOOKING_CANCELLED", exception.getErrorCode());
+        assertEquals("Đơn đặt vé đã được hủy và ghế đã được trả lại", exception.getMessage());
+        verify(reservationRepository, never()).findAllByBookingId(any());
+    }
+
+    @Test
+    void reportsExpiredBookingContextWithoutExtendingDeadline() {
+        Instant originalDeadline = Instant.now().minusSeconds(1);
+        booking.setExpiresAt(originalDeadline);
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(booking));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.getPaymentContext(100L));
+
+        assertEquals("BOOKING_PAYMENT_DEADLINE_EXPIRED", exception.getErrorCode());
+        assertEquals(originalDeadline, booking.getExpiresAt());
     }
 
     @Test

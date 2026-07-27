@@ -1,6 +1,7 @@
 package com.project.paymentservice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project.paymentservice.entity.Payment;
 import com.project.paymentservice.config.MomoProperties;
 import com.project.paymentservice.config.VnPayProperties;
 import com.project.paymentservice.provider.PaymentSession;
@@ -10,8 +11,10 @@ import com.project.paymentservice.provider.momo.MomoPaymentProvider;
 import com.project.paymentservice.provider.vnpay.VnPayPaymentProvider;
 import org.junit.jupiter.api.Test;
 
+import com.sun.net.httpserver.HttpServer;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.InetSocketAddress;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +22,10 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -96,6 +102,84 @@ class ProviderSignatureTest {
                 Map.of(), new ObjectMapper().writeValueAsString(callback)).isSignatureValid());
     }
 
+    @Test
+    void vnpayQueryDrVerifiesSignedSuccessWithoutIpn() throws Exception {
+        String secret = "test-vnpay-query-secret";
+        ObjectMapper objectMapper = new ObjectMapper();
+        AtomicReference<Map<String, String>> capturedRequest = new AtomicReference<>();
+        AtomicBoolean returnValidSignature = new AtomicBoolean(true);
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/query", exchange -> {
+            Map<String, String> requestValues = objectMapper.readValue(
+                    exchange.getRequestBody(),
+                    objectMapper.getTypeFactory().constructMapType(
+                            LinkedHashMap.class, String.class, String.class));
+            capturedRequest.set(requestValues);
+
+            Map<String, String> responseValues = new LinkedHashMap<>();
+            responseValues.put("vnp_ResponseId", "QUERY-RESPONSE-1");
+            responseValues.put("vnp_Command", "querydr");
+            responseValues.put("vnp_ResponseCode", "00");
+            responseValues.put("vnp_Message", "Success");
+            responseValues.put("vnp_TmnCode", "TESTCODE");
+            responseValues.put("vnp_TxnRef", "PAY-0001");
+            responseValues.put("vnp_Amount", "15000000");
+            responseValues.put("vnp_BankCode", "NCB");
+            responseValues.put("vnp_PayDate", "20260727210500");
+            responseValues.put("vnp_TransactionNo", "998877");
+            responseValues.put("vnp_TransactionType", "01");
+            responseValues.put("vnp_TransactionStatus", "00");
+            responseValues.put("vnp_OrderInfo", "Thanh toan PAY-0001");
+            responseValues.put("vnp_PromotionCode", "");
+            responseValues.put("vnp_PromotionAmount", "");
+            responseValues.put("vnp_SecureHash", returnValidSignature.get()
+                    ? hmacUnchecked("HmacSHA512", secret,
+                            vnpayQueryResponseSource(responseValues))
+                    : "invalid-signature");
+            byte[] response = objectMapper.writeValueAsBytes(responseValues);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            VnPayProperties properties = new VnPayProperties();
+            properties.setTmnCode("TESTCODE");
+            properties.setHashSecret(secret);
+            properties.setReturnUrl("http://localhost/return");
+            properties.setQueryUrl("http://localhost:" + server.getAddress().getPort() + "/query");
+            VnPayPaymentProvider provider =
+                    new VnPayPaymentProvider(properties, objectMapper);
+
+            Payment payment = new Payment();
+            payment.setPaymentTransactionCode("PAY-0001");
+            payment.setProviderOrderId("PAY-0001");
+            payment.setLatestProviderSummarySanitized(
+                    "{\"provider\":\"VNPAY\",\"createDate\":\"20260727210000\"}");
+
+            Optional<ProviderCallbackResult> queried = provider.queryStatus(payment);
+
+            assertTrue(queried.isPresent());
+            assertTrue(queried.get().isSignatureValid());
+            assertEquals("SUCCESS", queried.get().getResult());
+            assertEquals("PAY-0001", queried.get().getProviderOrderId());
+            assertEquals(0, new BigDecimal("150000").compareTo(queried.get().getAmount()));
+
+            Map<String, String> sent = capturedRequest.get();
+            assertNotNull(sent);
+            assertEquals("querydr", sent.get("vnp_Command"));
+            assertEquals("20260727210000", sent.get("vnp_TransactionDate"));
+            assertEquals(hmac("HmacSHA512", secret, vnpayQueryRequestSource(sent)),
+                    sent.get("vnp_SecureHash"));
+
+            returnValidSignature.set(false);
+            assertTrue(provider.queryStatus(payment).isEmpty());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private PaymentSessionRequest request() {
         PaymentSessionRequest request = new PaymentSessionRequest();
         request.setPaymentPublicId("d14bd538-83b8-4778-8200-5a49de7af0df");
@@ -140,9 +224,49 @@ class ProviderSignatureTest {
                 + "&transId=" + values.get("transId");
     }
 
+    private String vnpayQueryRequestSource(Map<String, String> values) {
+        return String.join("|",
+                values.get("vnp_RequestId"),
+                values.get("vnp_Version"),
+                values.get("vnp_Command"),
+                values.get("vnp_TmnCode"),
+                values.get("vnp_TxnRef"),
+                values.get("vnp_TransactionDate"),
+                values.get("vnp_CreateDate"),
+                values.get("vnp_IpAddr"),
+                values.get("vnp_OrderInfo"));
+    }
+
+    private String vnpayQueryResponseSource(Map<String, String> values) {
+        return String.join("|",
+                values.get("vnp_ResponseId"),
+                values.get("vnp_Command"),
+                values.get("vnp_ResponseCode"),
+                values.get("vnp_Message"),
+                values.get("vnp_TmnCode"),
+                values.get("vnp_TxnRef"),
+                values.get("vnp_Amount"),
+                values.get("vnp_BankCode"),
+                values.get("vnp_PayDate"),
+                values.get("vnp_TransactionNo"),
+                values.get("vnp_TransactionType"),
+                values.get("vnp_TransactionStatus"),
+                values.get("vnp_OrderInfo"),
+                values.get("vnp_PromotionCode"),
+                values.get("vnp_PromotionAmount"));
+    }
+
     private String hmac(String algorithm, String secret, String payload) throws Exception {
         Mac mac = Mac.getInstance(algorithm);
         mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), algorithm));
         return HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private String hmacUnchecked(String algorithm, String secret, String payload) {
+        try {
+            return hmac(algorithm, secret, payload);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

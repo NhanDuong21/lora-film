@@ -3,6 +3,7 @@ package com.project.paymentservice.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.paymentservice.entity.Payment;
 import com.project.paymentservice.entity.PaymentWebhookEvent;
+import com.project.paymentservice.enumtype.PaymentStatus;
 import com.project.paymentservice.enumtype.ProviderCode;
 import com.project.paymentservice.enumtype.WebhookProcessingStatus;
 import com.project.paymentservice.exception.BusinessException;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 
@@ -106,6 +108,10 @@ public class ProviderCallbackService {
         }
         Payment payment = paymentRepository.findByProviderCodeAndProviderOrderId(
                 provider, result.getProviderOrderId()).orElse(null);
+        if (payment != null && payment.getStatus() == PaymentStatus.PROCESSING) {
+            transactionService.scheduleProviderStatusCheck(
+                    payment.getId(), Instant.now());
+        }
         return payment == null
                 ? new ReturnOutcome(true, null, null)
                 : new ReturnOutcome(true, payment.getPublicId(), payment.getBookingPublicId());

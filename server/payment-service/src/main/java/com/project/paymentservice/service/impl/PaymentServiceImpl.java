@@ -136,7 +136,10 @@ public class PaymentServiceImpl implements PaymentService {
         try {
             PaymentSessionRequest sessionRequest = toSessionRequest(payment, clientIp);
             PaymentSession session = adapter.createSession(sessionRequest);
-            payment = transactionService.finalizeProviderSession(payment.getId(), session);
+            payment = transactionService.finalizeProviderSession(
+                    payment.getId(),
+                    session,
+                    Instant.now().plusSeconds(runtimeProperties.getSettlementHoldSeconds()));
             CreatePaymentResponse response = PaymentMapper.toCreateResponse(payment, session.getPaymentUrl());
             idempotencyService.complete(
                     reservation.record().getId(), ownerToken, payment.getId(), 201, json(response));

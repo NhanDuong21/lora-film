@@ -154,17 +154,46 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
 
     private InternalPaymentContextResponse buildPaymentContext(Booking booking) {
         Instant now = Instant.now();
-        boolean payable = booking.getBookingStatus() == BookingStatus.PENDING_PAYMENT
-                && booking.getExpiresAt() != null
-                && booking.getExpiresAt().isAfter(now)
-                && booking.getAmountLockedAt() != null
-                && booking.getFinalAmount() != null
-                && booking.getFinalAmount().signum() > 0
-                && hasLiveHeldReservations(booking.getId(), now);
-        if (!payable) {
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            throw new BusinessException(
+                    "BOOKING_CANCELLED",
+                    "Đơn đặt vé đã được hủy và ghế đã được trả lại",
+                    HttpStatus.CONFLICT);
+        }
+        if (booking.getBookingStatus() == BookingStatus.EXPIRED
+                || booking.getExpiresAt() == null
+                || !booking.getExpiresAt().isAfter(now)) {
+            throw new BusinessException(
+                    "BOOKING_PAYMENT_DEADLINE_EXPIRED",
+                    "Đơn đặt vé đã hết thời gian thanh toán",
+                    HttpStatus.CONFLICT);
+        }
+        if (booking.getBookingStatus() == BookingStatus.CONFIRMED
+                || booking.getBookingStatus() == BookingStatus.COMPLETED
+                || booking.getBookingStatus() == BookingStatus.REFUNDED) {
+            throw new BusinessException(
+                    "BOOKING_ALREADY_PAID",
+                    "Đơn đặt vé đã được thanh toán",
+                    HttpStatus.CONFLICT);
+        }
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BusinessException(
                     "BOOKING_NOT_PAYABLE",
-                    "Booking is not amount-locked, pending payment, unexpired, and backed by live HELD reservations",
+                    "Trạng thái hiện tại của đơn không cho phép thanh toán",
+                    HttpStatus.CONFLICT);
+        }
+        if (booking.getAmountLockedAt() == null
+                || booking.getFinalAmount() == null
+                || booking.getFinalAmount().signum() <= 0) {
+            throw new BusinessException(
+                    "BOOKING_AMOUNT_NOT_LOCKED",
+                    "Đơn chưa được chốt số tiền thanh toán",
+                    HttpStatus.CONFLICT);
+        }
+        if (!hasLiveHeldReservations(booking.getId(), now)) {
+            throw new BusinessException(
+                    "BOOKING_SEATS_NOT_HELD",
+                    "Ghế của đơn không còn được giữ",
                     HttpStatus.CONFLICT);
         }
         BookingPriceSnapshotPayload snapshot = readSnapshot(booking.getId());
