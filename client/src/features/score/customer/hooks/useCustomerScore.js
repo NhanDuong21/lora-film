@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
 import { parseApiError } from '@/utils/apiErrorHandler';
 
@@ -14,6 +14,15 @@ export default function useCustomerScore() {
   const [isTierHistoryLoading, setIsTierHistoryLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   const fetchScoreAndTiers = useCallback(async () => {
     setIsLoading(true);
     setError('');
@@ -22,6 +31,8 @@ export default function useCustomerScore() {
         scoreCustomerService.getScoreBalance(),
         scoreCustomerService.getMembershipTiers()
       ]);
+
+      if (!isMounted.current) return;
 
       if (scoreRes?.success && scoreRes?.data) {
         setScoreData(scoreRes.data);
@@ -33,9 +44,13 @@ export default function useCustomerScore() {
         setTiers(tiersRes.data);
       }
     } catch (err) {
-      setError(parseApiError(err));
+      if (isMounted.current) {
+        setError(parseApiError(err));
+      }
     } finally {
-      setIsLoading(false);
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -43,13 +58,18 @@ export default function useCustomerScore() {
     setIsHistoryLoading(true);
     try {
       const res = await scoreCustomerService.getScoreHistory(params);
-      if (res?.success && res?.data) {
+      if (isMounted.current && res?.success && res?.data) {
         setHistory(res.data);
       }
     } catch (err) {
-      console.error('Failed to fetch score history:', err);
+      if (isMounted.current) {
+        setError((prev) => prev || parseApiError(err));
+        console.error('Failed to fetch score history:', err);
+      }
     } finally {
-      setIsHistoryLoading(false);
+      if (isMounted.current) {
+        setIsHistoryLoading(false);
+      }
     }
   }, []);
 
@@ -57,13 +77,18 @@ export default function useCustomerScore() {
     setIsExpiringLoading(true);
     try {
       const res = await scoreCustomerService.getExpiringPoints();
-      if (res?.success && res?.data) {
+      if (isMounted.current && res?.success && res?.data) {
         setExpiringPoints(res.data);
       }
     } catch (err) {
-      console.error('Failed to fetch expiring points:', err);
+      if (isMounted.current) {
+        setError((prev) => prev || parseApiError(err));
+        console.error('Failed to fetch expiring points:', err);
+      }
     } finally {
-      setIsExpiringLoading(false);
+      if (isMounted.current) {
+        setIsExpiringLoading(false);
+      }
     }
   }, []);
 
@@ -71,18 +96,22 @@ export default function useCustomerScore() {
     setIsTierHistoryLoading(true);
     try {
       const res = await scoreCustomerService.getTierHistory();
-      if (res?.success && res?.data) {
+      if (isMounted.current && res?.success && res?.data) {
         setTierHistory(res.data);
       }
     } catch (err) {
-      console.error('Failed to fetch tier history:', err);
+      if (isMounted.current) {
+        setError((prev) => prev || parseApiError(err));
+        console.error('Failed to fetch tier history:', err);
+      }
     } finally {
-      setIsTierHistoryLoading(false);
+      if (isMounted.current) {
+        setIsTierHistoryLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchScoreAndTiers();
     fetchHistory({ page: 0, size: 10 });
     fetchExpiringPoints();
@@ -104,10 +133,10 @@ export default function useCustomerScore() {
       fetchScoreAndTiers();
       fetchExpiringPoints();
       fetchTierHistory();
+      fetchHistory({ page: 0, size: 10 });
     },
     fetchHistory,
     fetchExpiringPoints,
     fetchTierHistory
   };
 }
-

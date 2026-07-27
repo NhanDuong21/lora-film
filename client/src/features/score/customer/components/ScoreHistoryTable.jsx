@@ -70,7 +70,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
           <p className="text-xs text-zinc-400 mt-0.5">Theo dõi biến động điểm thưởng của bạn theo thời gian thực</p>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 bg-zinc-950 p-1 rounded-xl border border-zinc-800/80">
+        <div role="tablist" aria-label="Bộ lọc loại giao dịch" className="flex flex-wrap gap-1.5 bg-zinc-950 p-1 rounded-xl border border-zinc-800/80">
           {[
             { id: 'ALL', label: 'Tất cả' },
             { id: 'EARN', label: 'Tích điểm' },
@@ -79,6 +79,8 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
           ].map((tab) => (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={activeFilter === tab.id}
               onClick={() => handleFilterClick(tab.id)}
               className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
                 activeFilter === tab.id
@@ -158,20 +160,22 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
           <span className="text-zinc-500 font-medium">
             Trang <span className="text-white font-bold">{currentPage + 1}</span> / <span className="text-white font-bold">{totalPages}</span>
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" role="navigation" aria-label="Điều hướng trang">
             <button
               onClick={() => onPageChange && onPageChange(currentPage - 1)}
               disabled={currentPage === 0}
+              aria-label="Trang trước"
               className="p-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
               onClick={() => onPageChange && onPageChange(currentPage + 1)}
               disabled={currentPage >= totalPages - 1}
+              aria-label="Trang sau"
               className="p-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>

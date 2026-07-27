@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import scoreAdminService from '../services/scoreAdminService';
 
 export default function useAdminScore() {
@@ -13,20 +13,30 @@ export default function useAdminScore() {
   const [isLoadingUserScore, setIsLoadingUserScore] = useState(false);
   const [errorUserScore, setErrorUserScore] = useState(null);
 
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchTiers = useCallback(async () => {
     setIsLoadingTiers(true);
     setErrorTiers(null);
     try {
       const data = await scoreAdminService.getAllTiers();
-      setTiers(data || []);
+      if (isMounted.current) setTiers(data || []);
       return data;
     } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể tải danh sách hạng thẻ';
-      setErrorTiers(msg);
+      if (isMounted.current) {
+        const msg = err.response?.data?.message || 'Không thể tải danh sách hạng thẻ';
+        setErrorTiers(msg);
+      }
       throw err;
     } finally {
-      setIsLoadingTiers(false);
+      if (isMounted.current) setIsLoadingTiers(false);
     }
   }, []);
 
@@ -36,15 +46,17 @@ export default function useAdminScore() {
     setErrorUserScore(null);
     try {
       const data = await scoreAdminService.getScoreByAccount(accountId);
-      setUserScore(data);
+      if (isMounted.current) setUserScore(data);
       return data;
     } catch (err) {
-      const msg = err.response?.data?.message || `Không tìm thấy điểm thưởng cho tài khoản ID: ${accountId}`;
-      setErrorUserScore(msg);
-      setUserScore(null);
+      if (isMounted.current) {
+        const msg = err.response?.data?.message || `Không tìm thấy điểm thưởng cho tài khoản ID: ${accountId}`;
+        setErrorUserScore(msg);
+        setUserScore(null);
+      }
       throw err;
     } finally {
-      setIsLoadingUserScore(false);
+      if (isMounted.current) setIsLoadingUserScore(false);
     }
   }, []);
 
@@ -52,11 +64,15 @@ export default function useAdminScore() {
     if (!accountId) return;
     try {
       const data = await scoreAdminService.getScoreHistoryByAccount(accountId, params);
-      setUserHistory(data);
+      if (isMounted.current) setUserHistory(data);
       return data;
     } catch (err) {
-      console.error('Failed to fetch user score history in admin', err);
-      setUserHistory(null);
+      if (isMounted.current) {
+        const msg = err.response?.data?.message || 'Lỗi khi tải lịch sử giao dịch';
+        setErrorUserScore((prev) => prev || msg);
+        setUserHistory(null);
+      }
+      throw err;
     }
   }, []);
 
@@ -64,11 +80,15 @@ export default function useAdminScore() {
     if (!accountId) return;
     try {
       const data = await scoreAdminService.getUserExpiringPoints(accountId);
-      setExpiringPoints(data || []);
+      if (isMounted.current) setExpiringPoints(data || []);
       return data;
     } catch (err) {
-      console.error('Failed to fetch user expiring points in admin', err);
-      setExpiringPoints([]);
+      if (isMounted.current) {
+        const msg = err.response?.data?.message || 'Lỗi khi tải danh sách điểm sắp hết hạn';
+        setErrorUserScore((prev) => prev || msg);
+        setExpiringPoints([]);
+      }
+      throw err;
     }
   }, []);
 
@@ -76,14 +96,17 @@ export default function useAdminScore() {
     if (!accountId) return;
     try {
       const data = await scoreAdminService.getUserTierHistory(accountId);
-      setTierHistory(data || []);
+      if (isMounted.current) setTierHistory(data || []);
       return data;
     } catch (err) {
-      console.error('Failed to fetch user tier history in admin', err);
-      setTierHistory([]);
+      if (isMounted.current) {
+        const msg = err.response?.data?.message || 'Lỗi khi tải lịch sử thăng/giáng hạng';
+        setErrorUserScore((prev) => prev || msg);
+        setTierHistory([]);
+      }
+      throw err;
     }
   }, []);
-
 
   const [reconciliationRuns, setReconciliationRuns] = useState(null);
   const [reconciliationDetails, setReconciliationDetails] = useState(null);
@@ -110,7 +133,7 @@ export default function useAdminScore() {
       await fetchUserScore(accountId);
       return res;
     } finally {
-      setIsLoadingOperations(false);
+      if (isMounted.current) setIsLoadingOperations(false);
     }
   }, [fetchUserScore]);
 
@@ -121,7 +144,7 @@ export default function useAdminScore() {
       await fetchUserScore(accountId);
       return res;
     } finally {
-      setIsLoadingOperations(false);
+      if (isMounted.current) setIsLoadingOperations(false);
     }
   }, [fetchUserScore]);
 
@@ -132,7 +155,7 @@ export default function useAdminScore() {
       await fetchUserScore(accountId);
       return res;
     } finally {
-      setIsLoadingOperations(false);
+      if (isMounted.current) setIsLoadingOperations(false);
     }
   }, [fetchUserScore]);
 
@@ -142,7 +165,7 @@ export default function useAdminScore() {
       const res = await scoreAdminService.runReconciliation(reconData);
       return res;
     } finally {
-      setIsLoadingOperations(false);
+      if (isMounted.current) setIsLoadingOperations(false);
     }
   }, []);
 
@@ -150,10 +173,10 @@ export default function useAdminScore() {
     setIsLoadingOperations(true);
     try {
       const data = await scoreAdminService.getReconciliationRuns(params);
-      setReconciliationRuns(data);
+      if (isMounted.current) setReconciliationRuns(data);
       return data;
     } finally {
-      setIsLoadingOperations(false);
+      if (isMounted.current) setIsLoadingOperations(false);
     }
   }, []);
 
@@ -161,10 +184,10 @@ export default function useAdminScore() {
     setIsLoadingOperations(true);
     try {
       const data = await scoreAdminService.getReconciliationDetails(params);
-      setReconciliationDetails(data);
+      if (isMounted.current) setReconciliationDetails(data);
       return data;
     } finally {
-      setIsLoadingOperations(false);
+      if (isMounted.current) setIsLoadingOperations(false);
     }
   }, []);
 
@@ -172,20 +195,25 @@ export default function useAdminScore() {
     setIsLoadingOperations(true);
     try {
       const data = await scoreAdminService.getAuditLogs(params);
-      setAuditLogs(data);
+      if (isMounted.current) setAuditLogs(data);
       return data;
     } finally {
-      setIsLoadingOperations(false);
+      if (isMounted.current) setIsLoadingOperations(false);
     }
   }, []);
 
   const fetchDashboardStats = useCallback(async () => {
     try {
       const data = await scoreAdminService.getDashboardStats();
-      setDashboardStats(data);
+      if (isMounted.current) setDashboardStats(data);
       return data;
     } catch (err) {
-      console.error('Failed to fetch dashboard stats', err);
+      if (isMounted.current) {
+        const msg = err.response?.data?.message || 'Lỗi khi tải thống kê Dashboard';
+        setErrorUserScore((prev) => prev || msg);
+        console.error('Failed to fetch dashboard stats', err);
+      }
+      throw err;
     }
   }, []);
 
@@ -228,4 +256,3 @@ export default function useAdminScore() {
     exportData
   };
 }
-
