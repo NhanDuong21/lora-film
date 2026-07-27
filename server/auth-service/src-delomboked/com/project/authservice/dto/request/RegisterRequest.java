@@ -1,0 +1,125 @@
+package com.project.authservice.dto.request;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+public class RegisterRequest {
+    @Schema(example = "Nguyen Van A")
+    @NotBlank(message = "fullName is required")
+    @Size(min = 2, max = 200, message = "fullName length must be between 2 and 200")
+    @Pattern(regexp = "^\\s*[a-zA-ZÀ-ỹ]+(\\s+[a-zA-ZÀ-ỹ]+)+\\s*$", message = "The full name must not contain numbers or special characters and must have at least two words.")
+    private String fullName;
+
+    @Schema(example = "user@example.com")
+    @NotBlank(message = "email is required")
+    @Email(message = "Email is invalid")
+    @Size(max = 100, message = "email max length is 100")
+    private String email;
+
+    @Schema(example = "0901234567")
+    @NotBlank(message = "phoneNumber is required")
+    @Pattern(regexp = "^0\\d{9}$", message = "phoneNumber format is invalid")
+    private String phoneNumber;
+
+    @Schema(example = "092205006789")
+    @NotBlank(message = "cccd is required")
+    @Pattern(regexp = "^\\d{12}$", message = "CCCD must contain 12 digits")
+    private String cccd;
+
+    @Schema(example = "2005-06-12")
+    @NotBlank(message = "birthday is required")
+    // Strict YYYY-MM-DD pattern: 4-digit year, month 01-12, day 01-31.
+    // A deeper calendar check (e.g. Feb 30) is performed in the service layer
+    // via LocalDate.parse() which throws InvalidBirthdayFormatException.
+    @Pattern(
+        regexp = "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+        message = "Birthday must be in YYYY-MM-DD format"
+    )
+    private String birthday;
+
+    @Schema(example = "********")
+    @NotBlank(message = "Password is required")
+    @Size(min = 8, max = 50, message = "password length must be between 8 and 50")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*(),.?\":{}|<>]).+$",
+        message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
+    )
+    private String password;
+
+    public RegisterRequest() {}
+
+    public RegisterRequest(String fullName, String email, String phoneNumber, String cccd, String birthday, String password) {
+        this.fullName = fullName;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+        this.cccd = cccd;
+        this.birthday = birthday;
+        this.password = password;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public String getCccd() {
+        return cccd;
+    }
+
+    public void setCccd(String cccd) {
+        this.cccd = cccd;
+    }
+
+    public String getBirthday() {
+        return birthday;
+    }
+
+    public void setBirthday(String birthday) {
+        this.birthday = birthday;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    @Override
+    public String toString() {
+        return "RegisterRequest{" +
+                "fullName='" + fullName + '\'' +
+                ", email='" + email + '\'' +
+                ", phoneNumber='" + phoneNumber + '\'' +
+                ", cccd='" + cccd + '\'' +
+                ", birthday='" + birthday + '\'' +
+                ", password='[PROTECTED]'" +
+                '}';
+    }
+}

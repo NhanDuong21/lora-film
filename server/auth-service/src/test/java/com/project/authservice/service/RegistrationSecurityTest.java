@@ -43,14 +43,12 @@ class RegistrationSecurityTest {
     @Mock AuditLogService auditLogService;
     @Mock RefreshTokenRepository refreshTokenRepository;
     @Mock HttpServletRequest servletRequest;
-    @Mock AuthOutboxService outboxService;
+    @Mock com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher;
     @Mock StringRedisTemplate redisTemplate;
     @Mock ValueOperations<String, String> valueOperations;
     @Mock UserSessionRepository userSessionRepository;
     @Mock LoginHistoryRepository loginHistoryRepository;
     @Mock PasswordResetTokenRepository passwordResetTokenRepository;
-    @Mock RestTemplate restTemplate;
-    @Mock CredentialRevocationService revocationService;
 
     private AuthServiceImpl service;
 
@@ -58,9 +56,8 @@ class RegistrationSecurityTest {
     void setUp() {
         service = new AuthServiceImpl(accountRepository, roleRepository, passwordEncoder, jwtUtil,
                 cccdCheckClient, verificationService, auditLogService, refreshTokenRepository,
-                servletRequest, outboxService, redisTemplate, new ObjectMapper(),
-                userSessionRepository, loginHistoryRepository, passwordResetTokenRepository,
-                restTemplate, revocationService);
+                servletRequest, eventPublisher, redisTemplate, new ObjectMapper(),
+                userSessionRepository, loginHistoryRepository, passwordResetTokenRepository);
     }
 
     @Test

@@ -35,16 +35,14 @@ class AccountServiceImplTest {
     @Mock
     private HttpServletRequest request;
     @Mock
-    private AuthOutboxService outboxService;
-    @Mock
-    private CredentialRevocationService revocationService;
+    private com.project.authservice.repository.UserSessionRepository userSessionRepository;
 
     private AccountServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AccountServiceImpl(accountRepository, roleRepository, auditLogService,
-                request, outboxService, revocationService);
+                request, userSessionRepository);
     }
 
     @Test
@@ -55,9 +53,6 @@ class AccountServiceImplTest {
 
         service.updateAccountStatus(10L, AccountStatus.ACTIVE);
 
-        verify(outboxService).record(eq("ACCOUNT_UNLOCKED"), eq(10L),
-                argThat(data -> data instanceof java.util.Map<?, ?> map
-                        && AccountStatus.ACTIVE.name().equals(map.get("status"))));
         verify(auditLogService).log(10L, "UPDATE_ACCOUNT_STATUS", request);
     }
 
@@ -72,13 +67,8 @@ class AccountServiceImplTest {
 
         service.updateAccountRole(10L, 2);
 
-        verify(revocationService).revokeAll(10L);
-        verify(outboxService).record(eq("ROLE_REMOVED"), eq("ACCOUNT"), eq(10L),
-                argThat(data -> data instanceof java.util.Map<?, ?> map
-                        && "CUSTOMER".equals(map.get("role"))));
-        verify(outboxService).record(eq("ROLE_ASSIGNED"), eq("ACCOUNT"), eq(10L),
-                argThat(data -> data instanceof java.util.Map<?, ?> map
-                        && "MANAGER".equals(map.get("role"))));
+        verify(userSessionRepository).revokeAllForAccount(10L);
+        verify(auditLogService).log(10L, "UPDATE_ACCOUNT_ROLE", request);
     }
 
     @Test
@@ -93,8 +83,7 @@ class AccountServiceImplTest {
                 .hasMessageContaining("already assigned");
 
         verify(accountRepository, never()).save(any());
-        verify(revocationService, never()).revokeAll(any());
-        verify(outboxService, never()).record(any(), any(), any(), any());
+        verify(userSessionRepository, never()).revokeAllForAccount(any());
     }
 
     private Account account(Long id, Role role, AccountStatus status) {

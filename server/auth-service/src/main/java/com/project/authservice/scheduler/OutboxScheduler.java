@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.authservice.entity.OutboxMessage;
 import com.project.authservice.repository.OutboxMessageRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -13,10 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class OutboxScheduler {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OutboxScheduler.class);
 
     private final OutboxMessageRepository outboxMessageRepository;
     private final KafkaTemplate<String, Object> eventKafkaTemplate; // Assuming this bean exists
@@ -61,5 +58,10 @@ public class OutboxScheduler {
         }
         // Fallback to lowercase hyphen-separated
         return eventType.toLowerCase().replace('_', '-');
+    }
+    public OutboxScheduler(OutboxMessageRepository outboxMessageRepository, org.springframework.kafka.core.KafkaTemplate<String, Object> eventKafkaTemplate, ObjectMapper objectMapper) {
+        this.outboxMessageRepository = outboxMessageRepository;
+        this.eventKafkaTemplate = eventKafkaTemplate;
+        this.objectMapper = objectMapper;
     }
 }
