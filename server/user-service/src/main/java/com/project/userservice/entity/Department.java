@@ -21,6 +21,12 @@ public class Department {
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
+    @Column(name = "code", nullable = false, unique = true, length = 20)
+    private String code;
+
+    @Column(name = "description", length = 255)
+    private String description;
+
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
@@ -49,6 +55,22 @@ public class Department {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public boolean isDeleted() {
