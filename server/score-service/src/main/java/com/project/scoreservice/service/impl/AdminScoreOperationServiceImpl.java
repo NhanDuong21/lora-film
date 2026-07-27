@@ -146,15 +146,8 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
 
         boolean tierChanged = false;
         if (request.getEffectiveAffectAccumulatedPoints()) {
-            List<MembershipTier> allTiers = membershipTierRepository.findAll();
-            MembershipTier newTier = oldTier;
-            for (MembershipTier t : allTiers) {
-                if (Boolean.TRUE.equals(t.getActive()) && userScore.getAccumulatedPoints() >= t.getMinAccumulatedPoints()) {
-                    if (t.getMinAccumulatedPoints() >= newTier.getMinAccumulatedPoints()) {
-                        newTier = t;
-                    }
-                }
-            }
+            MembershipTier newTier = membershipTierRepository.findFirstByIsActiveTrueAndMinAccumulatedPointsLessThanEqualOrderByMinAccumulatedPointsDesc(userScore.getAccumulatedPoints())
+                    .orElse(oldTier);
             if (!newTier.getTierCode().equals(previousTierCode)) {
                 userScore.setCurrentTier(newTier);
                 tierChanged = true;
@@ -258,7 +251,31 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
         String oldTierCode = userScore.getCurrentTier().getTierCode();
 
         userScore.setCurrentPoints(oldBalance + reverseChange);
+
+        boolean tierChanged = false;
+        if (!original.getAccumulatedAfter().equals(original.getAccumulatedBefore())) {
+            int origAccumulatedChange = original.getAccumulatedAfter() - original.getAccumulatedBefore();
+            userScore.setAccumulatedPoints(oldAccumulated - origAccumulatedChange);
+
+            MembershipTier newTier = membershipTierRepository.findFirstByIsActiveTrueAndMinAccumulatedPointsLessThanEqualOrderByMinAccumulatedPointsDesc(userScore.getAccumulatedPoints())
+                    .orElse(userScore.getCurrentTier());
+            if (!newTier.getTierCode().equals(oldTierCode)) {
+                userScore.setCurrentTier(newTier);
+                tierChanged = true;
+            }
+        }
+
         userScoreRepository.save(userScore);
+
+        if (tierChanged) {
+            MembershipTierHistory tierHistory = MembershipTierHistory.builder()
+                    .userScore(userScore)
+                    .oldTierCode(oldTierCode)
+                    .newTierCode(userScore.getCurrentTier().getTierCode())
+                    .reason("Tier recalculated due to reverse adjustment of transaction #" + original.getId())
+                    .build();
+            membershipTierHistoryRepository.save(tierHistory);
+        }
 
         String reqId = (request.requestId() != null && !request.requestId().trim().isEmpty()) ? request.requestId().trim() : "REQ-REV-" + UUID.randomUUID().toString();
 
@@ -280,7 +297,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
                 .accumulatedAfter(userScore.getAccumulatedPoints())
                 .outstandingBefore(0)
                 .outstandingPoints(0)
-                .tierSnapshot(oldTierCode)
+                .tierSnapshot(userScore.getCurrentTier().getTierCode())
                 .reason(request.reason())
                 .description("Reversed transaction #" + original.getId() + ": " + request.reason())
                 .operatorId(opId != 0L ? opId : null)
@@ -296,7 +313,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
                 userScore.getAccumulatedPoints(),
                 userScore.getCurrentTier().getTierCode(),
                 oldTierCode,
-                false,
+                tierChanged,
                 history.getId(),
                 false
         );

@@ -41,7 +41,12 @@ public class ScoreEventPublisherImpl implements ScoreEventPublisher {
         log.debug("Publishing outbox event [{}] of type [{}] to topic [{}] with key [{}]",
                 event.getEventId(), event.getEventType(), topic, key);
 
-        kafkaTemplate.send(record);
+        try {
+            kafkaTemplate.send(record).get(5, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.error("Failed to publish outbox event [{}] to topic [{}]: {}", event.getEventId(), topic, e.getMessage());
+            throw new RuntimeException("Failed to send Kafka event: " + event.getEventId(), e);
+        }
     }
 
     private String getTopicForEventType(String eventType) {

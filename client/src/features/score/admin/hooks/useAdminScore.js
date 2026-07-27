@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import scoreAdminService from '../services/scoreAdminService';
+import queryCache from '@/utils/queryCache';
 
 export default function useAdminScore() {
   const [tiers, setTiers] = useState([]);
@@ -22,15 +23,15 @@ export default function useAdminScore() {
     };
   }, []);
 
-  const fetchTiers = useCallback(async () => {
+  const fetchTiers = useCallback(async (options = {}) => {
     setIsLoadingTiers(true);
     setErrorTiers(null);
     try {
-      const data = await scoreAdminService.getAllTiers();
+      const data = await queryCache.fetchQuery('admin-tiers', ({ signal }) => scoreAdminService.getAllTiers({ signal }), { staleTime: 60000, ...options });
       if (isMounted.current) setTiers(data || []);
       return data;
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         const msg = err.response?.data?.message || 'Không thể tải danh sách hạng thẻ';
         setErrorTiers(msg);
       }
@@ -40,16 +41,16 @@ export default function useAdminScore() {
     }
   }, []);
 
-  const fetchUserScore = useCallback(async (accountId) => {
+  const fetchUserScore = useCallback(async (accountId, options = {}) => {
     if (!accountId) return;
     setIsLoadingUserScore(true);
     setErrorUserScore(null);
     try {
-      const data = await scoreAdminService.getScoreByAccount(accountId);
+      const data = await queryCache.fetchQuery(`admin-user-score-${accountId}`, ({ signal }) => scoreAdminService.getScoreByAccount(accountId, { signal }), { staleTime: 15000, ...options });
       if (isMounted.current) setUserScore(data);
       return data;
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         const msg = err.response?.data?.message || `Không tìm thấy điểm thưởng cho tài khoản ID: ${accountId}`;
         setErrorUserScore(msg);
         setUserScore(null);
@@ -60,14 +61,15 @@ export default function useAdminScore() {
     }
   }, []);
 
-  const fetchUserHistory = useCallback(async (accountId, params = {}) => {
+  const fetchUserHistory = useCallback(async (accountId, params = {}, options = {}) => {
     if (!accountId) return;
     try {
-      const data = await scoreAdminService.getScoreHistoryByAccount(accountId, params);
+      const key = `admin-user-history-${accountId}-${JSON.stringify(params)}`;
+      const data = await queryCache.fetchQuery(key, ({ signal }) => scoreAdminService.getScoreHistoryByAccount(accountId, params, { signal }), { staleTime: 15000, ...options });
       if (isMounted.current) setUserHistory(data);
       return data;
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         const msg = err.response?.data?.message || 'Lỗi khi tải lịch sử giao dịch';
         setErrorUserScore((prev) => prev || msg);
         setUserHistory(null);
@@ -76,14 +78,14 @@ export default function useAdminScore() {
     }
   }, []);
 
-  const fetchUserExpiringPoints = useCallback(async (accountId) => {
+  const fetchUserExpiringPoints = useCallback(async (accountId, options = {}) => {
     if (!accountId) return;
     try {
-      const data = await scoreAdminService.getUserExpiringPoints(accountId);
+      const data = await queryCache.fetchQuery(`admin-user-expiring-${accountId}`, ({ signal }) => scoreAdminService.getUserExpiringPoints(accountId, { signal }), { staleTime: 30000, ...options });
       if (isMounted.current) setExpiringPoints(data || []);
       return data;
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         const msg = err.response?.data?.message || 'Lỗi khi tải danh sách điểm sắp hết hạn';
         setErrorUserScore((prev) => prev || msg);
         setExpiringPoints([]);
@@ -92,14 +94,14 @@ export default function useAdminScore() {
     }
   }, []);
 
-  const fetchUserTierHistory = useCallback(async (accountId) => {
+  const fetchUserTierHistory = useCallback(async (accountId, options = {}) => {
     if (!accountId) return;
     try {
-      const data = await scoreAdminService.getUserTierHistory(accountId);
+      const data = await queryCache.fetchQuery(`admin-user-tier-history-${accountId}`, ({ signal }) => scoreAdminService.getUserTierHistory(accountId, { signal }), { staleTime: 30000, ...options });
       if (isMounted.current) setTierHistory(data || []);
       return data;
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         const msg = err.response?.data?.message || 'Lỗi khi tải lịch sử thăng/giáng hạng';
         setErrorUserScore((prev) => prev || msg);
         setTierHistory([]);
@@ -116,13 +118,17 @@ export default function useAdminScore() {
 
   const createTier = useCallback(async (tierData) => {
     const created = await scoreAdminService.createTier(tierData);
-    await fetchTiers();
+    queryCache.invalidateQueries('admin-tiers');
+    queryCache.invalidateQueries('customer-membership-tiers');
+    await fetchTiers({ forceRefresh: true });
     return created;
   }, [fetchTiers]);
 
   const updateTier = useCallback(async (tierCode, tierData) => {
     const updated = await scoreAdminService.updateTier(tierCode, tierData);
-    await fetchTiers();
+    queryCache.invalidateQueries('admin-tiers');
+    queryCache.invalidateQueries('customer-membership-tiers');
+    await fetchTiers({ forceRefresh: true });
     return updated;
   }, [fetchTiers]);
 
@@ -130,7 +136,10 @@ export default function useAdminScore() {
     setIsLoadingOperations(true);
     try {
       const res = await scoreAdminService.adjustScore(accountId, adjustmentData);
-      await fetchUserScore(accountId);
+      queryCache.invalidateQueries(`admin-user-${accountId}`);
+      queryCache.invalidateQueries('admin-dashboard');
+      queryCache.invalidateQueries('customer-');
+      await fetchUserScore(accountId, { forceRefresh: true });
       return res;
     } finally {
       if (isMounted.current) setIsLoadingOperations(false);
@@ -141,7 +150,10 @@ export default function useAdminScore() {
     setIsLoadingOperations(true);
     try {
       const res = await scoreAdminService.reverseAdjustment(accountId, reverseData);
-      await fetchUserScore(accountId);
+      queryCache.invalidateQueries(`admin-user-${accountId}`);
+      queryCache.invalidateQueries('admin-dashboard');
+      queryCache.invalidateQueries('customer-');
+      await fetchUserScore(accountId, { forceRefresh: true });
       return res;
     } finally {
       if (isMounted.current) setIsLoadingOperations(false);
@@ -152,7 +164,9 @@ export default function useAdminScore() {
     setIsLoadingOperations(true);
     try {
       const res = await scoreAdminService.recalculateTier(accountId);
-      await fetchUserScore(accountId);
+      queryCache.invalidateQueries(`admin-user-${accountId}`);
+      queryCache.invalidateQueries('customer-');
+      await fetchUserScore(accountId, { forceRefresh: true });
       return res;
     } finally {
       if (isMounted.current) setIsLoadingOperations(false);
@@ -163,16 +177,19 @@ export default function useAdminScore() {
     setIsLoadingOperations(true);
     try {
       const res = await scoreAdminService.runReconciliation(reconData);
+      queryCache.invalidateQueries('admin-reconciliation');
+      queryCache.invalidateQueries('admin-dashboard');
       return res;
     } finally {
       if (isMounted.current) setIsLoadingOperations(false);
     }
   }, []);
 
-  const fetchReconciliationRuns = useCallback(async (params = {}) => {
+  const fetchReconciliationRuns = useCallback(async (params = {}, options = {}) => {
     setIsLoadingOperations(true);
     try {
-      const data = await scoreAdminService.getReconciliationRuns(params);
+      const key = `admin-reconciliation-runs-${JSON.stringify(params)}`;
+      const data = await queryCache.fetchQuery(key, ({ signal }) => scoreAdminService.getReconciliationRuns(params, { signal }), { staleTime: 30000, ...options });
       if (isMounted.current) setReconciliationRuns(data);
       return data;
     } finally {
@@ -180,10 +197,11 @@ export default function useAdminScore() {
     }
   }, []);
 
-  const fetchReconciliationDetails = useCallback(async (params = {}) => {
+  const fetchReconciliationDetails = useCallback(async (params = {}, options = {}) => {
     setIsLoadingOperations(true);
     try {
-      const data = await scoreAdminService.getReconciliationDetails(params);
+      const key = `admin-reconciliation-details-${JSON.stringify(params)}`;
+      const data = await queryCache.fetchQuery(key, ({ signal }) => scoreAdminService.getReconciliationDetails(params, { signal }), { staleTime: 30000, ...options });
       if (isMounted.current) setReconciliationDetails(data);
       return data;
     } finally {
@@ -191,10 +209,11 @@ export default function useAdminScore() {
     }
   }, []);
 
-  const fetchAuditLogs = useCallback(async (params = {}) => {
+  const fetchAuditLogs = useCallback(async (params = {}, options = {}) => {
     setIsLoadingOperations(true);
     try {
-      const data = await scoreAdminService.getAuditLogs(params);
+      const key = `admin-audit-logs-${JSON.stringify(params)}`;
+      const data = await queryCache.fetchQuery(key, ({ signal }) => scoreAdminService.getAuditLogs(params, { signal }), { staleTime: 30000, ...options });
       if (isMounted.current) setAuditLogs(data);
       return data;
     } finally {
@@ -202,13 +221,13 @@ export default function useAdminScore() {
     }
   }, []);
 
-  const fetchDashboardStats = useCallback(async () => {
+  const fetchDashboardStats = useCallback(async (options = {}) => {
     try {
-      const data = await scoreAdminService.getDashboardStats();
+      const data = await queryCache.fetchQuery('admin-dashboard-stats', ({ signal }) => scoreAdminService.getDashboardStats({ signal }), { staleTime: 30000, ...options });
       if (isMounted.current) setDashboardStats(data);
       return data;
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         const msg = err.response?.data?.message || 'Lỗi khi tải thống kê Dashboard';
         setErrorUserScore((prev) => prev || msg);
         console.error('Failed to fetch dashboard stats', err);

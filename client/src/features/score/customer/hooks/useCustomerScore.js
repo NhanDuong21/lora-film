@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
 import { parseApiError } from '@/utils/apiErrorHandler';
+import queryCache from '@/utils/queryCache';
 
 export default function useCustomerScore() {
   const [scoreData, setScoreData] = useState(null);
@@ -23,13 +24,13 @@ export default function useCustomerScore() {
     };
   }, []);
 
-  const fetchScoreAndTiers = useCallback(async () => {
+  const fetchScoreAndTiers = useCallback(async (options = {}) => {
     setIsLoading(true);
     setError('');
     try {
       const [scoreRes, tiersRes] = await Promise.all([
-        scoreCustomerService.getScoreBalance(),
-        scoreCustomerService.getMembershipTiers()
+        queryCache.fetchQuery('customer-score-balance', ({ signal }) => scoreCustomerService.getScoreBalance({ signal }), { staleTime: 30000, ...options }),
+        queryCache.fetchQuery('customer-membership-tiers', ({ signal }) => scoreCustomerService.getMembershipTiers({ signal }), { staleTime: 60000, ...options })
       ]);
 
       if (!isMounted.current) return;
@@ -44,7 +45,7 @@ export default function useCustomerScore() {
         setTiers(tiersRes.data);
       }
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         setError(parseApiError(err));
       }
     } finally {
@@ -54,15 +55,16 @@ export default function useCustomerScore() {
     }
   }, []);
 
-  const fetchHistory = useCallback(async (params = {}) => {
+  const fetchHistory = useCallback(async (params = {}, options = {}) => {
     setIsHistoryLoading(true);
     try {
-      const res = await scoreCustomerService.getScoreHistory(params);
+      const cacheKey = 'customer-score-history-' + JSON.stringify(params);
+      const res = await queryCache.fetchQuery(cacheKey, ({ signal }) => scoreCustomerService.getScoreHistory(params, { signal }), { staleTime: 15000, ...options });
       if (isMounted.current && res?.success && res?.data) {
         setHistory(res.data);
       }
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         setError((prev) => prev || parseApiError(err));
         console.error('Failed to fetch score history:', err);
       }
@@ -73,15 +75,15 @@ export default function useCustomerScore() {
     }
   }, []);
 
-  const fetchExpiringPoints = useCallback(async () => {
+  const fetchExpiringPoints = useCallback(async (options = {}) => {
     setIsExpiringLoading(true);
     try {
-      const res = await scoreCustomerService.getExpiringPoints();
+      const res = await queryCache.fetchQuery('customer-expiring-points', ({ signal }) => scoreCustomerService.getExpiringPoints({ signal }), { staleTime: 30000, ...options });
       if (isMounted.current && res?.success && res?.data) {
         setExpiringPoints(res.data);
       }
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         setError((prev) => prev || parseApiError(err));
         console.error('Failed to fetch expiring points:', err);
       }
@@ -92,15 +94,15 @@ export default function useCustomerScore() {
     }
   }, []);
 
-  const fetchTierHistory = useCallback(async () => {
+  const fetchTierHistory = useCallback(async (options = {}) => {
     setIsTierHistoryLoading(true);
     try {
-      const res = await scoreCustomerService.getTierHistory();
+      const res = await queryCache.fetchQuery('customer-tier-history', ({ signal }) => scoreCustomerService.getTierHistory({ signal }), { staleTime: 30000, ...options });
       if (isMounted.current && res?.success && res?.data) {
         setTierHistory(res.data);
       }
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && err?.name !== 'AbortError') {
         setError((prev) => prev || parseApiError(err));
         console.error('Failed to fetch tier history:', err);
       }
@@ -112,11 +114,26 @@ export default function useCustomerScore() {
   }, []);
 
   useEffect(() => {
-    fetchScoreAndTiers();
-    fetchHistory({ page: 0, size: 10 });
-    fetchExpiringPoints();
-    fetchTierHistory();
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    fetchScoreAndTiers({ signal });
+    fetchHistory({ page: 0, size: 10 }, { signal });
+    fetchExpiringPoints({ signal });
+    fetchTierHistory({ signal });
+
+    return () => {
+      controller.abort();
+    };
   }, [fetchScoreAndTiers, fetchHistory, fetchExpiringPoints, fetchTierHistory]);
+
+  const refreshScore = useCallback(() => {
+    queryCache.invalidateQueries('customer-');
+    fetchScoreAndTiers({ forceRefresh: true });
+    fetchExpiringPoints({ forceRefresh: true });
+    fetchTierHistory({ forceRefresh: true });
+    fetchHistory({ page: 0, size: 10 }, { forceRefresh: true });
+  }, [fetchScoreAndTiers, fetchExpiringPoints, fetchTierHistory, fetchHistory]);
 
   return {
     scoreData,
@@ -129,12 +146,7 @@ export default function useCustomerScore() {
     isExpiringLoading,
     isTierHistoryLoading,
     error,
-    refreshScore: () => {
-      fetchScoreAndTiers();
-      fetchExpiringPoints();
-      fetchTierHistory();
-      fetchHistory({ page: 0, size: 10 });
-    },
+    refreshScore,
     fetchHistory,
     fetchExpiringPoints,
     fetchTierHistory

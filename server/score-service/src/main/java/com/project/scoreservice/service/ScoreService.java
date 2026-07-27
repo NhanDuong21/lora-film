@@ -25,5 +25,7 @@ public interface ScoreService {
     java.util.List<ExpiringPointResponse> getExpiringPoints(Long userId);
     java.util.List<TierHistoryItemResponse> getTierHistory(Long userId);
     void expirePoints();
+    void expireSingleBucket(Long bucketId);
+    com.project.scoreservice.entity.UserScore initializeUserScoreRequiresNew(Long userId);
 }
 

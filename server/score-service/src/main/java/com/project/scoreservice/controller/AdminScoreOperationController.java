@@ -7,6 +7,7 @@ import com.project.scoreservice.enumtype.ReconciliationRunStatus;
 import com.project.scoreservice.service.AdminScoreOperationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,7 +30,7 @@ public class AdminScoreOperationController {
     @PostMapping({"/adjustment", "/adjustments"})
     @Operation(summary = "Adjust user points", description = "Manually add or deduct points for a user with userId in body.")
     public ResponseEntity<ApiResponse<AdminAdjustmentResponse>> adjustScore(
-            @RequestBody ScoreAdjustmentRequest request,
+            @Valid @RequestBody ScoreAdjustmentRequest request,
             @RequestHeader(value = "X-Operator-Id", required = false) String operatorId,
             @RequestHeader(value = "X-Client-Ip", required = false, defaultValue = "127.0.0.1") String clientIp) {
         AdminAdjustmentResponse response = adminScoreOperationService.adjustScore(request.userId(), request, operatorId, clientIp);
@@ -40,7 +41,7 @@ public class AdminScoreOperationController {
     @PostMapping({"/reconciliation", "/reconciliations"})
     @Operation(summary = "Trigger reconciliation job", description = "Run balance and ledger consistency check.")
     public ResponseEntity<ApiResponse<ReconciliationDTOs.ReconciliationRunResponse>> runReconciliation(
-            @RequestBody(required = false) ReconciliationDTOs.ReconciliationRunRequest request,
+            @Valid @RequestBody(required = false) ReconciliationDTOs.ReconciliationRunRequest request,
             @RequestHeader(value = "X-Operator-Id", required = false) String operatorId) {
         ReconciliationDTOs.ReconciliationRunResponse response = adminScoreOperationService.runReconciliation(request != null ? request : new ReconciliationDTOs.ReconciliationRunRequest(null, null), operatorId);
         return ResponseEntity.ok(ApiResponse.success("Reconciliation job completed successfully", response));

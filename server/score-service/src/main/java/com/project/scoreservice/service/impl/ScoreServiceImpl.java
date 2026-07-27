@@ -33,6 +33,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Propagation;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -44,6 +50,8 @@ import java.util.UUID;
 @Service
 public class ScoreServiceImpl implements ScoreService {
 
+    private static final Logger log = LoggerFactory.getLogger(ScoreServiceImpl.class);
+
     private final UserScoreRepository userScoreRepository;
     private final MembershipTierRepository membershipTierRepository;
     private final ScoreHistoryRepository scoreHistoryRepository;
@@ -52,6 +60,7 @@ public class ScoreServiceImpl implements ScoreService {
     private final MembershipTierHistoryRepository membershipTierHistoryRepository;
     private final OutboxService outboxService;
     private final ScoreMetricsService metricsService;
+    private final ScoreService self;
 
     public ScoreServiceImpl(UserScoreRepository userScoreRepository,
                             MembershipTierRepository membershipTierRepository,
@@ -60,7 +69,8 @@ public class ScoreServiceImpl implements ScoreService {
                             PointExpirationBucketRepository pointExpirationBucketRepository,
                             MembershipTierHistoryRepository membershipTierHistoryRepository,
                             OutboxService outboxService,
-                            ScoreMetricsService metricsService) {
+                            ScoreMetricsService metricsService,
+                            @Lazy ScoreService self) {
         this.userScoreRepository = userScoreRepository;
         this.membershipTierRepository = membershipTierRepository;
         this.scoreHistoryRepository = scoreHistoryRepository;
@@ -69,6 +79,7 @@ public class ScoreServiceImpl implements ScoreService {
         this.membershipTierHistoryRepository = membershipTierHistoryRepository;
         this.outboxService = outboxService;
         this.metricsService = metricsService;
+        this.self = self;
     }
 
 
@@ -138,27 +149,14 @@ public class ScoreServiceImpl implements ScoreService {
     }
 
     private UserScore getOrInitializeUserScore(Long userId) {
-        return userScoreRepository.findByUserId(userId).orElseGet(() -> {
-            MembershipTier defaultTier = membershipTierRepository.findFirstByIsActiveTrueOrderByMinAccumulatedPointsAsc()
-                    .orElseThrow(() -> new BusinessException("No active membership tier found in system", "SCORE_TIER_NOT_FOUND", HttpStatus.INTERNAL_SERVER_ERROR));
-
-            UserScore newScore = new UserScore(
-                    userId,
-                    0,
-                    0,
-                    0,
-                    defaultTier,
-                    UserScoreStatus.ACTIVE,
-                    0,
-                    null,
-                    null,
-                    null,
-                    0L,
-                    LocalDateTime.now(),
-                    LocalDateTime.now()
-            );
-
-            return userScoreRepository.save(newScore);
+        return userScoreRepository.findWithLockByUserId(userId).orElseGet(() -> {
+            try {
+                (self != null ? self : this).initializeUserScoreRequiresNew(userId);
+            } catch (Exception e) {
+                log.warn("Concurrent initialization detected for userId: {}. Fetching existing score with lock.", userId);
+            }
+            return userScoreRepository.findWithLockByUserId(userId)
+                    .orElseThrow(() -> new BusinessException("Failed to initialize or fetch user score for user: " + userId, "SCORE_INIT_FAILED", HttpStatus.INTERNAL_SERVER_ERROR));
         });
     }
 
@@ -1140,53 +1138,100 @@ public class ScoreServiceImpl implements ScoreService {
     }
 
     @Override
-    @Transactional
     public void expirePoints() {
-        List<PointExpirationBucket> expiredBuckets = pointExpirationBucketRepository.findByStatusInAndExpirationDateBefore(
-                List.of(PointExpirationBucketStatus.ACTIVE, PointExpirationBucketStatus.PARTIAL),
-                LocalDate.now()
-        );
-        for (PointExpirationBucket b : expiredBuckets) {
-            if (b.getRemainingPoints() > 0) {
-                UserScore us = userScoreRepository.findWithLockByUserId(b.getUserScore().getUserId()).orElse(null);
-                if (us != null && us.getCurrentPoints() > 0) {
-                    int toExpire = Math.min(us.getCurrentPoints(), b.getRemainingPoints());
-                    int oldBal = us.getCurrentPoints();
-                    us.setCurrentPoints(oldBal - toExpire);
-                    us.setLastExpireAt(LocalDateTime.now());
-                    userScoreRepository.save(us);
+        int batchSize = 500;
+        Pageable pageable = PageRequest.of(0, batchSize);
+        List<PointExpirationBucketStatus> statuses = List.of(PointExpirationBucketStatus.ACTIVE, PointExpirationBucketStatus.PARTIAL);
 
-                    b.setExpiredPoints(b.getExpiredPoints() + toExpire);
-                    b.setRemainingPoints(0);
-                    b.setStatus(PointExpirationBucketStatus.EXPIRED);
-                    pointExpirationBucketRepository.save(b);
-
-                    ScoreHistory history = ScoreHistory.builder()
-                            .transactionUuid(UUID.randomUUID().toString())
-                            .userScore(us)
-                            .bookingId(b.getBookingId())
-                            .eventId("expire-" + b.getId() + "-" + LocalDate.now())
-                            .idempotencyKey("idem-expire-" + b.getId() + "-" + LocalDate.now())
-                            .transactionType(ScoreTransactionType.EXPIRED)
-                            .pointChange(-toExpire)
-                            .actualPointChange(-toExpire)
-                            .balanceBefore(oldBal)
-                            .balanceAfter(us.getCurrentPoints())
-                            .accumulatedBefore(us.getAccumulatedPoints())
-                            .accumulatedAfter(us.getAccumulatedPoints())
-                            .description("Expired points from bucket " + b.getId())
-                            .build();
-                    scoreHistoryRepository.save(history);
-                    outboxService.saveEvent("USER_SCORE", String.valueOf(us.getUserId()), "POINT_EXPIRED", java.util.Map.of("userId", us.getUserId(), "expiredPoints", toExpire, "bucketId", b.getId()), "scheduler-expire");
-                    metricsService.recordPointsExpired(toExpire);
-                } else {
-                    b.setStatus(PointExpirationBucketStatus.EXPIRED);
-                    pointExpirationBucketRepository.save(b);
+        while (true) {
+            Page<PointExpirationBucket> page = pointExpirationBucketRepository.findByStatusInAndExpirationDateBefore(statuses, LocalDate.now(), pageable);
+            List<PointExpirationBucket> expiredBuckets = page.getContent();
+            if (expiredBuckets.isEmpty()) {
+                break;
+            }
+            for (PointExpirationBucket b : expiredBuckets) {
+                try {
+                    self.expireSingleBucket(b.getId());
+                } catch (Exception e) {
+                    log.error("Failed to expire point bucket id {}: ", b.getId(), e);
                 }
+            }
+            if (expiredBuckets.size() < batchSize) {
+                break;
+            }
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void expireSingleBucket(Long bucketId) {
+        PointExpirationBucket b = pointExpirationBucketRepository.findById(bucketId).orElse(null);
+        if (b == null || (b.getStatus() != PointExpirationBucketStatus.ACTIVE && b.getStatus() != PointExpirationBucketStatus.PARTIAL)) {
+            return;
+        }
+        if (b.getRemainingPoints() > 0) {
+            UserScore us = userScoreRepository.findWithLockByUserId(b.getUserScore().getUserId()).orElse(null);
+            if (us != null && us.getCurrentPoints() > 0) {
+                int toExpire = Math.min(us.getCurrentPoints(), b.getRemainingPoints());
+                int oldBal = us.getCurrentPoints();
+                us.setCurrentPoints(oldBal - toExpire);
+                us.setLastExpireAt(LocalDateTime.now());
+                userScoreRepository.save(us);
+
+                b.setExpiredPoints(b.getExpiredPoints() + toExpire);
+                b.setRemainingPoints(0);
+                b.setStatus(PointExpirationBucketStatus.EXPIRED);
+                pointExpirationBucketRepository.save(b);
+
+                ScoreHistory history = ScoreHistory.builder()
+                        .transactionUuid(UUID.randomUUID().toString())
+                        .userScore(us)
+                        .bookingId(b.getBookingId())
+                        .eventId("expire-" + b.getId() + "-" + LocalDate.now())
+                        .idempotencyKey("idem-expire-" + b.getId() + "-" + LocalDate.now())
+                        .transactionType(ScoreTransactionType.EXPIRED)
+                        .pointChange(-toExpire)
+                        .actualPointChange(-toExpire)
+                        .balanceBefore(oldBal)
+                        .balanceAfter(us.getCurrentPoints())
+                        .accumulatedBefore(us.getAccumulatedPoints())
+                        .accumulatedAfter(us.getAccumulatedPoints())
+                        .description("Expired points from bucket " + b.getId())
+                        .build();
+                scoreHistoryRepository.save(history);
+                outboxService.saveEvent("USER_SCORE", String.valueOf(us.getUserId()), "POINT_EXPIRED", java.util.Map.of("userId", us.getUserId(), "expiredPoints", toExpire, "bucketId", b.getId()), "scheduler-expire");
+                metricsService.recordPointsExpired(toExpire);
             } else {
                 b.setStatus(PointExpirationBucketStatus.EXPIRED);
                 pointExpirationBucketRepository.save(b);
             }
+        } else {
+            b.setStatus(PointExpirationBucketStatus.EXPIRED);
+            pointExpirationBucketRepository.save(b);
         }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public UserScore initializeUserScoreRequiresNew(Long userId) {
+        MembershipTier defaultTier = membershipTierRepository.findFirstByIsActiveTrueOrderByMinAccumulatedPointsAsc()
+                .orElseThrow(() -> new BusinessException("No active membership tier found in system", "SCORE_TIER_NOT_FOUND", HttpStatus.INTERNAL_SERVER_ERROR));
+
+        UserScore newScore = new UserScore(
+                userId,
+                0,
+                0,
+                0,
+                defaultTier,
+                UserScoreStatus.ACTIVE,
+                0,
+                null,
+                null,
+                null,
+                0L,
+                LocalDateTime.now(),
+                LocalDateTime.now()
+        );
+        return userScoreRepository.save(newScore);
     }
 }

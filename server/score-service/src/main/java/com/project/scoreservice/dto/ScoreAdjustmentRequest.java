@@ -2,14 +2,21 @@ package com.project.scoreservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ScoreAdjustmentRequest(
     Long userId,
+    @NotNull(message = "Adjustment type is required")
     @JsonAlias({"type", "adjustmentType"}) ScoreAdjustmentType type,
+    @NotNull(message = "Points is required")
+    @Min(value = 1, message = "Points must be at least 1")
     Integer points,
     @JsonAlias({"allowNegative", "affectAccumulatedPoints"}) Boolean allowNegative,
     @JsonAlias({"affectAccumulatedPoints", "allowNegative"}) Boolean affectAccumulatedPoints,
+    @NotBlank(message = "Reason is required")
     String reason,
     String requestId
 ) {
