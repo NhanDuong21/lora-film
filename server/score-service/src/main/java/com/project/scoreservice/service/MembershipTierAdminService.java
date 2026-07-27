@@ -11,7 +11,7 @@ public interface MembershipTierAdminService {
 
     List<AdminMembershipTierResponse> getTiers();
 
-    AdminMembershipTierResponse getTierDetail(Integer tierId);
+    AdminMembershipTierResponse getTierDetail(String tierIdOrCode);
 
-    AdminMembershipTierResponse updateTier(Integer tierId, UpdateMembershipTierRequest request);
+    AdminMembershipTierResponse updateTier(String tierIdOrCode, UpdateMembershipTierRequest request);
 }

@@ -352,55 +352,6 @@ export default function BookingDetailPage() {
                         <span className="text-white font-extrabold print:text-black">
                           {showtimeDate ? showtimeDate.toLocaleDateString('vi-VN') : ''}
                         </span>
-                  </span>
-                  <span className="text-[10px] text-zinc-500 block">Vé giải phóng về sơ đồ ghế</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tickets and QR Section */}
-        {tickets.length > 0 && (
-          <div className="space-y-6">
-            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 print:hidden">THÔNG TIN VÉ XEM PHIM (TICKETS)</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {tickets.map(ticket => (
-                <div
-                  key={ticket.id}
-                  className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col sm:flex-row shadow-2xl relative print:bg-white print:text-black print:border-black print:shadow-none"
-                >
-                  <div className="hidden sm:block absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 print:hidden"></div>
-                  <div className="hidden sm:block absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 print:hidden"></div>
-
-                  <div className="flex-grow p-6 space-y-4 sm:border-r sm:border-dashed sm:border-zinc-800 print:border-black">
-                    <div className="space-y-1">
-                      <span className="text-[9px] bg-brand-orange/15 text-brand-orange border border-brand-orange/20 px-2 py-0.5 rounded font-black uppercase tracking-wider print:border-black">
-                        {ticket.movieFormat || '2D Digital'}
-                      </span>
-                      <h3 className="text-sm font-black text-white leading-snug pt-1 print:text-black">{ticket.movieTitle}</h3>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-[10px] text-zinc-400 print:text-black">
-                      <div>
-                        <span className="text-zinc-500 font-bold block">RẠP</span>
-                        <span className="text-white font-extrabold print:text-black">{ticket.cinemaName}</span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500 font-bold block">PHÒNG</span>
-                        <span className="text-white font-extrabold print:text-black">{ticket.auditoriumName}</span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500 font-bold block">SUẤT CHIẾU</span>
-                        <span className="text-brand-orange font-black print:text-black">
-                          {showtimeDate ? showtimeDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500 font-bold block">NGÀY CHIẾU</span>
-                        <span className="text-white font-extrabold print:text-black">
-                          {showtimeDate ? showtimeDate.toLocaleDateString('vi-VN') : ''}
-                        </span>
                       </div>
                       <div>
                         <span className="text-zinc-500 font-bold block">GHẾ</span>

@@ -55,14 +55,21 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
                 .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
 
         MembershipTier ct = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
-        MembershipTierResponse currentTier = new MembershipTierResponse(ct.getId(), ct.getTierName(), ct.getMinPoints(), ct.getEarningRate());
+        MembershipTierResponse currentTier = new MembershipTierResponse(
+                ct.getId(),
+                ct.getTierCode(),
+                ct.getTierName(),
+                ct.getMinAccumulatedPoints(),
+                ct.getEarningRate(),
+                ct.getPriority()
+        );
 
-        Optional<MembershipTier> nextTierOpt = membershipTierRepository.findFirstByMinPointsGreaterThanOrderByMinPointsAsc(userScore.getAccumulatedPoints());
+        Optional<MembershipTier> nextTierOpt = membershipTierRepository.findFirstByIsActiveTrueAndMinAccumulatedPointsGreaterThanOrderByMinAccumulatedPointsAsc(userScore.getAccumulatedPoints());
         NextTierResponse nextTier = null;
         if (nextTierOpt.isPresent()) {
             MembershipTier nt = nextTierOpt.get();
-            int pointsReq = nt.getMinPoints() - userScore.getAccumulatedPoints();
-            nextTier = new NextTierResponse(nt.getId(), nt.getTierName(), nt.getMinPoints(), pointsReq);
+            int pointsReq = Math.max(0, nt.getMinAccumulatedPoints() - userScore.getAccumulatedPoints());
+            nextTier = new NextTierResponse(nt.getId(), nt.getTierCode(), nt.getTierName(), nt.getMinAccumulatedPoints(), pointsReq);
         }
 
         return new AdminUserScoreResponse(
@@ -88,29 +95,21 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
             LocalDateTime to,
             String sort
     ) {
-        // Validate pagination inputs
         if (page < 0 || size < 1 || size > 50) {
             throw new BusinessException("Invalid page or size parameters", "SCORE_INVALID_QUERY", HttpStatus.BAD_REQUEST);
         }
 
-        // Validate sorting inputs
-        if (sort == null || !sort.contains(",")) {
-            throw new BusinessException("Invalid sort format", "SCORE_INVALID_QUERY", HttpStatus.BAD_REQUEST);
+        Sort.Direction direction = Sort.Direction.DESC;
+        String sortField = "occurredAt";
+        if (sort != null && !sort.isEmpty()) {
+            String[] sortParts = sort.split(",");
+            sortField = sortParts[0];
+            String sortDir = sortParts.length > 1 ? sortParts[1] : "desc";
+            if ("asc".equalsIgnoreCase(sortDir)) {
+                direction = Sort.Direction.ASC;
+            }
         }
 
-        String[] sortParts = sort.split(",");
-        String sortField = sortParts[0];
-        String sortDir = sortParts.length > 1 ? sortParts[1] : "desc";
-
-        Set<String> whitelist = Set.of(
-                "createdAt", "pointChange", "transactionType", "bookingId",
-                "balanceAfter", "accumulatedAfter", "outstandingPoints", "reconciliationStatus"
-        );
-        if (!whitelist.contains(sortField)) {
-            throw new BusinessException("Invalid sort field: " + sortField, "SCORE_INVALID_QUERY", HttpStatus.BAD_REQUEST);
-        }
-
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(direction, sortField));
 
         Specification<ScoreHistory> spec = (root, query, cb) -> {
@@ -127,10 +126,10 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
                 predicates.add(cb.equal(root.get("reconciliationStatus"), reconciliationStatus));
             }
             if (from != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+                predicates.add(cb.greaterThanOrEqualTo(root.get("occurredAt"), from));
             }
             if (to != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), to));
+                predicates.add(cb.lessThanOrEqualTo(root.get("occurredAt"), to));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -148,9 +147,9 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
                 history.getId(),
                 history.getEventId(),
                 history.getBookingId(),
-                history.getPointChange(),
+                history.getActualPointChange(),
                 history.getRequestedPointChange(),
-                history.getOutstandingPoints(),
+                history.getOutstandingAfter(),
                 recStatusStr,
                 typeStr,
                 history.getBalanceBefore(),
@@ -158,11 +157,11 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
                 history.getAccumulatedBefore(),
                 history.getAccumulatedAfter(),
                 referenceHistoryId,
-                history.getCreatedBy(),
+                history.getOperatorId(),
                 history.getRequestId(),
                 history.getReason(),
                 history.getDescription(),
-                history.getCreatedAt()
+                history.getOccurredAt()
         );
     }
 }

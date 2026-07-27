@@ -10,17 +10,23 @@ import java.util.Optional;
 @Repository
 public interface MembershipTierRepository extends JpaRepository<MembershipTier, Integer> {
 
+    Optional<MembershipTier> findByTierCode(String tierCode);
+
     Optional<MembershipTier> findByTierName(String tierName);
 
-    Optional<MembershipTier> findByMinPoints(Integer minPoints);
+    Optional<MembershipTier> findByMinAccumulatedPoints(Integer minAccumulatedPoints);
+
+    boolean existsByTierCode(String tierCode);
 
     boolean existsByTierName(String tierName);
 
-    List<MembershipTier> findAllByOrderByMinPointsAsc();
+    List<MembershipTier> findAllByIsActiveTrueOrderByMinAccumulatedPointsAsc();
 
-    Optional<MembershipTier> findFirstByMinPointsLessThanEqualOrderByMinPointsDesc(Integer accumulatedPoints);
+    List<MembershipTier> findAllByOrderByMinAccumulatedPointsAsc();
 
-    Optional<MembershipTier> findFirstByMinPointsGreaterThanOrderByMinPointsAsc(Integer accumulatedPoints);
+    Optional<MembershipTier> findFirstByIsActiveTrueAndMinAccumulatedPointsLessThanEqualOrderByMinAccumulatedPointsDesc(Integer accumulatedPoints);
 
-    Optional<MembershipTier> findFirstByOrderByMinPointsAsc();
+    Optional<MembershipTier> findFirstByIsActiveTrueAndMinAccumulatedPointsGreaterThanOrderByMinAccumulatedPointsAsc(Integer accumulatedPoints);
+
+    Optional<MembershipTier> findFirstByIsActiveTrueOrderByMinAccumulatedPointsAsc();
 }
