@@ -1,5 +1,40 @@
 # Booking Service API Specification
 
+> **Normative production correction (2026-07-26):** Sections that describe
+> Redis as the long-lived seat source, a five-minute reservation TTL, or direct
+> confirmation are historical draft material. The implemented contract is
+> MySQL-only for reservation lifetime; Redis is an optional, token-owned
+> short-creation mutex released after transaction completion. Booking owns the
+> configurable 900-second deadline (capped by showtime start), and Payment
+> SUCCESS is the only confirmation authority.
+>
+> **Single-active-order policy (2026-07-27):** one customer may have at most
+> one non-deleted `PENDING_PAYMENT` Booking for the same Showtime. A second
+> `POST /api/bookings` returns HTTP 409 with
+> `BOOKING_ACTIVE_SHOWTIME_EXISTS`. The database constraint
+> `uk_active_customer_showtime_booking` is the final concurrency authority.
+> The client may discover the existing order through
+> `GET /api/bookings/active?showtimePublicId={uuid}`, but cannot override this
+> rule. A Booking for a different Showtime remains allowed.
+>
+> **Payment-readiness contract (2026-07-27):** canonical internal routes use
+> `bookingPublicId`; numeric routes exist only as temporary Payment compatibility
+> adapters. All timestamps are UTC instants. Payment reads the amount only after
+> `amountLockedAt` is set and posts a schema `1.0` result with a UUID `eventId`.
+> Exact replay returns the stored result; changed payload, late/conflicting
+> success, and amount/currency mismatch return 409 and persist reconciliation.
+> A dedicated `PAYMENT_TO_BOOKING_INTERNAL_TOKEN` protects payment context,
+> result, and refund-result routes. Direct confirmation and direct refund routes
+> cannot mutate Booking state.
+>
+> **Admin operations contract (2026-07-27):**
+> `GET /api/admin/bookings/summary` returns global lifecycle and attention
+> counters independent of list pagination. `GET /api/admin/bookings` accepts
+> `userIds` and `attention=NEEDS_ATTENTION|EXPIRING_SOON|OVERDUE|PAYMENT_FAILED`.
+> Admin detail includes database reservation rows and `operationalInfo`, so the
+> UI distinguishes held/booked/released/expired seats and “no payment attempt”
+> from an actual payment in progress.
+
 ## 1. Thông Tin Chung
 
 | Mục            | Nội dung                                        |
@@ -549,10 +584,14 @@ PENDING_PAYMENT
 → EXPIRED khi quá bookings.expiresAt
 
 CONFIRMED
-→ CANCELLED chỉ bởi Admin/Employee thông qua nghiệp vụ đặc biệt
+→ COMPLETED sau khi vận hành hoàn tất suất chiếu
+
+CONFIRMED
+→ REFUNDED chỉ sau kết quả hoàn tiền thành công từ Payment Service
 ```
 
-Customer không được tự hủy booking `CONFIRMED` trong Sprint 2 vì chưa có refund flow.
+Customer và Admin không được hủy booking `CONFIRMED`. Ghế `BOOKED` không được
+giải phóng bởi completion hoặc refund.
 
 Ticket chỉ được tạo tại transition:
 
@@ -564,8 +603,8 @@ PENDING_PAYMENT
 Nếu booking chuyển từ `PENDING_PAYMENT` sang `CANCELLED` hoặc `EXPIRED`:
 
 - Không tạo ticket.
-- Redis seat lock được release nếu còn tồn tại.
-- Các reservation `CONVERTED` không còn làm ghế unavailable vì booking liên kết đã kết thúc.
+- Reservation `HELD` chuyển sang `RELEASED` hoặc `EXPIRED`.
+- Redis không tham gia vòng đời reservation sau transaction tạo Booking.
 
 ---
 
@@ -604,7 +643,8 @@ Thời gian chờ thanh toán:
 Cấu hình:
 
 ```properties
-booking.payment-timeout-minutes=15
+booking.hold-duration-seconds=${BOOKING_HOLD_DURATION_SECONDS:900}
+booking.creation-lock-ttl-seconds=${BOOKING_CREATION_LOCK_TTL_SECONDS:30}
 ```
 
 Khi tạo booking:
@@ -696,11 +736,16 @@ PATCH /api/admin/bookings/{bookingId}/status
 ### 13.3. Internal APIs
 
 ```txt
-GET /internal/bookings/{bookingId}/payment-context
-POST /internal/bookings/{bookingId}/payment-results
+GET  /internal/bookings/{bookingPublicId}/payment-context
+POST /internal/bookings/{bookingPublicId}/payment-results
+POST /internal/bookings/{bookingPublicId}/refund-results
+
+GET  /internal/bookings/{bookingId}/payment-context   (numeric compatibility)
+POST /internal/bookings/{bookingId}/payment-results   (numeric compatibility)
 ```
 
-Internal API không được expose công khai qua API Gateway.
+Các API này không được expose qua API Gateway và yêu cầu dedicated
+`PAYMENT_TO_BOOKING_INTERNAL_TOKEN`.
 
 ---
 
@@ -720,8 +765,9 @@ Internal API không được expose công khai qua API Gateway.
 | GET    | `/api/admin/bookings`                     | Admin/Employee | Danh sách booking                 |
 | GET    | `/api/admin/bookings/{id}`                | Admin/Employee | Chi tiết booking                  |
 | PATCH  | `/api/admin/bookings/{id}/status`         | Admin/Employee | Điều chỉnh status                 |
-| GET    | `/internal/bookings/{bookingId}/payment-context` | Internal       | Lấy snapshot booking để thanh toán |
-| POST   | `/internal/bookings/{bookingId}/payment-results` | Internal       | Xử lý kết quả thanh toán           |
+| GET    | `/internal/bookings/{bookingPublicId}/payment-context` | Payment only | Lấy locked amount/deadline |
+| POST   | `/internal/bookings/{bookingPublicId}/payment-results` | Payment only | Ghi nhận kết quả thanh toán |
+| POST   | `/internal/bookings/{bookingPublicId}/refund-results` | Payment only | Ghi nhận kết quả hoàn tiền |
 ---
 
 # 15. Seat Reservation APIs
@@ -1566,9 +1612,9 @@ Khi customer cancel booking `PENDING_PAYMENT`:
 
 - Booking chuyển sang `CANCELLED`.
 - Không tạo ticket.
-- Reservation liên quan vẫn giữ trạng thái lịch sử `CONVERTED`.
-- Ghế không còn bị xem là unavailable vì booking đã `CANCELLED`.
-- Redis seat locks liên quan được release nếu còn tồn tại.
+- Reservation liên quan chuyển từ `HELD` sang `RELEASED`.
+- Ghế trở lại khả dụng do active-seat key trong MySQL trở thành `NULL`.
+- Không đọc hoặc xóa Redis trong lifecycle cancellation.
 - Payment refund không được xử lý vì customer không thể cancel booking `CONFIRMED`.
 - Có thể publish `BOOKING_CANCELLED` ở sprint sau.
 
@@ -1813,13 +1859,13 @@ Status: `409 Conflict`
 ### Endpoint
 
 ```http
-GET /internal/bookings/{bookingId}/payment-context
+GET /internal/bookings/{bookingPublicId}/payment-context
 ```
 
 ### Request Headers
 
 ```http
-X-Internal-Token: <internal-token>
+X-Internal-Token: <PAYMENT_TO_BOOKING_INTERNAL_TOKEN>
 ```
 
 ### Response Success
@@ -1831,11 +1877,13 @@ X-Internal-Token: <internal-token>
   "errorCode": null,
   "data": {
     "bookingId": 1001,
+    "bookingPublicId": "550e8400-e29b-41d4-a716-446655440000",
     "accountId": 15,
     "bookingStatus": "PENDING_PAYMENT",
     "payable": true,
     "amount": 250000.00,
     "currency": "VND",
+    "amountLockedAt": "2026-07-03T10:00:00Z",
     "expiresAt": "2026-07-03T10:15:00Z",
     "analyticsSnapshot": {
       "movieId": 99,
@@ -1854,14 +1902,14 @@ X-Internal-Token: <internal-token>
 ### Endpoint
 
 ```http
-POST /internal/bookings/{bookingId}/payment-results
+POST /internal/bookings/{bookingPublicId}/payment-results
 ```
 
 ### Request Headers
 
 ```http
 Content-Type: application/json
-X-Internal-Token: <internal-token>
+X-Internal-Token: <PAYMENT_TO_BOOKING_INTERNAL_TOKEN>
 ```
 
 ### Request
@@ -1871,14 +1919,15 @@ X-Internal-Token: <internal-token>
   "eventId": "123e4567-e89b-12d3-a456-426614174000",
   "schemaVersion": "1.0",
   "paymentId": 123,
+  "paymentPublicId": "223e4567-e89b-42d3-a456-426614174000",
   "paymentTransactionCode": "PAY-1001-XYZ",
+  "paymentProvider": "VNPAY",
   "paymentMethod": "VNPAY",
   "result": "SUCCESS",
   "amount": 250000.00,
   "currency": "VND",
   "occurredAt": "2026-07-03T10:05:00Z",
-  "externalTransactionId": "EXT-999",
-  "reconciliationStatus": "NONE"
+  "externalTransactionId": "EXT-999"
 }
 ```
 
@@ -1889,130 +1938,79 @@ X-Internal-Token: <internal-token>
 {
   "success": true,
   "data": {
+    "bookingId": 1001,
+    "bookingPublicId": "550e8400-e29b-41d4-a716-446655440000",
+    "paymentPublicId": "223e4567-e89b-42d3-a456-426614174000",
     "eventId": "123e4567-e89b-12d3-a456-426614174000",
-    "applied": false,
-    "duplicate": true,
-    "result": "ALREADY_PROCESSED"
+    "bookingStatus": "CONFIRMED",
+    "paymentStatus": "SUCCESS",
+    "accepted": true,
+    "idempotent": true,
+    "reconciliationRequired": false
   }
 }
 ```
 
-**Already Confirmed (200 OK)**
+**Late/conflicting/mismatched success (409 Conflict)**
 ```json
 {
-  "success": true,
-  "data": {
-    "eventId": "123e4567-e89b-12d3-a456-426614174000",
-    "applied": false,
-    "duplicate": false,
-    "result": "ALREADY_CONFIRMED_BY_ANOTHER_PAYMENT"
-  }
+  "success": false,
+  "errorCode": "LATE_PAYMENT_SUCCESS",
+  "message": "Expired, cancelled, or non-payable Booking cannot be confirmed"
 }
 ```
+
+The receipt and a reconciliation task are committed even though the response is
+409. Replaying the exact event returns the same conflict without duplicate work.
 
 **Confirmed Successfully (200 OK)**
 ```json
 {
   "success": true,
   "data": {
+    "bookingId": 1001,
+    "bookingPublicId": "550e8400-e29b-41d4-a716-446655440000",
+    "paymentPublicId": "223e4567-e89b-42d3-a456-426614174000",
     "eventId": "123e4567-e89b-12d3-a456-426614174000",
-    "applied": true,
-    "duplicate": false,
-    "result": "BOOKING_CONFIRMED"
+    "bookingStatus": "CONFIRMED",
+    "paymentStatus": "SUCCESS",
+    "accepted": true,
+    "idempotent": false,
+    "reconciliationRequired": false
   }
 }
 ```
 
 ---
 
-# 20. Redis Seat Lock Direction
+# 20. Reservation concurrency authority
 
-## 20.1. Redis Responsibility
+## 20.1. Redis: short creation mutex only
 
-Redis là source of truth tạm thời cho lock real-time:
+Booking chuẩn hóa và sắp xếp internal seat IDs, sau đó acquire toàn bộ Redis
+mutex bằng một owner token ngẫu nhiên. TTL mặc định là
+`booking.creation-lock-ttl-seconds=30`, hoàn toàn độc lập với deadline giữ ghế.
 
-```txt
-showtimeId + seatId
-```
+Ngay sau khi database transaction commit hoặc rollback, Booking chạy Lua
+compare-and-delete và chỉ xóa key còn thuộc owner token của request. Không có
+wildcard release, extension, lifecycle cleanup hoặc availability read từ Redis.
 
-Key đề xuất:
+## 20.2. MySQL: long-lived authority
 
-```txt
-booking:seat-lock:{showtimeId}:{seatId}
-```
-
-Value:
-
-```json
-{
-  "userId": 15,
-  "reservationId": 501,
-  "expiresAt": "2026-06-21T20:05:00"
-}
-```
-
-TTL:
+Ghế unavailable khi có reservation:
 
 ```txt
-5 phút
+status = HELD và expires_at > server_now
+hoặc status = BOOKED
 ```
 
-## 20.2. Database Responsibility
+`seat_reservations`, trạng thái, `expires_at`, transaction lifecycle và
+`uk_active_seat_reservation` là authority cuối cùng. Redis restart, flush hoặc
+TTL expiry không làm ghế khả dụng khi database reservation còn active.
 
-`seat_reservations` lưu trạng thái nghiệp vụ và audit cơ bản.
-
-Redis đảm bảo cạnh tranh real-time.
-
-Database đảm bảo truy vết reservation.
-
-## 20.3. Lock Rule
-
-Dùng atomic operation:
-
-```txt
-SET key value NX EX <ttl>
-```
-
-Không dùng flow:
-
-```txt
-GET
-→ nếu chưa có
-→ SET
-```
-
-vì có race condition.
-
-## 20.4. Partial Lock
-
-Nếu request giữ nhiều ghế và một ghế lock thất bại:
-
-```txt
-Rollback/release toàn bộ lock vừa tạo trong request
-Không tạo reservation DB
-Trả 409
-```
-
-## 20.5. Redis Failure
-
-Nếu Redis được bật làm seat lock chính nhưng không hoạt động:
-
-```txt
-Không tiếp tục tạo reservation chỉ bằng DB
-Trả 503 để tránh double booking
-```
-
-Response:
-
-```json
-{
-  "success": false,
-  "message": "Seat reservation service is temporarily unavailable",
-  "errorCode": "SEAT_LOCK_SERVICE_UNAVAILABLE",
-  "data": null,
-  "errors": null
-}
-```
+Nếu Redis unavailable, Booking ghi warning/metric và tiếp tục transaction.
+MySQL unique constraint vẫn chọn đúng một winner. Nếu một ghế trong tập bị
+collision thì toàn bộ tập ghế rollback và trả 409; không có partial success.
 
 ---
 
@@ -2034,8 +2032,9 @@ Xử lý:
 ```txt
 HELD
 → EXPIRED
-→ release Redis seat lock
 ```
+
+Reservation scheduler chỉ xử lý các compatibility hold chưa liên kết Booking.
 
 ## 21.2. Booking Expiration
 
@@ -2051,8 +2050,8 @@ Xử lý:
 ```txt
 PENDING_PAYMENT
 → EXPIRED
-→ release Redis seat lock nếu còn tồn tại
-→ ghế thuộc reservations CONVERTED được xem là available trở lại
+→ linked reservations HELD chuyển sang EXPIRED
+→ generated active-seat key trở thành NULL
 ```
 
 Không tạo ticket cho booking hết hạn.
@@ -2069,7 +2068,8 @@ Worker phải:
 - Xử lý theo batch nếu số lượng record lớn.
 - Ghi log số record đã xử lý và số record lỗi.
 
-Redis TTL giải phóng lock real-time, còn worker đồng bộ trạng thái nghiệp vụ trong database.
+Command-time stale check áp dụng cùng lifecycle ngay cả khi worker chạy trễ.
+Worker không đọc hoặc xóa Redis.
 
 ---
 
@@ -2083,19 +2083,20 @@ Một cặp:
 showtimeId + seatId
 ```
 
-chỉ có một active Redis lock tại một thời điểm.
+chỉ có một active database reservation tại một thời điểm theo
+`uk_active_seat_reservation`. Redis mutex chỉ giảm contention trong transaction.
 
 ### Booking Creation
-
-Một reservation chỉ được convert một lần.
 
 Create booking phải chạy trong transaction:
 
 ```txt
-Validate và lock/version-check reservations
-→ Create booking PENDING_PAYMENT
-→ Mark reservations CONVERTED
-→ Store idempotency result
+Validate authoritative Movie context
+→ lock/expire conflicting stale reservation rows
+→ create Booking PENDING_PAYMENT + immutable snapshots
+→ create linked HELD reservations
+→ flush active-seat unique constraint
+→ store idempotency response
 → Commit
 ```
 
@@ -2115,8 +2116,9 @@ Confirm payment phải chạy trong transaction:
 Validate callback
 → Lock/version-check booking
 → Change booking to CONFIRMED
+→ Change HELD reservations to BOOKED
 → Create tickets
-→ Store idempotency result
+→ Store normalized event receipt
 → Commit
 ```
 
@@ -2514,3 +2516,36 @@ Booking Service Owner đã review và xác nhận:
 | 22/06/2026 | Cập nhật contract theo review của Booking Service Owner: đổi thời điểm tạo ticket, bổ sung Idempotency-Key, expiration worker, schema alignment, Optimistic Locking và webhook security direction | Dương Thiện Nhân |
 
 Các thay đổi schema chỉ được ghi nhận là hoàn tất tại tài liệu sau khi Schema Alignment MR tương ứng được merge.
+# Production lifecycle correction (2026-07-26)
+
+`seat_reservations` in MySQL, its status/expiry columns, and
+`uk_active_seat_reservation` are the only long-lived seat authority. Redis is
+an optional short critical-section mutex for atomic Booking creation: keys are
+acquired in deterministic order, the database transaction commits or rolls
+back, and only the current owner token is deleted in `afterCompletion`. Redis
+TTL, restart, or cleanup never changes database availability. Booking owns
+`booking.hold-duration-seconds` (default 900) and
+`booking.max-seats-per-booking` (default 8); the deadline is
+`min(now + hold duration, showtime start)`.
+
+## Endpoint disposition
+
+| Endpoint family | Final disposition |
+|---|---|
+| `POST /api/bookings`, booking reads, cancel, tickets | Retained; canonical public IDs and lifecycle guards |
+| `POST /api/bookings/{publicId}/finalize-checkout` | Canonical amount-lock boundary |
+| `POST /api/bookings/{publicId}/payment` | Deprecated tombstone (`410 PAYMENT_SERVICE_HANDOFF_REQUIRED`) |
+| `POST /api/seat-reservations` and release/read adapters | Deprecated compatibility adapters; server limits, Movie validation, owner checks, DB uniqueness |
+| `POST /api/seat-reservations/{publicId}/extend` | Deprecated immutable-deadline response (`409 RESERVATION_DEADLINE_IMMUTABLE`) |
+| `GET /api/seat-reservations/showtimes/{showtimePublicId}/availability` | Canonical DB-only availability read |
+| `/internal/seat-reservations/convert`, `/release`, `/expire` | Runtime mutation tombstones; canonical Booking lifecycle is required |
+| `/internal/bookings/{publicId}/confirm` | Deprecated tombstone (`410 CONFIRM_VIA_PAYMENT_RESULT_REQUIRED`) |
+| Numeric and public-ID Payment context/result routes | Retained as canonical/compatibility adapters |
+| `/api/mock/payment/**` | Removed with Booking-side provider/mock implementation |
+> **Normative production correction (2026-07-26):** Sections that describe
+> Redis as the long-lived seat source, a five-minute reservation TTL, or direct
+> confirmation are historical draft material. The implemented contract is
+> MySQL-only for reservation lifetime; Redis is an optional, token-owned
+> short-creation mutex released after transaction completion. Booking owns the
+> configurable 900-second deadline (capped by showtime start), and Payment
+> SUCCESS is the only confirmation authority.

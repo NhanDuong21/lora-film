@@ -15,7 +15,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CustomerBookingFoodController.class)
@@ -56,5 +58,16 @@ class CustomerBookingFoodControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldReturnSuccessWhenBookingHasNoFoodOrder() throws Exception {
+        String bookingId = "booking-without-food";
+        when(facadeService.getFoodOrder(bookingId)).thenReturn(null);
+
+        mockMvc.perform(get("/api/bookings/{bookingId}/foods", bookingId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 }

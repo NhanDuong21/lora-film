@@ -48,6 +48,18 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
         @Param("now") Instant now
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT sr FROM SeatReservation sr
+        WHERE sr.showtimeId = :showtimeId
+          AND sr.seatId IN :seatIds
+          AND sr.status IN ('HELD', 'BOOKED')
+        ORDER BY sr.seatId, sr.id
+        """)
+    List<SeatReservation> findReservationsForBookingUpdate(
+            @Param("showtimeId") Long showtimeId,
+            @Param("seatIds") List<Long> seatIds);
+
     @Query("""
         SELECT bt.seatId FROM BookingTicket bt 
         JOIN bt.booking b 
@@ -65,9 +77,16 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
         WHERE sr.status = 'HELD' AND sr.expiresAt <= :now
     """)
     List<SeatReservation> findExpiredReservations(
-        @Param("now") Instant now,
-        Pageable pageable
+            @Param("now") Instant now,
+            Pageable pageable
     );
+
+    @Query("""
+        SELECT sr FROM SeatReservation sr
+        WHERE sr.status = 'HELD' AND sr.bookingId IS NULL AND sr.expiresAt <= :now
+        """)
+    List<SeatReservation> findExpiredUnlinkedReservations(
+            @Param("now") Instant now, Pageable pageable);
 
     @Query("""
         SELECT COUNT(sr) FROM SeatReservation sr 
@@ -91,6 +110,15 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
         @Param("showtimeId") Long showtimeId,
         @Param("now") Instant now
     );
+
+    @Query("""
+        SELECT sr FROM SeatReservation sr
+        WHERE sr.showtimePublicId = :showtimePublicId
+          AND (sr.status = 'BOOKED' OR (sr.status = 'HELD' AND sr.expiresAt > :now))
+        ORDER BY sr.seatPublicId
+        """)
+    List<SeatReservation> findAllActiveReservationsByShowtimePublicId(
+            @Param("showtimePublicId") String showtimePublicId, @Param("now") Instant now);
 
     @Query("""
         SELECT DISTINCT bt.seatId FROM BookingTicket bt 

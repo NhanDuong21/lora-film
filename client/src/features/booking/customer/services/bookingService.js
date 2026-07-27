@@ -1,4 +1,40 @@
 import apiClient from "@/services/apiClient";
+import {
+  clearAllBookingCreationAttempts,
+  clearBookingCreationAttempt
+} from '../utils/bookingCreationIdempotency';
+
+export const BOOKING_CHANGED_EVENT = "lorafilm:booking-changed";
+
+const emitBookingChanged = detail => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(BOOKING_CHANGED_EVENT, { detail }));
+  }
+};
+
+const normalizeCustomerBooking = booking => {
+  if (!booking) return booking;
+  const presentation = booking.presentation || booking.snapshot || {};
+  const seats = Array.isArray(presentation.seats) ? presentation.seats : [];
+  const food = booking.food || booking.foodOrder || null;
+  const foodItems = Array.isArray(food?.items) ? food.items : [];
+
+  return {
+    ...booking,
+    snapshot: presentation,
+    foodOrder: food,
+    movieTitle: presentation.movieTitle,
+    posterUrl: presentation.moviePosterUrl || presentation.moviePoster,
+    cinemaName: presentation.cinemaName,
+    auditoriumName: presentation.auditoriumName,
+    showtimeStart: presentation.showtimeStart,
+    showtimeEnd: presentation.showtimeEnd,
+    seatNames: seats.map(seat => seat.label).filter(Boolean).join(', '),
+    foodNames: foodItems
+      .map(item => `${item.name || item.productName} x${item.quantity}`)
+      .join(', ')
+  };
+};
 
 const uuidv4 = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -15,18 +51,30 @@ const uuidv4 = () => {
  * Create a new booking from active seat reservations
  * @param {Object} data - Create booking request
  * @param {string} data.showtimePublicId - Showtime UUID
- * @param {Array<string>} data.reservationPublicIds - List of active reservation UUIDs
+ * @param {Array<string>} data.seatPublicIds - Canonical public seat UUIDs
  * @param {string} [data.idempotencyKey] - UUID idempotency key for this logical booking request
  * @returns {Promise<Object>} The booking response
  */
-export const createBooking = async ({ showtimePublicId, reservationPublicIds, idempotencyKey = uuidv4() }) => {
+export const createBooking = async ({ showtimePublicId, seatPublicIds, reservationPublicIds, idempotencyKey = uuidv4() }) => {
+  const payload = { showtimePublicId };
+  if (Array.isArray(seatPublicIds) && seatPublicIds.length > 0) payload.seatPublicIds = seatPublicIds;
+  if (Array.isArray(reservationPublicIds) && reservationPublicIds.length > 0) payload.reservationPublicIds = reservationPublicIds;
   const response = await apiClient.post("/api/bookings", {
-    showtimePublicId,
-    reservationPublicIds
+    ...payload
   }, {
     headers: { "Idempotency-Key": idempotencyKey }
   });
-  return response.data.data;
+  const booking = response.data.data;
+  clearBookingCreationAttempt(showtimePublicId);
+  emitBookingChanged({ action: "CREATED", publicId: booking?.publicId });
+  return booking;
+};
+
+export const finalizeCheckout = async (bookingId) => {
+  const response = await apiClient.post(`/api/bookings/${bookingId}/finalize-checkout`);
+  const booking = response.data.data;
+  emitBookingChanged({ action: "FINALIZED", publicId: booking?.publicId || bookingId });
+  return booking;
 };
 
 /**
@@ -36,7 +84,18 @@ export const createBooking = async ({ showtimePublicId, reservationPublicIds, id
  */
 export const getBookingDetails = async (bookingId) => {
   const response = await apiClient.get(`/api/bookings/${bookingId}`);
-  return response.data.data;
+  return normalizeCustomerBooking(response.data.data);
+};
+
+/**
+ * Return the current customer's unexpired PENDING_PAYMENT booking for a Showtime.
+ * The server is authoritative; this endpoint is not a client-side uniqueness guard.
+ */
+export const getActiveBookingForShowtime = async (showtimePublicId) => {
+  const response = await apiClient.get('/api/bookings/active', {
+    params: { showtimePublicId }
+  });
+  return response.data?.data || null;
 };
 
 /**
@@ -46,7 +105,7 @@ export const getBookingDetails = async (bookingId) => {
  */
 export const getBookingByCode = async (bookingCode) => {
   const response = await apiClient.get(`/api/bookings/code/${bookingCode}`);
-  return response.data.data;
+  return normalizeCustomerBooking(response.data.data);
 };
 
 /**
@@ -73,11 +132,15 @@ export const getBookingTickets = async (bookingId) => {
 export const getBookingHistory = async ({ page = 0, size = 10, status, fromDate, toDate, sort = "createdAt,desc" }) => {
   const params = { page, size, sort };
   if (status) params.status = status;
-  if (fromDate) params.fromDate = fromDate;
-  if (toDate) params.toDate = toDate;
+  if (fromDate) params.fromDate = new Date(`${fromDate}T00:00:00`).toISOString();
+  if (toDate) params.toDate = new Date(`${toDate}T23:59:59.999`).toISOString();
 
   const response = await apiClient.get("/api/bookings", { params });
-  return response.data.data;
+  const responsePage = response.data.data;
+  return {
+    ...responsePage,
+    content: (responsePage?.content || []).map(normalizeCustomerBooking)
+  };
 };
 
 /**
@@ -95,7 +158,10 @@ export const cancelBooking = async (bookingId, reason = "") => {
     },
     headers: { "Idempotency-Key": idempotencyKey }
   });
-  return response.data.data;
+  const booking = response.data.data;
+  clearAllBookingCreationAttempts();
+  emitBookingChanged({ action: "CANCELLED", publicId: bookingId });
+  return booking;
 };
 
 /**
@@ -106,10 +172,9 @@ export const cancelBooking = async (bookingId, reason = "") => {
  * @param {string} [payload.paymentProvider] - Payment provider
  * @returns {Promise<Object>} Payment response containing paymentUrl
  */
-export const initiatePayment = async (bookingId, { paymentMethod, paymentProvider = paymentMethod }) => {
-  const response = await apiClient.post(`/api/bookings/${bookingId}/payment`, {
-    paymentMethod,
-    paymentProvider
-  });
-  return response.data.data;
+// Payment provider initiation is intentionally owned by Payment Service.
+export const initiatePayment = async () => {
+  const error = new Error("Hệ thống thanh toán chưa sẵn sàng.");
+  error.code = "PAYMENT_SERVICE_HANDOFF_REQUIRED";
+  throw error;
 };

@@ -5,6 +5,8 @@ import com.lorafilm.booking.audit.service.BookingOperationLogService;
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.dto.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.BookingFilterRequest;
+import com.lorafilm.booking.booking.dto.BookingSnapshotDto;
+import com.lorafilm.booking.booking.dto.BookingOperationsSummaryResponse;
 import com.lorafilm.booking.booking.dto.UpdateBookingStatusRequest;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
@@ -19,6 +21,10 @@ import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.response.PagedResponse;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
+import com.lorafilm.booking.payment.repository.BookingPaymentEventRepository;
+import com.lorafilm.booking.reservation.entity.SeatReservation;
+import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
+import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +37,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -57,6 +64,10 @@ public class AdminBookingServiceTest {
     private BookingTicketService ticketService;
     @Mock
     private BookingSnapshotService snapshotService;
+    @Mock
+    private SeatReservationRepository seatReservationRepository;
+    @Mock
+    private BookingPaymentEventRepository paymentEventRepository;
 
     @Mock
     private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
@@ -108,29 +119,170 @@ public class AdminBookingServiceTest {
     }
 
     @Test
+    public void findBookings_UsesPersistedSnapshotForOperationalLabels() {
+        BookingFilterRequest filter = new BookingFilterRequest();
+        filter.setPage(0);
+        filter.setSize(10);
+        BookingSnapshotDto snapshot = new BookingSnapshotDto();
+        snapshot.setMovieTitle("Nhà Có Năm Nàng Tiên");
+        snapshot.setMoviePoster("https://cdn.example/poster.jpg");
+        snapshot.setCinemaName("LoraFilm Hải Châu");
+        snapshot.setAuditoriumName("4DX 01");
+        snapshot.setShowtimeStart(java.time.Instant.parse("2026-07-27T12:30:00Z"));
+        snapshot.setSeatCount(2);
+
+        when(bookingRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleBooking)));
+        when(snapshotService.findByBooking(10L)).thenReturn(snapshot);
+
+        BookingAdminResponse result = adminBookingService.findBookings(filter).getContent().get(0);
+
+        assertEquals("Nhà Có Năm Nàng Tiên", result.getMovieTitle());
+        assertEquals("LoraFilm Hải Châu", result.getCinemaName());
+        assertEquals("4DX 01", result.getAuditoriumName());
+        assertEquals(2, result.getSeatCount());
+    }
+
+    @Test
     public void getBookingDetail_Success() {
         when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
+        when(ticketService.findByBooking(10L)).thenReturn(Collections.emptyList());
+        when(historyService.findByBooking(10L)).thenReturn(Collections.emptyList());
 
         BookingDetailResponse result = adminBookingService.getBookingDetail("550e8400-e29b-41d4-a716-446655440000");
 
         assertNotNull(result);
         assertEquals("BK1001", result.getBookingCode());
+        assertEquals(Collections.emptyList(), result.getTickets());
+        assertEquals(Collections.emptyList(), result.getStatusHistories());
     }
 
     @Test
-    public void updateBookingStatus_Success_FlowExecuted() {
+    public void getBookingDetail_UsesDatabaseReservationAndPaymentEventFacts() {
+        SeatReservation reservation = new SeatReservation();
+        reservation.setPublicId("reservation-public-id");
+        reservation.setSeatPublicId("seat-public-id");
+        reservation.setSeatLabel("B8");
+        reservation.setSeatType("STANDARD");
+        reservation.setStatus(SeatReservationStatus.HELD);
+        reservation.setReservedAt(java.time.Instant.now());
+        reservation.setExpiresAt(java.time.Instant.now().plusSeconds(600));
+        AdminBookingServiceImpl serviceWithOperationalSources =
+                new AdminBookingServiceImpl(
+                        bookingRepository,
+                        bookingMapper,
+                        statusTransitionService,
+                        historyService,
+                        auditService,
+                        operationLogService,
+                        outboxService,
+                        ticketService,
+                        snapshotService,
+                        bookingMetricsManager,
+                        null,
+                        null,
+                        seatReservationRepository,
+                        paymentEventRepository);
+        when(bookingRepository.findByPublicId(
+                "550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+        when(ticketService.findByBooking(10L)).thenReturn(Collections.emptyList());
+        when(historyService.findByBooking(10L)).thenReturn(Collections.emptyList());
+        when(seatReservationRepository.findAllByBookingId(10L))
+                .thenReturn(List.of(reservation));
+        when(paymentEventRepository.existsByBookingId(10L)).thenReturn(true);
+
+        BookingDetailResponse result = serviceWithOperationalSources.getBookingDetail(
+                "550e8400-e29b-41d4-a716-446655440000");
+
+        assertEquals(SeatReservationStatus.HELD,
+                result.getReservations().get(0).status());
+        assertEquals("HELD", result.getOperationalInfo().reservationState());
+        assertEquals(1, result.getOperationalInfo().heldSeatCount());
+        assertEquals(true, result.getOperationalInfo().paymentAttempted());
+    }
+
+    @Test
+    public void getOperationsSummary_UsesGlobalRepositoryCounts() {
+        when(bookingRepository.count(any(Specification.class)))
+                .thenReturn(20L, 5L, 4L, 3L, 2L, 1L, 0L, 2L, 1L, 1L, 3L);
+
+        BookingOperationsSummaryResponse response =
+                adminBookingService.getOperationsSummary();
+
+        assertEquals(20L, response.totalBookings());
+        assertEquals(5L, response.pendingPayment());
+        assertEquals(3L, response.needsAttention());
+    }
+
+    @Test
+    public void updateBookingStatus_Confirmed_IsPaymentTombstone() {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(BookingStatus.CONFIRMED, "Payment done", "ADMIN", "Note");
 
         when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
-        when(bookingRepository.save(any())).thenReturn(sampleBooking);
 
-        BookingAdminResponse response = adminBookingService.updateBookingStatus("550e8400-e29b-41d4-a716-446655440000", request);
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> adminBookingService.updateBookingStatus("550e8400-e29b-41d4-a716-446655440000", request));
 
-        assertNotNull(response);
-        verify(historyService).saveHistory(eq(sampleBooking), eq("PENDING_PAYMENT"), eq("CONFIRMED"), eq("Payment done"), eq("ADMIN"), eq("ADMIN"));
-        verify(auditService).logAudit(eq(10L), eq("ADMIN"), eq("CHANGE_STATUS"), eq("bookingStatus"), eq("PENDING_PAYMENT"), eq("CONFIRMED"), any(), any(), any(), any());
-        verify(operationLogService).logOperation(eq(10L), eq("CHANGE_STATUS"), eq("ADMIN"), eq(true), eq(0L), any(), any(), eq("Payment done"));
-        verify(outboxService).createOutboxEvent(eq("BOOKING"), eq(10L), eq("BOOKING_CONFIRMED"), eq(sampleBooking));
+        assertEquals("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED", exception.getErrorCode());
+        verify(bookingRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    public void updateBookingStatus_Refunded_IsPaymentTombstone() {
+        ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CONFIRMED);
+        UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(
+                BookingStatus.REFUNDED, "Admin requested refund", "ADMIN", null);
+        when(bookingRepository.findByPublicId(
+                "550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> adminBookingService.updateBookingStatus(
+                        "550e8400-e29b-41d4-a716-446655440000", request));
+
+        assertEquals("REFUND_VIA_PAYMENT_RESULT_REQUIRED", exception.getErrorCode());
+        verify(bookingRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    public void updateBookingStatus_PendingToCancelled_IsAllowedAdminCommand() {
+        UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(
+                BookingStatus.CANCELLED, "Khách yêu cầu hủy", "UNTRUSTED_SOURCE", null);
+        when(bookingRepository.findByPublicId(
+                "550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.save(any(Booking.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingAdminResponse response = adminBookingService.updateBookingStatus(
+                "550e8400-e29b-41d4-a716-446655440000", request);
+
+        assertEquals(BookingStatus.CANCELLED, response.getBookingStatus());
+        verify(historyService).saveHistory(
+                any(Booking.class),
+                eq(BookingStatus.PENDING_PAYMENT.name()),
+                eq(BookingStatus.CANCELLED.name()),
+                eq("Khách yêu cầu hủy"),
+                eq("ADMIN"),
+                eq("ADMIN"));
+    }
+
+    @Test
+    public void updateBookingStatus_ConfirmedToCompleted_IsAllowedAdminCommand() {
+        ReflectionTestUtils.setField(sampleBooking, "bookingStatus", BookingStatus.CONFIRMED);
+        UpdateBookingStatusRequest request = new UpdateBookingStatusRequest(
+                BookingStatus.COMPLETED, "Suất chiếu hoàn tất", "ADMIN", null);
+        when(bookingRepository.findByPublicId(
+                "550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.save(any(Booking.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingAdminResponse response = adminBookingService.updateBookingStatus(
+                "550e8400-e29b-41d4-a716-446655440000", request);
+
+        assertEquals(BookingStatus.COMPLETED, response.getBookingStatus());
     }
 
     @Test
@@ -142,7 +294,7 @@ public class AdminBookingServiceTest {
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 adminBookingService.updateBookingStatus("550e8400-e29b-41d4-a716-446655440000", request));
-        assertEquals("CANNOT_CONFIRM_CANCELLED", ex.getErrorCode());
+        assertEquals("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED", ex.getErrorCode());
     }
 
     @Test

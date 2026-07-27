@@ -13,9 +13,16 @@ public class BookingAdminResponse {
     private String bookingCode;
     private Long userId;
     private Long showtimeId;
+    private String showtimePublicId;
     private Long movieId;
     private Long cinemaId;
     private Long auditoriumId;
+    private String movieTitle;
+    private String moviePosterUrl;
+    private String cinemaName;
+    private String auditoriumName;
+    private Instant showtimeStart;
+    private Integer seatCount;
     private BigDecimal ticketAmount;
     private BigDecimal foodAmount;
     private BigDecimal serviceFee;
@@ -26,7 +33,10 @@ public class BookingAdminResponse {
     private String currency;
     private BookingStatus bookingStatus;
     private PaymentStatus paymentStatus;
+    private boolean paymentAttempted;
+    private String attentionCode;
     private Instant expiresAt;
+    private Instant amountLockedAt;
     private Instant confirmedAt;
     private Instant cancelledAt;
     private Instant createdAt;
@@ -74,6 +84,14 @@ public class BookingAdminResponse {
         this.showtimeId = showtimeId;
     }
 
+    public String getShowtimePublicId() {
+        return showtimePublicId;
+    }
+
+    public void setShowtimePublicId(String showtimePublicId) {
+        this.showtimePublicId = showtimePublicId;
+    }
+
     public Long getMovieId() {
         return movieId;
     }
@@ -96,6 +114,54 @@ public class BookingAdminResponse {
 
     public void setAuditoriumId(Long auditoriumId) {
         this.auditoriumId = auditoriumId;
+    }
+
+    public String getMovieTitle() {
+        return movieTitle;
+    }
+
+    public void setMovieTitle(String movieTitle) {
+        this.movieTitle = movieTitle;
+    }
+
+    public String getMoviePosterUrl() {
+        return moviePosterUrl;
+    }
+
+    public void setMoviePosterUrl(String moviePosterUrl) {
+        this.moviePosterUrl = moviePosterUrl;
+    }
+
+    public String getCinemaName() {
+        return cinemaName;
+    }
+
+    public void setCinemaName(String cinemaName) {
+        this.cinemaName = cinemaName;
+    }
+
+    public String getAuditoriumName() {
+        return auditoriumName;
+    }
+
+    public void setAuditoriumName(String auditoriumName) {
+        this.auditoriumName = auditoriumName;
+    }
+
+    public Instant getShowtimeStart() {
+        return showtimeStart;
+    }
+
+    public void setShowtimeStart(Instant showtimeStart) {
+        this.showtimeStart = showtimeStart;
+    }
+
+    public Integer getSeatCount() {
+        return seatCount;
+    }
+
+    public void setSeatCount(Integer seatCount) {
+        this.seatCount = seatCount;
     }
 
     public BigDecimal getTicketAmount() {
@@ -178,12 +244,36 @@ public class BookingAdminResponse {
         this.paymentStatus = paymentStatus;
     }
 
+    public boolean isPaymentAttempted() {
+        return paymentAttempted;
+    }
+
+    public void setPaymentAttempted(boolean paymentAttempted) {
+        this.paymentAttempted = paymentAttempted;
+    }
+
+    public String getAttentionCode() {
+        return attentionCode;
+    }
+
+    public void setAttentionCode(String attentionCode) {
+        this.attentionCode = attentionCode;
+    }
+
     public Instant getExpiresAt() {
         return expiresAt;
     }
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public Instant getAmountLockedAt() {
+        return amountLockedAt;
+    }
+
+    public void setAmountLockedAt(Instant amountLockedAt) {
+        this.amountLockedAt = amountLockedAt;
     }
 
     public Instant getConfirmedAt() {

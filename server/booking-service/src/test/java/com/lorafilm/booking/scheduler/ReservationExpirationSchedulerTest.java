@@ -38,7 +38,7 @@ public class ReservationExpirationSchedulerTest {
         SeatReservation res2 = new SeatReservation();
         res2.setId(102L);
 
-        when(seatReservationRepository.findExpiredReservations(any(), any(Pageable.class)))
+        when(seatReservationRepository.findExpiredUnlinkedReservations(any(), any(Pageable.class)))
                 .thenReturn(List.of(res1, res2));
 
         scheduler.processExpiredReservations();
@@ -48,7 +48,7 @@ public class ReservationExpirationSchedulerTest {
 
     @Test
     public void processExpiredReservations_NoExpired_NoOp() {
-        when(seatReservationRepository.findExpiredReservations(any(), any(Pageable.class)))
+        when(seatReservationRepository.findExpiredUnlinkedReservations(any(), any(Pageable.class)))
                 .thenReturn(List.of());
 
         scheduler.processExpiredReservations();

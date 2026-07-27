@@ -1,10 +1,19 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, AlertTriangle, ChevronRight, Search, ShieldCheck, Check, Info } from 'lucide-react';
-import { getBookingDetails, cancelBooking } from '../services/bookingService';
+import { Clock, AlertTriangle, Search, ShieldCheck, CreditCard } from 'lucide-react';
+import { getBookingDetails, cancelBooking, finalizeCheckout } from '../services/bookingService';
 import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 import BookingStepper from '../components/BookingStepper';
-import axios from 'axios';
+import BookingCancellationModal from '../components/BookingCancellationModal';
+import BookingNoticeModal from '../components/BookingNoticeModal';
+import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
+import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
+import {
+  createPaymentHandoff,
+  getOrCreatePaymentAttemptKey
+} from '../services/paymentHandoffService';
+
+const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
 
 export default function BookingCheckoutPage() {
   const location = useLocation();
@@ -29,6 +38,10 @@ export default function BookingCheckoutPage() {
   // Cart operations loading states
   const [cartUpdatingId, setCartUpdatingId] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [notice, setNotice] = useState(null);
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +49,8 @@ export default function BookingCheckoutPage() {
   
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
+  const [userScore, setUserScore] = useState(null);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(null);
@@ -58,23 +73,37 @@ export default function BookingCheckoutPage() {
       }
       setBooking({
         ...bookingData,
-        foodOrder,
-        finalAmount: bookingData.finalAmount ?? bookingData.totalAmount ?? 0,
-        ticketAmount: bookingData.ticketAmount ?? bookingData.totalAmount ?? 0,
+        foodOrder: foodOrder ?? bookingData.foodOrder ?? bookingData.food ?? null,
+        finalAmount: bookingData.totalAmount ?? bookingData.finalAmount ?? 0,
+        ticketAmount: bookingData.ticketAmount ?? 0,
         expiresAt: bookingData.expiresAt ?? bookingData.expiredAt ?? bookingData.paymentDeadline,
-        snapshot: bookingData.snapshot ?? bookingDraft.showtime ?? null
+        snapshot: bookingData.snapshot ?? bookingData.presentation ?? bookingDraft.showtime ?? null
       });
 
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
+
+      try {
+        const scoreResponse = await scoreCustomerService.getScoreBalance();
+        setUserScore(scoreResponse?.data ?? scoreResponse ?? null);
+      } catch {
+        // Score Service is optional for checkout. Its outage must not prevent
+        // the customer from completing the current Booking.
+        setUserScore(null);
+      }
     } catch (err) {
-      setError(err.message || err.detail || "Không thể tải thông tin đặt vé.");
+      setError(getBookingErrorMessage(
+        err,
+        'Không thể tải thông tin đặt vé. Vui lòng thử lại.'
+      ));
     } finally {
       setLoading(false);
     }
   }, [bookingId, bookingDraft.showtime]);
 
   useEffect(() => {
+    // Data loading is intentionally triggered when the public Booking ID changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
 
@@ -100,10 +129,15 @@ export default function BookingCheckoutPage() {
   // Handle countdown expiration
   useEffect(() => {
     if (timeLeft === 0) {
-      alert("Thời gian giữ ghế đã hết hạn. Đơn hàng của bạn đã bị hủy.");
-      navigate('/movies?error=expired');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNotice({
+        title: 'Thời gian giữ ghế đã kết thúc',
+        message: 'Đơn không còn khả dụng để thanh toán và ghế sẽ được trả lại cho khách hàng khác.',
+        variant: 'warning',
+        redirectTo: '/movies?error=expired'
+      });
     }
-  }, [timeLeft, navigate]);
+  }, [timeLeft]);
 
   // Concession categories
   const categories = useMemo(() => {
@@ -156,53 +190,105 @@ export default function BookingCheckoutPage() {
         const freshBooking = await getBookingDetails(bookingId);
         setBooking(prev => ({
           ...prev,
+          ...freshBooking,
+          snapshot: freshBooking.snapshot || prev.snapshot,
           foodOrder: freshBooking.foodOrder,
-          finalAmount: freshBooking.finalAmount
+          finalAmount: freshBooking.totalAmount ?? freshBooking.finalAmount ?? prev.finalAmount
         }));
         setCartUpdatingId(null);
         return;
       }
 
-      setBooking(prev => {
-        const foodAmount = updatedFoodOrder ? updatedFoodOrder.finalAmount : 0;
-        const total = (prev.ticketAmount || 0) + foodAmount - (prev.promotionDiscount || 0);
-        return {
-          ...prev,
-          foodOrder: updatedFoodOrder,
-          finalAmount: total
-        };
-      });
+      const freshBooking = await getBookingDetails(bookingId);
+      setBooking(prev => ({
+        ...prev,
+        ...freshBooking,
+        snapshot: freshBooking.snapshot || prev.snapshot,
+        foodOrder: updatedFoodOrder || freshBooking.foodOrder,
+        finalAmount: freshBooking.totalAmount ?? freshBooking.finalAmount ?? prev.finalAmount
+      }));
     } catch (err) {
-      alert("Không thể cập nhật giỏ hàng bắp nước: " + (err.message || "Lỗi kết nối"));
+      setNotice({
+        title: 'Không thể cập nhật bắp nước',
+        message: getBookingErrorMessage(
+          err,
+          'Kết nối không ổn định. Vui lòng thử lại.'
+        ),
+        variant: 'error'
+      });
     } finally {
       setCartUpdatingId(null);
     }
   };
 
-  // Simulate payment status
-  const handleSimulatePayment = async (success = true) => {
-    if (!termsAgreed && success) {
-      alert("Bạn phải đồng ý với Điều khoản & Điều kiện trước khi thanh toán.");
+  // Lock Booking-owned amount, then let Payment Service create the attempt.
+  const handleStartPayment = async () => {
+    if (!termsAgreed) {
+      setNotice({
+        title: 'Chưa đồng ý điều khoản',
+        message: 'Bạn cần đồng ý với Điều khoản và Quy định của LoraFilm trước khi tiếp tục thanh toán.',
+        variant: 'warning'
+      });
       return;
     }
     setPaymentLoading(true);
     try {
-      // Initiate payment simulation on mock controller
-      const endpoint = success ? '/api/mock/payment/success' : '/api/mock/payment/fail';
-      await axios.post(endpoint, {
-        bookingCode: booking.bookingCode
+      const finalized = await finalizeCheckout(bookingId);
+      setBooking(prev => ({ ...prev, ...finalized }));
+      const idempotencyKey = getOrCreatePaymentAttemptKey(
+        bookingId,
+        selectedPaymentMethod
+      );
+      const payment = await createPaymentHandoff({
+        bookingPublicId: bookingId,
+        paymentMethod: selectedPaymentMethod,
+        idempotencyKey
       });
 
-      // Redirect accordingly
-      if (success) {
-        navigate(`/bookings/success?bookingId=${bookingId}`);
-      } else {
-        navigate(`/bookings/failed?bookingId=${bookingId}`);
+      if (payment?.paymentUrl) {
+        window.location.assign(payment.paymentUrl);
+        return;
       }
+
+      setNotice({
+        title: 'Đã tạo yêu cầu thanh toán',
+        message: 'Payment Service đã tiếp nhận yêu cầu. Bạn có thể tiếp tục theo dõi trạng thái của giao dịch.',
+        variant: 'success',
+        redirectTo: `/bookings/${bookingId}`
+      });
     } catch (err) {
-      alert("Lỗi khi thực hiện giả lập thanh toán: " + (err.response?.data?.message || err.message));
+      setNotice({
+        title: 'Không thể chuẩn bị thanh toán',
+        message: getBookingErrorMessage(
+          err,
+          'Không thể chuẩn bị thanh toán. Vui lòng thử lại.'
+        ),
+        variant: 'error'
+      });
     } finally {
       setPaymentLoading(false);
+    }
+  };
+
+  const handleCancelBooking = async () => {
+    setCancelling(true);
+    setCancelError('');
+    try {
+      await cancelBooking(
+        bookingId,
+        'Khách hàng chủ động hủy đặt chỗ tại checkout'
+      );
+      setCancelModalOpen(false);
+      navigate('/movies');
+    } catch (requestError) {
+      setCancelError(
+        getBookingErrorMessage(
+          requestError,
+          'Không thể hủy đặt vé. Vui lòng thử lại.'
+        )
+      );
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -248,16 +334,72 @@ export default function BookingCheckoutPage() {
   }
 
   const { snapshot } = booking;
-  const isExpired = timeLeft === 0;
+  const bookingStatus = booking.bookingStatus || booking.status;
+  const isPending = bookingStatus === 'PENDING_PAYMENT';
+  const isExpired = timeLeft === 0 || !isPending;
   const draftSeats = bookingDraft.selectedSeats || [];
-  const visibleSeats = booking.tickets?.length ? booking.tickets : draftSeats;
+  const snapshotSeats = Array.isArray(snapshot?.seats) ? snapshot.seats : [];
+  const visibleSeats = snapshotSeats.length
+    ? snapshotSeats
+    : booking.tickets?.length
+      ? booking.tickets
+      : draftSeats;
+  const selectedFoodItems = Array.isArray(booking.foodOrder?.items)
+    ? booking.foodOrder.items
+    : [];
   const showtimeStart = snapshot?.showtimeStart || snapshot?.startTime;
   const movie = snapshot?.movie || {};
   const cinema = snapshot?.cinema || {};
   const auditorium = snapshot?.auditorium || {};
+  const movieTitle = snapshot?.movieTitle || movie?.title || booking.movieTitle || 'Thông tin phim đang cập nhật';
+  const moviePosterUrl = snapshot?.moviePosterUrl
+    || snapshot?.moviePoster
+    || movie?.posterUrl
+    || booking.posterUrl
+    || null;
+  const seatLabel = seat => seat.label || seat.seatLabel || seat.seatCode || 'Chưa rõ';
+  const seatType = seat => seat.type || seat.seatType;
+  const foodItemName = item => item.productName || item.name || 'Bắp nước';
+  const foodItemAmount = item => item.finalAmount
+    ?? item.totalAmount
+    ?? ((item.unitPrice || 0) * (item.quantity || 0));
+  const foodAmount = booking.foodOrder?.finalAmount
+    ?? booking.foodOrder?.totalAmount
+    ?? booking.foodAmount
+    ?? 0;
+  const availableScorePoints = Math.max(
+    0,
+    Number(userScore?.currentPoints || 0) - Number(userScore?.heldPoints || 0)
+  );
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
+      {notice && (
+        <BookingNoticeModal
+          title={notice.title}
+          message={notice.message}
+          variant={notice.variant}
+          onClose={() => {
+            const redirectTo = notice.redirectTo;
+            setNotice(null);
+            if (redirectTo) navigate(redirectTo);
+          }}
+        />
+      )}
+
+      {cancelModalOpen && (
+        <BookingCancellationModal
+          bookingCode={booking.bookingCode}
+          error={cancelError}
+          pending={cancelling}
+          onClose={() => {
+            setCancelError('');
+            setCancelModalOpen(false);
+          }}
+          onConfirm={handleCancelBooking}
+        />
+      )}
+
       <div className="max-w-7xl mx-auto w-full">
         {/* Booking Stepper */}
         <BookingStepper currentStep={step} />
@@ -325,16 +467,18 @@ export default function BookingCheckoutPage() {
                       return (
                         <div key={item.id} className="bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700/80 rounded-2xl p-4 flex gap-4 transition-all relative overflow-hidden">
                           {/* Concession Image */}
-                          <div className="w-20 aspect-square rounded-xl bg-zinc-950/60 overflow-hidden border border-zinc-800 shrink-0">
-                            <img
-                              src={item.imageUrl}
-                              alt={item.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%231f2937'><rect width='100%' height='100%'/></svg>";
-                              }}
-                            />
+                          <div className="relative w-20 aspect-square rounded-xl bg-zinc-950/60 overflow-hidden border border-zinc-800 shrink-0 flex items-center justify-center">
+                            <span className="px-2 text-center text-[8px] font-bold text-zinc-600">Chưa có ảnh</span>
+                            {item.imageUrl && (
+                              <img
+                                src={item.imageUrl}
+                                alt={item.name}
+                                className="absolute inset-0 w-full h-full object-cover"
+                                onError={(event) => {
+                                  event.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            )}
                           </div>
                           {/* Meta and selector */}
                           <div className="flex-grow flex flex-col justify-between py-0.5 space-y-3">
@@ -390,64 +534,92 @@ export default function BookingCheckoutPage() {
                 )}
               </div>
             ) : (
-              /* Step 4: Payment Placeholder */
+              /* Step 4: Payment Service handoff */
               <div className="space-y-8">
-                {/* Simulated Payment Methods */}
+                {availableScorePoints > 0 && (
+                  <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-r from-amber-950/30 to-zinc-900/60 p-6 md:p-8">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+                          Điểm thành viên
+                        </p>
+                        <h2 className="mt-1 text-lg font-black text-white">
+                          Bạn đang có {availableScorePoints.toLocaleString('vi-VN')} điểm khả dụng
+                        </h2>
+                      </div>
+                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-black uppercase text-amber-300">
+                        Đã đồng bộ Score Service
+                      </span>
+                    </div>
+                    <p className="mt-4 text-xs font-medium leading-relaxed text-zinc-400">
+                      Việc giữ và trừ điểm phải được Payment Service xác nhận cùng giao dịch.
+                      Tính năng dùng điểm tại checkout sẽ được mở khi tích hợp thanh toán hoàn tất;
+                      số tiền của đơn hiện tại vẫn do Booking Service quản lý.
+                    </p>
+                  </div>
+                )}
+
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Phương Thức Thanh Toán</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Hệ thống thanh toán giả lập dành cho thử nghiệm</p>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Payment Service sẽ xác thực lại số tiền và thời hạn của đơn</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 opacity-50">
-                    <div className="border border-zinc-800 rounded-2xl p-5 flex items-center gap-4 bg-zinc-900/30 cursor-not-allowed">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethod('VNPAY')}
+                      className={`border rounded-2xl p-5 flex items-center gap-4 text-left transition-colors ${
+                        selectedPaymentMethod === 'VNPAY'
+                          ? 'border-brand-orange bg-brand-orange/10'
+                          : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
+                      }`}
+                    >
                       <div className="w-12 aspect-[4/3] bg-white rounded-lg p-1.5 flex items-center justify-center">
                         <img src="https://sandbox.vnpayment.vn/paymentv2/Images/brands/logo.svg" alt="VNPay Logo" className="max-h-full max-w-full object-contain" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-zinc-400">VNPay (Coming Soon)</h4>
+                        <h4 className="text-xs font-black text-zinc-200">VNPay</h4>
                         <p className="text-[9px] text-zinc-650 mt-0.5">Hỗ trợ ngân hàng nội địa & quốc tế</p>
                       </div>
-                    </div>
+                    </button>
 
-                    <div className="border border-zinc-800 rounded-2xl p-5 flex items-center gap-4 bg-zinc-900/30 cursor-not-allowed">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethod('MOMO')}
+                      className={`border rounded-2xl p-5 flex items-center gap-4 text-left transition-colors ${
+                        selectedPaymentMethod === 'MOMO'
+                          ? 'border-brand-orange bg-brand-orange/10'
+                          : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
+                      }`}
+                    >
                       <div className="w-12 aspect-[4/3] bg-pink-100 rounded-lg p-2 flex items-center justify-center">
                         <img src="https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png" alt="Momo Logo" className="max-h-full max-w-full object-contain" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-zinc-400">MoMo (Coming Soon)</h4>
+                        <h4 className="text-xs font-black text-zinc-200">MoMo</h4>
                         <p className="text-[9px] text-zinc-650 mt-0.5">Thanh toán nhanh qua ví điện tử</p>
                       </div>
-                    </div>
+                    </button>
                   </div>
                 </div>
 
-                {/* Direct Simulation Actions */}
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
-                    <h2 className="text-lg font-black text-white uppercase tracking-wider">Giả Lập Quy Trình Thanh Toán</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Lựa chọn kết quả thanh toán mong muốn dưới đây</p>
+                    <h2 className="text-lg font-black text-white uppercase tracking-wider">Chuyển sang thanh toán</h2>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">
+                      LoraFilm không gửi số tiền từ trình duyệt; Payment Service lấy số tiền đã khóa trực tiếp từ Booking Service
+                    </p>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <button
-                      onClick={() => handleSimulatePayment(true)}
-                      disabled={paymentLoading || isExpired}
-                      className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-black font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <Check className="w-4 h-4 stroke-[3]" />
-                      <span>Giả lập Thanh toán Thành công</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleSimulatePayment(false)}
-                      disabled={paymentLoading || isExpired}
-                      className="flex-1 py-4 bg-red-500 hover:bg-red-650 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>Giả lập Thanh toán Thất bại</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleStartPayment}
+                    disabled={paymentLoading || isExpired}
+                    className="w-full py-4 bg-brand-orange hover:bg-opacity-95 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>{paymentLoading ? 'Đang tạo giao dịch...' : `Thanh toán qua ${selectedPaymentMethod}`}</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -468,23 +640,33 @@ export default function BookingCheckoutPage() {
 
             {/* Movie Poster & Meta details */}
             <div className="flex gap-4 items-start pb-6 border-b border-zinc-800">
-              <div className="w-16 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0">
+              <div className="w-20 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 flex items-center justify-center">
                 <img
-                  src={snapshot?.moviePoster}
-                  alt={snapshot?.movieTitle}
+                  src={moviePosterUrl || FALLBACK_POSTER}
+                  alt={`Áp phích phim ${movieTitle}`}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%2318181b'><rect width='100%' height='100%'/></svg>";
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = FALLBACK_POSTER;
                   }}
                 />
               </div>
-              <div className="space-y-1.5 flex-grow">
-                <h3 className="text-sm font-black text-white line-clamp-2 leading-snug">{snapshot?.movieTitle}</h3>
+              <div className="space-y-2 flex-grow min-w-0">
+                <span className="text-[9px] font-black uppercase tracking-widest text-brand-orange">Thông tin suất chiếu</span>
+                <h3 className="text-base font-black text-white leading-snug">{movieTitle}</h3>
+                {snapshot?.originalTitle && (
+                  <p className="text-[10px] text-zinc-500 line-clamp-1">{snapshot.originalTitle}</p>
+                )}
                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-semibold">
-                  <span>{snapshot?.duration || movie?.durationMinutes || '--'} phút</span>
-                  <span>•</span>
-                  <span className="text-brand-yellow font-black border border-brand-yellow/30 px-1 py-0.2 rounded text-[8px]">{snapshot?.ageRating || movie?.ageRating || 'P'}</span>
+                  {(snapshot?.duration || movie?.durationMinutes) && (
+                    <span>{snapshot?.duration || movie?.durationMinutes} phút</span>
+                  )}
+                  {(snapshot?.duration || movie?.durationMinutes) && (snapshot?.ageRating || movie?.ageRating) && <span>•</span>}
+                  {(snapshot?.ageRating || movie?.ageRating) && (
+                    <span className="text-brand-yellow font-black border border-brand-yellow/30 px-1.5 py-0.5 rounded text-[8px]">
+                      {snapshot?.ageRating || movie?.ageRating}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -493,46 +675,59 @@ export default function BookingCheckoutPage() {
             <div className="space-y-3 py-2 text-xs border-b border-zinc-800">
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Cụm rạp</span>
-                <span className="text-white font-bold text-right">{snapshot?.cinemaName || cinema?.name || `Rạp #${booking.cinemaId || '--'}`}</span>
+                <span className="text-white font-bold text-right">{snapshot?.cinemaName || cinema?.name || 'Chưa có thông tin rạp'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Phòng chiếu</span>
-                <span className="text-zinc-200 font-bold text-right">{snapshot?.auditoriumName || auditorium?.name || `Phòng #${booking.auditoriumId || '--'}`}</span>
+                <span className="text-zinc-200 font-bold text-right">{snapshot?.auditoriumName || auditorium?.name || 'Chưa có thông tin phòng'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Suất chiếu</span>
                 <span className="text-white font-bold text-right">
-                  {showtimeStart ? new Date(showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''} | {showtimeStart ? new Date(showtimeStart).toLocaleDateString('vi-VN') : ''}
+                  {showtimeStart
+                    ? `${new Date(showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} · ${new Date(showtimeStart).toLocaleDateString('vi-VN')}`
+                    : 'Chưa có thông tin'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Số lượng ghế</span>
-                <span className="text-brand-orange font-black text-right">{snapshot?.seatCount || visibleSeats.length || '--'} ghế</span>
+                <span className="text-brand-orange font-black text-right">{visibleSeats.length} ghế</span>
               </div>
             </div>
 
             {/* Selected Seats */}
             <div className="py-2 border-b border-zinc-800 space-y-2">
               <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Các vị trí ghế</span>
-              <div className="flex flex-wrap gap-1.5">
-                {visibleSeats.map((t, index) => (
-                  <span key={t.id || t.publicId || index} className="text-[10px] bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded font-black">
-                    {t.seatLabel || t.seatCode} {t.seatType ? `(${t.seatType})` : ''}
-                  </span>
-                ))}
-              </div>
+              {visibleSeats.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {visibleSeats.map((seat, index) => (
+                    <span
+                      key={seat.seatPublicId || seat.id || seat.publicId || index}
+                      className="rounded-lg border border-brand-orange/20 bg-brand-orange/10 px-2.5 py-1 text-[10px] font-black text-brand-orange"
+                    >
+                      {seatLabel(seat)}
+                      {seatType(seat) ? ` · ${seatType(seat)}` : ''}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-red-400">Không tìm thấy dữ liệu ghế của đơn. Vui lòng tải lại trang.</p>
+              )}
             </div>
 
             {/* Food items breakdown */}
             <div className="py-2 border-b border-zinc-800 space-y-3">
               <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Bắp nước đã chọn</span>
-              {booking.foodOrder && booking.foodOrder.items && booking.foodOrder.items.length > 0 ? (
+              {selectedFoodItems.length > 0 ? (
                 <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                  {booking.foodOrder.items.map(item => (
-                    <div key={item.id} className="flex justify-between text-[11px]">
-                      <span className="text-zinc-400 line-clamp-1 max-w-[150px]">{item.productName}</span>
-                      <span className="text-zinc-500 font-bold">x{item.quantity}</span>
-                      <span className="text-zinc-200 font-bold">{formatCurrency(item.finalAmount)}</span>
+                  {selectedFoodItems.map((item, index) => (
+                    <div
+                      key={item.id || item.productId || `${foodItemName(item)}-${index}`}
+                      className="grid grid-cols-[minmax(0,1fr)_36px_78px] items-center gap-2 text-[11px]"
+                    >
+                      <span className="truncate text-zinc-300" title={foodItemName(item)}>{foodItemName(item)}</span>
+                      <span className="text-center font-bold text-zinc-500">x{item.quantity}</span>
+                      <span className="text-right font-bold text-zinc-100">{formatCurrency(foodItemAmount(item))}</span>
                     </div>
                   ))}
                 </div>
@@ -544,12 +739,12 @@ export default function BookingCheckoutPage() {
             {/* Pricing breakdown */}
             <div className="space-y-4 text-xs py-4 border-b border-zinc-800">
               <div className="flex justify-between items-center text-zinc-300">
-                <span className="font-bold">Tiền vé ({snapshot?.seatCount || visibleSeats.length || 0} ghế):</span>
+                <span className="font-bold">Tiền vé ({visibleSeats.length} ghế):</span>
                 <span className="font-black text-sm">{formatCurrency(booking.ticketAmount)}</span>
               </div>
               <div className="flex justify-between items-center text-zinc-300">
                 <span className="font-bold">Tiền bắp nước:</span>
-                <span className="font-black text-sm">{formatCurrency(booking.foodOrder ? booking.foodOrder.finalAmount : 0)}</span>
+                <span className="font-black text-sm">{formatCurrency(foodAmount)}</span>
               </div>
               {booking.promotionDiscount > 0 && (
                 <div className="flex justify-between items-center text-emerald-400 font-bold bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
@@ -613,18 +808,12 @@ export default function BookingCheckoutPage() {
               )}
 
               <button
-                disabled={paymentLoading}
-                onClick={async () => {
-                  if (confirm("Bạn có chắc chắn muốn hủy đơn hàng này không?")) {
-                    try {
-                      await cancelBooking(bookingId, "Khách hàng chủ động hủy đặt chỗ");
-                      navigate('/movies');
-                    } catch (e) {
-                      alert("Không thể hủy đặt vé: " + e.message);
-                    }
-                  }
+                disabled={paymentLoading || isExpired || cancelling}
+                onClick={() => {
+                  setCancelError('');
+                  setCancelModalOpen(true);
                 }}
-                className="w-full py-2.5 text-center text-zinc-600 hover:text-red-400 font-semibold text-[10px] uppercase tracking-wider transition-colors cursor-pointer block"
+                className="w-full py-2.5 text-center text-zinc-600 hover:text-red-400 font-semibold text-[10px] uppercase tracking-wider transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 block"
               >
                 Hủy giao dịch
               </button>

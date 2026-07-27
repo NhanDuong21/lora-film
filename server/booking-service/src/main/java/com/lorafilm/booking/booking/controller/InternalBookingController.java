@@ -22,12 +22,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.http.HttpStatus;
+import com.lorafilm.booking.common.exception.BusinessException;
 
 @RestController
 @RequestMapping("/internal/bookings")
 @Validated
-@Tag(name = "Internal Booking API", description = "Inter-service communication endpoints for confirmation, expiration, refund, and retrieval")
+@Tag(name = "Internal Booking API", description = "Inter-service Booking context and idempotent Payment-result endpoints")
 @SecurityRequirement(name = "internalTokenAuth")
 public class InternalBookingController {
 
@@ -48,8 +49,9 @@ public class InternalBookingController {
                     example = "550e8400-e29b-41d4-a716-446655440000")
             @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")
             String publicId) {
-        BookingAdminResponse response = internalBookingService.confirmBooking(publicId);
-        return ResponseEntity.ok(ApiResponse.success("Booking confirmed successfully", response));
+        throw new BusinessException("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED",
+                "Booking confirmation is performed only by a validated Payment result",
+                HttpStatus.GONE);
     }
 
     @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/expire")
@@ -65,15 +67,19 @@ public class InternalBookingController {
     }
 
     @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/refund")
-    @Operation(summary = "Mark a confirmed booking as refunded using public UUID")
+    @Operation(
+            summary = "Deprecated direct refund marker",
+            description = "Refund lifecycle mutation requires an idempotent, authoritative Payment refund result")
     public ResponseEntity<ApiResponse<BookingAdminResponse>> refundBooking(
             @PathVariable
             @Parameter(description = "Booking publicId (UUID), not the internal database id",
                     example = "550e8400-e29b-41d4-a716-446655440000")
             @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")
             String publicId) {
-        BookingAdminResponse response = internalBookingService.refundBooking(publicId);
-        return ResponseEntity.ok(ApiResponse.success("Booking refunded successfully", response));
+        throw new BusinessException(
+                "REFUND_VIA_PAYMENT_RESULT_REQUIRED",
+                "Booking refund state is applied only from an authoritative Payment refund result",
+                HttpStatus.GONE);
     }
 
     @GetMapping("/code/{bookingCode}")
@@ -91,6 +97,14 @@ public class InternalBookingController {
                 internalBookingPaymentService.getPaymentContext(bookingId)));
     }
 
+    @GetMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/payment-context")
+    @Operation(summary = "Get authoritative payment context by Booking public ID")
+    public ResponseEntity<ApiResponse<InternalPaymentContextResponse>> getPaymentContextByPublicId(
+            @PathVariable String publicId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.getPaymentContext(publicId)));
+    }
+
     @PostMapping("/{bookingId:\\d+}/payment-results")
     @Operation(summary = "Apply an idempotent Payment Service result")
     public ResponseEntity<ApiResponse<InternalPaymentResultResponse>> recordPaymentResult(
@@ -98,5 +112,23 @@ public class InternalBookingController {
             @Valid @RequestBody InternalPaymentResultRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 internalBookingPaymentService.recordPaymentResult(bookingId, request)));
+    }
+
+    @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/payment-results")
+    @Operation(summary = "Apply an idempotent Payment result by Booking public ID")
+    public ResponseEntity<ApiResponse<InternalPaymentResultResponse>> recordPaymentResultByPublicId(
+            @PathVariable String publicId,
+            @Valid @RequestBody InternalPaymentResultRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.recordPaymentResult(publicId, request)));
+    }
+
+    @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[1-5][a-fA-F0-9]{3}-[89aAbB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}}/refund-results")
+    @Operation(summary = "Apply an idempotent authoritative Payment refund result")
+    public ResponseEntity<ApiResponse<InternalPaymentResultResponse>> recordRefundResultByPublicId(
+            @PathVariable String publicId,
+            @Valid @RequestBody InternalPaymentResultRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.recordRefundResult(publicId, request)));
     }
 }

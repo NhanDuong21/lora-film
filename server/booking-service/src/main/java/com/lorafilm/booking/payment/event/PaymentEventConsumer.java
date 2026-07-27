@@ -130,8 +130,8 @@ public class PaymentEventConsumer {
         if (event.payload() == null) {
             throw new IllegalArgumentException("Payment event payload is missing.");
         }
-        if (event.payload().bookingId() == null) {
-            throw new IllegalArgumentException("Booking ID is missing in payload.");
+        if (event.payload().bookingPublicId() == null && event.payload().bookingId() == null) {
+            throw new IllegalArgumentException("Booking public ID is missing in payload.");
         }
         if (event.payload().amount() == null) {
             throw new IllegalArgumentException("Amount is missing in payload.");

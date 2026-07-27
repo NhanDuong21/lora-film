@@ -42,6 +42,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -90,6 +91,18 @@ public class SeatReservationServiceTest {
                 movieServiceClient,
                 bookingMetricsManager
         );
+        var layout = new com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse(
+                1001L,
+                Instant.now().plusSeconds(3600),
+                Instant.now().plusSeconds(7200),
+                "OPEN",
+                1L,
+                List.of(
+                        new com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto(
+                                15L, "A1", "STANDARD", null, false, 1, 1),
+                        new com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto(
+                                16L, "A2", "STANDARD", null, false, 1, 2)));
+        lenient().when(movieServiceClient.getShowtimeSeatLayout(anyLong())).thenReturn(layout);
     }
 
     @Test
@@ -98,7 +111,7 @@ public class SeatReservationServiceTest {
         HoldSeatRequest request = new HoldSeatRequest(1001L, List.of(15L, 16L));
 
         when(redisLockService.acquireHoldLocks(eq(1001L), anyList(), anyString(), anyLong())).thenReturn(true);
-        when(seatReservationRepository.findActiveReservations(eq(1001L), anyList(), any())).thenReturn(List.of());
+        when(seatReservationRepository.findReservationsForBookingUpdate(eq(1001L), anyList())).thenReturn(List.of());
         when(seatReservationRepository.findSoldSeatIdsFromBookings(eq(1001L), anyList())).thenReturn(List.of());
 
         SeatReservation res1 = new SeatReservation();
@@ -121,7 +134,7 @@ public class SeatReservationServiceTest {
 
         assertNotNull(response);
         assertEquals(2, response.getReservationIds().size());
-        verify(redisLockService).acquireHoldLocks(eq(1001L), anyList(), anyString(), eq(300L));
+        verify(redisLockService).acquireHoldLocks(eq(1001L), anyList(), anyString(), eq(30L));
         verify(outboxEventRepository, times(2)).save(any());
     }
 
@@ -148,7 +161,10 @@ public class SeatReservationServiceTest {
 
         SeatReservation existing = new SeatReservation();
         existing.setSeatId(15L);
-        when(seatReservationRepository.findActiveReservations(eq(1001L), anyList(), any())).thenReturn(List.of(existing));
+        existing.setStatus(SeatReservationStatus.HELD);
+        existing.setExpiresAt(Instant.now().plusSeconds(300));
+        when(seatReservationRepository.findReservationsForBookingUpdate(eq(1001L), anyList()))
+                .thenReturn(List.of(existing));
 
         SeatReservationException ex = assertThrows(SeatReservationException.class, () ->
                 seatReservationService.holdSeats(userId, request));
@@ -174,7 +190,7 @@ public class SeatReservationServiceTest {
         seatReservationService.releaseSeats(userId, request);
 
         assertEquals(SeatReservationStatus.RELEASED, res.getStatus());
-        verify(redisLockService).releaseLocks(eq(1001L), anyList(), eq("*"));
+        verify(redisLockService, never()).releaseLocks(eq(1001L), anyList(), anyString());
         verify(outboxEventRepository).save(any());
     }
 
@@ -198,40 +214,25 @@ public class SeatReservationServiceTest {
     }
 
     @Test
-    public void convertReservations_Success() {
+    public void convertReservations_IsLifecycleTombstone() {
         ConvertReservationRequest request = new ConvertReservationRequest(50L, List.of(101L));
 
-        SeatReservation res = new SeatReservation();
-        res.setId(101L);
-        res.setShowtimeId(1001L);
-        res.setSeatId(15L);
-        res.setStatus(SeatReservationStatus.HELD);
-        res.setExpiresAt(Instant.now().plusSeconds(100));
+        SeatReservationException exception = assertThrows(SeatReservationException.class,
+                () -> seatReservationService.convertReservations(request));
 
-        when(seatReservationRepository.findAllByIdIn(List.of(101L))).thenReturn(List.of(res));
-
-        seatReservationService.convertReservations(request);
-
-        assertEquals(SeatReservationStatus.BOOKED, res.getStatus());
-        verify(redisLockService).releaseLocks(eq(1001L), anyList(), eq("*"));
-        verify(outboxEventRepository).save(any());
+        assertEquals("ATOMIC_BOOKING_CREATION_REQUIRED", exception.getErrorCode());
+        verify(redisLockService, never()).releaseLocks(eq(1001L), anyList(), anyString());
+        verify(outboxEventRepository, never()).save(any());
     }
 
     @Test
-    public void convertReservations_Expired_ThrowsException() {
+    public void convertReservations_AlwaysUsesCanonicalBookingLifecycle() {
         ConvertReservationRequest request = new ConvertReservationRequest(50L, List.of(101L));
-
-        SeatReservation res = new SeatReservation();
-        res.setId(101L);
-        res.setStatus(SeatReservationStatus.EXPIRED);
-        res.setExpiresAt(Instant.now().minusSeconds(100));
-
-        when(seatReservationRepository.findAllByIdIn(List.of(101L))).thenReturn(List.of(res));
 
         SeatReservationException ex = assertThrows(SeatReservationException.class, () ->
                 seatReservationService.convertReservations(request));
 
-        assertEquals("SEAT_006", ex.getErrorCode());
+        assertEquals("ATOMIC_BOOKING_CREATION_REQUIRED", ex.getErrorCode());
     }
 
     @Test
@@ -290,7 +291,7 @@ public class SeatReservationServiceTest {
     }
 
     @Test
-    public void extendReservation_Success() {
+    public void extendReservation_DeadlineIsImmutable() {
         String publicId = "pub-123";
         Long userId = 100L;
         Instant now = Instant.now();
@@ -306,18 +307,16 @@ public class SeatReservationServiceTest {
         res.setExpiresAt(now.plusSeconds(200));
 
         when(seatReservationRepository.findByPublicId(publicId)).thenReturn(Optional.of(res));
-        when(seatReservationRepository.save(any())).thenReturn(res);
+        SeatReservationException exception = assertThrows(
+                SeatReservationException.class,
+                () -> seatReservationService.extendReservation(publicId, userId));
 
-        com.lorafilm.booking.reservation.dto.ExtendReservationResponse response = seatReservationService.extendReservation(publicId, userId);
-
-        assertNotNull(response);
-        assertEquals(publicId, response.getPublicId());
-        assertEquals(180L, response.getExtendedSeconds());
-        verify(redisLockService).extendLockTtl(eq(1001L), eq(15L), eq(publicId), anyLong());
+        assertEquals("RESERVATION_DEADLINE_IMMUTABLE", exception.getErrorCode());
+        verify(redisLockService, never()).extendLockTtl(anyLong(), anyLong(), anyString(), anyLong());
     }
 
     @Test
-    public void handleBookingStatusChange_Cancelled_ReleasesSeats() {
+    public void handleBookingStatusChange_Cancelled_DoesNotReleaseBookedCapacity() {
         Long bookingId = 50L;
         SeatReservation res = new SeatReservation();
         res.setId(101L);
@@ -328,9 +327,7 @@ public class SeatReservationServiceTest {
 
         seatReservationService.handleBookingStatusChange(bookingId, com.lorafilm.booking.booking.enums.BookingStatus.CANCELLED, "User cancelled");
 
-        assertEquals(SeatReservationStatus.RELEASED, res.getStatus());
-        assertEquals("User cancelled", res.getExpiredReason());
-        verify(seatReservationRepository).save(res);
-        verify(outboxEventRepository).save(any());
+        assertEquals(SeatReservationStatus.BOOKED, res.getStatus());
+        verify(seatReservationRepository, never()).save(res);
     }
 }

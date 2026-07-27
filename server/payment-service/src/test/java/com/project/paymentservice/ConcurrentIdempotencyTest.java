@@ -82,7 +82,7 @@ public class ConcurrentIdempotencyTest {
             ctx.setAmount(new BigDecimal("100"));
             ctx.setCurrency("VND");
             ctx.setPayable(true);
-            ctx.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+            ctx.setExpiresAt(java.time.Instant.now().plusSeconds(900));
             BookingPaymentContext.AnalyticsSnapshotData snap = new BookingPaymentContext.AnalyticsSnapshotData();
             snap.setMovieId(1L);
             snap.setMovieTitle("Movie");
@@ -244,7 +244,7 @@ public class ConcurrentIdempotencyTest {
             ctx.setAmount(new java.math.BigDecimal("150000.0"));
             ctx.setCurrency("VND");
             ctx.setBookingStatus("MOCK");
-            ctx.setExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+            ctx.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
             var snap = new com.project.paymentservice.client.booking.BookingPaymentContext.AnalyticsSnapshotData();
             snap.setMovieId(1L);
             snap.setMovieTitle("Mock Movie");

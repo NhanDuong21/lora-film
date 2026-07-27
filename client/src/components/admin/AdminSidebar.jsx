@@ -6,7 +6,6 @@ import {
   Users, 
   Calendar, 
   Gift, 
-  Database, 
   Ticket, 
   Coffee, 
   Home, 
@@ -23,8 +22,8 @@ import {
   History,
   Zap,
   BadgeDollarSign,
-  ClipboardList,
-  BarChart3
+  BarChart3,
+  Award
 } from 'lucide-react';
 
 export default function AdminSidebar({ 
@@ -186,6 +185,10 @@ export default function AdminSidebar({
                     <Zap className="w-4 h-4 shrink-0" />
                     <span>Tạo lịch tự động</span>
                   </button>
+                  <button onClick={() => handleTabClick('auto-schedule-history', '#/admin/showtime-schedules')} className={getSubLinkClass('auto-schedule-history')}>
+                    <History className="w-4 h-4 shrink-0" />
+                    <span>Lịch sử bản xem trước</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -246,6 +249,14 @@ export default function AdminSidebar({
                     <button onClick={() => handleTabClick('customers', '#/admin/members')} className={getSubLinkClass('customers')}>
                       <Users className="w-4 h-4 shrink-0" />
                       <span>Khách hàng</span>
+                    </button>
+                    <button onClick={() => handleTabClick('scores-viewer', '#/admin/scores/viewer')} className={getSubLinkClass('scores-viewer')}>
+                      <Award className="w-4 h-4 shrink-0" />
+                      <span>Tra cứu Điểm thưởng</span>
+                    </button>
+                    <button onClick={() => handleTabClick('scores-tiers', '#/admin/scores/tiers')} className={getSubLinkClass('scores-tiers')}>
+                      <Gift className="w-4 h-4 shrink-0" />
+                      <span>Hạng thẻ thành viên</span>
                     </button>
                     <button onClick={() => handleTabClick('staff', '#/admin/staff')} className={getSubLinkClass('staff')}>
                       <Shield className="w-4 h-4 shrink-0" />

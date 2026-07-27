@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { login } from "@/features/auth/services/authService";
 import { useAuth } from "@/contexts/AuthContext";
-import { Mail, Lock, ShieldAlert, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
+import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
+import { getCustomerErrorMessage } from '@/utils/customerErrorMessages';
+import { Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
 
 function Login() {
     const { login: contextLogin } = useAuth();
@@ -88,13 +90,24 @@ function Login() {
                 INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
             };
 
-            const errorMessage = errorMap[errorCode] || error?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.";
+            const errorMessage = errorMap[errorCode] || getCustomerErrorMessage(
+                error,
+                'Không thể đăng nhập. Vui lòng thử lại sau.'
+            );
             setErrorMsg(errorMessage);
         }
     };
 
     return (
         <main className="bg-zinc-950 text-white min-h-screen flex items-center justify-center py-16 px-6 relative overflow-hidden select-none">
+            {errorMsg && (
+                <CustomerNoticeModal
+                    title="Không thể đăng nhập"
+                    message={errorMsg}
+                    variant="error"
+                    onClose={() => setErrorMsg("")}
+                />
+            )}
             {/* Background ambient decorative shapes */}
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-orange/5 rounded-full filter blur-3xl pointer-events-none"></div>
             <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-brand-yellow/5 rounded-full filter blur-3xl pointer-events-none"></div>
@@ -134,14 +147,6 @@ function Login() {
                         </div>
                     )}
                 </header>
-
-                {/* Error Notification Banner */}
-                {errorMsg && (
-                    <div className="mb-6 bg-red-950/50 border border-red-800/80 rounded-xl p-4 flex items-start gap-3 text-red-200 text-xs leading-relaxed animate-shake">
-                        <ShieldAlert className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
-                        <span>{errorMsg}</span>
-                    </div>
-                )}
 
                 <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                     <div className="space-y-1">

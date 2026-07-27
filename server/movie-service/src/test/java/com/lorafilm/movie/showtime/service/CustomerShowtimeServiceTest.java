@@ -21,6 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 class CustomerShowtimeServiceTest {
 
@@ -55,7 +57,8 @@ class CustomerShowtimeServiceTest {
         showtime.setServiceDate(persistedDate);
         showtime.setStartTime(Instant.parse("2026-07-25T06:30:00Z"));
         showtime.setEndTime(Instant.parse("2026-07-25T09:00:00Z"));
-        when(repository.findCustomerBookingOptions("movie", persistedDate, persistedDate))
+        when(repository.findCustomerBookingOptions(
+                eq("movie"), eq(persistedDate), eq(persistedDate), any(Instant.class)))
                 .thenReturn(List.of(showtime, showtime));
 
         var result = service.getBookingOptions("movie", persistedDate, persistedDate);
@@ -64,6 +67,7 @@ class CustomerShowtimeServiceTest {
         assertEquals(persistedDate, result.getFirst().serviceDate());
         assertEquals(LocalDateTime.of(2026, 7, 24, 23, 30), result.getFirst().localStartTime());
         assertEquals(LocalDateTime.of(2026, 7, 25, 2, 0), result.getFirst().localEndTime());
-        verify(repository).findCustomerBookingOptions("movie", persistedDate, persistedDate);
+        verify(repository).findCustomerBookingOptions(
+                eq("movie"), eq(persistedDate), eq(persistedDate), any(Instant.class));
     }
 }

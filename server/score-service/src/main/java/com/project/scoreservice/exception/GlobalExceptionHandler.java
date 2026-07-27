@@ -44,6 +44,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
  
+    @ExceptionHandler({org.springframework.data.mapping.PropertyReferenceException.class, IllegalArgumentException.class})
+    public ResponseEntity<ApiResponse<Void>> handlePropertyReferenceException(Exception ex) {
+        ApiResponse<Void> response = ApiResponse.error("Invalid query parameter: " + ex.getMessage(), "SCORE_INVALID_QUERY");
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneralException(Exception ex) {
         ApiResponse<Void> response = ApiResponse.error("Internal server error: " + ex.getMessage(), "INTERNAL_SERVER_ERROR");

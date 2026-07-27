@@ -4,6 +4,7 @@ public class ShowtimeMovieDto {
     private String publicId;
     private String slug;
     private String title;
+    private String posterUrl;
 
     public ShowtimeMovieDto() {}
 
@@ -13,4 +14,6 @@ public class ShowtimeMovieDto {
     public void setSlug(String slug) { this.slug = slug; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
+    public String getPosterUrl() { return posterUrl; }
+    public void setPosterUrl(String posterUrl) { this.posterUrl = posterUrl; }
 }

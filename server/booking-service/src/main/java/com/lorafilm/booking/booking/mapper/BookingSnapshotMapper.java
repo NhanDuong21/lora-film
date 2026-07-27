@@ -1,14 +1,19 @@
 package com.lorafilm.booking.booking.mapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.dto.BookingSnapshotDto;
 import com.lorafilm.booking.booking.dto.CreateSnapshotRequest;
 import com.lorafilm.booking.booking.entity.BookingSnapshot;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 @Component
 public class BookingSnapshotMapper {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     public BookingSnapshotDto toDto(BookingSnapshot snapshot) {
         if (snapshot == null) {
@@ -35,6 +40,7 @@ public class BookingSnapshotMapper {
         dto.setAuditoriumId(snapshot.getAuditoriumId());
         dto.setAuditoriumName(snapshot.getAuditoriumName());
         dto.setSeatCount(snapshot.getSeatCount());
+        dto.setSeats(readSeats(snapshot.getSnapshotJson()));
         dto.setPromotionCode(snapshot.getPromotionCode());
         dto.setPromotionName(snapshot.getPromotionName());
         dto.setSnapshotJson(snapshot.getSnapshotJson());
@@ -67,5 +73,19 @@ public class BookingSnapshotMapper {
         snapshot.setPromotionName(request.getPromotionName());
         snapshot.setSnapshotJson(request.getSnapshotJson());
         return snapshot;
+    }
+
+    private List<BookingSnapshotDto.SeatSnapshot> readSeats(String snapshotJson) {
+        if (snapshotJson == null || snapshotJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(
+                    snapshotJson,
+                    new TypeReference<List<BookingSnapshotDto.SeatSnapshot>>() {
+                    });
+        } catch (Exception ignored) {
+            return List.of();
+        }
     }
 }

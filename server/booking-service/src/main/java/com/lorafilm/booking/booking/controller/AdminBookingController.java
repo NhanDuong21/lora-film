@@ -4,6 +4,7 @@ import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.dto.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.BookingFilterRequest;
 import com.lorafilm.booking.booking.dto.UpdateBookingStatusRequest;
+import com.lorafilm.booking.booking.dto.BookingOperationsSummaryResponse;
 import com.lorafilm.booking.booking.service.AdminBookingService;
 import com.lorafilm.booking.common.response.ApiResponse;
 import com.lorafilm.booking.common.response.PagedResponse;
@@ -37,6 +38,15 @@ public class AdminBookingController {
     public ResponseEntity<ApiResponse<PagedResponse<BookingAdminResponse>>> getBookings(@ModelAttribute BookingFilterRequest filter) {
         PagedResponse<BookingAdminResponse> response = adminBookingService.findBookings(filter);
         return ResponseEntity.ok(ApiResponse.success("Bookings retrieved successfully", response));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "Get global booking operations summary",
+            description = "Global lifecycle and attention counters backed by Booking Service data")
+    public ResponseEntity<ApiResponse<BookingOperationsSummaryResponse>> getOperationsSummary() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Booking operations summary retrieved successfully",
+                adminBookingService.getOperationsSummary()));
     }
 
     @GetMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}")

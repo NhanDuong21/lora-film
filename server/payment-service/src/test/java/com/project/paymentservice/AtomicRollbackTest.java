@@ -92,7 +92,7 @@ public class AtomicRollbackTest {
             ctx.setAmount(new BigDecimal("100"));
             ctx.setCurrency("VND");
             ctx.setPayable(true);
-            ctx.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+            ctx.setExpiresAt(java.time.Instant.now().plusSeconds(900));
             BookingPaymentContext.AnalyticsSnapshotData snap = new BookingPaymentContext.AnalyticsSnapshotData();
             snap.setMovieId(1L);
             snap.setMovieTitle("Movie");
@@ -132,7 +132,7 @@ public class AtomicRollbackTest {
             ctx.setAmount(new BigDecimal("100"));
             ctx.setCurrency("VND");
             ctx.setPayable(true);
-            ctx.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+            ctx.setExpiresAt(java.time.Instant.now().plusSeconds(900));
             BookingPaymentContext.AnalyticsSnapshotData snap = new BookingPaymentContext.AnalyticsSnapshotData();
             snap.setMovieId(1L);
             snap.setMovieTitle("Movie");

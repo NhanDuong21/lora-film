@@ -524,9 +524,8 @@ public class PaymentServiceImpl implements PaymentService {
                 notifyReq.setResult("SUCCESS");
                 notifyReq.setAmount(payment.getAmount());
                 notifyReq.setCurrency(payment.getCurrency());
-                notifyReq.setOccurredAt(payment.getSucceededAt());
+                notifyReq.setOccurredAt(payment.getSucceededAt().toInstant(java.time.ZoneOffset.UTC));
                 notifyReq.setExternalTransactionId(payment.getExternalTransactionId());
-                notifyReq.setReconciliationStatus(payment.getReconciliationStatus().name());
 
                 com.project.paymentservice.entity.PaymentOutboxEvent outboxEvent = new com.project.paymentservice.entity.PaymentOutboxEvent();
                 outboxEvent.setEventId(notifyReq.getEventId());
@@ -654,9 +653,8 @@ public class PaymentServiceImpl implements PaymentService {
                 notifyReq.setResult("CANCELLED");
                 notifyReq.setAmount(payment.getAmount());
                 notifyReq.setCurrency(payment.getCurrency());
-                notifyReq.setOccurredAt(payment.getCancelledAt());
+                notifyReq.setOccurredAt(payment.getCancelledAt().toInstant(java.time.ZoneOffset.UTC));
                 notifyReq.setExternalTransactionId(payment.getExternalTransactionId());
-                notifyReq.setReconciliationStatus(payment.getReconciliationStatus().name());
 
                 com.project.paymentservice.entity.PaymentOutboxEvent outboxEvent = new com.project.paymentservice.entity.PaymentOutboxEvent();
                 outboxEvent.setEventId(notifyReq.getEventId());
@@ -831,7 +829,8 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setCurrency(context.getCurrency());
         payment.setPaymentMethod(method);
         payment.setStatus(PaymentStatus.PENDING);
-        payment.setExpiresAt(context.getExpiresAt());
+        payment.setExpiresAt(LocalDateTime.ofInstant(
+                context.getExpiresAt(), java.time.ZoneOffset.UTC));
         payment = paymentRepository.saveAndFlush(payment);
 
         // Create analytics snapshot

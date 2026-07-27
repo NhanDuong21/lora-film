@@ -19,6 +19,9 @@ public class User {
     @Column(name = "full_name", nullable = false, length = 100)
     private String fullName;
 
+    @Column(name = "email", length = 100)
+    private String email;
+
     @Column(name = "phone_number", nullable = false, unique = true, length = 15)
     private String phoneNumber;
 
@@ -99,6 +102,14 @@ public class User {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public String getPhoneNumber() {

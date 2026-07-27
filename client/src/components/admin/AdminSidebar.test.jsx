@@ -17,7 +17,7 @@ describe('AdminSidebar scheduling terminology', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('Quản lý suất chiếu')).toBeInTheDocument();
+    expect(screen.getByText('Lịch chiếu')).toBeInTheDocument();
     expect(screen.getByText('Lịch sử bản xem trước')).toBeInTheDocument();
     expect(screen.queryByText('Lịch sử bản xem trước xếp lịch')).not.toBeInTheDocument();
     expect(screen.queryByText('Lịch sử xếp lịch')).not.toBeInTheDocument();

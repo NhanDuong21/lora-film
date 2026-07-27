@@ -30,6 +30,12 @@ public class BookingPaymentEvent extends BaseEntity {
     @Column(name = "payment_id")
     private Long paymentId;
 
+    @Column(name = "payment_public_id", length = 36)
+    private String paymentPublicId;
+
+    @Column(name = "schema_version", length = 20, nullable = false)
+    private String schemaVersion = "1.0";
+
     @Column(name = "transaction_id", length = 100)
     private String transactionId;
 
@@ -57,6 +63,18 @@ public class BookingPaymentEvent extends BaseEntity {
 
     @Column(name = "response_payload", columnDefinition = "JSON")
     private String responsePayload;
+
+    @Column(name = "payload_hash", length = 64)
+    private String payloadHash;
+
+    @Column(name = "processing_outcome", length = 40, nullable = false)
+    private String processingOutcome = "ACCEPTED";
+
+    @Column(name = "processing_error_code", length = 100)
+    private String processingErrorCode;
+
+    @Column(name = "reconciliation_task_public_id", length = 36)
+    private String reconciliationTaskPublicId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
@@ -90,6 +108,22 @@ public class BookingPaymentEvent extends BaseEntity {
 
     public void setPaymentId(Long paymentId) {
         this.paymentId = paymentId;
+    }
+
+    public String getPaymentPublicId() {
+        return paymentPublicId;
+    }
+
+    public void setPaymentPublicId(String paymentPublicId) {
+        this.paymentPublicId = paymentPublicId;
+    }
+
+    public String getSchemaVersion() {
+        return schemaVersion;
+    }
+
+    public void setSchemaVersion(String schemaVersion) {
+        this.schemaVersion = schemaVersion;
     }
 
     public String getTransactionId() {
@@ -162,6 +196,38 @@ public class BookingPaymentEvent extends BaseEntity {
 
     public void setResponsePayload(String responsePayload) {
         this.responsePayload = responsePayload;
+    }
+
+    public String getPayloadHash() {
+        return payloadHash;
+    }
+
+    public void setPayloadHash(String payloadHash) {
+        this.payloadHash = payloadHash;
+    }
+
+    public String getProcessingOutcome() {
+        return processingOutcome;
+    }
+
+    public void setProcessingOutcome(String processingOutcome) {
+        this.processingOutcome = processingOutcome;
+    }
+
+    public String getProcessingErrorCode() {
+        return processingErrorCode;
+    }
+
+    public void setProcessingErrorCode(String processingErrorCode) {
+        this.processingErrorCode = processingErrorCode;
+    }
+
+    public String getReconciliationTaskPublicId() {
+        return reconciliationTaskPublicId;
+    }
+
+    public void setReconciliationTaskPublicId(String reconciliationTaskPublicId) {
+        this.reconciliationTaskPublicId = reconciliationTaskPublicId;
     }
 
     public PaymentEventStatus getStatus() {

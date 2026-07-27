@@ -71,10 +71,6 @@ public class BookingStatusHistoryServiceImpl implements BookingStatusHistoryServ
         }
 
         List<BookingStatusHistory> histories = historyRepository.findByBookingIdOrderByCreatedAtDesc(bookingId);
-        if (histories.isEmpty()) {
-            throw new BusinessException("NO_HISTORY_FOUND", "Booking has no status history");
-        }
-
         return histories.stream().map(historyMapper::toDto).collect(Collectors.toList());
     }
 }

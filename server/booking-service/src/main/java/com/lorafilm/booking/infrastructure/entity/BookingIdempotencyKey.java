@@ -14,7 +14,7 @@ import java.time.Instant;
 @Table(name = "booking_idempotency_keys")
 public class BookingIdempotencyKey extends BaseEntity {
 
-    @Column(name = "idempotency_key", length = 255, nullable = false, unique = true)
+    @Column(name = "idempotency_key", length = 255, nullable = false)
     private String idempotencyKey;
 
     @Column(name = "request_hash", length = 255, nullable = false)
@@ -35,6 +35,12 @@ public class BookingIdempotencyKey extends BaseEntity {
 
     @Column(name = "response_body", columnDefinition = "JSON")
     private String responseBody;
+
+    @Column(name = "locked_until")
+    private Instant lockedUntil;
+
+    @Column(name = "resource_public_id", length = 36)
+    private String resourcePublicId;
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
@@ -96,6 +102,22 @@ public class BookingIdempotencyKey extends BaseEntity {
 
     public void setResponseBody(String responseBody) {
         this.responseBody = responseBody;
+    }
+
+    public Instant getLockedUntil() {
+        return lockedUntil;
+    }
+
+    public void setLockedUntil(Instant lockedUntil) {
+        this.lockedUntil = lockedUntil;
+    }
+
+    public String getResourcePublicId() {
+        return resourcePublicId;
+    }
+
+    public void setResourcePublicId(String resourcePublicId) {
+        this.resourcePublicId = resourcePublicId;
     }
 
     public Instant getExpiresAt() {

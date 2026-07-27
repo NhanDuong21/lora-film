@@ -114,6 +114,25 @@ public class CustomerBookingController {
         return ResponseEntity.ok(ApiResponse.success("Bookings retrieved successfully", response));
     }
 
+    @GetMapping("/active")
+    @Operation(
+            summary = "Get my active booking for a showtime",
+            description = "Returns the unexpired PENDING_PAYMENT booking that prevents creating a second order")
+    public ResponseEntity<ApiResponse<BookingResponse>> getActiveBooking(
+            @RequestParam
+            @Pattern(regexp = ValidationConstants.UUID_PATTERN,
+                    message = "showtimePublicId must be a valid UUID")
+            String showtimePublicId) {
+        BookingResponse activeBooking = bookingService
+                .findActiveByShowtime(showtimePublicId)
+                .orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(
+                activeBooking == null
+                        ? "Không có đơn giữ ghế đang hoạt động cho suất chiếu này"
+                        : "Đã tải đơn giữ ghế đang hoạt động",
+                activeBooking));
+    }
+
     @GetMapping("/{publicId}")
     @Operation(summary = "Get booking detail", description = "Only the booking owner or an administrator can view it")
     public ResponseEntity<ApiResponse<BookingDetailResponse>> getBookingDetail(
@@ -148,16 +167,25 @@ public class CustomerBookingController {
                 "Booking cancelled successfully", bookingService.cancelBooking(publicId, request)));
     }
 
+    @PostMapping("/{publicId}/finalize-checkout")
+    @Operation(summary = "Lock the checkout amount", description = "Locks the server-owned amount before Payment handoff")
+    public ResponseEntity<ApiResponse<BookingResponse>> finalizeCheckout(@PathVariable String publicId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Checkout finalized successfully", bookingService.finalizeCheckout(publicId)));
+    }
+
     @PostMapping("/{publicId}/payment")
-    @Operation(summary = "Initiate payment", description = "Requests payment initiation for a PENDING_PAYMENT booking")
+    @Operation(summary = "Deprecated payment initiation", description = "Payment is owned by Payment Service after checkout finalization")
     @Idempotent
-    public ResponseEntity<ApiResponse<com.lorafilm.booking.payment.dto.PaymentResponseDto>> initiatePayment(
+    public ResponseEntity<ApiResponse<Void>> initiatePayment(
             @PathVariable
             @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")
             String publicId,
-            @Valid @RequestBody com.lorafilm.booking.payment.dto.InitiatePaymentRequest request) {
-        com.lorafilm.booking.payment.dto.PaymentResponseDto response = bookingService.initiatePayment(publicId, request);
-        return ResponseEntity.ok(ApiResponse.success("Payment initiated successfully", response));
+            @RequestBody(required = false) Map<String, Object> ignoredRequest) {
+        throw new com.lorafilm.booking.common.exception.BusinessException(
+                "PAYMENT_SERVICE_HANDOFF_REQUIRED",
+                "Payment initiation is owned by Payment Service",
+                HttpStatus.GONE);
     }
 
 

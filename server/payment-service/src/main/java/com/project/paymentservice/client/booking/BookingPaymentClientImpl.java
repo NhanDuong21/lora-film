@@ -15,7 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Component
 public class BookingPaymentClientImpl implements BookingPaymentClient {
@@ -116,6 +116,10 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
             throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
                     "Booking Service returned mismatched bookingId", HttpStatus.SERVICE_UNAVAILABLE);
         }
+        if (context.getBookingPublicId() == null || context.getBookingPublicId().isBlank()) {
+            throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
+                    "Booking Service returned missing bookingPublicId", HttpStatus.SERVICE_UNAVAILABLE);
+        }
         if (context.getAccountId() == null || context.getAccountId() <= 0) {
             throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
                     "Booking Service returned invalid accountId", HttpStatus.SERVICE_UNAVAILABLE);
@@ -132,7 +136,12 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
             throw new BusinessException("BOOKING_NOT_PAYABLE",
                     "Booking is not payable", HttpStatus.CONFLICT);
         }
-        if (context.getExpiresAt() == null || context.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (context.getAmountLockedAt() == null || context.getAmountLockedAt().isAfter(Instant.now())) {
+            throw new BusinessException("BOOKING_SERVICE_UNAVAILABLE",
+                    "Booking Service returned invalid amount lock timestamp",
+                    HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        if (context.getExpiresAt() == null || context.getExpiresAt().isBefore(Instant.now())) {
             throw new BusinessException("BOOKING_NOT_PAYABLE",
                     "Booking has expired", HttpStatus.CONFLICT);
         }

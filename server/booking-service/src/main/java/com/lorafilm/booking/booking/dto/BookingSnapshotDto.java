@@ -1,6 +1,8 @@
 package com.lorafilm.booking.booking.dto;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public class BookingSnapshotDto {
 
@@ -21,6 +23,7 @@ public class BookingSnapshotDto {
     private Long auditoriumId;
     private String auditoriumName;
     private Integer seatCount;
+    private List<SeatSnapshot> seats;
     private String promotionCode;
     private String promotionName;
     private String snapshotJson;
@@ -165,6 +168,14 @@ public class BookingSnapshotDto {
         this.seatCount = seatCount;
     }
 
+    public List<SeatSnapshot> getSeats() {
+        return seats;
+    }
+
+    public void setSeats(List<SeatSnapshot> seats) {
+        this.seats = seats;
+    }
+
     public String getPromotionCode() {
         return promotionCode;
     }
@@ -195,5 +206,14 @@ public class BookingSnapshotDto {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public record SeatSnapshot(
+            Long seatId,
+            String seatPublicId,
+            String seatLabel,
+            String seatType,
+            BigDecimal price,
+            String currency) {
     }
 }

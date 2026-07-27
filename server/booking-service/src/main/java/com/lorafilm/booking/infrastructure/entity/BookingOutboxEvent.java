@@ -21,6 +21,9 @@ public class BookingOutboxEvent extends BaseEntity {
     @Column(name = "aggregate_id", nullable = false)
     private Long aggregateId;
 
+    @Column(name = "aggregate_public_id", length = 36)
+    private String aggregatePublicId;
+
     @Column(name = "event_id", length = 36, nullable = false, unique = true)
     private String eventId;
 
@@ -73,6 +76,14 @@ public class BookingOutboxEvent extends BaseEntity {
 
     public void setAggregateId(Long aggregateId) {
         this.aggregateId = aggregateId;
+    }
+
+    public String getAggregatePublicId() {
+        return aggregatePublicId;
+    }
+
+    public void setAggregatePublicId(String aggregatePublicId) {
+        this.aggregatePublicId = aggregatePublicId;
     }
 
     public String getEventId() {

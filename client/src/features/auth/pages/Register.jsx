@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "@/features/auth/services/authService";
+import CustomerNoticeModal from "@/components/common/CustomerNoticeModal";
+import { getCustomerErrorMessage } from "@/utils/customerErrorMessages";
 
 function Register() {
     const navigate = useNavigate();
@@ -170,7 +172,10 @@ function Register() {
                         });
                     }, 1500);
                 } else {
-                    setGlobalError(res.message || "Đăng ký không thành công. Vui lòng thử lại.");
+                    setGlobalError(getCustomerErrorMessage(
+                        res,
+                        'Đăng ký không thành công. Vui lòng thử lại.'
+                    ));
                 }
             } catch (error) {
                 setIsSubmitting(false);
@@ -227,7 +232,10 @@ function Register() {
                 if (errorCode === "VALIDATION_ERROR" && error.errors) {
                     const fieldErrors = {};
                     error.errors.forEach(err => {
-                        fieldErrors[err.field] = err.message;
+                        fieldErrors[err.field] = getCustomerErrorMessage(
+                            err,
+                            'Giá trị này không hợp lệ.'
+                        );
                     });
                     setErrors(fieldErrors);
                     setGlobalError("Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại các trường.");
@@ -237,7 +245,10 @@ function Register() {
                 const errorMap = {
                     INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
                 };
-                const errorMessage = errorMap[errorCode] || error?.message || "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.";
+                const errorMessage = errorMap[errorCode] || getCustomerErrorMessage(
+                    error,
+                    'Không thể đăng ký tài khoản. Vui lòng thử lại sau.'
+                );
                 setGlobalError(errorMessage);
             }
         }
@@ -247,6 +258,14 @@ function Register() {
 
     return (
         <main className="bg-[#050506] text-white min-h-screen w-full flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden select-none">
+            {globalError && (
+                <CustomerNoticeModal
+                    title="Không thể đăng ký"
+                    message={globalError}
+                    variant="error"
+                    onClose={() => setGlobalError("")}
+                />
+            )}
             {/* Decorative ambient background lights */}
             <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] bg-brand-orange/10 rounded-full filter blur-[80px] pointer-events-none z-0" />
             <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-brand-orange/5 rounded-full filter blur-[80px] pointer-events-none z-0" />
@@ -298,28 +317,6 @@ function Register() {
                             <polyline points="20 6 9 17 4 12" />
                         </svg>
                         <span>{globalSuccess}</span>
-                    </div>
-                )}
-
-                {globalError && (
-                    <div className="mb-6 bg-red-950/50 border border-red-800/80 rounded-xl p-4 flex items-start gap-3 text-red-200 text-xs leading-relaxed">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-4 h-4 shrink-0 text-red-500 mt-0.5"
-                        >
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
-                        </svg>
-                        <span>{globalError}</span>
                     </div>
                 )}
 

@@ -14,7 +14,7 @@ public enum BookingStatus {
 
     private static final Map<BookingStatus, Set<BookingStatus>> ALLOWED_TRANSITIONS = Map.of(
             PENDING_PAYMENT, EnumSet.of(CONFIRMED, CANCELLED, EXPIRED),
-            CONFIRMED, EnumSet.of(COMPLETED, REFUNDED, CANCELLED),
+            CONFIRMED, EnumSet.of(COMPLETED, REFUNDED),
             COMPLETED, EnumSet.noneOf(BookingStatus.class),
             CANCELLED, EnumSet.noneOf(BookingStatus.class),
             EXPIRED, EnumSet.noneOf(BookingStatus.class),

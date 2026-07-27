@@ -7,7 +7,9 @@ import java.time.LocalDate;
 public class UserProfileResponse {
 
     private Long accountId;
+    private String customerCode;
     private String fullName;
+    private String email;
     private String phoneNumber;
     private Gender gender;
     private LocalDate birthday;
@@ -40,12 +42,28 @@ public class UserProfileResponse {
         this.accountId = accountId;
     }
 
+    public String getCustomerCode() {
+        return customerCode;
+    }
+
+    public void setCustomerCode(String customerCode) {
+        this.customerCode = customerCode;
+    }
+
     public String getFullName() {
         return fullName;
     }
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public String getPhoneNumber() {

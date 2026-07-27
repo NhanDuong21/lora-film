@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Film, Star, ChevronDown, Check, MapPin, AlertCircle } from 'lucide-react';
 import { getMovies, getCinemas, getShowtimes } from '@/features/catalog/customer/services/movieService';
 import { seatSelectionPath } from '@/features/catalog/customer/utils/customerMovieFlow';
+import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import BookingStepper from '../components/BookingStepper';
 
 export default function MasterBookingFunnelPage() {
@@ -14,8 +15,7 @@ export default function MasterBookingFunnelPage() {
   const [showtimes, setShowtimes] = useState([]);
   
   const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line no-unused-vars
-  const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   const [activeSection, setActiveSection] = useState('location'); // 'location' | 'movie' | 'showtime'
   
@@ -29,16 +29,19 @@ export default function MasterBookingFunnelPage() {
   // Fetch all initial cinemas and movies
   const fetchInitialData = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setNotice(null);
     try {
       const cinemasData = await getCinemas();
       const moviesData = await getMovies({ size: 100, status: 'NOW_SHOWING' });
       
       setCinemas(cinemasData.data || cinemasData.content || cinemasData || []);
       setMovies(moviesData.data || moviesData.content || moviesData || []);
-    // eslint-disable-next-line no-unused-vars
-    } catch (err) {
-      setError("Không thể tải thông tin phòng vé.");
+    } catch {
+      setNotice({
+        title: 'Không thể tải phòng vé',
+        message: 'Không thể tải danh sách phim và rạp lúc này. Vui lòng thử lại.',
+        variant: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -104,6 +107,11 @@ export default function MasterBookingFunnelPage() {
     } catch (e) {
       console.error(e);
       setShowtimes([]);
+      setNotice({
+        title: 'Không thể tải lịch chiếu',
+        message: 'Lịch chiếu hiện chưa tải được. Vui lòng chọn lại hoặc thử lại sau.',
+        variant: 'error'
+      });
     }
   }, [selectedMovie, selectedCinema, selectedDate]);
 
@@ -182,6 +190,14 @@ export default function MasterBookingFunnelPage() {
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-8 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
+      {notice && (
+        <CustomerNoticeModal
+          title={notice.title}
+          message={notice.message}
+          variant={notice.variant}
+          onClose={() => setNotice(null)}
+        />
+      )}
       <div className="max-w-7xl mx-auto">
         <BookingStepper currentStep={1} />
         

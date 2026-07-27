@@ -3,6 +3,7 @@ package com.lorafilm.booking.infrastructure.entity;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.common.entity.BaseEntity;
 import com.lorafilm.booking.infrastructure.enums.ReconciliationStatus;
+import com.lorafilm.booking.payment.entity.BookingPaymentEvent;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -27,6 +28,10 @@ public class BookingReconciliationTask extends BaseEntity {
     @JoinColumn(name = "booking_id", nullable = false)
     private Booking booking;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_event_id", unique = true)
+    private BookingPaymentEvent paymentEvent;
+
     @Column(name = "payment_reference", length = 100)
     private String paymentReference;
 
@@ -35,6 +40,12 @@ public class BookingReconciliationTask extends BaseEntity {
 
     @Column(name = "actual_amount", precision = 12, scale = 2)
     private BigDecimal actualAmount;
+
+    @Column(name = "expected_currency", length = 10)
+    private String expectedCurrency;
+
+    @Column(name = "actual_currency", length = 10)
+    private String actualCurrency;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "reconciliation_status", nullable = false)
@@ -69,6 +80,14 @@ public class BookingReconciliationTask extends BaseEntity {
         this.booking = booking;
     }
 
+    public BookingPaymentEvent getPaymentEvent() {
+        return paymentEvent;
+    }
+
+    public void setPaymentEvent(BookingPaymentEvent paymentEvent) {
+        this.paymentEvent = paymentEvent;
+    }
+
     public String getPaymentReference() {
         return paymentReference;
     }
@@ -91,6 +110,22 @@ public class BookingReconciliationTask extends BaseEntity {
 
     public void setActualAmount(BigDecimal actualAmount) {
         this.actualAmount = actualAmount;
+    }
+
+    public String getExpectedCurrency() {
+        return expectedCurrency;
+    }
+
+    public void setExpectedCurrency(String expectedCurrency) {
+        this.expectedCurrency = expectedCurrency;
+    }
+
+    public String getActualCurrency() {
+        return actualCurrency;
+    }
+
+    public void setActualCurrency(String actualCurrency) {
+        this.actualCurrency = actualCurrency;
     }
 
     public ReconciliationStatus getReconciliationStatus() {

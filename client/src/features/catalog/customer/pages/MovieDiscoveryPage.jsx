@@ -3,6 +3,7 @@ import {
   Play, RefreshCw, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import TrailerModal from '@/components/common/TrailerModal';
+import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import { getMovies, getGenres } from '@/features/catalog/customer/services/movieService';
 import { getYoutubeEmbedUrl } from '@/utils/formatters';
 
@@ -34,6 +35,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
   const [totalPages, setTotalPages] = useState(0);
 
   const [activeTrailerUrl, setActiveTrailerUrl] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     const fetchGenres = async () => {
@@ -41,13 +43,18 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
         const genresData = await getGenres();
         if (genresData && Array.isArray(genresData)) {
           const formattedGenres = genresData.map(g => ({
-            label: g.genreName,
-            value: g.id
+            label: g.name || g.genreName,
+            value: g.publicId || g.id
           }));
           setGenres([{ label: 'Tất cả thể loại', value: 'ALL' }, ...formattedGenres]);
         }
       } catch (error) {
         console.error("Failed to fetch genres:", error);
+        setNotice({
+          title: 'Không thể tải thể loại phim',
+          message: 'Danh sách thể loại hiện chưa tải được. Bạn vẫn có thể xem danh sách phim.',
+          variant: 'warning'
+        });
       }
     };
     fetchGenres();
@@ -76,6 +83,11 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
         }
       } catch (error) {
         console.error("Failed to fetch movies:", error);
+        setNotice({
+          title: 'Không thể tải danh sách phim',
+          message: 'Danh sách phim hiện chưa tải được. Vui lòng thử lại sau.',
+          variant: 'error'
+        });
       } finally {
         setLoading(false);
       }
@@ -112,6 +124,14 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
 
   return (
     <div className="bg-brand-dark text-zinc-100 min-h-screen py-8 px-4 md:px-8">
+      {notice && (
+        <CustomerNoticeModal
+          title={notice.title}
+          message={notice.message}
+          variant={notice.variant}
+          onClose={() => setNotice(null)}
+        />
+      )}
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* Header Breadcrumbs block */}
@@ -207,7 +227,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                 {movies.map((movie) => {
                   return (
                     <div 
-                      key={movie.id}
+                      key={movie.publicId || movie.id || movie.slug}
                       className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-3xl p-4 flex gap-4 md:gap-6 shadow-xl transition-all duration-300 relative group overflow-hidden"
                     >
                       {/* Image Block (Left Aspect Ratio container) */}
@@ -346,7 +366,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
               <div className="space-y-4">
                 {movies.slice(0, 3).map((movie) => (
                   <div 
-                    key={movie.id}
+                    key={movie.publicId || movie.id || movie.slug}
                     className="flex gap-3 hover:bg-white/5 p-1.5 rounded-xl transition-colors cursor-pointer group"
                   >
                     <div className="w-12 h-18 rounded-lg overflow-hidden shrink-0 bg-zinc-950 border border-zinc-800">

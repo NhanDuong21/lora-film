@@ -1,11 +1,18 @@
 package com.project.scoreservice.enumtype;
 
 public enum ScoreTransactionType {
-    EARN_BY_BOOKING,
-    REDEEM_FOR_BOOKING,
+    EARN,
+    HOLD,
+    COMMIT,
+    RELEASE,
+    REDEEM,
     REFUND_REDEEM,
-    REVOKE_EARN_BY_REFUND,
+    REVOKE_EARN,
+    EXPIRED,
     MANUAL_ADD,
     MANUAL_DEDUCT,
-    EXPIRED
+    REVERSE_ADJUSTMENT,
+    EARN_BY_BOOKING,
+    REDEEM_FOR_BOOKING,
+    REVOKE_EARN_BY_REFUND
 }

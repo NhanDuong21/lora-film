@@ -5,11 +5,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-@Schema(description = "Create a booking from active seat reservations")
+@Schema(description = "Create a Booking atomically from public seat identities")
 public class CreateBookingRequest {
 
     @NotBlank(message = "showtimePublicId is required")
@@ -19,10 +18,15 @@ public class CreateBookingRequest {
             example = "550e8400-e29b-41d4-a716-446655440001")
     private String showtimePublicId;
 
-    @NotEmpty(message = "reservationPublicIds cannot be empty")
-    @Size(max = 8, message = "A booking cannot contain more than 8 reservations")
+    @Schema(description = "Canonical public seat IDs.  The server validates the configured maximum.")
+    private List<
+            @NotBlank(message = "seatPublicId cannot be blank")
+            @Pattern(
+                    regexp = ValidationConstants.UUID_PATTERN,
+                    message = "seatPublicId must be a valid UUID") String> seatPublicIds;
+
     @Schema(
-            description = "Public IDs of the active seat reservations",
+            description = "Deprecated compatibility IDs of existing HELD reservations",
             example = "[\"8712253d-dc49-4f85-a6db-f99908dd61d7\", \"6f5867c6-9596-4011-844e-183f23e65bb6\"]")
     private List<
             @NotBlank(message = "reservationPublicId cannot be blank")
@@ -36,6 +40,11 @@ public class CreateBookingRequest {
     public CreateBookingRequest(String showtimePublicId, List<String> reservationPublicIds) {
         this.showtimePublicId = showtimePublicId;
         this.reservationPublicIds = reservationPublicIds;
+    }
+
+    public CreateBookingRequest(String showtimePublicId, List<String> seatPublicIds, boolean canonical) {
+        this.showtimePublicId = showtimePublicId;
+        this.seatPublicIds = seatPublicIds;
     }
 
     public String getShowtimePublicId() {
@@ -52,6 +61,14 @@ public class CreateBookingRequest {
 
     public void setReservationPublicIds(List<String> reservationPublicIds) {
         this.reservationPublicIds = reservationPublicIds;
+    }
+
+    public List<String> getSeatPublicIds() {
+        return seatPublicIds;
+    }
+
+    public void setSeatPublicIds(List<String> seatPublicIds) {
+        this.seatPublicIds = seatPublicIds;
     }
 
 }
