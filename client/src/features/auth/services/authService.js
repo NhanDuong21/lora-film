@@ -6,6 +6,11 @@ export const register = async (userData) => {
     return response.data;
 };
 
+export const getRegistrationStatus = async (requestId) => {
+    const response = await apiClient.get(`/api/auth/registrations/${encodeURIComponent(requestId)}/status`);
+    return response.data?.data;
+};
+
 export const verifyOtp = async (email, otpCode, purpose = "REGISTRATION") => {
     const response = await apiClient.post(`/api/auth/verify`, {
         email,
@@ -47,3 +52,21 @@ export const refreshToken = async (tokenValue) => {
         throw error;
     }
 };
+
+export const forgotPassword = async (email) =>
+    (await apiClient.post("/api/auth/forgot-password", { email })).data;
+
+export const resetPassword = async (token, newPassword) =>
+    (await apiClient.post("/api/auth/reset-password", { token, newPassword })).data;
+
+export const changePassword = async (oldPassword, newPassword) =>
+    (await apiClient.post("/api/auth/change-password", { oldPassword, newPassword })).data;
+
+export const getSessions = async () =>
+    (await apiClient.get("/api/auth/sessions")).data?.data || [];
+
+export const revokeSession = async (sessionId) =>
+    (await apiClient.delete(`/api/auth/sessions/${encodeURIComponent(sessionId)}`)).data;
+
+export const revokeAllSessions = async () =>
+    (await apiClient.delete("/api/auth/sessions")).data;

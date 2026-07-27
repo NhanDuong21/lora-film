@@ -47,7 +47,7 @@ apiClient.interceptors.response.use(
         return response;
     },
     async (error) => {
-        const originalRequest = error.config;
+        const originalRequest = error.config || {};
 
         // Skip token refresh for auth endpoints
         const isAuthEndpoint = originalRequest.url && (
@@ -113,7 +113,14 @@ apiClient.interceptors.response.use(
 
         // Return standard error data if available
         if (error.response && error.response.data) {
-            return Promise.reject(error.response.data);
+            const responseData = error.response.data;
+            if (typeof responseData === "object") {
+                return Promise.reject({ ...responseData, status: error.response.status });
+            }
+            return Promise.reject({
+                message: String(responseData),
+                status: error.response.status
+            });
         }
         return Promise.reject(error);
     }
