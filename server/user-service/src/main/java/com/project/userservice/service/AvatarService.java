@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
+import java.util.List;
 
 @Service
 public class AvatarService {
@@ -33,6 +34,7 @@ public class AvatarService {
     @Transactional
     public String upload(Long accountId, MultipartFile file) {
         User user = findUser(accountId);
+        List<Avatar> previousAvatars = avatarRepository.findByAccountIdOrderByUploadedAtDesc(accountId);
         SecureFileStorageService.StoredFile storedFile = fileStorageService.storeAvatar(file);
         try {
             Avatar avatar = new Avatar();
@@ -44,6 +46,9 @@ public class AvatarService {
             avatarRepository.save(avatar);
             user.setAvatarUrl(avatar.getFileUrl());
             userRepository.save(user);
+            avatarRepository.deleteAll(previousAvatars);
+            previousAvatars.forEach(previous -> fileStorageService.deleteAfterCommit(
+                    "avatars", previous.getFileName()));
             auditService.log("AVATAR_UPDATED", "USER", accountId, null);
             eventService.record("CUSTOMER_UPDATED", "USER", accountId,
                     Map.of("accountId", accountId, "avatarUrl", avatar.getFileUrl()));
@@ -61,13 +66,11 @@ public class AvatarService {
     @Transactional
     public void delete(Long accountId) {
         User user = findUser(accountId);
-        String current = user.getAvatarUrl();
+        List<Avatar> avatars = avatarRepository.findByAccountIdOrderByUploadedAtDesc(accountId);
         user.setAvatarUrl(null);
         userRepository.save(user);
-        if (current != null && current.contains("/")) {
-            String fileName = current.substring(current.lastIndexOf('/') + 1);
-            fileStorageService.deleteAfterCommit("avatars", fileName);
-        }
+        avatarRepository.deleteAll(avatars);
+        avatars.forEach(avatar -> fileStorageService.deleteAfterCommit("avatars", avatar.getFileName()));
         auditService.log("AVATAR_DELETED", "USER", accountId, null);
     }
 

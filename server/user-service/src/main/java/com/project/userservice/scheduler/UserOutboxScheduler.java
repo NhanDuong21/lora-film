@@ -81,7 +81,8 @@ public class UserOutboxScheduler {
     private boolean publishToDeadLetter(OutboxMessage message, Exception originalFailure) {
         try {
             kafkaTemplate.send(
-                    domainTopic + ".dlq",
+                    ("USER_PROFILE_CREATED".equals(message.getEventType())
+                            ? userProfileCreatedTopic : domainTopic) + ".dlq",
                     message.getAggregateId(),
                     message.getPayload()).get(10, TimeUnit.SECONDS);
             message.setAttemptCount(MAX_ATTEMPTS);

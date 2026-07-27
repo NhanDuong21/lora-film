@@ -1,10 +1,13 @@
 package com.project.userservice.service.impl;
 
 import com.project.userservice.dto.response.UserProfileResponse;
+import com.project.userservice.dto.request.UpdateProfileRequest;
 import com.project.userservice.entity.User;
 import com.project.userservice.exception.BusinessException;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.service.UserService;
+import com.project.userservice.service.UserAuditService;
+import com.project.userservice.service.UserDomainEventService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.PageRequest;
@@ -19,16 +22,55 @@ import java.util.Map;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final UserAuditService auditService;
+    private final UserDomainEventService eventService;
 
-    public UserServiceImpl(UserRepository userRepository) {
+    public UserServiceImpl(UserRepository userRepository, UserAuditService auditService,
+                           UserDomainEventService eventService) {
         this.userRepository = userRepository;
+        this.auditService = auditService;
+        this.eventService = eventService;
     }
 
     @Override
     public UserProfileResponse getUserProfile(Long accountId) {
         User user = userRepository.findById(accountId)
                 .orElseThrow(() -> new BusinessException("User profile not found", "USER_NOT_FOUND"));
+        if (Boolean.TRUE.equals(user.getIsDeleted())) {
+            throw new BusinessException("User profile not found", "USER_NOT_FOUND");
+        }
+        return mapToResponse(user);
+    }
 
+    @Override
+    @Transactional
+    public UserProfileResponse updateProfile(Long accountId, UpdateProfileRequest request) {
+        User user = userRepository.findById(accountId)
+                .orElseThrow(() -> new BusinessException("User profile not found", "USER_NOT_FOUND"));
+        if (Boolean.TRUE.equals(user.getIsDeleted())) {
+            throw new BusinessException("User profile not found", "USER_NOT_FOUND");
+        }
+        if (request.fullName() != null) {
+            user.setFullName(request.fullName().trim());
+        }
+        if (request.phoneNumber() != null) {
+            String phone = request.phoneNumber().trim();
+            if (userRepository.existsByPhoneNumberAndAccountIdNot(phone, accountId)) {
+                throw new BusinessException("Phone number already exists", "USER_PHONE_ALREADY_EXISTS");
+            }
+            user.setPhoneNumber(phone);
+        }
+        if (request.gender() != null) {
+            user.setGender(request.gender());
+        }
+        if (request.birthday() != null) {
+            user.setBirthday(request.birthday());
+            user.setBirthYear(request.birthday().getYear());
+        }
+        userRepository.save(user);
+        auditService.log("USER_PROFILE_UPDATED", "USER", accountId, null);
+        eventService.record("CUSTOMER_UPDATED", "USER", accountId,
+                Map.of("accountId", accountId));
         return mapToResponse(user);
     }
 
@@ -88,6 +130,8 @@ public class UserServiceImpl implements UserService {
         response.setCccdMasked(user.getCccdMasked());
         response.setProvinceName(user.getProvinceName());
         response.setBirthYear(user.getBirthYear());
+        response.setAvatarUrl(user.getAvatarUrl());
+        response.setStatus(user.getStatus());
         return response;
     }
 

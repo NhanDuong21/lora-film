@@ -12,13 +12,15 @@ import java.util.List;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByPhoneNumber(String phoneNumber);
+    boolean existsByPhoneNumberAndAccountIdNot(String phoneNumber, Long accountId);
     boolean existsByCccd(String cccd);
 
     @Query("""
             select u from User u
-            where lower(u.fullName) like :query
+            where u.isDeleted = false
+              and (lower(u.fullName) like :query
                or lower(coalesce(u.email, '')) like :query
-               or u.phoneNumber like :query
+               or u.phoneNumber like :query)
             order by u.fullName asc, u.accountId asc
             """)
     List<User> searchOperationalProfiles(
