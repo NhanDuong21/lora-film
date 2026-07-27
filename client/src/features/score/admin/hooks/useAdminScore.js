@@ -85,6 +85,12 @@ export default function useAdminScore() {
   }, []);
 
 
+  const [reconciliationRuns, setReconciliationRuns] = useState(null);
+  const [reconciliationDetails, setReconciliationDetails] = useState(null);
+  const [auditLogs, setAuditLogs] = useState(null);
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [isLoadingOperations, setIsLoadingOperations] = useState(false);
+
   const createTier = useCallback(async (tierData) => {
     const created = await scoreAdminService.createTier(tierData);
     await fetchTiers();
@@ -96,6 +102,96 @@ export default function useAdminScore() {
     await fetchTiers();
     return updated;
   }, [fetchTiers]);
+
+  const adjustScore = useCallback(async (accountId, adjustmentData) => {
+    setIsLoadingOperations(true);
+    try {
+      const res = await scoreAdminService.adjustScore(accountId, adjustmentData);
+      await fetchUserScore(accountId);
+      return res;
+    } finally {
+      setIsLoadingOperations(false);
+    }
+  }, [fetchUserScore]);
+
+  const reverseAdjustment = useCallback(async (accountId, reverseData) => {
+    setIsLoadingOperations(true);
+    try {
+      const res = await scoreAdminService.reverseAdjustment(accountId, reverseData);
+      await fetchUserScore(accountId);
+      return res;
+    } finally {
+      setIsLoadingOperations(false);
+    }
+  }, [fetchUserScore]);
+
+  const recalculateTier = useCallback(async (accountId) => {
+    setIsLoadingOperations(true);
+    try {
+      const res = await scoreAdminService.recalculateTier(accountId);
+      await fetchUserScore(accountId);
+      return res;
+    } finally {
+      setIsLoadingOperations(false);
+    }
+  }, [fetchUserScore]);
+
+  const runReconciliation = useCallback(async (reconData = {}) => {
+    setIsLoadingOperations(true);
+    try {
+      const res = await scoreAdminService.runReconciliation(reconData);
+      return res;
+    } finally {
+      setIsLoadingOperations(false);
+    }
+  }, []);
+
+  const fetchReconciliationRuns = useCallback(async (params = {}) => {
+    setIsLoadingOperations(true);
+    try {
+      const data = await scoreAdminService.getReconciliationRuns(params);
+      setReconciliationRuns(data);
+      return data;
+    } finally {
+      setIsLoadingOperations(false);
+    }
+  }, []);
+
+  const fetchReconciliationDetails = useCallback(async (params = {}) => {
+    setIsLoadingOperations(true);
+    try {
+      const data = await scoreAdminService.getReconciliationDetails(params);
+      setReconciliationDetails(data);
+      return data;
+    } finally {
+      setIsLoadingOperations(false);
+    }
+  }, []);
+
+  const fetchAuditLogs = useCallback(async (params = {}) => {
+    setIsLoadingOperations(true);
+    try {
+      const data = await scoreAdminService.getAuditLogs(params);
+      setAuditLogs(data);
+      return data;
+    } finally {
+      setIsLoadingOperations(false);
+    }
+  }, []);
+
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      const data = await scoreAdminService.getDashboardStats();
+      setDashboardStats(data);
+      return data;
+    } catch (err) {
+      console.error('Failed to fetch dashboard stats', err);
+    }
+  }, []);
+
+  const exportData = useCallback(async (params = {}) => {
+    return await scoreAdminService.exportData(params);
+  }, []);
 
   return {
     tiers,
@@ -115,7 +211,21 @@ export default function useAdminScore() {
     fetchUserExpiringPoints,
     fetchUserTierHistory,
     setUserScore,
-    setUserHistory
+    setUserHistory,
+    reconciliationRuns,
+    reconciliationDetails,
+    auditLogs,
+    dashboardStats,
+    isLoadingOperations,
+    adjustScore,
+    reverseAdjustment,
+    recalculateTier,
+    runReconciliation,
+    fetchReconciliationRuns,
+    fetchReconciliationDetails,
+    fetchAuditLogs,
+    fetchDashboardStats,
+    exportData
   };
 }
 

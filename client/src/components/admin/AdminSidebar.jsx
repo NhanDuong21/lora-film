@@ -250,13 +250,29 @@ export default function AdminSidebar({
                       <Users className="w-4 h-4 shrink-0" />
                       <span>Khách hàng</span>
                     </button>
+                    <button onClick={() => handleTabClick('scores-dashboard', '#/admin/scores/dashboard')} className={getSubLinkClass('scores-dashboard')}>
+                      <BarChart3 className="w-4 h-4 shrink-0" />
+                      <span>Tổng quan Loyalty</span>
+                    </button>
                     <button onClick={() => handleTabClick('scores-viewer', '#/admin/scores/viewer')} className={getSubLinkClass('scores-viewer')}>
                       <Award className="w-4 h-4 shrink-0" />
                       <span>Tra cứu Điểm thưởng</span>
                     </button>
+                    <button onClick={() => handleTabClick('scores-adjustments', '#/admin/scores/adjustments')} className={getSubLinkClass('scores-adjustments')}>
+                      <Sliders className="w-4 h-4 shrink-0" />
+                      <span>Điều chỉnh & Đảo GD</span>
+                    </button>
+                    <button onClick={() => handleTabClick('scores-reconciliation', '#/admin/scores/reconciliation')} className={getSubLinkClass('scores-reconciliation')}>
+                      <Zap className="w-4 h-4 shrink-0" />
+                      <span>Đối soát Điểm thưởng</span>
+                    </button>
                     <button onClick={() => handleTabClick('scores-tiers', '#/admin/scores/tiers')} className={getSubLinkClass('scores-tiers')}>
                       <Gift className="w-4 h-4 shrink-0" />
                       <span>Hạng thẻ thành viên</span>
+                    </button>
+                    <button onClick={() => handleTabClick('scores-audit-logs', '#/admin/scores/audit-logs')} className={getSubLinkClass('scores-audit-logs')}>
+                      <History className="w-4 h-4 shrink-0" />
+                      <span>Nhật ký kiểm toán</span>
                     </button>
                     <button onClick={() => handleTabClick('staff', '#/admin/staff')} className={getSubLinkClass('staff')}>
                       <Shield className="w-4 h-4 shrink-0" />
