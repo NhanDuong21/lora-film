@@ -5,6 +5,18 @@ COLLATE utf8mb4_unicode_ci;
 
 USE user_db;
 
+DROP TABLE IF EXISTS outbox_messages;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS payroll_details;
+DROP TABLE IF EXISTS payrolls;
+DROP TABLE IF EXISTS employee_documents;
+DROP TABLE IF EXISTS employees;
+DROP TABLE IF EXISTS positions;
+DROP TABLE IF EXISTS departments;
+DROP TABLE IF EXISTS customer_profiles;
+DROP TABLE IF EXISTS avatars;
+DROP TABLE IF EXISTS users;
+
 -- =====================================================
 -- TABLE: users
 -- Thực thể gốc của User Service
@@ -27,6 +39,8 @@ CREATE TABLE users
     -- ==========================
     full_name VARCHAR(150) NOT NULL,
 
+    email VARCHAR(100) NULL,
+
     phone_number VARCHAR(15) NOT NULL,
 
     gender ENUM
@@ -38,7 +52,7 @@ CREATE TABLE users
 
     birthday DATE NULL,
 
-    birth_year SMALLINT NULL,
+    birth_year INT NULL,
 
     avatar_url VARCHAR(500) NULL,
 
@@ -70,6 +84,8 @@ CREATE TABLE users
     -- ==========================
     -- Audit
     -- ==========================
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 
@@ -140,23 +156,23 @@ CREATE TABLE avatars
 (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    user_id BIGINT NOT NULL,
+    account_id BIGINT NOT NULL,
 
     file_name VARCHAR(255) NOT NULL,
 
     file_url VARCHAR(500) NOT NULL,
 
-    file_size BIGINT NULL,
+    content_type VARCHAR(100) NOT NULL,
 
-    mime_type VARCHAR(100) NULL,
+    file_size BIGINT NOT NULL,
 
     uploaded_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_avatar_user
-        FOREIGN KEY(user_id)
-        REFERENCES users(id)
-        ON UPDATE CASCADE
+        FOREIGN KEY(account_id)
+        REFERENCES users(account_id)
+        ON UPDATE CASCADE   
         ON DELETE CASCADE
 
 )
@@ -167,7 +183,7 @@ COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE INDEX idx_avatar_user
-ON avatars(user_id);
+ON avatars(account_id);
 
 USE user_db;
 
@@ -180,7 +196,7 @@ CREATE TABLE customer_profiles
 (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    user_id BIGINT NOT NULL,
+    account_id BIGINT NOT NULL,
 
     customer_code VARCHAR(30) NOT NULL,
 
@@ -199,11 +215,11 @@ CREATE TABLE customer_profiles
         UNIQUE(customer_code),
 
     CONSTRAINT uk_customer_user
-        UNIQUE(user_id),
+        UNIQUE(account_id),
 
     CONSTRAINT fk_customer_user
-        FOREIGN KEY(user_id)
-        REFERENCES users(id)
+        FOREIGN KEY(account_id)
+        REFERENCES users(account_id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
 
@@ -235,7 +251,7 @@ CREATE TABLE departments
 
     description VARCHAR(255) NULL,
 
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
 
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
@@ -257,7 +273,7 @@ COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE INDEX idx_department_active
-ON departments(is_active);
+ON departments(is_deleted);
 
 
 -- =====================================================
@@ -271,11 +287,11 @@ CREATE TABLE positions
 
     code VARCHAR(30) NOT NULL,
 
-    name VARCHAR(100) NOT NULL,
+    title VARCHAR(100) NOT NULL,
 
     description VARCHAR(255) NULL,
 
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
 
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
@@ -285,10 +301,7 @@ CREATE TABLE positions
         ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT uk_position_code
-        UNIQUE(code),
-
-    CONSTRAINT uk_position_name
-        UNIQUE(name)
+        UNIQUE(code)
 
 )
 ENGINE=InnoDB
@@ -297,7 +310,7 @@ COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE INDEX idx_position_active
-ON positions(is_active);
+ON positions(is_deleted);
 
 
 -- =====================================================
@@ -305,41 +318,25 @@ ON positions(is_active);
 -- Thông tin nhân sự
 -- =====================================================
 
-CREATE TABLE employee_profiles
+CREATE TABLE employees
 (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    account_id BIGINT PRIMARY KEY,
 
-    user_id BIGINT NOT NULL,
+    employee_code VARCHAR(50) NOT NULL,
 
-    employee_code VARCHAR(30) NOT NULL,
+    department_id BIGINT NULL,
 
-    department_id BIGINT NOT NULL,
+    position_id BIGINT NULL,
 
-    position_id BIGINT NOT NULL,
+    base_salary DECIMAL(15,2) NULL,
 
-    hire_date DATE NOT NULL,
+    hire_date DATE NULL,
 
-    resign_date DATE NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
 
-    employment_type ENUM(
-        'FULL_TIME',
-        'PART_TIME',
-        'CONTRACT',
-        'INTERN'
-    ) NOT NULL DEFAULT 'FULL_TIME',
+    version INT NOT NULL DEFAULT 0,
 
-    status ENUM(
-        'ACTIVE',
-        'ON_LEAVE',
-        'SUSPENDED',
-        'RESIGNED'
-    ) NOT NULL DEFAULT 'ACTIVE',
-
-    emergency_contact_name VARCHAR(150) NULL,
-
-    emergency_contact_phone VARCHAR(20) NULL,
-
-    note TEXT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
 
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
@@ -348,15 +345,12 @@ CREATE TABLE employee_profiles
         DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
 
-    CONSTRAINT uk_employee_user
-        UNIQUE(user_id),
-
     CONSTRAINT uk_employee_code
         UNIQUE(employee_code),
 
-    CONSTRAINT fk_employee_user
-        FOREIGN KEY(user_id)
-        REFERENCES users(id)
+    CONSTRAINT fk_employee_account
+        FOREIGN KEY(account_id)
+        REFERENCES users(account_id)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
 
@@ -379,16 +373,17 @@ COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE INDEX idx_employee_department
-ON employee_profiles(department_id);
+ON employees(department_id);
 
 CREATE INDEX idx_employee_position
-ON employee_profiles(position_id);
+ON employees(position_id);
 
 CREATE INDEX idx_employee_status
-ON employee_profiles(status);
+ON employees(status);
 
 CREATE INDEX idx_employee_hire_date
-ON employee_profiles(hire_date);
+ON employees(hire_date);
+
 
 
 
@@ -416,11 +411,13 @@ CREATE TABLE employee_documents
 
     document_name VARCHAR(255) NOT NULL,
 
+    file_name VARCHAR(255) NOT NULL,
+
     file_url VARCHAR(500) NOT NULL,
 
-    file_size BIGINT NULL,
+    file_size BIGINT NOT NULL,
 
-    mime_type VARCHAR(100) NULL,
+    mime_type VARCHAR(100) NOT NULL,
 
     issued_date DATE NULL,
 
@@ -429,9 +426,18 @@ CREATE TABLE employee_documents
     uploaded_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 
+    uploaded_by BIGINT NULL,
+
+    deleted_at TIMESTAMP NULL,
+
+    deleted_by BIGINT NULL,
+
+    CONSTRAINT uk_document_file_name
+        UNIQUE(file_name),
+
     CONSTRAINT fk_document_employee
         FOREIGN KEY(employee_id)
-        REFERENCES employee_profiles(id)
+        REFERENCES employees(account_id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
 
@@ -460,7 +466,7 @@ CREATE TABLE payrolls
 
     employee_id BIGINT NOT NULL,
 
-    payroll_month DATE NOT NULL,
+    salary_month DATE NOT NULL,
 
     basic_salary DECIMAL(15,2) NOT NULL DEFAULT 0,
 
@@ -488,6 +494,8 @@ CREATE TABLE payrolls
 
     note TEXT NULL,
 
+    version INT NOT NULL DEFAULT 0,
+
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 
@@ -496,11 +504,11 @@ CREATE TABLE payrolls
         ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT uk_employee_payroll
-        UNIQUE(employee_id, payroll_month),
+        UNIQUE(employee_id, salary_month),
 
     CONSTRAINT fk_payroll_employee
         FOREIGN KEY(employee_id)
-        REFERENCES employee_profiles(id)
+        REFERENCES employees(account_id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT
 
@@ -515,7 +523,7 @@ CREATE INDEX idx_payroll_employee
 ON payrolls(employee_id);
 
 CREATE INDEX idx_payroll_month
-ON payrolls(payroll_month);
+ON payrolls(salary_month);
 
 CREATE INDEX idx_payroll_status
 ON payrolls(status);
@@ -570,26 +578,22 @@ CREATE TABLE audit_logs
 (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    user_id BIGINT NULL,
+    actor_account_id BIGINT NULL,
 
     action VARCHAR(100) NOT NULL,
 
-    resource VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
 
-    resource_id BIGINT NULL,
+    target_id VARCHAR(100) NULL,
 
-    description TEXT NULL,
-
-    ip_address VARCHAR(45) NULL,
-
-    user_agent VARCHAR(500) NULL,
+    details VARCHAR(1000) NULL,
 
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_user_audit
-        FOREIGN KEY (user_id)
-        REFERENCES users(id)
+        FOREIGN KEY (actor_account_id)
+        REFERENCES users(account_id)
         ON UPDATE CASCADE
         ON DELETE SET NULL
 
@@ -601,13 +605,13 @@ COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE INDEX idx_audit_user
-ON audit_logs(user_id);
+ON audit_logs(actor_account_id);
 
 CREATE INDEX idx_audit_action
 ON audit_logs(action);
 
-CREATE INDEX idx_audit_resource
-ON audit_logs(resource);
+CREATE INDEX idx_audit_target
+ON audit_logs(target_type);
 
 CREATE INDEX idx_audit_created
 ON audit_logs(created_at);
@@ -621,45 +625,32 @@ ON audit_logs(created_at);
 -- Transactional Outbox Pattern
 -- =====================================================
 
-CREATE TABLE outbox_events
+CREATE TABLE outbox_messages
 (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-
-    aggregate_type VARCHAR(100) NOT NULL,
-
-    aggregate_id BIGINT NOT NULL,
-
-    event_type VARCHAR(100) NOT NULL,
-
-    payload JSON NOT NULL,
-
-    status ENUM
-    (
-        'PENDING',
-        'PUBLISHED',
-        'FAILED'
-    )
-    NOT NULL DEFAULT 'PENDING',
-
-    retry_count INT NOT NULL DEFAULT 0,
-
+    aggregate_type VARCHAR(255) NOT NULL,
+    aggregate_id VARCHAR(255) NOT NULL,
+    event_type VARCHAR(255) NOT NULL,
+    payload TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
-
-    published_at TIMESTAMP NULL
-
+    processed BOOLEAN NOT NULL DEFAULT FALSE,
+    attempt_count INT NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMP NULL,
+    processed_at TIMESTAMP NULL,
+    last_error VARCHAR(1000) NULL
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci;
 
-
-
-CREATE INDEX idx_outbox_status
-ON outbox_events(status);
+CREATE INDEX idx_outbox_processed
+ON outbox_messages(processed);
 
 CREATE INDEX idx_outbox_created
-ON outbox_events(created_at);
+ON outbox_messages(created_at);
 
 CREATE INDEX idx_outbox_event_type
-ON outbox_events(event_type);
+ON outbox_messages(event_type);
+
+

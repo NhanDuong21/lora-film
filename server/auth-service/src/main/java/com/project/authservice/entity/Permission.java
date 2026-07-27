@@ -14,120 +14,85 @@ import jakarta.persistence.Table;
 public class Permission {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Integer id;
+	private Long id;
 
-	@Column(name = "permission_code", nullable = false, unique = true, length = 100)
-	private String permissionCode;
+	@Column(name = "code", nullable = false, unique = true, length = 100)
+	private String code;
+
+	@Column(name = "name", nullable = false, length = 150)
+	private String name;
+
+	@Column(name = "module", nullable = false, length = 100)
+	private String module;
 
 	@Column(name = "description", length = 255)
 	private String description;
 
-	@Column(name = "created_at", updatable = false)
+	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
-	@Column(name = "created_by")
-	private Long createdBy;
-
-	@Column(name = "updated_at")
+	@Column(name = "updated_at", nullable = false)
 	private LocalDateTime updatedAt;
 
-	@Column(name = "updated_by")
-	private Long updatedBy;
-    public Integer getId() {
-        return this.id;
-    }
-    public String getPermissionCode() {
-        return this.permissionCode;
-    }
-    public String getDescription() {
-        return this.description;
-    }
-    public LocalDateTime getCreatedAt() {
-        return this.createdAt;
-    }
-    public Long getCreatedBy() {
-        return this.createdBy;
-    }
-    public LocalDateTime getUpdatedAt() {
-        return this.updatedAt;
-    }
-    public Long getUpdatedBy() {
-        return this.updatedBy;
-    }
-    public void setId(Integer id) {
+    public Long getId() { return this.id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getCode() { return this.code; }
+    public void setCode(String code) { this.code = code; }
+
+    public String getPermissionCode() { return this.code; }
+    public void setPermissionCode(String permissionCode) { this.code = permissionCode; }
+
+    public String getName() { return this.name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getModule() { return this.module; }
+    public void setModule(String module) { this.module = module; }
+
+    public String getDescription() { return this.description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public LocalDateTime getCreatedAt() { return this.createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getUpdatedAt() { return this.updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public Permission() {}
+
+    public Permission(Long id, String code, String name, String module, String description, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
-    }
-    public void setPermissionCode(String permissionCode) {
-        this.permissionCode = permissionCode;
-    }
-    public void setDescription(String description) {
-        this.description = description;
-    }
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-    public void setCreatedBy(Long createdBy) {
-        this.createdBy = createdBy;
-    }
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-    public void setUpdatedBy(Long updatedBy) {
-        this.updatedBy = updatedBy;
-    }
-    public Permission() {
-    }
-    public Permission(Integer id, String permissionCode, String description, LocalDateTime createdAt, Long createdBy, LocalDateTime updatedAt, Long updatedBy) {
-        this.id = id;
-        this.permissionCode = permissionCode;
+        this.code = code;
+        this.name = name;
+        this.module = module;
         this.description = description;
         this.createdAt = createdAt;
-        this.createdBy = createdBy;
         this.updatedAt = updatedAt;
-        this.updatedBy = updatedBy;
     }
+
     public static PermissionBuilder builder() {
         return new PermissionBuilder();
     }
+
     public static class PermissionBuilder {
-        private Integer id;
-        private String permissionCode;
+        private Long id;
+        private String code;
+        private String name;
+        private String module;
         private String description;
         private LocalDateTime createdAt;
-        private Long createdBy;
         private LocalDateTime updatedAt;
-        private Long updatedBy;
         PermissionBuilder() {}
-        public PermissionBuilder id(Integer id) {
-            this.id = id;
-            return this;
-        }
-        public PermissionBuilder permissionCode(String permissionCode) {
-            this.permissionCode = permissionCode;
-            return this;
-        }
-        public PermissionBuilder description(String description) {
-            this.description = description;
-            return this;
-        }
-        public PermissionBuilder createdAt(LocalDateTime createdAt) {
-            this.createdAt = createdAt;
-            return this;
-        }
-        public PermissionBuilder createdBy(Long createdBy) {
-            this.createdBy = createdBy;
-            return this;
-        }
-        public PermissionBuilder updatedAt(LocalDateTime updatedAt) {
-            this.updatedAt = updatedAt;
-            return this;
-        }
-        public PermissionBuilder updatedBy(Long updatedBy) {
-            this.updatedBy = updatedBy;
-            return this;
-        }
+        public PermissionBuilder id(Long id) { this.id = id; return this; }
+        public PermissionBuilder code(String code) { this.code = code; return this; }
+        public PermissionBuilder permissionCode(String permissionCode) { this.code = permissionCode; return this; }
+        public PermissionBuilder name(String name) { this.name = name; return this; }
+        public PermissionBuilder module(String module) { this.module = module; return this; }
+        public PermissionBuilder description(String description) { this.description = description; return this; }
+        public PermissionBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
+        public PermissionBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
         public Permission build() {
-            return new Permission(this.id, this.permissionCode, this.description, this.createdAt, this.createdBy, this.updatedAt, this.updatedBy);
+            return new Permission(this.id, this.code, this.name, this.module, this.description, this.createdAt, this.updatedAt);
         }
     }
 }

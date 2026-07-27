@@ -194,20 +194,15 @@ ON account_roles(role_id);
 
 
 -- =====================================================
--- TABLE: role_permissions
+-- TABLE: roles_permissions
 -- Quan hệ N-N giữa Role và Permission
 -- =====================================================
 
-CREATE TABLE role_permissions
+CREATE TABLE roles_permissions
 (
     role_id BIGINT NOT NULL,
 
     permission_id BIGINT NOT NULL,
-
-    granted_at TIMESTAMP NOT NULL
-        DEFAULT CURRENT_TIMESTAMP,
-
-    granted_by BIGINT NULL,
 
     PRIMARY KEY (role_id, permission_id),
 
@@ -229,8 +224,8 @@ DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci;
 
 
-CREATE INDEX idx_role_permissions_permission
-ON role_permissions(permission_id);
+CREATE INDEX idx_roles_permissions_permission
+ON roles_permissions(permission_id);
 
 
 
@@ -509,49 +504,30 @@ CREATE INDEX idx_password_reset_used
 ON password_reset_tokens(is_used);
 
 -- =====================================================
--- TABLE: login_histories
+-- TABLE: login_history
 -- Lưu lịch sử đăng nhập
 -- =====================================================
 
-CREATE TABLE login_histories
+CREATE TABLE login_history
 (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
     account_id BIGINT NOT NULL,
 
-    session_id BIGINT NULL,
-
-    login_at TIMESTAMP NOT NULL
+    login_time TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 
-    logout_at TIMESTAMP NULL,
+    ip_address VARCHAR(45) NULL,
 
-    ip_address VARCHAR(45) NOT NULL,
+    user_agent VARCHAR(255) NULL,
 
-    device_name VARCHAR(150) NULL,
-
-    browser VARCHAR(100) NULL,
-
-    operating_system VARCHAR(100) NULL,
-
-    login_status ENUM(
-        'SUCCESS',
-        'FAILED'
-    ) NOT NULL,
-
-    failure_reason VARCHAR(255) NULL,
+    status VARCHAR(20) NULL,
 
     CONSTRAINT fk_login_history_account
         FOREIGN KEY (account_id)
         REFERENCES accounts(id)
         ON UPDATE CASCADE
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_login_history_session
-        FOREIGN KEY (session_id)
-        REFERENCES sessions(id)
-        ON UPDATE CASCADE
-        ON DELETE SET NULL
+        ON DELETE CASCADE
 
 )
 ENGINE=InnoDB
@@ -561,16 +537,16 @@ COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE INDEX idx_login_history_account
-ON login_histories(account_id);
+ON login_history(account_id);
 
 CREATE INDEX idx_login_history_login
-ON login_histories(login_at);
+ON login_history(login_time);
 
 CREATE INDEX idx_login_history_status
-ON login_histories(login_status);
+ON login_history(status);
 
 CREATE INDEX idx_login_history_ip
-ON login_histories(ip_address);
+ON login_history(ip_address);
 
 
 
@@ -602,6 +578,14 @@ CREATE TABLE audit_logs
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 
+    created_by BIGINT NULL,
+
+    updated_at TIMESTAMP NULL
+        DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    updated_by BIGINT NULL,
+
     CONSTRAINT fk_audit_account
         FOREIGN KEY (account_id)
         REFERENCES accounts(id)
@@ -632,34 +616,26 @@ ON audit_logs(created_at);
 
 
 -- =====================================================
--- TABLE: outbox_events
+-- TABLE: outbox_messages
 -- Transactional Outbox Pattern
 -- =====================================================
 
-CREATE TABLE outbox_events
+CREATE TABLE outbox_messages
 (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
     aggregate_type VARCHAR(100) NOT NULL,
 
-    aggregate_id BIGINT NOT NULL,
+    aggregate_id VARCHAR(100) NOT NULL,
 
     event_type VARCHAR(100) NOT NULL,
 
-    payload JSON NOT NULL,
+    payload TEXT NOT NULL,
 
-    status ENUM(
-        'PENDING',
-        'PUBLISHED',
-        'FAILED'
-    ) NOT NULL DEFAULT 'PENDING',
-
-    retry_count INT NOT NULL DEFAULT 0,
+    processed BOOLEAN NOT NULL DEFAULT FALSE,
 
     created_at TIMESTAMP NOT NULL
-        DEFAULT CURRENT_TIMESTAMP,
-
-    published_at TIMESTAMP NULL
+        DEFAULT CURRENT_TIMESTAMP
 
 )
 ENGINE=InnoDB
@@ -669,11 +645,11 @@ COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE INDEX idx_outbox_status
-ON outbox_events(status);
+ON outbox_messages(processed);
 
 CREATE INDEX idx_outbox_created
-ON outbox_events(created_at);
+ON outbox_messages(created_at);
 
 CREATE INDEX idx_outbox_event_type
-ON outbox_events(event_type);
+ON outbox_messages(event_type);
 

@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "password_reset_tokens")
 public class PasswordResetToken {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -17,101 +17,89 @@ public class PasswordResetToken {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
-    @Column(name = "token", nullable = false, unique = true)
-    private String token;
+    @Column(name = "otp_code", nullable = false, length = 6, columnDefinition = "char(6)")
+    private String otpCode;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "expires_at", nullable = false)
-    private LocalDateTime expiresAt;
+    @Column(name = "expired_at", nullable = false)
+    private LocalDateTime expiredAt;
 
-    @Column(name = "used", nullable = false)
-    private Boolean used = false;
-    public Long getId() {
-        return this.id;
-    }
-    public Account getAccount() {
-        return this.account;
-    }
-    public String getToken() {
-        return this.token;
-    }
-    public LocalDateTime getCreatedAt() {
-        return this.createdAt;
-    }
-    public LocalDateTime getExpiresAt() {
-        return this.expiresAt;
-    }
-    public Boolean getUsed() {
-        return this.used;
-    }
-    public void setId(Long id) {
-        this.id = id;
-    }
-    public void setAccount(Account account) {
-        this.account = account;
-    }
-    public void setToken(String token) {
-        this.token = token;
-    }
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-    public void setExpiresAt(LocalDateTime expiresAt) {
-        this.expiresAt = expiresAt;
-    }
-    public void setUsed(Boolean used) {
-        this.used = used;
-    }
-    public PasswordResetToken() {
-    }
-    public PasswordResetToken(Long id, Account account, String token, LocalDateTime createdAt, LocalDateTime expiresAt, Boolean used) {
+    @Column(name = "used_at")
+    private LocalDateTime usedAt;
+
+    @Column(name = "attempts", nullable = false)
+    private Integer attempts = 0;
+
+    @Column(name = "is_used", nullable = false)
+    private Boolean isUsed = false;
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public Account getAccount() { return account; }
+    public void setAccount(Account account) { this.account = account; }
+
+    public String getOtpCode() { return otpCode; }
+    public void setOtpCode(String otpCode) { this.otpCode = otpCode; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getExpiredAt() { return expiredAt; }
+    public void setExpiredAt(LocalDateTime expiredAt) { this.expiredAt = expiredAt; }
+
+    public LocalDateTime getUsedAt() { return usedAt; }
+    public void setUsedAt(LocalDateTime usedAt) { this.usedAt = usedAt; }
+
+    public Integer getAttempts() { return attempts; }
+    public void setAttempts(Integer attempts) { this.attempts = attempts; }
+
+    public Boolean getIsUsed() { return isUsed; }
+    public void setIsUsed(Boolean isUsed) { this.isUsed = isUsed; }
+
+    public PasswordResetToken() {}
+
+    public PasswordResetToken(Long id, Account account, String otpCode, LocalDateTime createdAt, LocalDateTime expiredAt, LocalDateTime usedAt, Integer attempts, Boolean isUsed) {
         this.id = id;
         this.account = account;
-        this.token = token;
+        this.otpCode = otpCode;
         this.createdAt = createdAt;
-        this.expiresAt = expiresAt;
-        this.used = used;
+        this.expiredAt = expiredAt;
+        this.usedAt = usedAt;
+        this.attempts = attempts;
+        this.isUsed = isUsed;
     }
+
     public static PasswordResetTokenBuilder builder() {
         return new PasswordResetTokenBuilder();
     }
+
     public static class PasswordResetTokenBuilder {
         private Long id;
         private Account account;
-        private String token;
+        private String otpCode;
         private LocalDateTime createdAt;
-        private LocalDateTime expiresAt;
-        private Boolean used;
+        private LocalDateTime expiredAt;
+        private LocalDateTime usedAt;
+        private Integer attempts;
+        private Boolean isUsed;
+
         PasswordResetTokenBuilder() {}
-        public PasswordResetTokenBuilder id(Long id) {
-            this.id = id;
-            return this;
-        }
-        public PasswordResetTokenBuilder account(Account account) {
-            this.account = account;
-            return this;
-        }
-        public PasswordResetTokenBuilder token(String token) {
-            this.token = token;
-            return this;
-        }
-        public PasswordResetTokenBuilder createdAt(LocalDateTime createdAt) {
-            this.createdAt = createdAt;
-            return this;
-        }
-        public PasswordResetTokenBuilder expiresAt(LocalDateTime expiresAt) {
-            this.expiresAt = expiresAt;
-            return this;
-        }
-        public PasswordResetTokenBuilder used(Boolean used) {
-            this.used = used;
-            return this;
-        }
+
+        public PasswordResetTokenBuilder id(Long id) { this.id = id; return this; }
+        public PasswordResetTokenBuilder account(Account account) { this.account = account; return this; }
+        public PasswordResetTokenBuilder otpCode(String otpCode) { this.otpCode = otpCode; return this; }
+        public PasswordResetTokenBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
+        public PasswordResetTokenBuilder expiredAt(LocalDateTime expiredAt) { this.expiredAt = expiredAt; return this; }
+        public PasswordResetTokenBuilder usedAt(LocalDateTime usedAt) { this.usedAt = usedAt; return this; }
+        public PasswordResetTokenBuilder attempts(Integer attempts) { this.attempts = attempts; return this; }
+        public PasswordResetTokenBuilder isUsed(Boolean isUsed) { this.isUsed = isUsed; return this; }
+
         public PasswordResetToken build() {
-            return new PasswordResetToken(this.id, this.account, this.token, this.createdAt, this.expiresAt, this.used);
+            return new PasswordResetToken(id, account, otpCode, createdAt, expiredAt, usedAt, attempts, isUsed);
         }
     }
 }

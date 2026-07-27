@@ -10,10 +10,10 @@ import jakarta.persistence.Embeddable;
 public class RolePermissionId implements Serializable {
 
 	@Column(name = "role_id")
-	private Integer roleId;
+	private Long roleId;
 
 	@Column(name = "permission_id")
-	private Integer permissionId;
+	private Long permissionId;
 
 	@Override
 	public boolean equals(Object o) {
@@ -27,21 +27,21 @@ public class RolePermissionId implements Serializable {
 	public int hashCode() {
 		return Objects.hash(roleId, permissionId);
 	}
-    public Integer getRoleId() {
+    public Long getRoleId() {
         return this.roleId;
     }
-    public Integer getPermissionId() {
+    public Long getPermissionId() {
         return this.permissionId;
     }
-    public void setRoleId(Integer roleId) {
+    public void setRoleId(Long roleId) {
         this.roleId = roleId;
     }
-    public void setPermissionId(Integer permissionId) {
+    public void setPermissionId(Long permissionId) {
         this.permissionId = permissionId;
     }
     public RolePermissionId() {
     }
-    public RolePermissionId(Integer roleId, Integer permissionId) {
+    public RolePermissionId(Long roleId, Long permissionId) {
         this.roleId = roleId;
         this.permissionId = permissionId;
     }

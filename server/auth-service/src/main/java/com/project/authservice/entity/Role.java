@@ -15,30 +15,35 @@ import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import jakarta.persistence.EntityListeners;
+
 @Entity
 @Table(name = "roles")
+@EntityListeners(AuditingEntityListener.class)
 public class Role {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Integer id;
+	private Long id;
 
-	@Column(name = "role_name", nullable = false, unique = true, length = 50)
+	@Column(name = "code", nullable = false, unique = true, length = 50)
+	private String code;
+
+	@Column(name = "name", nullable = false, length = 100)
 	private String roleName;
 
 	@Column(name = "description", length = 255)
 	private String description;
 
-	@Column(name = "created_at", updatable = false)
+	@CreatedDate
+	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
-	@Column(name = "created_by")
-	private Long createdBy;
-
-	@Column(name = "updated_at")
+	@LastModifiedDate
+	@Column(name = "updated_at", nullable = false)
 	private LocalDateTime updatedAt;
-
-	@Column(name = "updated_by")
-	private Long updatedBy;
 
 	@ManyToMany(fetch = FetchType.LAZY)
 	@JoinTable(
@@ -47,8 +52,15 @@ public class Role {
 			inverseJoinColumns = @JoinColumn(name = "permission_id")
 	)
 	private Set<Permission> permissions = new HashSet<>();
-    public Integer getId() {
+
+    public Long getId() {
         return this.id;
+    }
+    public String getCode() {
+        return this.code;
+    }
+    public String getName() {
+        return this.roleName;
     }
     public String getRoleName() {
         return this.roleName;
@@ -59,20 +71,20 @@ public class Role {
     public LocalDateTime getCreatedAt() {
         return this.createdAt;
     }
-    public Long getCreatedBy() {
-        return this.createdBy;
-    }
     public LocalDateTime getUpdatedAt() {
         return this.updatedAt;
-    }
-    public Long getUpdatedBy() {
-        return this.updatedBy;
     }
     public Set<Permission> getPermissions() {
         return this.permissions;
     }
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
+    }
+    public void setCode(String code) {
+        this.code = code;
+    }
+    public void setName(String name) {
+        this.roleName = name;
     }
     public void setRoleName(String roleName) {
         this.roleName = roleName;
@@ -83,77 +95,44 @@ public class Role {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
-    public void setCreatedBy(Long createdBy) {
-        this.createdBy = createdBy;
-    }
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
-    }
-    public void setUpdatedBy(Long updatedBy) {
-        this.updatedBy = updatedBy;
     }
     public void setPermissions(Set<Permission> permissions) {
         this.permissions = permissions;
     }
     public Role() {
     }
-    public Role(Integer id, String roleName, String description, LocalDateTime createdAt, Long createdBy, LocalDateTime updatedAt, Long updatedBy, Set<Permission> permissions) {
+    public Role(Long id, String code, String roleName, String description, LocalDateTime createdAt, LocalDateTime updatedAt, Set<Permission> permissions) {
         this.id = id;
+        this.code = code;
         this.roleName = roleName;
         this.description = description;
         this.createdAt = createdAt;
-        this.createdBy = createdBy;
         this.updatedAt = updatedAt;
-        this.updatedBy = updatedBy;
         this.permissions = permissions;
     }
     public static RoleBuilder builder() {
         return new RoleBuilder();
     }
     public static class RoleBuilder {
-        private Integer id;
+        private Long id;
+        private String code;
         private String roleName;
         private String description;
         private LocalDateTime createdAt;
-        private Long createdBy;
         private LocalDateTime updatedAt;
-        private Long updatedBy;
         private Set<Permission> permissions;
         RoleBuilder() {}
-        public RoleBuilder id(Integer id) {
-            this.id = id;
-            return this;
-        }
-        public RoleBuilder roleName(String roleName) {
-            this.roleName = roleName;
-            return this;
-        }
-        public RoleBuilder description(String description) {
-            this.description = description;
-            return this;
-        }
-        public RoleBuilder createdAt(LocalDateTime createdAt) {
-            this.createdAt = createdAt;
-            return this;
-        }
-        public RoleBuilder createdBy(Long createdBy) {
-            this.createdBy = createdBy;
-            return this;
-        }
-        public RoleBuilder updatedAt(LocalDateTime updatedAt) {
-            this.updatedAt = updatedAt;
-            return this;
-        }
-        public RoleBuilder updatedBy(Long updatedBy) {
-            this.updatedBy = updatedBy;
-            return this;
-        }
-        public RoleBuilder permissions(Set<Permission> permissions) {
-            this.permissions = permissions;
-            return this;
-        }
+        public RoleBuilder id(Long id) { this.id = id; return this; }
+        public RoleBuilder code(String code) { this.code = code; return this; }
+        public RoleBuilder roleName(String roleName) { this.roleName = roleName; return this; }
+        public RoleBuilder description(String description) { this.description = description; return this; }
+        public RoleBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
+        public RoleBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
+        public RoleBuilder permissions(Set<Permission> permissions) { this.permissions = permissions; return this; }
         public Role build() {
-            return new Role(this.id, this.roleName, this.description, this.createdAt, this.createdBy, this.updatedAt, this.updatedBy, this.permissions);
+            return new Role(this.id, this.code, this.roleName, this.description, this.createdAt, this.updatedAt, this.permissions);
         }
     }
 }
