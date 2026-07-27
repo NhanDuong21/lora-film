@@ -8,6 +8,7 @@ import com.project.scoreservice.enumtype.*;
 import com.project.scoreservice.exception.BusinessException;
 import com.project.scoreservice.repository.*;
 import com.project.scoreservice.service.AdminScoreOperationService;
+import com.project.scoreservice.service.OutboxService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +37,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
     private final ReconciliationDetailRepository reconciliationDetailRepository;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final OutboxService outboxService;
 
     public AdminScoreOperationServiceImpl(UserScoreRepository userScoreRepository,
                                           ScoreHistoryRepository scoreHistoryRepository,
@@ -45,7 +47,8 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
                                           ReconciliationRunRepository reconciliationRunRepository,
                                           ReconciliationDetailRepository reconciliationDetailRepository,
                                           AuditLogRepository auditLogRepository,
-                                          ObjectMapper objectMapper) {
+                                          ObjectMapper objectMapper,
+                                          OutboxService outboxService) {
         this.userScoreRepository = userScoreRepository;
         this.scoreHistoryRepository = scoreHistoryRepository;
         this.scoreHoldRepository = scoreHoldRepository;
@@ -55,6 +58,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
         this.reconciliationDetailRepository = reconciliationDetailRepository;
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
+        this.outboxService = outboxService;
     }
 
     @Override
@@ -211,6 +215,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
         );
 
         saveAuditLog(opId, effectiveUserId, history.getId(), "ACTION_MANUAL_ADJUSTMENT", "USER_SCORE_" + effectiveUserId, 201, clientIp, request, response, 0L);
+        outboxService.saveEvent("USER_SCORE", String.valueOf(effectiveUserId), "POINT_ADJUSTED", response, org.slf4j.MDC.get("correlationId"));
 
         return response;
     }
@@ -297,6 +302,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
         );
 
         saveAuditLog(opId, effectiveUserId, history.getId(), "ACTION_REVERSE_ADJUSTMENT", "USER_SCORE_" + effectiveUserId, 201, clientIp, request, response, 0L);
+        outboxService.saveEvent("USER_SCORE", String.valueOf(effectiveUserId), "POINT_ADJUSTED", response, org.slf4j.MDC.get("correlationId"));
 
         return response;
     }

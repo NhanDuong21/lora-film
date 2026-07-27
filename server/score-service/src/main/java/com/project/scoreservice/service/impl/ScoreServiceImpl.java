@@ -19,7 +19,9 @@ import com.project.scoreservice.repository.PointExpirationBucketRepository;
 import com.project.scoreservice.repository.ScoreHistoryRepository;
 import com.project.scoreservice.repository.ScoreHoldRepository;
 import com.project.scoreservice.repository.UserScoreRepository;
+import com.project.scoreservice.service.OutboxService;
 import com.project.scoreservice.service.ScoreService;
+import com.project.scoreservice.monitoring.ScoreMetricsService;
 import java.time.LocalDate;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -48,20 +50,27 @@ public class ScoreServiceImpl implements ScoreService {
     private final ScoreHoldRepository scoreHoldRepository;
     private final PointExpirationBucketRepository pointExpirationBucketRepository;
     private final MembershipTierHistoryRepository membershipTierHistoryRepository;
+    private final OutboxService outboxService;
+    private final ScoreMetricsService metricsService;
 
     public ScoreServiceImpl(UserScoreRepository userScoreRepository,
                             MembershipTierRepository membershipTierRepository,
                             ScoreHistoryRepository scoreHistoryRepository,
                             ScoreHoldRepository scoreHoldRepository,
                             PointExpirationBucketRepository pointExpirationBucketRepository,
-                            MembershipTierHistoryRepository membershipTierHistoryRepository) {
+                            MembershipTierHistoryRepository membershipTierHistoryRepository,
+                            OutboxService outboxService,
+                            ScoreMetricsService metricsService) {
         this.userScoreRepository = userScoreRepository;
         this.membershipTierRepository = membershipTierRepository;
         this.scoreHistoryRepository = scoreHistoryRepository;
         this.scoreHoldRepository = scoreHoldRepository;
         this.pointExpirationBucketRepository = pointExpirationBucketRepository;
         this.membershipTierHistoryRepository = membershipTierHistoryRepository;
+        this.outboxService = outboxService;
+        this.metricsService = metricsService;
     }
+
 
     @Override
     @Transactional
@@ -358,9 +367,10 @@ public class ScoreServiceImpl implements ScoreService {
                     .reason("Upgraded tier due to earning points from booking " + request.bookingId())
                     .build();
             membershipTierHistoryRepository.save(tierHistory);
+            outboxService.saveEvent("TIER", String.valueOf(userScore.getUserId()), "TIER_UPGRADED", java.util.Map.of("userId", userScore.getUserId(), "oldTier", previousTierCode, "newTier", newTier.getTierCode()), org.slf4j.MDC.get("correlationId"));
         }
 
-        return new ScoreEarnResponse(
+        ScoreEarnResponse response = new ScoreEarnResponse(
                 earnedPoints,
                 oldBalance,
                 userScore.getCurrentPoints(),
@@ -371,6 +381,12 @@ public class ScoreServiceImpl implements ScoreService {
                 tierChanged,
                 false
         );
+        outboxService.saveEvent("USER_SCORE", String.valueOf(userScore.getUserId()), "POINT_EARNED", response, org.slf4j.MDC.get("correlationId"));
+        metricsService.recordPointsEarned(earnedPoints);
+        if (tierChanged) {
+            metricsService.recordTierUpgrade();
+        }
+        return response;
     }
 
     @Override
@@ -470,7 +486,7 @@ public class ScoreServiceImpl implements ScoreService {
                 .build();
         scoreHistoryRepository.save(history);
 
-        return new ScoreHoldResponse(
+        ScoreHoldResponse response = new ScoreHoldResponse(
                 hold.getHoldCode(),
                 userScore.getUserId(),
                 hold.getBookingId(),
@@ -480,6 +496,8 @@ public class ScoreServiceImpl implements ScoreService {
                 hold.getStatus().name(),
                 false
         );
+        outboxService.saveEvent("HOLD", hold.getHoldCode(), "POINT_HELD", response, org.slf4j.MDC.get("correlationId"));
+        return response;
     }
 
     @Override
@@ -572,7 +590,7 @@ public class ScoreServiceImpl implements ScoreService {
                 .build();
         scoreHistoryRepository.save(history);
 
-        return new ScoreCommitResponse(
+        ScoreCommitResponse response = new ScoreCommitResponse(
                 hold.getHoldCode(),
                 userScore.getUserId(),
                 hold.getBookingId(),
@@ -584,6 +602,9 @@ public class ScoreServiceImpl implements ScoreService {
                 ScoreHoldStatus.COMMITTED.name(),
                 false
         );
+        outboxService.saveEvent("HOLD", hold.getHoldCode(), "POINT_COMMITTED", response, org.slf4j.MDC.get("correlationId"));
+        metricsService.recordPointsRedeemed(pointsToCommit);
+        return response;
     }
 
     @Override
@@ -653,7 +674,7 @@ public class ScoreServiceImpl implements ScoreService {
                 .build();
         scoreHistoryRepository.save(history);
 
-        return new ScoreReleaseResponse(
+        ScoreReleaseResponse response = new ScoreReleaseResponse(
                 hold.getHoldCode(),
                 userScore.getUserId(),
                 hold.getBookingId(),
@@ -664,6 +685,8 @@ public class ScoreServiceImpl implements ScoreService {
                 ScoreHoldStatus.RELEASED.name(),
                 false
         );
+        outboxService.saveEvent("HOLD", hold.getHoldCode(), "POINT_RELEASED", response, org.slf4j.MDC.get("correlationId"));
+        return response;
     }
 
     private void consumePointsFromBuckets(Long userId, int pointsToConsume) {
@@ -759,7 +782,7 @@ public class ScoreServiceImpl implements ScoreService {
                 .build();
         scoreHistoryRepository.save(history);
 
-        return new ScoreRedeemResponse(
+        ScoreRedeemResponse response = new ScoreRedeemResponse(
                 userScore.getUserId(),
                 request.bookingId(),
                 request.points(),
@@ -768,6 +791,9 @@ public class ScoreServiceImpl implements ScoreService {
                 userScore.getAccumulatedPoints(),
                 false
         );
+        outboxService.saveEvent("USER_SCORE", String.valueOf(userScore.getUserId()), "POINT_REDEEMED", response, org.slf4j.MDC.get("correlationId"));
+        metricsService.recordPointsRedeemed(request.points());
+        return response;
     }
 
     @Override
@@ -879,7 +905,7 @@ public class ScoreServiceImpl implements ScoreService {
 
         scoreHistoryRepository.save(history);
 
-        return new ScoreRefundResponse(
+        ScoreRefundResponse response = new ScoreRefundResponse(
                 userScore.getUserId(),
                 request.bookingId(),
                 request.pointsToRefund(),
@@ -888,6 +914,8 @@ public class ScoreServiceImpl implements ScoreService {
                 orig.getId(),
                 false
         );
+        outboxService.saveEvent("USER_SCORE", String.valueOf(userScore.getUserId()), "POINT_REFUNDED", response, org.slf4j.MDC.get("correlationId"));
+        return response;
     }
 
     @Override
@@ -1019,6 +1047,7 @@ public class ScoreServiceImpl implements ScoreService {
                     .reason("Downgraded tier due to earn revoke for booking " + request.bookingId())
                     .build();
             membershipTierHistoryRepository.save(th);
+            outboxService.saveEvent("TIER", String.valueOf(userScore.getUserId()), "TIER_DOWNGRADED", java.util.Map.of("userId", userScore.getUserId(), "oldTier", previousTierCode, "newTier", newTier.getTierCode()), org.slf4j.MDC.get("correlationId"));
         }
 
         Optional<PointExpirationBucket> bucketOpt = pointExpirationBucketRepository.findWithLockByHistoryId(orig.getId());
@@ -1062,7 +1091,7 @@ public class ScoreServiceImpl implements ScoreService {
 
         scoreHistoryRepository.save(history);
 
-        return new ScoreRevokeResponse(
+        ScoreRevokeResponse response = new ScoreRevokeResponse(
                 userScore.getUserId(),
                 toRevoke,
                 deductedPoints,
@@ -1076,6 +1105,8 @@ public class ScoreServiceImpl implements ScoreService {
                 requiresManual,
                 false
         );
+        outboxService.saveEvent("USER_SCORE", String.valueOf(userScore.getUserId()), "POINT_REVOKED", response, org.slf4j.MDC.get("correlationId"));
+        return response;
     }
 
     @Override
@@ -1146,6 +1177,8 @@ public class ScoreServiceImpl implements ScoreService {
                             .description("Expired points from bucket " + b.getId())
                             .build();
                     scoreHistoryRepository.save(history);
+                    outboxService.saveEvent("USER_SCORE", String.valueOf(us.getUserId()), "POINT_EXPIRED", java.util.Map.of("userId", us.getUserId(), "expiredPoints", toExpire, "bucketId", b.getId()), "scheduler-expire");
+                    metricsService.recordPointsExpired(toExpire);
                 } else {
                     b.setStatus(PointExpirationBucketStatus.EXPIRED);
                     pointExpirationBucketRepository.save(b);
