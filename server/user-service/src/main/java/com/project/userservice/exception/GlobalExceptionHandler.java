@@ -44,12 +44,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
-        String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .distinct()
-                .collect(Collectors.joining("; "));
+        java.util.List<ApiResponse.ValidationError> validationErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> new ApiResponse.ValidationError(error.getField(), error.getCode(), error.getDefaultMessage()))
+                .collect(Collectors.toList());
+        
         return ResponseEntity.unprocessableEntity()
-                .body(ApiResponse.error(message, "VALIDATION_ERROR"));
+                .body(ApiResponse.validationError("Validation failed", validationErrors));
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class,

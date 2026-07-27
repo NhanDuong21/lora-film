@@ -211,6 +211,150 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
 	}
 
+	@ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+	public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException exception) {
+		log.warn("Access denied: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("You don't have permission to access this resource", "ACCESS_DENIED");
+		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+	public ResponseEntity<ApiResponse<Object>> handleAuthenticationException(org.springframework.security.core.AuthenticationException exception) {
+		log.warn("Authentication failed: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Authentication failed or token is invalid", "UNAUTHORIZED");
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+	public ResponseEntity<ApiResponse<Object>> handleMissingServletRequestParameterException(org.springframework.web.bind.MissingServletRequestParameterException exception) {
+		log.warn("Missing request parameter: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Missing required parameter: " + exception.getParameterName(), "BAD_REQUEST");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ApiResponse<Object>> handleMethodArgumentTypeMismatchException(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException exception) {
+		log.warn("Argument type mismatch: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Invalid parameter type for: " + exception.getName(), "BAD_REQUEST");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
+	@ExceptionHandler({
+		org.springframework.web.servlet.NoHandlerFoundException.class,
+		org.springframework.web.servlet.resource.NoResourceFoundException.class
+	})
+	public ResponseEntity<ApiResponse<Object>> handleNoHandlerFoundException(Exception exception) {
+		log.warn("No handler found: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Resource not found", "NOT_FOUND");
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+	public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolationException(org.springframework.dao.DataIntegrityViolationException exception) {
+		log.warn("Data integrity violation: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Database conflict or constraint violation", "CONFLICT");
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.web.HttpMediaTypeNotAcceptableException.class)
+	public ResponseEntity<ApiResponse<Object>> handleHttpMediaTypeNotAcceptableException(org.springframework.web.HttpMediaTypeNotAcceptableException exception) {
+		log.warn("Media type not acceptable: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Accept header media type is not supported", "NOT_ACCEPTABLE");
+		return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.web.bind.MissingPathVariableException.class)
+	public ResponseEntity<ApiResponse<Object>> handleMissingPathVariableException(org.springframework.web.bind.MissingPathVariableException exception) {
+		log.warn("Missing path variable: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Missing path variable: " + exception.getVariableName(), "BAD_REQUEST");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.web.bind.MissingRequestHeaderException.class)
+	public ResponseEntity<ApiResponse<Object>> handleMissingRequestHeaderException(org.springframework.web.bind.MissingRequestHeaderException exception) {
+		log.warn("Missing request header: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Missing required header: " + exception.getHeaderName(), "BAD_REQUEST");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+	public ResponseEntity<ApiResponse<Object>> handleMissingServletRequestPartException(org.springframework.web.multipart.support.MissingServletRequestPartException exception) {
+		log.warn("Missing request part: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Missing required request part: " + exception.getRequestPartName(), "BAD_REQUEST");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.validation.BindException.class)
+	public ResponseEntity<ApiResponse<Object>> handleBindException(org.springframework.validation.BindException exception) {
+		log.warn("Bind exception: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Request binding failed", "BAD_REQUEST");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.beans.TypeMismatchException.class)
+	public ResponseEntity<ApiResponse<Object>> handleTypeMismatchException(org.springframework.beans.TypeMismatchException exception) {
+		log.warn("Type mismatch: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Type mismatch for property: " + exception.getPropertyName(), "BAD_REQUEST");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.http.converter.HttpMessageNotWritableException.class)
+	public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotWritableException(org.springframework.http.converter.HttpMessageNotWritableException exception) {
+		log.warn("Message not writable: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Could not write response", "INTERNAL_SERVER_ERROR");
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+	public ResponseEntity<ApiResponse<Object>> handleMaxUploadSizeExceededException(org.springframework.web.multipart.MaxUploadSizeExceededException exception) {
+		log.warn("Max upload size exceeded: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("File size exceeds maximum limit", "PAYLOAD_TOO_LARGE");
+		return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
+	}
+
+	@ExceptionHandler({
+		jakarta.persistence.EntityNotFoundException.class,
+		org.springframework.orm.jpa.JpaObjectRetrievalFailureException.class,
+		org.springframework.dao.EmptyResultDataAccessException.class
+	})
+	public ResponseEntity<ApiResponse<Object>> handleEntityNotFoundExceptions(Exception exception) {
+		log.warn("Entity not found: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Requested data not found", "NOT_FOUND");
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+	public ResponseEntity<ApiResponse<Object>> handleOptimisticLockingFailureException(org.springframework.dao.OptimisticLockingFailureException exception) {
+		log.warn("Optimistic locking failure: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Data was modified by another transaction", "CONFLICT");
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.transaction.TransactionSystemException.class)
+	public ResponseEntity<ApiResponse<Object>> handleTransactionSystemException(org.springframework.transaction.TransactionSystemException exception) {
+		log.warn("Transaction system exception: {}", exception.getMessage());
+		Throwable rootCause = exception.getRootCause();
+		if (rootCause instanceof jakarta.validation.ConstraintViolationException) {
+			return handleConstraintViolationException((jakarta.validation.ConstraintViolationException) rootCause);
+		}
+		ApiResponse<Object> response = ApiResponse.error("Transaction failed", "INTERNAL_SERVER_ERROR");
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+	}
+
+	@ExceptionHandler(IllegalArgumentException.class)
+	public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(IllegalArgumentException exception) {
+		log.warn("Illegal argument: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage() != null ? exception.getMessage() : "Invalid argument provided", "BAD_REQUEST");
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
+	@ExceptionHandler(IllegalStateException.class)
+	public ResponseEntity<ApiResponse<Object>> handleIllegalStateException(IllegalStateException exception) {
+		log.warn("Illegal state: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage() != null ? exception.getMessage() : "Invalid state for this operation", "CONFLICT");
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+	}
+
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Object>> handleException(Exception exception) {
 		log.error("Unexpected error", exception);
