@@ -8,6 +8,10 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,6 +77,7 @@ public class AuthServiceImpl implements AuthService {
 	private final com.project.authservice.repository.UserSessionRepository userSessionRepository;
 	private final com.project.authservice.repository.LoginHistoryRepository loginHistoryRepository;
 	private final com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository;
+	private final ConcurrentHashMap<String, CompletableFuture<ValidationResult>> pendingRequests = new ConcurrentHashMap<>();
 	
 
 	public AuthServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository,
@@ -103,41 +108,11 @@ public class AuthServiceImpl implements AuthService {
 
 	@Transactional
 	public void completeValidation(String requestId, ValidationResult result) {
-		String tempKey = "temp_request:" + requestId;
-		String json = redisTemplate.opsForValue().get(tempKey);
-		if (json == null) {
-			log.warn("Temp request not found or expired for requestId={}", requestId);
-			return;
-		}
-
-		try {
-			PendingRegistrationData data = objectMapper.readValue(json, PendingRegistrationData.class);
-			RegisterRequest request = data.getRequest();
-			String email = request.getEmail();
-
-			if ("SUCCESS".equalsIgnoreCase(result.getStatus())) {
-				Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
-						.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
-
-				Account existingAccount = accountRepository.findByEmail(email).orElse(null);
-				Account account = existingAccount != null ? existingAccount : new Account();
-				account.setEmail(email);
-				account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-				account.setRole(role);
-				account.setAccountStatus(com.project.authservice.enums.AccountStatus.INACTIVE);
-				accountRepository.save(account);
-
-				String pendingKey = "pending_registration:" + email;
-				redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
-				verificationService.sendOtp(new SendOtpRequest(email));
-			} else {
-				// Mark as failed in Redis so polling client knows
-				redisTemplate.opsForValue().set("temp_request_result:" + requestId, result.getErrorCode(), Duration.ofMinutes(15));
-			}
-		} catch (Exception e) {
-			log.error("Failed to complete validation for requestId={}", requestId, e);
-		} finally {
-			redisTemplate.delete(tempKey);
+		CompletableFuture<ValidationResult> future = pendingRequests.get(requestId);
+		if (future != null) {
+			future.complete(result);
+		} else {
+			log.warn("No pending registration request found for requestId={}", requestId);
 		}
 	}
 
@@ -219,9 +194,67 @@ public class AuthServiceImpl implements AuthService {
 				throw new RuntimeException("Internal error processing registration");
 			}
 
-			eventPublisher.publishRegistrationValidationRequested(request, requestId);
-			
-			return new RegistrationInitiatedResponse(requestId, "Registration is processing. Please check status shortly via Polling API.");
+			CompletableFuture<ValidationResult> future = new CompletableFuture<>();
+			pendingRequests.put(requestId, future);
+
+			try {
+				eventPublisher.publishRegistrationValidationRequested(request, requestId);
+				
+				ValidationResult result = future.get(10, TimeUnit.SECONDS);
+				
+				if ("SUCCESS".equalsIgnoreCase(result.getStatus())) {
+					Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
+							.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
+
+					Account existingForUpdate = accountRepository.findByEmail(email).orElse(null);
+					Account account = existingForUpdate != null ? existingForUpdate : new Account();
+					account.setEmail(email);
+					account.setPasswordHash(request.getPassword()); // already encoded
+					account.setRole(role);
+					account.setAccountStatus(com.project.authservice.enums.AccountStatus.INACTIVE);
+					accountRepository.save(account);
+
+					String pendingKey = "pending_registration:" + email;
+					redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
+					verificationService.sendOtp(new SendOtpRequest(email));
+					
+					return new RegistrationInitiatedResponse(requestId, "Registration successful, please check your email for OTP");
+				} else {
+					if ("PHONE_NUMBER_AND_CCCD_ALREADY_EXIST".equals(result.getErrorCode())) {
+					    throw new RegistrationConflictException("Registration information (Phone number or CCCD) already exists.", "VALIDATION_ERROR", null,
+					            List.of(
+					                    new com.project.authservice.common.ApiResponse.ValidationError("phoneNumber", "Duplicate", "Phone number already exists or is reserved."),
+					                    new com.project.authservice.common.ApiResponse.ValidationError("cccd", "Duplicate", "CCCD already exists or is reserved.")
+					            ));
+					} else if ("PHONE_NUMBER_ALREADY_EXISTS".equals(result.getErrorCode())) {
+					    throw new RegistrationConflictException("Phone number already exists.", "PHONE_NUMBER_ALREADY_EXISTS", null, null);
+					} else if ("CCCD_ALREADY_EXISTS".equals(result.getErrorCode())) {
+					    throw new RegistrationConflictException("CCCD already exists.", "CCCD_ALREADY_EXISTS", null, null);
+					} else if ("PHONE_NUMBER_RESERVED".equals(result.getErrorCode())) {
+						throw new RegistrationConflictException("Phone number is currently reserved by another pending registration. Please try again later.", result.getErrorCode(), result.getRetryAfterSeconds(), null);
+					} else if ("CCCD_RESERVED".equals(result.getErrorCode())) {
+						throw new RegistrationConflictException("CCCD is currently reserved by another pending registration. Please try again later.", result.getErrorCode(), result.getRetryAfterSeconds(), null);
+					} else {
+						throw new RegistrationConflictException("Registration conflict", result.getErrorCode(), result.getRetryAfterSeconds(), null);
+					}
+				}
+			} catch (TimeoutException e) {
+				throw new com.project.authservice.exception.common.GatewayTimeoutException("Gateway timeout. Please try again later.");
+			} catch (RegistrationConflictException e) {
+				throw e;
+			} catch (DuplicateResourceException e) {
+				auditLogService.log(null, "REGISTER_FAILED_DUPLICATE", servletRequest);
+				throw e;
+			} catch (Exception e) {
+				log.error("Error during registration validation", e);
+				auditLogService.log(null, "REGISTER_FAILED", servletRequest);
+				throw new RuntimeException("System overload. Failed to validate registration. Please try again later.", e);
+			} finally {
+				pendingRequests.remove(requestId);
+				redisTemplate.delete("temp_request:" + requestId);
+			}
+		} catch (RegistrationConflictException | RegistrationAlreadyPendingException e) {
+			throw e;
 		} catch (DuplicateResourceException e) {
 			auditLogService.log(null, "REGISTER_FAILED_DUPLICATE", servletRequest);
 			throw e;

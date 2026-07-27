@@ -28,6 +28,15 @@ public class AuditLog {
 	@Column(name = "action", nullable = false, length = 100)
 	private String action;
 
+	@Column(name = "resource", nullable = false, length = 100)
+	private String resource;
+
+	@Column(name = "resource_id", length = 100)
+	private String resourceId;
+
+	@Column(name = "description", columnDefinition = "TEXT")
+	private String description;
+
 	@Column(name = "ip_address", length = 45)
 	private String ipAddress;
 
@@ -61,6 +70,15 @@ public class AuditLog {
     public String getAction() {
         return this.action;
     }
+    public String getResource() {
+        return this.resource;
+    }
+    public String getResourceId() {
+        return this.resourceId;
+    }
+    public String getDescription() {
+        return this.description;
+    }
     public String getIpAddress() {
         return this.ipAddress;
     }
@@ -88,6 +106,15 @@ public class AuditLog {
     public void setAction(String action) {
         this.action = action;
     }
+    public void setResource(String resource) {
+        this.resource = resource;
+    }
+    public void setResourceId(String resourceId) {
+        this.resourceId = resourceId;
+    }
+    public void setDescription(String description) {
+        this.description = description;
+    }
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
     }
@@ -108,10 +135,13 @@ public class AuditLog {
     }
     public AuditLog() {
     }
-    public AuditLog(Long id, Account account, String action, String ipAddress, String userAgent, LocalDateTime createdAt, Long createdBy, LocalDateTime updatedAt, Long updatedBy) {
+    public AuditLog(Long id, Account account, String action, String resource, String resourceId, String description, String ipAddress, String userAgent, LocalDateTime createdAt, Long createdBy, LocalDateTime updatedAt, Long updatedBy) {
         this.id = id;
         this.account = account;
         this.action = action;
+        this.resource = resource;
+        this.resourceId = resourceId;
+        this.description = description;
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;
         this.createdAt = createdAt;
@@ -126,6 +156,9 @@ public class AuditLog {
         private Long id;
         private Account account;
         private String action;
+        private String resource;
+        private String resourceId;
+        private String description;
         private String ipAddress;
         private String userAgent;
         private LocalDateTime createdAt;
@@ -143,6 +176,18 @@ public class AuditLog {
         }
         public AuditLogBuilder action(String action) {
             this.action = action;
+            return this;
+        }
+        public AuditLogBuilder resource(String resource) {
+            this.resource = resource;
+            return this;
+        }
+        public AuditLogBuilder resourceId(String resourceId) {
+            this.resourceId = resourceId;
+            return this;
+        }
+        public AuditLogBuilder description(String description) {
+            this.description = description;
             return this;
         }
         public AuditLogBuilder ipAddress(String ipAddress) {
@@ -170,7 +215,7 @@ public class AuditLog {
             return this;
         }
         public AuditLog build() {
-            return new AuditLog(this.id, this.account, this.action, this.ipAddress, this.userAgent, this.createdAt, this.createdBy, this.updatedAt, this.updatedBy);
+            return new AuditLog(id, account, action, resource, resourceId, description, ipAddress, userAgent, createdAt, createdBy, updatedAt, updatedBy);
         }
     }
 }

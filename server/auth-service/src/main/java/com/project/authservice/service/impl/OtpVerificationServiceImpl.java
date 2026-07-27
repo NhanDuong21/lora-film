@@ -122,6 +122,9 @@ public class OtpVerificationServiceImpl implements VerificationService {
         saveRedisOtpData(key, newData);
 
         log.info("OTP generated for email={}", email);
+        System.out.println("=================================================");
+        System.out.println("OTP CODE FOR " + email + " IS: " + otp);
+        System.out.println("=================================================");
 
         if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
             String name = "Khách hàng";

@@ -20,25 +20,25 @@ public class SessionController {
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<List<SessionDto>>> getSessions(@AuthenticationPrincipal UserDetails userDetails) {
-        log.info("Get sessions called for user={}", userDetails.getUsername());
-        List<SessionDto> sessions = sessionService.getUserSessions(userDetails.getUsername());
+    public ResponseEntity<ApiResponse<List<SessionDto>>> getSessions(@AuthenticationPrincipal String username) {
+        log.info("Get sessions called for user={}", username);
+        List<SessionDto> sessions = sessionService.getUserSessions(username);
         return ResponseEntity.ok(ApiResponse.success("Success", sessions));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<Void>> revokeSession(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
-        log.info("Revoke session id={} called for user={}", id, userDetails.getUsername());
-        sessionService.revokeSession(id, userDetails.getUsername());
+    public ResponseEntity<ApiResponse<Void>> revokeSession(@PathVariable Long id, @AuthenticationPrincipal String username) {
+        log.info("Revoke session id={} called for user={}", id, username);
+        sessionService.revokeSession(id, username);
         return ResponseEntity.ok(ApiResponse.success("Session revoked successfully", null));
     }
 
     @DeleteMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<Void>> revokeAllSessions(@AuthenticationPrincipal UserDetails userDetails) {
-        log.info("Revoke all sessions called for user={}", userDetails.getUsername());
-        sessionService.revokeAllSessions(userDetails.getUsername());
+    public ResponseEntity<ApiResponse<Void>> revokeAllSessions(@AuthenticationPrincipal String username) {
+        log.info("Revoke all sessions called for user={}", username);
+        sessionService.revokeAllSessions(username);
         return ResponseEntity.ok(ApiResponse.success("All sessions revoked successfully", null));
     }
     public SessionController(SessionService sessionService) {

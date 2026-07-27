@@ -45,9 +45,12 @@ public class AuditLogServiceImpl implements AuditLogService {
                 account = accountRepository.findById(accountId).orElse(null);
             }
 
+            String resource = determineResource(action);
+
             AuditLog auditLog = AuditLog.builder()
                     .account(account)
                     .action(action)
+                    .resource(resource)
                     .ipAddress(ipAddress)
                     .userAgent(userAgent)
                     .build();
@@ -59,6 +62,15 @@ public class AuditLogServiceImpl implements AuditLogService {
             log.error("Failed to write audit log for accountId={}, action={}: {}", accountId, action, e.getMessage());
         }
     }
+
+    private String determineResource(String action) {
+        if (action == null) return "UNKNOWN";
+        if (action.contains("ROLE")) return "ROLE";
+        if (action.contains("PERMISSION")) return "PERMISSION";
+        if (action.contains("ACCOUNT") || action.contains("REGISTER") || action.contains("LOGIN") || action.contains("LOGOUT") || action.contains("PASSWORD") || action.contains("TOKEN")) return "ACCOUNT";
+        return "SYSTEM";
+    }
+
     @Override
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<AuditLog> getAuditLogs(org.springframework.data.domain.Pageable pageable) {

@@ -355,6 +355,27 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
 	}
 
+	@ExceptionHandler(io.jsonwebtoken.ExpiredJwtException.class)
+	public ResponseEntity<ApiResponse<Object>> handleExpiredJwtException(io.jsonwebtoken.ExpiredJwtException exception) {
+		log.warn("Token expired: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Token has expired", "TOKEN_EXPIRED");
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+	}
+
+	@ExceptionHandler(io.jsonwebtoken.JwtException.class)
+	public ResponseEntity<ApiResponse<Object>> handleJwtException(io.jsonwebtoken.JwtException exception) {
+		log.warn("Invalid JWT: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error("Invalid token", "INVALID_TOKEN");
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+	}
+
+	@ExceptionHandler(org.springframework.security.core.userdetails.UsernameNotFoundException.class)
+	public ResponseEntity<ApiResponse<Object>> handleUsernameNotFoundException(org.springframework.security.core.userdetails.UsernameNotFoundException exception) {
+		log.warn("User not found: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), "USER_NOT_FOUND");
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+	}
+
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Object>> handleException(Exception exception) {
 		log.error("Unexpected error", exception);

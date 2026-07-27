@@ -38,7 +38,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 			   AND al.user_agent = :userAgent
 			   AND ABS(TIMESTAMPDIFF(SECOND, al.created_at, rt.created_at)) <= 2
 			WHERE rt.account_id = :accountId
-			  AND rt.is_revoked = 0
+			  AND rt.revoked = 0
 			""", nativeQuery = true)
 	List<RefreshToken> findActiveTokensByAccountAndUserAgent(
 			@Param("accountId") Long accountId,

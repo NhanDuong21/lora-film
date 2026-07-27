@@ -130,19 +130,19 @@ public class AuthController {
 
 	@PostMapping("/change-password")
 	@org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
-	public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody com.project.authservice.dto.request.ChangePasswordRequest request, @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails) {
-		log.info("Change password endpoint called for user={}", userDetails.getUsername());
-		authService.changePassword(request, userDetails.getUsername());
+	public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody com.project.authservice.dto.request.ChangePasswordRequest request, @org.springframework.security.core.annotation.AuthenticationPrincipal String username) {
+		log.info("Change password endpoint called for user={}", username);
+		authService.changePassword(request, username);
 		return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
 	}
 
 	@GetMapping("/me")
 	@org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
-	public ResponseEntity<ApiResponse<com.project.authservice.dto.AccountDto>> getMe(@org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails) {
-		log.info("Get me endpoint called for user={}", userDetails.getUsername());
+	public ResponseEntity<ApiResponse<com.project.authservice.dto.AccountDto>> getMe(@org.springframework.security.core.annotation.AuthenticationPrincipal String username) {
+		log.info("Get me endpoint called for user={}", username);
 		com.project.authservice.dto.AccountDto account = ((com.project.authservice.service.AccountService) org.springframework.web.context.support.WebApplicationContextUtils.getRequiredWebApplicationContext(
 				((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest().getServletContext()
-		).getBean(com.project.authservice.service.AccountService.class)).getAccountByEmail(userDetails.getUsername());
+		).getBean(com.project.authservice.service.AccountService.class)).getAccountByEmail(username);
 		return ResponseEntity.ok(ApiResponse.success("Success", account));
 	}
     public AuthController(AuthService authService, VerificationService verificationService, com.project.authservice.util.JwtUtil jwtUtil) {

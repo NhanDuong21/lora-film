@@ -10,8 +10,7 @@ public class RegistrationValidationResultEvent {
     private String eventVersion;
     private String source;
     
-    @JsonSerialize(using = ToStringSerializer.class)
-    private Instant occurredAt;
+    private String occurredAt;
     
     private RegistrationValidationResultEventData data;
 
@@ -25,8 +24,8 @@ public class RegistrationValidationResultEvent {
     public void setEventVersion(String eventVersion) { this.eventVersion = eventVersion; }
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
-    public Instant getOccurredAt() { return occurredAt; }
-    public void setOccurredAt(Instant occurredAt) { this.occurredAt = occurredAt; }
+    public String getOccurredAt() { return occurredAt; }
+    public void setOccurredAt(String occurredAt) { this.occurredAt = occurredAt; }
     public RegistrationValidationResultEventData getData() { return data; }
     public void setData(RegistrationValidationResultEventData data) { this.data = data; }
 }

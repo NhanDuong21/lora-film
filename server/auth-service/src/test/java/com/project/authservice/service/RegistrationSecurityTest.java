@@ -75,6 +75,18 @@ class RegistrationSecurityTest {
                 new CccdCheckClient.CccdInfo(
                         "092******789", "092", "Test Province", "MALE", 2005, null));
         when(passwordEncoder.encode(plaintext)).thenReturn(passwordHash);
+        
+        com.project.authservice.entity.Role mockRole = new com.project.authservice.entity.Role();
+        when(roleRepository.findByRoleName(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.of(mockRole));
+        when(accountRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(i -> i.getArgument(0));
+
+        org.mockito.Mockito.doAnswer(invocation -> {
+            String reqId = invocation.getArgument(1);
+            service.completeValidation(reqId, new com.project.authservice.dto.ValidationResult("SUCCESS", null, null));
+            return null;
+        }).when(eventPublisher).publishRegistrationValidationRequested(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
 
         service.register(request);
 
