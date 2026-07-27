@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.controller.AdminBookingController;
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.dto.BookingDetailResponse;
+import com.lorafilm.booking.booking.dto.BookingOperationsSummaryResponse;
 import com.lorafilm.booking.booking.dto.UpdateBookingStatusRequest;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.service.AdminBookingService;
@@ -79,6 +80,20 @@ public class AdminBookingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.bookingCode").value("BK1001"));
+    }
+
+    @Test
+    public void getOperationsSummary_Success_ReturnsGlobalCounters() throws Exception {
+        BookingOperationsSummaryResponse summary =
+                new BookingOperationsSummaryResponse(
+                        20, 5, 4, 3, 2, 1, 0, 2, 1, 1, 3);
+        when(adminBookingService.getOperationsSummary()).thenReturn(summary);
+
+        mockMvc.perform(get("/api/admin/bookings/summary")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalBookings").value(20))
+                .andExpect(jsonPath("$.data.needsAttention").value(3));
     }
 
     @Test

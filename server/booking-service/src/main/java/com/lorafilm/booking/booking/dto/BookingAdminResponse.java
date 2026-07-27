@@ -33,6 +33,8 @@ public class BookingAdminResponse {
     private String currency;
     private BookingStatus bookingStatus;
     private PaymentStatus paymentStatus;
+    private boolean paymentAttempted;
+    private String attentionCode;
     private Instant expiresAt;
     private Instant amountLockedAt;
     private Instant confirmedAt;
@@ -240,6 +242,22 @@ public class BookingAdminResponse {
 
     public void setPaymentStatus(PaymentStatus paymentStatus) {
         this.paymentStatus = paymentStatus;
+    }
+
+    public boolean isPaymentAttempted() {
+        return paymentAttempted;
+    }
+
+    public void setPaymentAttempted(boolean paymentAttempted) {
+        this.paymentAttempted = paymentAttempted;
+    }
+
+    public String getAttentionCode() {
+        return attentionCode;
+    }
+
+    public void setAttentionCode(String attentionCode) {
+        this.attentionCode = attentionCode;
     }
 
     public Instant getExpiresAt() {

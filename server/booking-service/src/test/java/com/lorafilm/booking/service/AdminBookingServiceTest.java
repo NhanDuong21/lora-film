@@ -6,6 +6,7 @@ import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.dto.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.BookingFilterRequest;
 import com.lorafilm.booking.booking.dto.BookingSnapshotDto;
+import com.lorafilm.booking.booking.dto.BookingOperationsSummaryResponse;
 import com.lorafilm.booking.booking.dto.UpdateBookingStatusRequest;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
@@ -20,6 +21,10 @@ import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.response.PagedResponse;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
+import com.lorafilm.booking.payment.repository.BookingPaymentEventRepository;
+import com.lorafilm.booking.reservation.entity.SeatReservation;
+import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
+import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -59,6 +64,10 @@ public class AdminBookingServiceTest {
     private BookingTicketService ticketService;
     @Mock
     private BookingSnapshotService snapshotService;
+    @Mock
+    private SeatReservationRepository seatReservationRepository;
+    @Mock
+    private BookingPaymentEventRepository paymentEventRepository;
 
     @Mock
     private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
@@ -146,6 +155,64 @@ public class AdminBookingServiceTest {
         assertEquals("BK1001", result.getBookingCode());
         assertEquals(Collections.emptyList(), result.getTickets());
         assertEquals(Collections.emptyList(), result.getStatusHistories());
+    }
+
+    @Test
+    public void getBookingDetail_UsesDatabaseReservationAndPaymentEventFacts() {
+        SeatReservation reservation = new SeatReservation();
+        reservation.setPublicId("reservation-public-id");
+        reservation.setSeatPublicId("seat-public-id");
+        reservation.setSeatLabel("B8");
+        reservation.setSeatType("STANDARD");
+        reservation.setStatus(SeatReservationStatus.HELD);
+        reservation.setReservedAt(java.time.Instant.now());
+        reservation.setExpiresAt(java.time.Instant.now().plusSeconds(600));
+        AdminBookingServiceImpl serviceWithOperationalSources =
+                new AdminBookingServiceImpl(
+                        bookingRepository,
+                        bookingMapper,
+                        statusTransitionService,
+                        historyService,
+                        auditService,
+                        operationLogService,
+                        outboxService,
+                        ticketService,
+                        snapshotService,
+                        bookingMetricsManager,
+                        null,
+                        null,
+                        seatReservationRepository,
+                        paymentEventRepository);
+        when(bookingRepository.findByPublicId(
+                "550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+        when(ticketService.findByBooking(10L)).thenReturn(Collections.emptyList());
+        when(historyService.findByBooking(10L)).thenReturn(Collections.emptyList());
+        when(seatReservationRepository.findAllByBookingId(10L))
+                .thenReturn(List.of(reservation));
+        when(paymentEventRepository.existsByBookingId(10L)).thenReturn(true);
+
+        BookingDetailResponse result = serviceWithOperationalSources.getBookingDetail(
+                "550e8400-e29b-41d4-a716-446655440000");
+
+        assertEquals(SeatReservationStatus.HELD,
+                result.getReservations().get(0).status());
+        assertEquals("HELD", result.getOperationalInfo().reservationState());
+        assertEquals(1, result.getOperationalInfo().heldSeatCount());
+        assertEquals(true, result.getOperationalInfo().paymentAttempted());
+    }
+
+    @Test
+    public void getOperationsSummary_UsesGlobalRepositoryCounts() {
+        when(bookingRepository.count(any(Specification.class)))
+                .thenReturn(20L, 5L, 4L, 3L, 2L, 1L, 0L, 2L, 1L, 1L, 3L);
+
+        BookingOperationsSummaryResponse response =
+                adminBookingService.getOperationsSummary();
+
+        assertEquals(20L, response.totalBookings());
+        assertEquals(5L, response.pendingPayment());
+        assertEquals(3L, response.needsAttention());
     }
 
     @Test

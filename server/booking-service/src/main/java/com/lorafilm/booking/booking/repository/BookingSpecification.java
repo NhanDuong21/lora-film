@@ -3,10 +3,13 @@ package com.lorafilm.booking.booking.repository;
 import com.lorafilm.booking.booking.dto.BookingFilterRequest;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.enums.BookingAttentionFilter;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,10 +29,11 @@ public class BookingSpecification {
     public static Specification<Booking> filterBy(BookingFilterRequest filter) {
         return (root, query, cb) -> {
             if (filter == null) {
-                return cb.conjunction();
+                return cb.isFalse(root.get("isDeleted"));
             }
 
             List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.isFalse(root.get("isDeleted")));
 
             if (filter.getBookingCode() != null && !filter.getBookingCode().trim().isEmpty()) {
                 predicates.add(cb.like(cb.lower(root.get("bookingCode")), "%" + filter.getBookingCode().trim().toLowerCase() + "%"));
@@ -37,6 +41,10 @@ public class BookingSpecification {
 
             if (filter.getUserId() != null) {
                 predicates.add(cb.equal(root.get("userId"), filter.getUserId()));
+            }
+
+            if (filter.getUserIds() != null && !filter.getUserIds().isEmpty()) {
+                predicates.add(root.get("userId").in(filter.getUserIds()));
             }
 
             if (filter.getStatus() != null) {
@@ -51,7 +59,45 @@ public class BookingSpecification {
                 predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), filter.getToDate()));
             }
 
+            if (filter.getAttention() != null) {
+                Predicate attentionPredicate = attentionPredicate(
+                        filter.getAttention(), root, cb, Instant.now());
+                predicates.add(attentionPredicate);
+            }
+
             return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    public static Specification<Booking> attention(BookingAttentionFilter attention, Instant now) {
+        return (root, query, cb) -> attention == null
+                ? cb.conjunction()
+                : attentionPredicate(attention, root, cb, now);
+    }
+
+    private static Predicate attentionPredicate(
+            BookingAttentionFilter attention,
+            jakarta.persistence.criteria.Root<Booking> root,
+            jakarta.persistence.criteria.CriteriaBuilder cb,
+            Instant now) {
+        Instant expiringSoonAt = now.plus(5, ChronoUnit.MINUTES);
+        Predicate pending = cb.equal(root.get("bookingStatus"), BookingStatus.PENDING_PAYMENT);
+        Predicate overdue = cb.and(
+                pending,
+                cb.lessThanOrEqualTo(root.get("expiresAt"), now));
+        Predicate expiringSoon = cb.and(
+                pending,
+                cb.greaterThan(root.get("expiresAt"), now),
+                cb.lessThanOrEqualTo(root.get("expiresAt"), expiringSoonAt));
+        Predicate paymentFailed = cb.and(
+                pending,
+                cb.equal(root.get("paymentStatus"), PaymentStatus.FAILED));
+
+        return switch (attention) {
+            case OVERDUE -> overdue;
+            case EXPIRING_SOON -> expiringSoon;
+            case PAYMENT_FAILED -> paymentFailed;
+            case NEEDS_ATTENTION -> cb.or(overdue, expiringSoon, paymentFailed);
         };
     }
 

@@ -11,7 +11,13 @@ vi.mock('../services/adminBookingService', () => ({
 }));
 
 vi.mock('@/features/auth/services/userService', () => ({
-  getUserProfile: vi.fn().mockResolvedValue(null)
+  getUserProfile: vi.fn().mockResolvedValue({
+    accountId: 5,
+    customerCode: 'KH000005',
+    fullName: 'Minh Duy',
+    email: 'duy@example.com',
+    phoneNumber: '0900000001'
+  })
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -40,6 +46,36 @@ describe('AdminBookingDetailPage operational detail', () => {
       createdAt: '2099-07-27T10:00:00Z',
       expiresAt: '2099-07-27T10:15:00Z',
       tickets: [],
+      reservations: [
+        {
+          publicId: 'reservation-d6',
+          seatPublicId: 'seat-d6',
+          seatLabel: 'D6',
+          seatType: 'VIP',
+          status: 'HELD',
+          reservedAt: '2099-07-27T10:00:00Z',
+          expiresAt: '2099-07-27T10:15:00Z'
+        },
+        {
+          publicId: 'reservation-d7',
+          seatPublicId: 'seat-d7',
+          seatLabel: 'D7',
+          seatType: 'VIP',
+          status: 'HELD',
+          reservedAt: '2099-07-27T10:00:00Z',
+          expiresAt: '2099-07-27T10:15:00Z'
+        }
+      ],
+      operationalInfo: {
+        reservationState: 'HELD',
+        heldSeatCount: 2,
+        bookedSeatCount: 0,
+        releasedSeatCount: 0,
+        expiredSeatCount: 0,
+        paymentAttempted: false,
+        attentionCode: null,
+        stateChangedAt: '2099-07-27T10:00:00Z'
+      },
       statusHistories: [],
       snapshot: {
         movieTitle: 'Nhà Có Năm Nàng Tiên',
@@ -80,9 +116,12 @@ describe('AdminBookingDetailPage operational detail', () => {
     );
 
     expect(await screen.findByText('Nhà Có Năm Nàng Tiên')).toBeInTheDocument();
-    expect(screen.getByText(/Ghế D6 \(VIP\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Ghế D7 \(VIP\)/)).toBeInTheDocument();
-    expect(screen.getAllByText('Đang giữ')).toHaveLength(2);
+    expect(screen.getByText(/Ghế D6 \(Ghế VIP\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Ghế D7 \(Ghế VIP\)/)).toBeInTheDocument();
+    expect(screen.getAllByText('Đang giữ ghế')).toHaveLength(3);
+    expect(screen.getByText('KH000005')).toBeInTheDocument();
+    expect(screen.getByText('duy@example.com')).toBeInTheDocument();
+    expect(screen.getAllByText('Chưa phát sinh thanh toán').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Đã có lỗi xảy ra/i)).not.toBeInTheDocument();
   });
 });

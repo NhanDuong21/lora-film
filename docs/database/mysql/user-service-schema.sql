@@ -1,5 +1,6 @@
 CREATE TABLE `users` (
   `account_id` bigint PRIMARY KEY COMMENT 'Shared Primary Key - Logical Ref từ accounts.id của Auth Service',
+  `email` varchar(100) COMMENT 'Email snapshot nhận từ ACCOUNT_VERIFIED; Auth Service vẫn sở hữu đăng nhập',
   `full_name` varchar(100) NOT NULL,
   `phone_number` varchar(15) UNIQUE NOT NULL,
   `gender` varchar(10) COMMENT 'MALE, FEMALE, OTHER',
@@ -12,6 +13,8 @@ CREATE TABLE `users` (
   `province_name` varchar(100),
   `birth_year` int
 );
+
+CREATE INDEX `idx_users_email` ON `users` (`email`);
 
 CREATE TABLE `employee_profiles` (
   `id` bigint PRIMARY KEY AUTO_INCREMENT,

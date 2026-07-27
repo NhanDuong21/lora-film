@@ -155,13 +155,67 @@ export default function AdminBookingDetailPage() {
     }
   };
 
-  const translatePaymentStatus = (paymentStatus) => {
+  const translatePaymentStatus = (paymentStatus, paymentAttempted = false) => {
+    if (!paymentAttempted) return 'Chưa phát sinh thanh toán';
     switch (paymentStatus) {
       case 'SUCCESS': return 'Thành công';
       case 'FAILED': return 'Thất bại';
       case 'REFUNDED': return 'Đã hoàn tiền';
-      case 'PENDING': return 'Đang chờ';
+      case 'PENDING': return 'Đang xử lý';
       default: return 'Chưa ghi nhận';
+    }
+  };
+
+  const translateReservationStatus = (reservationStatus) => {
+    switch (reservationStatus) {
+      case 'HELD': return 'Đang giữ ghế';
+      case 'BOOKED': return 'Đã đặt ghế';
+      case 'RELEASED': return 'Đã trả ghế';
+      case 'EXPIRED': return 'Giữ ghế đã hết hạn';
+      case 'MIXED': return 'Nhiều trạng thái';
+      case 'NONE': return 'Không có dữ liệu giữ ghế';
+      default: return reservationStatus || 'Chưa ghi nhận';
+    }
+  };
+
+  const translateAttention = (attentionCode) => {
+    switch (attentionCode) {
+      case 'EXPIRING_SOON': return 'Sắp hết thời gian giữ ghế';
+      case 'OVERDUE': return 'Đã quá hạn, cần kiểm tra';
+      case 'PAYMENT_FAILED': return 'Có lần thanh toán thất bại';
+      default: return null;
+    }
+  };
+
+  const translateFoodStatus = (foodStatus) => {
+    switch (foodStatus) {
+      case 'DRAFT': return 'Đang chọn món';
+      case 'PENDING': return 'Chờ thanh toán';
+      case 'CONFIRMED': return 'Đã xác nhận';
+      case 'PREPARING': return 'Đang chuẩn bị';
+      case 'READY': return 'Sẵn sàng nhận';
+      case 'COMPLETED': return 'Đã giao';
+      case 'CANCELLED': return 'Đã hủy';
+      default: return foodStatus ? 'Chưa xác định' : 'Chưa ghi nhận';
+    }
+  };
+
+  const translateProductType = (productType) => {
+    switch (productType) {
+      case 'FOOD': return 'Đồ ăn';
+      case 'DRINK': return 'Đồ uống';
+      case 'COMBO': return 'Combo';
+      default: return productType || 'Chưa phân loại';
+    }
+  };
+
+  const translateSeatType = (seatType) => {
+    switch (seatType) {
+      case 'STANDARD': return 'Ghế thường';
+      case 'VIP': return 'Ghế VIP';
+      case 'COUPLE': return 'Ghế đôi';
+      case 'ACCESSIBLE': return 'Ghế hỗ trợ';
+      default: return seatType || 'Chưa phân loại';
     }
   };
 
@@ -177,8 +231,20 @@ export default function AdminBookingDetailPage() {
 
   const translateHistoryReason = (history) => {
     const reason = history?.reason || '';
+    const knownReasons = {
+      USER_CANCEL: 'Khách hàng chủ động hủy đơn',
+      ADMIN_CANCEL: 'Quản trị viên hủy đơn theo yêu cầu vận hành',
+      PAYMENT_SUCCESS: 'Thanh toán được xác nhận thành công',
+      PAYMENT_FAILED: 'Lần thanh toán không thành công',
+      PAYMENT_DEADLINE_EXPIRED: 'Đơn đã hết thời hạn thanh toán',
+      BOOKING_EXPIRED: 'Đơn đã hết thời hạn giữ ghế'
+    };
+    if (knownReasons[reason]) return knownReasons[reason];
     if (reason.startsWith('Booking status changed to ')) {
       return `Hệ thống chuyển đơn sang trạng thái ${translateStatus(history.toStatus).toLowerCase()}`;
+    }
+    if (/^[A-Z0-9_]+$/.test(reason)) {
+      return `Hệ thống ghi nhận trạng thái ${translateStatus(history.toStatus).toLowerCase()}`;
     }
     return reason || 'Không ghi nhận lý do';
   };
@@ -186,14 +252,21 @@ export default function AdminBookingDetailPage() {
   const translateAuditActor = (value) => {
     if (!value || value === 'SYSTEM' || value === 'CRON') return 'Hệ thống';
     if (value === 'ADMIN') return 'Quản trị viên';
-    if (value === 'BOOKING_SERVICE') return 'Booking Service';
-    if (value === 'PAYMENT_SERVICE') return 'Payment Service';
+    if (value === 'CUSTOMER') return 'Khách hàng';
+    if (value === 'INTERNAL_SERVICE') return 'Dịch vụ nội bộ';
+    if (value === 'SCHEDULER') return 'Tác vụ tự động';
+    if (value === 'BOOKING_SERVICE') return 'Hệ thống đặt vé';
+    if (value === 'PAYMENT_SERVICE') return 'Hệ thống thanh toán';
     return value;
   };
 
   const formatCurrency = (val) => {
     return (val || 0).toLocaleString('vi-VN') + 'đ';
   };
+
+  const formatCustomerCode = (accountId) => (
+    accountId ? `KH${String(accountId).padStart(6, '0')}` : 'Chưa có mã'
+  );
 
   if (loading) {
     return (
@@ -224,8 +297,27 @@ export default function AdminBookingDetailPage() {
     );
   }
 
-  const { snapshot, tickets = [], statusHistories = [] } = booking;
-  const seatLines = tickets.length > 0 ? tickets : (snapshot?.seats || []);
+  const {
+    snapshot,
+    tickets = [],
+    reservations = [],
+    operationalInfo = {},
+    statusHistories = []
+  } = booking;
+  const ticketBySeat = new Map(
+    tickets.map(ticket => [ticket.seatPublicId || ticket.seatLabel, ticket])
+  );
+  const seatLines = reservations.length > 0
+    ? reservations.map(reservation => ({
+        ...reservation,
+        reservationStatus: reservation.status,
+        ...(ticketBySeat.get(
+          reservation.seatPublicId || reservation.seatLabel
+        ) || {})
+      }))
+    : (tickets.length > 0 ? tickets : (snapshot?.seats || []));
+  const paymentAttempted = Boolean(operationalInfo.paymentAttempted);
+  const attentionLabel = translateAttention(operationalInfo.attentionCode);
 
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-[#ff7a1a] selection:text-zinc-950">
@@ -261,6 +353,65 @@ export default function AdminBookingDetailPage() {
         </div>
       </div>
 
+      <div className={`rounded-3xl border p-5 md:p-6 ${
+        attentionLabel
+          ? 'border-orange-500/40 bg-orange-500/5'
+          : 'border-zinc-850 bg-zinc-900'
+      }`}>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-[#ff7a1a]" />
+            <span className="text-xs font-black uppercase tracking-wider text-white">
+              Tình trạng vận hành hiện tại
+            </span>
+          </div>
+          {attentionLabel && (
+            <span className="rounded-full bg-orange-500/15 px-3 py-1 text-[10px] font-black text-orange-300">
+              {attentionLabel}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 gap-4 text-xs md:grid-cols-3">
+          <div>
+            <span className="block text-[10px] font-bold uppercase text-zinc-500">Tình trạng ghế</span>
+            <span className="mt-1 block font-extrabold text-zinc-100">
+              {translateReservationStatus(operationalInfo.reservationState)}
+            </span>
+            <span className="mt-1 block text-[10px] text-zinc-500">
+              Giữ {operationalInfo.heldSeatCount || 0} · Đã đặt {operationalInfo.bookedSeatCount || 0}
+              {' · '}Đã trả {operationalInfo.releasedSeatCount || 0} · Hết hạn {operationalInfo.expiredSeatCount || 0}
+            </span>
+          </div>
+          <div>
+            <span className="block text-[10px] font-bold uppercase text-zinc-500">Thanh toán</span>
+            <span className="mt-1 block font-extrabold text-zinc-100">
+              {translatePaymentStatus(booking.paymentStatus, paymentAttempted)}
+            </span>
+            <span className="mt-1 block text-[10px] text-zinc-500">
+              {paymentAttempted
+                ? 'Đã có dữ liệu giao dịch gửi về hệ thống đặt vé'
+                : 'Khách chưa bắt đầu giao dịch thanh toán'}
+            </span>
+          </div>
+          <div>
+            <span className="block text-[10px] font-bold uppercase text-zinc-500">Mốc trạng thái</span>
+            <span className="mt-1 block font-extrabold text-zinc-100">
+              {operationalInfo.stateChangedAt
+                ? new Date(operationalInfo.stateChangedAt).toLocaleString('vi-VN')
+                : 'Chưa ghi nhận'}
+            </span>
+            <span className="mt-1 block text-[10px] text-zinc-500">
+              {operationalInfo.reasonDetail
+                || (booking.bookingStatus === 'PENDING_PAYMENT'
+                  ? (booking.expiresAt
+                    ? `Giữ ghế đến ${new Date(booking.expiresAt).toLocaleString('vi-VN')}`
+                    : 'Chưa ghi nhận thời hạn giữ ghế')
+                  : 'Không có lý do bổ sung')}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* Left Side: Order info & Audit History */}
@@ -285,7 +436,7 @@ export default function AdminBookingDetailPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Email:</span>
-                    <span className="font-mono text-zinc-300">{customer.email}</span>
+                    <span className="font-mono text-zinc-300">{customer.email || 'Chưa đồng bộ email'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Số điện thoại:</span>
@@ -293,13 +444,19 @@ export default function AdminBookingDetailPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Mã khách hàng:</span>
-                    <span className="font-bold text-zinc-400">#{booking.userId}</span>
+                    <span className="font-bold text-orange-400">
+                      {customer.customerCode || formatCustomerCode(booking.userId)}
+                    </span>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2 text-xs">
                   <p className="text-zinc-400">Không tìm thấy thông tin khách hàng chi tiết.</p>
-                  <p className="text-zinc-550">Mã khách hàng: <span className="font-bold">#{booking.userId}</span></p>
+                  <p className="text-zinc-550">
+                    Mã khách hàng: <span className="font-bold text-orange-400">
+                      {formatCustomerCode(booking.userId)}
+                    </span>
+                  </p>
                 </div>
               )}
             </div>
@@ -310,6 +467,15 @@ export default function AdminBookingDetailPage() {
                 <CreditCard className="w-4 h-4 text-[#ff7a1a]" />
                 <span className="text-xs font-black uppercase tracking-wider text-white">Phương Thức Thanh Toán</span>
               </div>
+              {!paymentAttempted ? (
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
+                  <span className="block font-extrabold text-zinc-200">Chưa phát sinh thanh toán</span>
+                  <span className="mt-1 block text-[10px] leading-relaxed text-zinc-500">
+                    Khách hàng chưa bắt đầu giao dịch, vì vậy chưa có cổng thanh toán,
+                    nhà cung cấp hay mã tham chiếu.
+                  </span>
+                </div>
+              ) : (
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Cổng thanh toán:</span>
@@ -323,13 +489,14 @@ export default function AdminBookingDetailPage() {
                   <span className="text-zinc-500">Trạng thái GD:</span>
                   <span className={`font-bold uppercase ${
                     booking.paymentStatus === 'SUCCESS' ? 'text-emerald-400' : 'text-amber-400'
-                  }`}>{translatePaymentStatus(booking.paymentStatus)}</span>
+                  }`}>{translatePaymentStatus(booking.paymentStatus, paymentAttempted)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Tham chiếu GD:</span>
                   <span className="font-mono text-zinc-400 text-[10px] select-all truncate max-w-[150px]">{booking.paymentReference || 'Chưa ghi nhận'}</span>
                 </div>
               </div>
+              )}
             </div>
           </div>
 
@@ -389,25 +556,33 @@ export default function AdminBookingDetailPage() {
                   const hasTicket = Boolean(seat.ticketCode);
                   const label = seat.seatLabel || seat.label || 'Chưa rõ';
                   const type = seat.seatType || seat.type;
+                  const reservationStatus = seat.reservationStatus
+                    || (hasTicket ? 'BOOKED' : seat.status);
+                  const activeReservation = reservationStatus === 'HELD'
+                    || reservationStatus === 'BOOKED';
                   return (
                   <div key={seat.id || seat.seatPublicId || index} className="bg-zinc-950 border border-zinc-850 rounded-2xl p-4 flex justify-between items-center text-xs">
                     <div>
                       <div className="flex items-center gap-1.5">
                         <Armchair className="w-3.5 h-3.5 text-[#ff7a1a]" />
                         <span className="text-zinc-100 font-extrabold block">
-                          Ghế {label}{type ? ` (${type})` : ''}
+                          Ghế {label}{type ? ` (${translateSeatType(type)})` : ''}
                         </span>
                       </div>
                       <span className="text-[9px] text-zinc-550 font-bold mt-1 block font-mono">
-                        {hasTicket ? `MÃ VÉ: ${seat.ticketCode}` : 'Vé được phát hành sau khi thanh toán thành công'}
+                        {hasTicket
+                          ? `MÃ VÉ: ${seat.ticketCode}`
+                          : (seat.reason || 'Chưa phát hành vé xem phim')}
                       </span>
                     </div>
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded ${
-                      hasTicket && seat.status === 'ACTIVE'
+                      activeReservation
                         ? 'bg-emerald-500/10 text-emerald-400'
-                        : 'bg-amber-500/10 text-amber-400'
+                        : 'bg-zinc-800 text-zinc-400'
                     }`}>
-                      {hasTicket ? translateTicketStatus(seat.status) : 'Đang giữ'}
+                      {reservations.length > 0
+                        ? translateReservationStatus(reservationStatus)
+                        : (hasTicket ? translateTicketStatus(seat.status) : 'Chưa ghi nhận')}
                     </span>
                   </div>
                   );
@@ -443,7 +618,10 @@ export default function AdminBookingDetailPage() {
                     <div key={item.id} className="py-4 flex justify-between items-center text-xs first:pt-0 last:pb-0">
                       <div className="space-y-1">
                         <h4 className="font-extrabold text-white">{item.productName}</h4>
-                        <p className="text-[9px] text-zinc-500 font-bold">Mã sản phẩm: <span className="font-mono">{item.productCode}</span> | Loại: {item.productType}</p>
+                        <p className="text-[9px] text-zinc-500 font-bold">
+                          Mã sản phẩm: <span className="font-mono">{item.productCode}</span>
+                          {' · '}Nhóm: {translateProductType(item.productType)}
+                        </p>
                       </div>
                       <div className="flex items-center gap-6">
                         <span className="text-zinc-500 font-bold">x{item.quantity}</span>
@@ -461,10 +639,10 @@ export default function AdminBookingDetailPage() {
                 <div className="bg-zinc-950/50 border border-zinc-850 p-4 rounded-2xl flex items-center justify-between text-xs mt-2">
                   <div className="flex items-center gap-2.5">
                     <Activity className="w-4 h-4 text-zinc-500" />
-                    <span className="text-zinc-400 font-bold">Trạng thái đơn bắp nước do Booking Service ghi nhận</span>
+                    <span className="text-zinc-400 font-bold">Trạng thái bắp nước được hệ thống đặt vé ghi nhận</span>
                   </div>
                   <span className="text-[9px] bg-zinc-800 text-zinc-300 font-black px-2 py-0.5 rounded border border-zinc-700 uppercase tracking-wider">
-                    {foodOrder.status || 'Chưa ghi nhận'}
+                    {translateFoodStatus(foodOrder.status)}
                   </span>
                 </div>
               </div>
@@ -586,7 +764,7 @@ export default function AdminBookingDetailPage() {
                     </div>
                   ) : (
                     <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-[10px] leading-relaxed text-zinc-500">
-                      Trạng thái hiện tại không có thao tác thủ công. Xác nhận và hoàn tiền chỉ được áp dụng từ kết quả hợp lệ của Payment Service; hết hạn do Booking Service quản lý.
+                      Trạng thái hiện tại không có thao tác thủ công. Xác nhận và hoàn tiền chỉ được áp dụng từ kết quả hợp lệ của hệ thống thanh toán; thời hạn giữ ghế do hệ thống đặt vé quản lý.
                     </div>
                   )}
 

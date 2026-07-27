@@ -26,6 +26,14 @@
 > A dedicated `PAYMENT_TO_BOOKING_INTERNAL_TOKEN` protects payment context,
 > result, and refund-result routes. Direct confirmation and direct refund routes
 > cannot mutate Booking state.
+>
+> **Admin operations contract (2026-07-27):**
+> `GET /api/admin/bookings/summary` returns global lifecycle and attention
+> counters independent of list pagination. `GET /api/admin/bookings` accepts
+> `userIds` and `attention=NEEDS_ATTENTION|EXPIRING_SOON|OVERDUE|PAYMENT_FAILED`.
+> Admin detail includes database reservation rows and `operationalInfo`, so the
+> UI distinguishes held/booked/released/expired seats and “no payment attempt”
+> from an actual payment in progress.
 
 ## 1. Thông Tin Chung
 

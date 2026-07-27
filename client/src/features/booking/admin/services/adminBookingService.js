@@ -13,7 +13,18 @@ import apiClient from "@/services/apiClient";
  * @returns {Promise<Object>} Paginated bookings list
  */
 export const getBookings = async (filter = {}) => {
-  const response = await apiClient.get("/api/admin/bookings", { params: filter });
+  const params = {
+    ...filter,
+    userIds: Array.isArray(filter.userIds)
+      ? filter.userIds.join(',')
+      : filter.userIds
+  };
+  const response = await apiClient.get("/api/admin/bookings", { params });
+  return response.data.data;
+};
+
+export const getBookingOperationsSummary = async () => {
+  const response = await apiClient.get('/api/admin/bookings/summary');
   return response.data.data;
 };
 

@@ -45,6 +45,8 @@ public class BookingDetailResponse {
 
     private BookingSnapshotDto snapshot;
     private List<BookingTicketDto> tickets;
+    private List<BookingReservationAdminDto> reservations;
+    private BookingOperationalInfoDto operationalInfo;
     private List<BookingStatusHistoryDto> statusHistories;
 
     public BookingDetailResponse() {
@@ -328,6 +330,22 @@ public class BookingDetailResponse {
 
     public void setTickets(List<BookingTicketDto> tickets) {
         this.tickets = tickets;
+    }
+
+    public List<BookingReservationAdminDto> getReservations() {
+        return reservations;
+    }
+
+    public void setReservations(List<BookingReservationAdminDto> reservations) {
+        this.reservations = reservations;
+    }
+
+    public BookingOperationalInfoDto getOperationalInfo() {
+        return operationalInfo;
+    }
+
+    public void setOperationalInfo(BookingOperationalInfoDto operationalInfo) {
+        this.operationalInfo = operationalInfo;
     }
 
     public List<BookingStatusHistoryDto> getStatusHistories() {

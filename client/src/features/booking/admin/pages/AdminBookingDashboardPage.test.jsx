@@ -2,11 +2,26 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminBookingDashboardPage from './AdminBookingDashboardPage';
-import { getBookings } from '../services/adminBookingService';
+import {
+  getBookings,
+  getBookingOperationsSummary
+} from '../services/adminBookingService';
 
 vi.mock('../services/adminBookingService', () => ({
   getBookings: vi.fn(),
+  getBookingOperationsSummary: vi.fn(),
   updateBookingStatus: vi.fn()
+}));
+
+vi.mock('@/features/auth/services/userService', () => ({
+  getUserProfiles: vi.fn().mockResolvedValue([{
+    accountId: 7,
+    customerCode: 'KH000007',
+    fullName: 'Nguyễn Minh Duy',
+    email: 'duy@example.com',
+    phoneNumber: '0900000001'
+  }]),
+  searchUserProfiles: vi.fn().mockResolvedValue([])
 }));
 
 vi.mock('@/features/catalog/admin/services/adminMovieService', () => ({
@@ -46,6 +61,7 @@ describe('AdminBookingDashboardPage data provenance', () => {
         finalAmount: 190000,
         bookingStatus: 'PENDING_PAYMENT',
         paymentStatus: 'PENDING',
+        paymentAttempted: false,
         expiresAt: '2099-07-27T10:15:00Z',
         createdAt: '2099-07-27T10:00:00Z'
       }],
@@ -55,6 +71,19 @@ describe('AdminBookingDashboardPage data provenance', () => {
       totalPages: 1,
       first: true,
       last: true
+    });
+    getBookingOperationsSummary.mockResolvedValue({
+      totalBookings: 12,
+      pendingPayment: 3,
+      confirmed: 4,
+      completed: 2,
+      cancelled: 2,
+      expired: 1,
+      refunded: 0,
+      expiringSoon: 1,
+      overdue: 0,
+      paymentFailed: 0,
+      needsAttention: 1
     });
   });
 
@@ -69,9 +98,13 @@ describe('AdminBookingDashboardPage data provenance', () => {
     expect(screen.getByText('Nhà Có Năm Nàng Tiên')).toBeInTheDocument();
     expect(screen.getByText(/LoraFilm Hải Châu · 4DX 01/)).toBeInTheDocument();
     expect(screen.getByText(/2 ghế/)).toBeInTheDocument();
-    expect(screen.getByText('Chưa thanh toán')).toBeInTheDocument();
+    expect(screen.getByText('Nguyễn Minh Duy')).toBeInTheDocument();
+    expect(screen.getByText('KH000007')).toBeInTheDocument();
+    expect(screen.getByText('Chưa phát sinh thanh toán')).toBeInTheDocument();
     expect(screen.queryByText(/Mã phim: 91/)).not.toBeInTheDocument();
-    expect(screen.getByText('Chờ thanh toán trên trang')).toBeInTheDocument();
+    expect(screen.getByText('Tổng đơn toàn hệ thống')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getAllByText('Cần xử lý').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Xu hướng Đặt Vé/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Giám Sát Hệ Thống/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Doanh Thu \(Trang\)/i)).not.toBeInTheDocument();

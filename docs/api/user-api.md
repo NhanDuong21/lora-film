@@ -1,5 +1,17 @@
 # User Service API Specification
 
+> **Bổ sung vận hành Booking Admin (27/07/2026):** User Service lưu bản chụp
+> email nhận từ sự kiện `ACCOUNT_VERIFIED` để hiển thị/tra cứu hồ sơ; Auth
+> Service vẫn là nguồn sở hữu tài khoản đăng nhập. Profile trả thêm
+> `customerCode` dạng `KH` + `accountId` đủ sáu chữ số (ví dụ `KH000005`).
+> `accountId` vẫn là khóa liên kết nội bộ, không được trình bày trên UI như mã
+> khách hàng. Admin/Staff có thể dùng:
+>
+> - `GET /api/users/admin/batch?accountIds=5,8`
+> - `GET /api/users/admin/search?query=Minh%20Duy&limit=20`
+>
+> Tìm kiếm hỗ trợ họ tên, email, số điện thoại, `accountId` và `customerCode`.
+
 ## 1. Thông Tin Chung
 
 | Mục                | Nội dung                               |
@@ -15,6 +27,7 @@
 ---
 
 ## Lịch Sử Chỉnh Sửa
+- **27/07/2026**: Bổ sung email snapshot, mã khách hàng vận hành và API batch/search cho Admin/Staff.
 - **23/06/2026**: Refactor toàn bộ theo kiến trúc Event-Driven. Xóa bỏ Internal HTTP API (`/internal/users`). User Service giờ chỉ giao tiếp qua Kafka Events (`REGISTRATION_VALIDATION_REQUESTED` và `ACCOUNT_VERIFIED`).
 - **17/06/2026**: Đồng bộ các quy tắc validate của internal create profile API (fullName, phoneNumber) với Auth Service và Frontend.
 - **14/06/2026**: Cập nhật Local URL từ port `8082` sang `8086`.

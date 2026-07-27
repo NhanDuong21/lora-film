@@ -5,7 +5,15 @@ import {
   XCircle, AlertCircle, Copy, FileDown, ArrowUpDown, User,
   Film, Building, CreditCard
 } from 'lucide-react';
-import { getBookings, updateBookingStatus } from '../services/adminBookingService';
+import {
+  getBookings,
+  getBookingOperationsSummary,
+  updateBookingStatus
+} from '../services/adminBookingService';
+import {
+  getUserProfiles,
+  searchUserProfiles
+} from '@/features/auth/services/userService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import { getBookingErrorMessage } from '../../customer/utils/bookingErrorMessages';
@@ -18,8 +26,9 @@ export default function AdminBookingDashboardPage() {
 
   // API Filter States (Sent to Backend)
   const [bookingCode, setBookingCode] = useState('');
-  const [userId, setUserId] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
   const [status, setStatus] = useState('ALL');
+  const [attention, setAttention] = useState('ALL');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(0);
@@ -41,12 +50,15 @@ export default function AdminBookingDashboardPage() {
 
   // Data States
   const [bookingPage, setBookingPage] = useState(null);
+  const [operationsSummary, setOperationsSummary] = useState(null);
+  const [summaryError, setSummaryError] = useState(null);
   const [moviesList, setMoviesList] = useState([]);
   const [cinemasList, setCinemasList] = useState([]);
   
   // Lookups
   const [moviesLookup, setMoviesLookup] = useState({});
   const [cinemasLookup, setCinemasLookup] = useState({});
+  const [customersLookup, setCustomersLookup] = useState({});
 
   // Loading & Error States
   const [loading, setLoading] = useState(true);
@@ -56,7 +68,7 @@ export default function AdminBookingDashboardPage() {
   // Resizable table column widths
   const [colWidths, setColWidths] = useState({
     code: 120,
-    customer: 100,
+    customer: 180,
     movie: 150,
     cinema: 120,
     showtime: 140,
@@ -108,25 +120,64 @@ export default function AdminBookingDashboardPage() {
         size
       };
       if (bookingCode) filters.bookingCode = bookingCode.trim();
-      if (userId) filters.userId = Number(userId);
+      if (customerQuery.trim()) {
+        const customerMatches = await searchUserProfiles(customerQuery, 50);
+        const userIds = customerMatches.map(customer => customer.accountId);
+        if (userIds.length === 0) {
+          setBookingPage({
+            content: [],
+            page,
+            size,
+            totalElements: 0,
+            totalPages: 0,
+            last: true
+          });
+          setCustomersLookup({});
+          return;
+        }
+        filters.userIds = userIds;
+      }
       if (status !== 'ALL') filters.status = status;
+      if (attention !== 'ALL') filters.attention = attention;
       if (fromDate) filters.fromDate = new Date(fromDate).toISOString();
       if (toDate) filters.toDate = new Date(toDate).toISOString();
 
       const response = await getBookings(filters);
       setBookingPage(response);
+      const visibleUserIds = [...new Set(
+        (response?.content || []).map(booking => booking.userId).filter(Boolean)
+      )];
+      try {
+        const profiles = await getUserProfiles(visibleUserIds);
+        setCustomersLookup(Object.fromEntries(
+          profiles.map(profile => [profile.accountId, profile])
+        ));
+      } catch {
+        setCustomersLookup({});
+      }
     } catch (err) {
       setError(getBookingErrorMessage(err, "Không thể tải danh sách đơn hàng."));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [page, size, bookingCode, userId, status, fromDate, toDate]);
+  }, [page, size, bookingCode, customerQuery, status, attention, fromDate, toDate]);
+
+  const fetchOperationsSummary = useCallback(async () => {
+    try {
+      setSummaryError(null);
+      setOperationsSummary(await getBookingOperationsSummary());
+    } catch (err) {
+      setSummaryError(getBookingErrorMessage(
+        err, 'Không thể tải số liệu vận hành đơn hàng.'));
+    }
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLookups();
-  }, [fetchLookups]);
+    fetchOperationsSummary();
+  }, [fetchLookups, fetchOperationsSummary]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -141,8 +192,9 @@ export default function AdminBookingDashboardPage() {
 
   const handleResetFilters = () => {
     setBookingCode('');
-    setUserId('');
+    setCustomerQuery('');
     setStatus('ALL');
+    setAttention('ALL');
     setFromDate('');
     setToDate('');
     setSelectedMovieId('ALL');
@@ -153,6 +205,13 @@ export default function AdminBookingDashboardPage() {
     setHasFoodFilter('ALL');
     setHasPromotionFilter('ALL');
     setPage(0);
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      fetchBookingsList(true),
+      fetchOperationsSummary()
+    ]);
   };
 
   // Client-side filtering & sorting logic
@@ -176,7 +235,13 @@ export default function AdminBookingDashboardPage() {
     }
     // Filter by Payment Status
     if (paymentStatusFilter !== 'ALL') {
-      list = list.filter(b => b.paymentStatus === paymentStatusFilter);
+      list = list.filter(b => {
+        if (paymentStatusFilter === 'NO_ATTEMPT') return !b.paymentAttempted;
+        if (paymentStatusFilter === 'PROCESSING') {
+          return b.paymentAttempted && b.paymentStatus === 'PENDING';
+        }
+        return b.paymentStatus === paymentStatusFilter;
+      });
     }
     // Filter by Food Ordered
     if (hasFoodFilter !== 'ALL') {
@@ -214,39 +279,6 @@ export default function AdminBookingDashboardPage() {
     });
   }, [bookingPage, selectedMovieId, selectedCinemaId, minPrice, maxPrice, paymentStatusFilter, hasFoodFilter, hasPromotionFilter, sortField, sortDirection]);
 
-  // Context cards reflect only the rows currently visible in this table.
-  const aggregatedStats = useMemo(() => {
-    const list = processedBookings;
-    let pending = 0;
-    let confirmed = 0;
-    let completed = 0;
-    let cancelled = 0;
-    let expired = 0;
-    let refunded = 0;
-
-    list.forEach(b => {
-      switch (b.bookingStatus) {
-        case 'PENDING_PAYMENT': pending++; break;
-        case 'CONFIRMED': confirmed++; break;
-        case 'COMPLETED': completed++; break;
-        case 'CANCELLED': cancelled++; break;
-        case 'EXPIRED': expired++; break;
-        case 'REFUNDED': refunded++; break;
-        default: break;
-      }
-    });
-
-    return {
-      pending,
-      confirmed,
-      completed,
-      cancelled,
-      expired,
-      refunded,
-      totalCount: list.length
-    };
-  }, [processedBookings]);
-
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
     if (triggerToast) triggerToast(`Đã sao chép mã đặt vé: ${code}`, 'info');
@@ -262,10 +294,11 @@ export default function AdminBookingDashboardPage() {
     if (!shouldCancel) return;
 
     try {
-      await updateBookingStatus(publicId, 'CANCELLED', 'Admin dashboard manual cancellation');
+      await updateBookingStatus(publicId, 'CANCELLED', 'Quản trị viên hủy đơn theo yêu cầu vận hành');
       if (triggerToast) triggerToast(`Hủy đơn đặt vé ${bookingCode} thành công.`, 'success');
       else if (triggerAlert) triggerAlert(`Hủy đơn đặt vé ${bookingCode} thành công.`);
       fetchBookingsList();
+      fetchOperationsSummary();
     } catch (err) {
       const msg = getBookingErrorMessage(err, 'Không thể hủy đơn hàng.');
       if (triggerToast) triggerToast(msg, 'error');
@@ -281,13 +314,16 @@ export default function AdminBookingDashboardPage() {
     }
 
     const headers = [
-      'Mã đặt vé', 'Mã User', 'Phim', 'Rạp', 'Tiền Vé', 'Tiền Bắp Nước', 
+      'Mã đặt vé', 'Mã khách hàng', 'Tên khách hàng', 'Email', 'Phim', 'Rạp',
+      'Tiền Vé', 'Tiền Bắp Nước',
       'Khuyến Mãi', 'Tổng Tiền', 'Trạng Thái Đơn', 'Thanh Toán', 'Ngày Tạo'
     ];
 
     const rows = processedBookings.map(b => [
       b.bookingCode,
-      b.userId,
+      customersLookup[b.userId]?.customerCode || formatCustomerCode(b.userId),
+      customersLookup[b.userId]?.fullName || 'Chưa tải được hồ sơ',
+      customersLookup[b.userId]?.email || '',
       b.movieTitle || moviesLookup[b.movieId] || 'Chưa có tên phim',
       b.cinemaName || cinemasLookup[b.cinemaId] || 'Chưa có tên rạp',
       b.ticketAmount,
@@ -353,6 +389,10 @@ export default function AdminBookingDashboardPage() {
     return (val || 0).toLocaleString('vi-VN') + 'đ';
   };
 
+  const formatCustomerCode = (userId) => (
+    userId ? `KH${String(userId).padStart(6, '0')}` : 'Chưa có mã'
+  );
+
   const translateStatus = (bStatus) => {
     switch (bStatus) {
       case 'CONFIRMED': return 'Đã xác nhận';
@@ -365,12 +405,13 @@ export default function AdminBookingDashboardPage() {
     }
   };
 
-  const translatePaymentStatus = (paymentStatus) => {
+  const translatePaymentStatus = (paymentStatus, paymentAttempted = false) => {
+    if (!paymentAttempted) return 'Chưa phát sinh thanh toán';
     switch (paymentStatus) {
       case 'SUCCESS': return 'Đã thanh toán';
       case 'FAILED': return 'Thanh toán thất bại';
       case 'REFUNDED': return 'Đã hoàn tiền';
-      case 'PENDING': return 'Chưa thanh toán';
+      case 'PENDING': return 'Đang xử lý thanh toán';
       default: return 'Chưa ghi nhận';
     }
   };
@@ -397,7 +438,7 @@ export default function AdminBookingDashboardPage() {
             <span>Xuất dữ liệu trang (CSV)</span>
           </button>
           <button
-            onClick={() => fetchBookingsList(true)}
+            onClick={handleRefresh}
             disabled={refreshing}
             className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-2.5 rounded-xl text-zinc-400 hover:text-white transition-all text-xs flex items-center gap-2 cursor-pointer"
           >
@@ -407,36 +448,57 @@ export default function AdminBookingDashboardPage() {
         </div>
       </div>
 
-      {/* These counters are derived only from the API rows visible in the current table. */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* Global counters are calculated by Booking Service, independent of pagination. */}
+      {summaryError && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-300">
+          {summaryError} Danh sách đơn bên dưới vẫn có thể tra cứu bình thường.
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
         <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
-          <span className="block text-[10px] font-bold uppercase text-zinc-500">Đơn đang hiển thị</span>
-          <span className="mt-1 text-xl font-black text-white">{aggregatedStats.totalCount}</span>
+          <span className="block text-[10px] font-bold uppercase text-zinc-500">Tổng đơn toàn hệ thống</span>
+          <span className="mt-1 text-xl font-black text-white">{operationsSummary?.totalBookings ?? '—'}</span>
           <span className="mt-1 block text-[9px] text-zinc-500">
-            Kết quả từ API: <strong className="text-zinc-300">{bookingPage?.totalElements ?? 0}</strong>
+            Bộ lọc hiện tại: <strong className="text-zinc-300">{bookingPage?.totalElements ?? 0}</strong> đơn
           </span>
         </div>
         <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
-          <span className="block text-[10px] font-bold uppercase text-amber-500">Chờ thanh toán trên trang</span>
-          <span className="mt-1 text-xl font-black text-amber-400">{aggregatedStats.pending}</span>
-          <span className="mt-1 block text-[9px] text-zinc-500">Chỉ tính các dòng đang hiển thị</span>
+          <span className="block text-[10px] font-bold uppercase text-amber-500">Đang chờ thanh toán</span>
+          <span className="mt-1 text-xl font-black text-amber-400">{operationsSummary?.pendingPayment ?? '—'}</span>
+          <span className="mt-1 block text-[9px] text-zinc-500">Tất cả đơn còn ở bước thanh toán</span>
         </div>
         <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
           <span className="block text-[10px] font-bold uppercase text-emerald-500">Đã xác nhận / hoàn thành</span>
           <span className="mt-1 text-xl font-black text-emerald-400">
-            {aggregatedStats.confirmed + aggregatedStats.completed}
+            {(operationsSummary?.confirmed ?? 0) + (operationsSummary?.completed ?? 0)}
           </span>
-          <span className="mt-1 block text-[9px] text-zinc-500">Chỉ tính các dòng đang hiển thị</span>
+          <span className="mt-1 block text-[9px] text-zinc-500">Ghế đã được ghi nhận là đã đặt</span>
         </div>
         <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
           <span className="block text-[10px] font-bold uppercase text-red-500">Không còn hoạt động</span>
           <span className="mt-1 text-xl font-black text-red-400">
-            {aggregatedStats.cancelled + aggregatedStats.expired + aggregatedStats.refunded}
+            {(operationsSummary?.cancelled ?? 0)
+              + (operationsSummary?.expired ?? 0)
+              + (operationsSummary?.refunded ?? 0)}
           </span>
           <span className="mt-1 block text-[9px] text-zinc-500">
-            Hủy, hết hạn hoặc hoàn tiền trên trang
+            Đã hủy, hết hạn hoặc hoàn tiền
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            setAttention('NEEDS_ATTENTION');
+            setPage(0);
+          }}
+          className="flex flex-col justify-between rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 text-left shadow-lg transition-colors hover:border-orange-400"
+        >
+          <span className="block text-[10px] font-bold uppercase text-orange-400">Cần xử lý</span>
+          <span className="mt-1 text-xl font-black text-orange-300">{operationsSummary?.needsAttention ?? '—'}</span>
+          <span className="mt-1 block text-[9px] text-zinc-500">
+            Sắp hết hạn, quá hạn hoặc thanh toán lỗi
+          </span>
+        </button>
       </div>
 
       {/* Advanced Search & Filtering form */}
@@ -457,7 +519,7 @@ export default function AdminBookingDashboardPage() {
         </div>
 
         {/* Primary Filter Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
           <div className="space-y-1">
             <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã đặt vé</label>
               <input
@@ -470,12 +532,12 @@ export default function AdminBookingDashboardPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã khách hàng</label>
+            <label className="text-[9px] text-zinc-500 font-bold uppercase">Khách hàng</label>
               <input
-              type="number"
-              placeholder="VD: 1, 2"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
+              type="text"
+              placeholder="Tên, email, SĐT hoặc KH000005"
+              value={customerQuery}
+              onChange={(e) => setCustomerQuery(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-xs focus-ring text-zinc-100 placeholder:text-zinc-500"
             />
           </div>
@@ -494,6 +556,21 @@ export default function AdminBookingDashboardPage() {
               <option value="CANCELLED">Đã hủy</option>
               <option value="EXPIRED">Đã hết hạn</option>
               <option value="REFUNDED">Hoàn tiền</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[9px] text-zinc-500 font-bold uppercase">Cần xử lý</label>
+            <select
+              value={attention}
+              onChange={(e) => setAttention(e.target.value)}
+              className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200 outline-none"
+            >
+              <option value="ALL">Tất cả</option>
+              <option value="NEEDS_ATTENTION">Tất cả đơn cần xử lý</option>
+              <option value="EXPIRING_SOON">Sắp hết thời gian giữ ghế</option>
+              <option value="OVERDUE">Đã quá hạn nhưng chưa đóng</option>
+              <option value="PAYMENT_FAILED">Có lần thanh toán thất bại</option>
             </select>
           </div>
 
@@ -610,7 +687,8 @@ export default function AdminBookingDashboardPage() {
                 className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200 outline-none"
               >
                 <option value="ALL">Tất cả trạng thái</option>
-                <option value="PENDING">Chưa thanh toán</option>
+                <option value="NO_ATTEMPT">Chưa phát sinh thanh toán</option>
+                <option value="PROCESSING">Đang xử lý thanh toán</option>
                 <option value="SUCCESS">Đã thanh toán</option>
                 <option value="FAILED">Thanh toán thất bại</option>
                 <option value="REFUNDED">Đã hoàn tiền</option>
@@ -781,6 +859,9 @@ export default function AdminBookingDashboardPage() {
                   const showtimeStart = b.showtimeStart ? new Date(b.showtimeStart) : null;
                   const hasFood = b.foodAmount > 0;
                   const discount = (b.promotionDiscount || 0) + (b.voucherDiscount || 0);
+                  const customer = customersLookup[b.userId];
+                  const isOverdue = b.attentionCode === 'OVERDUE';
+                  const isExpiringSoon = b.attentionCode === 'EXPIRING_SOON';
 
                   return (
                     <tr key={b.id} className="border-b border-zinc-850 hover:bg-zinc-950/40 text-zinc-300 transition-all">
@@ -802,9 +883,21 @@ export default function AdminBookingDashboardPage() {
 
                       {/* Customer */}
                       <td className="p-4 font-semibold text-zinc-400">
-                        <div className="flex items-center gap-1">
-                          <User className="w-3.5 h-3.5 text-zinc-650" />
-                          <span className="truncate">Khách hàng #{b.userId}</span>
+                        <div className="flex items-start gap-1.5">
+                          <User className="mt-0.5 w-3.5 h-3.5 shrink-0 text-zinc-650" />
+                          <div className="min-w-0">
+                            <span className="block truncate text-zinc-200" title={customer?.fullName}>
+                              {customer?.fullName || 'Chưa tải được hồ sơ'}
+                            </span>
+                            <span className="block truncate text-[9px] font-mono text-orange-400">
+                              {customer?.customerCode || formatCustomerCode(b.userId)}
+                            </span>
+                            {customer?.email && (
+                              <span className="block truncate text-[9px] font-normal text-zinc-500" title={customer.email}>
+                                {customer.email}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -875,11 +968,18 @@ export default function AdminBookingDashboardPage() {
                           <StatusBadge status={b.bookingStatus} label={translateStatus(b.bookingStatus)} />
                           <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 ${
                             b.paymentStatus === 'SUCCESS' ? 'text-emerald-500 bg-emerald-500/10' : 
+                            !b.paymentAttempted ? 'text-zinc-400 bg-zinc-800' :
                             b.paymentStatus === 'PENDING' ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10'
                           }`}>
                             <CreditCard className="w-2.5 h-2.5" />
-                            <span>{translatePaymentStatus(b.paymentStatus)}</span>
+                            <span>{translatePaymentStatus(b.paymentStatus, b.paymentAttempted)}</span>
                           </span>
+                          {isOverdue && (
+                            <span className="text-[8px] font-bold text-red-400">Quá hạn, cần kiểm tra</span>
+                          )}
+                          {isExpiringSoon && (
+                            <span className="text-[8px] font-bold text-orange-400">Sắp hết thời gian giữ ghế</span>
+                          )}
                         </div>
                       </td>
 
