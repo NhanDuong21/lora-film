@@ -63,8 +63,7 @@ public class AccountLifecycleConsumer {
         }
         User user = userRepository.findById(accountId).orElse(null);
         if (user == null) {
-            log.warn("Ignoring {} because profile {} does not exist yet", eventType, accountId);
-            return;
+            throw new IllegalStateException("Profile does not exist for account lifecycle event");
         }
 
         UserStatus status = mapStatus(eventType, data.path("status").asText());
@@ -89,6 +88,8 @@ public class AccountLifecycleConsumer {
                 fullName = "Member";
             }
             user.setFullName(fullName.substring(0, Math.min(fullName.length(), 150)));
+            String email = data.path("email").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            user.setEmail(email.isBlank() ? null : email);
             user.setStatus(UserStatus.ACTIVE);
             userRepository.save(user);
         }

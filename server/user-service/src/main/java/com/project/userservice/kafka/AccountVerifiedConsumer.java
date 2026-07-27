@@ -3,8 +3,13 @@ package com.project.userservice.kafka;
 import com.project.userservice.dto.AccountVerifiedEvent;
 import com.project.userservice.dto.AccountVerifiedPayload;
 import com.project.userservice.entity.User;
+import com.project.userservice.entity.CustomerProfile;
+import com.project.userservice.enumtype.UserStatus;
 import com.project.userservice.enumtype.Gender;
 import com.project.userservice.repository.UserRepository;
+import com.project.userservice.repository.CustomerProfileRepository;
+import com.project.userservice.service.UserDomainEventService;
+import com.project.userservice.service.UserAuditService;
 import com.project.userservice.service.impl.ReservationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -15,6 +20,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Component
 public class AccountVerifiedConsumer {
@@ -23,13 +33,22 @@ public class AccountVerifiedConsumer {
     private final UserRepository userRepository;
     private final ReservationService reservationService;
     private final ObjectMapper objectMapper;
-    private final UserEventPublisher userEventPublisher;
+    private final CustomerProfileRepository customerProfileRepository;
+    private final UserDomainEventService eventService;
+    private final UserAuditService auditService;
 
-    public AccountVerifiedConsumer(UserRepository userRepository, ReservationService reservationService, ObjectMapper objectMapper, UserEventPublisher userEventPublisher) {
+    public AccountVerifiedConsumer(UserRepository userRepository,
+                                   ReservationService reservationService,
+                                   ObjectMapper objectMapper,
+                                   CustomerProfileRepository customerProfileRepository,
+                                   UserDomainEventService eventService,
+                                   UserAuditService auditService) {
         this.userRepository = userRepository;
         this.reservationService = reservationService;
         this.objectMapper = objectMapper;
-        this.userEventPublisher = userEventPublisher;
+        this.customerProfileRepository = customerProfileRepository;
+        this.eventService = eventService;
+        this.auditService = auditService;
     }
 
     @KafkaListener(topics = "${app.kafka.topic.account-verified}", groupId = "user-service-account-verified-consumer")
@@ -51,6 +70,7 @@ public class AccountVerifiedConsumer {
             Long accountId = event.getData().getAccountId();
             String phoneNumber = event.getData().getPhoneNumber();
             String cccd = event.getData().getCccd();
+            String requestId = event.getData().getRequestId();
 
             // Duplicate event check (Idempotency)
             User existingUser = userRepository.findById(accountId).orElse(null);
@@ -61,20 +81,22 @@ public class AccountVerifiedConsumer {
                     userRepository.save(existingUser);
                     log.info("Backfilled email snapshot for existing accountId: {}", accountId);
                 }
-                log.warn("Duplicate event skipped. User profile already exists for accountId: {}. EventId: {}", accountId, event.getEventId());
-                reservationService.release(phoneNumber, cccd);
+                ensureCustomerProfile(accountId);
+                recordProfileCreated(accountId, payload.getEmail(), requestId, "SUCCESS");
+                releaseReservationAfterCommit(phoneNumber, cccd, requestId);
+                log.info("Idempotently handled existing user profile for accountId={}", accountId);
                 return;
             }
 
             if (phoneNumber != null && userRepository.existsByPhoneNumber(phoneNumber)) {
-                log.warn("Phone number already exists. Skipping event for accountId: {}. EventId: {}", accountId, event.getEventId());
-                reservationService.release(phoneNumber, cccd);
+                recordProfileCreated(accountId, payload.getEmail(), requestId, "FAILED");
+                releaseReservationAfterCommit(phoneNumber, cccd, requestId);
                 return;
             }
 
             if (cccd != null && userRepository.existsByCccd(cccd)) {
-                log.warn("CCCD already exists. Skipping event for accountId: {}. EventId: {}", accountId, event.getEventId());
-                reservationService.release(phoneNumber, cccd);
+                recordProfileCreated(accountId, payload.getEmail(), requestId, "FAILED");
+                releaseReservationAfterCommit(phoneNumber, cccd, requestId);
                 return;
             }
 
@@ -110,30 +132,55 @@ public class AccountVerifiedConsumer {
             if (event.getData().getBirthYear() != null) {
                 user.setBirthYear(event.getData().getBirthYear());
             }
+            user.setStatus(UserStatus.ACTIVE);
 
             userRepository.save(user);
+            ensureCustomerProfile(accountId);
+            auditService.log("CUSTOMER_PROFILE_CREATED", "CUSTOMER", accountId,
+                    "Created from verified account");
 
-            // Clean up Redis reservations
-            reservationService.release(phoneNumber, cccd);
-
-            String requestId = event.getData().getRequestId();
-            String createdAt = java.time.Instant.now().toString();
-            userEventPublisher.publishUserProfileCreated(accountId, event.getData().getEmail(), requestId, createdAt, "SUCCESS");
+            recordProfileCreated(accountId, event.getData().getEmail(), requestId, "SUCCESS");
+            releaseReservationAfterCommit(phoneNumber, cccd, requestId);
 
             log.info("Successfully created user profile for accountId: {}. Masked CCCD: {}", accountId, event.getData().getCccdMasked());
             
         } catch (Exception e) {
-            log.error("Error processing event message", e);
-            try {
-                com.project.userservice.dto.AccountVerifiedEvent event = objectMapper.readValue(message, com.project.userservice.dto.AccountVerifiedEvent.class);
-                Long accountId = event.getData().getAccountId();
-                String email = event.getData().getEmail();
-                userEventPublisher.publishUserProfileCreated(accountId, email, null, java.time.Instant.now().toString(), "FAILED");
-                log.info("Published FAILED profile creation event for accountId: {}", accountId);
-            } catch (Exception pubEx) {
-                log.error("Could not publish FAILED event", pubEx);
-            }
-            throw new RuntimeException("Kafka message processing failed, triggering retry/DLQ", e);
+            log.error("Error processing ACCOUNT_VERIFIED event", e);
+            throw new IllegalStateException("Account verified event processing failed", e);
         }
+    }
+
+    private void ensureCustomerProfile(Long accountId) {
+        if (customerProfileRepository.existsByAccountId(accountId)) {
+            return;
+        }
+        CustomerProfile customer = new CustomerProfile();
+        customer.setAccountId(accountId);
+        customer.setCustomerCode("CUS" + String.format("%010d", accountId));
+        customer.setJoinedAt(LocalDate.now());
+        customerProfileRepository.save(customer);
+    }
+
+    private void recordProfileCreated(Long accountId, String email, String requestId, String status) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("accountId", accountId);
+        data.put("email", email);
+        data.put("requestId", requestId);
+        data.put("createdAt", Instant.now().toString());
+        data.put("status", status);
+        eventService.record("USER_PROFILE_CREATED", "USER", accountId, data);
+    }
+
+    private void releaseReservationAfterCommit(String phone, String cccd, String requestId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            reservationService.release(phone, cccd, requestId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                reservationService.release(phone, cccd, requestId);
+            }
+        });
     }
 }

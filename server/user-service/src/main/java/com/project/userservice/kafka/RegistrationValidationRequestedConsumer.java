@@ -61,7 +61,8 @@ public class RegistrationValidationRequestedConsumer {
 
         // 2. Check and Reserve in Redis
         // TTL is 15 minutes (to match OTP expiry time)
-        ReservationResult reservationResult = reservationService.reserve(phoneNumber, cccd, Duration.ofMinutes(15));
+        ReservationResult reservationResult = reservationService.reserve(
+                phoneNumber, cccd, requestId, Duration.ofMinutes(15));
         
         if (!reservationResult.isSuccess()) {
             log.warn("Validation failed: phoneNumber or CCCD is already reserved in Redis for requestId={}", requestId);
@@ -73,7 +74,8 @@ public class RegistrationValidationRequestedConsumer {
         log.info("Validation successful, reservations made for requestId={}", requestId);
         eventPublisher.publishRegistrationValidationResult(requestId, "SUCCESS", null, null);
         } catch (Exception e) {
-            log.error("Failed to parse REGISTRATION_VALIDATION_REQUESTED event", e);
+            log.error("Failed to process REGISTRATION_VALIDATION_REQUESTED event", e);
+            throw new IllegalStateException("Registration validation event processing failed", e);
         }
     }
 }
