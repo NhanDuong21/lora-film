@@ -27,5 +27,11 @@ public interface ScoreHistoryRepository extends JpaRepository<ScoreHistory, Long
     List<ScoreHistory> findByReferenceHistoryAndTransactionType(ScoreHistory referenceHistory, com.project.scoreservice.enumtype.ScoreTransactionType transactionType);
 
     List<ScoreHistory> findByReferenceHistory(ScoreHistory referenceHistory);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(s.actualPointChange), 0) FROM ScoreHistory s WHERE s.userScore.userId = :userId")
+    Integer sumActualPointChangeByUserId(@org.springframework.data.repository.query.Param("userId") Long userId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(s.actualPointChange), 0) FROM ScoreHistory s WHERE s.userScore.userId = :userId AND s.actualPointChange > 0")
+    Integer sumEarnedPointsByUserId(@org.springframework.data.repository.query.Param("userId") Long userId);
 }
 

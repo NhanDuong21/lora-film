@@ -26,4 +26,7 @@ public interface ScoreHoldRepository extends JpaRepository<ScoreHold, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT h FROM ScoreHold h WHERE h.holdCode = :holdCode")
     Optional<ScoreHold> findWithLockByHoldCode(@Param("holdCode") String holdCode);
+
+    @Query("SELECT COALESCE(SUM(h.points), 0) FROM ScoreHold h WHERE h.userScore.userId = :userId AND h.status = com.project.scoreservice.enumtype.ScoreHoldStatus.ACTIVE AND h.expiredAt > CURRENT_TIMESTAMP")
+    Integer sumActiveHeldPointsByUserId(@Param("userId") Long userId);
 }

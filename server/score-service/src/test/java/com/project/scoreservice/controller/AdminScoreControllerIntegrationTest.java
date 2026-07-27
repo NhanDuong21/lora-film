@@ -120,7 +120,6 @@ public class AdminScoreControllerIntegrationTest {
     }
 
     @Test
-    @Disabled("Out of scope for Phase 2")
     @WithMockUser(username = "999", authorities = {"SCORE_ADJUST"})
     public void testAdjustScore_AddPointsWithoutAccumulated_Returns201() throws Exception {
         ScoreAdjustmentRequest request = new ScoreAdjustmentRequest(
@@ -139,7 +138,6 @@ public class AdminScoreControllerIntegrationTest {
     }
 
     @Test
-    @Disabled("Out of scope for Phase 2")
     @WithMockUser(username = "999", authorities = {"SCORE_ADJUST"})
     public void testAdjustScore_AddPointsWithAccumulatedUpgrade_Returns201() throws Exception {
         ScoreAdjustmentRequest request = new ScoreAdjustmentRequest(
@@ -159,7 +157,6 @@ public class AdminScoreControllerIntegrationTest {
     }
 
     @Test
-    @Disabled("Out of scope for Phase 2")
     @WithMockUser(username = "999", authorities = {"SCORE_ADJUST"})
     public void testAdjustScore_DeductPointsBalanceUnderflow_Returns409() throws Exception {
         ScoreAdjustmentRequest request = new ScoreAdjustmentRequest(
@@ -175,7 +172,6 @@ public class AdminScoreControllerIntegrationTest {
     }
 
     @Test
-    @Disabled("Out of scope for Phase 2")
     @WithMockUser(username = "999", authorities = {"SCORE_ADJUST"})
     public void testAdjustScore_IdempotencySuccessRetry_Returns200() throws Exception {
         ScoreAdjustmentRequest request = new ScoreAdjustmentRequest(
@@ -198,7 +194,6 @@ public class AdminScoreControllerIntegrationTest {
     }
 
     @Test
-    @Disabled("Out of scope for Phase 2")
     @WithMockUser(username = "999", authorities = {"SCORE_ADJUST"})
     public void testAdjustScore_IdempotencyConflictPayload_Returns409() throws Exception {
         ScoreAdjustmentRequest request1 = new ScoreAdjustmentRequest(
@@ -224,7 +219,6 @@ public class AdminScoreControllerIntegrationTest {
     }
 
     @Test
-    @Disabled("Out of scope for Phase 2")
     @WithMockUser(username = "999", authorities = {"SCORE_MANAGE"})
     public void testRecalculateTier_SingleUserSuccessfulRecalculation_Returns200() throws Exception {
         // Manually alter user's accumulated points without updating their currentTier to simulate inconsistency
