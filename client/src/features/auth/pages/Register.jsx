@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { register } from "@/features/auth/services/authService";
+import { register, getRegistrationStatus } from "@/features/auth/services/authService";
 import CustomerNoticeModal from "@/components/common/CustomerNoticeModal";
 import { getCustomerErrorMessage } from "@/utils/customerErrorMessages";
 
@@ -23,6 +23,27 @@ function Register() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [globalError, setGlobalError] = useState("");
     const [globalSuccess, setGlobalSuccess] = useState("");
+
+    const registrationError = (errorCode, message) => {
+        const error = new Error(message);
+        error.errorCode = errorCode;
+        return error;
+    };
+
+    const waitUntilOtpIsReady = async (requestId) => {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+            const status = await getRegistrationStatus(requestId);
+            if (status?.status === "AWAITING_VERIFICATION") return;
+            if (status?.status === "FAILED" || status?.status === "EXPIRED") {
+                throw registrationError(status.errorCode, "Registration validation failed");
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        throw registrationError(
+            "REGISTRATION_VALIDATION_TIMEOUT",
+            "Registration validation timed out"
+        );
+    };
 
     useEffect(() => {
         document.title = "Đăng Ký Tài Khoản - LoraFilm";
@@ -155,9 +176,17 @@ function Register() {
                 };
 
                 const res = await register(payload);
-                setIsSubmitting(false);
 
                 if (res.success || res.message === "Registration initiated") {
+                    const requestId = res.data?.requestId;
+                    if (!requestId) {
+                        throw registrationError(
+                            "REGISTRATION_REQUEST_INVALID",
+                            "Registration response did not contain a request ID"
+                        );
+                    }
+                    setGlobalSuccess("Äang kiá»ƒm tra thÃ´ng tin Ä‘Äƒng kÃ½...");
+                    await waitUntilOtpIsReady(requestId);
                     // Store email and purpose in sessionStorage for durability
                     sessionStorage.setItem("pending_otp_email", formData.email);
                     sessionStorage.setItem("pending_otp_purpose", "REGISTRATION");
@@ -177,6 +206,7 @@ function Register() {
                         'Đăng ký không thành công. Vui lòng thử lại.'
                     ));
                 }
+                setIsSubmitting(false);
             } catch (error) {
                 setIsSubmitting(false);
                 const errorCode = error?.errorCode || error?.code || error?.error;
