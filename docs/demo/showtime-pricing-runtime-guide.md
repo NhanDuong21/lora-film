@@ -83,3 +83,10 @@ Physical rollback is permitted only before any new policy or provenance writes
 have occurred, after restoring the legacy Auto Schedule price behavior. Once
 new writes exist, restore from the database backups instead of dropping tables,
 columns, or foreign keys.
+# Runtime verification correction (2026-07-26)
+
+After atomic creation, Redis seat keys must already be absent while the
+database rows remain `HELD`. Clearing/restarting Redis must not make those
+seats available. Expired/released rows become reusable, while `BOOKED` rows
+remain unavailable. Use `booking.hold-duration-seconds` and
+`booking.max-seats-per-booking` as server-owned configuration.

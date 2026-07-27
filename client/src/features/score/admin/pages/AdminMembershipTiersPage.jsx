@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import useAdminScore from '../hooks/useAdminScore';
 import TierModal from '../components/TierModal';
 import { Award, Plus, Edit2, CheckCircle, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
@@ -37,16 +37,12 @@ export default function AdminMembershipTiersPage() {
   };
 
   const handleSaveTier = async (formData) => {
-    try {
-      if (selectedTier) {
-        await updateTier(selectedTier.tierCode, formData);
-        showNotify(`Đã cập nhật hạng thẻ ${formData.tierCode} thành công!`);
-      } else {
-        await createTier(formData);
-        showNotify(`Đã tạo hạng thẻ mới ${formData.tierCode} thành công!`);
-      }
-    } catch (err) {
-      throw err;
+    if (selectedTier) {
+      await updateTier(selectedTier.tierCode, formData);
+      showNotify(`Đã cập nhật hạng thẻ ${formData.tierCode} thành công!`);
+    } else {
+      await createTier(formData);
+      showNotify(`Đã tạo hạng thẻ mới ${formData.tierCode} thành công!`);
     }
   };
 

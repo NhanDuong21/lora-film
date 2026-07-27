@@ -13,7 +13,18 @@ import apiClient from "@/services/apiClient";
  * @returns {Promise<Object>} Paginated bookings list
  */
 export const getBookings = async (filter = {}) => {
-  const response = await apiClient.get("/api/admin/bookings", { params: filter });
+  const params = {
+    ...filter,
+    userIds: Array.isArray(filter.userIds)
+      ? filter.userIds.join(',')
+      : filter.userIds
+  };
+  const response = await apiClient.get("/api/admin/bookings", { params });
+  return response.data.data;
+};
+
+export const getBookingOperationsSummary = async () => {
+  const response = await apiClient.get('/api/admin/bookings/summary');
   return response.data.data;
 };
 
@@ -34,7 +45,11 @@ export const getBookingDetail = async (publicId) => {
  * @param {string} [reason] - Transition reason
  * @returns {Promise<Object>} Updated booking response
  */
-export const updateBookingStatus = async (publicId, status, reason = "Admin manual override") => {
+export const updateBookingStatus = async (
+  publicId,
+  status,
+  reason = 'Quản trị viên thực hiện lệnh vòng đời'
+) => {
   const response = await apiClient.put(`/api/admin/bookings/${publicId}/status`, {
     status,
     reason

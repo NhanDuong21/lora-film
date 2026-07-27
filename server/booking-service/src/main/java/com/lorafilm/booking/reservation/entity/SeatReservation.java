@@ -25,8 +25,14 @@ public class SeatReservation extends BaseVersionedEntity {
     @Column(name = "showtime_id", nullable = false)
     private Long showtimeId;
 
+    @Column(name = "showtime_public_id", length = 36)
+    private String showtimePublicId;
+
     @Column(name = "seat_id", nullable = false)
     private Long seatId;
+
+    @Column(name = "seat_public_id", length = 36)
+    private String seatPublicId;
 
     @Column(name = "seat_label", length = 20, nullable = false)
     private String seatLabel;
@@ -88,12 +94,28 @@ public class SeatReservation extends BaseVersionedEntity {
         this.showtimeId = showtimeId;
     }
 
+    public String getShowtimePublicId() {
+        return showtimePublicId;
+    }
+
+    public void setShowtimePublicId(String showtimePublicId) {
+        this.showtimePublicId = showtimePublicId;
+    }
+
     public Long getSeatId() {
         return seatId;
     }
 
     public void setSeatId(Long seatId) {
         this.seatId = seatId;
+    }
+
+    public String getSeatPublicId() {
+        return seatPublicId;
+    }
+
+    public void setSeatPublicId(String seatPublicId) {
+        this.seatPublicId = seatPublicId;
     }
 
     public String getSeatLabel() {

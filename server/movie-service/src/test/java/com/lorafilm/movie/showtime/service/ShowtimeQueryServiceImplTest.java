@@ -96,8 +96,9 @@ class ShowtimeQueryServiceImplTest {
         showtime.setCinema(cinema);
         showtime.setAuditorium(auditorium);
         showtime.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
-        showtime.setStartTime(java.time.Instant.now());
-        showtime.setEndTime(java.time.Instant.now().plusSeconds(7200));
+        java.time.Instant futureStart = java.time.Instant.now().plusSeconds(3600);
+        showtime.setStartTime(futureStart);
+        showtime.setEndTime(futureStart.plusSeconds(7200));
 
         seatTypeStandard = new SeatType();
         seatTypeStandard.setId(1L);
@@ -134,6 +135,18 @@ class ShowtimeQueryServiceImplTest {
         showtime.setPublicId("public-123");
         showtime.setStatus(ShowtimeStatus.DRAFT);
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123")).thenReturn(Optional.of(showtime));
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> showtimeService.getShowtimeByPublicId("public-123"));
+        assertEquals("Showtime not found or not open for booking", ex.getMessage());
+    }
+
+    @Test
+    void getShowtimeByPublicId_alreadyStarted_throwsException() {
+        showtime.setPublicId("public-123");
+        showtime.setStartTime(java.time.Instant.now().minusSeconds(1));
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123"))
+                .thenReturn(Optional.of(showtime));
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> showtimeService.getShowtimeByPublicId("public-123"));

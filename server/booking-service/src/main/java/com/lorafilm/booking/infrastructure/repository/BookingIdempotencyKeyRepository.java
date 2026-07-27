@@ -10,4 +10,7 @@ import java.util.Optional;
 public interface BookingIdempotencyKeyRepository extends JpaRepository<BookingIdempotencyKey, Long> {
 
     Optional<BookingIdempotencyKey> findByIdempotencyKey(String idempotencyKey);
+
+    Optional<BookingIdempotencyKey> findByUserIdAndEndpointAndIdempotencyKey(
+            Long userId, String endpoint, String idempotencyKey);
 }

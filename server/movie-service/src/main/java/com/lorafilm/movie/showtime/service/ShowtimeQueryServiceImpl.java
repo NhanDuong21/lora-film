@@ -1,6 +1,7 @@
 package com.lorafilm.movie.showtime.service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +70,8 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
     @Override
     public PageResponse<ShowtimeDto> getShowtimes(String movieSlug, String cinemaSlug, String city, LocalDate date, String format, String audioLanguage, String subtitleLanguage, int page, int size) {
         Specification<Showtime> spec = Specification.where(ShowtimeSpecification.isNotDeleted())
-                .and(ShowtimeSpecification.hasStatus(ShowtimeStatus.OPEN_FOR_BOOKING));
+                .and(ShowtimeSpecification.hasStatus(ShowtimeStatus.OPEN_FOR_BOOKING))
+                .and(ShowtimeSpecification.startsAfter(Instant.now()));
 
         if (movieSlug != null && !movieSlug.isEmpty()) {
             spec = spec.and(ShowtimeSpecification.hasMovieSlug(movieSlug));
@@ -214,7 +216,9 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
         Showtime showtime = showtimeRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
 
-        if (showtime.getStatus() != ShowtimeStatus.OPEN_FOR_BOOKING) {
+        if (showtime.getStatus() != ShowtimeStatus.OPEN_FOR_BOOKING
+                || showtime.getStartTime() == null
+                || !showtime.getStartTime().isAfter(Instant.now())) {
             throw new ResourceNotFoundException("Showtime not found or not open for booking");
         }
         return showtime;

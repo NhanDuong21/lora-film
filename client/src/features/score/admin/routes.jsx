@@ -1,4 +1,3 @@
-import React from 'react';
 import AdminScoreViewerPage from '@/features/score/admin/pages/AdminScoreViewerPage';
 import AdminMembershipTiersPage from '@/features/score/admin/pages/AdminMembershipTiersPage';
 

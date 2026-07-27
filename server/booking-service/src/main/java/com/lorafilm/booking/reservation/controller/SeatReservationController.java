@@ -31,7 +31,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.dao.DataIntegrityViolationException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Optional;
 
 @RestController
@@ -69,9 +72,28 @@ public class SeatReservationController {
         Long userId = securityContextService.getCurrentUserId();
 
         if (key != null && !key.isBlank()) {
-            Optional<BookingIdempotencyKey> existingKey = idempotencyService.checkKey(key);
+            String endpoint = "/api/seat-reservations";
+            Optional<BookingIdempotencyKey> existingKey =
+                    idempotencyService.checkKey(key, userId, endpoint);
+            // Keep the old lookup as a read-only compatibility fallback for
+            // clients/tests written before the scoped lookup was introduced.
+            if (existingKey.isEmpty()) {
+                existingKey = idempotencyService.checkKey(key)
+                        .filter(record -> (record.getUserId() == null
+                                || (userId != null && userId.equals(record.getUserId())))
+                                && (record.getEndpoint() == null
+                                || endpoint.equals(record.getEndpoint())));
+            }
             if (existingKey.isPresent()) {
                 BookingIdempotencyKey keyRecord = existingKey.get();
+                if (keyRecord.getRequestHash() != null
+                        && !keyRecord.getRequestHash().isBlank()
+                        && !keyRecord.getRequestHash().equals(computeRequestHash(request))) {
+                    throw new SeatReservationException(
+                            "IDEMPOTENCY_PAYLOAD_CONFLICT",
+                            "The idempotency key was reused with a different request payload",
+                            HttpStatus.CONFLICT);
+                }
                 if (keyRecord.getStatus() == IdempotencyStatus.COMPLETED) {
                     try {
                         HoldSeatResponse cachedResponse = objectMapper.readValue(keyRecord.getResponseBody(), HoldSeatResponse.class);
@@ -85,18 +107,27 @@ public class SeatReservationController {
                     throw new SeatReservationException("IDEMPOTENCY_CONFLICT", "Request with this Idempotency-Key is currently being processed", HttpStatus.CONFLICT);
                 }
             }
-            idempotencyService.startProcessing(key, userId, "/api/seat-reservations", "POST", request);
+            try {
+                idempotencyService.startProcessing(key, userId, endpoint, "POST", request);
+            } catch (DataIntegrityViolationException concurrentClaim) {
+                throw new SeatReservationException(
+                        "DUPLICATE_REQUEST",
+                        "Another request already claimed this scoped idempotency key",
+                        HttpStatus.CONFLICT);
+            }
         }
 
         try {
             HoldSeatResponse response = seatReservationService.holdSeats(userId, request);
             if (key != null && !key.isBlank()) {
-                idempotencyService.completeProcessing(key, HttpStatus.CREATED.value(), response);
+                idempotencyService.completeProcessing(
+                        key, userId, "/api/seat-reservations",
+                        HttpStatus.CREATED.value(), response);
             }
             return new ResponseEntity<>(response, HttpStatus.CREATED);
         } catch (Exception ex) {
             if (key != null && !key.isBlank()) {
-                idempotencyService.failProcessing(key);
+                idempotencyService.failProcessing(key, userId, "/api/seat-reservations");
             }
             throw ex;
         }
@@ -129,6 +160,12 @@ public class SeatReservationController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/showtimes/{showtimePublicId}/availability")
+    public ResponseEntity<com.lorafilm.booking.reservation.dto.PublicSeatAvailabilityResponse> getPublicAvailability(
+            @PathVariable String showtimePublicId) {
+        return ResponseEntity.ok(seatReservationService.checkPublicAvailability(showtimePublicId));
+    }
+
     @GetMapping("/showtime/{showtimeId}/occupied-seats")
     public ResponseEntity<com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse> getOccupiedSeatsByShowtime(
             @PathVariable String showtimeId) {
@@ -142,5 +179,20 @@ public class SeatReservationController {
         Long currentUserId = securityContextService.getCurrentUserId();
         com.lorafilm.booking.reservation.dto.ExtendReservationResponse response = seatReservationService.extendReservation(publicId, currentUserId);
         return ResponseEntity.ok(response);
+    }
+
+    private String computeRequestHash(HoldSeatRequest request) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(objectMapper.writeValueAsString(request)
+                    .getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte value : hash) {
+                hex.append(String.format("%02x", value));
+            }
+            return hex.toString();
+        } catch (Exception ex) {
+            return "";
+        }
     }
 }

@@ -9,6 +9,7 @@ public class ErrorResponse {
     private String errorCode;
     private String message;
     private List<ValidationErrorDetail> details;
+    private String reconciliationTaskPublicId;
     private Instant timestamp;
 
     public ErrorResponse() {
@@ -58,6 +59,14 @@ public class ErrorResponse {
 
     public void setDetails(List<ValidationErrorDetail> details) {
         this.details = details;
+    }
+
+    public String getReconciliationTaskPublicId() {
+        return reconciliationTaskPublicId;
+    }
+
+    public void setReconciliationTaskPublicId(String reconciliationTaskPublicId) {
+        this.reconciliationTaskPublicId = reconciliationTaskPublicId;
     }
 
     public Instant getTimestamp() {

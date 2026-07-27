@@ -1,4 +1,3 @@
-import React from 'react';
 import { Award, ShieldCheck, Sparkles, TrendingUp, Lock } from 'lucide-react';
 
 export default function MembershipCard({ scoreData, user }) {

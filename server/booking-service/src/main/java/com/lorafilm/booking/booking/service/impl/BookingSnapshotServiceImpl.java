@@ -65,9 +65,8 @@ public class BookingSnapshotServiceImpl implements BookingSnapshotService {
             throw new BookingNotFoundException(bookingId);
         }
 
-        BookingSnapshot snapshot = bookingSnapshotRepository.findByBookingId(bookingId)
-                .orElseThrow(() -> new BusinessException("NO_SNAPSHOT_FOUND", "Booking has no snapshot"));
-
-        return bookingSnapshotMapper.toDto(snapshot);
+        return bookingSnapshotRepository.findByBookingId(bookingId)
+                .map(bookingSnapshotMapper::toDto)
+                .orElse(null);
     }
 }

@@ -22,8 +22,12 @@ import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.movie.domain.entity.Movie;
+import com.lorafilm.movie.movie.domain.entity.MovieMedia;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
@@ -53,6 +57,9 @@ class ShowtimeBookingContextServiceImplTest {
     private ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository;
 
     @Mock
+    private MovieMediaRepository movieMediaRepository;
+
+    @Mock
     private SeatRepository seatRepository;
 
     private SeatService seatService;
@@ -71,7 +78,9 @@ class ShowtimeBookingContextServiceImplTest {
     void setUp() {
         seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(seatRepository, null, null);
         showtimeMapper = new ShowtimeMapper();
-        showtimeService = new ShowtimeBookingContextServiceImpl(showtimeRepository, showtimePriceRepository, showtimeBlockedSeatRepository, seatService, showtimeMapper);
+        showtimeService = new ShowtimeBookingContextServiceImpl(
+                showtimeRepository, showtimePriceRepository, showtimeBlockedSeatRepository,
+                movieMediaRepository, seatService, showtimeMapper);
 
         Movie movie = new Movie();
         movie.setId(1L);
@@ -137,6 +146,10 @@ class ShowtimeBookingContextServiceImplTest {
         price.setCurrency("VND");
 
         when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.singletonList(price));
+        MovieMedia poster = new MovieMedia();
+        poster.setUrl("https://cdn.lorafilm.test/movie-1.jpg");
+        when(movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                1L, MovieMediaType.POSTER, ActiveStatus.ACTIVE)).thenReturn(Optional.of(poster));
 
         BookingContextResponse response = showtimeService.getBookingContext(10L, request);
 
@@ -146,6 +159,7 @@ class ShowtimeBookingContextServiceImplTest {
         assertEquals(1L, response.getMovieId());
         assertEquals(1L, response.getCinemaId());
         assertEquals(1L, response.getAuditoriumId());
+        assertEquals("https://cdn.lorafilm.test/movie-1.jpg", response.getMovie().getPosterUrl());
         assertEquals(2, response.getSelectedSeats().size());
         assertNotNull(response.getPricing());
         assertEquals(new BigDecimal("200000"), response.getPricing().getTotalAmount());

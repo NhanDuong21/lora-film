@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ArrowUpRight, ArrowDownLeft, RefreshCcw, AlertCircle, FileText, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 
 export default function ScoreHistoryTable({ history, isLoading, onPageChange, onFilterChange }) {
@@ -49,7 +49,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
         hour: '2-digit',
         minute: '2-digit'
       }).format(date);
-    } catch (e) {
+    } catch {
       return dateStr;
     }
   };

@@ -40,8 +40,9 @@ public class BookingStatusTransitionServiceTest {
     }
 
     @Test
-    public void validateTransition_ConfirmedToCancelled_Success() {
-        assertDoesNotThrow(() -> transitionService.validateTransition(BookingStatus.CONFIRMED, BookingStatus.CANCELLED));
+    public void validateTransition_ConfirmedToCancelled_IsRejected() {
+        assertThrows(BusinessException.class,
+                () -> transitionService.validateTransition(BookingStatus.CONFIRMED, BookingStatus.CANCELLED));
     }
 
     @Test

@@ -58,23 +58,15 @@ export default function useAdminScore() {
   }, []);
 
   const createTier = useCallback(async (tierData) => {
-    try {
-      const created = await scoreAdminService.createTier(tierData);
-      await fetchTiers();
-      return created;
-    } catch (err) {
-      throw err;
-    }
+    const created = await scoreAdminService.createTier(tierData);
+    await fetchTiers();
+    return created;
   }, [fetchTiers]);
 
   const updateTier = useCallback(async (tierCode, tierData) => {
-    try {
-      const updated = await scoreAdminService.updateTier(tierCode, tierData);
-      await fetchTiers();
-      return updated;
-    } catch (err) {
-      throw err;
-    }
+    const updated = await scoreAdminService.updateTier(tierCode, tierData);
+    await fetchTiers();
+    return updated;
   }, [fetchTiers]);
 
   return {

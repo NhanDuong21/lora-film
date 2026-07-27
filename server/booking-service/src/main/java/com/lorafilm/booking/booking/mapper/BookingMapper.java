@@ -17,6 +17,7 @@ public class BookingMapper {
         response.setBookingCode(booking.getBookingCode());
         response.setUserId(booking.getUserId());
         response.setShowtimeId(booking.getShowtimeId());
+        response.setShowtimePublicId(booking.getShowtimePublicId());
         response.setMovieId(booking.getMovieId());
         response.setCinemaId(booking.getCinemaId());
         response.setAuditoriumId(booking.getAuditoriumId());
@@ -31,6 +32,7 @@ public class BookingMapper {
         response.setBookingStatus(booking.getBookingStatus());
         response.setPaymentStatus(booking.getPaymentStatus());
         response.setExpiresAt(booking.getExpiresAt());
+        response.setAmountLockedAt(booking.getAmountLockedAt());
         response.setConfirmedAt(booking.getConfirmedAt());
         response.setCancelledAt(booking.getCancelledAt());
         response.setCreatedAt(booking.getCreatedAt());
@@ -48,6 +50,7 @@ public class BookingMapper {
         response.setBookingCode(booking.getBookingCode());
         response.setUserId(booking.getUserId());
         response.setShowtimeId(booking.getShowtimeId());
+        response.setShowtimePublicId(booking.getShowtimePublicId());
         response.setMovieId(booking.getMovieId());
         response.setCinemaId(booking.getCinemaId());
         response.setAuditoriumId(booking.getAuditoriumId());
@@ -65,6 +68,7 @@ public class BookingMapper {
         response.setPaymentProvider(booking.getPaymentProvider());
         response.setPaymentReference(booking.getPaymentReference());
         response.setExpiresAt(booking.getExpiresAt());
+        response.setAmountLockedAt(booking.getAmountLockedAt());
         response.setConfirmedAt(booking.getConfirmedAt());
         response.setCompletedAt(booking.getCompletedAt());
         response.setCancelledAt(booking.getCancelledAt());
@@ -84,14 +88,19 @@ public class BookingMapper {
         return new com.lorafilm.booking.booking.dto.response.BookingResponse(
                 booking.getPublicId(),
                 booking.getBookingCode(),
+                booking.getShowtimePublicId(),
                 booking.getBookingStatus(),
                 booking.getFinalAmount(),
                 booking.getCurrency(),
                 booking.getExpiresAt(),
+                booking.getAmountLockedAt(),
                 booking.getCreatedAt());
     }
 
-    public com.lorafilm.booking.booking.dto.response.BookingSummaryResponse toSummaryResponse(Booking booking) {
+    public com.lorafilm.booking.booking.dto.response.BookingSummaryResponse toSummaryResponse(
+            Booking booking,
+            com.lorafilm.booking.booking.dto.response.BookingPresentationResponse presentation,
+            com.lorafilm.booking.booking.dto.response.BookingFoodResponse food) {
         if (booking == null) {
             return null;
         }
@@ -99,14 +108,22 @@ public class BookingMapper {
                 booking.getPublicId(),
                 booking.getBookingCode(),
                 booking.getShowtimeId(),
+                booking.getShowtimePublicId(),
                 booking.getBookingStatus(),
+                booking.getTicketAmount(),
+                booking.getFoodAmount(),
                 booking.getFinalAmount(),
                 booking.getCurrency(),
                 booking.getExpiresAt(),
-                booking.getCreatedAt());
+                booking.getCreatedAt(),
+                presentation,
+                food);
     }
 
-    public com.lorafilm.booking.booking.dto.response.BookingDetailResponse toDetailResponse(Booking booking) {
+    public com.lorafilm.booking.booking.dto.response.BookingDetailResponse toDetailResponse(
+            Booking booking,
+            com.lorafilm.booking.booking.dto.response.BookingPresentationResponse presentation,
+            com.lorafilm.booking.booking.dto.response.BookingFoodResponse food) {
         if (booking == null) {
             return null;
         }
@@ -115,6 +132,7 @@ public class BookingMapper {
                 booking.getBookingCode(),
                 booking.getUserId(),
                 booking.getShowtimeId(),
+                booking.getShowtimePublicId(),
                 booking.getMovieId(),
                 booking.getCinemaId(),
                 booking.getAuditoriumId(),
@@ -129,6 +147,7 @@ public class BookingMapper {
                 booking.getBookingStatus(),
                 booking.getPaymentStatus(),
                 booking.getExpiresAt(),
+                booking.getAmountLockedAt(),
                 booking.getConfirmedAt(),
                 booking.getCompletedAt(),
                 booking.getCancelledAt(),
@@ -138,6 +157,8 @@ public class BookingMapper {
                 booking.getCancelReasonDetail(),
                 booking.getNote(),
                 booking.getCreatedAt(),
-                booking.getUpdatedAt());
+                booking.getUpdatedAt(),
+                presentation,
+                food);
     }
 }

@@ -96,7 +96,7 @@ public class PaymentIntegrationTest {
         context.setPayable(true);
         context.setAmount(new BigDecimal("150000"));
         context.setCurrency("VND");
-        context.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        context.setExpiresAt(java.time.Instant.now().plusSeconds(900));
 
         BookingPaymentContext.AnalyticsSnapshotData snapshot = new BookingPaymentContext.AnalyticsSnapshotData();
         snapshot.setMovieId(1L);

@@ -1,15 +1,19 @@
 package com.lorafilm.booking.booking.dto;
 
 import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.enums.BookingAttentionFilter;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.Instant;
+import java.util.List;
 
 public class BookingFilterRequest {
 
     private String bookingCode;
     private Long userId;
+    private List<Long> userIds;
     private BookingStatus status;
+    private BookingAttentionFilter attention;
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private Instant fromDate;
@@ -39,12 +43,28 @@ public class BookingFilterRequest {
         this.userId = userId;
     }
 
+    public List<Long> getUserIds() {
+        return userIds;
+    }
+
+    public void setUserIds(List<Long> userIds) {
+        this.userIds = userIds;
+    }
+
     public BookingStatus getStatus() {
         return status;
     }
 
     public void setStatus(BookingStatus status) {
         this.status = status;
+    }
+
+    public BookingAttentionFilter getAttention() {
+        return attention;
+    }
+
+    public void setAttention(BookingAttentionFilter attention) {
+        this.attention = attention;
     }
 
     public Instant getFromDate() {

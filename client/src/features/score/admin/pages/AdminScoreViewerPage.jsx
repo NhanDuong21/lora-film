@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import useAdminScore from '../hooks/useAdminScore';
-import { Search, Award, User, Lock, TrendingUp, AlertCircle, FileText, Calendar, ArrowUpRight, ArrowDownLeft, RefreshCcw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { Search, Award, User, TrendingUp, AlertCircle, FileText, Calendar, ArrowUpRight, ArrowDownLeft, RefreshCcw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 
 export default function AdminScoreViewerPage() {
   const {
@@ -21,7 +21,7 @@ export default function AdminScoreViewerPage() {
     try {
       await fetchUserScore(searchId.trim());
       await fetchUserHistory(searchId.trim(), { page: 0, size: 10 });
-    } catch (err) {
+    } catch {
       // error handled in hook
     }
   };
@@ -45,7 +45,7 @@ export default function AdminScoreViewerPage() {
       return new Intl.DateTimeFormat('vi-VN', {
         day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
       }).format(new Date(dateStr));
-    } catch (e) {
+    } catch {
       return dateStr;
     }
   };

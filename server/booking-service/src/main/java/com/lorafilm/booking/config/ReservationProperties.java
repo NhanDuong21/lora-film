@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ReservationProperties {
 
-    @Value("${booking.reservation-timeout:300}")
+    @Value("${booking.hold-duration-seconds:900}")
     private long reservationTimeout;
 
     public ReservationProperties() {

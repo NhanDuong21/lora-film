@@ -1,4 +1,3 @@
-import React from 'react';
 import LoyaltyCenterPage from '@/features/score/customer/pages/LoyaltyCenterPage';
 import { ProtectedRoute } from '@/components/common/RouteGuards';
 

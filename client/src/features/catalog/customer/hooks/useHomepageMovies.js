@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getMovies } from "@/features/catalog/customer/services/movieService";
+import { getCustomerErrorMessage } from "@/utils/customerErrorMessages";
 
 /**
  * Custom hook to query movies for a specific status tab on the homepage
@@ -83,7 +84,10 @@ export function useMoviesQuery({ status, sort, size = 8, onDataLoaded }) {
       }
     } catch (err) {
       if (lastRequestRef.current === requestId && err?.name !== 'CanceledError') {
-        setError(err.message || "Không thể tải danh sách phim.");
+        setError(getCustomerErrorMessage(
+          err,
+          'Không thể tải danh sách phim. Vui lòng thử lại.'
+        ));
       }
     } finally {
       if (lastRequestRef.current === requestId) {

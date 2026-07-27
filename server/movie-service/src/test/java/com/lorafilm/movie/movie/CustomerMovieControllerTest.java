@@ -18,6 +18,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -61,7 +62,11 @@ public class CustomerMovieControllerTest {
         
         PageResponse<MovieDto> pageResponse = PageResponse.of(new PageImpl<>(List.of(movie), PageRequest.of(0, 10), 1), List.of(movie));
         
-        when(customerMovieService.getMoviesByStatus(eq("now-showing"), any(), any())).thenReturn(pageResponse);
+        when(customerMovieService.getMoviesByStatus(
+                eq("now-showing"),
+                any(),
+                isNull(),
+                any())).thenReturn(pageResponse);
 
         mockMvc.perform(get("/api/customer/movies")
                         .param("status", "now-showing")
@@ -96,7 +101,11 @@ public class CustomerMovieControllerTest {
         
         PageResponse<MovieDto> pageResponse = PageResponse.of(new PageImpl<>(List.of(movie), PageRequest.of(0, 10), 1), List.of(movie));
         
-        when(customerMovieService.getMoviesByStatus(eq("coming-soon"), any(), any())).thenReturn(pageResponse);
+        when(customerMovieService.getMoviesByStatus(
+                eq("coming-soon"),
+                any(),
+                isNull(),
+                any())).thenReturn(pageResponse);
 
         mockMvc.perform(get("/api/customer/movies")
                         .param("status", "coming-soon")
@@ -110,7 +119,11 @@ public class CustomerMovieControllerTest {
 
     @Test
     void getMovies_InvalidStatus() throws Exception {
-        when(customerMovieService.getMoviesByStatus(eq("invalid-status"), any(), any()))
+        when(customerMovieService.getMoviesByStatus(
+                eq("invalid-status"),
+                any(),
+                isNull(),
+                any()))
                 .thenThrow(new com.lorafilm.movie.common.exception.BusinessException(
                         com.lorafilm.movie.common.exception.ErrorCode.VALIDATION_ERROR, "Invalid status parameter", null));
 
@@ -121,6 +134,27 @@ public class CustomerMovieControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void getMovies_DefaultsToAllAndSupportsTitleSort() throws Exception {
+        PageResponse<MovieDto> pageResponse = PageResponse.of(
+                new PageImpl<>(List.of(), PageRequest.of(0, 8), 0),
+                List.of());
+
+        when(customerMovieService.getMoviesByStatus(
+                eq("all"),
+                isNull(),
+                eq("genre-1"),
+                any())).thenReturn(pageResponse);
+
+        mockMvc.perform(get("/api/customer/movies")
+                        .param("genrePublicId", "genre-1")
+                        .param("sort", "title,asc")
+                        .param("size", "8"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content").isArray());
     }
 
     @Test

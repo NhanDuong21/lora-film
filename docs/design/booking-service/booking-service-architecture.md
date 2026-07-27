@@ -6325,3 +6325,10 @@ Kiến trúc này hướng đến các mục tiêu:
 - Khả năng chịu lỗi (Fault Tolerance).
 - Tính nhất quán dữ liệu (Eventual Consistency).
 - Dễ bảo trì và phát triển (Maintainability).
+# Production authority correction (2026-07-26)
+
+Redis is not a reservation store. It only serializes the short atomic Booking
+creation write section and is released by owner token after transaction
+completion. MySQL reservation rows plus the active-seat unique constraint are
+the sole long-lived authority. Booking owns the configurable 900-second
+deadline, amount locking, and lifecycle/payment-result transition.

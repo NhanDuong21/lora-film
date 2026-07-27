@@ -1,5 +1,4 @@
-import React from 'react';
-import { Sparkles, Gift, Tag, Clock, ArrowRight } from 'lucide-react';
+import { Sparkles, Gift, Tag, Clock } from 'lucide-react';
 
 export default function ComingSoonLayout() {
   const perks = [

@@ -18,7 +18,12 @@ public record BookingPriceSnapshotPayload(
             Long seatId,
             String seatLabel,
             String seatType,
-            BigDecimal unitPrice
+            BigDecimal unitPrice,
+            String seatPublicId
     ) {
+        /** Compatibility constructor for historical snapshot callers. */
+        public SeatPriceLine(Long seatId, String seatLabel, String seatType, BigDecimal unitPrice) {
+            this(seatId, seatLabel, seatType, unitPrice, null);
+        }
     }
 }

@@ -53,7 +53,14 @@ public class AccountVerifiedConsumer {
             String cccd = event.getData().getCccd();
 
             // Duplicate event check (Idempotency)
-            if (userRepository.existsById(accountId)) {
+            User existingUser = userRepository.findById(accountId).orElse(null);
+            if (existingUser != null) {
+                if ((existingUser.getEmail() == null || existingUser.getEmail().isBlank())
+                        && payload.getEmail() != null && !payload.getEmail().isBlank()) {
+                    existingUser.setEmail(payload.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
+                    userRepository.save(existingUser);
+                    log.info("Backfilled email snapshot for existing accountId: {}", accountId);
+                }
                 log.warn("Duplicate event skipped. User profile already exists for accountId: {}. EventId: {}", accountId, event.getEventId());
                 reservationService.release(phoneNumber, cccd);
                 return;
@@ -74,6 +81,9 @@ public class AccountVerifiedConsumer {
             User user = new User();
             user.setAccountId(accountId);
             user.setFullName(event.getData().getFullName());
+            if (event.getData().getEmail() != null) {
+                user.setEmail(event.getData().getEmail().trim().toLowerCase(java.util.Locale.ROOT));
+            }
             user.setPhoneNumber(phoneNumber);
             user.setCccd(cccd);
             user.setCccdMasked(event.getData().getCccdMasked());

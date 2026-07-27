@@ -2,33 +2,37 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { 
   Search, SlidersHorizontal, Eye, RefreshCw, ShoppingCart, 
-  CheckCircle, XCircle, AlertCircle, Clock, Copy, FileDown, 
-  ArrowUpDown, User, Film, Building, CreditCard, Gift, History
+  XCircle, AlertCircle, Copy, FileDown, ArrowUpDown, User,
+  Film, Building, CreditCard
 } from 'lucide-react';
-import { getBookings, getBookingMonitoringSummary, updateBookingStatus } from '../services/adminBookingService';
+import {
+  getBookings,
+  getBookingOperationsSummary,
+  updateBookingStatus
+} from '../services/adminBookingService';
+import {
+  getUserProfiles,
+  searchUserProfiles
+} from '@/features/auth/services/userService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
-import { useAuth } from '@/contexts/AuthContext';
-import { parseApiError } from '@/utils/apiErrorHandler';
+import { getBookingErrorMessage } from '../../customer/utils/bookingErrorMessages';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import { EmptyState, StatusBadge } from '@/components/common/ui/uiKit';
 
 export default function AdminBookingDashboardPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { triggerToast, triggerConfirm } = useOutletContext() || {};
-
-  // Check if current user is Admin
-  const isAdmin = user?.role === 'ADMIN';
+  const { triggerToast, triggerConfirm, triggerAlert } = useOutletContext() || {};
 
   // API Filter States (Sent to Backend)
   const [bookingCode, setBookingCode] = useState('');
-  const [userId, setUserId] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
   const [status, setStatus] = useState('ALL');
+  const [attention, setAttention] = useState('ALL');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(0);
-  const [size, setSize] = useState(10);
+  const size = 10;
 
   // Sorting
   const [sortField, setSortField] = useState('createdAt');
@@ -46,23 +50,25 @@ export default function AdminBookingDashboardPage() {
 
   // Data States
   const [bookingPage, setBookingPage] = useState(null);
-  const [monitoringSummary, setMonitoringSummary] = useState(null);
+  const [operationsSummary, setOperationsSummary] = useState(null);
+  const [summaryError, setSummaryError] = useState(null);
   const [moviesList, setMoviesList] = useState([]);
   const [cinemasList, setCinemasList] = useState([]);
   
   // Lookups
   const [moviesLookup, setMoviesLookup] = useState({});
   const [cinemasLookup, setCinemasLookup] = useState({});
+  const [customersLookup, setCustomersLookup] = useState({});
 
   // Loading & Error States
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Table Column Widths (Resize Mock state)
+  // Resizable table column widths
   const [colWidths, setColWidths] = useState({
     code: 120,
-    customer: 100,
+    customer: 180,
     movie: 150,
     cinema: 120,
     showtime: 140,
@@ -102,16 +108,6 @@ export default function AdminBookingDashboardPage() {
     }
   }, []);
 
-  // Fetch Summary stats
-  const fetchSummaryStats = useCallback(async () => {
-    try {
-      const summary = await getBookingMonitoringSummary();
-      setMonitoringSummary(summary);
-    } catch (err) {
-      console.warn("Could not fetch monitoring stats:", err);
-    }
-  }, []);
-
   // Fetch Bookings List
   const fetchBookingsList = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -124,29 +120,69 @@ export default function AdminBookingDashboardPage() {
         size
       };
       if (bookingCode) filters.bookingCode = bookingCode.trim();
-      if (userId) filters.userId = Number(userId);
+      if (customerQuery.trim()) {
+        const customerMatches = await searchUserProfiles(customerQuery, 50);
+        const userIds = customerMatches.map(customer => customer.accountId);
+        if (userIds.length === 0) {
+          setBookingPage({
+            content: [],
+            page,
+            size,
+            totalElements: 0,
+            totalPages: 0,
+            last: true
+          });
+          setCustomersLookup({});
+          return;
+        }
+        filters.userIds = userIds;
+      }
       if (status !== 'ALL') filters.status = status;
+      if (attention !== 'ALL') filters.attention = attention;
       if (fromDate) filters.fromDate = new Date(fromDate).toISOString();
       if (toDate) filters.toDate = new Date(toDate).toISOString();
 
       const response = await getBookings(filters);
       setBookingPage(response);
+      const visibleUserIds = [...new Set(
+        (response?.content || []).map(booking => booking.userId).filter(Boolean)
+      )];
+      try {
+        const profiles = await getUserProfiles(visibleUserIds);
+        setCustomersLookup(Object.fromEntries(
+          profiles.map(profile => [profile.accountId, profile])
+        ));
+      } catch {
+        setCustomersLookup({});
+      }
     } catch (err) {
-      setError(parseApiError(err) || "Không thể tải danh sách đơn hàng.");
+      setError(getBookingErrorMessage(err, "Không thể tải danh sách đơn hàng."));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [page, size, bookingCode, userId, status, fromDate, toDate]);
+  }, [page, size, bookingCode, customerQuery, status, attention, fromDate, toDate]);
+
+  const fetchOperationsSummary = useCallback(async () => {
+    try {
+      setSummaryError(null);
+      setOperationsSummary(await getBookingOperationsSummary());
+    } catch (err) {
+      setSummaryError(getBookingErrorMessage(
+        err, 'Không thể tải số liệu vận hành đơn hàng.'));
+    }
+  }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLookups();
-  }, [fetchLookups]);
+    fetchOperationsSummary();
+  }, [fetchLookups, fetchOperationsSummary]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBookingsList();
-    fetchSummaryStats();
-  }, [fetchBookingsList, fetchSummaryStats]);
+  }, [fetchBookingsList]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -156,8 +192,9 @@ export default function AdminBookingDashboardPage() {
 
   const handleResetFilters = () => {
     setBookingCode('');
-    setUserId('');
+    setCustomerQuery('');
     setStatus('ALL');
+    setAttention('ALL');
     setFromDate('');
     setToDate('');
     setSelectedMovieId('ALL');
@@ -168,6 +205,13 @@ export default function AdminBookingDashboardPage() {
     setHasFoodFilter('ALL');
     setHasPromotionFilter('ALL');
     setPage(0);
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      fetchBookingsList(true),
+      fetchOperationsSummary()
+    ]);
   };
 
   // Client-side filtering & sorting logic
@@ -191,7 +235,13 @@ export default function AdminBookingDashboardPage() {
     }
     // Filter by Payment Status
     if (paymentStatusFilter !== 'ALL') {
-      list = list.filter(b => b.paymentStatus === paymentStatusFilter);
+      list = list.filter(b => {
+        if (paymentStatusFilter === 'NO_ATTEMPT') return !b.paymentAttempted;
+        if (paymentStatusFilter === 'PROCESSING') {
+          return b.paymentAttempted && b.paymentStatus === 'PENDING';
+        }
+        return b.paymentStatus === paymentStatusFilter;
+      });
     }
     // Filter by Food Ordered
     if (hasFoodFilter !== 'ALL') {
@@ -229,102 +279,30 @@ export default function AdminBookingDashboardPage() {
     });
   }, [bookingPage, selectedMovieId, selectedCinemaId, minPrice, maxPrice, paymentStatusFilter, hasFoodFilter, hasPromotionFilter, sortField, sortDirection]);
 
-  // Aggregate stats from processed bookings list for cards
-  const aggregatedStats = useMemo(() => {
-    const list = bookingPage?.content || [];
-    let totalRev = 0;
-    let ticketRev = 0;
-    let foodRev = 0;
-    
-    let pending = 0;
-    let confirmed = 0;
-    let completed = 0;
-    let cancelled = 0;
-    let expired = 0;
-    let refunded = 0;
-
-    list.forEach(b => {
-      totalRev += (b.finalAmount || 0);
-      ticketRev += (b.ticketAmount || 0);
-      foodRev += (b.foodAmount || 0);
-
-      switch (b.bookingStatus) {
-        case 'PENDING_PAYMENT': pending++; break;
-        case 'CONFIRMED': confirmed++; break;
-        case 'COMPLETED': completed++; break;
-        case 'CANCELLED': cancelled++; break;
-        case 'EXPIRED': expired++; break;
-        case 'REFUNDED': refunded++; break;
-        default: break;
-      }
-    });
-
-    return {
-      totalRevenue: totalRev,
-      ticketRevenue: ticketRev,
-      foodRevenue: foodRev,
-      pending,
-      confirmed,
-      completed,
-      cancelled,
-      expired,
-      refunded,
-      totalCount: list.length
-    };
-  }, [bookingPage]);
-
-  // Generate Booking Trend Data for custom SVG curve (7 days back)
-  const trendPoints = useMemo(() => {
-    const list = bookingPage?.content || [];
-    const dateMap = {};
-    
-    // Seed last 7 days
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-      dateMap[dateStr] = 0;
-    }
-
-    list.forEach(b => {
-      const dateStr = new Date(b.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-      if (dateMap[dateStr] !== undefined) {
-        dateMap[dateStr]++;
-      }
-    });
-
-    return Object.keys(dateMap).map((date, index) => ({
-      x: (index * 80) + 40,
-      y: 150 - (dateMap[date] * 12), // scale booking count
-      label: date,
-      value: dateMap[date]
-    }));
-  }, [bookingPage]);
-
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
     if (triggerToast) triggerToast(`Đã sao chép mã đặt vé: ${code}`, 'info');
-    else alert(`Đã sao chép: ${code}`);
+    else if (triggerAlert) triggerAlert(`Đã sao chép mã đặt vé: ${code}`);
   };
 
   const handleCancelBooking = async (publicId, bookingCode) => {
     const confirmMessage = `Bạn có chắc chắn muốn hủy đơn hàng ${bookingCode} không? Tất cả ghế và vé đi kèm sẽ bị giải phóng.`;
     const shouldCancel = triggerConfirm 
       ? await triggerConfirm(confirmMessage) 
-      : window.confirm(confirmMessage);
+      : false;
 
     if (!shouldCancel) return;
 
     try {
-      await updateBookingStatus(publicId, 'CANCELLED', 'Admin dashboard manual cancellation');
+      await updateBookingStatus(publicId, 'CANCELLED', 'Quản trị viên hủy đơn theo yêu cầu vận hành');
       if (triggerToast) triggerToast(`Hủy đơn đặt vé ${bookingCode} thành công.`, 'success');
-      else alert('Đã hủy đơn thành công');
+      else if (triggerAlert) triggerAlert(`Hủy đơn đặt vé ${bookingCode} thành công.`);
       fetchBookingsList();
-      fetchSummaryStats();
+      fetchOperationsSummary();
     } catch (err) {
-      const msg = parseApiError(err) || 'Không thể hủy đơn hàng';
+      const msg = getBookingErrorMessage(err, 'Không thể hủy đơn hàng.');
       if (triggerToast) triggerToast(msg, 'error');
-      else alert(msg);
+      else if (triggerAlert) triggerAlert(msg);
     }
   };
 
@@ -336,15 +314,18 @@ export default function AdminBookingDashboardPage() {
     }
 
     const headers = [
-      'Mã đặt vé', 'Mã User', 'Phim', 'Rạp', 'Tiền Vé', 'Tiền Bắp Nước', 
+      'Mã đặt vé', 'Mã khách hàng', 'Tên khách hàng', 'Email', 'Phim', 'Rạp',
+      'Tiền Vé', 'Tiền Bắp Nước',
       'Khuyến Mãi', 'Tổng Tiền', 'Trạng Thái Đơn', 'Thanh Toán', 'Ngày Tạo'
     ];
 
     const rows = processedBookings.map(b => [
       b.bookingCode,
-      b.userId,
-      moviesLookup[b.movieId] || `Phim #${b.movieId}`,
-      cinemasLookup[b.cinemaId] || `Rạp #${b.cinemaId}`,
+      customersLookup[b.userId]?.customerCode || formatCustomerCode(b.userId),
+      customersLookup[b.userId]?.fullName || 'Chưa tải được hồ sơ',
+      customersLookup[b.userId]?.email || '',
+      b.movieTitle || moviesLookup[b.movieId] || 'Chưa có tên phim',
+      b.cinemaName || cinemasLookup[b.cinemaId] || 'Chưa có tên rạp',
       b.ticketAmount,
       b.foodAmount,
       b.promotionDiscount + b.voucherDiscount,
@@ -408,6 +389,10 @@ export default function AdminBookingDashboardPage() {
     return (val || 0).toLocaleString('vi-VN') + 'đ';
   };
 
+  const formatCustomerCode = (userId) => (
+    userId ? `KH${String(userId).padStart(6, '0')}` : 'Chưa có mã'
+  );
+
   const translateStatus = (bStatus) => {
     switch (bStatus) {
       case 'CONFIRMED': return 'Đã xác nhận';
@@ -420,22 +405,14 @@ export default function AdminBookingDashboardPage() {
     }
   };
 
-  const getStatusBadgeStyle = (bStatus) => {
-    switch (bStatus) {
-      case 'CONFIRMED':
-        return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-      case 'COMPLETED':
-        return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
-      case 'PENDING_PAYMENT':
-        return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-      case 'CANCELLED':
-        return 'bg-red-500/10 text-red-400 border border-red-500/20';
-      case 'EXPIRED':
-        return 'bg-zinc-800 text-zinc-500 border border-zinc-700';
-      case 'REFUNDED':
-        return 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
-      default:
-        return 'bg-zinc-800 text-zinc-400';
+  const translatePaymentStatus = (paymentStatus, paymentAttempted = false) => {
+    if (!paymentAttempted) return 'Chưa phát sinh thanh toán';
+    switch (paymentStatus) {
+      case 'SUCCESS': return 'Đã thanh toán';
+      case 'FAILED': return 'Thanh toán thất bại';
+      case 'REFUNDED': return 'Đã hoàn tiền';
+      case 'PENDING': return 'Đang xử lý thanh toán';
+      default: return 'Chưa ghi nhận';
     }
   };
 
@@ -449,7 +426,7 @@ export default function AdminBookingDashboardPage() {
             QUẢN LÝ ĐƠN HÀNG ĐẶT VÉ
           </h1>
           <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
-            Hệ thống quản lý, giám sát giao dịch, bắp nước, kiểm toán và cập nhật trạng thái hóa đơn đặt chỗ
+            Tra cứu đơn, kiểm tra ghế và thực hiện các thao tác vận hành được phép
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -458,10 +435,10 @@ export default function AdminBookingDashboardPage() {
             className="bg-zinc-900 border border-zinc-850 hover:border-zinc-700 px-4 py-2 rounded-xl text-zinc-300 hover:text-white transition-all text-xs flex items-center gap-2 cursor-pointer font-bold"
           >
             <FileDown className="w-4 h-4 text-emerald-400" />
-            <span>Xuất báo cáo (CSV)</span>
+            <span>Xuất dữ liệu trang (CSV)</span>
           </button>
           <button
-            onClick={() => { fetchBookingsList(true); fetchSummaryStats(); }}
+            onClick={handleRefresh}
             disabled={refreshing}
             className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-2.5 rounded-xl text-zinc-400 hover:text-white transition-all text-xs flex items-center gap-2 cursor-pointer"
           >
@@ -471,141 +448,57 @@ export default function AdminBookingDashboardPage() {
         </div>
       </div>
 
-      {/* Analytics Dashboard Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left 2 Columns: KPI Summaries & charts */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* KPI Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase block">Tổng đơn (Trang)</span>
-              <span className="text-xl font-black text-white mt-1">{aggregatedStats.totalCount}</span>
-              <span className="text-[9px] text-zinc-500 mt-1 block">Xác nhận: <span className="text-emerald-400 font-bold">{aggregatedStats.confirmed + aggregatedStats.completed}</span></span>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-400 font-bold uppercase block text-amber-500">Chờ thanh toán</span>
-              <span className="text-xl font-black text-amber-400 mt-1">{aggregatedStats.pending}</span>
-              <span className="text-[9px] text-zinc-500 mt-1 block">Hết hạn: <span className="text-zinc-400 font-bold">{aggregatedStats.expired}</span></span>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-400 font-bold uppercase block text-[#ff7a1a]">Doanh Thu (Trang)</span>
-              <span className="text-xl font-black text-[#ff7a1a] mt-1 truncate">{formatCurrency(aggregatedStats.totalRevenue)}</span>
-              <span className="text-[9px] text-zinc-500 mt-1 block">Bắp nước: <span className="text-amber-300 font-bold">{formatCurrency(aggregatedStats.foodRevenue)}</span></span>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-850 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-400 font-bold uppercase block text-red-500">Hủy / Hoàn Tiền</span>
-              <span className="text-xl font-black text-red-400 mt-1">{aggregatedStats.cancelled + aggregatedStats.refunded}</span>
-              <span className="text-[9px] text-zinc-500 mt-1 block">Hoàn: <span className="text-purple-400 font-bold">{aggregatedStats.refunded}</span></span>
-            </div>
-          </div>
-
-          {/* Booking Trend Custom SVG Curve Chart */}
-          <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-5 md:p-6 shadow-xl space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-white">Xu hướng Đặt Vé (Tuần này)</h3>
-                <p className="text-[9px] text-zinc-550 font-bold mt-0.5">Thống kê số lượng đơn hàng mới phát sinh theo ngày</p>
-              </div>
-              <span className="text-[9px] bg-[#ff7a1a]/10 border border-[#ff7a1a]/30 text-[#ff7a1a] font-bold px-2 py-0.5 rounded uppercase">Biểu đồ động</span>
-            </div>
-            <div className="w-full overflow-x-auto select-none pt-2">
-              <svg className="w-[600px] h-[180px] mx-auto overflow-visible">
-                {/* Grid Lines */}
-                <line x1="40" y1="30" x2="520" y2="30" stroke="#27272a" strokeDasharray="3" />
-                <line x1="40" y1="70" x2="520" y2="70" stroke="#27272a" strokeDasharray="3" />
-                <line x1="40" y1="110" x2="520" y2="110" stroke="#27272a" strokeDasharray="3" />
-                <line x1="40" y1="150" x2="520" y2="150" stroke="#3f3f46" strokeWidth="1.5" />
-
-                {/* Draw curve path */}
-                {trendPoints.length > 1 && (
-                  <path
-                    d={`M ${trendPoints.map(p => `${p.x} ${p.y}`).join(' L ')}`}
-                    fill="none"
-                    stroke="#ff7a1a"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                )}
-
-                {/* Connection points with popover values */}
-                {trendPoints.map((p, i) => (
-                  <g key={i} className="group cursor-pointer">
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r="5.5"
-                      fill="#09090b"
-                      stroke="#ff7a1a"
-                      strokeWidth="3.5"
-                      className="transition-transform group-hover:scale-150"
-                    />
-                    {/* Tooltip showing amount */}
-                    <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
-                      <rect x={p.x - 20} y={p.y - 28} width="40" height="18" rx="4" fill="#ff7a1a" />
-                      <text x={p.x} y={p.y - 16} fill="#000" fontSize="9" fontWeight="bold" textAnchor="middle">
-                        {p.value} đơn
-                      </text>
-                    </g>
-                    {/* Date label */}
-                    <text x={p.x} y="170" fill="#71717a" fontSize="9" fontWeight="bold" textAnchor="middle">
-                      {p.label}
-                    </text>
-                  </g>
-                ))}
-              </svg>
-            </div>
-          </div>
+      {/* Global counters are calculated by Booking Service, independent of pagination. */}
+      {summaryError && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-300">
+          {summaryError} Danh sách đơn bên dưới vẫn có thể tra cứu bình thường.
         </div>
-
-        {/* Right 1 Column: System Monitoring Summary Panel */}
-        <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-5 md:p-6 shadow-xl flex flex-col justify-between space-y-4">
-          <div>
-            <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
-              <span className="text-xs font-black uppercase tracking-wider text-white">Giám Sát Hệ Thống</span>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-            </div>
-            <p className="text-[9px] text-zinc-550 font-semibold mt-2">
-              Dữ liệu tải từ API Monitoring với cơ chế Cache 10s TTL chống quá tải
-            </p>
-          </div>
-
-          <div className="space-y-3.5 flex-1 justify-center flex flex-col">
-            <div className="flex justify-between items-center border-b border-zinc-850 pb-2.5">
-              <span className="text-xs text-zinc-400 flex items-center gap-2">
-                <History className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Đặt vé hôm nay (Hồ Chí Minh)</span>
-              </span>
-              <span className="text-sm font-black text-white">{monitoringSummary?.bookingToday ?? '0'}</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-zinc-850 pb-2.5">
-              <span className="text-xs text-zinc-400 flex items-center gap-2">
-                <XCircle className="w-4 h-4 text-red-500 shrink-0" />
-                <span>Giao dịch lỗi (Thanh toán hỏng)</span>
-              </span>
-              <span className="text-sm font-black text-red-400">{monitoringSummary?.paymentFailed ?? '0'}</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-zinc-850 pb-2.5">
-              <span className="text-xs text-zinc-400 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>Số lượng đơn hết hạn chờ</span>
-              </span>
-              <span className="text-sm font-black text-amber-400">{monitoringSummary?.expiredBooking ?? '0'}</span>
-            </div>
-            <div className="flex justify-between items-center pb-1">
-              <span className="text-xs text-zinc-400 flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-sky-400 shrink-0" />
-                <span>Tiến trình đồng bộ bù lỗi (Kafka)</span>
-              </span>
-              <span className="text-sm font-black text-sky-400">{monitoringSummary?.pendingRetry ?? '0'} tác vụ</span>
-            </div>
-          </div>
-
-          <div className="pt-2 text-[9px] text-zinc-500 border-t border-zinc-850 italic text-center">
-            Hạ tầng Microservices kết nối Kafka Outbox & Redis Lock
-          </div>
+      )}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+          <span className="block text-[10px] font-bold uppercase text-zinc-500">Tổng đơn toàn hệ thống</span>
+          <span className="mt-1 text-xl font-black text-white">{operationsSummary?.totalBookings ?? '—'}</span>
+          <span className="mt-1 block text-[9px] text-zinc-500">
+            Bộ lọc hiện tại: <strong className="text-zinc-300">{bookingPage?.totalElements ?? 0}</strong> đơn
+          </span>
         </div>
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+          <span className="block text-[10px] font-bold uppercase text-amber-500">Đang chờ thanh toán</span>
+          <span className="mt-1 text-xl font-black text-amber-400">{operationsSummary?.pendingPayment ?? '—'}</span>
+          <span className="mt-1 block text-[9px] text-zinc-500">Tất cả đơn còn ở bước thanh toán</span>
+        </div>
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+          <span className="block text-[10px] font-bold uppercase text-emerald-500">Đã xác nhận / hoàn thành</span>
+          <span className="mt-1 text-xl font-black text-emerald-400">
+            {(operationsSummary?.confirmed ?? 0) + (operationsSummary?.completed ?? 0)}
+          </span>
+          <span className="mt-1 block text-[9px] text-zinc-500">Ghế đã được ghi nhận là đã đặt</span>
+        </div>
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+          <span className="block text-[10px] font-bold uppercase text-red-500">Không còn hoạt động</span>
+          <span className="mt-1 text-xl font-black text-red-400">
+            {(operationsSummary?.cancelled ?? 0)
+              + (operationsSummary?.expired ?? 0)
+              + (operationsSummary?.refunded ?? 0)}
+          </span>
+          <span className="mt-1 block text-[9px] text-zinc-500">
+            Đã hủy, hết hạn hoặc hoàn tiền
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setAttention('NEEDS_ATTENTION');
+            setPage(0);
+          }}
+          className="flex flex-col justify-between rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 text-left shadow-lg transition-colors hover:border-orange-400"
+        >
+          <span className="block text-[10px] font-bold uppercase text-orange-400">Cần xử lý</span>
+          <span className="mt-1 text-xl font-black text-orange-300">{operationsSummary?.needsAttention ?? '—'}</span>
+          <span className="mt-1 block text-[9px] text-zinc-500">
+            Sắp hết hạn, quá hạn hoặc thanh toán lỗi
+          </span>
+        </button>
       </div>
 
       {/* Advanced Search & Filtering form */}
@@ -613,7 +506,7 @@ export default function AdminBookingDashboardPage() {
         <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="w-4 h-4 text-[#ff7a1a]" />
-            <span className="text-xs font-black uppercase tracking-wider text-white">Bộ lọc tra cứu chuyên sâu</span>
+            <span className="text-xs font-black uppercase tracking-wider text-white">Bộ lọc dữ liệu đơn hàng</span>
           </div>
           <button
             type="button"
@@ -626,9 +519,9 @@ export default function AdminBookingDashboardPage() {
         </div>
 
         {/* Primary Filter Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
           <div className="space-y-1">
-            <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã đặt vé (Booking Code)</label>
+            <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã đặt vé</label>
               <input
               type="text"
               placeholder="Nhập mã đặt vé..."
@@ -639,12 +532,12 @@ export default function AdminBookingDashboardPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-zinc-500 font-bold uppercase">Mã khách hàng (User ID)</label>
+            <label className="text-[9px] text-zinc-500 font-bold uppercase">Khách hàng</label>
               <input
-              type="number"
-              placeholder="VD: 1, 2"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
+              type="text"
+              placeholder="Tên, email, SĐT hoặc KH000005"
+              value={customerQuery}
+              onChange={(e) => setCustomerQuery(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-xs focus-ring text-zinc-100 placeholder:text-zinc-500"
             />
           </div>
@@ -658,11 +551,26 @@ export default function AdminBookingDashboardPage() {
             >
               <option value="ALL">Tất cả</option>
               <option value="PENDING_PAYMENT">Chờ thanh toán</option>
-              <option value="CONFIRMED">Đã xác nhận (Paid)</option>
+              <option value="CONFIRMED">Đã xác nhận thanh toán</option>
               <option value="COMPLETED">Đã hoàn thành</option>
               <option value="CANCELLED">Đã hủy</option>
               <option value="EXPIRED">Đã hết hạn</option>
               <option value="REFUNDED">Hoàn tiền</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[9px] text-zinc-500 font-bold uppercase">Cần xử lý</label>
+            <select
+              value={attention}
+              onChange={(e) => setAttention(e.target.value)}
+              className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200 outline-none"
+            >
+              <option value="ALL">Tất cả</option>
+              <option value="NEEDS_ATTENTION">Tất cả đơn cần xử lý</option>
+              <option value="EXPIRING_SOON">Sắp hết thời gian giữ ghế</option>
+              <option value="OVERDUE">Đã quá hạn nhưng chưa đóng</option>
+              <option value="PAYMENT_FAILED">Có lần thanh toán thất bại</option>
             </select>
           </div>
 
@@ -693,7 +601,11 @@ export default function AdminBookingDashboardPage() {
 
         {/* Collapsible Advanced Filters Section */}
         {advancedOpen && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-zinc-800/40 animate-fade-in">
+          <>
+            <p className="border-t border-zinc-800/40 pt-3 text-[10px] font-semibold text-amber-300/80">
+              Các bộ lọc mở rộng bên dưới chỉ áp dụng cho dữ liệu của trang hiện tại.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
             {/* Filter by Movie */}
             <div className="space-y-1">
               <label className="text-[9px] text-zinc-500 font-bold uppercase">Phim chiếu</label>
@@ -774,11 +686,12 @@ export default function AdminBookingDashboardPage() {
                 onChange={(e) => setPaymentStatusFilter(e.target.value)}
                 className="w-full bg-[#050506] border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff7a1a]/40 text-zinc-200 outline-none"
               >
-                <option value="ALL">Tất cả cổng</option>
-                <option value="PENDING">Chờ xử lý (Pending)</option>
-                <option value="SUCCESS">Thành công (Success)</option>
-                <option value="FAILED">Thất bại (Failed)</option>
-                <option value="REFUNDED">Hoàn tiền (Refunded)</option>
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="NO_ATTEMPT">Chưa phát sinh thanh toán</option>
+                <option value="PROCESSING">Đang xử lý thanh toán</option>
+                <option value="SUCCESS">Đã thanh toán</option>
+                <option value="FAILED">Thanh toán thất bại</option>
+                <option value="REFUNDED">Đã hoàn tiền</option>
               </select>
             </div>
 
@@ -809,7 +722,8 @@ export default function AdminBookingDashboardPage() {
                 <option value="NO">Giữ nguyên giá gốc</option>
               </select>
             </div>
-          </div>
+            </div>
+          </>
         )}
 
         {/* Action Buttons */}
@@ -884,7 +798,7 @@ export default function AdminBookingDashboardPage() {
                 {/* Amounts Column */}
                 <th className="p-4 relative" style={{ width: colWidths.amounts }}>
                   <div className="flex items-center gap-1.5 cursor-pointer select-none" onClick={() => handleSort('finalAmount')}>
-                    <span>Chi tiết tiền vé</span>
+                    <span>Giá trị đơn</span>
                     {sortField === 'finalAmount' && (sortDirection === 'asc' ? ' ▲' : ' ▼')}
                   </div>
                   <div onMouseDown={(e) => startResize('amounts', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#ff7a1a] opacity-0 hover:opacity-100 transition-opacity" />
@@ -893,7 +807,7 @@ export default function AdminBookingDashboardPage() {
                 {/* Status Column */}
                 <th className="p-4 relative" style={{ width: colWidths.status }}>
                   <div className="flex items-center gap-1.5 cursor-pointer select-none" onClick={() => handleSort('bookingStatus')}>
-                    <span>Hóa đơn</span>
+                    <span>Trạng thái đơn</span>
                     {sortField === 'bookingStatus' && (sortDirection === 'asc' ? ' ▲' : ' ▼')}
                   </div>
                   <div onMouseDown={(e) => startResize('status', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#ff7a1a] opacity-0 hover:opacity-100 transition-opacity" />
@@ -939,10 +853,15 @@ export default function AdminBookingDashboardPage() {
                 </tr>
               ) : processedBookings.length > 0 ? (
                 processedBookings.map(b => {
-                  const movieName = moviesLookup[b.movieId] || `Mã phim: ${b.movieId}`;
-                  const cinemaName = cinemasLookup[b.cinemaId] || `Cụm rạp: ${b.cinemaId}`;
+                  const movieName = b.movieTitle || moviesLookup[b.movieId] || 'Chưa có tên phim';
+                  const cinemaName = b.cinemaName || cinemasLookup[b.cinemaId] || 'Chưa có tên rạp';
+                  const auditoriumName = b.auditoriumName || 'Chưa có tên phòng';
+                  const showtimeStart = b.showtimeStart ? new Date(b.showtimeStart) : null;
                   const hasFood = b.foodAmount > 0;
                   const discount = (b.promotionDiscount || 0) + (b.voucherDiscount || 0);
+                  const customer = customersLookup[b.userId];
+                  const isOverdue = b.attentionCode === 'OVERDUE';
+                  const isExpiringSoon = b.attentionCode === 'EXPIRING_SOON';
 
                   return (
                     <tr key={b.id} className="border-b border-zinc-850 hover:bg-zinc-950/40 text-zinc-300 transition-all">
@@ -964,9 +883,21 @@ export default function AdminBookingDashboardPage() {
 
                       {/* Customer */}
                       <td className="p-4 font-semibold text-zinc-400">
-                        <div className="flex items-center gap-1">
-                          <User className="w-3.5 h-3.5 text-zinc-650" />
-                          <span className="truncate">KH #{b.userId}</span>
+                        <div className="flex items-start gap-1.5">
+                          <User className="mt-0.5 w-3.5 h-3.5 shrink-0 text-zinc-650" />
+                          <div className="min-w-0">
+                            <span className="block truncate text-zinc-200" title={customer?.fullName}>
+                              {customer?.fullName || 'Chưa tải được hồ sơ'}
+                            </span>
+                            <span className="block truncate text-[9px] font-mono text-orange-400">
+                              {customer?.customerCode || formatCustomerCode(b.userId)}
+                            </span>
+                            {customer?.email && (
+                              <span className="block truncate text-[9px] font-normal text-zinc-500" title={customer.email}>
+                                {customer.email}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -982,8 +913,8 @@ export default function AdminBookingDashboardPage() {
                       <td className="p-4 font-semibold text-zinc-400 truncate">
                         <div className="flex items-center gap-1">
                           <Building className="w-3.5 h-3.5 text-zinc-650 shrink-0" />
-                          <span className="truncate" title={`${cinemaName} | Phòng #${b.auditoriumId}`}>
-                            {cinemaName} | P.{b.auditoriumId}
+                          <span className="truncate" title={`${cinemaName} · ${auditoriumName}`}>
+                            {cinemaName} · {auditoriumName}
                           </span>
                         </div>
                       </td>
@@ -991,8 +922,17 @@ export default function AdminBookingDashboardPage() {
                       {/* Showtime */}
                       <td className="p-4 text-[10px] text-zinc-400">
                         <div className="flex flex-col">
-                          <span className="font-bold text-zinc-300">Suất #{b.showtimeId}</span>
-                          <span className="text-[9px] text-zinc-500 font-bold uppercase mt-0.5">Giữ vé: {new Date(b.expiresAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="font-bold text-zinc-300">
+                            {showtimeStart
+                              ? `${showtimeStart.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} · ${showtimeStart.toLocaleDateString('vi-VN')}`
+                              : 'Chưa có giờ chiếu'}
+                          </span>
+                          <span className="mt-0.5 text-[9px] font-bold uppercase text-zinc-500">
+                            {b.seatCount ? `${b.seatCount} ghế` : 'Chưa có số ghế'}
+                            {b.expiresAt
+                              ? ` · Giữ đến ${new Date(b.expiresAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+                              : ''}
+                          </span>
                         </div>
                       </td>
 
@@ -1028,11 +968,18 @@ export default function AdminBookingDashboardPage() {
                           <StatusBadge status={b.bookingStatus} label={translateStatus(b.bookingStatus)} />
                           <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 ${
                             b.paymentStatus === 'SUCCESS' ? 'text-emerald-500 bg-emerald-500/10' : 
+                            !b.paymentAttempted ? 'text-zinc-400 bg-zinc-800' :
                             b.paymentStatus === 'PENDING' ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10'
                           }`}>
                             <CreditCard className="w-2.5 h-2.5" />
-                            <span>{b.paymentStatus}</span>
+                            <span>{translatePaymentStatus(b.paymentStatus, b.paymentAttempted)}</span>
                           </span>
+                          {isOverdue && (
+                            <span className="text-[8px] font-bold text-red-400">Quá hạn, cần kiểm tra</span>
+                          )}
+                          {isExpiringSoon && (
+                            <span className="text-[8px] font-bold text-orange-400">Sắp hết thời gian giữ ghế</span>
+                          )}
                         </div>
                       </td>
 
@@ -1056,7 +1003,7 @@ export default function AdminBookingDashboardPage() {
                             <span>Xem</span>
                           </button>
 
-                          {(b.bookingStatus === 'PENDING_PAYMENT' || b.bookingStatus === 'CONFIRMED') && (
+                          {b.bookingStatus === 'PENDING_PAYMENT' && (
                             <button
                               onClick={() => handleCancelBooking(b.publicId, b.bookingCode)}
                               className="border border-red-950 bg-red-950/20 hover:border-red-500 hover:text-white p-2 rounded-xl text-red-400 transition-all cursor-pointer text-[9px] uppercase font-bold flex items-center gap-1"

@@ -27,6 +27,15 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, ex.getStatus());
     }
 
+    @ExceptionHandler(PaymentResultConflictException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentResultConflict(
+            PaymentResultConflictException ex) {
+        log.warn("Payment result conflict: [{}] {}", ex.getErrorCode(), ex.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse(ex.getErrorCode(), ex.getMessage());
+        errorResponse.setReconciliationTaskPublicId(ex.getReconciliationTaskPublicId());
+        return new ResponseEntity<>(errorResponse, ex.getStatus());
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException ex) {
         log.warn("BusinessException occurred: [{}] {}", ex.getErrorCode(), ex.getMessage(), ex);

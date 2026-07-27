@@ -269,4 +269,9 @@ public class SeatServiceImpl implements SeatService {
     public List<Seat> getSeatsByIds(List<Long> seatIds) {
         return seatRepository.findByIdInAndDeletedAtIsNull(seatIds);
     }
+
+    @Override
+    public List<Seat> getSeatsByPublicIds(List<String> seatPublicIds) {
+        return seatRepository.findByPublicIdInAndDeletedAtIsNull(seatPublicIds);
+    }
 }

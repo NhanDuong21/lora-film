@@ -10,12 +10,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
+import java.util.Optional;
 
 public interface BookingService {
 
     BookingResponse createBooking(CreateBookingRequest request);
 
     BookingResponse cancelBooking(String publicId, CancelBookingRequest request);
+
+    BookingResponse finalizeCheckout(String publicId);
 
     BookingResponse confirmBooking(String publicId);
 
@@ -27,6 +30,8 @@ public interface BookingService {
 
     BookingDetailResponse findByCode(String bookingCode);
 
+    Optional<BookingResponse> findActiveByShowtime(String showtimePublicId);
+
     Page<BookingSummaryResponse> findAll(
             BookingStatus status, Instant fromDate, Instant toDate, Pageable pageable);
 
@@ -34,6 +39,4 @@ public interface BookingService {
             Long userId, BookingStatus status, Instant fromDate, Instant toDate, Pageable pageable);
 
     BookingResponse changeStatus(String publicId, BookingStatus targetStatus);
-
-    com.lorafilm.booking.payment.dto.PaymentResponseDto initiatePayment(String publicId, com.lorafilm.booking.payment.dto.InitiatePaymentRequest request);
 }

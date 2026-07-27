@@ -11,6 +11,7 @@ import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -39,7 +40,15 @@ public class RedisLockServiceImpl implements RedisLockService {
     @Override
     public boolean acquireHoldLocks(Long showtimeId, List<Long> seatIds, String lockOwner, long ttlSeconds) {
         List<String> keys = buildSeatLockKeys(showtimeId, seatIds);
-        Long result = redisTemplate.execute(holdScript, keys, lockOwner, String.valueOf(ttlSeconds));
+        Long result;
+        try {
+            result = redisTemplate.execute(holdScript, keys, lockOwner, String.valueOf(ttlSeconds));
+        } catch (RuntimeException unavailable) {
+            // Redis is an optional contention reducer.  MySQL uniqueness remains
+            // the authority when Redis is down.
+            log.warn("Redis unavailable during Booking creation; continuing with DB uniqueness", unavailable);
+            return true;
+        }
         boolean success = result != null && result == 1L;
         if (success) {
             bookingMetricsManager.incrementRedisLockSuccess();
@@ -53,12 +62,22 @@ public class RedisLockServiceImpl implements RedisLockService {
     @Override
     public void releaseLocks(Long showtimeId, List<Long> seatIds, String lockOwner) {
         List<String> keys = buildSeatLockKeys(showtimeId, seatIds);
-        redisTemplate.execute(releaseScript, keys, lockOwner);
+        try {
+            redisTemplate.execute(releaseScript, keys, lockOwner);
+        } catch (RuntimeException releaseFailure) {
+            log.warn("Redis lock cleanup failed after the DB section completed", releaseFailure);
+        }
     }
 
     @Override
     public boolean acquireSingleLock(String lockKey, String lockOwner, long ttlSeconds) {
-        Long result = redisTemplate.execute(holdScript, List.of(lockKey), lockOwner, String.valueOf(ttlSeconds));
+        Long result;
+        try {
+            result = redisTemplate.execute(holdScript, List.of(lockKey), lockOwner, String.valueOf(ttlSeconds));
+        } catch (RuntimeException unavailable) {
+            log.warn("Redis unavailable during short Booking lock", unavailable);
+            return true;
+        }
         boolean success = result != null && result == 1L;
         if (success) {
             bookingMetricsManager.incrementRedisLockSuccess();
@@ -70,18 +89,18 @@ public class RedisLockServiceImpl implements RedisLockService {
 
     @Override
     public void releaseSingleLock(String lockKey, String lockOwner) {
-        redisTemplate.execute(releaseScript, List.of(lockKey), lockOwner);
+        try {
+            redisTemplate.execute(releaseScript, List.of(lockKey), lockOwner);
+        } catch (RuntimeException releaseFailure) {
+            log.warn("Redis single-lock cleanup failed", releaseFailure);
+        }
     }
 
     @Override
     public boolean extendLockTtl(Long showtimeId, Long seatId, String lockOwner, long newTtlSeconds) {
-        String key = "seat-lock:" + showtimeId + ":" + seatId;
-        Boolean exists = redisTemplate.hasKey(key);
-        if (Boolean.TRUE.equals(exists)) {
-            return Boolean.TRUE.equals(redisTemplate.expire(key, java.time.Duration.ofSeconds(newTtlSeconds)));
-        } else {
-            return acquireSingleLock(key, lockOwner, newTtlSeconds);
-        }
+        // Long-lived reservation lifetime is database-owned.  This method is
+        // retained only for binary compatibility with deprecated callers.
+        return false;
     }
 
     private List<String> buildSeatLockKeys(Long showtimeId, List<Long> seatIds) {
@@ -89,6 +108,7 @@ public class RedisLockServiceImpl implements RedisLockService {
         for (Long seatId : seatIds) {
             keys.add("seat-lock:" + showtimeId + ":" + seatId);
         }
+        keys.sort(Comparator.naturalOrder());
         return keys;
     }
 }

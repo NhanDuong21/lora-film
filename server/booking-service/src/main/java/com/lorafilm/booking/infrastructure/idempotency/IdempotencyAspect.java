@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -31,6 +32,7 @@ public class IdempotencyAspect {
 
     private static final Logger log = LoggerFactory.getLogger(IdempotencyAspect.class);
     private static final String IDEMPOTENCY_HEADER = "Idempotency-Key";
+    private static final long PROCESSING_LEASE_SECONDS = 120;
 
     private final BookingIdempotencyKeyRepository idempotencyKeyRepository;
     private final SecurityContextService securityContextService;
@@ -77,16 +79,28 @@ public class IdempotencyAspect {
         String requestHash = computeRequestHash(joinPoint.getArgs());
 
         // Check database
-        Optional<BookingIdempotencyKey> existingOpt = idempotencyKeyRepository.findByIdempotencyKey(key);
+        Instant now = Instant.now();
+        Optional<BookingIdempotencyKey> existingOpt =
+                idempotencyKeyRepository.findByUserIdAndEndpointAndIdempotencyKey(userId, endpoint, key);
         if (existingOpt.isPresent()) {
             BookingIdempotencyKey record = existingOpt.get();
-            if (record.getExpiresAt().isBefore(Instant.now())) {
+            if (record.getExpiresAt().isBefore(now)) {
                 idempotencyKeyRepository.delete(record);
             } else {
-                if (record.getStatus() == IdempotencyStatus.PROCESSING) {
-                    throw new BusinessException("DUPLICATE_REQUEST", "Request is already in progress");
+                if (!requestHash.equals(record.getRequestHash())) {
+                    throw new BusinessException("IDEMPOTENCY_PAYLOAD_CONFLICT",
+                            "The idempotency key was reused with a different request payload",
+                            HttpStatus.CONFLICT);
                 }
-                if (record.getStatus() == IdempotencyStatus.COMPLETED) {
+                if (record.getStatus() == IdempotencyStatus.PROCESSING) {
+                    if (record.getLockedUntil() == null || record.getLockedUntil().isAfter(now)) {
+                        throw new BusinessException("DUPLICATE_REQUEST", "Request is already in progress");
+                    }
+                    // A crashed request may be retried only after its processing lease
+                    // expires. The scoped DB unique key still arbitrates concurrent claims.
+                    idempotencyKeyRepository.delete(record);
+                    idempotencyKeyRepository.flush();
+                } else if (record.getStatus() == IdempotencyStatus.COMPLETED) {
                     log.info("Idempotency match found for key: {}. Returning cached response.", key);
                     MethodSignature signature = (MethodSignature) joinPoint.getSignature();
                     Class<?> returnType = signature.getReturnType();
@@ -107,9 +121,10 @@ public class IdempotencyAspect {
                     } else {
                         return objectMapper.readValue(record.getResponseBody(), returnType);
                     }
+                } else {
+                    // If status is FAILED, we let it retry by deleting it.
+                    idempotencyKeyRepository.delete(record);
                 }
-                // If status is FAILED, we let it retry by deleting it
-                idempotencyKeyRepository.delete(record);
             }
         }
 
@@ -120,8 +135,16 @@ public class IdempotencyAspect {
         newRecord.setUserId(userId);
         newRecord.setEndpoint(endpoint);
         newRecord.setStatus(IdempotencyStatus.PROCESSING);
-        newRecord.setExpiresAt(Instant.now().plusSeconds(idempotent.expireInSeconds()));
-        newRecord = idempotencyKeyRepository.saveAndFlush(newRecord);
+        newRecord.setLockedUntil(now.plusSeconds(PROCESSING_LEASE_SECONDS));
+        newRecord.setExpiresAt(now.plusSeconds(idempotent.expireInSeconds()));
+        try {
+            newRecord = idempotencyKeyRepository.saveAndFlush(newRecord);
+        } catch (DataIntegrityViolationException concurrentClaim) {
+            throw new BusinessException(
+                    "DUPLICATE_REQUEST",
+                    "Another request already claimed this scoped idempotency key",
+                    HttpStatus.CONFLICT);
+        }
 
         Object result;
         try {
@@ -150,12 +173,36 @@ public class IdempotencyAspect {
                 newRecord.setResponseStatus(HttpStatus.NO_CONTENT.value());
             }
             newRecord.setStatus(IdempotencyStatus.COMPLETED);
+            newRecord.setLockedUntil(null);
+            newRecord.setResourcePublicId(extractResourcePublicId(result));
             idempotencyKeyRepository.save(newRecord);
         } catch (Exception ex) {
             log.error("Failed to update idempotency key status to COMPLETED", ex);
         }
 
         return result;
+    }
+
+    private String extractResourcePublicId(Object result) {
+        Object body = result instanceof ResponseEntity<?> responseEntity
+                ? responseEntity.getBody() : result;
+        if (body instanceof com.lorafilm.booking.common.response.ApiResponse<?> apiResponse) {
+            body = apiResponse.getData();
+        }
+        if (body == null) {
+            return null;
+        }
+        try {
+            Object value = body.getClass().getMethod("publicId").invoke(body);
+            return value instanceof String publicId ? publicId : null;
+        } catch (ReflectiveOperationException ignored) {
+            try {
+                Object value = body.getClass().getMethod("getPublicId").invoke(body);
+                return value instanceof String publicId ? publicId : null;
+            } catch (ReflectiveOperationException noPublicIdentity) {
+                return null;
+            }
+        }
     }
 
     private String computeRequestHash(Object[] args) {
