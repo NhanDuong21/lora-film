@@ -4,6 +4,7 @@ import { Clock, AlertTriangle, ChevronRight, Search, ShieldCheck, Check, Info } 
 import { getBookingDetails, cancelBooking } from '../services/bookingService';
 import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 import BookingStepper from '../components/BookingStepper';
+import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
 import axios from 'axios';
 
 export default function BookingCheckoutPage() {
@@ -37,6 +38,13 @@ export default function BookingCheckoutPage() {
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
 
+  // Loyalty Rewards / Score Redeem state
+  const [userScore, setUserScore] = useState(null);
+  const [pointsToRedeem, setPointsToRedeem] = useState('');
+  const [redeemPreview, setRedeemPreview] = useState(null);
+  const [redeemLoading, setRedeemLoading] = useState(false);
+  const [redeemError, setRedeemError] = useState(null);
+
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(null);
 
@@ -67,6 +75,15 @@ export default function BookingCheckoutPage() {
 
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
+
+      try {
+        const scoreRes = await scoreCustomerService.getScoreBalance();
+        if (scoreRes && scoreRes.data) {
+          setUserScore(scoreRes.data);
+        }
+      } catch {
+        setUserScore(null);
+      }
     } catch (err) {
       setError(err.message || err.detail || "Không thể tải thông tin đặt vé.");
     } finally {
@@ -179,6 +196,55 @@ export default function BookingCheckoutPage() {
     }
   };
 
+  // Handle loyalty rewards redemption
+  const handleApplyRedeem = async () => {
+    const pts = parseInt(pointsToRedeem, 10);
+    if (!pts || isNaN(pts) || pts <= 0) {
+      setRedeemError('Vui lòng nhập số điểm hợp lệ.');
+      return;
+    }
+    const avail = userScore ? (userScore.currentPoints - (userScore.heldPoints || 0)) : 0;
+    if (pts > avail) {
+      setRedeemError('Số điểm vượt quá số dư khả dụng.');
+      return;
+    }
+    setRedeemLoading(true);
+    setRedeemError(null);
+    try {
+      const res = await scoreCustomerService.redeemPreview({
+        bookingId: parseInt(bookingId, 10),
+        points: pts
+      });
+      if (res && res.data && res.data.eligible) {
+        setRedeemPreview(res.data);
+      } else {
+        setRedeemError(res?.data?.message || 'Không đủ điều kiện đổi điểm cho đơn hàng này.');
+        setRedeemPreview(null);
+      }
+    } catch (err) {
+      setRedeemError(err?.response?.data?.message || err?.message || 'Lỗi khi kiểm tra đổi điểm.');
+      setRedeemPreview(null);
+    } finally {
+      setRedeemLoading(false);
+    }
+  };
+
+  const handleCancelRedeem = () => {
+    setPointsToRedeem('');
+    setRedeemPreview(null);
+    setRedeemError(null);
+  };
+
+  // Calculate effective total amount after applying reward discount
+  const effectiveFinalAmount = useMemo(() => {
+    if (!booking) return 0;
+    let total = booking.finalAmount || 0;
+    if (redeemPreview && redeemPreview.discountAmount) {
+      total = Math.max(0, total - redeemPreview.discountAmount);
+    }
+    return total;
+  }, [booking, redeemPreview]);
+
   // Simulate payment status
   const handleSimulatePayment = async (success = true) => {
     if (!termsAgreed && success) {
@@ -190,7 +256,8 @@ export default function BookingCheckoutPage() {
       // Initiate payment simulation on mock controller
       const endpoint = success ? '/api/mock/payment/success' : '/api/mock/payment/fail';
       await axios.post(endpoint, {
-        bookingCode: booking.bookingCode
+        bookingCode: booking.bookingCode,
+        redeemedPoints: redeemPreview ? redeemPreview.requestedPoints : 0
       });
 
       // Redirect accordingly
@@ -392,6 +459,119 @@ export default function BookingCheckoutPage() {
             ) : (
               /* Step 4: Payment Placeholder */
               <div className="space-y-8">
+                {/* Loyalty Redeem Section */}
+                {userScore && (userScore.currentPoints - (userScore.heldPoints || 0)) > 0 && (
+                  <div className="bg-gradient-to-r from-amber-950/30 to-zinc-900/60 border border-amber-500/30 rounded-3xl p-6 md:p-8 space-y-5 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+                    <div className="flex items-center justify-between flex-wrap gap-4 border-b border-amber-500/20 pb-4">
+                      <div>
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-wider mb-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          Loyalty Rewards
+                        </div>
+                        <h2 className="text-lg font-black text-white tracking-wide">Đổi Điểm Thưởng Lấy Ưu Đãi</h2>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-zinc-400 font-bold uppercase block">Số dư khả dụng</span>
+                        <span className="text-xl font-black text-amber-400">
+                          {(userScore.currentPoints - (userScore.heldPoints || 0)).toLocaleString('vi-VN')} <span className="text-xs">điểm</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {!redeemPreview ? (
+                      <div className="space-y-4">
+                        <p className="text-xs text-zinc-300 font-medium leading-relaxed">
+                          Sử dụng điểm tích lũy để giảm trực tiếp vào tổng hóa đơn đặt vé (Tỷ lệ quy đổi: <strong className="text-amber-400">1 điểm = 1,000đ</strong>).
+                        </p>
+                        
+                        {/* Quick Preset Buttons */}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {[10, 20, 50, 100].map(preset => {
+                            const avail = userScore.currentPoints - (userScore.heldPoints || 0);
+                            if (avail >= preset) {
+                              return (
+                                <button
+                                  key={preset}
+                                  type="button"
+                                  onClick={() => {
+                                    setPointsToRedeem(preset.toString());
+                                    setRedeemError(null);
+                                  }}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                                    pointsToRedeem === preset.toString()
+                                      ? 'bg-amber-500 border-amber-400 text-black font-black shadow-md shadow-amber-500/20'
+                                      : 'bg-zinc-800/80 border-zinc-700 text-zinc-300 hover:border-amber-500/50 hover:text-white'
+                                  }`}
+                                >
+                                  {preset} điểm (-{(preset * 1000).toLocaleString('vi-VN')}đ)
+                                </button>
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="number"
+                              placeholder="Nhập số điểm muốn đổi..."
+                              value={pointsToRedeem}
+                              onChange={(e) => {
+                                setPointsToRedeem(e.target.value);
+                                setRedeemError(null);
+                              }}
+                              min="1"
+                              max={userScore.currentPoints - (userScore.heldPoints || 0)}
+                              className="w-full bg-zinc-900/90 border border-zinc-700/80 rounded-2xl px-4 py-3.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500 font-bold transition-all"
+                            />
+                            {pointsToRedeem && (
+                              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-amber-400 font-black">
+                                -{(parseInt(pointsToRedeem, 10) * 1000 || 0).toLocaleString('vi-VN')}đ
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleApplyRedeem}
+                            disabled={!pointsToRedeem || redeemLoading}
+                            className="px-6 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-black font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                          >
+                            {redeemLoading ? <span>Đang kiểm tra...</span> : <span>Áp dụng</span>}
+                          </button>
+                        </div>
+
+                        {redeemError && (
+                          <div className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-2.5 rounded-xl flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
+                            <span>{redeemError}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 font-black">
+                            ✓
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-white">Đã áp dụng {redeemPreview.requestedPoints} điểm thưởng</div>
+                            <div className="text-[11px] text-amber-400 font-bold mt-0.5">Tiết kiệm ngay {(redeemPreview.discountAmount || 0).toLocaleString('vi-VN')}đ</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCancelRedeem}
+                          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-bold rounded-xl border border-zinc-700 transition-all cursor-pointer"
+                        >
+                          Hủy dùng điểm
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Simulated Payment Methods */}
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
@@ -557,6 +737,12 @@ export default function BookingCheckoutPage() {
                   <span>-{formatCurrency(booking.promotionDiscount)}</span>
                 </div>
               )}
+              {redeemPreview && redeemPreview.discountAmount > 0 && (
+                <div className="flex justify-between items-center text-amber-400 font-bold bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                  <span>Đổi điểm thưởng ({redeemPreview.requestedPoints} điểm):</span>
+                  <span>-{formatCurrency(redeemPreview.discountAmount)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-zinc-500 text-[10px] pt-1">
                 <span>Thuế GTGT (VAT) đã bao gồm:</span>
                 <span>10%</span>
@@ -570,7 +756,7 @@ export default function BookingCheckoutPage() {
                 <span className="text-[9px] text-brand-orange/80 font-bold uppercase">Đã bao gồm VAT</span>
               </div>
               <span className="text-2xl md:text-3xl font-black text-brand-orange tracking-tight">
-                {formatCurrency(booking.finalAmount)}
+                {formatCurrency(effectiveFinalAmount)}
               </span>
             </div>
 

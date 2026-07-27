@@ -49,15 +49,19 @@ public class MembershipTier {
 
     public MembershipTier(Integer id, String tierCode, String tierName, Integer minAccumulatedPoints, BigDecimal earningRate, Integer priority, Boolean isActive, String description, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
-        this.tierCode = tierCode;
+        this.tierCode = tierCode != null ? tierCode : (tierName != null ? tierName.trim().toUpperCase().replace(" ", "_") : null);
         this.tierName = tierName;
         this.minAccumulatedPoints = minAccumulatedPoints;
         this.earningRate = earningRate;
-        this.priority = priority;
+        this.priority = priority != null ? priority : 10;
         this.isActive = isActive != null ? isActive : true;
         this.description = description;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+    }
+
+    public MembershipTier(Integer id, String tierName, Integer minAccumulatedPoints, BigDecimal earningRate, String description, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this(id, tierName != null ? tierName.trim().toUpperCase().replace(" ", "_") : null, tierName, minAccumulatedPoints, earningRate, 10, true, description, createdAt, updatedAt);
     }
 
     public Integer getId() {
@@ -90,6 +94,14 @@ public class MembershipTier {
 
     public void setMinAccumulatedPoints(Integer minAccumulatedPoints) {
         this.minAccumulatedPoints = minAccumulatedPoints;
+    }
+
+    public Integer getMinPoints() {
+        return minAccumulatedPoints;
+    }
+
+    public void setMinPoints(Integer minPoints) {
+        this.minAccumulatedPoints = minPoints;
     }
 
     public BigDecimal getEarningRate() {
@@ -150,7 +162,7 @@ public class MembershipTier {
         private String tierName;
         private Integer minAccumulatedPoints;
         private BigDecimal earningRate;
-        private Integer priority;
+        private Integer priority = 10;
         private Boolean isActive = true;
         private String description;
         private LocalDateTime createdAt;
@@ -168,11 +180,19 @@ public class MembershipTier {
 
         public MembershipTierBuilder tierName(String tierName) {
             this.tierName = tierName;
+            if (this.tierCode == null && tierName != null) {
+                this.tierCode = tierName.trim().toUpperCase().replace(" ", "_");
+            }
             return this;
         }
 
         public MembershipTierBuilder minAccumulatedPoints(Integer minAccumulatedPoints) {
             this.minAccumulatedPoints = minAccumulatedPoints;
+            return this;
+        }
+
+        public MembershipTierBuilder minPoints(Integer minPoints) {
+            this.minAccumulatedPoints = minPoints;
             return this;
         }
 

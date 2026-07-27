@@ -22,6 +22,11 @@ const scoreCustomerService = {
   getMembershipTiers: async () => {
     const response = await apiClient.get(TIERS_API_URL);
     return response.data;
+  },
+
+  redeemPreview: async (data) => {
+    const response = await apiClient.post(`${SCORE_API_URL}/redeem-preview`, data);
+    return response.data;
   }
 };
 

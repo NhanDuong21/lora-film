@@ -28,9 +28,9 @@ public class MembershipTierServiceImpl implements MembershipTierService {
     @Transactional
     public void seedDefaultTiers() {
         if (membershipTierRepository.count() == 0) {
-            membershipTierRepository.save(new MembershipTier(null, "SILVER", "Silver", 0, new BigDecimal("0.05"), 1, true, "Silver membership tier", null, null));
-            membershipTierRepository.save(new MembershipTier(null, "GOLD", "Gold", 400, new BigDecimal("0.07"), 2, true, "Gold membership tier", null, null));
-            membershipTierRepository.save(new MembershipTier(null, "DIAMOND", "Diamond", 1000, new BigDecimal("0.10"), 3, true, "Diamond membership tier", null, null));
+            membershipTierRepository.save(new MembershipTier(null, "SILVER", "SILVER", 0, new BigDecimal("0.05"), 1, true, "Silver membership tier", null, null));
+            membershipTierRepository.save(new MembershipTier(null, "GOLD", "GOLD", 400, new BigDecimal("0.07"), 2, true, "Gold membership tier", null, null));
+            membershipTierRepository.save(new MembershipTier(null, "DIAMOND", "DIAMOND", 1000, new BigDecimal("0.10"), 3, true, "Diamond membership tier", null, null));
         }
     }
 

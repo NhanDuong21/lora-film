@@ -9,7 +9,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "score_history")
+@Table(name = "score_history", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_transaction_uuid", columnNames = "transaction_uuid"),
+        @UniqueConstraint(name = "uk_history_event", columnNames = "event_id"),
+        @UniqueConstraint(name = "uk_history_idempotency", columnNames = "idempotency_key"),
+        @UniqueConstraint(name = "uk_history_request", columnNames = "request_id")
+})
 public class ScoreHistory {
 
     @Id
@@ -17,7 +22,7 @@ public class ScoreHistory {
     private Long id;
 
     @Column(name = "transaction_uuid", nullable = false, length = 36, columnDefinition = "CHAR(36)")
-    private String transactionUuid;
+    private String transactionUuid = java.util.UUID.randomUUID().toString();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -124,6 +129,16 @@ public class ScoreHistory {
     private LocalDateTime createdAt;
 
     public ScoreHistory() {
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.transactionUuid == null) {
+            this.transactionUuid = java.util.UUID.randomUUID().toString();
+        }
+        if (this.occurredAt == null) {
+            this.occurredAt = java.time.LocalDateTime.now();
+        }
     }
 
     // Getters and Setters
@@ -439,7 +454,7 @@ public class ScoreHistory {
 
     public static class ScoreHistoryBuilder {
         private Long id;
-        private String transactionUuid;
+        private String transactionUuid = java.util.UUID.randomUUID().toString();
         private UserScore userScore;
         private Long bookingId;
         private Long holdId;
@@ -650,6 +665,11 @@ public class ScoreHistory {
 
         public ScoreHistoryBuilder occurredAt(LocalDateTime occurredAt) {
             this.occurredAt = occurredAt;
+            return this;
+        }
+
+        public ScoreHistoryBuilder outstandingPoints(Integer outstandingPoints) {
+            this.outstandingAfter = outstandingPoints;
             return this;
         }
 

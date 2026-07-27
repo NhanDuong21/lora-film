@@ -29,4 +29,22 @@ public interface MembershipTierRepository extends JpaRepository<MembershipTier, 
     Optional<MembershipTier> findFirstByIsActiveTrueAndMinAccumulatedPointsGreaterThanOrderByMinAccumulatedPointsAsc(Integer accumulatedPoints);
 
     Optional<MembershipTier> findFirstByIsActiveTrueOrderByMinAccumulatedPointsAsc();
+
+    Optional<MembershipTier> findFirstByOrderByMinAccumulatedPointsAsc();
+
+    Optional<MembershipTier> findFirstByMinAccumulatedPointsLessThanEqualOrderByMinAccumulatedPointsDesc(Integer accumulatedPoints);
+
+    Optional<MembershipTier> findFirstByMinAccumulatedPointsGreaterThanOrderByMinAccumulatedPointsAsc(Integer accumulatedPoints);
+
+    default Optional<MembershipTier> findFirstByOrderByMinPointsAsc() {
+        return findFirstByOrderByMinAccumulatedPointsAsc();
+    }
+
+    default Optional<MembershipTier> findFirstByMinPointsLessThanEqualOrderByMinPointsDesc(Integer points) {
+        return findFirstByMinAccumulatedPointsLessThanEqualOrderByMinAccumulatedPointsDesc(points);
+    }
+
+    default Optional<MembershipTier> findFirstByMinPointsGreaterThanOrderByMinPointsAsc(Integer points) {
+        return findFirstByMinAccumulatedPointsGreaterThanOrderByMinAccumulatedPointsAsc(points);
+    }
 }
