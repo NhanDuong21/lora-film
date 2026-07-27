@@ -2651,7 +2651,6 @@ Recommended metrics:
 - Global Exception Handling
 - Validation using Jakarta Validation
 - OpenAPI 3 Documentation
-- Flyway for Database Migration
 
 ---
 

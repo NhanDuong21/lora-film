@@ -2453,7 +2453,6 @@ UPLOAD_DIRECTORY
 - Repository Pattern
 - Global Exception Handler
 - Bean Validation
-- Flyway Migration
 - OpenAPI 3
 
 ---
