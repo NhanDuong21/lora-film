@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Check, AlertCircle, Coffee, DollarSign } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Check, AlertCircle, Coffee } from 'lucide-react';
 import apiClient from "@/services/apiClient";
 
 export default function AdminConcessionInventoryPage() {
@@ -42,6 +42,7 @@ export default function AdminConcessionInventoryPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchItems();
   }, [fetchItems]);
 
@@ -88,7 +89,7 @@ export default function AdminConcessionInventoryPage() {
     try {
       if (editingItem) {
         // Update product
-        const response = await apiClient.put(`/api/admin/foods/${editingItem.id}`, {
+        await apiClient.put(`/api/admin/foods/${editingItem.id}`, {
           ...editingItem,
           ...formState
         });

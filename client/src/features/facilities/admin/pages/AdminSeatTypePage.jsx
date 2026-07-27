@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import useAdminSeatTypes from '../hooks/useAdminSeatTypes';
-import { PlusCircle, Search, Edit } from 'lucide-react';
+import { Search, Edit } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState } from '@/components/common/ui/uiKit';
 
 export default function AdminSeatTypePage() {
   const { triggerToast } = useOutletContext() || {};
-  const { seatTypes, isLoading, error, fetchSeatTypes, createSeatType, updateSeatType } = useAdminSeatTypes(triggerToast);
+  const { seatTypes, isLoading, error, fetchSeatTypes, updateSeatType } = useAdminSeatTypes(triggerToast);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);

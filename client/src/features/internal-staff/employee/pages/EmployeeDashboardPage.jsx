@@ -6,7 +6,6 @@ export default function EmployeeDashboardPage() {
   const [result, setResult] = useState({ content: [] });
   const [state, setState] = useState({ loading: true, error: '' });
   const load = useCallback(async () => {
-    setState({ loading: true, error: '' });
     try {
       setResult(await getMyPayrolls({ page: 0, size: 6, sort: 'salaryMonth,desc' }) || { content: [] });
       setState({ loading: false, error: '' });
@@ -14,7 +13,12 @@ export default function EmployeeDashboardPage() {
       setState({ loading: false, error: error?.message || 'Không thể tải thông tin nhân viên.' });
     }
   }, []);
-  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setState(prev => ({ ...prev, loading: true, error: '' }));
+    load();
+  }, [load]);
 
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-zinc-950 p-6 text-white">

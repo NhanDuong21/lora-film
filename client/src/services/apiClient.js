@@ -36,6 +36,7 @@ const processQueue = (error, token = null) => {
         if (error) {
             prom.reject(error);
         } else {
+
             prom.resolve(token);
         }
     });
@@ -111,16 +112,15 @@ apiClient.interceptors.response.use(
             }
         }
 
-        // Return standard error data if available
+        // Preserve original AxiosError structure but attach standard response data
         if (error.response && error.response.data) {
             const responseData = error.response.data;
+            error.status = error.response.status;
             if (typeof responseData === "object") {
-                return Promise.reject({ ...responseData, status: error.response.status });
+                Object.assign(error, responseData);
+            } else {
+                error.message = String(responseData) || error.message;
             }
-            return Promise.reject({
-                message: String(responseData),
-                status: error.response.status
-            });
         }
         return Promise.reject(error);
     }
