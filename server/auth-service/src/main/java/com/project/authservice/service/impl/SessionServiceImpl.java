@@ -7,7 +7,6 @@ import com.project.authservice.exception.ResourceNotFoundException;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.repository.UserSessionRepository;
 import com.project.authservice.service.SessionService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,7 +14,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class SessionServiceImpl implements SessionService {
 
     private final UserSessionRepository userSessionRepository;
@@ -64,5 +62,9 @@ public class SessionServiceImpl implements SessionService {
                 .expiresAt(session.getExpiresAt())
                 .isActive(session.getIsActive())
                 .build();
+    }
+    public SessionServiceImpl(UserSessionRepository userSessionRepository, AccountRepository accountRepository) {
+        this.userSessionRepository = userSessionRepository;
+        this.accountRepository = accountRepository;
     }
 }

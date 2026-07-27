@@ -20,14 +20,11 @@ import com.project.authservice.service.AuthService;
 import com.project.authservice.service.VerificationService;
 
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("/api/auth")
 public class AuthController {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthController.class);
 	private final AuthService authService;
 	private final VerificationService verificationService;
 	private final com.project.authservice.util.JwtUtil jwtUtil;
@@ -148,4 +145,9 @@ public class AuthController {
 		).getBean(com.project.authservice.service.AccountService.class)).getAccountByEmail(userDetails.getUsername());
 		return ResponseEntity.ok(ApiResponse.success("Success", account));
 	}
+    public AuthController(AuthService authService, VerificationService verificationService, com.project.authservice.util.JwtUtil jwtUtil) {
+        this.authService = authService;
+        this.verificationService = verificationService;
+        this.jwtUtil = jwtUtil;
+    }
 }

@@ -4,19 +4,16 @@ import com.project.authservice.common.ApiResponse;
 import com.project.authservice.dto.AccountDto;
 import com.project.authservice.enums.AccountStatus;
 import com.project.authservice.service.AccountService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/accounts")
-@RequiredArgsConstructor
 public class AccountController {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AccountController.class);
 
     private final AccountService accountService;
 
@@ -50,5 +47,8 @@ public class AccountController {
         log.info("Update account role called: id={}, roleId={}", id, roleId);
         AccountDto account = accountService.updateAccountRole(id, roleId);
         return ResponseEntity.ok(ApiResponse.success("Role updated successfully", account));
+    }
+    public AccountController(AccountService accountService) {
+        this.accountService = accountService;
     }
 }

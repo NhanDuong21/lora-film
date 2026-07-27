@@ -5,7 +5,6 @@ import com.project.authservice.entity.Permission;
 import com.project.authservice.exception.ResourceNotFoundException;
 import com.project.authservice.repository.PermissionRepository;
 import com.project.authservice.service.PermissionService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,7 +12,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class PermissionServiceImpl implements PermissionService {
 
     private final PermissionRepository permissionRepository;
@@ -75,5 +73,10 @@ public class PermissionServiceImpl implements PermissionService {
                 .permissionCode(permission.getPermissionCode())
                 .description(permission.getDescription())
                 .build();
+    }
+    public PermissionServiceImpl(PermissionRepository permissionRepository, com.project.authservice.service.AuditLogService auditLogService, jakarta.servlet.http.HttpServletRequest request) {
+        this.permissionRepository = permissionRepository;
+        this.auditLogService = auditLogService;
+        this.request = request;
     }
 }

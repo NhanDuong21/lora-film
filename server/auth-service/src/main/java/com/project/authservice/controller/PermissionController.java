@@ -3,19 +3,16 @@ package com.project.authservice.controller;
 import com.project.authservice.common.ApiResponse;
 import com.project.authservice.dto.PermissionDto;
 import com.project.authservice.service.PermissionService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/permissions")
-@RequiredArgsConstructor
 public class PermissionController {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PermissionController.class);
 
     private final PermissionService permissionService;
 
@@ -53,5 +50,8 @@ public class PermissionController {
         log.info("Delete permission called: {}", id);
         permissionService.deletePermission(id);
         return ResponseEntity.ok(ApiResponse.success("Permission deleted successfully", null));
+    }
+    public PermissionController(PermissionService permissionService) {
+        this.permissionService = permissionService;
     }
 }

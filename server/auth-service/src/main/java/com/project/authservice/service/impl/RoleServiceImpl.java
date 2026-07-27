@@ -8,7 +8,6 @@ import com.project.authservice.exception.ResourceNotFoundException;
 import com.project.authservice.repository.PermissionRepository;
 import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.service.RoleService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +17,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class RoleServiceImpl implements RoleService {
 
     private final RoleRepository roleRepository;
@@ -113,5 +111,11 @@ public class RoleServiceImpl implements RoleService {
                 .description(role.getDescription())
                 .permissions(permissions)
                 .build();
+    }
+    public RoleServiceImpl(RoleRepository roleRepository, PermissionRepository permissionRepository, com.project.authservice.service.AuditLogService auditLogService, jakarta.servlet.http.HttpServletRequest request) {
+        this.roleRepository = roleRepository;
+        this.permissionRepository = permissionRepository;
+        this.auditLogService = auditLogService;
+        this.request = request;
     }
 }

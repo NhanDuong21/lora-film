@@ -3,19 +3,16 @@ package com.project.authservice.controller;
 import com.project.authservice.common.ApiResponse;
 import com.project.authservice.dto.RoleDto;
 import com.project.authservice.service.RoleService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/roles")
-@RequiredArgsConstructor
 public class RoleController {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RoleController.class);
 
     private final RoleService roleService;
 
@@ -53,5 +50,8 @@ public class RoleController {
         log.info("Delete role called: {}", id);
         roleService.deleteRole(id);
         return ResponseEntity.ok(ApiResponse.success("Role deleted successfully", null));
+    }
+    public RoleController(RoleService roleService) {
+        this.roleService = roleService;
     }
 }

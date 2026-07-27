@@ -41,9 +41,6 @@ public class CredentialRevocationService {
     public void revoke(UserSession session) {
         blacklist(session);
         session.setIsActive(false);
-        if (session.getRefreshToken() != null) {
-            session.getRefreshToken().setIsRevoked(true);
-        }
         sessionRepository.save(session);
     }
 

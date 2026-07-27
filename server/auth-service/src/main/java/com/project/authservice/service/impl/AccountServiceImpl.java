@@ -11,14 +11,12 @@ import com.project.authservice.repository.UserSessionRepository;
 import com.project.authservice.service.AccountService;
 import com.project.authservice.service.AuditLogService;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
@@ -93,5 +91,12 @@ public class AccountServiceImpl implements AccountService {
                 .createdAt(account.getCreatedAt())
                 .updatedAt(account.getUpdatedAt())
                 .build();
+    }
+    public AccountServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository, AuditLogService auditLogService, HttpServletRequest servletRequest, UserSessionRepository userSessionRepository) {
+        this.accountRepository = accountRepository;
+        this.roleRepository = roleRepository;
+        this.auditLogService = auditLogService;
+        this.servletRequest = servletRequest;
+        this.userSessionRepository = userSessionRepository;
     }
 }
