@@ -2,12 +2,14 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight, 
-  PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle 
+import {
+  User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight,
+  PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle, Award
 } from 'lucide-react';
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import CustomerBookingHistory from '@/features/booking/customer/components/CustomerBookingHistory';
+import useCustomerScore from '@/features/score/customer/hooks/useCustomerScore';
+import LoyaltyCenterPage from '@/features/score/customer/pages/LoyaltyCenterPage';
 
 const normalizeDateForInput = (value) => {
   if (!value) return '';
@@ -78,11 +80,10 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
     user?.avatarUrl || ''
   );
 
-  // Loyalty and spending states
-  // TODO: Connect to loyalty API
+  // Loyalty and spending states connected to Score Service API
+  const { scoreData } = useCustomerScore();
   const totalSpending = useMemo(() => user?.totalSpending ?? 0, [user]);
-  // TODO: Connect to loyalty API
-  const points = useMemo(() => user?.points ?? 0, [user]);
+  const points = useMemo(() => scoreData?.currentPoints ?? user?.points ?? 0, [scoreData, user]);
 
   // Modal / toggle states
   const [showToast, setShowToast] = useState(false);
@@ -116,18 +117,18 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
 
 
-  // Calculate membership progress milestones
-  // Milestones: 0 (Standard), 2.000.000 (Silver), 4.000.000 (Gold)
-  const membershipProgress = useMemo(() => {
-    const maxMilestone = 4000000;
-    return Math.min((totalSpending / maxMilestone) * 100, 100);
-  }, [totalSpending]);
-
+  // Calculate membership progress milestones from Score Service API
   const currentRank = useMemo(() => {
-    if (totalSpending >= 4000000) return 'Gold VIP';
-    if (totalSpending >= 2000000) return 'Silver VIP';
-    return 'Standard Member';
-  }, [totalSpending]);
+    return scoreData?.currentTier?.tierName || 'Silver Member';
+  }, [scoreData]);
+
+  const membershipProgress = useMemo(() => {
+    const currentMin = scoreData?.currentTier?.minAccumulatedPoints || 0;
+    const targetMin = scoreData?.nextTier?.minAccumulatedPoints || (currentMin + 400);
+    if (targetMin === currentMin) return 100;
+    const currentProgress = Math.max(0, (scoreData?.accumulatedPoints || 0) - currentMin);
+    return Math.min(100, Math.max(0, Math.round((currentProgress / (targetMin - currentMin)) * 100)));
+  }, [scoreData]);
 
   const showErrorNotice = message => {
     setErrorNotice({
@@ -378,6 +379,15 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     <span>Vàng (Gold)</span>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('loyalty')}
+                  className="w-full mt-4 bg-gradient-to-r from-amber-500/20 to-brand-orange/20 hover:from-amber-500/30 hover:to-brand-orange/30 text-amber-400 border border-amber-500/30 rounded-xl py-2.5 px-4 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Trung tâm Điểm thưởng & Hạng thẻ</span>
+                </button>
               </div>
             </div>
 
@@ -490,6 +500,19 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               >
                 <FileText className="w-4 h-4 shrink-0" />
                 <span>Chính Sách</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('loyalty')}
+                className={`flex-grow sm:flex-grow-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
+                  activeTab === 'loyalty'
+                    ? 'bg-brand-orange text-white shadow-md'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Award className="w-4 h-4 shrink-0" />
+                <span>Điểm Thưởng & Hạng Thẻ</span>
               </button>
             </div>
 
@@ -746,6 +769,12 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                 </div>
               )}
 
+              {/* TAB 6: Loyalty Center */}
+              {activeTab === 'loyalty' && (
+                <div className="-m-6 md:-m-8">
+                  <LoyaltyCenterPage />
+                </div>
+              )}
             </div>
 
           </div>

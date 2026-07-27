@@ -7,6 +7,7 @@ import BookingStepper from '../components/BookingStepper';
 import BookingCancellationModal from '../components/BookingCancellationModal';
 import BookingNoticeModal from '../components/BookingNoticeModal';
 import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
+import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
 import {
   createPaymentHandoff,
   getOrCreatePaymentAttemptKey
@@ -49,6 +50,7 @@ export default function BookingCheckoutPage() {
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
+  const [userScore, setUserScore] = useState(null);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(null);
@@ -80,6 +82,15 @@ export default function BookingCheckoutPage() {
 
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
+
+      try {
+        const scoreResponse = await scoreCustomerService.getScoreBalance();
+        setUserScore(scoreResponse?.data ?? scoreResponse ?? null);
+      } catch {
+        // Score Service is optional for checkout. Its outage must not prevent
+        // the customer from completing the current Booking.
+        setUserScore(null);
+      }
     } catch (err) {
       setError(getBookingErrorMessage(
         err,
@@ -356,6 +367,10 @@ export default function BookingCheckoutPage() {
     ?? booking.foodOrder?.totalAmount
     ?? booking.foodAmount
     ?? 0;
+  const availableScorePoints = Math.max(
+    0,
+    Number(userScore?.currentPoints || 0) - Number(userScore?.heldPoints || 0)
+  );
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
@@ -521,6 +536,29 @@ export default function BookingCheckoutPage() {
             ) : (
               /* Step 4: Payment Service handoff */
               <div className="space-y-8">
+                {availableScorePoints > 0 && (
+                  <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-r from-amber-950/30 to-zinc-900/60 p-6 md:p-8">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+                          Điểm thành viên
+                        </p>
+                        <h2 className="mt-1 text-lg font-black text-white">
+                          Bạn đang có {availableScorePoints.toLocaleString('vi-VN')} điểm khả dụng
+                        </h2>
+                      </div>
+                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-black uppercase text-amber-300">
+                        Đã đồng bộ Score Service
+                      </span>
+                    </div>
+                    <p className="mt-4 text-xs font-medium leading-relaxed text-zinc-400">
+                      Việc giữ và trừ điểm phải được Payment Service xác nhận cùng giao dịch.
+                      Tính năng dùng điểm tại checkout sẽ được mở khi tích hợp thanh toán hoàn tất;
+                      số tiền của đơn hiện tại vẫn do Booking Service quản lý.
+                    </p>
+                  </div>
+                )}
+
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Phương Thức Thanh Toán</h2>

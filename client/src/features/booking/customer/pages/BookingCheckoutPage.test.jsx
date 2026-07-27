@@ -15,6 +15,7 @@ import {
   createPaymentHandoff,
   getOrCreatePaymentAttemptKey
 } from '../services/paymentHandoffService';
+import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
 
 vi.mock('../services/bookingService', () => ({
   cancelBooking: vi.fn(),
@@ -33,6 +34,12 @@ vi.mock('../services/foodService', () => ({
 vi.mock('../services/paymentHandoffService', () => ({
   createPaymentHandoff: vi.fn(),
   getOrCreatePaymentAttemptKey: vi.fn()
+}));
+
+vi.mock('@/features/score/customer/services/scoreCustomerService', () => ({
+  default: {
+    getScoreBalance: vi.fn()
+  }
 }));
 
 vi.mock('../components/BookingStepper', () => ({
@@ -74,6 +81,12 @@ describe('BookingCheckoutPage cancellation', () => {
       finalAmount: 50000
     });
     getConcessions.mockResolvedValue([]);
+    scoreCustomerService.getScoreBalance.mockResolvedValue({
+      data: {
+        currentPoints: 100,
+        heldPoints: 0
+      }
+    });
     finalizeCheckout.mockResolvedValue({});
     cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
     getOrCreatePaymentAttemptKey.mockReturnValue('payment-attempt-key');
