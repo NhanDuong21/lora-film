@@ -14,12 +14,18 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class CloudinaryServiceImpl implements CloudinaryService {
 
     private static final Logger log = LoggerFactory.getLogger(CloudinaryServiceImpl.class);
+    private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024L * 1024L;
+    private static final Set<String> SUPPORTED_IMAGE_TYPES = Set.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp");
 
     private final Cloudinary cloudinary;
     private final String baseFolder;
@@ -48,8 +54,12 @@ public class CloudinaryServiceImpl implements CloudinaryService {
 
     @Override
     public MediaUploadResponse uploadImage(MultipartFile file, String type, String publicId) {
+        validateImage(file);
         if (cloudinary == null) {
-            throw new BusinessException("INTERNAL_SERVER_ERROR", "Failed to upload file to Cloudinary", HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(
+                    "CONCESSION_IMAGE_STORAGE_UNAVAILABLE",
+                    "Concession image storage is not configured",
+                    HttpStatus.SERVICE_UNAVAILABLE);
         }
         
         try {
@@ -83,6 +93,27 @@ public class CloudinaryServiceImpl implements CloudinaryService {
         } catch (IOException e) {
             log.error("Failed to upload image to Cloudinary", e);
             throw new BusinessException("VALIDATION_ERROR", "Invalid image format. Supported formats: JPG, PNG, WEBP", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void validateImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(
+                    "INVALID_CONCESSION_IMAGE",
+                    "The selected image file is empty",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (file.getSize() > MAX_IMAGE_SIZE_BYTES) {
+            throw new BusinessException(
+                    "INVALID_CONCESSION_IMAGE",
+                    "The selected image exceeds the 5 MB limit",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (!SUPPORTED_IMAGE_TYPES.contains(file.getContentType())) {
+            throw new BusinessException(
+                    "INVALID_CONCESSION_IMAGE",
+                    "Only JPG, PNG and WEBP images are supported",
+                    HttpStatus.BAD_REQUEST);
         }
     }
 }

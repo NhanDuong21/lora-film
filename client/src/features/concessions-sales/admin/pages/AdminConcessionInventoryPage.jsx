@@ -1,424 +1,513 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Check, AlertCircle, Coffee, DollarSign } from 'lucide-react';
-import apiClient from "@/services/apiClient";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Archive,
+  Coffee,
+  Image as ImageIcon,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  RotateCcw,
+  Search,
+  TriangleAlert
+} from 'lucide-react';
+import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
+import apiClient from '@/services/apiClient';
+import ConcessionArchiveModal from '../components/ConcessionArchiveModal';
+import ConcessionCatalogFormModal from '../components/ConcessionCatalogFormModal';
+
+const typeFilters = [
+  { value: 'ALL', label: 'Tất cả loại' },
+  { value: 'FOOD', label: 'Bắp & đồ ăn' },
+  { value: 'DRINK', label: 'Nước uống' },
+  { value: 'COMBO', label: 'Combo' }
+];
+
+const statusFilters = [
+  { value: 'ALL', label: 'Tất cả trạng thái' },
+  { value: 'SELLING', label: 'Đang bán' },
+  { value: 'PAUSED', label: 'Tạm dừng' },
+  { value: 'ARCHIVED', label: 'Đã lưu trữ' }
+];
+
+const typeLabels = {
+  FOOD: 'Bắp & đồ ăn',
+  DRINK: 'Nước uống',
+  COMBO: 'Combo'
+};
+
+const getStatus = item => {
+  if (item.deleted) return 'ARCHIVED';
+  if (item.active && item.sellable && !item.disabled) return 'SELLING';
+  return 'PAUSED';
+};
+
+const statusPresentation = {
+  SELLING: {
+    label: 'Đang bán',
+    className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
+    dotClassName: 'bg-emerald-400'
+  },
+  PAUSED: {
+    label: 'Tạm dừng',
+    className: 'border-amber-500/25 bg-amber-500/10 text-amber-300',
+    dotClassName: 'bg-amber-400'
+  },
+  ARCHIVED: {
+    label: 'Đã lưu trữ',
+    className: 'border-zinc-600 bg-zinc-800 text-zinc-400',
+    dotClassName: 'bg-zinc-500'
+  }
+};
+
+const typeClassNames = {
+  FOOD: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+  DRINK: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
+  COMBO: 'border-purple-500/30 bg-purple-500/10 text-purple-300'
+};
+
+const resolveImageUrl = imageUrl => {
+  if (!imageUrl) return '';
+  if (/^https?:\/\//i.test(imageUrl) || imageUrl.startsWith('/')) return imageUrl;
+  return '';
+};
+
+const getCatalogErrorMessage = (error, fallback) => {
+  const errorCode = error?.errorCode || error?.code || error?.response?.data?.errorCode;
+
+  const messages = {
+    CONCESSION_CODE_EXISTS: 'Mã sản phẩm này đã tồn tại. Vui lòng sử dụng một mã khác.',
+    CONCESSION_ARCHIVED: 'Sản phẩm đã được lưu trữ. Hãy khôi phục sản phẩm trước khi chỉnh sửa.',
+    CONCESSION_CODE_IMMUTABLE: 'Mã sản phẩm không thể thay đổi sau khi tạo.',
+    INVALID_CONCESSION_IMAGE: 'Ảnh không hợp lệ. Chỉ chấp nhận JPG, PNG hoặc WEBP, tối đa 5 MB.',
+    CONCESSION_IMAGE_STORAGE_UNAVAILABLE: 'Kho lưu trữ ảnh chưa được cấu hình. Hãy nhập đường dẫn ảnh HTTPS hoặc cấu hình Cloudinary rồi thử lại.',
+    VALIDATION_FAILED: 'Thông tin sản phẩm chưa hợp lệ. Vui lòng kiểm tra lại các trường bắt buộc.',
+    MALFORMED_REQUEST_BODY: 'Dữ liệu sản phẩm không đúng định dạng. Vui lòng thử lại.',
+    INTERNAL_SERVER_ERROR: 'Hệ thống chưa thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.'
+  };
+
+  if (messages[errorCode]) return messages[errorCode];
+  if (error?.code === 'ERR_NETWORK') {
+    return 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối và thử lại.';
+  }
+  return fallback;
+};
+
+const buildCatalogFormData = ({ payload, image }) => {
+  const formData = new FormData();
+  formData.append(
+    'item',
+    new Blob([JSON.stringify(payload)], { type: 'application/json' })
+  );
+  if (image) formData.append('image', image);
+  return formData;
+};
 
 export default function AdminConcessionInventoryPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
-
-  // Search & Filters
+  const [loadError, setLoadError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('ALL');
+  const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [editingItem, setEditingItem] = useState(undefined);
+  const [formOpen, setFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState(null);
+  const [notice, setNotice] = useState(null);
 
-  // Modal states
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  
-  // Form State
-  const [formState, setFormState] = useState({
-    code: '',
-    name: '',
-    type: 'FOOD',
-    price: 0,
-    imageUrl: '',
-    active: true,
-    sellable: true
-  });
-
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchItems = useCallback(async ({ background = false } = {}) => {
+    if (!background) setLoading(true);
+    setLoadError('');
     try {
       const response = await apiClient.get('/api/admin/foods');
-      // Format backend response
-      setItems(response.data.data || []);
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || "Không thể tải danh sách bắp nước.");
+      setItems(response?.data?.data || []);
+    } catch (error) {
+      setLoadError(getCatalogErrorMessage(
+        error,
+        'Không thể tải danh mục bắp nước. Vui lòng thử lại.'
+      ));
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // Remote catalog state is intentionally loaded once when the page is mounted.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchItems();
   }, [fetchItems]);
 
-  const showSuccess = (msg) => {
-    setSuccessMessage(msg);
-    setTimeout(() => setSuccessMessage(null), 3000);
-  };
+  const counts = useMemo(() => items.reduce((result, item) => {
+    const status = getStatus(item);
+    result[status] += 1;
+    return result;
+  }, { SELLING: 0, PAUSED: 0, ARCHIVED: 0 }), [items]);
 
-  const handleOpenAdd = () => {
-    setEditingItem(null);
-    setFormState({
-      code: '',
-      name: '',
-      type: 'FOOD',
-      price: 0,
-      imageUrl: '',
-      active: true,
-      sellable: true
+  const filteredItems = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLocaleLowerCase('vi-VN');
+
+    return items.filter(item => {
+      const matchesSearch = !normalizedSearch
+        || item.name?.toLocaleLowerCase('vi-VN').includes(normalizedSearch)
+        || item.code?.toLocaleLowerCase('vi-VN').includes(normalizedSearch);
+      const matchesType = selectedType === 'ALL' || item.type === selectedType;
+      const matchesStatus = selectedStatus === 'ALL' || getStatus(item) === selectedStatus;
+      return matchesSearch && matchesType && matchesStatus;
     });
-    setIsModalOpen(true);
+  }, [items, searchQuery, selectedStatus, selectedType]);
+
+  const openCreateModal = () => {
+    setEditingItem(undefined);
+    setFormOpen(true);
   };
 
-  const handleOpenEdit = (item) => {
+  const openEditModal = item => {
     setEditingItem(item);
-    setFormState({
-      code: item.code || '',
-      name: item.name || '',
-      type: item.type || 'FOOD',
-      price: item.price || 0,
-      imageUrl: item.imageUrl || '',
-      active: item.active ?? true,
-      sellable: item.sellable ?? true
-    });
-    setIsModalOpen(true);
+    setFormOpen(true);
   };
 
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    if (!formState.code || !formState.name || formState.price <= 0) {
-      alert("Vui lòng điền đầy đủ Mã, Tên và Giá bán hợp lệ!");
-      return;
-    }
+  const closeFormModal = () => {
+    if (saving) return;
+    setFormOpen(false);
+    setEditingItem(undefined);
+  };
 
+  const handleSave = async formValue => {
+    setSaving(true);
     try {
+      const formData = buildCatalogFormData(formValue);
+      const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+
       if (editingItem) {
-        // Update product
-        const response = await apiClient.put(`/api/admin/foods/${editingItem.id}`, {
-          ...editingItem,
-          ...formState
-        });
-        showSuccess("Cập nhật bắp nước thành công!");
+        await apiClient.put(`/api/admin/foods/${editingItem.id}`, formData, config);
       } else {
-        // Add product
-        await apiClient.post('/api/admin/foods', {
-          ...formState,
-          deleted: false,
-          disabled: false
-        });
-        showSuccess("Thêm bắp nước mới thành công!");
+        await apiClient.post('/api/admin/foods', formData, config);
       }
-      setIsModalOpen(false);
-      fetchItems();
-    } catch (err) {
-      alert("Lỗi lưu sản phẩm: " + (err.response?.data?.message || err.message));
+
+      setFormOpen(false);
+      setEditingItem(undefined);
+      await fetchItems({ background: true });
+      setNotice({
+        variant: 'success',
+        title: editingItem ? 'Đã cập nhật sản phẩm' : 'Đã thêm sản phẩm',
+        message: editingItem
+          ? 'Thông tin sản phẩm và trạng thái bán đã được cập nhật.'
+          : 'Sản phẩm mới đã được thêm vào danh mục bắp nước.'
+      });
+    } catch (error) {
+      setNotice({
+        variant: 'error',
+        title: 'Không thể lưu sản phẩm',
+        message: getCatalogErrorMessage(
+          error,
+          'Hệ thống chưa thể lưu sản phẩm. Vui lòng kiểm tra thông tin và thử lại.'
+        )
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm("Bạn có chắc chắn muốn ngừng kinh doanh / xóa sản phẩm này?")) return;
-
+  const handleArchive = async () => {
+    if (!archiveTarget) return;
+    setArchiving(true);
     try {
-      await apiClient.delete(`/api/admin/foods/${id}`);
-      showSuccess("Đã xóa/ngừng kinh doanh sản phẩm!");
-      fetchItems();
-    } catch (err) {
-      alert("Lỗi khi xóa: " + (err.response?.data?.message || err.message));
+      await apiClient.delete(`/api/admin/foods/${archiveTarget.id}`);
+      setArchiveTarget(null);
+      await fetchItems({ background: true });
+      setNotice({
+        variant: 'success',
+        title: 'Đã lưu trữ sản phẩm',
+        message: 'Sản phẩm đã ngừng bán và được chuyển vào danh sách đã lưu trữ.'
+      });
+    } catch (error) {
+      setNotice({
+        variant: 'error',
+        title: 'Không thể lưu trữ sản phẩm',
+        message: getCatalogErrorMessage(
+          error,
+          'Hệ thống chưa thể lưu trữ sản phẩm. Vui lòng thử lại.'
+        )
+      });
+    } finally {
+      setArchiving(false);
     }
   };
 
-  // Filtered Items
-  const filteredItems = items.filter(item => {
-    if (item.deleted) return false;
-    const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          item.code?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = selectedType === 'ALL' || item.type === selectedType;
-    return matchesSearch && matchesType;
-  });
+  const handleRestore = async item => {
+    setRestoringId(item.id);
+    try {
+      await apiClient.patch(`/api/admin/foods/${item.id}/restore`);
+      await fetchItems({ background: true });
+      setNotice({
+        variant: 'success',
+        title: 'Đã khôi phục sản phẩm',
+        message: 'Sản phẩm đã được khôi phục ở trạng thái tạm dừng. Hãy kiểm tra rồi bật bán khi sẵn sàng.'
+      });
+    } catch (error) {
+      setNotice({
+        variant: 'error',
+        title: 'Không thể khôi phục sản phẩm',
+        message: getCatalogErrorMessage(
+          error,
+          'Hệ thống chưa thể khôi phục sản phẩm. Vui lòng thử lại.'
+        )
+      });
+    } finally {
+      setRestoringId(null);
+    }
+  };
 
   return (
-    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6">
-      
-      {/* Header section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-800 pb-6 gap-4">
+    <div className="flex min-h-[400px] flex-1 flex-col space-y-6 overflow-auto bg-zinc-950 p-6 text-white md:p-8">
+      <header className="flex flex-col items-start justify-between gap-4 border-b border-zinc-800 pb-6 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">DANH MỤC BẮP NƯỚC</h1>
-          <p className="text-xs text-zinc-400 mt-1">Quản lý kho sản phẩm bán đi kèm vé cho khách hàng</p>
+          <h1 className="text-xl font-black uppercase tracking-wider text-white md:text-2xl">
+            Danh mục bắp nước
+          </h1>
+          <p className="mt-1 text-xs text-zinc-400">
+            Quản lý sản phẩm bán kèm, giá bán và trạng thái hiển thị cho khách hàng.
+          </p>
         </div>
         <button
-          onClick={handleOpenAdd}
-          className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-orange-500/20 active:scale-95"
+          type="button"
+          onClick={openCreateModal}
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-orange-500/20 transition-all hover:from-orange-600 hover:to-amber-600 active:scale-95"
         >
-          <Plus size={16} /> Thêm bắp nước
+          <Plus className="h-4 w-4" />
+          Thêm sản phẩm
         </button>
-      </div>
+      </header>
 
-      {/* Success Notification */}
-      {successMessage && (
-        <div className="bg-emerald-950/80 border border-emerald-500/30 text-emerald-200 px-5 py-4 rounded-2xl flex items-center gap-3 text-sm animate-pulse">
-          <Check size={18} className="text-emerald-400" />
-          <span>{successMessage}</span>
-        </div>
-      )}
+      <section className="grid gap-4 sm:grid-cols-3" aria-label="Tổng quan trạng thái sản phẩm">
+        {[
+          { label: 'Đang bán', value: counts.SELLING, color: 'text-emerald-400' },
+          { label: 'Tạm dừng', value: counts.PAUSED, color: 'text-amber-400' },
+          { label: 'Đã lưu trữ', value: counts.ARCHIVED, color: 'text-zinc-400' }
+        ].map(card => (
+          <div key={card.label} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 px-5 py-4">
+            <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{card.label}</p>
+            <p className={`mt-1 text-2xl font-black ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </section>
 
-      {/* Filter and search bar */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/40">
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Tìm kiếm bắp nước (tên hoặc mã)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-amber-500 text-white transition-all"
-          />
+      <section className="space-y-4 rounded-2xl border border-zinc-800/60 bg-zinc-900/45 p-4" aria-label="Bộ lọc danh mục">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+          <div className="relative w-full lg:max-w-md">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="search"
+              placeholder="Tìm theo tên hoặc mã sản phẩm..."
+              value={searchQuery}
+              onChange={event => setSearchQuery(event.target.value)}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-3 pl-10 pr-4 text-sm text-white outline-none transition-colors focus:border-orange-500"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchItems()}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs font-bold text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-50"
+          >
+            <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Làm mới
+          </button>
         </div>
-        <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-          {['ALL', 'FOOD', 'DRINK', 'COMBO'].map(type => (
-            <button
-              key={type}
-              onClick={() => setSelectedType(type)}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                selectedType === type
-                  ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
-                  : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800/60'
-              }`}
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Phân loại</span>
+            <select
+              value={selectedType}
+              onChange={event => setSelectedType(event.target.value)}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-white outline-none focus:border-orange-500"
             >
-              {type === 'ALL' ? 'Tất cả' : type}
-            </button>
-          ))}
+              {typeFilters.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Trạng thái vận hành</span>
+            <select
+              value={selectedStatus}
+              onChange={event => setSelectedStatus(event.target.value)}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-white outline-none focus:border-orange-500"
+            >
+              {statusFilters.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
-      </div>
+      </section>
 
-      {/* Table grid */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-zinc-500 text-xs">Đang tải danh sách bắp nước...</p>
+        <div className="flex flex-col items-center justify-center gap-3 py-20">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+          <p className="text-xs text-zinc-500">Đang tải danh mục bắp nước...</p>
         </div>
-      ) : error ? (
-        <div className="bg-red-950/50 border border-red-500/30 text-red-200 p-5 rounded-2xl flex items-center gap-3 text-sm">
-          <AlertCircle size={18} className="text-red-400" />
-          <span>{error}</span>
+      ) : loadError ? (
+        <div role="alert" className="flex flex-col items-center rounded-3xl border border-red-500/25 bg-red-500/5 px-6 py-12 text-center">
+          <TriangleAlert className="h-10 w-10 text-red-400" />
+          <h2 className="mt-4 text-base font-black text-white">Không thể tải danh mục</h2>
+          <p className="mt-2 max-w-lg text-sm leading-6 text-zinc-400">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => fetchItems()}
+            className="mt-5 rounded-xl bg-orange-500 px-5 py-3 text-xs font-black uppercase text-white hover:bg-orange-600"
+          >
+            Thử lại
+          </button>
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center py-16 bg-zinc-900/20 rounded-3xl border border-dashed border-zinc-850">
-          <Coffee size={40} className="mx-auto text-zinc-600 mb-3" />
-          <p className="text-zinc-400 text-sm font-medium">Không tìm thấy sản phẩm bắp nước nào</p>
-          <p className="text-zinc-650 text-xs mt-1">Hãy thử đổi bộ lọc hoặc thêm sản phẩm mới</p>
+        <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-900/20 py-16 text-center">
+          <Coffee className="mx-auto h-10 w-10 text-zinc-600" />
+          <p className="mt-3 text-sm font-bold text-zinc-300">Không tìm thấy sản phẩm phù hợp</p>
+          <p className="mt-1 text-xs text-zinc-500">Hãy thay đổi từ khóa hoặc bộ lọc trạng thái.</p>
         </div>
       ) : (
-        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-3xl overflow-hidden shadow-xl">
+        <section className="overflow-hidden rounded-3xl border border-zinc-800/70 bg-zinc-900/55 shadow-xl" aria-label="Danh sách sản phẩm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[980px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-900/30">
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400">Hình ảnh</th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400">Mã sản phẩm</th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400">Tên sản phẩm</th>
+                <tr className="border-b border-zinc-800 bg-zinc-900/60">
+                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400">Sản phẩm</th>
+                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400">Mã</th>
                   <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400">Phân loại</th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400 text-right">Đơn giá</th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400 text-center">Đang bán</th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-wider text-zinc-400 text-center">Thao tác</th>
+                  <th className="px-6 py-4 text-right text-xs font-black uppercase tracking-wider text-zinc-400">Giá bán</th>
+                  <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider text-zinc-400">Trạng thái</th>
+                  <th className="px-6 py-4 text-right text-xs font-black uppercase tracking-wider text-zinc-400">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-850">
-                {filteredItems.map(item => (
-                  <tr key={item.id} className="hover:bg-zinc-900/40 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="w-12 h-12 rounded-xl bg-zinc-950 border border-zinc-850 flex items-center justify-center overflow-hidden">
-                        {item.imageUrl ? (
-                          <img
-                            src={item.imageUrl.startsWith('http') ? item.imageUrl : `/images/foods/${item.imageUrl}`}
-                            alt={item.name}
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = 'https://images.unsplash.com/photo-1578242187038-04f7620a273b?auto=format&fit=crop&q=80&w=120';
-                            }}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Coffee className="text-zinc-600 w-5 h-5" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs font-bold text-amber-500">{item.code}</td>
-                    <td className="px-6 py-4 font-semibold text-sm">{item.name}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                        item.type === 'COMBO' 
-                          ? 'bg-purple-500/10 border border-purple-500/30 text-purple-400'
-                          : item.type === 'DRINK'
-                            ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400'
-                            : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
-                      }`}>
-                        {item.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right font-black text-sm text-zinc-100">
-                      {item.price?.toLocaleString()}đ
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        item.active && item.sellable
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-zinc-800 text-zinc-500'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.active && item.sellable ? 'bg-emerald-400' : 'bg-zinc-600'}`}></span>
-                        {item.active && item.sellable ? 'Đang bán' : 'Tạm dừng'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center gap-3">
-                        <button
-                          onClick={() => handleOpenEdit(item)}
-                          className="p-2 text-zinc-400 hover:text-amber-500 bg-zinc-950 border border-zinc-850 hover:border-amber-500/40 rounded-xl transition-all cursor-pointer"
-                          title="Sửa sản phẩm"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-2 text-zinc-400 hover:text-red-500 bg-zinc-950 border border-zinc-850 hover:border-red-500/40 rounded-xl transition-all cursor-pointer"
-                          title="Ngừng kinh doanh"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-zinc-800/70">
+                {filteredItems.map(item => {
+                  const status = getStatus(item);
+                  const presentation = statusPresentation[status];
+                  const imageUrl = resolveImageUrl(item.imageUrl);
+
+                  return (
+                    <tr key={item.id} className={`transition-colors hover:bg-zinc-900/70 ${status === 'ARCHIVED' ? 'opacity-65' : ''}`}>
+                      <td className="px-6 py-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+                            {imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt={item.name}
+                                onError={event => {
+                                  event.currentTarget.hidden = true;
+                                  event.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                }}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : null}
+                            <ImageIcon className={`h-5 w-5 text-zinc-600 ${imageUrl ? 'hidden' : ''}`} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="max-w-xs truncate text-sm font-bold text-white" title={item.name}>{item.name}</p>
+                            <p className="mt-1 text-[11px] text-zinc-500">
+                              {imageUrl ? 'Có ảnh sản phẩm' : 'Chưa có ảnh hợp lệ'}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs font-bold text-orange-400">{item.code}</td>
+                      <td className="px-6 py-4">
+                        <span className={`rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${typeClassNames[item.type] || typeClassNames.FOOD}`}>
+                          {typeLabels[item.type] || item.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm font-black text-white">
+                        {Number(item.price || 0).toLocaleString('vi-VN')}đ
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${presentation.className}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${presentation.dotClassName}`} />
+                          {presentation.label}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          {status === 'ARCHIVED' ? (
+                            <button
+                              type="button"
+                              disabled={restoringId === item.id}
+                              onClick={() => handleRestore(item)}
+                              aria-label={`Khôi phục ${item.name}`}
+                              title="Khôi phục ở trạng thái tạm dừng"
+                              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-xs font-bold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:cursor-wait disabled:opacity-50"
+                            >
+                              <RotateCcw className={`h-4 w-4 ${restoringId === item.id ? 'animate-spin' : ''}`} />
+                              Khôi phục
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(item)}
+                                aria-label={`Chỉnh sửa ${item.name}`}
+                                title="Chỉnh sửa sản phẩm"
+                                className="rounded-xl border border-zinc-700 bg-zinc-950 p-2.5 text-zinc-400 transition-colors hover:border-orange-500/40 hover:text-orange-400"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setArchiveTarget(item)}
+                                aria-label={`Lưu trữ ${item.name}`}
+                                title="Lưu trữ sản phẩm"
+                                className="rounded-xl border border-zinc-700 bg-zinc-950 p-2.5 text-zinc-400 transition-colors hover:border-red-500/40 hover:text-red-400"
+                              >
+                                <Archive className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
+          <footer className="border-t border-zinc-800 px-6 py-3 text-xs text-zinc-500">
+            Hiển thị {filteredItems.length} trong tổng số {items.length} sản phẩm.
+          </footer>
+        </section>
       )}
 
-      {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b border-zinc-800/80">
-              <div>
-                <h3 className="text-base font-black uppercase tracking-wider text-white">
-                  {editingItem ? 'CẬP NHẬT SẢN PHẨM' : 'THÊM BẮP NƯỚC MỚI'}
-                </h3>
-                <p className="text-xs text-zinc-500 mt-1">Thông tin cơ bản bắp nước/combo</p>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 hover:bg-zinc-850 text-zinc-400 hover:text-white rounded-xl transition-colors cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Modal Form Body */}
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1.5">Mã sản phẩm *</label>
-                  <input
-                    type="text"
-                    required
-                    disabled={!!editingItem}
-                    placeholder="Ví dụ: POP_L"
-                    value={formState.code}
-                    onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                    className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-amber-500 text-white disabled:opacity-55"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1.5">Loại sản phẩm</label>
-                  <select
-                    value={formState.type}
-                    onChange={(e) => setFormState(prev => ({ ...prev, type: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-amber-500 text-white cursor-pointer"
-                  >
-                    <option value="FOOD">FOOD (Đồ ăn)</option>
-                    <option value="DRINK">DRINK (Thức uống)</option>
-                    <option value="COMBO">COMBO (Trọn bộ)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1.5">Tên sản phẩm *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ví dụ: Bắp rang lớn vị Caramel"
-                  value={formState.name}
-                  onChange={(e) => setFormState(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-amber-500 text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1.5">Giá bán (VND) *</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      required
-                      min={1000}
-                      placeholder="50000"
-                      value={formState.price}
-                      onChange={(e) => setFormState(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                      className="w-full pl-4 pr-10 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-amber-500 text-white"
-                    />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-bold">đ</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1.5">Ảnh sản phẩm (URL hoặc tên tệp)</label>
-                  <input
-                    type="text"
-                    placeholder="popcorn_l.png"
-                    value={formState.imageUrl}
-                    onChange={(e) => setFormState(prev => ({ ...prev, imageUrl: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-amber-500 text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-6 pt-2">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={formState.active}
-                    onChange={(e) => setFormState(prev => ({ ...prev, active: e.target.checked }))}
-                    className="rounded bg-zinc-950 border-zinc-800 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                  />
-                  <span className="text-xs text-zinc-300 font-bold uppercase tracking-wider">Kích hoạt sản phẩm</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={formState.sellable}
-                    onChange={(e) => setFormState(prev => ({ ...prev, sellable: e.target.checked }))}
-                    className="rounded bg-zinc-950 border-zinc-800 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                  />
-                  <span className="text-xs text-zinc-300 font-bold uppercase tracking-wider">Cho phép đặt bán</span>
-                </label>
-              </div>
-
-              {/* Modal Actions */}
-              <div className="flex justify-end gap-3 pt-6 border-t border-zinc-800/80">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-zinc-800 text-zinc-300 hover:bg-zinc-700/80 transition-all cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-500 text-black hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/10 cursor-pointer"
-                >
-                  Lưu lại
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {formOpen && (
+        <ConcessionCatalogFormModal
+          key={editingItem?.id || 'new-concession'}
+          item={editingItem}
+          pending={saving}
+          onClose={closeFormModal}
+          onSubmit={handleSave}
+        />
       )}
 
+      {archiveTarget && (
+        <ConcessionArchiveModal
+          item={archiveTarget}
+          pending={archiving}
+          onClose={() => {
+            if (!archiving) setArchiveTarget(null);
+          }}
+          onConfirm={handleArchive}
+        />
+      )}
+
+      {notice && (
+        <CustomerNoticeModal
+          {...notice}
+          actionLabel="Đóng"
+          onClose={() => setNotice(null)}
+        />
+      )}
     </div>
   );
 }
