@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping({"/api/scores/me", "/api/scores"})
+@RequestMapping("/api/scores/me")
 @Tag(name = "Customer Score Balance", description = "Endpoints for logged-in customer's score balance and history")
 public class ScoreController {
 
