@@ -1,4 +1,3 @@
-import React from 'react';
 import useCustomerScore from '@/features/score/customer/hooks/useCustomerScore';
 import MembershipCard from '@/features/score/customer/components/MembershipCard';
 import TierProgressBar from '@/features/score/customer/components/TierProgressBar';

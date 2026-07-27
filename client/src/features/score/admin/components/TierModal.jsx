@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Award, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function TierModal({ isOpen, onClose, onSave, initialData }) {
@@ -18,6 +18,8 @@ export default function TierModal({ isOpen, onClose, onSave, initialData }) {
 
   useEffect(() => {
     if (initialData && isOpen) {
+      // The form is intentionally synchronized when the selected tier changes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData({
         tierCode: initialData.tierCode || '',
         tierName: initialData.tierName || '',
@@ -27,6 +29,7 @@ export default function TierModal({ isOpen, onClose, onSave, initialData }) {
         active: initialData.active ?? true
       });
     } else if (!isOpen) {
+      // Reset transient form state only after the modal is closed.
       setFormData({
         tierCode: '',
         tierName: '',

@@ -10,10 +10,13 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.lorafilm.movie.common.enums.ActionStatus;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import com.lorafilm.movie.seat.service.SeatService;
@@ -40,17 +43,20 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
     private final ShowtimeRepository showtimeRepository;
     private final ShowtimePriceRepository showtimePriceRepository;
     private final ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository;
+    private final MovieMediaRepository movieMediaRepository;
     private final SeatService seatService;
     private final ShowtimeMapper showtimeMapper;
 
     public ShowtimeBookingContextServiceImpl(ShowtimeRepository showtimeRepository,
                                ShowtimePriceRepository showtimePriceRepository,
                                ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository,
+                               MovieMediaRepository movieMediaRepository,
                                SeatService seatService,
                                ShowtimeMapper showtimeMapper) {
         this.showtimeRepository = showtimeRepository;
         this.showtimePriceRepository = showtimePriceRepository;
         this.showtimeBlockedSeatRepository = showtimeBlockedSeatRepository;
+        this.movieMediaRepository = movieMediaRepository;
         this.seatService = seatService;
         this.showtimeMapper = showtimeMapper;
     }
@@ -116,6 +122,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
 
             BookingContextSeatDto seatDto = new BookingContextSeatDto();
             seatDto.setSeatId(seat.getId());
+            seatDto.setSeatPublicId(seat.getPublicId());
             seatDto.setSeatCode(seat.getSeatCode());
             seatDto.setSeatType(seat.getSeatType().getCode().name());
             seatDto.setPrice(showtimePrice.getPrice());
@@ -135,6 +142,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         showtimeDto.setId(showtime.getId());
         showtimeDto.setPublicId(showtime.getPublicId());
         showtimeDto.setStatus(showtime.getStatus().name());
+        showtimeDto.setServiceDate(showtime.getServiceDate());
         
         java.time.ZoneId zoneId = java.time.ZoneId.of(showtime.getCinema().getTimezone());
         showtimeDto.setStartAt(OffsetDateTime.ofInstant(showtime.getStartTime(), zoneId));
@@ -145,6 +153,9 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         movieDto.setPublicId(showtime.getMovie().getPublicId());
         movieDto.setSlug(showtime.getMovie().getSlug());
         movieDto.setTitle(showtime.getMovie().getTitle());
+        movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                        showtime.getMovie().getId(), MovieMediaType.POSTER, ActiveStatus.ACTIVE)
+                .ifPresent(media -> movieDto.setPosterUrl(media.getUrl()));
         response.setMovie(movieDto);
 
         ShowtimeMovieVersionDto versionDto = new ShowtimeMovieVersionDto();
@@ -180,6 +191,25 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         response.setBookingExpiredAt(OffsetDateTime.now().plusMinutes(15));
 
         return response;
+    }
+
+    @Override
+    public BookingContextResponse getBookingContextByPublicId(String showtimePublicId, List<String> seatPublicIds) {
+        Showtime showtime = showtimeRepository.findByPublicIdAndDeletedAtIsNull(showtimePublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
+        if (seatPublicIds == null || seatPublicIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Seat public IDs cannot be empty");
+        }
+        Set<String> unique = new java.util.HashSet<>(seatPublicIds);
+        if (unique.size() != seatPublicIds.size()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Duplicate seat public IDs are not allowed");
+        }
+        List<Seat> seats = seatService.getSeatsByPublicIds(seatPublicIds);
+        if (seats.size() != seatPublicIds.size()) {
+            throw new ResourceNotFoundException("One or more seats not found");
+        }
+        return getBookingContext(showtime.getId(),
+                new BookingContextRequest(seats.stream().map(Seat::getId).toList()));
     }
 
     // removed getActiveShowtime

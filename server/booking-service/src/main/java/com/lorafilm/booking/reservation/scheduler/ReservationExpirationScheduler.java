@@ -36,7 +36,8 @@ public class ReservationExpirationScheduler {
         Instant now = Instant.now();
 
         try {
-            List<SeatReservation> expiredReservations = seatReservationRepository.findExpiredReservations(now, PageRequest.of(0, BATCH_SIZE));
+            List<SeatReservation> expiredReservations = seatReservationRepository.findExpiredUnlinkedReservations(
+                    now, PageRequest.of(0, BATCH_SIZE));
             if (expiredReservations.isEmpty()) {
                 log.debug("ReservationExpirationScheduler: No expired reservations found.");
                 return;

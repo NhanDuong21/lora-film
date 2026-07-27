@@ -86,6 +86,7 @@ public class ShowtimeSeatLayoutResponse {
     public static class SeatDetailDto {
         @JsonProperty("id")
         private Long seatId;
+        private String seatPublicId;
         private String seatCode; // E.g., "A1", "B5"
         private String seatType; // E.g., "STANDARD", "VIP", "COUPLE"
         private Long pairedSeatId; // For couple seats
@@ -115,6 +116,14 @@ public class ShowtimeSeatLayoutResponse {
 
         public void setSeatId(Long seatId) {
             this.seatId = seatId;
+        }
+
+        public String getSeatPublicId() {
+            return seatPublicId;
+        }
+
+        public void setSeatPublicId(String seatPublicId) {
+            this.seatPublicId = seatPublicId;
         }
 
         public String getSeatCode() {

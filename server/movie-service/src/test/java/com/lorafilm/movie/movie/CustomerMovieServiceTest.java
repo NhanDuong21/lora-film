@@ -10,6 +10,7 @@ import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
 import com.lorafilm.movie.movie.repository.MovieGenreRepository;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.service.CustomerMovieService;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +41,9 @@ public class CustomerMovieServiceTest {
     
     @Mock
     private MovieGenreRepository movieGenreRepository;
+
+    @Mock
+    private MovieMediaRepository movieMediaRepository;
     
     @Mock
     private MovieMapper movieMapper;
@@ -81,6 +85,27 @@ public class CustomerMovieServiceTest {
         PageResponse<MovieDto> response = customerMovieService.getMoviesByStatus("now-showing", null, pageable);
 
         assertNotNull(response);
+        assertEquals(1, response.getContent().size());
+        assertEquals("movie-1", response.getContent().get(0).getPublicId());
+    }
+
+    @Test
+    void getMoviesByStatus_All_ReturnsPubliclyVisibleMovies() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Movie> moviePage = new PageImpl<>(List.of(activeMovie), pageable, 1);
+
+        when(movieRepository.findAll(
+                any(org.springframework.data.jpa.domain.Specification.class),
+                eq(pageable))).thenReturn(moviePage);
+        when(movieGenreRepository.findByMovieId(1L)).thenReturn(Collections.emptyList());
+
+        MovieDto dto = new MovieDto();
+        dto.setPublicId("movie-1");
+        when(movieMapper.toDto(eq(activeMovie), any(), any())).thenReturn(dto);
+
+        PageResponse<MovieDto> response =
+                customerMovieService.getMoviesByStatus("all", null, null, pageable);
+
         assertEquals(1, response.getContent().size());
         assertEquals("movie-1", response.getContent().get(0).getPublicId());
     }

@@ -23,7 +23,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -49,20 +50,14 @@ public class InternalBookingControllerTest {
     }
 
     @Test
-    public void confirmBooking_Success_Returns200() throws Exception {
-        BookingAdminResponse response = new BookingAdminResponse();
-        response.setId(10L);
-        response.setPublicId("550e8400-e29b-41d4-a716-446655440000");
-        response.setBookingCode("BK1001");
-        response.setBookingStatus(BookingStatus.CONFIRMED);
-
-        when(internalBookingService.confirmBooking("550e8400-e29b-41d4-a716-446655440000")).thenReturn(response);
-
-        mockMvc.perform(post("/internal/bookings/550e8400-e29b-41d4-a716-446655440000/confirm")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.bookingStatus").value("CONFIRMED"));
+    public void confirmBooking_IsPaymentResultTombstone() {
+        com.lorafilm.booking.common.exception.BusinessException exception =
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        com.lorafilm.booking.common.exception.BusinessException.class,
+                        () -> internalBookingController.confirmBooking(
+                                "550e8400-e29b-41d4-a716-446655440000"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "CONFIRM_VIA_PAYMENT_RESULT_REQUIRED", exception.getErrorCode());
     }
 
     @Test
@@ -83,20 +78,14 @@ public class InternalBookingControllerTest {
     }
 
     @Test
-    public void refundBooking_Success_Returns200() throws Exception {
-        BookingAdminResponse response = new BookingAdminResponse();
-        response.setId(10L);
-        response.setPublicId("550e8400-e29b-41d4-a716-446655440000");
-        response.setBookingCode("BK1001");
-        response.setBookingStatus(BookingStatus.REFUNDED);
-
-        when(internalBookingService.refundBooking("550e8400-e29b-41d4-a716-446655440000")).thenReturn(response);
-
-        mockMvc.perform(post("/internal/bookings/550e8400-e29b-41d4-a716-446655440000/refund")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.bookingStatus").value("REFUNDED"));
+    public void refundBooking_IsPaymentResultTombstone() {
+        com.lorafilm.booking.common.exception.BusinessException exception =
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        com.lorafilm.booking.common.exception.BusinessException.class,
+                        () -> internalBookingController.refundBooking(
+                                "550e8400-e29b-41d4-a716-446655440000"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "REFUND_VIA_PAYMENT_RESULT_REQUIRED", exception.getErrorCode());
     }
 
     @Test
@@ -118,12 +107,14 @@ public class InternalBookingControllerTest {
     public void getPaymentContext_Success_ReturnsAuthoritativeAmount() throws Exception {
         InternalPaymentContextResponse response = new InternalPaymentContextResponse(
                 10L,
+                "550e8400-e29b-41d4-a716-446655440000",
                 15L,
                 "PENDING_PAYMENT",
                 true,
                 new BigDecimal("240000.00"),
                 "VND",
-                LocalDateTime.now().plusMinutes(15),
+                Instant.now(),
+                Instant.now().plusSeconds(900),
                 new InternalPaymentContextResponse.AnalyticsSnapshot(101L, "Superman", 2));
         when(internalBookingPaymentService.getPaymentContext(10L)).thenReturn(response);
 
@@ -137,20 +128,32 @@ public class InternalBookingControllerTest {
 
     @Test
     public void recordPaymentResult_Success_ReturnsAuthoritativeState() throws Exception {
+        String eventId = UUID.randomUUID().toString();
         InternalPaymentResultRequest request = new InternalPaymentResultRequest(
-                "event-123",
-                "v1",
+                eventId,
+                "1.0",
                 501L,
+                "660e8400-e29b-41d4-a716-446655440000",
                 "TX-1001",
+                "VNPAY",
                 "VNPAY",
                 "SUCCESS",
                 new BigDecimal("240000.00"),
                 "VND",
-                LocalDateTime.now(),
-                "EXT-999",
-                "MATCHED");
+                Instant.now(),
+                "EXT-999");
         InternalPaymentResultResponse response = new InternalPaymentResultResponse(
-                1001L, "event-123", "CONFIRMED", "SUCCESS", false);
+                1001L,
+                "550e8400-e29b-41d4-a716-446655440000",
+                501L,
+                "660e8400-e29b-41d4-a716-446655440000",
+                eventId,
+                "CONFIRMED",
+                "SUCCESS",
+                true,
+                false,
+                false,
+                null);
         when(internalBookingPaymentService.recordPaymentResult(
                 eq(1001L), any(InternalPaymentResultRequest.class))).thenReturn(response);
 
@@ -159,7 +162,7 @@ public class InternalBookingControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.eventId").value("event-123"))
+                .andExpect(jsonPath("$.data.eventId").value(eventId))
                 .andExpect(jsonPath("$.data.bookingStatus").value("CONFIRMED"))
                 .andExpect(jsonPath("$.data.paymentStatus").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.idempotent").value(false));

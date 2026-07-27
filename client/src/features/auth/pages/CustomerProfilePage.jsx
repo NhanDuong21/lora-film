@@ -2,11 +2,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight, 
-  PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle, Award 
+import {
+  User, Calendar, Mail, Phone, Lock, Eye, EyeOff, Camera, ChevronRight,
+  PhoneCall, HelpCircle, History, Bell, Gift, FileText, CheckCircle, AlertCircle, Award
 } from 'lucide-react';
-import SystemUpdating from '@/components/common/SystemUpdating';
+import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import CustomerBookingHistory from '@/features/booking/customer/components/CustomerBookingHistory';
 import useCustomerScore from '@/features/score/customer/hooks/useCustomerScore';
 import LoyaltyCenterPage from '@/features/score/customer/pages/LoyaltyCenterPage';
@@ -15,6 +15,8 @@ const normalizeDateForInput = (value) => {
   if (!value) return '';
   return String(value).substring(0, 10);
 };
+
+const hasImageSource = value => typeof value === 'string' && value.trim().length > 0;
 
 export default function CustomerProfileView({ onBackHome, initialTab = 'info' }) {
   const navigate = useNavigate();
@@ -86,7 +88,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   // Modal / toggle states
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState('success'); // 'success' | 'error'
+  const [errorNotice, setErrorNotice] = useState(null);
 
   const [isChangingEmail, setIsChangingEmail] = useState(false);
   const [newEmail, setNewEmail] = useState(email);
@@ -128,9 +130,15 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
     return Math.min(100, Math.max(0, Math.round((currentProgress / (targetMin - currentMin)) * 100)));
   }, [scoreData]);
 
-  const triggerToast = (message, type = 'success') => {
+  const showErrorNotice = message => {
+    setErrorNotice({
+      title: 'Không thể thực hiện',
+      message
+    });
+  };
+
+  const showSuccessToast = message => {
     setToastMessage(message);
-    setToastType(type);
     setShowToast(true);
     setTimeout(() => {
       setShowToast(false);
@@ -141,7 +149,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   const handleUpdateProfile = (e) => {
     e.preventDefault();
     if (!phone.trim()) {
-      triggerToast('Số điện thoại không được để trống!', 'error');
+      showErrorNotice('Số điện thoại không được để trống!');
       return;
     }
 
@@ -153,50 +161,50 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
       points
     });
 
-    triggerToast('Cập nhật thông tin cá nhân thành công!');
+    showSuccessToast('Cập nhật thông tin cá nhân thành công!');
   };
 
   // Change Email Action
   const handleSaveEmail = () => {
     if (!newEmail.includes('@')) {
-      triggerToast('Email không đúng định dạng!', 'error');
+      showErrorNotice('Email không đúng định dạng!');
       return;
     }
     setEmail(newEmail);
     updateUser({ email: newEmail });
     setIsChangingEmail(false);
-    triggerToast('Đổi địa chỉ email thành công!');
+    showSuccessToast('Đổi địa chỉ email thành công!');
   };
 
   // Change Password Action
   const handleSavePassword = () => {
     if (!currentPassword) {
-      triggerToast('Vui lòng nhập mật khẩu hiện tại!', 'error');
+      showErrorNotice('Vui lòng nhập mật khẩu hiện tại!');
       return;
     }
     if (newPassword.length < 6) {
-      triggerToast('Mật khẩu mới phải có ít nhất 6 ký tự!', 'error');
+      showErrorNotice('Mật khẩu mới phải có ít nhất 6 ký tự!');
       return;
     }
     if (newPassword !== confirmPassword) {
-      triggerToast('Mật khẩu xác nhận không trùng khớp!', 'error');
+      showErrorNotice('Mật khẩu xác nhận không trùng khớp!');
       return;
     }
 
     // Password change is currently handled via a separate auth flow or not supported in this view yet
-    triggerToast('Tính năng đổi mật khẩu đang được nâng cấp!', 'error');
+    showErrorNotice('Tính năng đổi mật khẩu đang được nâng cấp!');
   };
 
   // Change Avatar Action
   const handleSaveAvatar = () => {
     if (!tempAvatarUrl.trim()) {
-      triggerToast('Đường dẫn ảnh không được để trống!', 'error');
+      showErrorNotice('Đường dẫn ảnh không được để trống!');
       return;
     }
     setAvatarUrl(tempAvatarUrl);
     updateUser({ avatarUrl: tempAvatarUrl });
     setIsEditingAvatar(false);
-    triggerToast('Cập nhật ảnh đại diện thành công!');
+    showSuccessToast('Cập nhật ảnh đại diện thành công!');
   };
 
   if (!accountId) {
@@ -220,19 +228,19 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
   return (
     <div className="flex flex-col min-h-screen bg-[#050506] text-white selection:bg-brand-orange selection:text-zinc-950 font-sans">
+      {errorNotice && (
+        <CustomerNoticeModal
+          title={errorNotice.title}
+          message={errorNotice.message}
+          variant="error"
+          onClose={() => setErrorNotice(null)}
+        />
+      )}
       <main className="flex-grow pt-32 pb-16 px-4 sm:px-6 md:px-8 max-w-6xl mx-auto w-full">
-        {/* Toast alert popup */}
+        {/* Non-blocking success toast */}
         {showToast && (
-          <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 py-3.5 px-6 rounded-2xl shadow-2xl border flex items-center gap-3 transition-all duration-300 ${
-            toastType === 'success' 
-              ? 'bg-emerald-950 border-emerald-500/30 text-emerald-400' 
-              : 'bg-red-950 border-red-500/30 text-red-400'
-          }`}>
-            {toastType === 'success' ? (
-              <CheckCircle className="w-5 h-5 shrink-0 text-emerald-500" />
-            ) : (
-              <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
-            )}
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 py-3.5 px-6 rounded-2xl shadow-2xl border flex items-center gap-3 transition-all duration-300 bg-emerald-950 border-emerald-500/30 text-emerald-400">
+            <CheckCircle className="w-5 h-5 shrink-0 text-emerald-500" />
             <span className="text-xs md:text-sm font-bold">{toastMessage}</span>
           </div>
         )}
@@ -268,7 +276,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
             <button
               type="button"
               onClick={async () => {
-                triggerToast("Đang tải lại hồ sơ...", "success");
+                showSuccessToast("Đang tải lại hồ sơ...");
                 await refreshProfile();
               }}
               className="bg-brand-orange hover:bg-opacity-95 text-zinc-950 font-black py-3.5 px-8 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/10 cursor-pointer"
@@ -303,15 +311,19 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               {/* User Avatar + Metadata Header */}
               <div className="flex items-center gap-4 pb-6 border-b border-zinc-800/80">
                 <div className="relative w-16 h-16 shrink-0 rounded-full border-2 border-brand-orange overflow-hidden bg-zinc-950 group">
-                  <img 
-                    src={avatarUrl} 
-                    alt={fullName} 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
-                    }}
-                  />
+                  {hasImageSource(avatarUrl) ? (
+                    <img
+                      src={avatarUrl}
+                      alt={fullName}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                  ) : (
+                    <User className="h-full w-full p-4 text-zinc-600" aria-label="Chưa có ảnh đại diện" />
+                  )}
                   {/* Camera overlay */}
                   <button 
                     type="button"
@@ -861,15 +873,19 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               {/* Preview image */}
               <div className="flex justify-center">
                 <div className="w-24 h-24 rounded-full border border-zinc-700 overflow-hidden bg-zinc-950">
-                  <img 
-                    src={tempAvatarUrl} 
-                    alt="Preview avatar" 
-                    className="w-full h-full object-cover" 
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
-                    }}
-                  />
+                  {hasImageSource(tempAvatarUrl) ? (
+                    <img
+                      src={tempAvatarUrl}
+                      alt="Preview avatar"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                  ) : (
+                    <User className="h-full w-full p-6 text-zinc-600" aria-label="Chưa có ảnh xem trước" />
+                  )}
                 </div>
               </div>
 

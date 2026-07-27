@@ -78,17 +78,12 @@ public class InternalBookingServiceTest {
     }
 
     @Test
-    public void confirmBooking_Success() {
-        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(sampleBooking));
-        when(bookingRepository.save(any())).thenReturn(sampleBooking);
-
-        BookingAdminResponse result = internalBookingService.confirmBooking("550e8400-e29b-41d4-a716-446655440000");
-
-        assertNotNull(result);
-        verify(historyService).saveHistory(eq(sampleBooking), eq("PENDING_PAYMENT"), eq("CONFIRMED"), any(), eq("INTERNAL_SERVICE"), eq("SYSTEM"));
-        verify(auditService).logAudit(eq(10L), eq("SYSTEM"), eq("CONFIRM_BOOKING"), eq("bookingStatus"), eq("PENDING_PAYMENT"), eq("CONFIRMED"), any(), any(), any(), any());
-        verify(operationLogService).logOperation(eq(10L), eq("CONFIRM_BOOKING"), eq("SYSTEM"), eq(true), eq(0L), any(), any(), any());
-        verify(outboxService).createOutboxEvent(eq("BOOKING"), eq(10L), eq("BOOKING_CONFIRMED"), eq(sampleBooking));
+    public void confirmBooking_IsPaymentResultTombstone() {
+        com.lorafilm.booking.common.exception.BusinessException exception = assertThrows(
+                com.lorafilm.booking.common.exception.BusinessException.class,
+                () -> internalBookingService.confirmBooking(
+                        "550e8400-e29b-41d4-a716-446655440000"));
+        assertEquals("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED", exception.getErrorCode());
     }
 
     @Test

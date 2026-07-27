@@ -1,7 +1,7 @@
 package com.lorafilm.booking.security.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lorafilm.booking.common.response.ApiResponse;
+import com.lorafilm.booking.common.response.ErrorResponse;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -22,10 +22,16 @@ public class InternalTokenFilter extends OncePerRequestFilter {
     @Value("${app.internal-token}")
     private String internalToken;
 
+    @Value("${app.internal-payment-token:${app.internal-token}}")
+    private String internalPaymentToken;
+
     @PostConstruct
     public void init() {
         if (internalToken == null || internalToken.isBlank()) {
             throw new IllegalStateException("CRITICAL SECURITY FAILURE: 'app.internal-token' configuration is missing! Must configure APP_INTERNAL_TOKEN environment variable.");
+        }
+        if (internalPaymentToken == null || internalPaymentToken.isBlank()) {
+            throw new IllegalStateException("CRITICAL SECURITY FAILURE: 'app.internal-payment-token' configuration is missing! Must configure PAYMENT_TO_BOOKING_INTERNAL_TOKEN environment variable.");
         }
     }
 
@@ -39,6 +45,9 @@ public class InternalTokenFilter extends OncePerRequestFilter {
         }
 
         if (path != null && path.toLowerCase().startsWith("/internal")) {
+            String expectedToken = isPaymentAuthorityPath(path)
+                    ? internalPaymentToken
+                    : internalToken;
             String tokenHeader = request.getHeader("X-Internal-Token");
             if (tokenHeader == null || tokenHeader.isEmpty()) {
                 tokenHeader = request.getHeader("X-Service-Token");
@@ -49,25 +58,38 @@ public class InternalTokenFilter extends OncePerRequestFilter {
                 response.setCharacterEncoding("UTF-8");
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
-                ApiResponse<Void> apiResponse = ApiResponse.error("ERR_401_UNAUTHORIZED: Missing internal token");
+                ErrorResponse errorResponse = new ErrorResponse(
+                        "INTERNAL_TOKEN_MISSING",
+                        "Missing internal service token");
                 ObjectMapper mapper = new ObjectMapper();
                 mapper.findAndRegisterModules();
-                mapper.writeValue(response.getOutputStream(), apiResponse);
+                mapper.writeValue(response.getOutputStream(), errorResponse);
                 return;
-            } else if (!isConstantTimeEquals(tokenHeader, internalToken)) {
+            } else if (!isConstantTimeEquals(tokenHeader, expectedToken)) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setCharacterEncoding("UTF-8");
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
 
-                ApiResponse<Void> apiResponse = ApiResponse.error("ERR_403_FORBIDDEN: Invalid internal token");
+                ErrorResponse errorResponse = new ErrorResponse(
+                        "INTERNAL_TOKEN_INVALID",
+                        "Invalid internal service token");
                 ObjectMapper mapper = new ObjectMapper();
                 mapper.findAndRegisterModules();
-                mapper.writeValue(response.getOutputStream(), apiResponse);
+                mapper.writeValue(response.getOutputStream(), errorResponse);
                 return;
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isPaymentAuthorityPath(String path) {
+        String normalized = path.toLowerCase();
+        return normalized.startsWith("/internal/bookings/")
+                && (normalized.endsWith("/payment-context")
+                || normalized.endsWith("/payment-results")
+                || normalized.endsWith("/refund-results")
+                || normalized.endsWith("/refund"));
     }
 
     private boolean isConstantTimeEquals(String tokenA, String tokenB) {

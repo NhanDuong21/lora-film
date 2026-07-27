@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Comparator;
@@ -61,7 +62,8 @@ public class CustomerShowtimeService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                     "Booking option range must contain between 1 and 14 service dates");
         }
-        return showtimeRepository.findCustomerBookingOptions(movieIdentifier, from, to).stream()
+        return showtimeRepository.findCustomerBookingOptions(
+                        movieIdentifier, from, to, Instant.now()).stream()
                 .collect(Collectors.toMap(
                         Showtime::getPublicId,
                         Function.identity(),
@@ -164,9 +166,11 @@ public class CustomerShowtimeService {
     private Showtime customerVisibleShowtime(String publicId) {
         Showtime showtime = showtimeRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
-        if (showtime.getStatus() != ShowtimeStatus.OPEN_FOR_BOOKING) {
+        if (showtime.getStatus() != ShowtimeStatus.OPEN_FOR_BOOKING
+                || showtime.getStartTime() == null
+                || !showtime.getStartTime().isAfter(Instant.now())) {
             throw new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND,
-                    "Showtime is not open for booking");
+                    "Showtime is not open for booking or has already started");
         }
         return showtime;
     }

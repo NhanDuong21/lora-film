@@ -135,4 +135,31 @@ class ShowtimeRepositoryIntegrationTest {
         
         assertTrue(overlaps.isEmpty(), "Should NOT detect overlap for adjacent boundaries");
     }
+
+    @Test
+    void findCustomerBookingOptions_shouldExcludeStartedAndBoundaryShowtimes() {
+        Instant now = Instant.parse("2026-07-26T11:53:00Z");
+        Showtime past = createShowtime(
+                Instant.parse("2026-07-26T02:00:00Z"),
+                Instant.parse("2026-07-26T04:00:00Z"));
+        Showtime boundary = createShowtime(
+                now,
+                Instant.parse("2026-07-26T13:53:00Z"));
+        Showtime future = createShowtime(
+                Instant.parse("2026-07-26T12:30:00Z"),
+                Instant.parse("2026-07-26T14:30:00Z"));
+        past.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+        boundary.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+        future.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+        showtimeRepository.saveAllAndFlush(List.of(past, boundary, future));
+
+        List<Showtime> result = showtimeRepository.findCustomerBookingOptions(
+                movie.getSlug(),
+                java.time.LocalDate.of(2026, 7, 26),
+                java.time.LocalDate.of(2026, 7, 26),
+                now);
+
+        assertEquals(List.of(future.getPublicId()),
+                result.stream().map(Showtime::getPublicId).toList());
+    }
 }

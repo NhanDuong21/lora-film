@@ -13,4 +13,6 @@ public interface BookingReconciliationTaskRepository extends JpaRepository<Booki
     Optional<BookingReconciliationTask> findByPublicId(String publicId);
 
     List<BookingReconciliationTask> findByBookingId(Long bookingId);
+
+    Optional<BookingReconciliationTask> findByPaymentEventId(Long paymentEventId);
 }

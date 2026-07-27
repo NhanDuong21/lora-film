@@ -34,6 +34,9 @@ public class Booking extends FullAuditableEntity {
     @Column(name = "showtime_id", nullable = false)
     private Long showtimeId;
 
+    @Column(name = "showtime_public_id", length = 36)
+    private String showtimePublicId;
+
     @Column(name = "movie_id", nullable = false)
     private Long movieId;
 
@@ -86,6 +89,9 @@ public class Booking extends FullAuditableEntity {
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
+
+    @Column(name = "amount_locked_at")
+    private Instant amountLockedAt;
 
     @Column(name = "confirmed_at")
     private Instant confirmedAt;
@@ -250,6 +256,14 @@ public class Booking extends FullAuditableEntity {
         this.showtimeId = showtimeId;
     }
 
+    public String getShowtimePublicId() {
+        return showtimePublicId;
+    }
+
+    public void setShowtimePublicId(String showtimePublicId) {
+        this.showtimePublicId = showtimePublicId;
+    }
+
     public Long getMovieId() {
         return movieId;
     }
@@ -385,6 +399,20 @@ public class Booking extends FullAuditableEntity {
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public Instant getAmountLockedAt() {
+        return amountLockedAt;
+    }
+
+    public void setAmountLockedAt(Instant amountLockedAt) {
+        this.amountLockedAt = amountLockedAt;
+    }
+
+    public void lockAmount(Instant lockedAt) {
+        if (amountLockedAt == null) {
+            amountLockedAt = Objects.requireNonNull(lockedAt, "lockedAt is required");
+        }
     }
 
     public Instant getConfirmedAt() {

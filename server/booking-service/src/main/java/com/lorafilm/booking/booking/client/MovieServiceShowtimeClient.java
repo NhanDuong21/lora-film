@@ -10,6 +10,7 @@ import org.springframework.web.client.RestClientException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 @Component
@@ -51,7 +52,34 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         }
     }
 
+    @Override
+    public ShowtimeBookingContext getBookingContextByPublicId(String showtimePublicId, List<String> seatPublicIds) {
+        try {
+            BookingContextEnvelope envelope = restClient.post()
+                    .uri("/internal/showtimes/by-public-id/{showtimePublicId}/booking-context", showtimePublicId)
+                    .header("X-Internal-Token", internalToken)
+                    .body(new PublicBookingContextRequest(seatPublicIds))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> {
+                        throw new IntegrationException(
+                                "Movie Service rejected public booking context request with status " + response.getStatusCode());
+                    })
+                    .body(BookingContextEnvelope.class);
+            if (envelope == null || envelope.data == null) {
+                throw new IntegrationException("Movie Service returned an empty booking context");
+            }
+            return envelope.data.toDomain();
+        } catch (IntegrationException ex) {
+            throw ex;
+        } catch (RestClientException ex) {
+            throw new IntegrationException("Cannot retrieve public booking context from Movie Service", ex);
+        }
+    }
+
     private record BookingContextRequest(List<Long> seatIds) {
+    }
+
+    private record PublicBookingContextRequest(List<String> seatPublicIds) {
     }
 
     private static class BookingContextEnvelope {
@@ -93,6 +121,7 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
                     defaultZero(pricing.totalAmount),
                     pricing.currency,
                     movie.title,
+                    movie.posterUrl,
                     cinema.name,
                     auditorium.name,
                     seatContexts);
@@ -103,6 +132,7 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         public Long id;
         public String publicId;
         public String status;
+        public LocalDate serviceDate;
         public OffsetDateTime startAt;
         public OffsetDateTime endAt;
     }
@@ -110,18 +140,20 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
     private static class ResourcePayload {
         public Long id;
         public String title;
+        public String posterUrl;
         public String name;
     }
 
     private static class SeatPayload {
         public Long seatId;
+        public String seatPublicId;
         public String seatCode;
         public String seatType;
         public BigDecimal price;
         public String currency;
 
         private ShowtimeBookingContext.SeatContext toDomain() {
-            return new ShowtimeBookingContext.SeatContext(seatId, seatCode, seatType, price, currency);
+            return new ShowtimeBookingContext.SeatContext(seatId, seatPublicId, seatCode, seatType, price, currency);
         }
     }
 

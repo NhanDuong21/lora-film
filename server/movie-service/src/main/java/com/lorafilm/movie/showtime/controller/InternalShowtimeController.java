@@ -40,6 +40,15 @@ public class InternalShowtimeController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    @PostMapping("/by-public-id/{showtimePublicId}/booking-context")
+    public ResponseEntity<ApiResponse<BookingContextResponse>> getBookingContextByPublicId(
+            @PathVariable String showtimePublicId,
+            @Valid @RequestBody java.util.Map<String, java.util.List<String>> request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                showtimeBookingContextService.getBookingContextByPublicId(
+                        showtimePublicId, request.get("seatPublicIds"))));
+    }
+
     @GetMapping("/{showtimeId}/seat-layout")
     public ResponseEntity<ApiResponse<SeatLayoutDto>> getSeatLayout(@PathVariable Long showtimeId) {
         SeatLayoutDto response = showtimeQueryService.getSeatLayout(showtimeId);

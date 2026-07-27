@@ -6,7 +6,6 @@ import {
   Users, 
   Calendar, 
   Gift, 
-  Database, 
   Ticket, 
   Coffee, 
   Home, 
@@ -23,7 +22,6 @@ import {
   History,
   Zap,
   BadgeDollarSign,
-  ClipboardList,
   BarChart3,
   Award
 } from 'lucide-react';
@@ -186,6 +184,10 @@ export default function AdminSidebar({
                   <button onClick={() => handleTabClick('auto-schedule-create', '#/admin/showtime-schedules/create')} className={getSubLinkClass('auto-schedule-create')}>
                     <Zap className="w-4 h-4 shrink-0" />
                     <span>Tạo lịch tự động</span>
+                  </button>
+                  <button onClick={() => handleTabClick('auto-schedule-history', '#/admin/showtime-schedules')} className={getSubLinkClass('auto-schedule-history')}>
+                    <History className="w-4 h-4 shrink-0" />
+                    <span>Lịch sử bản xem trước</span>
                   </button>
                 </div>
               )}

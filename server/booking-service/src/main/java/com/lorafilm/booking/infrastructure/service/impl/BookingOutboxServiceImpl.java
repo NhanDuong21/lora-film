@@ -8,6 +8,7 @@ import com.lorafilm.booking.infrastructure.enums.OutboxStatus;
 import com.lorafilm.booking.infrastructure.repository.BookingOutboxEventRepository;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import com.lorafilm.booking.booking.entity.Booking;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +54,9 @@ public class BookingOutboxServiceImpl implements BookingOutboxService {
         BookingOutboxEvent event = new BookingOutboxEvent();
         event.setAggregateType(aggregateType);
         event.setAggregateId(aggregateId);
+        if (payload instanceof Booking booking) {
+            event.setAggregatePublicId(booking.getPublicId());
+        }
         event.setEventId(UUID.randomUUID().toString());
         event.setEventType(eventType);
         event.setEventVersion(1);

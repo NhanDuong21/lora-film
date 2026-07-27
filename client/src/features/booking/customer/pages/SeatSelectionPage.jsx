@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, Info, MapPin, Monitor, ShieldAlert, Check
+  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, ShieldAlert
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
@@ -10,8 +10,28 @@ import {
   seatTypePresentation,
   sortSeatLegend
 } from '@/features/booking/customer/utils/seatPresentation';
-import { holdSeats } from '../services/seatReservationService';
-import { createBooking, getBookingHistory, getBookingDetails, getBookingTickets } from '../services/bookingService';
+import {
+  applySeatAvailabilityUpdates,
+  createSeatAvailabilitySocket
+} from '../services/seatAvailabilitySocket';
+import {
+  getBookingErrorCode,
+  getBookingErrorMessage,
+  seatConflictErrorCodes
+} from '../utils/bookingErrorMessages';
+import {
+  clearBookingCreationAttempt,
+  getOrCreateBookingCreationKey
+} from '../utils/bookingCreationIdempotency';
+import {
+  cancelBooking,
+  createBooking,
+  getActiveBookingForShowtime,
+  getBookingDetails
+} from '../services/bookingService';
+import { getSeatAvailability } from '../services/seatReservationService';
+import ActiveBookingConflictModal from '../components/ActiveBookingConflictModal';
+import BookingNoticeModal from '../components/BookingNoticeModal';
 import BookingStepper from '../components/BookingStepper';
 
 const money = value => value == null
@@ -33,42 +53,54 @@ export default function SeatSelectionPage() {
 
   // Seat Selection States
   const [selectedSeats, setSelectedSeats] = useState([]);
-  const [toastMessage, setToastMessage] = useState('');
+  const [notice, setNotice] = useState(null);
   const [showGapModal, setShowGapModal] = useState(false);
   const [reservationLoading, setReservationLoading] = useState(false);
   const [activeBooking, setActiveBooking] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
+  const [activeConflictOpen, setActiveConflictOpen] = useState(false);
+  const [activeConflictError, setActiveConflictError] = useState(null);
+  const [cancellingActiveBooking, setCancellingActiveBooking] = useState(false);
 
-  // Check for active booking drafts when layout is loaded
-  useEffect(() => {
-    if (!layout || !layout.showtimeId) return;
+  const showNotice = useCallback((message, {
+    title = 'Không thể tiếp tục',
+    variant = 'warning'
+  } = {}) => {
+    setNotice({ message, title, variant });
+  }, []);
 
-    let isMounted = true;
-
-    const checkActiveBooking = async () => {
-      try {
-        const history = await getBookingHistory({ status: 'PENDING_PAYMENT' });
-        if (!isMounted) return;
-
-        const match = history?.content?.find(b => b.showtimeId === layout.showtimeId);
-        if (match) {
-          const details = await getBookingDetails(match.publicId);
-          if (!isMounted) return;
-          const tickets = await getBookingTickets(match.publicId).catch(() => []);
-          if (!isMounted) return;
-          setActiveBooking({ ...details, tickets });
-        }
-      } catch (err) {
-        console.error("Failed to check active bookings:", err);
-      }
+  const loadActiveBooking = useCallback(async targetShowtimePublicId => {
+    if (!targetShowtimePublicId) return null;
+    const active = await getActiveBookingForShowtime(targetShowtimePublicId);
+    if (!active) {
+      setActiveBooking(null);
+      return null;
+    }
+    const details = await getBookingDetails(active.publicId);
+    const normalized = {
+      ...active,
+      ...details,
+      paymentDeadline: details.paymentDeadline || active.expiredAt
     };
+    setActiveBooking(normalized);
+    return normalized;
+  }, []);
 
-    checkActiveBooking();
+  // Read the server-authoritative active Booking instead of searching one page of history.
+  useEffect(() => {
+    let isMounted = true;
+    if (!layout?.showtimePublicId) return undefined;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadActiveBooking(layout.showtimePublicId).catch(errorValue => {
+      if (isMounted) {
+        console.error('Không thể kiểm tra đơn đang giữ ghế:', errorValue);
+      }
+    });
     return () => {
       isMounted = false;
     };
-  }, [layout]);
+  }, [layout?.showtimePublicId, loadActiveBooking]);
 
   // Expiration countdown logic for active reservation
   useEffect(() => {
@@ -91,6 +123,8 @@ export default function SeatSelectionPage() {
 
   useEffect(() => {
     if (timeLeft === 0) {
+      // The countdown owns cleanup when the persisted deadline is reached.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveBooking(null);
       setTimeLeft(null);
     }
@@ -112,8 +146,28 @@ export default function SeatSelectionPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getSeatLayout(showtimePublicId, { signal });
-      setLayout(data);
+      const [data, availability] = await Promise.all([
+        getSeatLayout(showtimePublicId, { signal }),
+        getSeatAvailability(showtimePublicId, { signal })
+      ]);
+      const occupiedByPublicId = new Map(
+        (availability?.occupiedSeats || []).map(item => [item.seatPublicId, item])
+      );
+      setLayout({
+        ...data,
+        maxSeatsPerBooking: Number(availability?.maxSeatsPerBooking || 8),
+        seats: (data?.seats || []).map(seat => {
+          const reservation = occupiedByPublicId.get(seat.publicId);
+          return reservation
+            ? {
+              ...seat,
+              reservationStatus: reservation.status,
+              reservationExpiresAt: reservation.expiresAt,
+              sellable: false
+            }
+            : seat;
+        })
+      });
     } catch (requestError) {
       if (requestError?.name !== 'CanceledError') {
         setError('Suất chiếu này không còn mở bán hoặc không thể tải sơ đồ ghế.');
@@ -125,9 +179,74 @@ export default function SeatSelectionPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    // Fetch both the static Movie layout and Booking's DB availability overlay.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  const refreshAvailability = useCallback(async () => {
+    if (!showtimePublicId) return;
+    const availability = await getSeatAvailability(showtimePublicId);
+    const occupiedIds = new Set(
+      (availability?.occupiedSeats || [])
+        .filter(item => item?.seatPublicId)
+        .map(item => item.seatPublicId)
+    );
+    setLayout(previous => previous
+      ? {
+        ...previous,
+        maxSeatsPerBooking: Number(
+          availability?.maxSeatsPerBooking || previous.maxSeatsPerBooking || 8
+        ),
+        seats: applySeatAvailabilityUpdates(
+          previous.seats,
+          availability?.occupiedSeats || []
+        )
+      }
+      : previous);
+    setSelectedSeats(previous => previous.filter(seat => !occupiedIds.has(seat.publicId)));
+  }, [showtimePublicId]);
+
+  useEffect(() => {
+    if (!showtimePublicId) return undefined;
+
+    const socket = createSeatAvailabilitySocket();
+    const onAvailabilityChanged = event => {
+      if (event?.showtimePublicId !== showtimePublicId) return;
+      const updates = event?.seats || [];
+      const unavailableIds = new Set(
+        updates
+          .filter(update => ['HELD', 'BOOKED'].includes(update?.status))
+          .map(update => update.seatPublicId)
+      );
+      setLayout(previous => previous
+        ? { ...previous, seats: applySeatAvailabilityUpdates(previous.seats, updates) }
+        : previous);
+      setSelectedSeats(previous => {
+        const next = previous.filter(seat => !unavailableIds.has(seat.publicId));
+        if (next.length !== previous.length) {
+          showNotice(
+            'Một hoặc nhiều ghế vừa được khách khác giữ. Sơ đồ ghế đã được cập nhật, vui lòng chọn ghế khác.',
+            { title: 'Ghế vừa có người giữ' }
+          );
+        }
+        return next;
+      });
+    };
+    const subscribe = () => socket.emit('seat:subscribe', showtimePublicId);
+
+    socket.on('seat:availability-changed', onAvailabilityChanged);
+    socket.on('connect', subscribe);
+    socket.connect();
+
+    return () => {
+      socket.emit('seat:unsubscribe', showtimePublicId);
+      socket.off('connect', subscribe);
+      socket.off('seat:availability-changed', onAvailabilityChanged);
+      socket.disconnect();
+    };
+  }, [showtimePublicId, showNotice]);
 
   const rows = useMemo(() => {
     const grouped = new Map();
@@ -144,51 +263,35 @@ export default function SeatSelectionPage() {
       ]);
   }, [layout]);
 
-  // Handle seat click selection (with couple seat pairing rules)
+  // Handle one sellable seat per click. Couple seats are represented by one
+  // seat item in the customer booking flow; their neighbour is independent.
   const handleSeatClick = (seat) => {
     if (!seat.sellable || seat.blockedForShowtime || seat.operationalStatus !== 'ACTIVE') return;
 
     const isSelected = selectedSeats.some(s => s.publicId === seat.publicId);
 
     // Find if this is a couple seat / has a pair group
-    let pairedSeat = null;
-    if (seat.pairGroup) {
-      pairedSeat = layout?.seats?.find(
-        s => s.pairGroup === seat.pairGroup && s.publicId !== seat.publicId
-      );
-    }
-
     if (isSelected) {
       // Deselect
-      if (pairedSeat) {
-        setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId && s.publicId !== pairedSeat.publicId));
-      } else {
-        setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId));
-      }
-      setToastMessage('');
+      setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId));
     } else {
       // Select
-      const seatsToSelect = pairedSeat ? [seat, pairedSeat] : [seat];
-      const neededSlots = seatsToSelect.length;
-
-      if (selectedSeats.length + neededSlots > 8) {
-        showToast('Bạn chỉ được chọn tối đa 8 ghế cho mỗi giao dịch!');
+      const maxSeats = Number(layout?.maxSeatsPerBooking || 8);
+      if (selectedSeats.length + 1 > maxSeats) {
+        showNotice(
+          `Bạn chỉ được chọn tối đa ${maxSeats} ghế cho mỗi giao dịch.`,
+          { title: 'Đã đạt giới hạn số ghế' }
+        );
         return;
       }
 
-      setSelectedSeats(prev => [...prev, ...seatsToSelect]);
-      setToastMessage('');
+      setSelectedSeats(prev => [...prev, seat]);
     }
-  };
-
-  const showToast = (message) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(''), 4000);
   };
 
   // Check for single seat gaps in rows
   const checkSingleSeatGap = () => {
-    for (const [label, rowSeats] of rows) {
+    for (const [, rowSeats] of rows) {
       const seatsWithSelection = rowSeats.map(seat => {
         let seatStatus = 'AVAILABLE';
         if (seat.blockedForShowtime) {
@@ -222,6 +325,11 @@ export default function SeatSelectionPage() {
   // Handle proceed to food selection & checkout
   const handleContinue = async () => {
     if (selectedSeats.length === 0) return;
+    if (activeBooking && timeLeft > 0) {
+      setActiveConflictError(null);
+      setActiveConflictOpen(true);
+      return;
+    }
     if (checkSingleSeatGap()) {
       setShowGapModal(true);
       return;
@@ -233,23 +341,18 @@ export default function SeatSelectionPage() {
     setShowGapModal(false);
     setReservationLoading(true);
     try {
-      const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
+      const seatPublicIds = selectedSeats.map(seat => seat.publicId);
+      const idempotencyKey = getOrCreateBookingCreationKey({
+        showtimePublicId: layout.showtimePublicId,
+        seatPublicIds
       });
 
-      const holdResponse = await holdSeats({
-        showtimeId: layout.showtimeId,
-        seatIds: selectedSeats.map(s => s.id)
-      }, uuidv4());
-
-      const reservationPublicIds = holdResponse.reservationPublicIds || [];
-
-      // Create Booking Draft
       const bookingData = await createBooking({
         showtimePublicId: layout.showtimePublicId,
-        reservationPublicIds
+        seatPublicIds,
+        idempotencyKey
       });
+      clearBookingCreationAttempt(layout.showtimePublicId);
 
       // Navigate to checkout/F&B page
       navigate(`/bookings/checkout?bookingId=${bookingData.publicId}`, {
@@ -275,9 +378,75 @@ export default function SeatSelectionPage() {
         }
       });
     } catch (err) {
-      showToast(err.response?.data?.message || err.message || "Không thể giữ ghế hoặc tạo đơn hàng. Vui lòng thử lại!");
+      const errorCode = getBookingErrorCode(err);
+      if (errorCode === 'BOOKING_ACTIVE_SHOWTIME_EXISTS') {
+        clearBookingCreationAttempt(layout.showtimePublicId);
+        try {
+          const existingBooking = await loadActiveBooking(layout.showtimePublicId);
+          if (existingBooking) {
+            setActiveConflictError(null);
+            setActiveConflictOpen(true);
+            return;
+          }
+        } catch {
+          // Fall through to the translated modal when the recovery read also fails.
+        }
+      }
+      if (seatConflictErrorCodes.has(errorCode)) {
+        await refreshAvailability().catch(() => {});
+      }
+      if (
+        errorCode === 'IDEMPOTENCY_PAYLOAD_CONFLICT'
+        || errorCode === 'BOOKING_IDEMPOTENCY_PAYLOAD_CONFLICT'
+      ) {
+        clearBookingCreationAttempt(layout.showtimePublicId);
+      }
+      showNotice(
+        getBookingErrorMessage(
+          err,
+          'Không thể giữ ghế hoặc tạo đơn hàng. Vui lòng thử lại.'
+        ),
+        {
+          title: (
+            errorCode === 'IDEMPOTENCY_PAYLOAD_CONFLICT'
+            || errorCode === 'BOOKING_IDEMPOTENCY_PAYLOAD_CONFLICT'
+          )
+            ? 'Phiên đặt vé đã thay đổi'
+            : 'Không thể giữ ghế',
+          variant: 'error'
+        }
+      );
     } finally {
       setReservationLoading(false);
+    }
+  };
+
+  const resumeActiveBooking = () => {
+    if (!activeBooking?.publicId) return;
+    setActiveConflictOpen(false);
+    navigate(`/bookings/checkout?bookingId=${activeBooking.publicId}`, {
+      state: { showtime: layout }
+    });
+  };
+
+  const cancelActiveBookingAndChooseAgain = async () => {
+    if (!activeBooking?.publicId || cancellingActiveBooking) return;
+    setCancellingActiveBooking(true);
+    setActiveConflictError(null);
+    try {
+      await cancelBooking(activeBooking.publicId);
+      clearBookingCreationAttempt(layout.showtimePublicId);
+      setActiveBooking(null);
+      setTimeLeft(null);
+      setActiveConflictOpen(false);
+      await refreshAvailability();
+    } catch (cancelError) {
+      setActiveConflictError(getBookingErrorMessage(
+        cancelError,
+        'Không thể hủy đơn đang giữ ghế. Vui lòng thử lại.'
+      ));
+    } finally {
+      setCancellingActiveBooking(false);
     }
   };
 
@@ -363,7 +532,7 @@ export default function SeatSelectionPage() {
               <div>
                 <p className="text-xs font-black uppercase tracking-wider text-brand-orange">Đơn hàng đang xử lý</p>
                 <h3 className="mt-1 text-sm font-bold text-white">
-                  Bạn đang giữ các ghế: <span className="text-brand-orange">{activeBooking.tickets?.map(t => t.seatLabel || t.seatCode)?.join(', ') || '...'}</span>
+                  Bạn đang giữ các ghế: <span className="text-brand-orange">{activeBooking.seatNames || 'Đang cập nhật'}</span>
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1">Vui lòng thanh toán hoặc hủy vé cũ trước khi đặt thêm ghế mới.</p>
               </div>
@@ -374,20 +543,12 @@ export default function SeatSelectionPage() {
                 <span className="text-xl font-black text-brand-orange tracking-widest">{formattedTimeLeft}</span>
               </div>
               <button
-                onClick={() => navigate(`/bookings/checkout?bookingId=${activeBooking.publicId}`, { state: { showtime: layout } })}
+                onClick={resumeActiveBooking}
                 className="bg-brand-orange hover:bg-orange-600 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-brand-orange/20"
               >
                 Thanh toán ngay
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Warning Toast Alerts */}
-        {toastMessage && (
-          <div className="fixed bottom-28 right-6 z-50 max-w-md bg-red-950/90 border border-red-500/30 text-red-200 px-5 py-4 rounded-2xl flex items-center gap-3 text-sm animate-bounce shadow-2xl backdrop-blur-sm">
-            <Info size={18} className="text-red-400 shrink-0" />
-            <span>{toastMessage}</span>
           </div>
         )}
 
@@ -522,6 +683,33 @@ export default function SeatSelectionPage() {
           </div>
         </section>
       </div>
+
+      {notice && (
+        <BookingNoticeModal
+          title={notice.title}
+          message={notice.message}
+          variant={notice.variant}
+          onClose={() => setNotice(null)}
+        />
+      )}
+
+      {activeConflictOpen && activeBooking && (
+        <ActiveBookingConflictModal
+          bookingCode={activeBooking.bookingCode}
+          seatNames={activeBooking.seatNames}
+          timeLeft={formattedTimeLeft}
+          error={activeConflictError}
+          pending={cancellingActiveBooking}
+          onClose={() => {
+            if (!cancellingActiveBooking) {
+              setActiveConflictError(null);
+              setActiveConflictOpen(false);
+            }
+          }}
+          onResume={resumeActiveBooking}
+          onCancel={cancelActiveBookingAndChooseAgain}
+        />
+      )}
 
       {/* Single Seat Gap Warning Modal */}
       {showGapModal && (

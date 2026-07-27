@@ -36,8 +36,9 @@ public class CustomerMovieController {
 
     @GetMapping
     public ApiResponse<PageResponse<MovieDto>> getMovies(
-            @RequestParam String status,
+            @RequestParam(defaultValue = "all") String status,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String genrePublicId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "releaseDate,desc") String sort) {
@@ -45,9 +46,10 @@ public class CustomerMovieController {
         String property = switch (sortParts[0]) {
             case "createdAt" -> "createdAt";
             case "releaseDate" -> "releaseDate";
+            case "title" -> "title";
             default -> throw new com.lorafilm.movie.common.exception.BusinessException(
                     com.lorafilm.movie.common.exception.ErrorCode.VALIDATION_ERROR,
-                    "Customer movie sort must be createdAt or releaseDate");
+                    "Customer movie sort must be createdAt, releaseDate or title");
         };
         org.springframework.data.domain.Sort.Direction direction =
                 sortParts.length > 1 && "asc".equalsIgnoreCase(sortParts[1])
@@ -55,7 +57,11 @@ public class CustomerMovieController {
                         : org.springframework.data.domain.Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size,
                 org.springframework.data.domain.Sort.by(direction, property));
-        return ApiResponse.ok(customerMovieService.getMoviesByStatus(status, keyword, pageable));
+        return ApiResponse.ok(customerMovieService.getMoviesByStatus(
+                status,
+                keyword,
+                genrePublicId,
+                pageable));
     }
 
     @GetMapping("/{identifier}")

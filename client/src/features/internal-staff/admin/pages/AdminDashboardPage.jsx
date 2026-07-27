@@ -1,112 +1,133 @@
-import { useState } from 'react';
-import { DollarSign, Ticket, Eye, Users, ArrowUpRight, Activity } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  Clock3,
+  RefreshCw,
+  RotateCcw,
+  TicketCheck
+} from 'lucide-react';
+import { getBookingMonitoringSummary } from '@/features/booking/admin/services/adminBookingService';
+import { ErrorState, LoadingState } from '@/components/common/ui/uiKit';
 
-const KPI_CARDS = [
-  { title: 'Doanh thu', value: '1.24B VNĐ', trend: '+14.5%', icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-  { title: 'Vé đã bán', value: '12,450', trend: '+8.2%', icon: Ticket, color: 'text-brand-orange', bg: 'bg-brand-orange/10 border-brand-orange/20' },
-  { title: 'Lượt xem trang', value: '145.2K', trend: '+22.4%', icon: Eye, color: 'text-sky-500', bg: 'bg-sky-500/10 border-sky-500/20' },
-  { title: 'Khách hàng mới', value: '890', trend: '+5.1%', icon: Users, color: 'text-purple-500', bg: 'bg-purple-500/10 border-purple-500/20' },
-];
-
-const RECENT_ACTIVITIES = [
-  { id: 1, action: 'Khách hàng KH#1402 đã đặt 2 vé phim Mai', time: '5 phút trước' },
-  { id: 2, action: 'Hệ thống đã đồng bộ 5 phim mới từ TMDB', time: '2 giờ trước' },
-  { id: 3, action: 'Giao dịch hoàn tiền cho đơn #VN20412 thành công', time: '3 giờ trước' },
-  { id: 4, action: 'Quản trị viên đã duyệt lịch chiếu tuần sau', time: 'Hôm qua' },
+const MONITORING_CARDS = [
+  {
+    key: 'bookingToday',
+    title: 'Đơn tạo hôm nay',
+    description: 'Theo múi giờ Hồ Chí Minh',
+    icon: TicketCheck,
+    iconClass: 'text-emerald-400',
+    iconBackground: 'border-emerald-500/20 bg-emerald-500/10'
+  },
+  {
+    key: 'paymentFailed',
+    title: 'Thanh toán thất bại',
+    description: 'Tổng Booking có payment status FAILED',
+    icon: AlertTriangle,
+    iconClass: 'text-red-400',
+    iconBackground: 'border-red-500/20 bg-red-500/10'
+  },
+  {
+    key: 'expiredBooking',
+    title: 'Đơn đã hết hạn',
+    description: 'Tổng Booking ở trạng thái EXPIRED',
+    icon: Clock3,
+    iconClass: 'text-amber-400',
+    iconBackground: 'border-amber-500/20 bg-amber-500/10'
+  },
+  {
+    key: 'pendingRetry',
+    title: 'Tác vụ chờ đồng bộ lại',
+    description: 'Retry task đang ở trạng thái PENDING',
+    icon: RotateCcw,
+    iconClass: 'text-sky-400',
+    iconBackground: 'border-sky-500/20 bg-sky-500/10'
+  }
 ];
 
 export default function AdminDashboardView() {
-  const [timeFilter, setTimeFilter] = useState('today');
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  const loadSummary = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      setSummary(await getBookingMonitoringSummary());
+    } catch {
+      setSummary(null);
+      setError('Không thể tải dữ liệu giám sát hệ thống.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadSummary();
+  }, [loadSummary]);
 
   return (
-    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-8">
-      
-      {/* Page Header with Time Filters */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-        <div className="flex flex-col">
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">TỔNG QUAN HỆ THỐNG</h1>
-          <p className="text-xs text-zinc-400 mt-1">Hệ thống báo cáo hiệu suất kinh doanh và vận hành rạp phim LoraFilm</p>
+    <div className="flex min-h-[400px] flex-1 flex-col space-y-8 overflow-auto bg-zinc-950 p-6 text-white md:p-8">
+      <div className="flex flex-col justify-between gap-4 border-b border-zinc-800 pb-4 lg:flex-row lg:items-center">
+        <div>
+          <h1 className="text-xl font-black uppercase tracking-wider text-white md:text-2xl">
+            Tổng quan vận hành
+          </h1>
+          <p className="mt-1 text-xs text-zinc-400">
+            Chỉ hiển thị số liệu lấy trực tiếp từ Booking Monitoring API.
+          </p>
         </div>
-        
-        <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 gap-1 select-none">
-          {['today', '7days', 'month', 'year'].map(filter => (
-            <button
-              key={filter}
-              onClick={() => setTimeFilter(filter)}
-              className={`rounded-lg px-3 py-1.5 text-xs transition-all ${
-                timeFilter === filter ? 'bg-brand-orange text-white font-semibold shadow-md' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              {filter === 'today' ? 'Hôm nay' : filter === '7days' ? '7 ngày qua' : filter === 'month' ? 'Tháng này' : 'Năm nay'}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          disabled={loading || refreshing}
+          onClick={() => loadSummary(true)}
+          className="flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white disabled:cursor-wait disabled:opacity-60"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Đang làm mới...' : 'Làm mới dữ liệu'}
+        </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {KPI_CARDS.map((card, index) => {
-          const Icon = card.icon;
-          return (
-            <div key={index} className="enterprise-card p-5 flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className={`p-3 rounded-full border ${card.bg}`}>
-                  <Icon className={`w-5 h-5 ${card.color}`} />
-                </div>
-                <div className="flex items-center gap-1 text-emerald-400 text-xs font-bold bg-emerald-500/10 px-2 py-1 rounded-md">
-                  <ArrowUpRight className="w-3 h-3" />
-                  {card.trend}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">{card.title}</h3>
-                <p className="text-2xl font-black text-zinc-100">{card.value}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Main Content Area */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        
-        {/* Placeholder for Chart */}
-        <div className="xl:col-span-2 enterprise-card p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-sm font-black uppercase tracking-widest text-zinc-100">Biểu đồ doanh thu</h2>
-          </div>
-          <div className="flex-1 min-h-[300px] border border-zinc-800 border-dashed rounded-xl flex items-center justify-center text-zinc-500 text-sm">
-            Khu vực hiển thị biểu đồ
-          </div>
+      {loading ? (
+        <LoadingState message="Đang tải dữ liệu vận hành..." />
+      ) : error ? (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70">
+          <ErrorState message={error} onRetry={() => loadSummary()} />
         </div>
-
-        {/* Timeline / Activities */}
-        <div className="enterprise-card p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-6 border-b border-zinc-800 pb-4">
-            <h2 className="text-sm font-black uppercase tracking-widest text-zinc-100 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-brand-orange" />
-              Hoạt động gần đây
-            </h2>
-          </div>
-          <div className="flex-1 space-y-6">
-            {RECENT_ACTIVITIES.map((activity, index) => (
-              <div key={activity.id} className="relative flex gap-4">
-                {/* Timeline Line */}
-                {index !== RECENT_ACTIVITIES.length - 1 && (
-                  <div className="absolute left-1.5 top-5 bottom-[-24px] w-px bg-zinc-800" />
-                )}
-                {/* Dot */}
-                <div className="w-3 h-3 rounded-full bg-brand-orange mt-1 shrink-0 relative z-10 ring-4 ring-zinc-950" />
-                {/* Content */}
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm text-zinc-300 font-medium leading-snug">{activity.action}</p>
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">{activity.time}</span>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {MONITORING_CARDS.map(card => {
+            const Icon = card.icon;
+            return (
+              <section key={card.key} className="enterprise-card flex min-h-44 flex-col justify-between p-5">
+                <div className={`w-fit rounded-2xl border p-3 ${card.iconBackground}`}>
+                  <Icon className={`h-5 w-5 ${card.iconClass}`} />
                 </div>
-              </div>
-            ))}
-          </div>
+                <div className="mt-6">
+                  <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                    {card.title}
+                  </p>
+                  <p className="mt-1 text-3xl font-black text-zinc-100">
+                    {summary?.[card.key] ?? '—'}
+                  </p>
+                  <p className="mt-2 text-[11px] leading-5 text-zinc-500">{card.description}</p>
+                </div>
+              </section>
+            );
+          })}
         </div>
-        
+      )}
+
+      <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-8 text-center">
+        <p className="text-sm font-bold text-zinc-300">Chưa có nguồn dữ liệu dashboard tổng hợp</p>
+        <p className="mx-auto mt-2 max-w-2xl text-xs leading-5 text-zinc-500">
+          Doanh thu, vé bán, khách hàng mới và hoạt động gần đây sẽ chỉ xuất hiện khi có
+          contract tổng hợp từ Analytics, Payment và User Service.
+        </p>
       </div>
     </div>
   );

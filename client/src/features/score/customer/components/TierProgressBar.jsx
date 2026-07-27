@@ -1,5 +1,4 @@
-import React from 'react';
-import { Crown, Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Crown, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export default function TierProgressBar({ scoreData }) {
   const currentTier = scoreData?.currentTier || { tierName: 'Silver Member', minAccumulatedPoints: 0 };

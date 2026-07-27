@@ -12,8 +12,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
-import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.List;
 
@@ -37,6 +37,35 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     Page<Booking> findByUserId(Long userId, Pageable pageable);
 
     Page<Booking> findByUserIdAndBookingStatus(Long userId, BookingStatus bookingStatus, Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.userId = :userId
+              AND b.showtimeId = :showtimeId
+              AND b.bookingStatus = :status
+              AND b.isDeleted = false
+            ORDER BY b.createdAt ASC, b.id ASC
+            """)
+    List<Booking> findPendingByUserAndShowtimeForUpdate(
+            @Param("userId") Long userId,
+            @Param("showtimeId") Long showtimeId,
+            @Param("status") BookingStatus status);
+
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.userId = :userId
+              AND b.showtimePublicId = :showtimePublicId
+              AND b.bookingStatus = :status
+              AND b.expiresAt > :now
+              AND b.isDeleted = false
+            ORDER BY b.createdAt ASC, b.id ASC
+            """)
+    List<Booking> findActiveByUserAndShowtimePublicId(
+            @Param("userId") Long userId,
+            @Param("showtimePublicId") String showtimePublicId,
+            @Param("status") BookingStatus status,
+            @Param("now") Instant now);
 
     long countByCreatedAtAfter(java.time.Instant start);
 

@@ -1,5 +1,15 @@
 import apiClient from '@/services/apiClient';
 
+const normalizeMovie = movie => {
+  if (!movie) return movie;
+  return {
+    ...movie,
+    id: movie.publicId || movie.id,
+    posterUrl: movie.primaryPoster || movie.posterUrl || movie.image || null,
+    description: movie.synopsis || movie.description || ''
+  };
+};
+
 /**
  * Fetch movies list from the public API
  * @param {Object} params - Query parameters
@@ -19,19 +29,29 @@ export const getMovies = async ({
   const params = {};
   if (page !== undefined) params.page = page;
   if (size !== undefined) params.size = size;
-  if (search !== undefined) params.search = search;
+  if (search !== undefined) params.keyword = search;
   if (status !== undefined) {
     if (status === 'NOW_SHOWING') params.status = 'now-showing';
     else if (status === 'UPCOMING') params.status = 'coming-soon';
+    else if (status === 'ALL') params.status = 'all';
     else params.status = status;
+  } else {
+    params.status = 'all';
   }
-  if (genreId !== undefined) params.genreId = genreId;
+  if (genreId !== undefined) params.genrePublicId = genreId;
   if (releaseFrom !== undefined) params.releaseFrom = releaseFrom;
   if (releaseTo !== undefined) params.releaseTo = releaseTo;
   if (sort !== undefined) params.sort = sort;
 
   const response = await apiClient.get("/api/customer/movies", { params, signal });
-  return response.data.data;
+  const pageData = response.data.data;
+  if (!pageData) return pageData;
+  const content = (pageData.content || pageData.data || []).map(normalizeMovie);
+  return {
+    ...pageData,
+    content,
+    data: content
+  };
 };
 
 /**

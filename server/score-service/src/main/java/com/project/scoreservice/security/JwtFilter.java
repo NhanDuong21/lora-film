@@ -41,9 +41,9 @@ public class JwtFilter extends OncePerRequestFilter {
  
             if (StringUtils.hasText(jwt) && jwtProvider.validateToken(jwt)) {
                 Claims claims = jwtProvider.getClaimsFromToken(jwt);
-                
+
                 List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
-                
+
                 // [TEMP - TO BE REMOVED WHEN RBAC IS IMPLEMENTED]: Basic role extraction supporting single role or roles list
                 Object roleClaim = claims.get("role");
                 if (roleClaim != null && StringUtils.hasText(roleClaim.toString())) {
@@ -52,7 +52,7 @@ public class JwtFilter extends OncePerRequestFilter {
                     authorities.add(new SimpleGrantedAuthority(roleAuth));
                     authorities.add(new SimpleGrantedAuthority(role)); // Add raw name as well for flexibility
                 }
-                
+
                 Object rolesClaim = claims.get("roles");
                 if (rolesClaim instanceof List<?> list) {
                     for (Object r : list) {
@@ -64,7 +64,7 @@ public class JwtFilter extends OncePerRequestFilter {
                         }
                     }
                 }
-                
+
                 if (authorities.isEmpty()) {
                     authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
                     authorities.add(new SimpleGrantedAuthority("USER"));

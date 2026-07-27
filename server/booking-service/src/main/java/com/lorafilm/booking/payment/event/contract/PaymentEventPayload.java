@@ -4,8 +4,11 @@ import java.math.BigDecimal;
 
 public record PaymentEventPayload(
     Long paymentId,
+    String paymentPublicId,
     Long bookingId,
+    String bookingPublicId,
     String transactionCode,
+    String paymentProvider,
     String paymentMethod,
     String paymentStatus,
     BigDecimal amount,

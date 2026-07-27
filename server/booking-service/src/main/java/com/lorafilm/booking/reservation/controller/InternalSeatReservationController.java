@@ -6,6 +6,8 @@ import com.lorafilm.booking.reservation.dto.SeatAvailabilityResponse;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import com.lorafilm.booking.common.exception.BusinessException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,20 +29,21 @@ public class InternalSeatReservationController {
 
     @PostMapping("/convert")
     public ResponseEntity<Void> convertReservation(@Valid @RequestBody ConvertReservationRequest request) {
-        seatReservationService.convertReservations(request);
-        return ResponseEntity.ok().build();
+        throw new BusinessException("ATOMIC_BOOKING_CREATION_REQUIRED",
+                "Reservations are created and linked by the canonical Booking coordinator",
+                HttpStatus.GONE);
     }
 
     @PostMapping("/release")
     public ResponseEntity<Void> releaseReservation(@Valid @RequestBody ReleaseSeatRequest request) {
-        seatReservationService.releaseSeatsInternal(request.getReservationIds(), request.getReason());
-        return ResponseEntity.ok().build();
+        throw new BusinessException("BOOKING_LIFECYCLE_REQUIRED",
+                "Linked reservation release is owned by Booking lifecycle", HttpStatus.GONE);
     }
 
     @PostMapping("/expire")
     public ResponseEntity<Void> expireReservation(@RequestBody List<Long> reservationIds) {
-        seatReservationService.expireReservations(reservationIds);
-        return ResponseEntity.ok().build();
+        throw new BusinessException("BOOKING_LIFECYCLE_REQUIRED",
+                "Linked reservation expiry is owned by Booking lifecycle", HttpStatus.GONE);
     }
 
     @GetMapping("/availability")

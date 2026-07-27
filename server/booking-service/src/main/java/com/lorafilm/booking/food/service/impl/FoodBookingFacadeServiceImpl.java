@@ -12,7 +12,10 @@ import com.lorafilm.booking.food.dto.request.UpdateFoodQuantityRequest;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
 import com.lorafilm.booking.food.mapper.FoodMapper;
 import com.lorafilm.booking.food.service.FoodBookingFacadeService;
+import com.lorafilm.booking.security.service.SecurityContextService;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -20,18 +23,27 @@ public class FoodBookingFacadeServiceImpl implements FoodBookingFacadeService {
 
     private final BookingRepository bookingRepository;
     private final FoodCatalogClient foodCatalogClient;
+    private final SecurityContextService securityContextService;
 
-    public FoodBookingFacadeServiceImpl(BookingRepository bookingRepository, FoodCatalogClient foodCatalogClient) {
+    @Autowired
+    public FoodBookingFacadeServiceImpl(BookingRepository bookingRepository, FoodCatalogClient foodCatalogClient,
+                                        SecurityContextService securityContextService) {
         this.bookingRepository = bookingRepository;
         this.foodCatalogClient = foodCatalogClient;
+        this.securityContextService = securityContextService;
+    }
+
+    public FoodBookingFacadeServiceImpl(BookingRepository bookingRepository, FoodCatalogClient foodCatalogClient) {
+        this(bookingRepository, foodCatalogClient, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public FoodOrderResponse getFoodOrder(String bookingPublicId) {
         Booking booking = getBooking(bookingPublicId);
+        validateBookingOwnership(booking);
         if (booking.getFoodOrder() == null) {
-            throw new NotFoundException("FoodOrder", "bookingId", bookingPublicId);
+            return null;
         }
         return FoodMapper.INSTANCE.toFoodOrderResponse(booking.getFoodOrder());
     }
@@ -84,8 +96,25 @@ public class FoodBookingFacadeServiceImpl implements FoodBookingFacadeService {
     }
 
     private void validateBookingStatus(Booking booking) {
+        validateBookingOwnership(booking);
         if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BusinessException("BOOKING_NOT_MODIFIABLE", "Food cannot be modified because booking status is " + booking.getBookingStatus());
+        }
+        if (booking.getAmountLockedAt() != null) {
+            throw new BusinessException("BOOKING_AMOUNT_LOCKED", "Food cannot be modified after checkout finalization");
+        }
+        if (booking.getExpiresAt() == null || !booking.getExpiresAt().isAfter(java.time.Instant.now())) {
+            throw new BusinessException("BOOKING_EXPIRED", "The Booking payment deadline has passed");
+        }
+    }
+
+    private void validateBookingOwnership(Booking booking) {
+        if (securityContextService != null
+                && securityContextService.getCurrentUserId() != null
+                && !securityContextService.getCurrentUserId().equals(booking.getUserId())
+                && !securityContextService.isAdmin()) {
+            throw new BusinessException(
+                    "BOOKING_OWNER_REQUIRED", "You do not own this booking", HttpStatus.FORBIDDEN);
         }
     }
 }

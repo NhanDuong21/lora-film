@@ -11,11 +11,14 @@ import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.service.BookingStatusHistoryService;
 import com.lorafilm.booking.booking.service.BookingStatusTransitionService;
 import com.lorafilm.booking.booking.service.BookingTicketService;
+import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.booking.service.InternalBookingService;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
+import com.lorafilm.booking.reservation.service.SeatReservationService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -38,7 +41,10 @@ public class InternalBookingServiceImpl implements InternalBookingService {
     private final BookingOutboxService outboxService;
     private final BookingMetricsManager bookingMetricsManager;
     private final BookingTicketService ticketService;
+    private final SeatReservationService reservationService;
+    private final BookingLifecycleService lifecycleService;
 
+    @Autowired
     public InternalBookingServiceImpl(BookingRepository bookingRepository,
                                        BookingMapper bookingMapper,
                                        BookingStatusTransitionService statusTransitionService,
@@ -47,7 +53,9 @@ public class InternalBookingServiceImpl implements InternalBookingService {
                                        BookingOperationLogService operationLogService,
                                        BookingOutboxService outboxService,
                                        BookingMetricsManager bookingMetricsManager,
-                                       BookingTicketService ticketService) {
+                                       BookingTicketService ticketService,
+                                       SeatReservationService reservationService,
+                                       BookingLifecycleService lifecycleService) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.statusTransitionService = statusTransitionService;
@@ -57,12 +65,31 @@ public class InternalBookingServiceImpl implements InternalBookingService {
         this.outboxService = outboxService;
         this.bookingMetricsManager = bookingMetricsManager;
         this.ticketService = ticketService;
+        this.reservationService = reservationService;
+        this.lifecycleService = lifecycleService;
+    }
+
+    /** Backwards-compatible constructor for existing unit callers. */
+    public InternalBookingServiceImpl(BookingRepository bookingRepository,
+                                       BookingMapper bookingMapper,
+                                       BookingStatusTransitionService statusTransitionService,
+                                       BookingStatusHistoryService historyService,
+                                       BookingAuditService auditService,
+                                       BookingOperationLogService operationLogService,
+                                       BookingOutboxService outboxService,
+                                       BookingMetricsManager bookingMetricsManager,
+                                       BookingTicketService ticketService) {
+        this(bookingRepository, bookingMapper, statusTransitionService, historyService,
+                auditService, operationLogService, outboxService, bookingMetricsManager,
+                ticketService, null, null);
     }
 
     @Override
     @Transactional
     public BookingAdminResponse confirmBooking(String publicId) {
-        return processStatusChange(publicId, BookingStatus.CONFIRMED, PaymentStatus.SUCCESS, "CONFIRM_BOOKING", "Internal Payment Confirmation");
+        throw new BusinessException("CONFIRM_VIA_PAYMENT_RESULT_REQUIRED",
+                "Booking confirmation is performed only by a validated Payment result",
+                org.springframework.http.HttpStatus.GONE);
     }
 
     @Override
@@ -101,6 +128,15 @@ public class InternalBookingServiceImpl implements InternalBookingService {
         Booking booking = bookingRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
 
+        if (lifecycleService != null) {
+            Booking saved = lifecycleService.transition(booking, targetStatus, reason, "INTERNAL_SERVICE");
+            if (targetPaymentStatus != null) {
+                saved.setPaymentStatus(targetPaymentStatus);
+                saved = bookingRepository.save(saved);
+            }
+            return bookingMapper.toAdminResponse(saved);
+        }
+
         BookingStatus oldStatus = booking.getBookingStatus();
         statusTransitionService.validateTransition(oldStatus, targetStatus);
 
@@ -112,17 +148,28 @@ public class InternalBookingServiceImpl implements InternalBookingService {
 
         Booking savedBooking = bookingRepository.save(booking);
 
+        if (reservationService != null
+                && (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED)) {
+            reservationService.handleBookingStatusChange(savedBooking.getId(), targetStatus, reason);
+        }
+
         historyService.saveHistory(savedBooking, oldStatus.name(), targetStatus.name(), reason, "INTERNAL_SERVICE", "SYSTEM");
         auditService.logAudit(savedBooking.getId(), "SYSTEM", operationType, "bookingStatus", oldStatus.name(), targetStatus.name(), null, null, null, null);
         operationLogService.logOperation(savedBooking.getId(), operationType, "SYSTEM", true, 0L, null, null, reason);
         outboxService.createOutboxEvent("BOOKING", savedBooking.getId(), "BOOKING_" + targetStatus.name(), savedBooking);
 
         // Cancel/Delete tickets if cancelling/refunding/expiring
-        if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED || targetStatus == BookingStatus.REFUNDED) {
+        if (targetStatus == BookingStatus.CANCELLED
+                || targetStatus == BookingStatus.EXPIRED
+                || targetStatus == BookingStatus.REFUNDED) {
             try {
-                ticketService.deleteTickets(savedBooking.getId());
+                if (targetStatus == BookingStatus.REFUNDED) {
+                    ticketService.refundTickets(savedBooking.getId());
+                } else {
+                    ticketService.deleteTickets(savedBooking.getId());
+                }
             } catch (Exception e) {
-                log.warn("Failed to delete/cancel tickets for bookingId: {}", savedBooking.getId(), e);
+                log.warn("Failed to update tickets for bookingId: {}", savedBooking.getId(), e);
             }
         }
         

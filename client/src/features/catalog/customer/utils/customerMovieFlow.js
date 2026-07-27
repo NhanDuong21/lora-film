@@ -17,6 +17,15 @@ export const formatLocalClock = localDateTime =>
     ? localDateTime.slice(11, 16)
     : '--:--';
 
+export const isFutureBookableShowtime = (showtime, now = Date.now()) => {
+  if (showtime?.status !== 'OPEN_FOR_BOOKING') return false;
+  const startTime = Date.parse(showtime?.startTime);
+  const currentTime = now instanceof Date ? now.getTime() : Number(now);
+  return Number.isFinite(startTime)
+    && Number.isFinite(currentTime)
+    && startTime > currentTime;
+};
+
 export const vietnamDateKey = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: '2-digit', day: '2-digit',

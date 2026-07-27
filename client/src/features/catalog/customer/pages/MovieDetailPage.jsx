@@ -8,6 +8,7 @@ import {
   addCalendarDays,
   formatLocalClock,
   formatServiceDate,
+  isFutureBookableShowtime,
   seatSelectionPath,
   vietnamDateKey
 } from '@/features/catalog/customer/utils/customerMovieFlow';
@@ -65,13 +66,15 @@ export default function MovieDetailPage() {
   const [error, setError] = useState(null);
   const [showtimeError, setShowtimeError] = useState(null);
   const [trailer, setTrailer] = useState(null);
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
   const availableDates = useMemo(
     () => [...new Set(
       options
-        .filter(option => option.status === 'OPEN_FOR_BOOKING' && option.serviceDate)
+        .filter(option => option.serviceDate
+          && isFutureBookableShowtime(option, currentTimeMs))
         .map(option => option.serviceDate)
     )].sort(),
-    [options]
+    [currentTimeMs, options]
   );
 
   const loadMovie = useCallback(async () => {
@@ -121,6 +124,11 @@ export default function MovieDetailPage() {
   }, [loadOptions]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTimeMs(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (!availableDates.length) return;
     const nextDate = availableDates.includes(selectedDate) ? selectedDate : availableDates[0];
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -134,7 +142,8 @@ export default function MovieDetailPage() {
     const result = new Map();
     const unique = new Map(options.map(option => [option.showtimePublicId, option]));
     for (const option of unique.values()) {
-      if (option.serviceDate !== selectedDate || option.status !== 'OPEN_FOR_BOOKING') continue;
+      if (option.serviceDate !== selectedDate
+        || !isFutureBookableShowtime(option, currentTimeMs)) continue;
       if (!result.has(option.cinemaPublicId)) {
         result.set(option.cinemaPublicId, { cinema: option, versions: new Map() });
       }
@@ -150,7 +159,7 @@ export default function MovieDetailPage() {
       }
     }
     return [...result.values()];
-  }, [options, selectedDate]);
+  }, [currentTimeMs, options, selectedDate]);
 
   const poster = movie?.primaryPoster || movie?.media?.find(item => item.mediaType === 'POSTER')?.url || FALLBACK_POSTER;
   const backdrop = movie?.media?.find(item => item.mediaType === 'BACKDROP')?.url;

@@ -1,11 +1,13 @@
 package com.lorafilm.movie.showtime.dto.response;
 
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 
 public class BookingContextShowtimeDto {
     private Long id;
     private String publicId;
     private String status;
+    private LocalDate serviceDate;
     private OffsetDateTime startAt;
     private OffsetDateTime endAt;
 
@@ -33,6 +35,14 @@ public class BookingContextShowtimeDto {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public LocalDate getServiceDate() {
+        return serviceDate;
+    }
+
+    public void setServiceDate(LocalDate serviceDate) {
+        this.serviceDate = serviceDate;
     }
 
     public OffsetDateTime getStartAt() {
