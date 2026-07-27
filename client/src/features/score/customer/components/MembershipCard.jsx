@@ -11,7 +11,9 @@ export default function MembershipCard({ scoreData, user }) {
   const currentPoints = scoreData?.currentPoints ?? 0;
   const heldPoints = scoreData?.heldPoints ?? 0;
   const accumulatedPoints = scoreData?.accumulatedPoints ?? 0;
+  const outstandingPoints = scoreData?.outstandingPoints ?? 0;
   const earningRatePct = Math.round((currentTier.earningRate || 0.05) * 100);
+
 
   const getTierStyle = (code) => {
     switch (code?.toUpperCase()) {
@@ -88,15 +90,26 @@ export default function MembershipCard({ scoreData, user }) {
           </div>
         </div>
 
-        {heldPoints > 0 && (
-          <div className="flex items-center gap-2 rounded-xl bg-black/30 backdrop-blur-md px-4 py-2.5 border border-amber-500/30 text-amber-300">
-            <Lock className="h-4 w-4 shrink-0" />
-            <div className="text-xs">
-              <span className="font-bold">{heldPoints.toLocaleString('vi-VN')}</span> điểm đang tạm giữ
+        <div className="flex flex-wrap items-center gap-3">
+          {heldPoints > 0 && (
+            <div className="flex items-center gap-2 rounded-xl bg-black/30 backdrop-blur-md px-4 py-2.5 border border-amber-500/30 text-amber-300">
+              <Lock className="h-4 w-4 shrink-0" />
+              <div className="text-xs">
+                <span className="font-bold">{heldPoints.toLocaleString('vi-VN')}</span> điểm đang tạm giữ
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          {outstandingPoints > 0 && (
+            <div className="flex items-center gap-2 rounded-xl bg-red-500/20 backdrop-blur-md px-4 py-2.5 border border-red-500/40 text-red-300 animate-pulse">
+              <span className="h-2 w-2 rounded-full bg-red-400" />
+              <div className="text-xs">
+                <span className="font-bold">{outstandingPoints.toLocaleString('vi-VN')}</span> điểm nợ (Outstanding)
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
 
       {/* Card Footer */}
       <div className="mt-6 flex items-center justify-between text-[11px] text-zinc-300 font-medium relative z-10">

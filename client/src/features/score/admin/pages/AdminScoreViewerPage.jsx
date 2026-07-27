@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
 import useAdminScore from '../hooks/useAdminScore';
+import ExpiringPointsSection from '@/features/score/customer/components/ExpiringPointsSection';
+import TierHistoryTimeline from '@/features/score/customer/components/TierHistoryTimeline';
 import { Search, Award, User, Lock, TrendingUp, AlertCircle, FileText, Calendar, ArrowUpRight, ArrowDownLeft, RefreshCcw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 
 export default function AdminScoreViewerPage() {
   const {
     userScore,
     userHistory,
+    expiringPoints,
+    tierHistory,
     isLoadingUserScore,
     errorUserScore,
     fetchUserScore,
-    fetchUserHistory
+    fetchUserHistory,
+    fetchUserExpiringPoints,
+    fetchUserTierHistory
   } = useAdminScore();
+
 
   const [searchId, setSearchId] = useState('');
   const [activeTabFilter, setActiveTabFilter] = useState('ALL');
@@ -21,10 +28,13 @@ export default function AdminScoreViewerPage() {
     try {
       await fetchUserScore(searchId.trim());
       await fetchUserHistory(searchId.trim(), { page: 0, size: 10 });
+      await fetchUserExpiringPoints(searchId.trim());
+      await fetchUserTierHistory(searchId.trim());
     } catch (err) {
       // error handled in hook
     }
   };
+
 
   const handlePageChange = (newPage) => {
     if (!searchId.trim()) return;
@@ -53,13 +63,21 @@ export default function AdminScoreViewerPage() {
   const getTransactionBadge = (type) => {
     switch (type) {
       case 'EARN':
+      case 'EARN_BY_BOOKING':
         return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/20"><ArrowUpRight className="h-3.5 w-3.5" />Tích điểm</span>;
       case 'REDEEM':
+      case 'REDEEM_FOR_BOOKING':
         return <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-400 border border-amber-500/20"><ArrowDownLeft className="h-3.5 w-3.5" />Dùng điểm</span>;
+      case 'REFUND_REDEEM':
+        return <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs font-bold text-cyan-400 border border-cyan-500/20"><RefreshCcw className="h-3.5 w-3.5" />Hoàn điểm</span>;
+      case 'REVOKE_EARN':
+      case 'REVOKE_EARN_BY_REFUND':
+        return <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-400 border border-red-500/20"><AlertCircle className="h-3.5 w-3.5" />Thu hồi</span>;
       default:
         return <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-bold text-blue-400 border border-blue-500/20"><RefreshCcw className="h-3.5 w-3.5" />{type}</span>;
     }
   };
+
 
   const historyItems = userHistory?.content || [];
   const currentPage = userHistory?.number || 0;
@@ -154,10 +172,19 @@ export default function AdminScoreViewerPage() {
                 </span>
                 <span className="text-xs font-bold text-zinc-500 uppercase">Điểm</span>
               </div>
-              <div className="mt-4 pt-4 border-t border-zinc-800 text-[11px] text-zinc-400 flex items-center justify-between">
-                <span>Điểm tạm giữ (Held):</span>
-                <span className="font-bold text-amber-400">{(userScore.heldPoints ?? 0).toLocaleString('vi-VN')} điểm</span>
+              <div className="mt-4 pt-4 border-t border-zinc-800 text-[11px] text-zinc-400 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span>Điểm tạm giữ: </span>
+                  <span className="font-bold text-amber-400">{(userScore.heldPoints ?? 0).toLocaleString('vi-VN')} điểm</span>
+                </div>
+                {(userScore.outstandingPoints > 0) && (
+                  <div>
+                    <span>Điểm nợ: </span>
+                    <span className="font-bold text-red-400">{(userScore.outstandingPoints ?? 0).toLocaleString('vi-VN')} điểm</span>
+                  </div>
+                )}
               </div>
+
             </div>
 
             <div className="rounded-3xl bg-gradient-to-br from-amber-600/20 via-zinc-900 to-zinc-950 border border-amber-500/30 p-6 shadow-xl flex flex-col justify-between relative overflow-hidden">
@@ -183,14 +210,24 @@ export default function AdminScoreViewerPage() {
             </div>
           </div>
 
-          {/* Phase 2 Note */}
+          {/* Phase 3 Note & Sections */}
           <div className="rounded-2xl bg-blue-500/10 border border-blue-500/20 p-4 flex items-start gap-3 text-blue-300 text-xs leading-relaxed">
             <Info className="h-5 w-5 shrink-0 text-blue-400 mt-0.5" />
             <div>
-              <span className="font-bold block mb-0.5">Quyền hạn quản lý điểm Phase 1</span>
-              Ở Giai đoạn 1 (Foundation & Loyalty Center), Admin được cấp quyền tra cứu số dư và lịch sử giao dịch điểm. Các tính năng Điều chỉnh số dư thủ công (Manual Adjustments) và Phục hồi điểm (Revoke/Refund) sẽ được tích hợp trong Giai đoạn 2.
+              <span className="font-bold block mb-0.5">Quyền hạn quản lý điểm Phase 3 (Refund, Expiration & Tier)</span>
+              Ở Giai đoạn 3, hệ thống đã hoàn thiện toàn bộ vòng đời điểm thưởng: tích điểm, dùng điểm, hoàn điểm (Refund), thu hồi điểm (Revoke), theo dõi hạn sử dụng theo nguyên tắc FIFO (Expiration) và lịch sử thăng giáng hạng (Tier History - Append Only).
             </div>
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-6 flex flex-col">
+              <ExpiringPointsSection expiringPoints={expiringPoints} isLoading={isLoadingUserScore} />
+            </div>
+            <div className="lg:col-span-6 flex flex-col">
+              <TierHistoryTimeline tierHistory={tierHistory} isLoading={isLoadingUserScore} />
+            </div>
+          </div>
+
 
           {/* History Table */}
           <div className="rounded-3xl bg-zinc-900/80 border border-zinc-800 p-6 shadow-xl space-y-6 backdrop-blur-md">
@@ -207,8 +244,10 @@ export default function AdminScoreViewerPage() {
                   { id: 'ALL', label: 'Tất cả' },
                   { id: 'EARN', label: 'Tích điểm' },
                   { id: 'REDEEM', label: 'Dùng điểm' },
-                  { id: 'REFUND_REDEEM', label: 'Hoàn/Thu hồi' }
+                  { id: 'REFUND_REDEEM', label: 'Hoàn điểm' },
+                  { id: 'REVOKE_EARN', label: 'Thu hồi' }
                 ].map((tab) => (
+
                   <button
                     key={tab.id}
                     onClick={() => handleFilterClick(tab.id)}

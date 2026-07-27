@@ -27,12 +27,29 @@ const scoreAdminService = {
   },
 
   /**
+   * Get user expiring point buckets by accountId
+   */
+  getUserExpiringPoints: async (accountId) => {
+    const response = await apiClient.get(`${ADMIN_SCORE_API_URL}/${accountId}/expiring`);
+    return response.data?.data || response.data;
+  },
+
+  /**
+   * Get user membership tier history by accountId
+   */
+  getUserTierHistory: async (accountId) => {
+    const response = await apiClient.get(`${ADMIN_SCORE_API_URL}/${accountId}/tier-history`);
+    return response.data?.data || response.data;
+  },
+
+  /**
    * Get all membership tiers
    */
   getAllTiers: async () => {
     const response = await apiClient.get(ADMIN_TIER_API_URL);
     return response.data?.data || response.data;
   },
+
 
   /**
    * Get membership tier by code or id

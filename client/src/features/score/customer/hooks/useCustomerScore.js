@@ -6,8 +6,12 @@ export default function useCustomerScore() {
   const [scoreData, setScoreData] = useState(null);
   const [tiers, setTiers] = useState([]);
   const [history, setHistory] = useState({ content: [], totalPages: 0, totalElements: 0, number: 0 });
+  const [expiringPoints, setExpiringPoints] = useState([]);
+  const [tierHistory, setTierHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [isExpiringLoading, setIsExpiringLoading] = useState(false);
+  const [isTierHistoryLoading, setIsTierHistoryLoading] = useState(false);
   const [error, setError] = useState('');
 
   const fetchScoreAndTiers = useCallback(async () => {
@@ -49,20 +53,61 @@ export default function useCustomerScore() {
     }
   }, []);
 
+  const fetchExpiringPoints = useCallback(async () => {
+    setIsExpiringLoading(true);
+    try {
+      const res = await scoreCustomerService.getExpiringPoints();
+      if (res?.success && res?.data) {
+        setExpiringPoints(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch expiring points:', err);
+    } finally {
+      setIsExpiringLoading(false);
+    }
+  }, []);
+
+  const fetchTierHistory = useCallback(async () => {
+    setIsTierHistoryLoading(true);
+    try {
+      const res = await scoreCustomerService.getTierHistory();
+      if (res?.success && res?.data) {
+        setTierHistory(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch tier history:', err);
+    } finally {
+      setIsTierHistoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchScoreAndTiers();
     fetchHistory({ page: 0, size: 10 });
-  }, [fetchScoreAndTiers, fetchHistory]);
+    fetchExpiringPoints();
+    fetchTierHistory();
+  }, [fetchScoreAndTiers, fetchHistory, fetchExpiringPoints, fetchTierHistory]);
 
   return {
     scoreData,
     tiers,
     history,
+    expiringPoints,
+    tierHistory,
     isLoading,
     isHistoryLoading,
+    isExpiringLoading,
+    isTierHistoryLoading,
     error,
-    refreshScore: fetchScoreAndTiers,
-    fetchHistory
+    refreshScore: () => {
+      fetchScoreAndTiers();
+      fetchExpiringPoints();
+      fetchTierHistory();
+    },
+    fetchHistory,
+    fetchExpiringPoints,
+    fetchTierHistory
   };
 }
+

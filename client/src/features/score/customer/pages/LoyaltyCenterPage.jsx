@@ -4,6 +4,9 @@ import MembershipCard from '@/features/score/customer/components/MembershipCard'
 import TierProgressBar from '@/features/score/customer/components/TierProgressBar';
 import ScoreHistoryTable from '@/features/score/customer/components/ScoreHistoryTable';
 import ComingSoonLayout from '@/features/score/customer/components/ComingSoonLayout';
+import OutstandingBadge from '@/features/score/customer/components/OutstandingBadge';
+import ExpiringPointsSection from '@/features/score/customer/components/ExpiringPointsSection';
+import TierHistoryTimeline from '@/features/score/customer/components/TierHistoryTimeline';
 import { Award, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -12,8 +15,12 @@ export default function LoyaltyCenterPage() {
   const {
     scoreData,
     history,
+    expiringPoints,
+    tierHistory,
     isLoading,
     isHistoryLoading,
+    isExpiringLoading,
+    isTierHistoryLoading,
     error,
     refreshScore,
     fetchHistory
@@ -62,6 +69,11 @@ export default function LoyaltyCenterPage() {
           </div>
         )}
 
+        {/* Outstanding Badge Banner (if in debt) */}
+        {scoreData?.outstandingPoints > 0 && (
+          <OutstandingBadge outstandingPoints={scoreData.outstandingPoints} variant="banner" />
+        )}
+
         {/* Loading skeleton or Content */}
         {isLoading && !scoreData ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-pulse">
@@ -82,6 +94,16 @@ export default function LoyaltyCenterPage() {
           </div>
         )}
 
+        {/* Phase 3: Expiring Points & Tier History Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-6 flex flex-col">
+            <ExpiringPointsSection expiringPoints={expiringPoints} isLoading={isExpiringLoading} />
+          </div>
+          <div className="lg:col-span-6 flex flex-col">
+            <TierHistoryTimeline tierHistory={tierHistory} isLoading={isTierHistoryLoading} />
+          </div>
+        </div>
+
         {/* Transaction History Table */}
         <div>
           <ScoreHistoryTable
@@ -100,3 +122,4 @@ export default function LoyaltyCenterPage() {
     </div>
   );
 }
+
