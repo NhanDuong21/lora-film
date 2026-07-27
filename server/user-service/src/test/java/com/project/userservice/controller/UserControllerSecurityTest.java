@@ -11,9 +11,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 public class UserControllerSecurityTest {
 
     @Autowired
@@ -25,7 +27,8 @@ public class UserControllerSecurityTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Unauthorized access"));
+                .andExpect(jsonPath("$.message").value("Authentication is required"))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_UNAUTHORIZED"));
     }
     
     @Test
@@ -35,6 +38,7 @@ public class UserControllerSecurityTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Unauthorized access"));
+                .andExpect(jsonPath("$.message").value("Invalid or expired access token"))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_UNAUTHORIZED"));
     }
 }

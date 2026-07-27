@@ -24,12 +24,16 @@ class UserServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private UserAuditService auditService;
+    @Mock
+    private UserDomainEventService eventService;
 
     private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserServiceImpl(userRepository);
+        userService = new UserServiceImpl(userRepository, auditService, eventService);
     }
 
     @Test
