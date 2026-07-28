@@ -28,17 +28,24 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
     private final String baseUrl;
     private final String internalToken;
     private final Duration readTimeout;
+    private final Duration maxClockSkew;
 
     public BookingPaymentClientImpl(
             ObjectMapper objectMapper,
             @Value("${booking.service.base-url:http://localhost:8083}") String baseUrl,
             @Value("${booking.service.internal-token:}") String internalToken,
             @Value("${booking.service.connect-timeout:5000}") int connectTimeout,
-            @Value("${booking.service.read-timeout:10000}") int readTimeout) {
+            @Value("${booking.service.read-timeout:10000}") int readTimeout,
+            @Value("${booking.service.max-clock-skew-seconds:5}") long maxClockSkewSeconds) {
+        if (maxClockSkewSeconds < 0) {
+            throw new IllegalArgumentException(
+                    "booking.service.max-clock-skew-seconds must not be negative");
+        }
         this.objectMapper = objectMapper;
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         this.internalToken = internalToken;
         this.readTimeout = Duration.ofMillis(readTimeout);
+        this.maxClockSkew = Duration.ofSeconds(maxClockSkewSeconds);
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeout))
                 .build();
@@ -136,7 +143,7 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
                 || context.getAmount().compareTo(BigDecimal.ZERO) <= 0
                 || context.getCurrency() == null
                 || context.getAmountLockedAt() == null
-                || context.getAmountLockedAt().isAfter(now)
+                || context.getAmountLockedAt().isAfter(now.plus(maxClockSkew))
                 || context.getExpiresAt() == null
                 || !context.getExpiresAt().isAfter(now)
                 || !Boolean.TRUE.equals(context.getPayable())) {
