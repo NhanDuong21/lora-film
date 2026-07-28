@@ -658,7 +658,6 @@ CREATE TABLE promotion_rules (
     deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
     deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
     CONSTRAINT uk_promotion_rule_public UNIQUE (public_id),
-    CONSTRAINT uk_promotion_rule_code UNIQUE (code),
     CONSTRAINT chk_rule_priority CHECK (priority >= 0),
     CONSTRAINT chk_rule_execution_order CHECK (execution_order > 0),
     CONSTRAINT chk_rule_period CHECK (
