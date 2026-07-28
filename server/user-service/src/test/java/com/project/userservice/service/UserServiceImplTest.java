@@ -18,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
@@ -28,12 +30,15 @@ class UserServiceImplTest {
     private UserAuditService auditService;
     @Mock
     private UserDomainEventService eventService;
+    @Mock
+    private com.project.userservice.repository.CustomerProfileRepository customerProfileRepository;
 
     private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserServiceImpl(userRepository, auditService, eventService);
+        userService = new UserServiceImpl(
+                userRepository, auditService, eventService, customerProfileRepository);
     }
 
     @Test
@@ -43,7 +48,7 @@ class UserServiceImplTest {
 
         UserProfileResponse response = userService.getUserProfile(5L);
 
-        assertEquals("KH000005", response.getCustomerCode());
+        assertEquals("CUS0000000005", response.getCustomerCode());
         assertEquals("duy@example.com", response.getEmail());
         assertEquals("Minh Duy", response.getFullName());
     }
@@ -60,8 +65,10 @@ class UserServiceImplTest {
         List<UserProfileResponse> response =
                 userService.searchUserProfiles("KH000005", 20);
 
-        assertEquals(List.of("KH000005", "KH000008"),
+        assertEquals(List.of("CUS0000000005", "CUS0000000008"),
                 response.stream().map(UserProfileResponse::getCustomerCode).toList());
+        verify(customerProfileRepository).findByAccountIdIn(List.of(5L, 8L));
+        verify(customerProfileRepository, never()).findByAccountId(any());
     }
 
     private User user(Long id, String fullName, String email, String phone) {

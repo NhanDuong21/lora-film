@@ -12,6 +12,8 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     Optional<Department> findByCodeIgnoreCase(String code);
     boolean existsByCodeIgnoreCase(String code);
     boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
+    boolean existsByNameIgnoreCase(String name);
+    boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
     Page<Department> findByIsDeletedFalseAndNameContainingIgnoreCase(String keyword, Pageable pageable);
     List<Department> findByIsDeletedFalseOrderByNameAsc();
 }

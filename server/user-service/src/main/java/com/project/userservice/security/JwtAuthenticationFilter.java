@@ -18,7 +18,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -54,6 +53,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     writeUnauthorized(response);
                     return;
                 }
+                Object sessionClaim = claims.get("sid");
+                Long sessionId = sessionClaim instanceof Number number ? number.longValue() : null;
+                if (sessionId != null
+                        && Boolean.TRUE.equals(redisTemplate.hasKey("revoked_session:" + sessionId))) {
+                    writeUnauthorized(response);
+                    return;
+                }
+                String accountRevokedAt = redisTemplate.opsForValue()
+                        .get("account_revoked_after:" + accountId);
+                if (accountRevokedAt != null && isIssuedBeforeRevocation(claims, accountRevokedAt)) {
+                    writeUnauthorized(response);
+                    return;
+                }
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
                 authorities.add(new SimpleGrantedAuthority(
                         role.startsWith("ROLE_") ? role : "ROLE_" + role));
@@ -63,6 +75,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             .map(String.class::cast)
                             .map(SimpleGrantedAuthority::new)
                             .forEach(authorities::add);
+                    if (permissions.contains("PERM_ROOT_ACCESS")
+                            && !"ADMIN".equals(role) && !"ROLE_ADMIN".equals(role)) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+                    }
                 }
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         accountId, null, authorities);
@@ -123,6 +139,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return result.toString();
         } catch (java.security.NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private boolean isIssuedBeforeRevocation(Claims claims, String revokedAt) {
+        try {
+            Number issuedAtMs = claims.get("iatMs", Number.class);
+            long issuedAt = issuedAtMs == null
+                    ? (claims.getIssuedAt() == null ? Long.MIN_VALUE : claims.getIssuedAt().getTime())
+                    : issuedAtMs.longValue();
+            return issuedAt < Long.parseLong(revokedAt);
+        } catch (NumberFormatException exception) {
+            return true;
         }
     }
 }

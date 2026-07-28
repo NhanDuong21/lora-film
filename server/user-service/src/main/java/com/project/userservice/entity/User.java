@@ -17,10 +17,10 @@ public class User {
     @Column(name = "account_id")
     private Long accountId;
 
-    @Column(name = "full_name", nullable = false, length = 100)
+    @Column(name = "full_name", nullable = false, length = 150)
     private String fullName;
 
-    @Column(name = "email", length = 100)
+    @Column(name = "email", length = 255)
     private String email;
 
     @Column(name = "phone_number", unique = true, length = 15)
@@ -32,10 +32,10 @@ public class User {
     @Column(name = "cccd_masked", length = 20)
     private String cccdMasked;
 
-    @Column(name = "province_code", length = 10)
+    @Column(name = "province_code", length = 20)
     private String provinceCode;
 
-    @Column(name = "province_name", length = 100)
+    @Column(name = "province_name", length = 150)
     private String provinceName;
 
     @Enumerated(EnumType.STRING)

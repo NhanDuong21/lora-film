@@ -40,4 +40,17 @@ public interface PayrollRepository extends JpaRepository<Payroll, Long>, JpaSpec
                          @Param("status") PayrollStatus status,
                          @Param("month") LocalDate month,
                          Pageable pageable);
+
+    @EntityGraph(attributePaths = {"employee", "employee.department", "employee.position"})
+    @Query("""
+            select p from Payroll p
+            where p.employee.accountId = :employeeId
+              and p.status in :statuses
+              and (:month is null or p.salaryMonth = :month)
+            """)
+    Page<Payroll> findVisibleToEmployee(
+            @Param("employeeId") Long employeeId,
+            @Param("statuses") java.util.Collection<PayrollStatus> statuses,
+            @Param("month") LocalDate month,
+            Pageable pageable);
 }

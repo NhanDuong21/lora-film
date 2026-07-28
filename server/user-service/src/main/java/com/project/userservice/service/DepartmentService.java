@@ -36,7 +36,10 @@ public class DepartmentService {
 
     @Transactional(readOnly = true)
     public Page<DepartmentResponse> search(String keyword, Pageable pageable) {
-        return repository.findByIsDeletedFalseAndNameContainingIgnoreCase(keyword == null ? "" : keyword, pageable)
+        return repository.findByIsDeletedFalseAndNameContainingIgnoreCase(keyword == null ? "" : keyword,
+                        com.project.userservice.util.PageableUtils.sanitize(pageable,
+                                java.util.Set.of("id", "code", "name", "createdAt", "updatedAt"),
+                                "name", org.springframework.data.domain.Sort.Direction.ASC))
                 .map(this::map);
     }
 
@@ -45,6 +48,9 @@ public class DepartmentService {
     public DepartmentResponse create(DepartmentRequest request) {
         if (repository.existsByCodeIgnoreCase(request.code())) {
             throw new BusinessException("Department code already exists", "USER_DEPARTMENT_DUPLICATE");
+        }
+        if (repository.existsByNameIgnoreCase(request.name().trim())) {
+            throw new BusinessException("Department name already exists", "USER_DEPARTMENT_DUPLICATE");
         }
         Department value = new Department();
         apply(value, request);
@@ -59,6 +65,9 @@ public class DepartmentService {
         Department value = find(id);
         if (repository.existsByCodeIgnoreCaseAndIdNot(request.code(), id)) {
             throw new BusinessException("Department code already exists", "USER_DEPARTMENT_DUPLICATE");
+        }
+        if (repository.existsByNameIgnoreCaseAndIdNot(request.name().trim(), id)) {
+            throw new BusinessException("Department name already exists", "USER_DEPARTMENT_DUPLICATE");
         }
         apply(value, request);
         auditService.log("DEPARTMENT_UPDATED", "DEPARTMENT", id, null);

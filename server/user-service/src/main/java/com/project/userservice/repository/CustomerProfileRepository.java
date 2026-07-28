@@ -8,10 +8,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import com.project.userservice.enumtype.UserStatus;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface CustomerProfileRepository extends JpaRepository<CustomerProfile, Long> {
     Optional<CustomerProfile> findByAccountId(Long accountId);
+    List<CustomerProfile> findByAccountIdIn(Collection<Long> accountIds);
     boolean existsByAccountId(Long accountId);
     Page<CustomerProfile> findByCustomerCodeContainingIgnoreCase(String keyword, Pageable pageable);
 

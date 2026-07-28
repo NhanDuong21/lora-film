@@ -10,6 +10,7 @@ public record CustomerResponse(
         Long accountId,
         String customerCode,
         String fullName,
+        String email,
         String phoneNumber,
         Gender gender,
         LocalDate birthday,

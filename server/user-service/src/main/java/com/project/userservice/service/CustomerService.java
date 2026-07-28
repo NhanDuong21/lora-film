@@ -34,7 +34,10 @@ public class CustomerService {
 
     @Transactional(readOnly = true)
     public Page<CustomerResponse> search(String keyword, UserStatus status, Pageable pageable) {
-        Page<CustomerProfile> page = customerRepository.search(keyword, status, pageable);
+        Page<CustomerProfile> page = customerRepository.search(keyword, status,
+                com.project.userservice.util.PageableUtils.sanitize(pageable,
+                        java.util.Set.of("id", "customerCode", "joinedAt", "createdAt", "updatedAt"),
+                        "createdAt", org.springframework.data.domain.Sort.Direction.DESC));
         Map<Long, User> users = userRepository.findAllById(
                         page.getContent().stream().map(CustomerProfile::getAccountId).toList())
                 .stream().collect(Collectors.toMap(User::getAccountId, Function.identity()));
@@ -70,7 +73,7 @@ public class CustomerService {
             throw new BusinessException("User not found", "USER_001");
         }
         return new CustomerResponse(profile.getId(), user.getAccountId(), profile.getCustomerCode(),
-                user.getFullName(), user.getPhoneNumber(), user.getGender(), user.getBirthday(),
+                user.getFullName(), user.getEmail(), user.getPhoneNumber(), user.getGender(), user.getBirthday(),
                 user.getAvatarUrl(), user.getStatus(), profile.getJoinedAt(), profile.getNote());
     }
 }

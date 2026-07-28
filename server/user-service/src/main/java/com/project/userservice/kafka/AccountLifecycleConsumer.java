@@ -66,6 +66,18 @@ public class AccountLifecycleConsumer {
             throw new IllegalStateException("Profile does not exist for account lifecycle event");
         }
 
+        if ("ACCOUNT_EMAIL_CHANGED".equals(eventType)) {
+            String email = data.path("email").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            if (email.isBlank()) {
+                throw new IllegalArgumentException("Email change event is missing data.email");
+            }
+            user.setEmail(email);
+            auditService.log(eventType, "USER", accountId, "Email synchronized from auth-service");
+            domainEventService.record("USER_EMAIL_CHANGED", "USER", accountId,
+                    Map.of("accountId", accountId, "email", email));
+            return;
+        }
+
         UserStatus status = mapStatus(eventType, data.path("status").asText());
         if (status == null || user.getStatus() == status) {
             return;

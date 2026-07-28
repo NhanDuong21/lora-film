@@ -46,7 +46,11 @@ public class EmployeeService {
     @Transactional(readOnly = true)
     public Page<EmployeeResponse> search(String keyword, EmployeeStatus status, Long departmentId,
                                          Long positionId, Pageable pageable) {
-        Page<Employee> page = employeeRepository.search(keyword, status, departmentId, positionId, pageable);
+        Page<Employee> page = employeeRepository.search(keyword, status, departmentId, positionId,
+                com.project.userservice.util.PageableUtils.sanitize(pageable,
+                        java.util.Set.of("accountId", "employeeCode", "hireDate", "baseSalary", "status",
+                                "createdAt", "updatedAt"),
+                        "createdAt", org.springframework.data.domain.Sort.Direction.DESC));
         Map<Long, User> users = userRepository.findAllById(
                         page.getContent().stream().map(Employee::getAccountId).toList())
                 .stream().collect(Collectors.toMap(User::getAccountId, Function.identity()));
@@ -171,6 +175,7 @@ public class EmployeeService {
 
     private Map<String, Object> eventData(Employee employee) {
         return Map.of(
+                "accountId", employee.getAccountId(),
                 "employeeId", employee.getAccountId(),
                 "employeeCode", employee.getEmployeeCode(),
                 "departmentId", employee.getDepartment().getId(),

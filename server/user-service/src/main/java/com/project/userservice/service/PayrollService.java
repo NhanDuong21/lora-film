@@ -52,7 +52,20 @@ public class PayrollService {
     @Transactional(readOnly = true)
     public Page<PayrollResponse> search(Long employeeId, PayrollStatus status, String month, Pageable pageable) {
         LocalDate salaryMonth = month == null || month.isBlank() ? null : parseMonth(month);
-        Page<Payroll> page = payrollRepository.search(employeeId, status, salaryMonth, pageable);
+        Page<Payroll> page = payrollRepository.search(employeeId, status, salaryMonth, sanitize(pageable));
+        return mapPage(page);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PayrollResponse> searchMine(Long employeeId, String month, Pageable pageable) {
+        LocalDate salaryMonth = month == null || month.isBlank() ? null : parseMonth(month);
+        Page<Payroll> page = payrollRepository.findVisibleToEmployee(employeeId,
+                java.util.EnumSet.of(PayrollStatus.APPROVED, PayrollStatus.PAID),
+                salaryMonth, sanitize(pageable));
+        return mapPage(page);
+    }
+
+    private Page<PayrollResponse> mapPage(Page<Payroll> page) {
         Map<Long, User> users = userRepository.findAllById(page.getContent().stream()
                         .map(p -> p.getEmployee().getAccountId()).distinct().toList())
                 .stream().collect(Collectors.toMap(User::getAccountId, Function.identity()));
@@ -172,6 +185,12 @@ public class PayrollService {
     }
 
     private void applyAmounts(Payroll payroll, PayrollRequest request) {
+        if (request.basicSalary() == null || request.basicSalary().signum() <= 0
+                || request.allowance() == null || request.allowance().signum() < 0
+                || request.bonus() == null || request.bonus().signum() < 0
+                || request.deduction() == null || request.deduction().signum() < 0) {
+            throw new BusinessException("Payroll amounts are invalid", "USER_008");
+        }
         validateDetailTotals(request);
         BigDecimal total = request.basicSalary().add(request.allowance()).add(request.bonus())
                 .subtract(request.deduction());
@@ -233,5 +252,12 @@ public class PayrollService {
                 includeDetails ? payroll.getDetails().stream()
                         .map(d -> new PayrollDetailResponse(d.getId(), d.getType(), d.getDescription(), d.getAmount()))
                         .toList() : Collections.emptyList());
+    }
+
+    private Pageable sanitize(Pageable pageable) {
+        return com.project.userservice.util.PageableUtils.sanitize(pageable,
+                java.util.Set.of("id", "salaryMonth", "basicSalary", "totalSalary",
+                        "status", "createdAt", "updatedAt"),
+                "salaryMonth", org.springframework.data.domain.Sort.Direction.DESC);
     }
 }

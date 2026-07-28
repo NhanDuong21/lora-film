@@ -36,7 +36,10 @@ public class PositionService {
 
     @Transactional(readOnly = true)
     public Page<PositionResponse> search(String keyword, Pageable pageable) {
-        return repository.findByIsDeletedFalseAndTitleContainingIgnoreCase(keyword == null ? "" : keyword, pageable)
+        return repository.findByIsDeletedFalseAndTitleContainingIgnoreCase(keyword == null ? "" : keyword,
+                        com.project.userservice.util.PageableUtils.sanitize(pageable,
+                                java.util.Set.of("id", "code", "title", "createdAt", "updatedAt"),
+                                "title", org.springframework.data.domain.Sort.Direction.ASC))
                 .map(this::map);
     }
 
