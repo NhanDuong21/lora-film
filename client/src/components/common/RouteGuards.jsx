@@ -43,21 +43,44 @@ export function RoleRoute({ children, allowedRoles }) {
     const normalizedAllowedRoles = allowedRoles.map(role => role.replace(/^ROLE_/, ""));
 
     if (!normalizedAllowedRoles.includes(normalizedRole)) {
-        return <Navigate to="/" replace />;
+        return <Navigate to="/403" replace />;
     }
 
     return children;
 }
 
+export function PermissionRoute({ children, requiredPermissions = [], requireAll = false }) {
+    const { isAuthenticated, user, isInitializing } = useAuth();
+    const location = useLocation();
+
+    if (isInitializing) return <PageLoader />;
+    if (!isAuthenticated) {
+        return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    const permissions = user?.permissions || [];
+    const normalizedRole = String(user?.role || "").replace(/^ROLE_/, "");
+    const hasSuperAdminAccess = normalizedRole === "ADMIN"
+        || permissions.includes("PERM_ROOT_ACCESS");
+    const allowed = hasSuperAdminAccess || requiredPermissions.length === 0 || (
+        requireAll
+            ? requiredPermissions.every((permission) => permissions.includes(permission))
+            : requiredPermissions.some((permission) => permissions.includes(permission))
+    );
+
+    return allowed ? children : <Navigate to="/403" replace />;
+}
+
 export function AdminRedirectGuard({ children }) {
     const { isAuthenticated, userRole, isInitializing } = useAuth();
+    const location = useLocation();
 
     if (isInitializing) {
         return <PageLoader />;
     }
 
     const normalizedRole = userRole ? userRole.replace(/^ROLE_/, "") : "";
-    if (isAuthenticated && normalizedRole === "ADMIN") {
+    if (isAuthenticated && normalizedRole === "ADMIN" && location.pathname === "/") {
         return <Navigate to="/admin" replace />;
     }
 

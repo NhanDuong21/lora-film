@@ -1,121 +1,133 @@
 import { jwtDecode } from "jwt-decode";
 
+const AUTH_KEYS = [
+    "authToken",
+    "refreshToken",
+    "tokenType",
+    "userEmail",
+    "userRole",
+    "userAccountId",
+    "userPermissions",
+    "expiresIn",
+    "authRememberMe"
+];
+
 let pendingAccountId = null;
+
+const readValue = (key) => sessionStorage.getItem(key) ?? localStorage.getItem(key);
+
+const removeFromStorage = (storage) => {
+    AUTH_KEYS.forEach((key) => storage.removeItem(key));
+};
+
+const decodeToken = (token) => {
+    if (!token) return null;
+    try {
+        return jwtDecode(token);
+    } catch {
+        return null;
+    }
+};
 
 export const setPendingAccountId = (id) => {
     pendingAccountId = id;
 };
 
-export const getPendingAccountId = () => {
-    return pendingAccountId;
-};
+export const getPendingAccountId = () => pendingAccountId;
 
 export const clearPendingAccountId = () => {
     pendingAccountId = null;
 };
 
+export const getRememberMe = () => readValue("authRememberMe") === "true";
+
 export const setAuthData = (data) => {
     if (!data) return;
-    const token = data.accessToken || data.token || "";
-    localStorage.setItem("authToken", token);
-    localStorage.setItem("refreshToken", data.refreshToken || "");
-    localStorage.setItem("tokenType", data.tokenType || "Bearer");
-    localStorage.setItem("userEmail", data.email || "");
-    localStorage.setItem("userRole", data.role || "");
-    
-    if (data.expiresIn) {
-        localStorage.setItem("expiresIn", data.expiresIn.toString());
+
+    const current = getAuthSession();
+    const rememberMe = data.rememberMe ?? getRememberMe();
+    const storage = rememberMe ? localStorage : sessionStorage;
+    const secondaryStorage = rememberMe ? sessionStorage : localStorage;
+    const token = data.accessToken || data.token || current.accessToken || "";
+    const decoded = decodeToken(token);
+
+    removeFromStorage(secondaryStorage);
+    storage.setItem("authToken", token);
+    storage.setItem("refreshToken", data.refreshToken || current.refreshToken || "");
+    storage.setItem("tokenType", data.tokenType || current.tokenType || "Bearer");
+    storage.setItem("userEmail", data.email || decoded?.sub || current.email || "");
+    storage.setItem("userRole", data.role || decoded?.role || current.role || "");
+    storage.setItem("authRememberMe", String(Boolean(rememberMe)));
+
+    const permissions = data.permissions || decoded?.permissions || current.permissions || [];
+    storage.setItem("userPermissions", JSON.stringify(Array.isArray(permissions) ? permissions : []));
+
+    const accountId = data.accountId ?? decoded?.userId ?? current.accountId;
+    if (accountId != null && accountId !== "") {
+        storage.setItem("userAccountId", String(accountId));
     }
 
-    if (data.accountId) {
-        localStorage.setItem("userAccountId", data.accountId.toString());
-    } else if (token) {
-        try {
-            const decoded = jwtDecode(token);
-            if (decoded && decoded.userId) {
-                localStorage.setItem("userAccountId", decoded.userId.toString());
-            }
-        } catch {
-            // Ignore parse errors safely
-        }
+    const expiresIn = data.expiresIn ?? current.expiresIn;
+    if (expiresIn != null && expiresIn !== "") {
+        storage.setItem("expiresIn", String(expiresIn));
     }
 };
 
-export const getAuthToken = () => {
-    return localStorage.getItem("authToken");
-};
+export const getAuthToken = () => readValue("authToken");
 
-export const getRefreshToken = () => {
-    return localStorage.getItem("refreshToken");
-};
+export const getRefreshToken = () => readValue("refreshToken");
 
-export const getUserRole = () => {
-    return localStorage.getItem("userRole");
-};
+export const getUserRole = () => readValue("userRole");
 
-export const getUserEmail = () => {
-    return localStorage.getItem("userEmail");
-};
+export const getUserEmail = () => readValue("userEmail");
 
-export const getUserAccountId = () => {
-    return localStorage.getItem("userAccountId");
+export const getUserAccountId = () => readValue("userAccountId");
+
+export const getUserPermissions = () => {
+    const decodedPermissions = decodeToken(getAuthToken())?.permissions;
+    if (Array.isArray(decodedPermissions)) return decodedPermissions;
+    try {
+        const stored = JSON.parse(readValue("userPermissions") || "[]");
+        return Array.isArray(stored) ? stored : [];
+    } catch {
+        return [];
+    }
 };
 
 export const clearAuthData = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("tokenType");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("userRole");
-    localStorage.removeItem("userAccountId");
-    localStorage.removeItem("expiresIn");
+    removeFromStorage(localStorage);
+    removeFromStorage(sessionStorage);
 };
 
 export const isAuthenticated = () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) return false;
-    try {
-        const decoded = jwtDecode(token);
-        if (!decoded?.exp || decoded.exp * 1000 <= Date.now()) {
-            clearAuthData();
-            return false;
-        }
-        // Backend does not send tokenType in JWT payload, so just return true if token is valid and not expired.
-        return true;
-    } catch {
-        clearAuthData();
-        return false;
-    }
+    const decoded = decodeToken(getAuthToken());
+    return Boolean(decoded?.exp && decoded.exp * 1000 > Date.now());
 };
 
-// Consolidated Storage APIs required by the integration prompt
-export const getAuthSession = () => {
-    return {
-        accessToken: getAuthToken(),
-        refreshToken: getRefreshToken(),
-        tokenType: localStorage.getItem("tokenType") || "Bearer",
-        accountId: getUserAccountId(),
-        email: getUserEmail(),
-        role: getUserRole(),
-        expiresIn: localStorage.getItem("expiresIn")
-    };
-};
+export const hasRefreshToken = () => Boolean(getRefreshToken());
+
+export const getAuthSession = () => ({
+    accessToken: getAuthToken(),
+    refreshToken: getRefreshToken(),
+    tokenType: readValue("tokenType") || "Bearer",
+    accountId: getUserAccountId(),
+    email: getUserEmail(),
+    role: getUserRole(),
+    permissions: getUserPermissions(),
+    expiresIn: readValue("expiresIn"),
+    rememberMe: getRememberMe()
+});
 
 export const saveAuthSession = (data) => {
     setAuthData(data);
 };
 
 export const updateAuthTokens = (accessToken, refreshToken) => {
-    localStorage.setItem("authToken", accessToken);
-    if (refreshToken) {
-        localStorage.setItem("refreshToken", refreshToken);
-    }
+    setAuthData({ accessToken, refreshToken });
 };
 
 export const clearAuthSession = () => {
     clearAuthData();
 };
 
-export const getAccessToken = () => {
-    return getAuthToken();
-};
+export const getAccessToken = () => getAuthToken();

@@ -16,10 +16,11 @@ export const verifyOtp = async (email, otpCode, purpose = "REGISTRATION") => {
     return response.data;
 };
 
-export const login = async (email, password) => {
+export const login = async (email, password, rememberMe = false) => {
     const response = await apiClient.post(`/api/auth/login`, {
         email,
-        password
+        password,
+        rememberMe
     });
     return response.data;
 };
@@ -32,7 +33,7 @@ export const resendOtp = async (email, purpose = "REGISTRATION") => {
     return response.data;
 };
 
-export const refreshToken = async (tokenValue) => {
+export const refreshToken = async (tokenValue, { redirectOnFailure = true } = {}) => {
     try {
         const response = await apiClient.post(`/api/auth/refresh-token`, {
             refreshToken: tokenValue
@@ -44,7 +45,9 @@ export const refreshToken = async (tokenValue) => {
         return resData;
     } catch (error) {
         clearAuthData();
-        window.location.href = "/login";
+        if (redirectOnFailure) {
+            window.location.href = "/login";
+        }
         throw error;
     }
 };
@@ -52,15 +55,33 @@ export const refreshToken = async (tokenValue) => {
 export const forgotPassword = async (email) =>
     (await apiClient.post("/api/auth/forgot-password", { email })).data;
 
-export const resetPassword = async (token, newPassword) =>
-    (await apiClient.post("/api/auth/reset-password", { token, newPassword })).data;
+export const resetPassword = async (token, newPassword, email) =>
+    (await apiClient.post("/api/auth/reset-password", {
+        token,
+        newPassword,
+        ...(email ? { email } : {})
+    })).data;
 
 export const changePassword = async (oldPassword, newPassword) =>
     (await apiClient.post("/api/auth/change-password", { oldPassword, newPassword })).data;
 
+export const changeEmail = async (newEmail, password) =>
+    (await apiClient.post("/api/auth/change-email", { newEmail, password })).data;
+
+export const getCurrentAccount = async () =>
+    (await apiClient.get("/api/auth/me")).data?.data;
+
 export const logout = async () => {
     try {
         await apiClient.post('/api/auth/logout');
+    } finally {
+        clearAuthData();
+    }
+};
+
+export const logoutAll = async () => {
+    try {
+        await apiClient.post('/api/auth/logout-all');
     } finally {
         clearAuthData();
     }

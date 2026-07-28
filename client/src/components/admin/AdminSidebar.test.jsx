@@ -10,7 +10,7 @@ describe('AdminSidebar scheduling terminology', () => {
         <AdminSidebar
           activeTab="auto-schedule-history"
           setActiveTab={vi.fn()}
-          user={{ permissions: [] }}
+          user={{ role: 'ADMIN', permissions: [] }}
           onBackHome={vi.fn()}
           handleLogout={vi.fn()}
         />

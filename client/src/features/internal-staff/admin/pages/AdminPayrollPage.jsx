@@ -1,30 +1,46 @@
 import { useCallback, useEffect, useState } from 'react';
 import { changePayrollStatus, getPayrolls, createPayroll, updatePayroll, getEmployees } from '../services/userAdminService';
-import { AsyncState, Input, Select, StatusBadge } from '@/components/common/ui/uiKit';
-import { Banknote, FileSpreadsheet, Plus, Edit2, CheckCircle2, XCircle, Search, Filter, AlertCircle, Clock, CheckCircle } from 'lucide-react';
+import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
+import { Banknote, FileSpreadsheet, Plus, Edit2, CheckCircle2, XCircle, Search, Filter, Clock, CheckCircle } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import AdminStatCard from '../components/AdminStatCard';
+import useAdminAccess from '../hooks/useAdminAccess';
 
 const money = value => new Intl.NumberFormat('vi-VN', {
   style: 'currency', currency: 'VND', maximumFractionDigits: 0
 }).format(value || 0);
 
 export default function AdminPayrollPage() {
+  const can = useAdminAccess();
+  const canCreatePayroll = can('PAYROLL_CREATE');
+  const canUpdatePayroll = can('PAYROLL_UPDATE');
+  const canApprovePayroll = can('PAYROLL_APPROVE');
   const [query, setQuery] = useState({ month: '', status: '', page: 0, size: 10 });
   const [result, setResult] = useState({ content: [], totalPages: 0, totalElements: 0 });
   const [employees, setEmployees] = useState([]);
   const [state, setState] = useState({ loading: true, error: '' });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPayroll, setEditingPayroll] = useState(null);
-  const [formData, setFormData] = useState({ accountId: '', salaryMonth: '', bonusSalary: 0, penaltySalary: 0, note: '' });
+  const [formData, setFormData] = useState({
+    employeeId: '', salaryMonth: '', basicSalary: '', allowance: 0, bonus: 0, deduction: 0
+  });
   const [stats, setStats] = useState({ totalBudget: 0, pending: 0, paid: 0 });
+  const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
+  const notify = outlet?.triggerToast || (() => undefined);
 
   const loadEmployees = useCallback(async () => {
+    if (!canCreatePayroll && !canUpdatePayroll) return;
     try {
-      const data = await getEmployees({ size: 1000 });
+      const data = await getEmployees({ size: 100 });
       setEmployees(data?.content || []);
     } catch (error) {
-      console.error(error);
+      setState(value => ({
+        ...value,
+        error: error?.message || 'Không thể tải danh sách nhân viên.'
+      }));
     }
-  }, []);
+  }, [canCreatePayroll, canUpdatePayroll]);
 
   useEffect(() => { loadEmployees(); }, [loadEmployees]);
 
@@ -32,32 +48,46 @@ export default function AdminPayrollPage() {
     setEditingPayroll(payroll);
     if (payroll) {
       setFormData({
-        accountId: payroll.accountId || '',
-        salaryMonth: payroll.salaryMonth || '',
-        bonusSalary: payroll.bonusSalary || 0,
-        penaltySalary: payroll.penaltySalary || 0,
-        note: payroll.note || ''
+        employeeId: payroll.employeeId || '',
+        salaryMonth: String(payroll.salaryMonth || '').slice(0, 7),
+        basicSalary: payroll.basicSalary || '',
+        allowance: payroll.allowance || 0,
+        bonus: payroll.bonus || 0,
+        deduction: payroll.deduction || 0
       });
     } else {
       const now = new Date();
-      const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      setFormData({ accountId: '', salaryMonth: monthStr, bonusSalary: 0, penaltySalary: 0, note: '' });
+      const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      setFormData({
+        employeeId: '', salaryMonth: monthStr, basicSalary: '',
+        allowance: 0, bonus: 0, deduction: 0
+      });
     }
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const payload = {
+      employeeId: Number(formData.employeeId),
+      salaryMonth: formData.salaryMonth,
+      basicSalary: Number(formData.basicSalary),
+      allowance: Number(formData.allowance || 0),
+      bonus: Number(formData.bonus || 0),
+      deduction: Number(formData.deduction || 0),
+      details: []
+    };
     try {
       if (editingPayroll) {
-        await updatePayroll(editingPayroll.id, formData);
+        await updatePayroll(editingPayroll.id, payload);
       } else {
-        await createPayroll(formData);
+        await createPayroll(payload);
       }
       setIsModalOpen(false);
       await load();
+      notify(editingPayroll ? 'Bảng lương đã được cập nhật.' : 'Bảng lương đã được tạo.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi lưu bảng lương');
+      notify(error?.message || 'Lỗi khi lưu bảng lương', 'error');
     }
   };
 
@@ -86,26 +116,15 @@ export default function AdminPayrollPage() {
   useEffect(() => { load(); }, [load]);
 
   const transition = async (id, action) => {
+    if (!await confirmAction(`Xác nhận thao tác ${action} với bảng lương này?`)) return;
     try {
       await changePayrollStatus(id, action);
       await load();
+      notify('Trạng thái bảng lương đã được cập nhật.');
     } catch (error) {
       setState(value => ({ ...value, error: error?.message || 'Không thể cập nhật bảng lương.' }));
     }
   };
-
-  const StatCard = ({ title, value, icon: Icon, colorClass, subtitle }) => (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between hover:bg-zinc-900 transition-colors">
-      <div>
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-        <h3 className={`text-2xl font-black ${typeof value === 'string' && value.includes('₫') ? 'text-brand-orange' : 'text-white'}`}>{value}</h3>
-        {subtitle && <p className="text-[10px] text-zinc-500 mt-1 uppercase">{subtitle}</p>}
-      </div>
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${colorClass}`}>
-        <Icon size={24} />
-      </div>
-    </div>
-  );
 
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-6 text-white md:p-8">
@@ -114,17 +133,17 @@ export default function AdminPayrollPage() {
           <h1 className="text-2xl font-black uppercase tracking-wider text-white">Quản lý <span className="text-brand-orange">Lương</span></h1>
           <p className="mt-1 text-sm text-zinc-500">Duyệt, ghi nhận thanh toán và theo dõi lương theo tháng.</p>
         </div>
-        <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
+        {canCreatePayroll && <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
           <Plus size={18} />
           <span>Tạo Bảng Lương</span>
-        </button>
+        </button>}
       </header>
 
       {/* Dashboard Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Tổng ngân sách hiển thị" value={money(stats.totalBudget)} subtitle={`Kỳ ${query.month || 'hiện tại'}`} icon={Banknote} colorClass="bg-brand-orange/10 text-brand-orange border border-brand-orange/20" />
-        <StatCard title="Chờ duyệt" value={stats.pending || '0'} icon={Clock} colorClass="bg-amber-500/10 text-amber-500 border border-amber-500/20" />
-        <StatCard title="Đã thanh toán" value={stats.paid || '0'} icon={CheckCircle} colorClass="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" />
+        <AdminStatCard title="Tổng ngân sách hiển thị" value={money(stats.totalBudget)} valueClassName="text-brand-orange" subtitle={`Kỳ ${query.month || 'hiện tại'}`} icon={Banknote} colorClass="bg-brand-orange/10 text-brand-orange border-brand-orange/20" />
+        <AdminStatCard title="Chờ duyệt" value={stats.pending} icon={Clock} colorClass="bg-amber-500/10 text-amber-500 border-amber-500/20" />
+        <AdminStatCard title="Đã thanh toán" value={stats.paid} icon={CheckCircle} colorClass="bg-emerald-500/10 text-emerald-500 border-emerald-500/20" />
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row gap-3">
@@ -185,7 +204,7 @@ export default function AdminPayrollPage() {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {payroll.status === 'PENDING_APPROVAL' && (
+                      {canApprovePayroll && payroll.status === 'PENDING_APPROVAL' && (
                         <button 
                           onClick={() => transition(payroll.id, 'approve')}
                           className="p-1.5 rounded-lg text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors tooltip"
@@ -195,7 +214,7 @@ export default function AdminPayrollPage() {
                         </button>
                       )}
                       
-                      {payroll.status === 'APPROVED' && (
+                      {canUpdatePayroll && payroll.status === 'APPROVED' && (
                         <button 
                           onClick={() => transition(payroll.id, 'paid')}
                           className="p-1.5 rounded-lg text-zinc-400 hover:text-sky-400 hover:bg-sky-500/10 transition-colors tooltip"
@@ -205,15 +224,15 @@ export default function AdminPayrollPage() {
                         </button>
                       )}
 
-                      <button 
+                      {canUpdatePayroll && <button
                         onClick={() => openModal(payroll)} 
                         className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors tooltip"
                         title="Chỉnh sửa chi tiết"
                       >
                         <Edit2 size={16} />
-                      </button>
+                      </button>}
 
-                      {!['APPROVED', 'PAID', 'CANCELLED'].includes(payroll.status) && (
+                      {canUpdatePayroll && !['APPROVED', 'PAID', 'CANCELLED'].includes(payroll.status) && (
                         <button 
                           onClick={() => transition(payroll.id, 'cancel')}
                           className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors tooltip"
@@ -275,8 +294,15 @@ export default function AdminPayrollPage() {
                 <div className="space-y-1.5 relative col-span-2">
                   <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Nhân viên <span className="text-brand-orange">*</span></label>
                   <select 
-                    value={formData.accountId} 
-                    onChange={e => setFormData({ ...formData, accountId: e.target.value })} 
+                    value={formData.employeeId}
+                    onChange={e => {
+                      const employee = employees.find(item => String(item.accountId) === e.target.value);
+                      setFormData({
+                        ...formData,
+                        employeeId: e.target.value,
+                        basicSalary: employee?.baseSalary || ''
+                      });
+                    }}
                     required 
                     disabled={!!editingPayroll}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors appearance-none disabled:opacity-50"
@@ -288,9 +314,9 @@ export default function AdminPayrollPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Kỳ lương (Ngày ghi nhận) <span className="text-brand-orange">*</span></label>
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Kỳ lương <span className="text-brand-orange">*</span></label>
                 <input 
-                  type="date" 
+                  type="month"
                   value={formData.salaryMonth} 
                   onChange={e => setFormData({ ...formData, salaryMonth: e.target.value })} 
                   required 
@@ -300,35 +326,46 @@ export default function AdminPayrollPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Tiền Thưởng (+)</label>
+                  <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Lương cơ bản</label>
                   <input 
                     type="number" 
-                    value={formData.bonusSalary} 
-                    onChange={e => setFormData({ ...formData, bonusSalary: e.target.value })} 
+                    value={formData.basicSalary}
+                    onChange={e => setFormData({ ...formData, basicSalary: e.target.value })}
                     className="w-full bg-zinc-900 border border-emerald-900/50 rounded-xl px-4 py-2.5 text-sm focus:border-emerald-500 outline-none transition-colors font-mono text-emerald-400" 
                     placeholder="0" 
+                    min="0.01"
+                    step="0.01"
+                    required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-red-400 uppercase tracking-widest">Tiền Phạt (-)</label>
+                  <label className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Phụ cấp</label>
                   <input 
                     type="number" 
-                    value={formData.penaltySalary} 
-                    onChange={e => setFormData({ ...formData, penaltySalary: e.target.value })} 
-                    className="w-full bg-zinc-900 border border-red-900/50 rounded-xl px-4 py-2.5 text-sm focus:border-red-500 outline-none transition-colors font-mono text-red-400" 
+                    value={formData.allowance}
+                    onChange={e => setFormData({ ...formData, allowance: e.target.value })}
+                    className="w-full bg-zinc-900 border border-sky-900/50 rounded-xl px-4 py-2.5 text-sm focus:border-sky-500 outline-none transition-colors font-mono text-sky-400"
                     placeholder="0" 
+                    min="0"
+                    step="0.01"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ghi chú chi tiết</label>
-                <textarea 
-                  value={formData.note || ''} 
-                  onChange={e => setFormData({ ...formData, note: e.target.value })} 
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-sm focus:border-brand-orange outline-none transition-colors min-h-[80px] resize-none" 
-                  placeholder="Lý do thưởng/phạt, chi tiết kỳ lương..." 
-                />
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Thưởng / Khấu trừ</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <input type="number" min="0" step="0.01" value={formData.bonus}
+                    onChange={e => setFormData({ ...formData, bonus: e.target.value })}
+                    aria-label="Tiền thưởng"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none"
+                    placeholder="Tiền thưởng" />
+                  <input type="number" min="0" step="0.01" value={formData.deduction}
+                    onChange={e => setFormData({ ...formData, deduction: e.target.value })}
+                    aria-label="Khấu trừ"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none"
+                    placeholder="Khấu trừ" />
+                </div>
               </div>
             </div>
 

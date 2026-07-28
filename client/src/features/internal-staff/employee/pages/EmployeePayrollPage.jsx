@@ -26,7 +26,11 @@ export default function EmployeePayrollPage() {
     }
   }, [query]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Loading remote payroll state is the synchronization performed by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-zinc-950 p-6 text-white md:p-8">

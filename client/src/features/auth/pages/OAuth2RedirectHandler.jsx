@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from 'lucide-react';
 import { jwtDecode } from "jwt-decode";
+import { getAdminLandingPath, hasAdminAreaAccess } from '@/features/internal-staff/admin/permissionAccess';
 
 function OAuth2RedirectHandler() {
     const { login } = useAuth();
@@ -24,20 +25,19 @@ function OAuth2RedirectHandler() {
                 return;
             }
 
-            if (accessToken) {
+            if (accessToken && refreshToken) {
                 try {
-                    let decodedToken = null;
-                    let role = "";
-                    let email = "";
-                    try {
-                        decodedToken = jwtDecode(accessToken);
-                        role = decodedToken.role || "";
-                        email = decodedToken.sub || "";
-                    } catch (e) {
-                        console.error("Failed to decode token", e);
+                    const decodedToken = jwtDecode(accessToken);
+                    const role = decodedToken.role || "";
+                    const email = decodedToken.sub || "";
+                    if (!decodedToken.exp || decodedToken.exp * 1000 <= Date.now()
+                        || !decodedToken.userId || !role || !email) {
+                        throw new Error("OAuth2 token is missing required claims");
                     }
 
-                    const expiresIn = expiresInStr ? parseInt(expiresInStr, 10) : 3600000;
+                    const parsedExpiresIn = expiresInStr ? Number.parseInt(expiresInStr, 10) : 3600000;
+                    const expiresIn = Number.isFinite(parsedExpiresIn) ? parsedExpiresIn : 3600000;
+                    window.history.replaceState(null, "", window.location.pathname);
                     
                     const sessionData = {
                         accessToken,
@@ -51,18 +51,15 @@ function OAuth2RedirectHandler() {
 
                     await login(sessionData);
 
-                    setTimeout(() => {
-                        if (role === "ADMIN" || role === "ROLE_ADMIN" || role === "ROLE_ACCOUNTANT") {
-                            navigate("/admin", { replace: true });
-                        } else if (role === "EMPLOYEE" || role === "STAFF" || role === "ROLE_STAFF") {
-                            navigate("/employee", { replace: true });
-                        } else {
-                            navigate("/", { replace: true });
-                        }
-                    }, 400);
+                    if (hasAdminAreaAccess(role, decodedToken.permissions || [])) {
+                        navigate(getAdminLandingPath(role, decodedToken.permissions || []), { replace: true });
+                    } else if (role === "EMPLOYEE" || role === "STAFF" || role === "ROLE_STAFF") {
+                        navigate("/employee", { replace: true });
+                    } else {
+                        navigate("/", { replace: true });
+                    }
 
-                } catch (e) {
-                    console.error("Error processing OAuth2 login", e);
+                } catch {
                     navigate("/login", { state: { error: "Lỗi xử lý đăng nhập." }, replace: true });
                 }
             } else {

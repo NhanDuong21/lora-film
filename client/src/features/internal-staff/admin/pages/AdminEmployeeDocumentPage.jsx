@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { getEmployeeDocuments, uploadEmployeeDocument, downloadEmployeeDocument, deleteEmployeeDocument } from '../services/userAdminService';
-import { AsyncState, Input, Select } from '@/components/common/ui/uiKit';
-import { ArrowLeft, File, Download, Trash, FileText, FileBadge, FileCheck, UploadCloud, FileImage, ShieldAlert } from 'lucide-react';
+import { AsyncState } from '@/components/common/ui/uiKit';
+import { ArrowLeft, Download, Trash, FileText, FileBadge, FileCheck, UploadCloud, FileImage, ShieldAlert } from 'lucide-react';
+import AdminStatCard from '../components/AdminStatCard';
+import useAdminAccess from '../hooks/useAdminAccess';
 
 export default function AdminEmployeeDocumentPage() {
+  const can = useAdminAccess();
+  const canUpdateEmployeeDocuments = can('EMPLOYEE_UPDATE');
   const { accountId } = useParams();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
   const [state, setState] = useState({ loading: true, error: '' });
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ file: null, documentType: 'CONTRACT', documentName: '', issuedDate: '', expiredDate: '' });
+  const [formData, setFormData] = useState({ file: null, documentType: 'LABOR_CONTRACT', documentName: '', issuedDate: '', expiredDate: '' });
   const [stats, setStats] = useState({ total: 0, contracts: 0, ids: 0 });
+  const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
+  const notify = outlet?.triggerToast || (() => undefined);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
@@ -22,8 +29,8 @@ export default function AdminEmployeeDocumentPage() {
       
       setStats({
         total: docs.length,
-        contracts: docs.filter(d => d.documentType === 'CONTRACT').length,
-        ids: docs.filter(d => d.documentType === 'ID_CARD').length
+        contracts: docs.filter(d => d.documentType === 'LABOR_CONTRACT').length,
+        ids: docs.filter(d => d.documentType === 'IDENTITY_CARD').length
       });
       
       setState({ loading: false, error: '' });
@@ -32,31 +39,37 @@ export default function AdminEmployeeDocumentPage() {
     }
   }, [accountId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Loading remote document state is the synchronization performed by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!formData.file) {
-      alert('Vui lòng chọn file đính kèm');
+      notify('Vui lòng chọn file đính kèm.', 'error');
       return;
     }
     try {
       await uploadEmployeeDocument(accountId, formData);
       setIsModalOpen(false);
-      setFormData({ file: null, documentType: 'CONTRACT', documentName: '', issuedDate: '', expiredDate: '' });
+      setFormData({ file: null, documentType: 'LABOR_CONTRACT', documentName: '', issuedDate: '', expiredDate: '' });
       await load();
+      notify('Tài liệu đã được tải lên.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi tải lên tài liệu');
+      notify(error?.message || 'Lỗi khi tải lên tài liệu', 'error');
     }
   };
 
   const handleDelete = async (docId) => {
-    if (!window.confirm('Hành động này không thể hoàn tác. Bạn có chắc muốn xóa tài liệu này?')) return;
+    if (!await confirmAction('Hành động này không thể hoàn tác. Xóa tài liệu này?')) return;
     try {
       await deleteEmployeeDocument(accountId, docId);
       await load();
+      notify('Tài liệu đã được xóa.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi xóa tài liệu');
+      notify(error?.message || 'Lỗi khi xóa tài liệu', 'error');
     }
   };
 
@@ -70,15 +83,17 @@ export default function AdminEmployeeDocumentPage() {
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      notify('Tài liệu đã được tải xuống.');
     } catch (error) {
-      alert('Lỗi khi tải xuống tài liệu');
+      notify(error?.message || 'Lỗi khi tải xuống tài liệu', 'error');
     }
   };
 
   const getDocIcon = (type) => {
     switch(type) {
-      case 'CONTRACT': return <FileText className="w-6 h-6 text-emerald-400" />;
-      case 'ID_CARD': return <FileBadge className="w-6 h-6 text-blue-400" />;
+      case 'LABOR_CONTRACT': return <FileText className="w-6 h-6 text-emerald-400" />;
+      case 'IDENTITY_CARD': return <FileBadge className="w-6 h-6 text-blue-400" />;
       case 'CERTIFICATE': return <FileCheck className="w-6 h-6 text-purple-400" />;
       default: return <FileImage className="w-6 h-6 text-amber-400" />;
     }
@@ -86,24 +101,12 @@ export default function AdminEmployeeDocumentPage() {
 
   const getDocTypeLabel = (type) => {
     switch(type) {
-      case 'CONTRACT': return 'Hợp đồng lao động';
-      case 'ID_CARD': return 'CMND / CCCD';
+      case 'LABOR_CONTRACT': return 'Hợp đồng lao động';
+      case 'IDENTITY_CARD': return 'CMND / CCCD';
       case 'CERTIFICATE': return 'Chứng chỉ / Bằng cấp';
       default: return 'Tài liệu khác';
     }
   };
-
-  const StatCard = ({ title, value, icon: Icon, colorClass }) => (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between hover:bg-zinc-900 transition-colors">
-      <div>
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-        <h3 className="text-3xl font-black text-white">{value}</h3>
-      </div>
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${colorClass}`}>
-        <Icon size={24} />
-      </div>
-    </div>
-  );
 
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-6 text-white md:p-8">
@@ -117,17 +120,17 @@ export default function AdminEmployeeDocumentPage() {
             <p className="mt-1 text-sm text-zinc-500">Quản lý hợp đồng, CMND/CCCD và các giấy tờ liên quan của nhân viên.</p>
           </div>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
+        {canUpdateEmployeeDocuments && <button onClick={() => setIsModalOpen(true)} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
           <UploadCloud size={18} />
           <span>Tải Lên Tài Liệu</span>
-        </button>
+        </button>}
       </header>
 
       {/* Dashboard Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Tổng tài liệu" value={stats.total} icon={FileText} colorClass="bg-blue-500/10 text-blue-500 border border-blue-500/20" />
-        <StatCard title="Hợp đồng" value={stats.contracts} icon={FileCheck} colorClass="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" />
-        <StatCard title="Định danh" value={stats.ids} icon={FileBadge} colorClass="bg-purple-500/10 text-purple-500 border border-purple-500/20" />
+        <AdminStatCard title="Tổng tài liệu" value={stats.total} icon={FileText} colorClass="bg-blue-500/10 text-blue-500 border border-blue-500/20" />
+        <AdminStatCard title="Hợp đồng" value={stats.contracts} icon={FileCheck} colorClass="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" />
+        <AdminStatCard title="Định danh" value={stats.ids} icon={FileBadge} colorClass="bg-purple-500/10 text-purple-500 border border-purple-500/20" />
       </div>
 
       <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!documents.length} emptyMessage="Chưa có tài liệu nào">
@@ -163,9 +166,9 @@ export default function AdminEmployeeDocumentPage() {
                 </div>
               </div>
               <div className="flex justify-between items-center gap-2 pt-2">
-                <button onClick={() => handleDelete(doc.id)} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Xóa tài liệu">
+                {canUpdateEmployeeDocuments && <button onClick={() => handleDelete(doc.id)} className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Xóa tài liệu">
                   <Trash size={16} />
-                </button>
+                </button>}
                 <button onClick={() => handleDownload(doc.id, doc.originalFileName)} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors">
                   <Download size={14} /> <span>Tải xuống</span>
                 </button>
@@ -203,8 +206,8 @@ export default function AdminEmployeeDocumentPage() {
                   required 
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors appearance-none"
                 >
-                  <option value="CONTRACT">Hợp đồng lao động</option>
-                  <option value="ID_CARD">CMND / CCCD</option>
+                  <option value="LABOR_CONTRACT">Hợp đồng lao động</option>
+                  <option value="IDENTITY_CARD">CMND / CCCD</option>
                   <option value="CERTIFICATE">Chứng chỉ / Bằng cấp</option>
                   <option value="OTHER">Tài liệu khác</option>
                 </select>

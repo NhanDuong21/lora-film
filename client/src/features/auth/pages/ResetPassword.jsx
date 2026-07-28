@@ -8,6 +8,7 @@ const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100
 export default function ResetPassword() {
   const [params] = useSearchParams();
   const token = useMemo(() => params.get('token') || '', [params]);
+  const email = useMemo(() => params.get('email') || '', [params]);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [status, setStatus] = useState({ error: '', done: false });
@@ -20,7 +21,7 @@ export default function ResetPassword() {
     if (password !== confirm) return setStatus({ error: 'Mật khẩu xác nhận không khớp.', done: false });
     setLoading(true);
     try {
-      await resetPassword(token, password);
+      await resetPassword(token, password, email);
       setStatus({ error: '', done: true });
     } catch (reason) {
       setStatus({ error: reason?.message || 'Liên kết đã hết hạn hoặc không hợp lệ.', done: false });

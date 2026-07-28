@@ -86,9 +86,16 @@ export const SkeletonLoader = ({ className = '', type = 'rectangle' }) => {
 };
 
 export const LoadingState = ({ message = 'Đang tải dữ liệu...', className = '' }) => (
-  <div className={`flex flex-col items-center justify-center py-12 text-zinc-500 ${className}`}>
-    <Loader2 className="w-8 h-8 animate-spin mb-4 text-brand-orange" />
-    <p className="text-sm font-medium">{message}</p>
+  <div role="status" aria-live="polite" className={`space-y-4 py-8 text-zinc-500 ${className}`}>
+    <div className="flex items-center justify-center gap-3">
+      <Loader2 className="w-6 h-6 animate-spin text-brand-orange" />
+      <p className="text-sm font-medium">{message}</p>
+    </div>
+    <div className="space-y-3" aria-hidden="true">
+      <SkeletonLoader className="h-12 w-full" />
+      <SkeletonLoader className="h-12 w-full" />
+      <SkeletonLoader className="h-12 w-4/5" />
+    </div>
   </div>
 );
 
@@ -137,10 +144,15 @@ export const StatusBadge = ({ status, label }) => {
       case 'CANCELLED':
       case 'FAILED':
       case 'ERROR':
+      case 'LOCKED':
+      case 'BLOCKED':
+      case 'SUSPENDED':
         return 'bg-red-500/10 border-red-500/30 text-red-500';
       case 'EXPIRED':
       case 'ARCHIVED':
       case 'INACTIVE':
+      case 'DELETED':
+      case 'RESIGNED':
         return 'bg-zinc-500/10 border-zinc-500/30 text-zinc-400';
       case 'REFUNDED':
         return 'bg-purple-500/10 border-purple-500/30 text-purple-400';

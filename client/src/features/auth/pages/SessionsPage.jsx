@@ -2,11 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import AuthActionCard from '../components/AuthActionCard';
 import { getSessions, revokeAllSessions, revokeSession } from '../services/authService';
 import { Laptop, Smartphone, Monitor, ShieldAlert, Trash2, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [success, setSuccess] = useState('');
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -21,17 +27,31 @@ export default function SessionsPage() {
   }, []);
 
   useEffect(() => {
+    // Loading remote session state is the synchronization performed by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
   const revoke = async (id) => {
-    await revokeSession(id);
-    await load();
+    setPendingAction(null);
+    try {
+      await revokeSession(id);
+      setSuccess('Phiên đăng nhập đã được thu hồi.');
+      await load();
+    } catch (reason) {
+      setError(reason?.message || 'Không thể thu hồi phiên đăng nhập.');
+    }
   };
 
   const revokeAll = async () => {
-    await revokeAllSessions();
-    await load();
+    setPendingAction(null);
+    try {
+      await revokeAllSessions();
+      await logout();
+      navigate('/login', { replace: true, state: { message: 'Tất cả phiên đăng nhập đã được thu hồi.' } });
+    } catch (reason) {
+      setError(reason?.message || 'Không thể thu hồi tất cả phiên đăng nhập.');
+    }
   };
 
   const getDeviceIcon = (userAgent) => {
@@ -48,6 +68,11 @@ export default function SessionsPage() {
           <ShieldAlert size={16} className="text-red-500 mt-0.5" />
           <p className="text-sm text-red-400">{error}</p>
         </div>
+      )}
+      {success && (
+        <p role="status" className="mb-4 rounded-lg border border-emerald-900/50 bg-emerald-950/40 p-3 text-sm text-emerald-300">
+          {success}
+        </p>
       )}
       
       {loading ? (
@@ -89,7 +114,7 @@ export default function SessionsPage() {
                     </div>
                   </div>
                   <button 
-                    onClick={() => revoke(session.id)} 
+                    onClick={() => setPendingAction({ id: session.id, label: session.deviceName || 'thiết bị này' })}
                     className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
                     title="Thu hồi phiên"
                   >
@@ -100,7 +125,7 @@ export default function SessionsPage() {
               
               {sessions.length > 1 && (
                 <button 
-                  onClick={revokeAll} 
+                  onClick={() => setPendingAction({ all: true, label: 'tất cả thiết bị' })}
                   className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-900/50 bg-red-950/20 py-3 text-sm font-bold text-red-400 hover:bg-red-950/40 hover:border-red-900 transition-colors mt-6"
                 >
                   <LogOut size={16} />
@@ -109,6 +134,28 @@ export default function SessionsPage() {
               )}
             </div>
           )}
+        </div>
+      )}
+      {pendingAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="session-confirm-title">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+            <h2 id="session-confirm-title" className="text-lg font-black text-white">Xác nhận thu hồi phiên</h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              {pendingAction.all
+                ? 'Bạn sẽ được đăng xuất khỏi tất cả thiết bị.'
+                : `Thiết bị “${pendingAction.label}” sẽ phải đăng nhập lại.`}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setPendingAction(null)}
+                className="rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300">
+                Hủy
+              </button>
+              <button type="button" onClick={() => pendingAction.all ? revokeAll() : revoke(pendingAction.id)}
+                className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white">
+                Thu hồi
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </AuthActionCard>

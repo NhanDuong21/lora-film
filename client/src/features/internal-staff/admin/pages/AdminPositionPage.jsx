@@ -1,17 +1,26 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getPositions, createPosition, updatePosition, deletePosition } from '../services/userAdminService';
-import { AsyncState, Input } from '@/components/common/ui/uiKit';
+import { AsyncState } from '@/components/common/ui/uiKit';
 import { Briefcase, Search, Plus, Edit2, Trash2, ShieldAlert, BadgeCheck, Users } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import AdminStatCard from '../components/AdminStatCard';
+import useAdminAccess from '../hooks/useAdminAccess';
 
 export default function AdminPositionPage() {
+  const can = useAdminAccess();
+  const canCreatePositions = can('POSITION_CREATE');
+  const canUpdatePositions = can('POSITION_UPDATE');
+  const canDeletePositions = can('POSITION_DELETE');
   const [positions, setPositions] = useState([]);
-  const [filteredPositions, setFilteredPositions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [state, setState] = useState({ loading: true, error: '' });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPos, setEditingPos] = useState(null);
   const [formData, setFormData] = useState({ code: '', name: '', description: '' });
   const [stats, setStats] = useState({ total: 0 });
+  const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
+  const notify = outlet?.triggerToast || (() => undefined);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
@@ -19,7 +28,6 @@ export default function AdminPositionPage() {
       const data = await getPositions();
       const posData = data || [];
       setPositions(posData);
-      setFilteredPositions(posData);
       setStats({ total: posData.length });
       setState({ loading: false, error: '' });
     } catch (error) {
@@ -27,25 +35,28 @@ export default function AdminPositionPage() {
     }
   }, []);
   
-  useEffect(() => { load(); }, [load]);
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
+
+  const filteredPositions = useMemo(() => {
     if (!searchQuery.trim()) {
-      setFilteredPositions(positions);
-      return;
+      return positions;
     }
     const lower = searchQuery.toLowerCase();
-    setFilteredPositions(positions.filter(p => 
+    return positions.filter(p =>
       p.name?.toLowerCase().includes(lower) || 
       p.code?.toLowerCase().includes(lower) ||
       p.description?.toLowerCase().includes(lower)
-    ));
+    );
   }, [searchQuery, positions]);
 
   const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.code.trim() || !formData.name.trim()) {
-       return alert('Mã và tên vị trí là bắt buộc');
+       notify('Mã và tên vị trí là bắt buộc.', 'error');
+       return;
     }
     try {
       if (editingPos) {
@@ -55,18 +66,20 @@ export default function AdminPositionPage() {
       }
       setIsModalOpen(false);
       await load();
+      notify(editingPos ? 'Vị trí đã được cập nhật.' : 'Vị trí đã được tạo.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi lưu vị trí');
+      notify(error?.message || 'Lỗi khi lưu vị trí', 'error');
     }
   };
 
   const handleDelete = async (id) => {
-    if (confirm('Hành động này không thể hoàn tác. Bạn có chắc chắn muốn xóa vị trí này?')) {
+    if (await confirmAction('Hành động này không thể hoàn tác. Xóa vị trí này?')) {
       try {
         await deletePosition(id);
         await load();
+        notify('Vị trí đã được xóa.');
       } catch (error) {
-        alert(error?.message || 'Lỗi khi xóa. Có thể vị trí này đang được gán cho nhân viên.');
+        notify(error?.message || 'Không thể xóa vị trí đang được gán cho nhân viên.', 'error');
       }
     }
   };
@@ -77,18 +90,6 @@ export default function AdminPositionPage() {
     setIsModalOpen(true);
   };
 
-  const StatCard = ({ title, value, icon: Icon, colorClass }) => (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between hover:bg-zinc-900 transition-colors">
-      <div>
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-        <h3 className="text-3xl font-black text-white">{value}</h3>
-      </div>
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${colorClass}`}>
-        <Icon size={24} />
-      </div>
-    </div>
-  );
-
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-6 text-white md:p-8">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -96,17 +97,17 @@ export default function AdminPositionPage() {
           <h1 className="text-2xl font-black uppercase tracking-wider text-white">Quản lý <span className="text-brand-orange">Vị Trí</span></h1>
           <p className="mt-1 text-sm text-zinc-500">Danh mục chức danh và vị trí công việc trong hệ thống.</p>
         </div>
-        <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
+        {canCreatePositions && <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
           <Plus size={18} />
           <span>Thêm Vị Trí</span>
-        </button>
+        </button>}
       </header>
 
       {/* Dashboard Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Tổng số vị trí" value={stats.total || '...'} icon={Briefcase} colorClass="bg-blue-500/10 text-blue-500 border border-blue-500/20" />
-        <StatCard title="Phân bổ" value="100%" icon={Users} colorClass="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" />
-        <StatCard title="Định danh" value="Chuẩn" icon={BadgeCheck} colorClass="bg-purple-500/10 text-purple-500 border border-purple-500/20" />
+        <AdminStatCard title="Tổng số vị trí" value={stats.total} icon={Briefcase} colorClass="bg-blue-500/10 text-blue-500 border-blue-500/20" />
+        <AdminStatCard title="Phân bổ" value="100%" icon={Users} colorClass="bg-emerald-500/10 text-emerald-500 border-emerald-500/20" />
+        <AdminStatCard title="Định danh" value="Chuẩn" icon={BadgeCheck} colorClass="bg-purple-500/10 text-purple-500 border-purple-500/20" />
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row gap-3">
@@ -148,20 +149,20 @@ export default function AdminPositionPage() {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button 
+                      {canUpdatePositions && <button
                         onClick={() => openModal(pos)} 
                         className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                         title="Chỉnh sửa"
                       >
                         <Edit2 size={16} />
-                      </button>
-                      <button 
+                      </button>}
+                      {canDeletePositions && <button
                         onClick={() => handleDelete(pos.id)} 
                         className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                         title="Xóa"
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>

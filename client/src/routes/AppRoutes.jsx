@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ScrollToTop from "@/components/common/ScrollToTop";
-import { RoleRoute, AdminRedirectGuard } from "@/components/common/RouteGuards";
+import { PermissionRoute, RoleRoute, AdminRedirectGuard } from "@/components/common/RouteGuards";
+import { ADMIN_AREA_PERMISSIONS } from "@/features/internal-staff/admin/permissionAccess";
 
 // Feature Routes
 import { authRoutes } from "@/features/auth/routes";
@@ -24,6 +25,7 @@ import { adminScoreRoutes } from "@/features/score/admin/routes";
 import MainLayout from "@/components/layout/MainLayout";
 import AdminLayout from "@/components/admin/AdminLayout";
 import EmployeeLayout from "@/components/employee/EmployeeLayout";
+import { ForbiddenPage, NotFoundPage, ServerErrorPage, UnauthorizedPage } from "@/features/auth/pages/ErrorPages";
 
 function AppRoutes() {
     return (
@@ -67,9 +69,9 @@ function AppRoutes() {
 
                 {/* Admin Routes */}
                 <Route path="/admin" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
+                    <PermissionRoute requiredPermissions={ADMIN_AREA_PERMISSIONS}>
                         <AdminLayout />
-                    </RoleRoute>
+                    </PermissionRoute>
                 }>
                     {adminStaffRoutes.map((route, index) => (
                         route.index ? 
@@ -77,27 +79,45 @@ function AppRoutes() {
                             <Route key={`staff-adm-${index}`} path={route.path} element={route.element} />
                     ))}
                     {adminCatalogRoutes.map((route, index) => (
-                        <Route key={`cat-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`cat-adm-${index}`} path={route.path} element={
+                            <RoleRoute allowedRoles={["ADMIN"]}>{route.element}</RoleRoute>
+                        } />
                     ))}
                     {adminFacilitiesRoutes.map((route, index) => (
-                        <Route key={`fac-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`fac-adm-${index}`} path={route.path} element={
+                            <RoleRoute allowedRoles={["ADMIN"]}>{route.element}</RoleRoute>
+                        } />
                     ))}
                     {adminSchedulingRoutes.map((route, index) => (
-                        <Route key={`sched-${index}`} path={route.path} element={route.element} />
+                        <Route key={`sched-${index}`} path={route.path} element={
+                            <RoleRoute allowedRoles={["ADMIN"]}>{route.element}</RoleRoute>
+                        } />
                     ))}
                     {adminPricingRoutes.map((route, index) => (
-                        <Route key={`pricing-${index}`} path={route.path} element={route.element} />
+                        <Route key={`pricing-${index}`} path={route.path} element={
+                            <RoleRoute allowedRoles={["ADMIN"]}>{route.element}</RoleRoute>
+                        } />
                     ))}
                     {adminConcessionRoutes.map((route, index) => (
-                        <Route key={`conc-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`conc-adm-${index}`} path={route.path} element={
+                            <RoleRoute allowedRoles={["ADMIN"]}>{route.element}</RoleRoute>
+                        } />
                     ))}
                     {adminBookingRoutes.map((route, index) => (
-                        <Route key={`book-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`book-adm-${index}`} path={route.path} element={
+                            <RoleRoute allowedRoles={["ADMIN"]}>{route.element}</RoleRoute>
+                        } />
                     ))}
                     {adminScoreRoutes.map((route, index) => (
-                        <Route key={`score-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`score-adm-${index}`} path={route.path} element={
+                            <RoleRoute allowedRoles={["ADMIN"]}>{route.element}</RoleRoute>
+                        } />
                     ))}
                 </Route>
+                <Route path="/401" element={<UnauthorizedPage />} />
+                <Route path="/403" element={<ForbiddenPage />} />
+                <Route path="/500" element={<ServerErrorPage />} />
+                <Route path="*" element={<NotFoundPage />} />
             </Routes>
         </BrowserRouter>
     );

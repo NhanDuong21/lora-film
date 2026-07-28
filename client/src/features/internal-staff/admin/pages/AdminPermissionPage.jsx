@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getPermissions, createPermission, updatePermission, deletePermission } from '../services/authAdminService';
 import { AsyncState, Input } from '@/components/common/ui/uiKit';
+import { useOutletContext } from 'react-router-dom';
+import useAdminAccess from '../hooks/useAdminAccess';
 
 export default function AdminPermissionPage() {
+  const can = useAdminAccess();
+  const canCreatePermissions = can('PERMISSION_CREATE');
+  const canUpdatePermissions = can('PERMISSION_UPDATE');
+  const canDeletePermissions = can('PERMISSION_DELETE');
   const [permissions, setPermissions] = useState([]);
   const [state, setState] = useState({ loading: true, error: '' });
   const [editingPerm, setEditingPerm] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: '', code: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', code: '', module: '', description: '' });
+  const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
+  const notify = outlet?.triggerToast || (() => undefined);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
@@ -20,7 +29,11 @@ export default function AdminPermissionPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Loading remote permission state is the synchronization performed by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,18 +45,20 @@ export default function AdminPermissionPage() {
       }
       setIsModalOpen(false);
       await load();
+      notify(editingPerm ? 'Quyền hạn đã được cập nhật.' : 'Quyền hạn đã được tạo.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi lưu quyền hạn');
+      notify(error?.message || 'Lỗi khi lưu quyền hạn', 'error');
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa quyền này?')) return;
+    if (!await confirmAction('Bạn có chắc chắn muốn xóa quyền này?')) return;
     try {
       await deletePermission(id);
       await load();
+      notify('Quyền hạn đã được xóa.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi xóa quyền hạn');
+      notify(error?.message || 'Lỗi khi xóa quyền hạn', 'error');
     }
   };
 
@@ -53,10 +68,11 @@ export default function AdminPermissionPage() {
       setFormData({
         name: perm.name || '',
         code: perm.code || '',
+        module: perm.module || '',
         description: perm.description || ''
       });
     } else {
-      setFormData({ name: '', code: '', description: '' });
+      setFormData({ name: '', code: '', module: '', description: '' });
     }
     setIsModalOpen(true);
   };
@@ -68,9 +84,9 @@ export default function AdminPermissionPage() {
           <h1 className="text-2xl font-black uppercase">Quản lý Quyền hạn</h1>
           <p className="mt-1 text-sm text-zinc-500">Danh sách quyền truy cập trong hệ thống.</p>
         </div>
-        <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-4 py-2 text-sm font-bold text-zinc-950 hover:bg-brand-orange/90">
+        {canCreatePermissions && <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-4 py-2 text-sm font-bold text-zinc-950 hover:bg-brand-orange/90">
           + Thêm Quyền
-        </button>
+        </button>}
       </div>
 
       <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!permissions.length} emptyMessage="Chưa có quyền hạn nào">
@@ -80,6 +96,7 @@ export default function AdminPermissionPage() {
               <tr>
                 <th className="p-4">Tên quyền</th>
                 <th className="p-4">Mã quyền (Code)</th>
+                <th className="p-4">Phân hệ</th>
                 <th className="p-4">Mô tả</th>
                 <th className="p-4 text-right">Thao tác</th>
               </tr>
@@ -89,10 +106,11 @@ export default function AdminPermissionPage() {
                 <tr key={perm.id} className="hover:bg-zinc-900/50">
                   <td className="p-4 font-bold text-white">{perm.name}</td>
                   <td className="p-4 text-brand-orange">{perm.code}</td>
+                  <td className="p-4 text-zinc-300">{perm.module}</td>
                   <td className="p-4 text-zinc-400">{perm.description || '—'}</td>
                   <td className="p-4 text-right space-x-3">
-                    <button onClick={() => openModal(perm)} className="text-xs font-bold text-zinc-400 hover:text-white">Sửa</button>
-                    <button onClick={() => handleDelete(perm.id)} className="text-xs font-bold text-red-400 hover:text-red-300">Xóa</button>
+                    {canUpdatePermissions && <button onClick={() => openModal(perm)} className="text-xs font-bold text-zinc-400 hover:text-white">Sửa</button>}
+                    {canDeletePermissions && <button onClick={() => handleDelete(perm.id)} className="text-xs font-bold text-red-400 hover:text-red-300">Xóa</button>}
                   </td>
                 </tr>
               ))}
@@ -106,6 +124,10 @@ export default function AdminPermissionPage() {
           <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xl font-bold text-white">{editingPerm ? 'Sửa Quyền' : 'Thêm Quyền'}</h2>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-zinc-400">Phân hệ</label>
+              <Input value={formData.module} onChange={e => setFormData({ ...formData, module: e.target.value })} required placeholder="VD: PAYROLL" />
             </div>
             <div>
               <label className="text-xs font-bold text-zinc-400">Tên quyền</label>

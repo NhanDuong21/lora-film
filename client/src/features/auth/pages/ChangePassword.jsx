@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import AuthActionCard from '../components/AuthActionCard';
 import { changePassword } from '../services/authService';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100}$/;
 
 export default function ChangePassword() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({ oldPassword: '', newPassword: '', confirm: '' });
   const [showPassword, setShowPassword] = useState({ old: false, new: false, confirm: false });
   const [feedback, setFeedback] = useState({ error: '', success: '' });
@@ -37,7 +41,12 @@ export default function ChangePassword() {
     try {
       await changePassword(form.oldPassword, form.newPassword);
       setForm({ oldPassword: '', newPassword: '', confirm: '' });
-      setFeedback({ error: '', success: 'Đổi mật khẩu thành công. Các phiên khác đã bị thu hồi.' });
+      setFeedback({ error: '', success: 'Đổi mật khẩu thành công. Đang chuyển đến trang đăng nhập...' });
+      await logout();
+      navigate('/login', {
+        replace: true,
+        state: { message: 'Mật khẩu đã được thay đổi. Vui lòng đăng nhập lại.' }
+      });
     } catch (reason) {
       setFeedback({ error: reason?.message || 'Không thể đổi mật khẩu.', success: '' });
     } finally {

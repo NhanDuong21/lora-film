@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import { getCustomerErrorMessage } from '@/utils/customerErrorMessages';
 import { Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
+import { getUserPermissions } from '@/utils/authStorage';
+import { getAdminLandingPath, hasAdminAreaAccess } from '@/features/internal-staff/admin/permissionAccess';
 
 function Login() {
     const { login: contextLogin } = useAuth();
@@ -13,10 +15,13 @@ function Login() {
 
     const [email, setEmail] = useState(() => location.state?.email || "");
     const [password, setPassword] = useState("");
+    const [rememberMe, setRememberMe] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [errorMsg, setErrorMsg] = useState("");
-    const [successMessage, setSuccessMessage] = useState(() => 
-        location.state?.verified ? "Xác thực tài khoản thành công! Vui lòng đăng nhập." : ""
+    const [errorMsg, setErrorMsg] = useState(() => location.state?.error || "");
+    const [successMessage, setSuccessMessage] = useState(() =>
+        location.state?.message || (
+            location.state?.verified ? "Xác thực tài khoản thành công! Vui lòng đăng nhập." : ""
+        )
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -36,18 +41,18 @@ function Login() {
 
         setIsSubmitting(true);
         try {
-            const data = await login(email, password);
+            const data = await login(email.trim(), password, rememberMe);
             setIsSubmitting(false);
 
             if (data?.success && data?.data) {
-                await contextLogin(data.data);
+                await contextLogin({ ...data.data, rememberMe });
                 setSuccessMessage("Đăng nhập thành công. Đang chuyển hướng...");
 
                 // Navigate based on role-specific paths
                 const role = data.data.role;
                 setTimeout(() => {
-                    if (role === "ADMIN" || role === "ROLE_ADMIN" || role === "ROLE_ACCOUNTANT") {
-                        navigate("/admin");
+                    if (hasAdminAreaAccess(role, getUserPermissions())) {
+                        navigate(getAdminLandingPath(role, getUserPermissions()));
                     } else if (role === "EMPLOYEE" || role === "STAFF" || role === "ROLE_STAFF") {
                         navigate("/employee");
                     } else {
@@ -99,7 +104,7 @@ function Login() {
     };
 
     return (
-        <main className="bg-zinc-950 text-white min-h-screen flex items-center justify-center py-16 px-6 relative overflow-hidden select-none">
+        <main className="bg-zinc-950 text-white min-h-screen flex items-center justify-center py-10 sm:py-16 px-4 sm:px-6 relative overflow-hidden select-none">
             {errorMsg && (
                 <CustomerNoticeModal
                     title="Không thể đăng nhập"
@@ -112,7 +117,7 @@ function Login() {
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-orange/5 rounded-full filter blur-3xl pointer-events-none"></div>
             <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-brand-yellow/5 rounded-full filter blur-3xl pointer-events-none"></div>
 
-            <article className="bg-zinc-900/80 border border-zinc-800 p-8 rounded-2xl w-full max-w-md shadow-2xl shadow-black/50 relative z-10 animate-fade-in">
+            <article className="bg-zinc-900/80 border border-zinc-800 p-5 sm:p-8 rounded-2xl w-full max-w-md shadow-2xl shadow-black/50 relative z-10 animate-fade-in">
                 {/* Back to Home Button */}
                 <button
                     onClick={() => navigate("/")}
@@ -206,6 +211,17 @@ function Login() {
                             </button>
                         </div>
                     </div>
+
+                    <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-400">
+                        <input
+                            type="checkbox"
+                            checked={rememberMe}
+                            onChange={(event) => setRememberMe(event.target.checked)}
+                            disabled={isSubmitting}
+                            className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-orange-500 focus:ring-orange-500"
+                        />
+                        Duy trì đăng nhập trên thiết bị này
+                    </label>
 
                     <button
                         type="submit"

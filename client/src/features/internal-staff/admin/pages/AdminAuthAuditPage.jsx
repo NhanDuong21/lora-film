@@ -22,7 +22,11 @@ export default function AdminAuthAuditPage() {
     }
   }, [query]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Loading remote audit state is the synchronization performed by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
   const formatDate = (dateString) => {
     if (!dateString) return '—';
@@ -54,7 +58,6 @@ export default function AdminAuthAuditPage() {
                 <th className="p-4">Tài khoản (ID)</th>
                 <th className="p-4">Địa chỉ IP</th>
                 <th className="p-4">User Agent</th>
-                <th className="p-4 text-center">Trạng thái</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
@@ -65,13 +68,6 @@ export default function AdminAuthAuditPage() {
                   <td className="p-4 text-brand-orange">{audit.accountId || '—'}</td>
                   <td className="p-4 text-zinc-400 font-mono text-xs">{audit.ipAddress || '—'}</td>
                   <td className="p-4 text-zinc-500 text-[10px] truncate max-w-[200px]" title={audit.userAgent}>{audit.userAgent || '—'}</td>
-                  <td className="p-4 text-center">
-                    {audit.success ? (
-                      <span className="text-emerald-400 font-bold text-xs bg-emerald-400/10 px-2 py-1 rounded">THÀNH CÔNG</span>
-                    ) : (
-                      <span className="text-red-400 font-bold text-xs bg-red-400/10 px-2 py-1 rounded">THẤT BẠI</span>
-                    )}
-                  </td>
                 </tr>
               ))}
             </tbody>

@@ -1,58 +1,80 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+  import { Link, useOutletContext } from 'react-router-dom';
 import {
   changeEmployeeStatus, getDepartments, getEmployees, getPositions, createEmployee, updateEmployee
 } from '../services/userAdminService';
-import { AsyncState, Input, Select, StatusBadge } from '@/components/common/ui/uiKit';
-import { Users, Briefcase, Building, Wallet, Search, Filter, MoreVertical, Edit2, FileText, UserMinus, UserCheck, Play, Pause, UserPlus } from 'lucide-react';
+import { getAccounts } from '../services/authAdminService';
+import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
+import AdminStatCard from '../components/AdminStatCard';
+import useAdminAccess from '../hooks/useAdminAccess';
+import { Users, Briefcase, Building, Wallet, Search, Filter, Edit2, FileText, UserMinus, UserCheck, Play, Pause, UserPlus } from 'lucide-react';
 
 export default function AdminStaffPage() {
+  const can = useAdminAccess();
+  const canCreateEmployees = can('EMPLOYEE_CREATE');
+  const canUpdateEmployees = can('EMPLOYEE_UPDATE');
   const [query, setQuery] = useState({
     keyword: '', status: '', departmentId: '', positionId: '', page: 0, size: 10
   });
-  const [options, setOptions] = useState({ departments: [], positions: [] });
+  const [options, setOptions] = useState({ departments: [], positions: [], accounts: [] });
   const [result, setResult] = useState({ content: [], totalPages: 0, totalElements: 0 });
   const [state, setState] = useState({ loading: true, error: '' });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
-  const [formData, setFormData] = useState({ fullName: '', employeeCode: '', departmentId: '', positionId: '', baseSalary: '' });
+  const [formData, setFormData] = useState({
+    accountId: '', departmentId: '', positionId: '', hireDate: '', baseSalary: ''
+  });
   const [stats, setStats] = useState({ total: 0, active: 0, onLeave: 0, departments: 0 });
+  const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
+  const notify = outlet?.triggerToast || (() => undefined);
 
   const openModal = (emp = null) => {
     setEditingEmployee(emp);
     if (emp) {
       setFormData({
-        fullName: emp.fullName || '',
-        employeeCode: emp.employeeCode || '',
+        accountId: emp.accountId || '',
         departmentId: emp.departmentId || '',
         positionId: emp.positionId || '',
+        hireDate: emp.hireDate || '',
         baseSalary: emp.baseSalary || ''
       });
     } else {
-      setFormData({ fullName: '', employeeCode: '', departmentId: '', positionId: '', baseSalary: '' });
+      setFormData({
+        accountId: '', departmentId: '', positionId: '',
+        hireDate: new Date().toISOString().slice(0, 10), baseSalary: ''
+      });
     }
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const payload = {
+      accountId: Number(formData.accountId),
+      departmentId: Number(formData.departmentId),
+      positionId: Number(formData.positionId),
+      hireDate: formData.hireDate,
+      baseSalary: Number(formData.baseSalary)
+    };
     try {
       if (editingEmployee) {
-        await updateEmployee(editingEmployee.accountId, formData);
+        await updateEmployee(editingEmployee.accountId, payload);
       } else {
-        await createEmployee(formData);
+        await createEmployee(payload);
       }
       setIsModalOpen(false);
       await load();
+      notify(editingEmployee ? 'Nhân viên đã được cập nhật.' : 'Nhân viên đã được tạo.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi lưu nhân viên');
+      notify(error?.message || 'Lỗi khi lưu nhân viên', 'error');
     }
   };
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
     try {
-      const [employees, departments, positions] = await Promise.all([
+      const [employees, departments, positions, accounts] = await Promise.all([
         getEmployees({
           ...query,
           keyword: query.keyword || undefined,
@@ -61,10 +83,17 @@ export default function AdminStaffPage() {
           positionId: query.positionId || undefined
         }),
         getDepartments(),
-        getPositions()
+        getPositions(),
+        canCreateEmployees
+          ? getAccounts({ status: 'ACTIVE', page: 0, size: 100 })
+          : Promise.resolve({ content: [] })
       ]);
       setResult(employees || { content: [], totalPages: 0, totalElements: 0 });
-      setOptions({ departments: departments || [], positions: positions || [] });
+      setOptions({
+        departments: departments || [],
+        positions: positions || [],
+        accounts: accounts?.content || []
+      });
       
       if (query.page === 0 && !query.keyword && !query.status && !query.departmentId && !query.positionId) {
         setStats({
@@ -79,29 +108,19 @@ export default function AdminStaffPage() {
     } catch (error) {
       setState({ loading: false, error: error?.message || 'Không thể tải nhân viên.' });
     }
-  }, [query]);
+  }, [canCreateEmployees, query]);
   useEffect(() => { load(); }, [load]);
 
   const changeStatus = async (employee, action) => {
+    if (!await confirmAction(`Xác nhận thao tác ${action} cho nhân viên ${employee.employeeCode}?`)) return;
     try {
       await changeEmployeeStatus(employee.accountId, action);
       await load();
+      notify('Trạng thái nhân viên đã được cập nhật.');
     } catch (error) {
       setState(value => ({ ...value, error: error?.message || 'Không thể đổi trạng thái.' }));
     }
   };
-
-  const StatCard = ({ title, value, icon: Icon, colorClass }) => (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between hover:bg-zinc-900 transition-colors">
-      <div>
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-        <h3 className="text-3xl font-black text-white">{value}</h3>
-      </div>
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${colorClass}`}>
-        <Icon size={24} />
-      </div>
-    </div>
-  );
 
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-6 text-white md:p-8">
@@ -110,18 +129,18 @@ export default function AdminStaffPage() {
           <h1 className="text-2xl font-black uppercase tracking-wider text-white">Quản lý <span className="text-brand-orange">Nhân Sự</span></h1>
           <p className="mt-1 text-sm text-zinc-500">Lọc nhân viên theo phòng ban, vị trí và trạng thái làm việc.</p>
         </div>
-        <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
+        {canCreateEmployees && <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
           <UserPlus size={18} />
           <span>Thêm Nhân viên</span>
-        </button>
+        </button>}
       </header>
 
       {/* Dashboard Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Tổng nhân sự" value={stats.total || result.totalElements || '...'} icon={Users} colorClass="bg-blue-500/10 text-blue-500 border border-blue-500/20" />
-        <StatCard title="Đang làm việc" value={stats.active || '...'} icon={UserCheck} colorClass="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" />
-        <StatCard title="Đang nghỉ/Tạm ngưng" value={stats.onLeave || '...'} icon={Pause} colorClass="bg-amber-500/10 text-amber-500 border border-amber-500/20" />
-        <StatCard title="Phòng ban" value={stats.departments || '...'} icon={Building} colorClass="bg-purple-500/10 text-purple-500 border border-purple-500/20" />
+        <AdminStatCard title="Tổng nhân sự" value={state.loading ? '...' : stats.total || result.totalElements} icon={Users} colorClass="bg-blue-500/10 text-blue-500 border-blue-500/20" />
+        <AdminStatCard title="Đang làm việc" value={state.loading ? '...' : stats.active} icon={UserCheck} colorClass="bg-emerald-500/10 text-emerald-500 border-emerald-500/20" />
+        <AdminStatCard title="Đang nghỉ/Tạm ngưng" value={state.loading ? '...' : stats.onLeave} icon={Pause} colorClass="bg-amber-500/10 text-amber-500 border-amber-500/20" />
+        <AdminStatCard title="Phòng ban" value={state.loading ? '...' : stats.departments} icon={Building} colorClass="bg-purple-500/10 text-purple-500 border-purple-500/20" />
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col xl:flex-row gap-3">
@@ -217,15 +236,15 @@ export default function AdminStaffPage() {
                       >
                         <FileText size={16} />
                       </Link>
-                      <button 
+                      {canUpdateEmployees && <button
                         onClick={() => openModal(employee)} 
                         className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                         title="Chỉnh sửa"
                       >
                         <Edit2 size={16} />
-                      </button>
+                      </button>}
                       
-                      {employee.status === 'SUSPENDED' ? (
+                      {canUpdateEmployees && (employee.status === 'SUSPENDED' ? (
                         <button 
                           onClick={() => changeStatus(employee, 'activate')}
                           className="p-1.5 rounded-lg text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
@@ -241,9 +260,9 @@ export default function AdminStaffPage() {
                         >
                           <Pause size={16} />
                         </button>
-                      ) : null}
+                      ) : null)}
                       
-                      {employee.status !== 'RESIGNED' && (
+                      {canUpdateEmployees && employee.status !== 'RESIGNED' && (
                         <button 
                           onClick={() => changeStatus(employee, 'resign')}
                           className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -301,14 +320,23 @@ export default function AdminStaffPage() {
             
             <div className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Họ và tên</label>
-                  <input value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} required className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors" placeholder="Nhập tên nhân viên" />
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Tài khoản đăng nhập</label>
+                  <select value={formData.accountId} onChange={e => setFormData({ ...formData, accountId: e.target.value })} required disabled={!!editingEmployee} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors disabled:opacity-50">
+                    <option value="">Chọn tài khoản đã kích hoạt</option>
+                    {editingEmployee && !options.accounts.some(account => String(account.id) === String(formData.accountId)) && (
+                      <option value={formData.accountId}>Tài khoản #{formData.accountId}</option>
+                    )}
+                    {options.accounts.map(account => (
+                      <option key={account.id} value={account.id}>{account.email} · #{account.id}</option>
+                    ))}
+                  </select>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Mã nhân viên</label>
-                  <input value={formData.employeeCode} onChange={e => setFormData({ ...formData, employeeCode: e.target.value })} required disabled={!!editingEmployee} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors disabled:opacity-50" placeholder="VD: NV001" />
-                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ngày bắt đầu làm việc</label>
+                <input type="date" value={formData.hireDate} max={new Date().toISOString().slice(0, 10)} onChange={e => setFormData({ ...formData, hireDate: e.target.value })} required className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

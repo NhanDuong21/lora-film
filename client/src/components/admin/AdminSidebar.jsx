@@ -29,6 +29,7 @@ import {
   UserCircle,
   FileSearch
 } from 'lucide-react';
+import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
 
 export default function AdminSidebar({ 
   activeTab, 
@@ -39,7 +40,28 @@ export default function AdminSidebar({
 }) {
   const navigate = useNavigate();
   const permissions = user?.permissions || [];
-  const isAccountantOnly = permissions.includes('PERM_VIEW_FINANCE') && !permissions.includes('PERM_ROOT_ACCESS');
+  const normalizedRole = String(user?.role || '').replace(/^ROLE_/, '');
+  const can = (...requiredPermissions) =>
+    hasPermissionAccess(normalizedRole, permissions, ...requiredPermissions);
+  const isFullAdmin = normalizedRole === 'ADMIN' || permissions.includes('PERM_ROOT_ACCESS');
+  const isAccountantOnly = can('PERM_VIEW_FINANCE') && !isFullAdmin;
+  const canManageCustomers = can('CUSTOMER_VIEW');
+  const canManageEmployees = can('EMPLOYEE_VIEW');
+  const canManageDepartments = can('DEPARTMENT_VIEW');
+  const canManagePositions = can('POSITION_VIEW');
+  const canManagePayroll = can('PAYROLL_VIEW');
+  const canManageRoles = can('ROLE_VIEW');
+  const canManagePermissions = can('PERMISSION_VIEW');
+  const canConfigureSystem = can('SYSTEM_CONFIGURATION');
+  const canViewUserAudits = can('USER_AUDIT_VIEW', 'SYSTEM_CONFIGURATION');
+  const hasHumanResourcesAccess = canManageEmployees || canManageDepartments
+    || canManagePositions || canManagePayroll;
+  const hasSystemAccess = canManageRoles || canManagePermissions
+    || canConfigureSystem || canViewUserAudits;
+  const roleLabel = isAccountantOnly
+    ? 'Finance'
+    : (isFullAdmin ? 'Admin' : normalizedRole.replaceAll('_', ' ') || 'Staff');
+  const adminHomePath = getAdminLandingPath(normalizedRole, permissions);
 
   // Collapsible categories state (default false = expanded, true = collapsed)
   const [collapsedSections, setCollapsedSections] = useState({
@@ -88,7 +110,7 @@ export default function AdminSidebar({
       <div>
         {/* Brand Top Header */}
         <div className="px-6 py-6 border-b border-zinc-800/60 flex items-center justify-between shrink-0 h-[72px]">
-          <Link to="/admin" className="flex items-center gap-2.5 bg-transparent p-0 m-0 shadow-none border-none select-none decoration-none group">
+          <Link to={adminHomePath} className="flex items-center gap-2.5 bg-transparent p-0 m-0 shadow-none border-none select-none decoration-none group">
             <img 
               src="/images/main-logo.png" 
               alt="LoraFilm Icon" 
@@ -99,7 +121,7 @@ export default function AdminSidebar({
             </span>
           </Link>
           <span className="bg-brand-orange/10 border border-brand-orange/30 text-brand-orange font-mono text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider select-none">
-            {isAccountantOnly ? 'Finance' : 'Admin'}
+            {roleLabel}
           </span>
         </div>
 
@@ -107,7 +129,7 @@ export default function AdminSidebar({
         <nav className="py-4 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
           
           {/* Section 1: Dashboard */}
-          {!isAccountantOnly && (
+          {can('DASHBOARD_VIEW') && (
             <div className="mb-2">
               <button
                 onClick={() => handleTabClick('dashboard', '#/admin')}
@@ -120,7 +142,7 @@ export default function AdminSidebar({
           )}
 
           {/* Section 2: Content Management */}
-          {!isAccountantOnly && (
+          {isFullAdmin && (
             <div className="space-y-1">
               <button
                 onClick={() => toggleSection('noiDung')}
@@ -152,7 +174,7 @@ export default function AdminSidebar({
           )}
 
           {/* Section 3: Facilities & Showtimes */}
-          {!isAccountantOnly && (
+          {isFullAdmin && (
             <div className="space-y-1">
               <button
                 onClick={() => toggleSection('coSo')}
@@ -200,7 +222,7 @@ export default function AdminSidebar({
           )}
 
           {/* Section 4: Operations & Finance */}
-          <div className="space-y-1">
+          {(isFullAdmin || isAccountantOnly) && <div className="space-y-1">
             <button
               onClick={() => toggleSection('vanHanhTaiChinh')}
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
@@ -213,30 +235,30 @@ export default function AdminSidebar({
 
             {!collapsedSections.vanHanhTaiChinh && (
               <div className="space-y-0.5">
-                <button onClick={() => handleTabClick('bookings', '#/admin/bookings')} className={getSubLinkClass('bookings')}>
+                {isFullAdmin && <button onClick={() => handleTabClick('bookings', '#/admin/bookings')} className={getSubLinkClass('bookings')}>
                   <Ticket className="w-4 h-4 shrink-0" />
                   <span>Quản lý vé & Đơn hàng</span>
-                </button>
+                </button>}
                 <button onClick={() => handleTabClick('finance', '#/admin/finance')} className={getSubLinkClass('finance')}>
                   <BarChart3 className="w-4 h-4 shrink-0" />
                   <span>Báo cáo doanh thu</span>
                 </button>
-                {!isAccountantOnly && (
+                {isFullAdmin && (
                   <button onClick={() => handleTabClick('concessions', '#/admin/concessions')} className={getSubLinkClass('concessions')}>
                     <Coffee className="w-4 h-4 shrink-0" />
                     <span>Danh mục bắp nước</span>
                   </button>
                 )}
-                <button onClick={() => handleTabClick('concession-sales', '#/admin/concession-sales')} className={getSubLinkClass('concession-sales')}>
+                {isFullAdmin && <button onClick={() => handleTabClick('concession-sales', '#/admin/concession-sales')} className={getSubLinkClass('concession-sales')}>
                   <Coins className="w-4 h-4 shrink-0" />
                   <span>Doanh thu bắp nước</span>
-                </button>
+                </button>}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Section 5: Customers */}
-          <div className="space-y-1">
+          {(isFullAdmin || canManageCustomers) && <div className="space-y-1">
             <button
               onClick={() => toggleSection('khachHang')}
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
@@ -249,31 +271,31 @@ export default function AdminSidebar({
 
             {!collapsedSections.khachHang && (
               <div className="space-y-0.5">
-                {!isAccountantOnly && (
+                {canManageCustomers && (
                   <>
                     <button onClick={() => handleTabClick('customers', '#/admin/members')} className={getSubLinkClass('customers')}>
                       <Users className="w-4 h-4 shrink-0" />
                       <span>Danh sách Khách hàng</span>
                     </button>
-                    <div className="px-6 py-2 mt-2">
+                    {isFullAdmin && <div className="px-6 py-2 mt-2">
                       <span className="text-[10px] uppercase font-black tracking-widest text-zinc-600">Loyalty Program</span>
-                    </div>
-                    <button onClick={() => handleTabClick('scores-tiers', '#/admin/scores/tiers')} className={getSubLinkClass('scores-tiers')}>
+                    </div>}
+                    {isFullAdmin && <button onClick={() => handleTabClick('scores-tiers', '#/admin/scores/tiers')} className={getSubLinkClass('scores-tiers')}>
                       <Award className="w-4 h-4 shrink-0" />
                       <span>Hạng thẻ thành viên</span>
-                    </button>
-                    <button onClick={() => handleTabClick('scores-viewer', '#/admin/scores/viewer')} className={getSubLinkClass('scores-viewer')}>
+                    </button>}
+                    {isFullAdmin && <button onClick={() => handleTabClick('scores-viewer', '#/admin/scores/viewer')} className={getSubLinkClass('scores-viewer')}>
                       <Gift className="w-4 h-4 shrink-0" />
                       <span>Tra cứu Điểm thưởng</span>
-                    </button>
+                    </button>}
                   </>
                 )}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Section 6: Human Resources */}
-          <div className="space-y-1">
+          {hasHumanResourcesAccess && <div className="space-y-1">
             <button
               onClick={() => toggleSection('nhanSu')}
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
@@ -286,32 +308,28 @@ export default function AdminSidebar({
 
             {!collapsedSections.nhanSu && (
               <div className="space-y-0.5">
-                {!isAccountantOnly && (
-                  <>
-                    <button onClick={() => handleTabClick('staff', '#/admin/staff')} className={getSubLinkClass('staff')}>
+                {canManageEmployees && <button onClick={() => handleTabClick('staff', '#/admin/staff')} className={getSubLinkClass('staff')}>
                       <Shield className="w-4 h-4 shrink-0" />
                       <span>Nhân viên</span>
-                    </button>
-                    <button onClick={() => handleTabClick('departments', '#/admin/departments')} className={getSubLinkClass('departments')}>
+                    </button>}
+                {canManageDepartments && <button onClick={() => handleTabClick('departments', '#/admin/departments')} className={getSubLinkClass('departments')}>
                       <Building className="w-4 h-4 shrink-0" />
                       <span>Phòng ban</span>
-                    </button>
-                    <button onClick={() => handleTabClick('positions', '#/admin/positions')} className={getSubLinkClass('positions')}>
+                    </button>}
+                {canManagePositions && <button onClick={() => handleTabClick('positions', '#/admin/positions')} className={getSubLinkClass('positions')}>
                       <BadgeDollarSign className="w-4 h-4 shrink-0" />
                       <span>Vị trí</span>
-                    </button>
-                  </>
-                )}
-                <button onClick={() => handleTabClick('payroll', '#/admin/payroll')} className={getSubLinkClass('payroll')}>
+                    </button>}
+                {canManagePayroll && <button onClick={() => handleTabClick('payroll', '#/admin/payroll')} className={getSubLinkClass('payroll')}>
                   <TrendingUp className="w-4 h-4 shrink-0" />
                   <span>Bảng lương</span>
-                </button>
+                </button>}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Section 7: Settings */}
-          {!isAccountantOnly && (
+          {hasSystemAccess && (
             <div className="space-y-1">
               <button
                 onClick={() => toggleSection('cauHinh')}
@@ -325,22 +343,30 @@ export default function AdminSidebar({
 
               {!collapsedSections.cauHinh && (
                 <div className="space-y-0.5">
-                  <button onClick={() => handleTabClick('roles', '#/admin/roles')} className={getSubLinkClass('roles')}>
+                  {canManageRoles && <button onClick={() => handleTabClick('roles', '#/admin/roles')} className={getSubLinkClass('roles')}>
                     <ShieldAlert className="w-4 h-4 shrink-0" />
                     <span>Quản lý vai trò (Role)</span>
-                  </button>
-                  <button onClick={() => handleTabClick('permissions', '#/admin/permissions')} className={getSubLinkClass('permissions')}>
+                  </button>}
+                  {canConfigureSystem && <button onClick={() => handleTabClick('accounts', '#/admin/accounts')} className={getSubLinkClass('accounts')}>
+                    <UserCircle className="w-4 h-4 shrink-0" />
+                    <span>Tài khoản đăng nhập</span>
+                  </button>}
+                  {canManagePermissions && <button onClick={() => handleTabClick('permissions', '#/admin/permissions')} className={getSubLinkClass('permissions')}>
                     <Key className="w-4 h-4 shrink-0" />
                     <span>Quản lý quyền hạn (Permission)</span>
-                  </button>
-                  <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
+                  </button>}
+                  {canConfigureSystem && <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
                     <Sliders className="w-4 h-4 shrink-0" />
                     <span>Cấu hình chung</span>
-                  </button>
-                  <button onClick={() => handleTabClick('audits', '#/admin/audits')} className={getSubLinkClass('audits')}>
+                  </button>}
+                  {canConfigureSystem && <button onClick={() => handleTabClick('audits', '#/admin/audits')} className={getSubLinkClass('audits')}>
                     <FileSearch className="w-4 h-4 shrink-0" />
                     <span>Nhật ký truy cập (Audit)</span>
-                  </button>
+                  </button>}
+                  {canViewUserAudits && <button onClick={() => handleTabClick('user-audits', '#/admin/user-audits')} className={getSubLinkClass('user-audits')}>
+                    <FileSearch className="w-4 h-4 shrink-0" />
+                    <span>Nhật ký nghiệp vụ</span>
+                  </button>}
                 </div>
               )}
             </div>
@@ -354,11 +380,11 @@ export default function AdminSidebar({
         <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl flex flex-col gap-3 hover-scale">
           <div className="flex items-center justify-start gap-3">
             <div className="w-10 h-10 rounded-full bg-brand-orange/10 border border-brand-orange/20 flex items-center justify-center font-bold text-brand-orange text-sm shrink-0">
-              {isAccountantOnly ? 'AC' : 'AD'}
+              {roleLabel.slice(0, 2).toUpperCase()}
             </div>
             <div className="truncate">
               <span className="text-[10px] text-zinc-500 font-bold block uppercase tracking-wider truncate">
-                {isAccountantOnly ? 'Kế toán viên' : 'Quản Trị Viên'}
+                {roleLabel}
               </span>
               <span className="text-sm text-zinc-100 font-bold block truncate">
                 {user?.fullName || 'Quản trị viên Lora'}

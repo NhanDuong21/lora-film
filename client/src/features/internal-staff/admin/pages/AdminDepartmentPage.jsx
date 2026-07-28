@@ -1,17 +1,26 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../services/userAdminService';
-import { AsyncState, Input } from '@/components/common/ui/uiKit';
+import { AsyncState } from '@/components/common/ui/uiKit';
 import { Building2, Search, Plus, Edit2, Trash2, ShieldAlert, BarChart3, Users } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import AdminStatCard from '../components/AdminStatCard';
+import useAdminAccess from '../hooks/useAdminAccess';
 
 export default function AdminDepartmentPage() {
+  const can = useAdminAccess();
+  const canCreateDepartments = can('DEPARTMENT_CREATE');
+  const canUpdateDepartments = can('DEPARTMENT_UPDATE');
+  const canDeleteDepartments = can('DEPARTMENT_DELETE');
   const [departments, setDepartments] = useState([]);
-  const [filteredDepartments, setFilteredDepartments] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [state, setState] = useState({ loading: true, error: '' });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDept, setEditingDept] = useState(null);
   const [formData, setFormData] = useState({ code: '', name: '', description: '' });
   const [stats, setStats] = useState({ total: 0 });
+  const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
+  const notify = outlet?.triggerToast || (() => undefined);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
@@ -19,7 +28,6 @@ export default function AdminDepartmentPage() {
       const data = await getDepartments();
       const depts = data || [];
       setDepartments(depts);
-      setFilteredDepartments(depts);
       setStats({ total: depts.length });
       setState({ loading: false, error: '' });
     } catch (error) {
@@ -27,25 +35,28 @@ export default function AdminDepartmentPage() {
     }
   }, []);
   
-  useEffect(() => { load(); }, [load]);
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
+
+  const filteredDepartments = useMemo(() => {
     if (!searchQuery.trim()) {
-      setFilteredDepartments(departments);
-      return;
+      return departments;
     }
     const lower = searchQuery.toLowerCase();
-    setFilteredDepartments(departments.filter(d => 
+    return departments.filter(d =>
       d.name?.toLowerCase().includes(lower) || 
       d.code?.toLowerCase().includes(lower) ||
       d.description?.toLowerCase().includes(lower)
-    ));
+    );
   }, [searchQuery, departments]);
 
   const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.code.trim() || !formData.name.trim()) {
-       return alert('Mã và tên phòng ban là bắt buộc');
+       notify('Mã và tên phòng ban là bắt buộc.', 'error');
+       return;
     }
     try {
       if (editingDept) {
@@ -55,18 +66,20 @@ export default function AdminDepartmentPage() {
       }
       setIsModalOpen(false);
       await load();
+      notify(editingDept ? 'Phòng ban đã được cập nhật.' : 'Phòng ban đã được tạo.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi lưu phòng ban');
+      notify(error?.message || 'Lỗi khi lưu phòng ban', 'error');
     }
   };
 
   const handleDelete = async (id) => {
-    if (confirm('Hành động này không thể hoàn tác. Bạn có chắc chắn muốn xóa phòng ban này?')) {
+    if (await confirmAction('Hành động này không thể hoàn tác. Xóa phòng ban này?')) {
       try {
         await deleteDepartment(id);
         await load();
+        notify('Phòng ban đã được xóa.');
       } catch (error) {
-        alert(error?.message || 'Lỗi khi xóa. Có thể phòng ban đang có nhân viên.');
+        notify(error?.message || 'Không thể xóa phòng ban đang có nhân viên.', 'error');
       }
     }
   };
@@ -77,18 +90,6 @@ export default function AdminDepartmentPage() {
     setIsModalOpen(true);
   };
 
-  const StatCard = ({ title, value, icon: Icon, colorClass }) => (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between hover:bg-zinc-900 transition-colors">
-      <div>
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-        <h3 className="text-3xl font-black text-white">{value}</h3>
-      </div>
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${colorClass}`}>
-        <Icon size={24} />
-      </div>
-    </div>
-  );
-
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-6 text-white md:p-8">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -96,17 +97,17 @@ export default function AdminDepartmentPage() {
           <h1 className="text-2xl font-black uppercase tracking-wider text-white">Quản lý <span className="text-brand-orange">Phòng Ban</span></h1>
           <p className="mt-1 text-sm text-zinc-500">Cơ cấu tổ chức và các bộ phận trong hệ thống.</p>
         </div>
-        <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
+        {canCreateDepartments && <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
           <Plus size={18} />
           <span>Thêm Phòng Ban</span>
-        </button>
+        </button>}
       </header>
 
       {/* Dashboard Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Tổng số phòng ban" value={stats.total || '...'} icon={Building2} colorClass="bg-blue-500/10 text-blue-500 border border-blue-500/20" />
-        <StatCard title="Hoạt động" value={stats.total || '...'} icon={BarChart3} colorClass="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" />
-        <StatCard title="Quy mô" value="100%" icon={Users} colorClass="bg-purple-500/10 text-purple-500 border border-purple-500/20" />
+        <AdminStatCard title="Tổng số phòng ban" value={stats.total} icon={Building2} colorClass="bg-blue-500/10 text-blue-500 border-blue-500/20" />
+        <AdminStatCard title="Hoạt động" value={stats.total} icon={BarChart3} colorClass="bg-emerald-500/10 text-emerald-500 border-emerald-500/20" />
+        <AdminStatCard title="Quy mô" value="100%" icon={Users} colorClass="bg-purple-500/10 text-purple-500 border-purple-500/20" />
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row gap-3">
@@ -148,20 +149,20 @@ export default function AdminDepartmentPage() {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button 
+                      {canUpdateDepartments && <button
                         onClick={() => openModal(dept)} 
                         className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                         title="Chỉnh sửa"
                       >
                         <Edit2 size={16} />
-                      </button>
-                      <button 
+                      </button>}
+                      {canDeleteDepartments && <button
                         onClick={() => handleDelete(dept.id)} 
                         className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                         title="Xóa"
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>

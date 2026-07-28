@@ -1,34 +1,44 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getCustomers, setCustomerBlocked } from '../services/userAdminService';
-import { AsyncState, Input, Select, StatusBadge } from '@/components/common/ui/uiKit';
-import { Users, UserPlus, UserCheck, UserX, Search, Filter, MoreVertical, ShieldBan, ShieldCheck } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import { getCustomers, setCustomerBlocked, getDashboard } from '../services/userAdminService';
+import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
+import AdminStatCard from '../components/AdminStatCard';
+import useAdminAccess from '../hooks/useAdminAccess';
+import { Users, UserPlus, UserCheck, UserX, Search, Filter, ShieldBan, ShieldCheck } from 'lucide-react';
 
 export default function AdminMembersPage() {
+  const can = useAdminAccess();
+  const canUpdateCustomers = can('CUSTOMER_UPDATE');
   const [query, setQuery] = useState({ keyword: '', status: '', page: 0, size: 10 });
   const [result, setResult] = useState({ content: [], totalPages: 0, totalElements: 0 });
   const [state, setState] = useState({ loading: true, error: '' });
   const [stats, setStats] = useState({ total: 0, active: 0, blocked: 0, new: 0 });
+  const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
+  const notify = outlet?.triggerToast || (() => undefined);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
     try {
-      const data = await getCustomers({
-        ...query,
-        keyword: query.keyword || undefined,
-        status: query.status || undefined
-      });
+      const [data, dashboard] = await Promise.all([
+        getCustomers({
+          ...query,
+          keyword: query.keyword || undefined,
+          status: query.status || undefined
+        }),
+        can('DASHBOARD_VIEW') ? getDashboard() : Promise.resolve(null)
+      ]);
       setResult(data || { content: [], totalPages: 0, totalElements: 0 });
       
       // Calculate basic stats for the current view if we don't have a dedicated endpoint
       if (query.page === 0 && !query.keyword && !query.status) {
         setStats({
-          total: data.totalElements || data.content.length || 0,
-          active: data.content.filter(c => c.status === 'ACTIVE').length || 0,
-          blocked: data.content.filter(c => c.status === 'BLOCKED').length || 0,
+          total: dashboard?.totalCustomers ?? data.totalElements ?? 0,
+          active: dashboard?.activeCustomers ?? data.content.filter(c => c.status === 'ACTIVE').length,
+          blocked: dashboard?.blockedCustomers ?? data.content.filter(c => c.status === 'BLOCKED').length,
           new: data.content.filter(c => {
-             // Assuming created within last 7 days
-             if(!c.createdAt) return false;
-             return (new Date() - new Date(c.createdAt)) / (1000 * 60 * 60 * 24) < 7;
+             if (!c.joinedAt) return false;
+             return (new Date() - new Date(c.joinedAt)) / (1000 * 60 * 60 * 24) < 7;
           }).length || 0
         });
       }
@@ -37,30 +47,43 @@ export default function AdminMembersPage() {
     } catch (error) {
       setState({ loading: false, error: error?.message || 'Không thể tải khách hàng.' });
     }
-  }, [query]);
+  }, [can, query]);
 
   useEffect(() => { load(); }, [load]);
 
   const toggleBlocked = async (customer) => {
+    const nextAction = customer.status === 'BLOCKED' ? 'mở khóa' : 'khóa';
+    if (!await confirmAction(`Xác nhận ${nextAction} khách hàng ${customer.customerCode}?`)) return;
     try {
       await setCustomerBlocked(customer.id, customer.status !== 'BLOCKED');
       await load();
+      notify(`Đã ${nextAction} khách hàng.`);
     } catch (error) {
       setState(value => ({ ...value, error: error?.message || 'Không thể đổi trạng thái.' }));
     }
   };
 
-  const StatCard = ({ title, value, icon: Icon, colorClass }) => (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between hover:bg-zinc-900 transition-colors">
-      <div>
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-        <h3 className="text-3xl font-black text-white">{value}</h3>
-      </div>
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${colorClass}`}>
-        <Icon size={24} />
-      </div>
-    </div>
-  );
+  const exportCurrentPage = () => {
+    const rows = [
+      ['customerCode', 'fullName', 'email', 'phoneNumber', 'status', 'joinedAt'],
+      ...(result.content || []).map(customer => [
+        customer.customerCode,
+        customer.fullName,
+        customer.email,
+        customer.phoneNumber,
+        customer.status,
+        customer.joinedAt
+      ])
+    ];
+    const csv = rows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `customers-page-${query.page + 1}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    notify('Đã xuất dữ liệu trang hiện tại.');
+  };
 
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-6 text-white md:p-8">
@@ -70,18 +93,18 @@ export default function AdminMembersPage() {
           <p className="mt-1 text-sm text-zinc-500">Xem danh sách, tìm kiếm và quản lý trạng thái tài khoản thành viên.</p>
         </div>
         <div className="flex gap-2">
-          <button className="px-4 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-sm font-bold hover:bg-zinc-800 transition-colors flex items-center gap-2 text-zinc-300">
-             Xuất dữ liệu
+          <button type="button" onClick={exportCurrentPage} disabled={!result.content?.length} className="px-4 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-sm font-bold hover:bg-zinc-800 transition-colors flex items-center gap-2 text-zinc-300 disabled:opacity-40">
+             Xuất trang hiện tại
           </button>
         </div>
       </header>
 
       {/* Dashboard Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Tổng thành viên" value={stats.total || result.totalElements || '...'} icon={Users} colorClass="bg-blue-500/10 text-blue-500 border border-blue-500/20" />
-        <StatCard title="Thành viên mới" value={stats.new || '...'} icon={UserPlus} colorClass="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" />
-        <StatCard title="Đang hoạt động" value={stats.active || '...'} icon={UserCheck} colorClass="bg-brand-orange/10 text-brand-orange border border-brand-orange/20" />
-        <StatCard title="Bị khóa" value={stats.blocked || '...'} icon={UserX} colorClass="bg-red-500/10 text-red-500 border border-red-500/20" />
+        <AdminStatCard title="Tổng thành viên" value={stats.total} icon={Users} colorClass="bg-blue-500/10 text-blue-500 border-blue-500/20" />
+        <AdminStatCard title="Thành viên mới (trang)" value={stats.new} icon={UserPlus} colorClass="bg-emerald-500/10 text-emerald-500 border-emerald-500/20" />
+        <AdminStatCard title="Đang hoạt động" value={stats.active} icon={UserCheck} colorClass="bg-brand-orange/10 text-brand-orange border-brand-orange/20" />
+        <AdminStatCard title="Bị khóa" value={stats.blocked} icon={UserX} colorClass="bg-red-500/10 text-red-500 border-red-500/20" />
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col md:flex-row gap-3">
@@ -141,7 +164,7 @@ export default function AdminMembersPage() {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex justify-end gap-2">
-                      <button 
+                      {canUpdateCustomers && <button
                         type="button" 
                         onClick={() => toggleBlocked(customer)}
                         className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -152,10 +175,7 @@ export default function AdminMembersPage() {
                       >
                         {customer.status === 'BLOCKED' ? <ShieldCheck size={14} /> : <ShieldBan size={14} />}
                         {customer.status === 'BLOCKED' ? 'Mở khóa' : 'Khóa'}
-                      </button>
-                      <button className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors">
-                        <MoreVertical size={16} />
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>

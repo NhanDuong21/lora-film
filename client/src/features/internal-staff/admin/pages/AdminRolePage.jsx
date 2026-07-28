@@ -1,42 +1,55 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getRoles, createRole, updateRole, deleteRole, getPermissions } from '../services/authAdminService';
 import { AsyncState, Input } from '@/components/common/ui/uiKit';
+import { useOutletContext } from 'react-router-dom';
+import useAdminAccess from '../hooks/useAdminAccess';
 
 export default function AdminRolePage() {
+  const can = useAdminAccess();
+  const canCreateRoles = can('ROLE_CREATE');
+  const canUpdateRoles = can('ROLE_UPDATE');
+  const canDeleteRoles = can('ROLE_DELETE');
   const [roles, setRoles] = useState([]);
-  const [filteredRoles, setFilteredRoles] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [allPermissions, setAllPermissions] = useState([]);
   const [state, setState] = useState({ loading: true, error: '' });
   const [editingRole, setEditingRole] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '', permissionIds: [] });
+  const [formData, setFormData] = useState({ code: '', name: '', description: '', permissionIds: [] });
+  const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
+  const notify = outlet?.triggerToast || (() => undefined);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
     try {
-      const [rolesData, permsData] = await Promise.all([getRoles(), getPermissions()]);
+      const [rolesData, permsData] = await Promise.all([
+        getRoles(),
+        (canCreateRoles || canUpdateRoles) ? getPermissions() : Promise.resolve([])
+      ]);
       setRoles(rolesData || []);
-      setFilteredRoles(rolesData || []);
       setAllPermissions(permsData || []);
       setState({ loading: false, error: '' });
     } catch (error) {
       setState({ loading: false, error: error?.message || 'Không thể tải vai trò.' });
     }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  }, [canCreateRoles, canUpdateRoles]);
 
   useEffect(() => {
+    // Loading remote role state is the synchronization performed by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
+
+  const filteredRoles = useMemo(() => {
     if (!searchQuery.trim()) {
-      setFilteredRoles(roles);
-      return;
+      return roles;
     }
     const lower = searchQuery.toLowerCase();
-    setFilteredRoles(roles.filter(r => 
+    return roles.filter(r =>
       r.name?.toLowerCase().includes(lower) || 
       r.description?.toLowerCase().includes(lower)
-    ));
+    );
   }, [searchQuery, roles]);
 
   const handleSubmit = async (e) => {
@@ -49,18 +62,20 @@ export default function AdminRolePage() {
       }
       setIsModalOpen(false);
       await load();
+      notify(editingRole ? 'Vai trò đã được cập nhật.' : 'Vai trò đã được tạo.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi lưu vai trò');
+      notify(error?.message || 'Lỗi khi lưu vai trò', 'error');
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa vai trò này?')) return;
+    if (!await confirmAction('Bạn có chắc chắn muốn xóa vai trò này?')) return;
     try {
       await deleteRole(id);
       await load();
+      notify('Vai trò đã được xóa.');
     } catch (error) {
-      alert(error?.message || 'Lỗi khi xóa vai trò');
+      notify(error?.message || 'Lỗi khi xóa vai trò', 'error');
     }
   };
 
@@ -68,12 +83,13 @@ export default function AdminRolePage() {
     setEditingRole(role);
     if (role) {
       setFormData({
+        code: role.code || '',
         name: role.name || '',
         description: role.description || '',
         permissionIds: role.permissions?.map(p => p.id) || []
       });
     } else {
-      setFormData({ name: '', description: '', permissionIds: [] });
+      setFormData({ code: '', name: '', description: '', permissionIds: [] });
     }
     setIsModalOpen(true);
   };
@@ -94,9 +110,9 @@ export default function AdminRolePage() {
           <h1 className="text-2xl font-black uppercase">Quản lý Vai trò</h1>
           <p className="mt-1 text-sm text-zinc-500">Thiết lập và phân quyền cho các vai trò trong hệ thống.</p>
         </div>
-        <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-4 py-2 text-sm font-bold text-zinc-950 hover:bg-brand-orange/90">
+        {canCreateRoles && <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-4 py-2 text-sm font-bold text-zinc-950 hover:bg-brand-orange/90">
           + Thêm Vai trò
-        </button>
+        </button>}
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col xl:flex-row gap-3">
@@ -116,10 +132,13 @@ export default function AdminRolePage() {
           {filteredRoles.map(role => (
             <div key={role.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
               <div className="flex items-start justify-between mb-2">
-                <h3 className="font-bold text-lg text-brand-orange">{role.name}</h3>
+                <div>
+                  <h3 className="font-bold text-lg text-brand-orange">{role.name}</h3>
+                  <p className="font-mono text-[10px] text-zinc-500">{role.code}</p>
+                </div>
                 <div className="space-x-2">
-                  <button onClick={() => openModal(role)} className="text-xs text-zinc-400 hover:text-white">Sửa</button>
-                  <button onClick={() => handleDelete(role.id)} className="text-xs text-red-400 hover:text-red-300">Xóa</button>
+                  {canUpdateRoles && <button onClick={() => openModal(role)} className="text-xs text-zinc-400 hover:text-white">Sửa</button>}
+                  {canDeleteRoles && <button onClick={() => handleDelete(role.id)} className="text-xs text-red-400 hover:text-red-300">Xóa</button>}
                 </div>
               </div>
               <p className="text-sm text-zinc-400 mb-4">{role.description || 'Không có mô tả'}</p>
@@ -143,6 +162,10 @@ export default function AdminRolePage() {
           <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xl font-bold text-white">{editingRole ? 'Sửa Vai trò' : 'Thêm Vai trò'}</h2>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-zinc-400">Mã vai trò</label>
+              <Input value={formData.code} onChange={e => setFormData({ ...formData, code: e.target.value })} required={!editingRole} disabled={!!editingRole} placeholder="VD: MANAGER" />
             </div>
             <div>
               <label className="text-xs font-bold text-zinc-400">Tên vai trò</label>

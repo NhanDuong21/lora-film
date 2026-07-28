@@ -12,8 +12,9 @@ import {
   Activity
 } from 'lucide-react';
 import { getBookingMonitoringSummary } from '@/features/booking/admin/services/adminBookingService';
-import { getCustomers, getEmployees, getPayrolls } from '@/features/internal-staff/admin/services/userAdminService';
+import { getDashboard } from '@/features/internal-staff/admin/services/userAdminService';
 import { ErrorState, LoadingState } from '@/components/common/ui/uiKit';
+import AdminStatCard from '../components/AdminStatCard';
 
 const MONITORING_CARDS = [
   {
@@ -56,32 +57,39 @@ export default function AdminDashboardView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [warning, setWarning] = useState(null);
 
   const loadData = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
+    setWarning(null);
     try {
-      // Load Booking Monitoring
-      const bookingPromise = getBookingMonitoringSummary().catch(() => null);
-      
-      // Load User/HR Stats
-      const customersPromise = getCustomers({ size: 1 }).catch(() => ({ totalElements: 0 }));
-      const employeesPromise = getEmployees({ size: 1 }).catch(() => ({ totalElements: 0 }));
-      const payrollsPromise = getPayrolls({ status: 'PENDING_APPROVAL', size: 1 }).catch(() => ({ totalElements: 0 }));
-
-      const [bookingData, customersData, employeesData, payrollsData] = await Promise.all([
-        bookingPromise, customersPromise, employeesPromise, payrollsPromise
+      const [bookingResult, userResult] = await Promise.allSettled([
+        getBookingMonitoringSummary(),
+        getDashboard()
       ]);
 
-      setSummary(bookingData);
-      setUserStats({
-        customers: customersData?.totalElements || 0,
-        employees: employeesData?.totalElements || 0,
-        pendingPayrolls: payrollsData?.totalElements || 0
-      });
+      setSummary(bookingResult.status === 'fulfilled' ? bookingResult.value : null);
+      if (userResult.status === 'fulfilled') {
+        const userData = userResult.value;
+        setUserStats({
+          customers: userData?.totalCustomers || 0,
+          employees: userData?.totalEmployees || 0,
+          pendingPayrolls: userData?.pendingPayrolls || 0
+        });
+      }
+
+      if (bookingResult.status === 'rejected' && userResult.status === 'rejected') {
+        setError('Không thể tải dữ liệu giám sát hệ thống.');
+      } else if (bookingResult.status === 'rejected') {
+        setWarning('Dữ liệu đặt vé tạm thời chưa khả dụng. Số liệu nhân sự vẫn được cập nhật.');
+      } else if (userResult.status === 'rejected') {
+        setWarning('Dữ liệu nhân sự tạm thời chưa khả dụng. Số liệu đặt vé vẫn được cập nhật.');
+      }
     } catch {
-      setError('Không thể tải một số dữ liệu vận hành.');
+      setSummary(null);
+      setError('Không thể tải dữ liệu giám sát hệ thống.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -89,24 +97,9 @@ export default function AdminDashboardView() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
-
-  const StatCard = ({ title, value, description, icon: Icon, colorClass }) => (
-    <section className="enterprise-card flex min-h-40 flex-col justify-between p-5 bg-zinc-900/50 border border-zinc-800 rounded-2xl hover:bg-zinc-900 transition-colors group">
-      <div className="flex justify-between items-start">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${colorClass} group-hover:scale-110 transition-transform`}>
-          <Icon className="h-6 w-6" />
-        </div>
-        <TrendingUp className="w-4 h-4 text-zinc-600" />
-      </div>
-      <div className="mt-4">
-        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1">{title}</p>
-        <p className="text-3xl font-black text-white">{value}</p>
-        <p className="mt-2 text-[10px] leading-relaxed text-zinc-500 uppercase">{description}</p>
-      </div>
-    </section>
-  );
 
   return (
     <div className="flex min-h-[400px] flex-1 flex-col space-y-8 overflow-auto bg-[#050506] p-6 text-white md:p-8">
@@ -132,12 +125,21 @@ export default function AdminDashboardView() {
 
       {loading ? (
         <LoadingState message="Đang tải dữ liệu tổng quan..." />
-      ) : error && !summary && userStats.customers === 0 ? (
+      ) : error ? (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-8">
           <ErrorState message={error} onRetry={() => loadData()} />
         </div>
       ) : (
         <div className="space-y-8">
+          {warning && (
+            <div
+              role="status"
+              className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200"
+            >
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <p>{warning}</p>
+            </div>
+          )}
           {/* Nhân sự & Khách hàng */}
           <section>
             <div className="flex items-center gap-2 mb-4">
@@ -145,26 +147,29 @@ export default function AdminDashboardView() {
               <h2 className="text-sm font-bold text-zinc-300 uppercase tracking-widest">Nhân sự & Khách hàng</h2>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <StatCard 
+              <AdminStatCard
                 title="Khách hàng đăng ký" 
                 value={userStats.customers.toLocaleString('vi-VN')} 
                 description="Tổng số tài khoản khách hàng trên hệ thống" 
                 icon={Users} 
                 colorClass="border-blue-500/20 bg-blue-500/10 text-blue-400" 
+                showTrend
               />
-              <StatCard 
+              <AdminStatCard
                 title="Nhân viên nội bộ" 
                 value={userStats.employees.toLocaleString('vi-VN')} 
                 description="Tổng số nhân sự đang hoạt động" 
                 icon={Briefcase} 
                 colorClass="border-purple-500/20 bg-purple-500/10 text-purple-400" 
+                showTrend
               />
-              <StatCard 
+              <AdminStatCard
                 title="Bảng lương chờ duyệt" 
                 value={userStats.pendingPayrolls.toLocaleString('vi-VN')} 
                 description="Số lượng bảng lương cần xử lý" 
                 icon={Banknote} 
                 colorClass="border-amber-500/20 bg-amber-500/10 text-amber-400" 
+                showTrend
               />
             </div>
           </section>

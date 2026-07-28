@@ -171,7 +171,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   // Change Email Action
   const handleSaveEmail = () => {
     setIsChangingEmail(false);
-    showErrorNotice('Email đăng nhập được quản lý bởi dịch vụ xác thực và không thể đổi tại hồ sơ.');
+    navigate('/change-email', { state: { newEmail } });
   };
 
   // Change Password Action
@@ -195,7 +195,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
       setNewPassword('');
       setConfirmPassword('');
       setIsChangingPassword(false);
-      logout();
+      await logout();
       navigate('/login', {
         replace: true,
         state: { message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.' }
