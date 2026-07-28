@@ -33,30 +33,33 @@ public class CredentialRevocationService {
     public void revokeAll(Long accountId) {
         sessionRepository.findByAccountIdAndIsOnlineTrue(accountId).forEach(this::revoke);
         var tokens = refreshTokenRepository.findActiveTokensByAccountId(accountId);
-        tokens.forEach(token -> token.setIsRevoked(true));
+        LocalDateTime now = LocalDateTime.now();
+        tokens.forEach(token -> {
+            token.setIsRevoked(true);
+            token.setRevokedAt(now);
+        });
         refreshTokenRepository.saveAll(tokens);
+        redisTemplate.opsForValue().set(
+                "account_revoked_after:" + accountId,
+                Long.toString(System.currentTimeMillis()),
+                Duration.ofMillis(jwtUtil.getJwtExpirationMs()));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void revoke(UserSession session) {
-        blacklist(session);
-        session.setIsActive(false);
-        sessionRepository.save(session);
-    }
-
-    private void blacklist(UserSession session) {
-        if (session.getAccessTokenHash() == null || session.getAccessTokenHash().isBlank()) {
-            return;
-        }
-        long sessionRemaining = session.getExpiresAt() == null
-                ? jwtUtil.getJwtExpirationMs()
-                : Duration.between(LocalDateTime.now(), session.getExpiresAt()).toMillis();
-        long ttlMillis = Math.min(jwtUtil.getJwtExpirationMs(), sessionRemaining);
-        if (ttlMillis > 0) {
+        if (session.getId() != null) {
             redisTemplate.opsForValue().set(
-                    "blacklist:" + session.getAccessTokenHash(),
+                    "revoked_session:" + session.getId(),
                     "revoked",
-                    Duration.ofMillis(ttlMillis));
+                    Duration.ofMillis(jwtUtil.getJwtExpirationMs()));
         }
+        if (session.getRefreshToken() != null && !Boolean.TRUE.equals(session.getRefreshToken().getIsRevoked())) {
+            session.getRefreshToken().setIsRevoked(true);
+            session.getRefreshToken().setRevokedAt(LocalDateTime.now());
+            refreshTokenRepository.save(session.getRefreshToken());
+        }
+        session.setIsActive(false);
+        session.setLogoutAt(LocalDateTime.now());
+        sessionRepository.save(session);
     }
 }

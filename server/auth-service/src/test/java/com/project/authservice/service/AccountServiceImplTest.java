@@ -35,14 +35,16 @@ class AccountServiceImplTest {
     @Mock
     private HttpServletRequest request;
     @Mock
-    private com.project.authservice.repository.UserSessionRepository userSessionRepository;
+    private CredentialRevocationService credentialRevocationService;
+    @Mock
+    private AuthOutboxService authOutboxService;
 
     private AccountServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AccountServiceImpl(accountRepository, roleRepository, auditLogService,
-                request, userSessionRepository);
+                request, credentialRevocationService, authOutboxService);
     }
 
     @Test
@@ -65,9 +67,10 @@ class AccountServiceImplTest {
         when(roleRepository.findById(2L)).thenReturn(Optional.of(manager));
         when(accountRepository.save(account)).thenReturn(account);
 
-        service.updateAccountRole(10L, 2);
+        service.updateAccountRole(10L, 2L);
 
-        verify(userSessionRepository).revokeAllForAccount(10L);
+        verify(credentialRevocationService).revokeAll(10L);
+        verify(authOutboxService).record(eq("ACCOUNT_ROLE_CHANGED"), eq(10L), any());
         verify(auditLogService).log(10L, "UPDATE_ACCOUNT_ROLE", request);
     }
 
@@ -78,12 +81,12 @@ class AccountServiceImplTest {
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
         when(roleRepository.findById(1L)).thenReturn(Optional.of(customer));
 
-        assertThatThrownBy(() -> service.updateAccountRole(10L, 1))
+        assertThatThrownBy(() -> service.updateAccountRole(10L, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("already assigned");
 
         verify(accountRepository, never()).save(any());
-        verify(userSessionRepository, never()).revokeAllForAccount(any());
+        verify(credentialRevocationService, never()).revokeAll(any());
     }
 
     private Account account(Long id, Role role, AccountStatus status) {

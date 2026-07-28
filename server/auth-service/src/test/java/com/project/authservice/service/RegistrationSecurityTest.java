@@ -49,6 +49,8 @@ class RegistrationSecurityTest {
     @Mock UserSessionRepository userSessionRepository;
     @Mock LoginHistoryRepository loginHistoryRepository;
     @Mock PasswordResetTokenRepository passwordResetTokenRepository;
+    @Mock CredentialRevocationService credentialRevocationService;
+    @Mock AuthOutboxService authOutboxService;
 
     private AuthServiceImpl service;
 
@@ -57,7 +59,8 @@ class RegistrationSecurityTest {
         service = new AuthServiceImpl(accountRepository, roleRepository, passwordEncoder, jwtUtil,
                 cccdCheckClient, verificationService, auditLogService, refreshTokenRepository,
                 servletRequest, eventPublisher, redisTemplate, new ObjectMapper(),
-                userSessionRepository, loginHistoryRepository, passwordResetTokenRepository);
+                userSessionRepository, loginHistoryRepository, passwordResetTokenRepository,
+                credentialRevocationService, authOutboxService);
     }
 
     @Test

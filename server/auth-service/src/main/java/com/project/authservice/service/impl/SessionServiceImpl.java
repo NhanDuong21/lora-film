@@ -18,6 +18,7 @@ public class SessionServiceImpl implements SessionService {
 
     private final UserSessionRepository userSessionRepository;
     private final AccountRepository accountRepository;
+    private final com.project.authservice.service.CredentialRevocationService credentialRevocationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -40,8 +41,7 @@ public class SessionServiceImpl implements SessionService {
         UserSession session = userSessionRepository.findByIdAndAccountId(sessionId, account.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Session not found or belongs to another user"));
         
-        session.setIsActive(false);
-        userSessionRepository.save(session);
+        credentialRevocationService.revoke(session);
     }
 
     @Override
@@ -50,21 +50,25 @@ public class SessionServiceImpl implements SessionService {
         Account account = accountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
         
-        userSessionRepository.revokeAllForAccount(account.getId());
+        credentialRevocationService.revokeAll(account.getId());
     }
 
     private SessionDto mapToDto(UserSession session) {
         return SessionDto.builder()
                 .id(session.getId())
+                .deviceName(session.getDeviceName())
                 .ipAddress(session.getIpAddress())
                 .userAgent(session.getUserAgent())
                 .createdAt(session.getCreatedAt())
+                .lastActiveAt(session.getLastActiveAt())
                 .expiresAt(session.getExpiresAt())
                 .isActive(session.getIsActive())
                 .build();
     }
-    public SessionServiceImpl(UserSessionRepository userSessionRepository, AccountRepository accountRepository) {
+    public SessionServiceImpl(UserSessionRepository userSessionRepository, AccountRepository accountRepository,
+                              com.project.authservice.service.CredentialRevocationService credentialRevocationService) {
         this.userSessionRepository = userSessionRepository;
         this.accountRepository = accountRepository;
+        this.credentialRevocationService = credentialRevocationService;
     }
 }

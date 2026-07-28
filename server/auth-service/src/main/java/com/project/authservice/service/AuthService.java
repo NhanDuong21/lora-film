@@ -67,6 +67,8 @@ public interface AuthService {
 	
 	void changePassword(com.project.authservice.dto.request.ChangePasswordRequest request, String email);
 
+	void changeEmail(com.project.authservice.dto.request.ChangeEmailRequest request, String currentEmail);
+
 	/**
 	 * Authenticates an OAuth2 user and generates JWT token.
 	 *

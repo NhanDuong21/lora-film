@@ -7,9 +7,10 @@ import com.project.authservice.enums.AccountStatus;
 import com.project.authservice.exception.ResourceNotFoundException;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.repository.RoleRepository;
-import com.project.authservice.repository.UserSessionRepository;
 import com.project.authservice.service.AccountService;
 import com.project.authservice.service.AuditLogService;
+import com.project.authservice.service.AuthOutboxService;
+import com.project.authservice.service.CredentialRevocationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,12 +24,15 @@ public class AccountServiceImpl implements AccountService {
     private final RoleRepository roleRepository;
     private final AuditLogService auditLogService;
     private final HttpServletRequest servletRequest;
-    private final UserSessionRepository userSessionRepository;
+    private final CredentialRevocationService credentialRevocationService;
+    private final AuthOutboxService authOutboxService;
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AccountDto> getAccounts(Pageable pageable) {
-        return accountRepository.findAll(pageable).map(this::mapToDto);
+    public Page<AccountDto> getAccounts(String keyword, AccountStatus status, Long roleId, Pageable pageable) {
+        Pageable safePageable = sanitize(pageable);
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        return accountRepository.search(normalizedKeyword, status, roleId, safePageable).map(this::mapToDto);
     }
 
     @Override
@@ -52,26 +56,32 @@ public class AccountServiceImpl implements AccountService {
     public AccountDto updateAccountStatus(Long id, AccountStatus status) {
         Account account = accountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
-        
+        if (Boolean.TRUE.equals(account.getIsDeleted()) && status != AccountStatus.DELETED) {
+            throw new com.project.authservice.exception.BusinessException("Deleted account cannot be reactivated");
+        }
         account.setAccountStatus(status);
+        if (status == AccountStatus.DELETED) {
+            account.setIsDeleted(true);
+            account.setIsEnabled(false);
+        } else if (status == AccountStatus.ACTIVE) {
+            account.setIsEnabled(true);
+        }
         account = accountRepository.save(account);
         
-        // If locked/inactive, revoke all sessions
-        if (status == AccountStatus.LOCKED || status == AccountStatus.INACTIVE) {
-            userSessionRepository.revokeAllForAccount(account.getId());
-        }
-        
+        credentialRevocationService.revokeAll(account.getId());
+        authOutboxService.record("ACCOUNT_STATUS_CHANGED", account.getId(),
+                java.util.Map.of("accountId", account.getId(), "status", status.name()));
         auditLogService.log(account.getId(), "UPDATE_ACCOUNT_STATUS", servletRequest);
         return mapToDto(account);
     }
 
     @Override
     @Transactional
-    public AccountDto updateAccountRole(Long id, Integer roleId) {
+    public AccountDto updateAccountRole(Long id, Long roleId) {
         Account account = accountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
                 
-        Role role = roleRepository.findById(roleId.longValue())
+        Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
                 
         if (account.getRole() != null && account.getRole().getId().equals(role.getId())) {
@@ -81,7 +91,10 @@ public class AccountServiceImpl implements AccountService {
         account.setRole(role);
         account = accountRepository.save(account);
         
-        userSessionRepository.revokeAllForAccount(account.getId()); // Revoke sessions to force re-login with new role
+        credentialRevocationService.revokeAll(account.getId());
+        String roleCode = role.getCode() == null ? role.getRoleName() : role.getCode();
+        authOutboxService.record("ACCOUNT_ROLE_CHANGED", account.getId(),
+                java.util.Map.of("accountId", account.getId(), "role", roleCode));
         auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ROLE", servletRequest);
         return mapToDto(account);
     }
@@ -90,17 +103,43 @@ public class AccountServiceImpl implements AccountService {
         return AccountDto.builder()
                 .id(account.getId())
                 .email(account.getEmail())
-                .roleName(account.getRole().getRoleName())
+                .roleName(account.getRole() == null ? null : account.getRole().getCode())
+                .role(account.getRole() == null ? null : com.project.authservice.dto.RoleDto.builder()
+                        .id(account.getRole().getId())
+                        .code(account.getRole().getCode())
+                        .name(account.getRole().getRoleName())
+                        .build())
+                .enabled(account.getIsEnabled())
                 .status(account.getAccountStatus())
                 .createdAt(account.getCreatedAt())
                 .updatedAt(account.getUpdatedAt())
                 .build();
     }
-    public AccountServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository, AuditLogService auditLogService, HttpServletRequest servletRequest, UserSessionRepository userSessionRepository) {
+    private Pageable sanitize(Pageable pageable) {
+        java.util.Set<String> allowedSorts = java.util.Set.of("id", "email", "status", "createdAt", "updatedAt");
+        org.springframework.data.domain.Sort sort = pageable.getSort().stream()
+                .filter(order -> allowedSorts.contains(order.getProperty()))
+                .map(order -> new org.springframework.data.domain.Sort.Order(order.getDirection(), order.getProperty()))
+                .collect(java.util.stream.Collectors.collectingAndThen(
+                        java.util.stream.Collectors.toList(),
+                        orders -> orders.isEmpty()
+                                ? org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")
+                                : org.springframework.data.domain.Sort.by(orders)));
+        return org.springframework.data.domain.PageRequest.of(
+                Math.max(0, pageable.getPageNumber()),
+                Math.min(Math.max(1, pageable.getPageSize()), 100),
+                sort);
+    }
+
+    public AccountServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository,
+                              AuditLogService auditLogService, HttpServletRequest servletRequest,
+                              CredentialRevocationService credentialRevocationService,
+                              AuthOutboxService authOutboxService) {
         this.accountRepository = accountRepository;
         this.roleRepository = roleRepository;
         this.auditLogService = auditLogService;
         this.servletRequest = servletRequest;
-        this.userSessionRepository = userSessionRepository;
+        this.credentialRevocationService = credentialRevocationService;
+        this.authOutboxService = authOutboxService;
     }
 }
