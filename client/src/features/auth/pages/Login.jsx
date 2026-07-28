@@ -172,9 +172,14 @@ function Login() {
                     </div>
 
                     <div className="space-y-1">
-                        <label htmlFor="password-input" className="text-zinc-400 text-xs font-black uppercase tracking-wider block">
-                            Mật khẩu
-                        </label>
+                        <div className="flex items-center justify-between">
+                            <label htmlFor="password-input" className="text-zinc-400 text-xs font-black uppercase tracking-wider block">
+                                Mật khẩu
+                            </label>
+                            <Link to="/forgot-password" className="text-xs font-bold text-orange-400 hover:underline transition-colors focus:outline-none">
+                                Quên mật khẩu?
+                            </Link>
+                        </div>
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-zinc-500 pointer-events-none">
                                 <Lock className="w-4 h-4" />
