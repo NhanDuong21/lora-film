@@ -139,6 +139,9 @@ CREATE INDEX idx_coupon_redemption_deleted ON coupon_redemptions (deleted_at);
 
 CREATE INDEX idx_coupon_redemption_created ON coupon_redemptions (created_at);
 
+CREATE UNIQUE INDEX uk_coupon_redemption_reservation
+    ON coupon_redemptions (reservation_public_id);
+
 -- ============================================================
 -- PHASE 3 - VOUCHER
 -- ============================================================
@@ -242,6 +245,9 @@ CREATE INDEX idx_voucher_redemption_deleted ON voucher_redemptions (deleted_at);
 
 CREATE INDEX idx_voucher_redemption_created ON voucher_redemptions (created_at);
 
+CREATE UNIQUE INDEX uk_voucher_redemption_reservation
+    ON voucher_redemptions (reservation_public_id);
+
 -- ============================================================
 -- PHASE 4 - PROMOTION RESERVATION
 -- ============================================================
@@ -280,7 +286,16 @@ CREATE TABLE promotion_reservations (
     deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
     CONSTRAINT uk_promotion_reservation_public UNIQUE (public_id),
     CONSTRAINT uk_promotion_reservation_code UNIQUE (reservation_code),
-    CONSTRAINT chk_reservation_amount CHECK (final_amount >= 0),
+    CONSTRAINT chk_reservation_amount CHECK (
+        original_amount >= 0
+        AND discount_amount >= 0
+        AND final_amount >= 0
+        AND final_amount = original_amount - discount_amount
+    ),
+    CONSTRAINT chk_reservation_single_benefit CHECK (
+        (coupon_public_id IS NOT NULL AND voucher_public_id IS NULL)
+        OR (coupon_public_id IS NULL AND voucher_public_id IS NOT NULL)
+    ),
     CONSTRAINT chk_reservation_period CHECK (
         reservation_expired_at > reservation_started_at
     )
@@ -303,6 +318,15 @@ CREATE INDEX idx_reservation_status ON promotion_reservations (status);
 CREATE INDEX idx_reservation_expired ON promotion_reservations (reservation_expired_at);
 
 CREATE INDEX idx_reservation_deleted ON promotion_reservations (deleted_at);
+
+CREATE INDEX idx_reservation_coupon_active
+    ON promotion_reservations (coupon_public_id, status, reservation_expired_at);
+
+CREATE INDEX idx_reservation_voucher_active
+    ON promotion_reservations (voucher_public_id, status, reservation_expired_at);
+
+CREATE INDEX idx_reservation_campaign_active
+    ON promotion_reservations (campaign_public_id, status, reservation_expired_at);
 
 -- ============================================================
 -- COMPENSATION VOUCHERS
