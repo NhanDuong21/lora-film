@@ -4,7 +4,7 @@ import {
   changeEmployeeStatus, getDepartments, getEmployees, getPositions, createEmployee, updateEmployee
 } from '../services/userAdminService';
 import { AsyncState, Input, Select, StatusBadge } from '@/components/common/ui/uiKit';
-import { Users, Briefcase, Building, Wallet, Search, Filter, MoreVertical, Edit2, FileText, UserMinus, UserCheck, Play, Pause } from 'lucide-react';
+import { Users, Briefcase, Building, Wallet, Search, Filter, MoreVertical, Edit2, FileText, UserMinus, UserCheck, Play, Pause, UserPlus } from 'lucide-react';
 
 export default function AdminStaffPage() {
   const [query, setQuery] = useState({

@@ -10,6 +10,37 @@ import {
 } from 'lucide-react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
+const EMPLOYEE_MENUS = [
+  {
+    id: 'pos',
+    path: '/employee/pos',
+    label: 'Đặt Vé Tại Quầy',
+    icon: Ticket,
+    permission: 'PERM_POS_ACCESS'
+  },
+  {
+    id: 'checkin',
+    path: '/employee/checkin',
+    label: 'Kiểm Tra Vé',
+    icon: CheckSquare,
+    permission: 'PERM_CHECKIN'
+  },
+  {
+    id: 'schedules',
+    path: '/employee/schedules',
+    label: 'Xem Lịch Chiếu',
+    icon: Calendar,
+    permission: 'PERM_VIEW_SCHEDULE'
+  },
+  {
+    id: 'payroll',
+    path: '/employee/payroll',
+    label: 'Lương Của Tôi',
+    icon: DollarSign,
+    permission: 'PERM_VIEW_PAYROLL'
+  }
+];
+
 export default function EmployeeLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -51,53 +82,33 @@ export default function EmployeeLayout() {
 
           {/* Navigation Links List */}
           <nav className="p-4 space-y-1">
-            <button
-              onClick={() => navigate('/employee/pos')}
-              className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
-                activeTab === 'pos'
-                  ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
-              }`}
-            >
-              <Ticket className="w-4 h-4 mr-3 shrink-0" />
-              <span>Đặt Vé Tại Quầy</span>
-            </button>
+            {EMPLOYEE_MENUS.map((menu) => {
+              // ROOT_ACCESS implies all permissions, or check explicit permission
+              const hasPerm = user?.permissions?.includes('PERM_ROOT_ACCESS') || 
+                              user?.permissions?.includes(menu.permission) ||
+                              // Fallback if permissions aren't properly configured yet
+                              !user?.permissions || user.permissions.length === 0;
+                              
+              if (!hasPerm) return null;
 
-            <button
-              onClick={() => navigate('/employee/checkin')}
-              className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
-                activeTab === 'checkin'
-                  ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
-              }`}
-            >
-              <CheckSquare className="w-4 h-4 mr-3 shrink-0" />
-              <span>Kiểm Tra Vé</span>
-            </button>
+              const Icon = menu.icon;
+              const isActive = activeTab === menu.id;
 
-            <button
-              onClick={() => navigate('/employee/schedules')}
-              className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
-                activeTab === 'schedules'
-                  ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
-              }`}
-            >
-              <Calendar className="w-4 h-4 mr-3 shrink-0" />
-              <span>Xem Lịch Chiếu</span>
-            </button>
-
-            <button
-              onClick={() => navigate('/employee/payroll')}
-              className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
-                activeTab === 'payroll'
-                  ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
-              }`}
-            >
-              <DollarSign className="w-4 h-4 mr-3 shrink-0" />
-              <span>Lương Của Tôi</span>
-            </button>
+              return (
+                <button
+                  key={menu.id}
+                  onClick={() => navigate(menu.path)}
+                  className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
+                    isActive
+                      ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
+                      : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 mr-3 shrink-0" />
+                  <span>{menu.label}</span>
+                </button>
+              );
+            })}
           </nav>
         </div>
 

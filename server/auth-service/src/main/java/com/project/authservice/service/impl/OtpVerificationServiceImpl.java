@@ -220,4 +220,36 @@ public class OtpVerificationServiceImpl implements VerificationService {
         // Account status activation should be handled by the caller or Saga pattern,
         // not here.
     }
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
+    @Override
+    public void sendForgotPasswordEmail(Long accountId, String email, String otp) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Internal-Token", internalToken);
+
+            String resetLink = frontendUrl + "/reset-password?token=" + otp;
+            String content = "Chào bạn,<br/><br/>Bạn đã yêu cầu đặt lại mật khẩu. Vui lòng nhấp vào liên kết sau để đặt lại mật khẩu: <a href=\"" + resetLink + "\">Đặt lại mật khẩu</a><br/><br/>Nếu bạn không yêu cầu, vui lòng bỏ qua email này.";
+
+            Map<String, Object> body = Map.of(
+                    "eventId", "AUTH-FORGOT-PASSWORD-" + email + "-" + System.currentTimeMillis(),
+                    "requestSource", "auth-service",
+                    "title", "Yêu cầu đặt lại mật khẩu",
+                    "content", content,
+                    "userId", accountId,
+                    "recipient", email,
+                    "channelType", "EMAIL");
+
+            HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(body, headers);
+            String url = notificationServiceUrl + "/internal/notifications/send";
+            log.info("Sending forgot password email request to notification-service: url={}", url);
+            restTemplate.postForEntity(url, httpEntity, Map.class);
+            log.info("Forgot password email request sent successfully for email={}", email);
+        } catch (Exception e) {
+            log.warn("Failed to send forgot password email via notification-service: {}", e.getMessage(), e);
+        }
+    }
 }

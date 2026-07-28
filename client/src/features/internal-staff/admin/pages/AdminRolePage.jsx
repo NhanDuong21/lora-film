@@ -4,6 +4,8 @@ import { AsyncState, Input } from '@/components/common/ui/uiKit';
 
 export default function AdminRolePage() {
   const [roles, setRoles] = useState([]);
+  const [filteredRoles, setFilteredRoles] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [allPermissions, setAllPermissions] = useState([]);
   const [state, setState] = useState({ loading: true, error: '' });
   const [editingRole, setEditingRole] = useState(null);
@@ -15,6 +17,7 @@ export default function AdminRolePage() {
     try {
       const [rolesData, permsData] = await Promise.all([getRoles(), getPermissions()]);
       setRoles(rolesData || []);
+      setFilteredRoles(rolesData || []);
       setAllPermissions(permsData || []);
       setState({ loading: false, error: '' });
     } catch (error) {
@@ -23,6 +26,18 @@ export default function AdminRolePage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredRoles(roles);
+      return;
+    }
+    const lower = searchQuery.toLowerCase();
+    setFilteredRoles(roles.filter(r => 
+      r.name?.toLowerCase().includes(lower) || 
+      r.description?.toLowerCase().includes(lower)
+    ));
+  }, [searchQuery, roles]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -84,9 +99,21 @@ export default function AdminRolePage() {
         </button>
       </div>
 
-      <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!roles.length} emptyMessage="Chưa có vai trò nào">
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col xl:flex-row gap-3">
+        <div className="flex-1 relative">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input 
+            placeholder="Tìm kiếm vai trò theo tên, mô tả..." 
+            value={searchQuery}
+            onChange={event => setSearchQuery(event.target.value)} 
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-10 pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-brand-orange outline-none transition-colors"
+          />
+        </div>
+      </div>
+
+      <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!filteredRoles.length} emptyMessage="Chưa có vai trò nào">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {roles.map(role => (
+          {filteredRoles.map(role => (
             <div key={role.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
               <div className="flex items-start justify-between mb-2">
                 <h3 className="font-bold text-lg text-brand-orange">{role.name}</h3>

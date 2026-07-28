@@ -616,8 +616,8 @@ public class AuthServiceImpl implements AuthService {
 				.build();
 		passwordResetTokenRepository.save(resetToken);
 		
-		// In a real system, send email here
-		log.info("Password reset OTP generated for email={}: {}", request.getEmail(), otp);
+		verificationService.sendForgotPasswordEmail(account.getId(), request.getEmail(), otp);
+		log.info("Password reset email sent for email={}", request.getEmail());
 	}
 
 	@Override

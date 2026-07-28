@@ -46,6 +46,7 @@ export default function AdminSidebar({
     noiDung: false,
     coSo: false,
     vanHanhTaiChinh: false,
+    khachHang: false,
     nhanSu: false,
     cauHinh: false
   });
@@ -234,13 +235,50 @@ export default function AdminSidebar({
             )}
           </div>
 
-          {/* Section 5: Users & HR */}
+          {/* Section 5: Customers */}
+          <div className="space-y-1">
+            <button
+              onClick={() => toggleSection('khachHang')}
+              className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
+            >
+              <span>Khách hàng</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                !collapsedSections.khachHang ? 'rotate-180' : ''
+              }`} />
+            </button>
+
+            {!collapsedSections.khachHang && (
+              <div className="space-y-0.5">
+                {!isAccountantOnly && (
+                  <>
+                    <button onClick={() => handleTabClick('customers', '#/admin/members')} className={getSubLinkClass('customers')}>
+                      <Users className="w-4 h-4 shrink-0" />
+                      <span>Danh sách Khách hàng</span>
+                    </button>
+                    <div className="px-6 py-2 mt-2">
+                      <span className="text-[10px] uppercase font-black tracking-widest text-zinc-600">Loyalty Program</span>
+                    </div>
+                    <button onClick={() => handleTabClick('scores-tiers', '#/admin/scores/tiers')} className={getSubLinkClass('scores-tiers')}>
+                      <Award className="w-4 h-4 shrink-0" />
+                      <span>Hạng thẻ thành viên</span>
+                    </button>
+                    <button onClick={() => handleTabClick('scores-viewer', '#/admin/scores/viewer')} className={getSubLinkClass('scores-viewer')}>
+                      <Gift className="w-4 h-4 shrink-0" />
+                      <span>Tra cứu Điểm thưởng</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Section 6: Human Resources */}
           <div className="space-y-1">
             <button
               onClick={() => toggleSection('nhanSu')}
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
-              <span>Nhân sự & Khách hàng</span>
+              <span>Nhân sự</span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
                 !collapsedSections.nhanSu ? 'rotate-180' : ''
               }`} />
@@ -250,18 +288,6 @@ export default function AdminSidebar({
               <div className="space-y-0.5">
                 {!isAccountantOnly && (
                   <>
-                    <button onClick={() => handleTabClick('customers', '#/admin/members')} className={getSubLinkClass('customers')}>
-                      <Users className="w-4 h-4 shrink-0" />
-                      <span>Khách hàng</span>
-                    </button>
-                    <button onClick={() => handleTabClick('scores-viewer', '#/admin/scores/viewer')} className={getSubLinkClass('scores-viewer')}>
-                      <Award className="w-4 h-4 shrink-0" />
-                      <span>Tra cứu Điểm thưởng</span>
-                    </button>
-                    <button onClick={() => handleTabClick('scores-tiers', '#/admin/scores/tiers')} className={getSubLinkClass('scores-tiers')}>
-                      <Gift className="w-4 h-4 shrink-0" />
-                      <span>Hạng thẻ thành viên</span>
-                    </button>
                     <button onClick={() => handleTabClick('staff', '#/admin/staff')} className={getSubLinkClass('staff')}>
                       <Shield className="w-4 h-4 shrink-0" />
                       <span>Nhân viên</span>
@@ -284,7 +310,7 @@ export default function AdminSidebar({
             )}
           </div>
 
-          {/* Section 6: Settings */}
+          {/* Section 7: Settings */}
           {!isAccountantOnly && (
             <div className="space-y-1">
               <button
@@ -299,10 +325,6 @@ export default function AdminSidebar({
 
               {!collapsedSections.cauHinh && (
                 <div className="space-y-0.5">
-                  <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
-                    <Sliders className="w-4 h-4 shrink-0" />
-                    <span>Cấu hình chung</span>
-                  </button>
                   <button onClick={() => handleTabClick('roles', '#/admin/roles')} className={getSubLinkClass('roles')}>
                     <ShieldAlert className="w-4 h-4 shrink-0" />
                     <span>Quản lý vai trò (Role)</span>
@@ -311,9 +333,9 @@ export default function AdminSidebar({
                     <Key className="w-4 h-4 shrink-0" />
                     <span>Quản lý quyền hạn (Permission)</span>
                   </button>
-                  <button onClick={() => handleTabClick('accounts', '#/admin/accounts')} className={getSubLinkClass('accounts')}>
-                    <UserCircle className="w-4 h-4 shrink-0" />
-                    <span>Quản lý tài khoản (Account)</span>
+                  <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
+                    <Sliders className="w-4 h-4 shrink-0" />
+                    <span>Cấu hình chung</span>
                   </button>
                   <button onClick={() => handleTabClick('audits', '#/admin/audits')} className={getSubLinkClass('audits')}>
                     <FileSearch className="w-4 h-4 shrink-0" />
@@ -343,22 +365,38 @@ export default function AdminSidebar({
               </span>
             </div>
           </div>
-          <div className="flex items-center justify-between border-t border-zinc-800 pt-3 mt-1">
+          <div className="flex flex-col gap-1 border-t border-zinc-800 pt-3 mt-1">
             <button 
-              onClick={onBackHome}
-              className="flex items-center justify-start gap-1.5 text-xs font-medium text-zinc-400 hover:text-brand-orange transition-colors"
-              title="Quay lại trang chủ"
+              onClick={() => handleTabClick('my-profile', '#/profile')}
+              className="flex items-center justify-start gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors rounded hover:bg-zinc-800/50"
             >
-              <Home className="w-4 h-4" />
-              <span>Trang chủ</span>
+              <UserCircle className="w-3.5 h-3.5" />
+              <span>Hồ sơ của tôi</span>
             </button>
             <button 
-              onClick={handleLogout}
-              className="flex items-center justify-start gap-1.5 text-xs font-bold text-red-500 hover:text-red-400 transition-colors"
+              onClick={() => handleTabClick('my-security', '#/profile?tab=security')}
+              className="flex items-center justify-start gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors rounded hover:bg-zinc-800/50"
             >
-              <LogOut className="w-4 h-4" />
-              <span>Đăng xuất</span>
+              <Key className="w-3.5 h-3.5" />
+              <span>Bảo mật</span>
             </button>
+            <div className="flex items-center justify-between pt-2 mt-1 border-t border-zinc-800/50">
+              <button 
+                onClick={onBackHome}
+                className="flex items-center justify-start gap-1.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-brand-orange transition-colors rounded"
+                title="Quay lại trang chủ"
+              >
+                <Home className="w-4 h-4" />
+                <span>Trang chủ</span>
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center justify-start gap-1.5 px-2 py-1.5 text-xs font-bold text-red-500 hover:text-red-400 transition-colors rounded"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

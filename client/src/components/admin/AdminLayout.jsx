@@ -9,6 +9,7 @@ import { X } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import AdminSidebar from './AdminSidebar';
+import Breadcrumbs from '@/components/common/Breadcrumbs';
 
 export default function AdminLayout({ onBackHome }) {
   const { user, logout } = useAuth();
@@ -187,11 +188,7 @@ export default function AdminLayout({ onBackHome }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="hidden lg:flex items-center gap-2 text-sm">
-              <span className="text-zinc-500 font-medium tracking-wide">Quản trị viên</span>
-              <span className="text-zinc-600">/</span>
-              <span className="text-zinc-200 font-semibold capitalize">{activeTab.replace('-', ' ')}</span>
-            </div>
+            <Breadcrumbs />
           </div>
           <div className="flex items-center gap-4">
             <div className="text-[10px] text-brand-orange font-bold uppercase tracking-widest bg-brand-orange/10 border border-brand-orange/20 px-3 py-1.5 rounded-full hidden md:block">
