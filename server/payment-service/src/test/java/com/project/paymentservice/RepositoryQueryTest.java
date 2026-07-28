@@ -15,7 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,8 +41,8 @@ public class RepositoryQueryTest {
         p.setAttemptNumber(1);
         p.setAmount(new BigDecimal("200000"));
         p.setPaymentMethod(PaymentMethod.VNPAY);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        paymentRepository.saveAndFlush(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        paymentRepository.saveAndFlush(TestFixtures.complete(p));
         
         assertTrue(paymentRepository.findByPaymentTransactionCode("TXN-QUERY-1").isPresent());
         assertTrue(paymentRepository.findByBookingId(5L, PageRequest.of(0, 10)).getTotalElements() > 0);
@@ -62,7 +62,9 @@ public class RepositoryQueryTest {
         event.setStatus(OutboxStatus.PENDING);
         outboxEventRepository.saveAndFlush(event);
         
-        List<PaymentOutboxEvent> claimed = outboxEventRepository.findAndClaimPendingEvents(LocalDateTime.now(), 10);
+        Instant now = Instant.now();
+        List<PaymentOutboxEvent> claimed =
+                outboxEventRepository.findAndClaimPendingEvents(now, now.plusSeconds(30), "test-worker", 10);
         assertFalse(claimed.isEmpty());
     }
 }

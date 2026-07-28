@@ -10,6 +10,7 @@ import com.project.paymentservice.repository.PaymentIdempotencyRecordRepository;
 import com.project.paymentservice.repository.PaymentLogRepository;
 import com.project.paymentservice.repository.PaymentRepository;
 import com.project.paymentservice.service.PaymentService;
+import com.project.paymentservice.service.PaymentIdempotencyService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -45,22 +46,20 @@ public class PaymentCancelAndIdempotencyTest {
     @Autowired
     private PaymentLogRepository logRepository;
 
+    @Autowired
+    private PaymentIdempotencyService paymentIdempotencyService;
+
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
-        snapshotRepository.deleteAllInBatch();
-        logRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @AfterEach
     void tearDown() {
-        snapshotRepository.deleteAllInBatch();
-        logRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @Test
@@ -73,8 +72,8 @@ public class PaymentCancelAndIdempotencyTest {
         p.setPaymentMethod(PaymentMethod.MOCK);
         p.setAttemptNumber(1);
         p.setStatus(PaymentStatus.PENDING);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        p = paymentRepository.save(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = savePaymentWithGuard(p);
 
         // First cancel
         CancelPaymentResponse resp1 = paymentService.cancelPayment(15L, "cancel-key", p.getId());
@@ -99,19 +98,20 @@ public class PaymentCancelAndIdempotencyTest {
         p.setPaymentMethod(PaymentMethod.MOCK);
         p.setAttemptNumber(1);
         p.setStatus(PaymentStatus.PENDING);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        final Payment savedP = paymentRepository.save(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        final Payment savedP = savePaymentWithGuard(p);
 
         com.project.paymentservice.entity.PaymentIdempotencyRecord record = new com.project.paymentservice.entity.PaymentIdempotencyRecord();
         record.setAccountId(15L);
         record.setOperation("CANCEL_PAYMENT");
         record.setIdempotencyKey("failed-cancel-key");
-        record.setRequestHash(com.project.paymentservice.service.CanonicalHashUtil.hashCancelPayment(15L, savedP.getId()));
+        record.setRequestHash(com.project.paymentservice.service.CanonicalHashUtil.hashOperation(
+                "CANCEL_PAYMENT", 15L, savedP.getPublicId()));
         record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.FAILED);
         record.setErrorCode("INTERNAL_SERVER_ERROR");
         record.setLastError("Simulated failure");
         record.setResponseStatus(500);
-        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        record.setExpiresAt(Instant.now().plusSeconds(3600));
         idempotencyRepository.saveAndFlush(record);
 
         com.project.paymentservice.exception.BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(
@@ -137,8 +137,8 @@ public class PaymentCancelAndIdempotencyTest {
         p1.setPaymentMethod(PaymentMethod.MOCK);
         p1.setAttemptNumber(1);
         p1.setStatus(PaymentStatus.PENDING);
-        p1.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        p1 = paymentRepository.save(p1);
+        p1.setExpiresAt(Instant.now().plusSeconds(900));
+        p1 = savePaymentWithGuard(p1);
 
         Payment p2 = new Payment();
         p2.setAccountId(15L);
@@ -148,8 +148,8 @@ public class PaymentCancelAndIdempotencyTest {
         p2.setPaymentMethod(PaymentMethod.MOCK);
         p2.setAttemptNumber(1);
         p2.setStatus(PaymentStatus.PENDING);
-        p2.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        final Payment savedP2 = paymentRepository.save(p2);
+        p2.setExpiresAt(Instant.now().plusSeconds(900));
+        final Payment savedP2 = savePaymentWithGuard(p2);
 
         // First cancel
         paymentService.cancelPayment(15L, "shared-cancel-key", p1.getId());
@@ -173,7 +173,7 @@ public class PaymentCancelAndIdempotencyTest {
         record.setIdempotencyKey("conflict-key");
         record.setRequestHash("hash-A");
         record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.PROCESSING);
-        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        record.setExpiresAt(Instant.now().plusSeconds(3600));
         idempotencyRepository.saveAndFlush(record);
 
         com.project.paymentservice.dto.request.CreatePaymentRequest req = new com.project.paymentservice.dto.request.CreatePaymentRequest(9999L, "MOCK");
@@ -201,7 +201,7 @@ public class PaymentCancelAndIdempotencyTest {
         record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED);
         record.setResponseStatus(200);
         record.setResponseBodySanitized("{\"success\":true}");
-        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        record.setExpiresAt(Instant.now().plusSeconds(3600));
         idempotencyRepository.saveAndFlush(record);
 
         com.project.paymentservice.dto.request.CreatePaymentRequest req = new com.project.paymentservice.dto.request.CreatePaymentRequest(8888L, "MOCK");
@@ -226,7 +226,7 @@ public class PaymentCancelAndIdempotencyTest {
         record.setErrorCode("SOME_ERROR");
         record.setLastError("Some error msg");
         record.setResponseStatus(400);
-        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        record.setExpiresAt(Instant.now().plusSeconds(3600));
         idempotencyRepository.saveAndFlush(record);
 
         com.project.paymentservice.dto.request.CreatePaymentRequest req = new com.project.paymentservice.dto.request.CreatePaymentRequest(7777L, "MOCK");
@@ -253,24 +253,25 @@ public class PaymentCancelAndIdempotencyTest {
         record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED);
         record.setResponseStatus(200);
         record.setResponseBodySanitized("{\"success\":true}");
-        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        record.setExpiresAt(Instant.now().plusSeconds(3600));
         idempotencyRepository.saveAndFlush(record);
 
-        // A stale failure finalizer attempts to mark it FAILED because its thread was delayed.
-        // It should use the public method or we can invoke it via reflection since it's private.
-        // Actually, we can test it directly by invoking the private method `markIdempotencyFailed` via reflection.
-        try {
-            java.lang.reflect.Method m = com.project.paymentservice.service.impl.PaymentServiceImpl.class
-                    .getDeclaredMethod("markIdempotencyFailed", Long.class, String.class, String.class, String.class, String.class);
-            m.setAccessible(true);
-            m.invoke(paymentService, 15L, "CREATE_PAYMENT", "stale-fail-key", "STALE_ERR", "Stale error");
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        com.project.paymentservice.exception.BusinessException staleOwner =
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        com.project.paymentservice.exception.BusinessException.class,
+                        () -> paymentIdempotencyService.fail(
+                                record.getId(), "stale-owner", "STALE_ERR", "Stale error"));
+        assertEquals("IDEMPOTENCY_OWNER_MISMATCH", staleOwner.getErrorCode());
 
         var after = idempotencyRepository.findById(record.getId()).orElseThrow();
         assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED, after.getProcessingStatus());
         assertEquals(200, after.getResponseStatus());
         org.junit.jupiter.api.Assertions.assertNull(after.getErrorCode());
+    }
+
+    private Payment savePaymentWithGuard(Payment payment) {
+        Payment saved = paymentRepository.saveAndFlush(TestFixtures.complete(payment));
+        guardRepository.saveAndFlush(TestFixtures.guard(saved));
+        return saved;
     }
 }

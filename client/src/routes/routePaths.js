@@ -18,6 +18,7 @@ export const routePaths = {
     pos: '/employee/pos',
     checkin: '/employee/checkin',
     schedules: '/employee/schedules',
+    cashPayment: '/employee/payments/cash',
   },
   admin: {
     root: '/admin',
@@ -25,6 +26,8 @@ export const routePaths = {
     genres: '/admin/genres',
     bookings: '/admin/bookings',
     bookingDetail: '/admin/bookings/:bookingId',
+    payments: '/admin/payments',
+    paymentDetail: '/admin/payments/:paymentPublicId',
     cinemas: '/admin/cinemas',
     concessions: '/admin/concessions',
     events: '/admin/events',

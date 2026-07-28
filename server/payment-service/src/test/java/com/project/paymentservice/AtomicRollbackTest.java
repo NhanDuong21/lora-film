@@ -26,7 +26,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.project.paymentservice.exception.BusinessException;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -65,22 +65,17 @@ public class AtomicRollbackTest {
     @MockBean
     private PaymentProvider paymentProvider;
 
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
-        snapshotRepository.deleteAllInBatch();
-        logRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @AfterEach
     void tearDown() {
-        snapshotRepository.deleteAllInBatch();
-        logRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @Test
@@ -98,7 +93,7 @@ public class AtomicRollbackTest {
             snap.setMovieTitle("Movie");
             snap.setTicketCount(1);
             ctx.setAnalyticsSnapshot(snap);
-            return ctx;
+            return TestFixtures.complete(ctx);
         });
 
         // Force log persistence to fail
@@ -124,55 +119,37 @@ public class AtomicRollbackTest {
 
     @Test
     void cancelFailureShouldMarkIdempotencyRecordAsFailed() {
-        // We will test transition failure by simulating log failure during transition.
-        when(bookingClient.getPaymentContext(2002L)).thenAnswer(invocation -> {
-            BookingPaymentContext ctx = new BookingPaymentContext();
-            ctx.setBookingId(2002L);
-            ctx.setAccountId(15L);
-            ctx.setAmount(new BigDecimal("100"));
-            ctx.setCurrency("VND");
-            ctx.setPayable(true);
-            ctx.setExpiresAt(java.time.Instant.now().plusSeconds(900));
-            BookingPaymentContext.AnalyticsSnapshotData snap = new BookingPaymentContext.AnalyticsSnapshotData();
-            snap.setMovieId(1L);
-            snap.setMovieTitle("Movie");
-            snap.setTicketCount(1);
-            ctx.setAnalyticsSnapshot(snap);
-            return ctx;
-        });
+        Payment payment = new Payment();
+        payment.setAccountId(15L);
+        payment.setBookingId(2002L);
+        payment.setPaymentTransactionCode("ROLLBACK-CANCEL-2002");
+        payment.setAmount(new BigDecimal("100"));
+        payment.setPaymentMethod(com.project.paymentservice.enumtype.PaymentMethod.MOCK);
+        payment.setAttemptNumber(1);
+        payment.setStatus(com.project.paymentservice.enumtype.PaymentStatus.PENDING);
+        payment.setExpiresAt(Instant.now().plusSeconds(900));
+        payment = paymentRepository.saveAndFlush(TestFixtures.complete(payment));
+        guardRepository.saveAndFlush(TestFixtures.guard(payment));
+        Long paymentId = payment.getId();
 
-        when(providerRegistry.getProvider(any())).thenReturn(paymentProvider);
-        when(paymentProvider.supportedMethod()).thenReturn(com.project.paymentservice.enumtype.PaymentMethod.MOCK);
-        when(paymentProvider.createSession(any())).thenReturn(
-                new PaymentSession("ORDER", "SESSION", "URL", LocalDateTime.now().plusMinutes(15)));
-
-        CreatePaymentRequest req = new CreatePaymentRequest(2002L, "MOCK");
-        paymentService.createPayment(15L, "idem-rollback-2", req);
-
-        assertEquals(1, paymentRepository.count());
-        Payment payment = paymentRepository.findAll().get(0);
-        assertEquals(com.project.paymentservice.enumtype.PaymentStatus.PENDING, payment.getStatus());
-
-        // Now we force log persistence to fail for the NEXT log insertion
         doThrow(new DataIntegrityViolationException("Simulated log failure during cancel"))
                 .when(logRepository).save(any());
 
         BusinessException ex = assertThrows(BusinessException.class, () -> {
-            paymentService.cancelPayment(15L, "idem-cancel-1", payment.getId());
+            paymentService.cancelPayment(15L, "idem-cancel-1", paymentId);
         });
         assertEquals("INTERNAL_SERVER_ERROR", ex.getErrorCode());
 
-        // The state should remain PROCESSING
-        Payment afterRollback = paymentRepository.findById(payment.getId()).orElseThrow();
-        assertEquals(com.project.paymentservice.enumtype.PaymentStatus.PENDING, afterRollback.getStatus(), "Original Payment status remains");
+        Payment afterRollback = paymentRepository.findById(paymentId).orElseThrow();
+        assertEquals(com.project.paymentservice.enumtype.PaymentStatus.PENDING,
+                afterRollback.getStatus(), "Payment cancellation must roll back atomically");
 
-        assertEquals(2, idempotencyRepository.count(), "Idempotency for cancel exists (2 total)");
+        assertEquals(1, idempotencyRepository.count(), "Cancel idempotency record exists");
         PaymentIdempotencyRecord cancelIdemp = idempotencyRepository.findAll().stream()
                 .filter(r -> "CANCEL_PAYMENT".equals(r.getOperation()))
                 .findFirst().orElseThrow();
         assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.FAILED, cancelIdemp.getProcessingStatus(), "Cancel idempotency should be marked FAILED");
 
-        // The log count should be 2 (PAYMENT_CREATED and PROVIDER_SESSION_CREATED from the create flow)
-        assertEquals(2, logRepository.count(), "No partial terminal log");
+        assertEquals(0, logRepository.count(), "No partial cancellation log");
     }
 }

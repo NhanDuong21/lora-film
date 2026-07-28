@@ -7,7 +7,7 @@ import jakarta.persistence.Query;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public class PaymentOutboxEventRepositoryImpl implements PaymentOutboxEventRepositoryCustom {
@@ -15,11 +15,14 @@ public class PaymentOutboxEventRepositoryImpl implements PaymentOutboxEventRepos
     private static final String CLAIM_PENDING_SQL = """
             SELECT *
             FROM payment_outbox_events
-            WHERE status = 'PENDING'
-              AND (
-                  next_retry_at IS NULL
-                  OR next_retry_at <= :now
-              )
+            WHERE (
+                    status IN ('PENDING', 'FAILED')
+                    AND (next_retry_at IS NULL OR next_retry_at <= :now)
+                  )
+               OR (
+                    status = 'PROCESSING'
+                    AND locked_until <= :now
+                  )
             ORDER BY created_at, id
             FOR UPDATE SKIP LOCKED
             """;
@@ -30,7 +33,8 @@ public class PaymentOutboxEventRepositoryImpl implements PaymentOutboxEventRepos
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     @SuppressWarnings("unchecked")
-    public List<PaymentOutboxEvent> findAndClaimPendingEvents(LocalDateTime now, int batchSize) {
+    public List<PaymentOutboxEvent> findAndClaimPendingEvents(
+            Instant now, Instant lockedUntil, String ownerToken, int batchSize) {
         if (now == null) {
             throw new IllegalArgumentException("now must not be null");
         }
@@ -43,6 +47,14 @@ public class PaymentOutboxEventRepositoryImpl implements PaymentOutboxEventRepos
         query.setParameter("now", now);
         query.setMaxResults(batchSize);
 
-        return query.getResultList();
+        List<PaymentOutboxEvent> events = query.getResultList();
+        for (PaymentOutboxEvent event : events) {
+            event.setStatus(com.project.paymentservice.enumtype.OutboxStatus.PROCESSING);
+            event.setLockedBy(ownerToken);
+            event.setLockedAt(now);
+            event.setLockedUntil(lockedUntil);
+        }
+        entityManager.flush();
+        return events;
     }
 }

@@ -12,6 +12,10 @@ import {
   createPaymentHandoff,
   getOrCreatePaymentAttemptKey
 } from '../services/paymentHandoffService';
+import {
+  paymentErrorCode,
+  paymentErrorMessage
+} from '@/features/payment/services/paymentService';
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
 
@@ -252,18 +256,36 @@ export default function BookingCheckoutPage() {
 
       setNotice({
         title: 'Đã tạo yêu cầu thanh toán',
-        message: 'Payment Service đã tiếp nhận yêu cầu. Bạn có thể tiếp tục theo dõi trạng thái của giao dịch.',
+        message: 'Hệ thống thanh toán đã tiếp nhận yêu cầu. Bạn có thể tiếp tục theo dõi trạng thái giao dịch.',
         variant: 'success',
         redirectTo: `/bookings/${bookingId}`
       });
     } catch (err) {
+      const errorCode = paymentErrorCode(err);
+      const bookingUnavailable = [
+        'BOOKING_CANCELLED',
+        'BOOKING_PAYMENT_DEADLINE_EXPIRED',
+        'BOOKING_SEATS_NOT_HELD'
+      ].includes(errorCode);
+      const alreadyPaid = [
+        'BOOKING_ALREADY_PAID',
+        'PAYMENT_ALREADY_SUCCESS'
+      ].includes(errorCode);
       setNotice({
-        title: 'Không thể chuẩn bị thanh toán',
-        message: getBookingErrorMessage(
-          err,
-          'Không thể chuẩn bị thanh toán. Vui lòng thử lại.'
-        ),
-        variant: 'error'
+        title: errorCode === 'BOOKING_CANCELLED'
+          ? 'Đơn đã được hủy'
+          : errorCode === 'BOOKING_PAYMENT_DEADLINE_EXPIRED'
+            ? 'Đã hết thời gian giữ ghế'
+            : alreadyPaid
+              ? 'Đơn đã được thanh toán'
+              : 'Không thể chuẩn bị thanh toán',
+        message: paymentErrorMessage(err),
+        variant: alreadyPaid ? 'success' : 'error',
+        redirectTo: bookingUnavailable
+          ? '/movies'
+          : alreadyPaid
+            ? `/bookings/${bookingId}`
+            : undefined
       });
     } finally {
       setPaymentLoading(false);
@@ -552,7 +574,7 @@ export default function BookingCheckoutPage() {
                       </span>
                     </div>
                     <p className="mt-4 text-xs font-medium leading-relaxed text-zinc-400">
-                      Việc giữ và trừ điểm phải được Payment Service xác nhận cùng giao dịch.
+                      Việc giữ và trừ điểm sẽ được hệ thống xác nhận cùng giao dịch.
                       Tính năng dùng điểm tại checkout sẽ được mở khi tích hợp thanh toán hoàn tất;
                       số tiền của đơn hiện tại vẫn do Booking Service quản lý.
                     </p>
@@ -562,7 +584,7 @@ export default function BookingCheckoutPage() {
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Phương Thức Thanh Toán</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Payment Service sẽ xác thực lại số tiền và thời hạn của đơn</p>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Hệ thống sẽ xác thực lại số tiền và thời hạn của đơn</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -608,7 +630,7 @@ export default function BookingCheckoutPage() {
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">Chuyển sang thanh toán</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">
-                      LoraFilm không gửi số tiền từ trình duyệt; Payment Service lấy số tiền đã khóa trực tiếp từ Booking Service
+                      Số tiền thanh toán được lấy trực tiếp từ đơn đã chốt, không thể thay đổi từ trình duyệt
                     </p>
                   </div>
 

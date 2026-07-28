@@ -5,7 +5,8 @@ import {
   Calendar, 
   LogOut, 
   Home,
-  User
+  User,
+  Banknote
 } from 'lucide-react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -24,6 +25,7 @@ export default function EmployeeLayout() {
     if (path.endsWith('/pos')) return 'pos';
     if (path.endsWith('/checkin')) return 'checkin';
     if (path.endsWith('/schedules')) return 'schedules';
+    if (path.includes('/payments/cash')) return 'cash-payment';
     return 'pos';
   })();
 
@@ -59,6 +61,18 @@ export default function EmployeeLayout() {
             >
               <Ticket className="w-4 h-4 mr-3 shrink-0" />
               <span>Đặt Vé Tại Quầy</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/employee/payments/cash')}
+              className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
+                activeTab === 'cash-payment'
+                  ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
+                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
+              }`}
+            >
+              <Banknote className="w-4 h-4 mr-3 shrink-0" />
+              <span>Thu Tiền Tại Quầy</span>
             </button>
 
             <button

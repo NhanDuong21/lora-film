@@ -8,12 +8,32 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 
 public interface PaymentIdempotencyRecordRepository extends JpaRepository<PaymentIdempotencyRecord, Long> {
+
+    @Modifying
+    @Query(value = """
+            insert ignore into payment_idempotency_records
+                (account_id, operation, idempotency_key, request_hash,
+                 processing_status, locked_by, locked_at, locked_until, expires_at)
+            values
+                (:accountId, :operation, :idempotencyKey, :requestHash,
+                 'PROCESSING', :ownerToken, :now, :lockedUntil, :expiresAt)
+            """, nativeQuery = true)
+    int insertIfAbsent(
+            @Param("accountId") Long accountId,
+            @Param("operation") String operation,
+            @Param("idempotencyKey") String idempotencyKey,
+            @Param("requestHash") String requestHash,
+            @Param("ownerToken") String ownerToken,
+            @Param("now") Instant now,
+            @Param("lockedUntil") Instant lockedUntil,
+            @Param("expiresAt") Instant expiresAt);
 
     Optional<PaymentIdempotencyRecord> findByAccountIdAndOperationAndIdempotencyKey(Long accountId, String operation,
             String idempotencyKey);
@@ -25,8 +45,8 @@ public interface PaymentIdempotencyRecordRepository extends JpaRepository<Paymen
             @Param("operation") String operation,
             @Param("idempotencyKey") String idempotencyKey);
 
-    Page<PaymentIdempotencyRecord> findByProcessingStatusAndLockedAtBefore(IdempotencyProcessingStatus status,
-            LocalDateTime lockedAt, Pageable pageable);
+    Page<PaymentIdempotencyRecord> findByProcessingStatusAndLockedUntilBefore(IdempotencyProcessingStatus status,
+            Instant lockedUntil, Pageable pageable);
 
-    Page<PaymentIdempotencyRecord> findByExpiresAtBefore(LocalDateTime expiresAt, Pageable pageable);
+    Page<PaymentIdempotencyRecord> findByExpiresAtBefore(Instant expiresAt, Pageable pageable);
 }

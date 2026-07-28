@@ -15,6 +15,11 @@ export const getOrCreatePaymentAttemptKey = (bookingPublicId, paymentMethod) => 
   return generated;
 };
 
+export const resetPaymentAttemptKey = (bookingPublicId, paymentMethod) => {
+  if (!bookingPublicId || !paymentMethod) return;
+  sessionStorage.removeItem(storageKey(bookingPublicId, paymentMethod));
+};
+
 export const createPaymentHandoff = async ({
   bookingPublicId,
   paymentMethod,

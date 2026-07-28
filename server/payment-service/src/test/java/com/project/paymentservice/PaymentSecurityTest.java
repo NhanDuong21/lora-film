@@ -20,7 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import javax.crypto.SecretKey;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Date;
 import java.util.Base64;
 
@@ -46,9 +46,12 @@ public class PaymentSecurityTest {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
-        paymentRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     private String generateJwt(Long userId, String email, String role) {
@@ -112,8 +115,8 @@ public class PaymentSecurityTest {
         p.setPaymentMethod(PaymentMethod.MOCK);
         p.setAttemptNumber(1);
         p.setStatus(PaymentStatus.PENDING);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        p = paymentRepository.save(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = paymentRepository.save(TestFixtures.complete(p));
 
         String token = generateJwt(15L, "user@test.com", "CUSTOMER");
 
@@ -133,14 +136,71 @@ public class PaymentSecurityTest {
         p.setPaymentMethod(PaymentMethod.MOCK);
         p.setAttemptNumber(1);
         p.setStatus(PaymentStatus.PENDING);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        p = paymentRepository.save(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = paymentRepository.save(TestFixtures.complete(p));
 
         String wrongToken = generateJwt(99L, "other@test.com", "CUSTOMER");
 
         mockMvc.perform(get("/api/payments/" + p.getId())
                 .header("Authorization", "Bearer " + wrongToken))
                 .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("PAYMENT_ACCESS_DENIED"));
+    }
+
+    @Test
+    void accountantCanReadAndExportButCannotReplayOperations() throws Exception {
+        String token = generateJwt(31L, "accountant@test.com", "ACCOUNTANT");
+
+        mockMvc.perform(get("/api/admin/payments")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/admin/payments/export")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/admin/payments/outbox/missing-event/replay")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    }
+
+    @Test
+    void adminCanAccessPaymentOperations() throws Exception {
+        String token = generateJwt(1L, "admin@test.com", "ADMIN");
+
+        mockMvc.perform(get("/api/admin/payments/outbox")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void employeeAndSupervisorCanReachCashEndpoints() throws Exception {
+        String paymentPublicId = "11111111-1111-4111-8111-111111111111";
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(21L, "employee@test.com", "EMPLOYEE")))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(22L, "supervisor@test.com", "SUPERVISOR")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void customerAndAccountantCannotUseCashMutationTree() throws Exception {
+        String paymentPublicId = "11111111-1111-4111-8111-111111111111";
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(15L, "customer@test.com", "CUSTOMER")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(31L, "accountant@test.com", "ACCOUNTANT")))
+                .andExpect(status().isForbidden());
     }
 }

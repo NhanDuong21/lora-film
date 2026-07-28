@@ -2,42 +2,38 @@ package com.project.paymentservice.controller;
 
 import com.project.paymentservice.common.ApiResponse;
 import com.project.paymentservice.dto.request.MockCallbackRequest;
-import com.project.paymentservice.exception.BusinessException;
+import com.project.paymentservice.security.CurrentUserProvider;
 import com.project.paymentservice.service.PaymentService;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/payments/callback")
-@ConditionalOnProperty(name = "payment.mock.enabled", havingValue = "true", matchIfMissing = false)
-@Tag(name = "MOCK Callback", description = "LOCAL/TEST ONLY. Unavailable when payment.mock.enabled=false. Must never be enabled in production.")
+@RequestMapping("/api/payments/mock")
+@ConditionalOnProperty(name = "payment.providers.mock.enabled", havingValue = "true")
 public class MockCallbackController {
-
     private final PaymentService paymentService;
+    private final CurrentUserProvider currentUserProvider;
 
-    public MockCallbackController(PaymentService paymentService) {
+    public MockCallbackController(
+            PaymentService paymentService, CurrentUserProvider currentUserProvider) {
         this.paymentService = paymentService;
+        this.currentUserProvider = currentUserProvider;
     }
 
-    @Operation(summary = "Handle MOCK Payment Callback", description = "Simulates a payment provider callback. LOCAL/TEST ONLY.")
-    @PostMapping("/mock")
-    public ResponseEntity<ApiResponse<String>> handleMockCallback(
+    @PostMapping("/{paymentPublicId}/complete")
+    public ResponseEntity<ApiResponse<String>> complete(
+            @PathVariable String paymentPublicId,
             @Valid @RequestBody MockCallbackRequest request) {
-
-        try {
-            paymentService.processMockCallback(request);
-            return ResponseEntity.ok(ApiResponse.success("MOCK callback processed", "OK"));
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException("INTERNAL_SERVER_ERROR",
-                    "Failed to process MOCK callback", HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        paymentService.processMockCallback(
+                currentUserProvider.getCurrentUserId(),
+                paymentPublicId,
+                request.getSimulatedStatus());
+        return ResponseEntity.ok(ApiResponse.success("Đã xử lý kết quả MOCK", "OK"));
     }
 }

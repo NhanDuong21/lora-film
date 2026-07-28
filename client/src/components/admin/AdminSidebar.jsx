@@ -23,7 +23,8 @@ import {
   Zap,
   BadgeDollarSign,
   BarChart3,
-  Award
+  Award,
+  CreditCard
 } from 'lucide-react';
 
 export default function AdminSidebar({ 
@@ -208,9 +209,15 @@ export default function AdminSidebar({
 
             {!collapsedSections.vanHanhTaiChinh && (
               <div className="space-y-0.5">
-                <button onClick={() => handleTabClick('bookings', '#/admin/bookings')} className={getSubLinkClass('bookings')}>
-                  <Ticket className="w-4 h-4 shrink-0" />
-                  <span>Quản lý vé & Đơn hàng</span>
+                {!isAccountantOnly && (
+                  <button onClick={() => handleTabClick('bookings', '#/admin/bookings')} className={getSubLinkClass('bookings')}>
+                    <Ticket className="w-4 h-4 shrink-0" />
+                    <span>Quản lý vé & Đơn hàng</span>
+                  </button>
+                )}
+                <button onClick={() => handleTabClick('payments', '#/admin/payments')} className={getSubLinkClass('payments')}>
+                  <CreditCard className="w-4 h-4 shrink-0" />
+                  <span>Giao dịch & Đối soát</span>
                 </button>
                 <button onClick={() => handleTabClick('finance', '#/admin/finance')} className={getSubLinkClass('finance')}>
                   <BarChart3 className="w-4 h-4 shrink-0" />
@@ -231,7 +238,7 @@ export default function AdminSidebar({
           </div>
 
           {/* Section 5: Users & HR */}
-          <div className="space-y-1">
+          {!isAccountantOnly && <div className="space-y-1">
             <button
               onClick={() => toggleSection('nhanSu')}
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
@@ -270,7 +277,7 @@ export default function AdminSidebar({
                 </button>
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Section 6: Settings */}
           {!isAccountantOnly && (
