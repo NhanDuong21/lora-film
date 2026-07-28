@@ -102,4 +102,27 @@ describe('PaymentReturnPage', () => {
     await waitFor(() => expect(resetPaymentAttemptKey)
       .toHaveBeenCalledWith('booking-1', 'VNPAY'));
   });
+
+  it('stops polling after a cancelled MoMo attempt and lets the customer retry the booking', async () => {
+    router.params = new URLSearchParams(
+      'paymentPublicId=payment-2&bookingPublicId=booking-2&provider=MOMO&verified=true',
+    );
+    getPaymentStatus.mockResolvedValue({
+      paymentPublicId: 'payment-2',
+      bookingPublicId: 'booking-2',
+      status: 'CANCELLED',
+      reconciliationStatus: 'NONE',
+      bookingDeliveryStatus: 'DELIVERED',
+    });
+
+    render(<PaymentReturnPage />);
+
+    expect(await screen.findByRole(
+      'heading',
+      { name: 'Thanh toán chưa thành công' },
+    )).toBeInTheDocument();
+    expect(getPaymentStatus).toHaveBeenCalledOnce();
+    await waitFor(() => expect(resetPaymentAttemptKey)
+      .toHaveBeenCalledWith('booking-2', 'MOMO'));
+  });
 });

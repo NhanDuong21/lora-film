@@ -148,8 +148,6 @@ class ProviderSignatureTest {
             responseValues.put("payType", "qr");
             responseValues.put("responseTime", "1785140000000");
             responseValues.put("extraData", "");
-            responseValues.put("signature",
-                    hmacUnchecked("HmacSHA256", secret, momoSource(responseValues)));
             byte[] response = objectMapper.writeValueAsBytes(responseValues);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, response.length);
@@ -194,6 +192,7 @@ class ProviderSignatureTest {
             payment.setPublicId("d14bd538-83b8-4778-8200-5a49de7af0df");
             payment.setPaymentTransactionCode("PAY-0001");
             payment.setProviderOrderId("PAY-0001");
+            payment.setAmount(new BigDecimal("150000"));
             Optional<ProviderCallbackResult> queried = provider.queryStatus(payment);
 
             assertTrue(queried.isPresent());
@@ -201,6 +200,70 @@ class ProviderSignatureTest {
             assertEquals("SUCCESS", queried.get().getResult());
             assertEquals("PAY-0001", queried.get().getProviderOrderId());
             assertEquals("PAY-0001", capturedQuery.get().get("orderId"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void momoQueryAcceptsDocumentedUnsignedCancellationResponse() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        AtomicBoolean returnMismatchedRequest = new AtomicBoolean(false);
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/query", exchange -> {
+            Map<String, Object> requestValues = objectMapper.readValue(
+                    exchange.getRequestBody(),
+                    objectMapper.getTypeFactory().constructMapType(
+                            LinkedHashMap.class, String.class, Object.class));
+            Map<String, Object> responseValues = new LinkedHashMap<>();
+            responseValues.put("partnerCode", "MOMO");
+            responseValues.put("orderId", requestValues.get("orderId"));
+            responseValues.put("requestId", returnMismatchedRequest.get()
+                    ? "another-payment-request" : requestValues.get("requestId"));
+            responseValues.put("amount", 304000);
+            responseValues.put("transId", 1785273495518L);
+            responseValues.put("resultCode", 1006);
+            responseValues.put("message", "Giao dịch bị từ chối bởi người dùng.");
+            responseValues.put("responseTime", 1785290000000L);
+            responseValues.put("extraData", "");
+            byte[] response = objectMapper.writeValueAsBytes(responseValues);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            MomoProperties properties = new MomoProperties();
+            properties.setPartnerCode("MOMO");
+            properties.setAccessKey("ACCESS");
+            properties.setSecretKey("test-momo-query-secret");
+            properties.setCreateUrl("http://localhost/unused");
+            properties.setQueryUrl(
+                    "http://localhost:" + server.getAddress().getPort() + "/query");
+            properties.setRedirectUrl("http://localhost/return");
+            properties.setIpnUrl("http://localhost/ipn");
+            MomoPaymentProvider provider =
+                    new MomoPaymentProvider(properties, objectMapper);
+
+            Payment payment = new Payment();
+            payment.setPublicId("d7544ddf-a2af-48c9-a095-165ba3cf9925");
+            payment.setPaymentTransactionCode("PAY-73-LZ3VD8L9");
+            payment.setProviderOrderId("PAY-73-LZ3VD8L9");
+            payment.setAmount(new BigDecimal("304000"));
+
+            Optional<ProviderCallbackResult> queried = provider.queryStatus(payment);
+
+            assertTrue(queried.isPresent());
+            assertTrue(queried.get().isSignatureValid());
+            assertEquals("CANCELLED", queried.get().getResult());
+            assertEquals("1006", queried.get().getResponseCode());
+            assertEquals("PAY-73-LZ3VD8L9", queried.get().getProviderOrderId());
+            assertEquals("1785273495518", queried.get().getExternalTransactionId());
+            assertEquals(0, payment.getAmount().compareTo(queried.get().getAmount()));
+
+            returnMismatchedRequest.set(true);
+            assertTrue(provider.queryStatus(payment).isEmpty());
         } finally {
             server.stop(0);
         }

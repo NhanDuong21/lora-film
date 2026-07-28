@@ -172,12 +172,27 @@ public class MomoPaymentProvider implements PaymentProvider {
                     || "7002".equals(resultCode)) {
                 return Optional.empty();
             }
-            ProviderCallbackResult result = verify(toStrings(parsed), "QUERY");
-            if (!result.isSignatureValid()
-                    || !orderId.equals(result.getProviderOrderId())) {
+            Map<String, String> values = toStrings(parsed);
+            if (!properties.getPartnerCode().equals(value(values, "partnerCode"))
+                    || !orderId.equals(value(values, "orderId"))
+                    || !requestId.equals(value(values, "requestId"))) {
                 return Optional.empty();
             }
-            return Optional.of(result);
+            /*
+             * MoMo's Query API signs the merchant request but its documented
+             * response does not contain a signature. Trust the HTTPS
+             * server-to-server response only after its echoed merchant,
+             * payment and request identifiers have all matched. Some
+             * environments may include a signature; reject it when present
+             * but invalid instead of silently downgrading verification.
+             */
+            if (!value(values, "signature").isBlank()) {
+                ProviderCallbackResult signed = verify(values, "QUERY");
+                if (!signed.isSignatureValid()) {
+                    return Optional.empty();
+                }
+            }
+            return Optional.of(toTrustedQueryResult(values));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return Optional.empty();
@@ -243,6 +258,35 @@ public class MomoPaymentProvider implements PaymentProvider {
         result.setResult("0".equals(resultCode) ? "SUCCESS"
                 : ("1006".equals(resultCode) ? "CANCELLED" : "FAILED"));
         result.setDeduplicationKey(eventType + ":" + value(values, "orderId")
+                + ":" + value(values, "transId") + ":" + resultCode);
+        Map<String, String> sanitized = new LinkedHashMap<>(values);
+        sanitized.remove("signature");
+        try {
+            result.setSanitizedPayload(objectMapper.writeValueAsString(sanitized));
+        } catch (Exception ignored) {
+            result.setSanitizedPayload("{}");
+        }
+        return result;
+    }
+
+    private ProviderCallbackResult toTrustedQueryResult(Map<String, String> values) {
+        ProviderCallbackResult result = new ProviderCallbackResult();
+        result.setSignatureValid(true);
+        result.setProviderOrderId(value(values, "orderId"));
+        result.setExternalTransactionId(value(values, "transId"));
+        String resultCode = value(values, "resultCode");
+        result.setResponseCode(resultCode);
+        try {
+            result.setAmount(new java.math.BigDecimal(value(values, "amount")));
+        } catch (NumberFormatException ignored) {
+            result.setAmount(java.math.BigDecimal.ZERO);
+        }
+        result.setCurrency("VND");
+        result.setEventType("QUERY");
+        result.setOccurredAt(Instant.now());
+        result.setResult("0".equals(resultCode) ? "SUCCESS"
+                : ("1006".equals(resultCode) ? "CANCELLED" : "FAILED"));
+        result.setDeduplicationKey("QUERY:" + value(values, "orderId")
                 + ":" + value(values, "transId") + ":" + resultCode);
         Map<String, String> sanitized = new LinkedHashMap<>(values);
         sanitized.remove("signature");

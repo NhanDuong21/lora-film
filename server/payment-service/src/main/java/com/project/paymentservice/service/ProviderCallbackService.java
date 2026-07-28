@@ -124,8 +124,8 @@ public class ProviderCallbackService {
             ProviderCode provider, PaymentProvider adapter, Payment payment) {
         try {
             // Browser Return remains navigation data only. It merely prompts a
-            // server-to-server provider query; only that signed QueryDR result
-            // is allowed to mutate Payment and Booking.
+            // server-to-server provider query; only that authoritative query
+            // result is allowed to mutate Payment and Booking.
             var authoritativeResult = adapter.queryStatus(payment);
             if (authoritativeResult.isPresent()) {
                 transactionService.applyProviderResult(
