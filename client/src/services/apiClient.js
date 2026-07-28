@@ -13,8 +13,18 @@ const apiClient = axios.create({
 // Request Interceptor
 apiClient.interceptors.request.use(
     (config) => {
-        // Do not attach Authorization if it's CCCD or other external URLs
-        if (config.url && !config.url.includes("/api/cccd")) {
+        const isPublicAuthEndpoint = config.url && (
+            config.url.includes("/api/auth/login") ||
+            config.url.includes("/api/auth/register") ||
+            config.url.includes("/api/auth/verify") ||
+            config.url.includes("/api/auth/send-otp") ||
+            config.url.includes("/api/auth/refresh-token") ||
+            config.url.includes("/api/auth/forgot-password") ||
+            config.url.includes("/api/auth/reset-password")
+        );
+
+        // Do not attach Authorization if it's CCCD, external URLs, or public auth endpoints
+        if (config.url && !config.url.includes("/api/cccd") && !isPublicAuthEndpoint) {
             const token = getAuthToken();
             if (token) {
                 config.headers["Authorization"] = `Bearer ${token}`;
@@ -36,6 +46,7 @@ const processQueue = (error, token = null) => {
         if (error) {
             prom.reject(error);
         } else {
+
             prom.resolve(token);
         }
     });
@@ -47,7 +58,7 @@ apiClient.interceptors.response.use(
         return response;
     },
     async (error) => {
-        const originalRequest = error.config;
+        const originalRequest = error.config || {};
 
         // Skip token refresh for auth endpoints
         const isAuthEndpoint = originalRequest.url && (
@@ -111,9 +122,15 @@ apiClient.interceptors.response.use(
             }
         }
 
-        // Return standard error data if available
+        // Preserve original AxiosError structure but attach standard response data
         if (error.response && error.response.data) {
-            return Promise.reject(error.response.data);
+            const responseData = error.response.data;
+            error.status = error.response.status;
+            if (typeof responseData === "object") {
+                Object.assign(error, responseData);
+            } else {
+                error.message = String(responseData) || error.message;
+            }
         }
         return Promise.reject(error);
     }

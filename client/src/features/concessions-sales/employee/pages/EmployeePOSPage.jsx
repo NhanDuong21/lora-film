@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ShoppingCart, Plus, Minus, Trash2, CheckCircle2, XCircle, Coffee, Coins } from 'lucide-react';
 import apiClient from "@/services/apiClient";
 
@@ -30,6 +30,7 @@ export default function EmployeePOSPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([fetchConcessions(), fetchCart()]).finally(() => setLoading(false));
   }, [fetchConcessions, fetchCart]);

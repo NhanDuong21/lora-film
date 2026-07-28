@@ -16,7 +16,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -42,8 +43,9 @@ public class ConcurrencyTest {
     @Test
     void pessimisticGuardLockShouldBlockSecondTransaction() throws InterruptedException {
         long uniqueId = System.currentTimeMillis() + 2000;
+        String bookingPublicId = UUID.randomUUID().toString();
         transactionTemplate.execute(status -> {
-            guardRepository.insertIfAbsent(uniqueId);
+            guardRepository.insertIfAbsent(bookingPublicId, uniqueId);
             return null;
         });
         
@@ -105,17 +107,19 @@ public class ConcurrencyTest {
             newP.setAttemptNumber(1);
             newP.setAmount(new BigDecimal("1000"));
             newP.setPaymentMethod(PaymentMethod.VNPAY);
-            newP.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-            return paymentRepository.saveAndFlush(newP);
+            newP.setExpiresAt(Instant.now().plusSeconds(900));
+            return paymentRepository.saveAndFlush(TestFixtures.complete(newP));
         });
 
         Payment pTx1 = paymentRepository.findById(p.getId()).orElseThrow();
         Payment pTx2 = paymentRepository.findById(p.getId()).orElseThrow();
 
         pTx1.setStatus(PaymentStatus.SUCCESS);
+        pTx1.setSucceededAt(Instant.now());
         paymentRepository.saveAndFlush(pTx1);
 
         pTx2.setStatus(PaymentStatus.FAILED);
+        pTx2.setFailedAt(Instant.now());
         Assertions.assertThrows(
             org.springframework.orm.ObjectOptimisticLockingFailureException.class,
             () -> paymentRepository.saveAndFlush(pTx2)
@@ -127,12 +131,13 @@ public class ConcurrencyTest {
         long uniqueId = System.currentTimeMillis();
         BookingPaymentGuard guard = transactionTemplate.execute(status -> {
             BookingPaymentGuard newG = new BookingPaymentGuard();
+            newG.setBookingPublicId(UUID.randomUUID().toString());
             newG.setBookingId(uniqueId);
             return guardRepository.saveAndFlush(newG);
         });
 
-        BookingPaymentGuard g1 = guardRepository.findById(guard.getBookingId()).orElseThrow();
-        BookingPaymentGuard g2 = guardRepository.findById(guard.getBookingId()).orElseThrow();
+        BookingPaymentGuard g1 = guardRepository.findById(guard.getBookingPublicId()).orElseThrow();
+        BookingPaymentGuard g2 = guardRepository.findById(guard.getBookingPublicId()).orElseThrow();
 
         g1.setNextAttemptNumber(2);
         guardRepository.saveAndFlush(g1);
@@ -147,6 +152,7 @@ public class ConcurrencyTest {
     @Test
     void concurrentInsertIfAbsentShouldCreateExactlyOneGuard() throws InterruptedException {
         long uniqueId = System.currentTimeMillis() + 1000;
+        String bookingPublicId = UUID.randomUUID().toString();
         int threads = 5;
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -157,7 +163,7 @@ public class ConcurrencyTest {
                 try {
                     startLatch.await();
                     transactionTemplate.execute(status -> {
-                        guardRepository.insertIfAbsent(uniqueId);
+                        guardRepository.insertIfAbsent(bookingPublicId, uniqueId);
                         return null;
                     });
                 } catch (Exception e) {} finally {
@@ -201,7 +207,9 @@ public class ConcurrencyTest {
         executor.submit(() -> {
             try {
                 transactionTemplate.execute(status -> {
-                    list1.addAll(outboxRepository.findAndClaimPendingEvents(LocalDateTime.now(), 3));
+                    Instant now = Instant.now();
+                    list1.addAll(outboxRepository.findAndClaimPendingEvents(
+                            now, now.plusSeconds(30), "worker-1", 3));
                     tx1Ready.countDown();
                     try { Thread.sleep(1000); } catch (InterruptedException e) {}
                     return null;
@@ -215,7 +223,9 @@ public class ConcurrencyTest {
             try {
                 tx1Ready.await();
                 transactionTemplate.execute(status -> {
-                    list2.addAll(outboxRepository.findAndClaimPendingEvents(LocalDateTime.now(), 3));
+                    Instant now = Instant.now();
+                    list2.addAll(outboxRepository.findAndClaimPendingEvents(
+                            now, now.plusSeconds(30), "worker-2", 3));
                     return null;
                 });
             } catch (Exception e) {}

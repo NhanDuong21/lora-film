@@ -4,15 +4,17 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import AdminSidebar from './AdminSidebar';
+import Breadcrumbs from '@/components/common/Breadcrumbs';
 
 export default function AdminLayout({ onBackHome }) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Derive activeTab from pathname
   const activeTab = (() => {
@@ -28,6 +30,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/rooms') || path.includes('/rooms')) return 'rooms';
     if (path.endsWith('/seat-types') || path.includes('/seat-types')) return 'seat-types';
     if (path.endsWith('/finance')) return 'tickets';
+    if (path.endsWith('/payments') || path.includes('/payments/')) return 'payments';
     if (path.endsWith('/bookings') || path.includes('/bookings/')) return 'bookings';
     if (path.endsWith('/concessions')) return 'concessions';
     if (path.endsWith('/concession-sales')) return 'concession-sales';
@@ -35,16 +38,22 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/staff')) return 'staff';
     if (path.endsWith('/payroll')) return 'payroll';
     if (path.endsWith('/settings')) return 'settings';
+    if (path.endsWith('/accounts')) return 'accounts';
+    if (path.endsWith('/roles')) return 'roles';
+    if (path.endsWith('/permissions')) return 'permissions';
+    if (path.endsWith('/user-audits')) return 'user-audits';
+    if (path.endsWith('/audits')) return 'audits';
+    if (path.endsWith('/departments')) return 'departments';
+    if (path.endsWith('/positions')) return 'positions';
     return 'dashboard';
   })();
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     localStorage.removeItem('lora_session');
-    sessionStorage.clear();
-    window.location.hash = '#/';
+    navigate('/', { replace: true });
     if (onBackHome) onBackHome();
   };
 
@@ -179,19 +188,17 @@ export default function AdminLayout({ onBackHome }) {
       <div className="flex-1 h-full flex flex-col overflow-hidden">
         
         {/* Sticky top Navigation Bar */}
-        <header className="w-full h-[72px] bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800 flex items-center justify-between px-8 shrink-0 z-20">
+        <header className="w-full h-[72px] bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800 flex items-center justify-between px-4 sm:px-8 shrink-0 z-20">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setSidebarOpen(true)}
+              aria-label="Mở menu quản trị"
+              aria-expanded={sidebarOpen}
               className="lg:hidden p-2 -ml-2 text-zinc-400 hover:text-white transition-colors"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="hidden lg:flex items-center gap-2 text-sm">
-              <span className="text-zinc-500 font-medium tracking-wide">Quản trị viên</span>
-              <span className="text-zinc-600">/</span>
-              <span className="text-zinc-200 font-semibold capitalize">{activeTab.replace('-', ' ')}</span>
-            </div>
+            <Breadcrumbs />
           </div>
           <div className="flex items-center gap-4">
             <div className="text-[10px] text-brand-orange font-bold uppercase tracking-widest bg-brand-orange/10 border border-brand-orange/20 px-3 py-1.5 rounded-full hidden md:block">
@@ -208,7 +215,7 @@ export default function AdminLayout({ onBackHome }) {
         </header>
 
         {/* Dynamic View Body Content */}
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           <Outlet context={outletContext} />
         </main>
       </div>

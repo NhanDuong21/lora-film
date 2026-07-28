@@ -3,6 +3,7 @@ package com.project.paymentservice;
 import com.project.paymentservice.client.booking.BookingPaymentClient;
 import com.project.paymentservice.client.booking.BookingPaymentContext;
 import com.project.paymentservice.dto.request.CreatePaymentRequest;
+import com.project.paymentservice.entity.PaymentIdempotencyRecord;
 import com.project.paymentservice.exception.BusinessException;
 import com.project.paymentservice.repository.BookingPaymentGuardRepository;
 import com.project.paymentservice.repository.PaymentAnalyticsSnapshotRepository;
@@ -19,7 +20,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -55,22 +56,17 @@ public class ConcurrentIdempotencyTest {
     @MockBean
     private BookingPaymentClient bookingClient;
 
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
-        snapshotRepository.deleteAllInBatch();
-        logRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @AfterEach
     void tearDown() {
-        snapshotRepository.deleteAllInBatch();
-        logRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @Test
@@ -90,7 +86,7 @@ public class ConcurrentIdempotencyTest {
             ctx.setAnalyticsSnapshot(snap);
             // Simulate slight delay to increase race window
             Thread.sleep(50);
-            return ctx;
+            return TestFixtures.complete(ctx);
         });
 
         int numThreads = 2;
@@ -110,7 +106,7 @@ public class ConcurrentIdempotencyTest {
                     paymentService.createPayment(15L, "concurrent-key-1", req);
                     successCount.incrementAndGet();
                 } catch (BusinessException e) {
-                    if ("IDEMPOTENCY_REQUEST_IN_PROGRESS".equals(e.getErrorCode())) {
+                    if ("PAYMENT_REQUEST_IN_PROGRESS".equals(e.getErrorCode())) {
                         conflictCount.incrementAndGet();
                     } else {
                         e.printStackTrace();
@@ -144,7 +140,10 @@ public class ConcurrentIdempotencyTest {
         record.setIdempotencyKey("existing-processing-key");
         record.setRequestHash(com.project.paymentservice.service.CanonicalHashUtil.hashCreatePayment(15L, 1009L, "MOCK"));
         record.setProcessingStatus(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.PROCESSING);
-        record.setExpiresAt(LocalDateTime.now().plusHours(1));
+        record.setLockedBy("another-request-owner");
+        record.setLockedAt(Instant.now());
+        record.setLockedUntil(Instant.now().plusSeconds(60));
+        record.setExpiresAt(Instant.now().plusSeconds(3600));
         idempotencyRepository.saveAndFlush(record);
 
         CreatePaymentRequest req = new CreatePaymentRequest(1009L, "MOCK");
@@ -154,7 +153,7 @@ public class ConcurrentIdempotencyTest {
             () -> paymentService.createPayment(15L, "existing-processing-key", req)
         );
 
-        assertEquals("IDEMPOTENCY_REQUEST_IN_PROGRESS", exception.getErrorCode());
+        assertEquals("PAYMENT_REQUEST_IN_PROGRESS", exception.getErrorCode());
         assertEquals(0, paymentRepository.count(), "No Payment created");
         assertEquals(0, guardRepository.count(), "No Guard created or changed");
         assertEquals(0, snapshotRepository.count(), "No analytics snapshot created");
@@ -172,10 +171,11 @@ public class ConcurrentIdempotencyTest {
         p.setPaymentMethod(com.project.paymentservice.enumtype.PaymentMethod.MOCK);
         p.setAttemptNumber(1);
         p.setStatus(com.project.paymentservice.enumtype.PaymentStatus.PENDING);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        p = paymentRepository.save(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = paymentRepository.save(TestFixtures.complete(p));
 
         com.project.paymentservice.entity.BookingPaymentGuard guard = new com.project.paymentservice.entity.BookingPaymentGuard();
+        guard.setBookingPublicId(p.getBookingPublicId());
         guard.setBookingId(1001L);
         guard.setActivePaymentId(p.getId());
         guard.setNextAttemptNumber(1);
@@ -197,7 +197,7 @@ public class ConcurrentIdempotencyTest {
                     paymentService.cancelPayment(15L, "concurrent-cancel-key", paymentId);
                     successCount.incrementAndGet();
                 } catch (BusinessException e) {
-                    if ("IDEMPOTENCY_REQUEST_IN_PROGRESS".equals(e.getErrorCode())) {
+                    if ("PAYMENT_REQUEST_IN_PROGRESS".equals(e.getErrorCode())) {
                         conflictCount.incrementAndGet();
                     }
                 } catch (Exception e) {
@@ -226,71 +226,40 @@ public class ConcurrentIdempotencyTest {
     }
 
     @Test
-    void concurrentLoserShouldNotMarkWinnerIdempotencyRecordAsFailed() throws InterruptedException {
+    void expiredProcessingLeaseShouldBeRecovered() {
         String key = "concurrent-loser-test";
-        com.project.paymentservice.dto.request.CreatePaymentRequest req = new com.project.paymentservice.dto.request.CreatePaymentRequest(1011L, "MOCK");
+        CreatePaymentRequest req = new CreatePaymentRequest(1011L, "MOCK");
+        PaymentIdempotencyRecord record = new PaymentIdempotencyRecord();
+        record.setAccountId(15L);
+        record.setOperation("CREATE_PAYMENT");
+        record.setIdempotencyKey(key);
+        record.setRequestHash(
+                com.project.paymentservice.service.CanonicalHashUtil.hashCreatePayment(
+                        15L, 1011L, "MOCK"));
+        record.setProcessingStatus(
+                com.project.paymentservice.enumtype.IdempotencyProcessingStatus.PROCESSING);
+        record.setLockedBy("crashed-worker");
+        record.setLockedAt(Instant.now().minusSeconds(120));
+        record.setLockedUntil(Instant.now().minusSeconds(60));
+        record.setExpiresAt(Instant.now().plusSeconds(3600));
+        idempotencyRepository.saveAndFlush(record);
 
-        java.util.concurrent.CountDownLatch winnerInBusinessLogic = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.CountDownLatch loserDone = new java.util.concurrent.CountDownLatch(1);
-
-        org.mockito.Mockito.when(bookingClient.getPaymentContext(1011L)).thenAnswer(inv -> {
-            winnerInBusinessLogic.countDown();
-            try {
-                loserDone.await(); // Winner waits for loser to finish before proceeding
-            } catch (InterruptedException e) {}
-            var ctx = new com.project.paymentservice.client.booking.BookingPaymentContext();
+        when(bookingClient.getPaymentContext(1011L)).thenAnswer(invocation -> {
+            BookingPaymentContext ctx = new BookingPaymentContext();
             ctx.setAccountId(15L);
             ctx.setBookingId(1011L);
-            ctx.setAmount(new java.math.BigDecimal("150000.0"));
+            ctx.setAmount(new BigDecimal("150000.0"));
             ctx.setCurrency("VND");
-            ctx.setBookingStatus("MOCK");
-            ctx.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
-            var snap = new com.project.paymentservice.client.booking.BookingPaymentContext.AnalyticsSnapshotData();
-            snap.setMovieId(1L);
-            snap.setMovieTitle("Mock Movie");
-            snap.setTicketCount(2);
-            ctx.setAnalyticsSnapshot(snap);
-            return ctx;
+            return TestFixtures.complete(ctx);
         });
 
-        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        paymentService.createPayment(15L, key, req);
 
-        // Winner thread
-        executor.submit(() -> {
-            try {
-                paymentService.createPayment(15L, key, req);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
-
-        // Wait until winner reaches business logic (meaning PROCESSING record is created)
-        winnerInBusinessLogic.await();
-
-        // Loser thread
-        executor.submit(() -> {
-            try {
-                paymentService.createPayment(15L, key, req);
-            } catch (Exception e) {
-                e.printStackTrace();
-                // Expected to throw IDEMPOTENCY_REQUEST_IN_PROGRESS
-            } finally {
-                loserDone.countDown();
-            }
-        });
-
-        loserDone.await();
-        // At this point, loser has finished. Winner is still paused or just about to resume.
-        // Let's check that the record is still PROCESSING
-        var record = idempotencyRepository.findAll().get(0);
-        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.PROCESSING, record.getProcessingStatus());
-
-        executor.shutdown();
-        executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
-
-        // Now winner has completed
-        record = idempotencyRepository.findAll().get(0);
-        assertEquals(com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED, record.getProcessingStatus());
+        PaymentIdempotencyRecord recovered = idempotencyRepository.findById(record.getId())
+                .orElseThrow();
+        assertEquals(
+                com.project.paymentservice.enumtype.IdempotencyProcessingStatus.COMPLETED,
+                recovered.getProcessingStatus());
         assertEquals(1, paymentRepository.count(), "Exactly one payment should be created");
         assertEquals(2, logRepository.count());
     }

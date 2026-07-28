@@ -14,17 +14,20 @@ import static org.mockito.Mockito.when;
 class AutoScheduleGenerationStrategyRegistryTest {
 
     @Test
-    void resolvesTheRegisteredCurrentS3Strategy() {
+    void resolvesTheRegisteredCurrentS5StrategyAndKeepsHistoricalStrategies() {
         AutoScheduleGenerationStrategy s3 = strategy(
                 AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3);
         AutoScheduleGenerationStrategy s4 = strategy(
                 AutoScheduleStrategyVersions.BALANCED_V1_S4);
+        AutoScheduleGenerationStrategy s5 = strategy(
+                AutoScheduleStrategyVersions.BALANCED_V1_S5);
         AutoScheduleGenerationStrategyRegistry registry =
-                new AutoScheduleGenerationStrategyRegistry(List.of(s4, s3));
+                new AutoScheduleGenerationStrategyRegistry(List.of(s5, s4, s3));
 
-        assertSame(s3, registry.getCurrent());
+        assertSame(s5, registry.getCurrent());
         assertSame(s3, registry.require(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3));
         assertSame(s4, registry.require(AutoScheduleStrategyVersions.BALANCED_V1_S4));
+        assertSame(s5, registry.require(AutoScheduleStrategyVersions.BALANCED_V1_S5));
     }
 
     @Test
@@ -43,7 +46,7 @@ class AutoScheduleGenerationStrategyRegistryTest {
                 () -> new AutoScheduleGenerationStrategyRegistry(List.of()).getCurrent());
         assertThrows(IllegalStateException.class,
                 () -> new AutoScheduleGenerationStrategyRegistry(List.of(first))
-                        .require(AutoScheduleStrategyVersions.BALANCED_V1_S4));
+                        .require(AutoScheduleStrategyVersions.BALANCED_V1_S5));
     }
 
     private AutoScheduleGenerationStrategy strategy(String version) {

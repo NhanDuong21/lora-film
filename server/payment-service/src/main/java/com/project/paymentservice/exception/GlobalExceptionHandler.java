@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
             errors.add(fieldError);
         });
         return new ResponseEntity<>(
-                ApiResponse.error("Validation failed", "VALIDATION_ERROR", errors),
+                ApiResponse.error("Dữ liệu gửi lên chưa hợp lệ", "VALIDATION_ERROR", errors),
                 HttpStatus.BAD_REQUEST);
     }
 
@@ -58,7 +58,7 @@ public class GlobalExceptionHandler {
         String errorCode = "Idempotency-Key".equalsIgnoreCase(ex.getHeaderName())
                 ? "IDEMPOTENCY_KEY_REQUIRED" : "MISSING_HEADER";
         return new ResponseEntity<>(
-                ApiResponse.error("Missing required header: " + ex.getHeaderName(), errorCode),
+                ApiResponse.error("Thiếu header bắt buộc: " + ex.getHeaderName(), errorCode),
                 HttpStatus.BAD_REQUEST);
     }
 
@@ -66,13 +66,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
         logger.warn("Optimistic locking failure: {}", ex.getMessage());
         return new ResponseEntity<>(
-                ApiResponse.error("Concurrent update conflict, please retry", "CONCURRENT_CONFLICT"),
+                ApiResponse.error(
+                        "Dữ liệu vừa được cập nhật bởi một yêu cầu khác. Vui lòng thử lại",
+                        "CONCURRENT_CONFLICT"),
                 HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        String msg = String.format("Invalid value for parameter '%s'", ex.getName());
+        String msg = String.format("Giá trị của tham số '%s' không hợp lệ", ex.getName());
         return new ResponseEntity<>(
                 ApiResponse.error(msg, "VALIDATION_ERROR"), HttpStatus.BAD_REQUEST);
     }
@@ -80,20 +82,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException ex) {
         return new ResponseEntity<>(
-                ApiResponse.error("Malformed JSON request", "VALIDATION_ERROR"), HttpStatus.BAD_REQUEST);
+                ApiResponse.error("Nội dung JSON không hợp lệ", "VALIDATION_ERROR"),
+                HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotFound(NoResourceFoundException ex) {
         return new ResponseEntity<>(
-                ApiResponse.error("Resource not found", "NOT_FOUND"), HttpStatus.NOT_FOUND);
+                ApiResponse.error("Không tìm thấy tài nguyên được yêu cầu", "NOT_FOUND"),
+                HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(Throwable.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneric(Throwable ex) {
         logger.error("Unexpected error: {}", ex.getMessage(), ex);
         return new ResponseEntity<>(
-                ApiResponse.error("An unexpected error occurred", "INTERNAL_SERVER_ERROR"),
+                ApiResponse.error(
+                        "Hệ thống thanh toán đang bận. Vui lòng thử lại sau",
+                        "INTERNAL_SERVER_ERROR"),
                 HttpStatus.INTERNAL_SERVER_ERROR);
     }
 

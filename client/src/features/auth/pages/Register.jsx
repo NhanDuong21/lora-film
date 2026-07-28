@@ -24,6 +24,14 @@ function Register() {
     const [globalError, setGlobalError] = useState("");
     const [globalSuccess, setGlobalSuccess] = useState("");
 
+    const registrationError = (errorCode, message) => {
+        const error = new Error(message);
+        error.errorCode = errorCode;
+        return error;
+    };
+
+
+
     useEffect(() => {
         document.title = "Đăng Ký Tài Khoản - LoraFilm";
     }, []);
@@ -155,9 +163,15 @@ function Register() {
                 };
 
                 const res = await register(payload);
-                setIsSubmitting(false);
 
                 if (res.success || res.message === "Registration initiated") {
+                    const requestId = res.data?.requestId;
+                    if (!requestId) {
+                        throw registrationError(
+                            "REGISTRATION_REQUEST_INVALID",
+                            "Registration response did not contain a request ID"
+                        );
+                    }
                     // Store email and purpose in sessionStorage for durability
                     sessionStorage.setItem("pending_otp_email", formData.email);
                     sessionStorage.setItem("pending_otp_purpose", "REGISTRATION");
@@ -177,6 +191,7 @@ function Register() {
                         'Đăng ký không thành công. Vui lòng thử lại.'
                     ));
                 }
+                setIsSubmitting(false);
             } catch (error) {
                 setIsSubmitting(false);
                 const errorCode = error?.errorCode || error?.code || error?.error;
@@ -255,6 +270,21 @@ function Register() {
     };
 
     const isSubmitDisabled = isSubmitting;
+
+    const calculateStrength = (pwd) => {
+        if (!pwd) return 0;
+        let score = 0;
+        if (pwd.length >= 8) score++;
+        if (/[A-Z]/.test(pwd)) score++;
+        if (/[a-z]/.test(pwd)) score++;
+        if (/[0-9]/.test(pwd)) score++;
+        if (/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) score++;
+        return score;
+    };
+
+    const strength = calculateStrength(formData.password);
+    const strengthLabels = ["", "Rất yếu", "Yếu", "Trung bình", "Khá", "Rất mạnh"];
+    const strengthColors = ["bg-zinc-800", "bg-red-500", "bg-orange-500", "bg-amber-400", "bg-emerald-400", "bg-emerald-500"];
 
     return (
         <main className="bg-[#050506] text-white min-h-screen w-full flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden select-none">
@@ -503,6 +533,25 @@ function Register() {
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
                                 {errors.password}
                             </span>
+                        )}
+                        {formData.password && (
+                            <div className="w-full mt-2 space-y-1.5 animate-fade-in">
+                                <div className="flex gap-1 h-1.5 w-full">
+                                    {[1, 2, 3, 4, 5].map((level) => (
+                                        <div
+                                            key={level}
+                                            className={`h-full flex-1 rounded-full transition-all duration-300 ${
+                                                strength >= level ? strengthColors[strength] : "bg-zinc-800"
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                                <p className={`text-[10px] font-bold uppercase tracking-wider text-right ${
+                                    strength <= 2 ? 'text-red-400' : strength <= 4 ? 'text-amber-400' : 'text-emerald-400'
+                                }`}>
+                                    {strengthLabels[strength]}
+                                </p>
+                            </div>
                         )}
                     </div>
 

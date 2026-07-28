@@ -9,12 +9,16 @@ public final class CanonicalHashUtil {
     private CanonicalHashUtil() {
     }
 
-    public static String hashCreatePayment(Long accountId, Long bookingId, String paymentMethod) {
+    public static String hashCreatePayment(Long accountId, String bookingReference, String paymentMethod) {
         String canonical = "operation=CREATE_PAYMENT"
                 + "|accountId=" + accountId
-                + "|bookingId=" + bookingId
+                + "|bookingReference=" + bookingReference
                 + "|paymentMethod=" + paymentMethod;
         return sha256Hex(canonical);
+    }
+
+    public static String hashCreatePayment(Long accountId, Long bookingId, String paymentMethod) {
+        return hashCreatePayment(accountId, String.valueOf(bookingId), paymentMethod);
     }
 
     public static String hashCancelPayment(Long accountId, Long paymentId) {
@@ -22,6 +26,12 @@ public final class CanonicalHashUtil {
                 + "|accountId=" + accountId
                 + "|paymentId=" + paymentId;
         return sha256Hex(canonical);
+    }
+
+    public static String hashOperation(String operation, Long accountId, String canonicalPayload) {
+        return sha256Hex("operation=" + operation
+                + "|accountId=" + accountId
+                + "|payload=" + (canonicalPayload == null ? "" : canonicalPayload.trim()));
     }
 
     public static String hashCollectCashPayment(Long accountId, Long paymentId, java.math.BigDecimal receivedAmount, String note) {

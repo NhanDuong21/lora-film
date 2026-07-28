@@ -89,6 +89,14 @@ public class InternalBookingController {
         return ResponseEntity.ok(ApiResponse.success("Booking retrieved successfully", response));
     }
 
+    @GetMapping("/code/{bookingCode}/payment-context")
+    @Operation(summary = "Get authoritative payment context by Booking code")
+    public ResponseEntity<ApiResponse<InternalPaymentContextResponse>> getPaymentContextByCode(
+            @PathVariable String bookingCode) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.getPaymentContextByCode(bookingCode)));
+    }
+
     @GetMapping("/{bookingId:\\d+}/payment-context")
     @Operation(summary = "Get authoritative payment context by numeric Booking ID")
     public ResponseEntity<ApiResponse<InternalPaymentContextResponse>> getPaymentContext(

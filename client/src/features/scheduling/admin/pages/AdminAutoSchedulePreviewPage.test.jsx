@@ -40,6 +40,7 @@ const preview = (status = 'PREVIEWED', overrides = {}) => ({
   generatedAt: '2026-07-23T10:00:00Z',
   expiresAt: '2099-07-24T12:00:00Z',
   applyMode: 'ALL_OR_NOTHING',
+  strategyVersion: 'BALANCED_V1_S3',
   totalCandidateCount: 1,
   validCandidateCount: 1,
   rejectedCandidateCount: 0,
@@ -219,14 +220,76 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(within(rows[2]).getByText('Phim 3')).toBeInTheDocument();
     expect(within(rows[0]).getByText((_, element) => element?.tagName === 'TD' && element.textContent === '89 / 2')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Dữ liệu mở rộng')).toBeInTheDocument();
-    expect(screen.getByText(/Điểm ưu tiên là tổng các thành phần/)).toHaveTextContent('điểm cao hơn tốt hơn');
-    expect(screen.getByText(/Điểm ưu tiên là tổng các thành phần/)).toHaveTextContent('Hạng chỉ là thứ tự hiển thị, không phải thứ tự chọn');
-    expect(screen.getByText(/Điểm ưu tiên là tổng các thành phần/)).toHaveTextContent('hạng thấp hơn vẫn có thể được chọn');
+    expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('điểm cao hơn tốt hơn');
+    expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('Hạng toàn cục chỉ là thứ tự rà soát');
+    expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('có thể dồn nhiều suất vào cùng một phim');
+  });
+
+  it('makes movie coverage gaps and a dominant movie visible before applying', () => {
+    const items = [
+      ...Array.from({ length: 7 }, (_, index) => candidate(index + 1, {
+        itemPublicId: `a-${index}`,
+        moviePublicId: 'movie-a',
+        movieTitle: 'Phim A',
+        startTime: `2026-07-24T${String(8 + index).padStart(2, '0')}:00:00Z`,
+        endTime: `2026-07-24T${String(9 + index).padStart(2, '0')}:00:00Z`,
+        occupancyEndTime: `2026-07-24T${String(9 + index).padStart(2, '0')}:15:00Z`,
+      })),
+      candidate(20, {
+        itemPublicId: 'b-1',
+        moviePublicId: 'movie-b',
+        movieTitle: 'Phim B',
+        auditoriumPublicId: 'aud-2',
+        auditoriumName: 'Phòng 2',
+      }),
+      candidate(30, {
+        itemPublicId: 'c-1',
+        moviePublicId: 'movie-c',
+        movieTitle: 'Phim C',
+        selected: false,
+      }),
+    ];
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      items,
+      selectedIds: new Set(items.filter(row => row.selected).map(row => row.itemPublicId)),
+    }));
+    renderPage();
+
+    expect(screen.getByText('2/3 phim được xếp lịch')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Phim C có phương án hợp lệ nhưng chưa có suất nào');
+    expect(screen.getByRole('alert')).toHaveTextContent('Phim A đang chiếm 87.5%');
+    expect(screen.getByRole('button', { name: /Phim C.*0 suất/i })).toBeInTheDocument();
+  });
+
+  it('explains the historical S4 minimum-coverage limitation', () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      previewOverrides: { strategyVersion: 'BALANCED_V1_S4' },
+    }));
+    renderPage();
+
+    expect(screen.getByText('BALANCED_V1_S4')).toBeInTheDocument();
+    expect(screen.getByText(/Chiến lược S4 chỉ bảo đảm độ phủ tối thiểu/)).toHaveTextContent(
+      'vẫn có thể bị dồn suất',
+    );
+  });
+
+  it('explains that S5 balances distribution without violating the daily quality floor', () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      previewOverrides: { strategyVersion: 'BALANCED_V1_S5' },
+    }));
+    renderPage();
+
+    expect(screen.getByText('BALANCED_V1_S5')).toBeInTheDocument();
+    expect(screen.getByText(/Chiến lược S5 cân bằng số suất/)).toHaveTextContent(
+      '90% thời gian sử dụng phòng',
+    );
   });
 
   it('renders no more than 100 candidate rows from a 3,615-item complete dataset', () => {
     const items = Array.from({ length: 3615 }, (_, index) => candidate(index, {
       selected: false,
+      moviePublicId: 'movie-load-test',
+      movieTitle: 'Phim kiểm thử tải',
       auditoriumPublicId: `aud-${index % 10}`,
       auditoriumName: `Phòng ${index % 10}`,
     }));
@@ -263,21 +326,15 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(screen.getByRole('checkbox', { name: /Chọn Phim 1/i })).toBeDisabled();
   });
 
-  it('uses the non-conflicting auto-selection wording for its action and loading state', () => {
+  it('does not expose the old greedy bulk action that can destroy movie balance', () => {
     const value = hookValue();
     useAutoSchedulePreview.mockReturnValue(value);
-    const { unmount } = renderPage();
-
-    const action = screen.getByRole('button', { name: 'Tự chọn lịch không xung đột' });
-    fireEvent.click(action);
-    expect(value.handleBulkSelection).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText('Chọn nhanh không trùng')).not.toBeInTheDocument();
-    unmount();
-
-    useAutoSchedulePreview.mockReturnValue(hookValue({ isUpdatingSelection: true }));
     renderPage();
-    expect(screen.getByRole('button', { name: 'Đang tự chọn lịch không xung đột' }))
-      .toHaveTextContent('Đang tự chọn lịch không xung đột…');
+
+    expect(screen.queryByRole('button', { name: /Tự chọn lịch không xung đột/i }))
+      .not.toBeInTheDocument();
+    expect(value.handleBulkSelection).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: /Chọn Phim 1/i })).toBeInTheDocument();
   });
 
   it('defaults an applied preview to created Showtimes and remains read-only', () => {

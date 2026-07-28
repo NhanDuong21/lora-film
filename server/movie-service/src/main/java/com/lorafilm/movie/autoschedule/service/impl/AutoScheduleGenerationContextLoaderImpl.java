@@ -163,7 +163,8 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
             List<OperatingWindow> windows,
             Instant planningStart,
             Instant planningEndExclusive) {
-        if (!AutoScheduleStrategyVersions.BALANCED_V1_S4.equals(strategyVersion)) {
+        if (!AutoScheduleStrategyVersions.BALANCED_V1_S4.equals(strategyVersion)
+                && !AutoScheduleStrategyVersions.BALANCED_V1_S5.equals(strategyVersion)) {
             return Map.of();
         }
 

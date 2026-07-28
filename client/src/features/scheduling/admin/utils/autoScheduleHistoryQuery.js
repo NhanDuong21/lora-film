@@ -26,6 +26,7 @@ export const AUTO_SCHEDULE_HISTORY_STRATEGIES = Object.freeze([
   'BALANCED_V1_S2',
   'BALANCED_V1_S3',
   'BALANCED_V1_S4',
+  'BALANCED_V1_S5',
 ]);
 
 export const AUTO_SCHEDULE_HISTORY_PAGE_SIZES = Object.freeze([10, 20, 50]);

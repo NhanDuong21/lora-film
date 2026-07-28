@@ -43,7 +43,7 @@ public class UserEventPublisher {
             log.info("Published REGISTRATION_VALIDATION_RESULT event for requestId={}", requestId);
         } catch (Exception ex) {
             log.error("Failed to publish REGISTRATION_VALIDATION_RESULT event for requestId={}", requestId, ex);
-            throw new RuntimeException("Kafka publish failed for requestId=" + requestId, ex);
+            throw new com.project.userservice.exception.BusinessException("Kafka publish failed for requestId=" + requestId, "KAFKA_PUBLISH_ERROR");
         }
     }
 
@@ -62,7 +62,7 @@ public class UserEventPublisher {
             log.info("Published USER_PROFILE_CREATED event for accountId={}", accountId);
         } catch (Exception ex) {
             log.error("Failed to publish USER_PROFILE_CREATED event for accountId={}", accountId, ex);
-            throw new RuntimeException("Kafka publish failed for accountId=" + accountId, ex);
+            throw new com.project.userservice.exception.BusinessException("Kafka publish failed for accountId=" + accountId, "KAFKA_PUBLISH_ERROR");
         }
     }
 }

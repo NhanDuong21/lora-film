@@ -29,7 +29,8 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
 
-        ApiResponse<Void> apiResponse = ApiResponse.error("Authentication required", "UNAUTHORIZED");
+        ApiResponse<Void> apiResponse = ApiResponse.error(
+                "Vui lòng đăng nhập để tiếp tục", "UNAUTHORIZED");
         objectMapper.writeValue(response.getOutputStream(), apiResponse);
     }
 }

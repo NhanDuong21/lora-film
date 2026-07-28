@@ -11,20 +11,6 @@ export default function SeatGridDesigner({
   onCellMouseDown,
   onCellMouseEnter
 }) {
-  const getRowLabel = (index, skip) => {
-    let current = 0;
-    let label = '';
-    while (current <= index) {
-      label = String.fromCharCode(65 + (current % 26)) + label;
-      if (skip && (label === 'I' || label === 'O')) {
-        index++; // push the index further to skip this letter
-      }
-      current++;
-    }
-    // Actually this loop logic for multi-character is complex. Since max rows is 20, we can just map it directly.
-    return '';
-  };
-
   const calculateRowLabel = (rIdx, skip) => {
     let letterCode = 65; // 'A'
     for (let i = 0; i < rIdx; i++) {
@@ -91,9 +77,9 @@ export default function SeatGridDesigner({
                   }}
                 >
                   {row.map((cell, cIdx) => {
-                    let cellBg = '';
+                    let cellBg;
                     let labelColor = 'text-white/60';
-                    let content = '';
+                    let content;
                     
                     let currentSeatNumber = seatNumber;
                     if (cell.type !== 'AISLE' && cell.type !== 'EXIT') {

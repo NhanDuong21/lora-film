@@ -29,7 +29,8 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpStatus.FORBIDDEN.value());
 
-        ApiResponse<Void> apiResponse = ApiResponse.error("Access denied", "FORBIDDEN");
+        ApiResponse<Void> apiResponse = ApiResponse.error(
+                "Bạn không có quyền thực hiện thao tác này", "FORBIDDEN");
         objectMapper.writeValue(response.getOutputStream(), apiResponse);
     }
 }

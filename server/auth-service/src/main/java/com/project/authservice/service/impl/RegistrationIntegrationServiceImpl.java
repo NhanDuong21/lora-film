@@ -4,11 +4,10 @@ import org.springframework.stereotype.Service;
 
 import com.project.authservice.service.RegistrationIntegrationService;
 
-import lombok.extern.slf4j.Slf4j;
 
 @Service
-@Slf4j
 public class RegistrationIntegrationServiceImpl implements RegistrationIntegrationService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RegistrationIntegrationServiceImpl.class);
 
     @Override
     public void forwardProfileData(Long accountId, String fullName, String citizenId, String gender, String dob) {

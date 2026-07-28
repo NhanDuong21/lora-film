@@ -5,13 +5,28 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
 	Optional<RefreshToken> findByToken(String token);
 
+	/*
+	 * Lock only the refresh-token row. A JOIN FETCH here causes MySQL to lock
+	 * the parent account row as well. The independent audit transaction then
+	 * needs a foreign-key lock on that account and waits on its own caller,
+	 * turning every refresh into a 50-second lock timeout.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("SELECT r FROM RefreshToken r WHERE r.token = :token")
+	Optional<RefreshToken> findByTokenForUpdate(@Param("token") String token);
+
 	void deleteByAccountId(Long accountId);
+	
+	@Query("SELECT r FROM RefreshToken r WHERE r.account.id = :accountId AND r.isRevoked = false")
+	List<RefreshToken> findActiveTokensByAccountId(@Param("accountId") Long accountId);
 
 	/**
 	 * Finds all active (non-revoked) refresh tokens for a given account that were
@@ -35,7 +50,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 			   AND al.user_agent = :userAgent
 			   AND ABS(TIMESTAMPDIFF(SECOND, al.created_at, rt.created_at)) <= 2
 			WHERE rt.account_id = :accountId
-			  AND rt.is_revoked = 0
+			  AND rt.revoked = 0
 			""", nativeQuery = true)
 	List<RefreshToken> findActiveTokensByAccountAndUserAgent(
 			@Param("accountId") Long accountId,

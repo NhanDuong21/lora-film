@@ -51,7 +51,7 @@ public class RegisterRequest {
         regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*(),.?\":{}|<>]).+$",
         message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
     )
-    @JsonSerialize(using = com.project.authservice.util.PasswordMaskSerializer.class)
+
     private String password;
 
     public RegisterRequest() {}

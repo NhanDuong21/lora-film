@@ -84,16 +84,20 @@ class AutoScheduleRequestFingerprintServiceImplTest {
                 request, AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3);
         String phaseS4 = fingerprintService.generateFingerprint(
                 request, AutoScheduleStrategyVersions.BALANCED_V1_S4);
+        String phaseS5 = fingerprintService.generateFingerprint(
+                request, AutoScheduleStrategyVersions.BALANCED_V1_S5);
         String current = fingerprintService.generateFingerprint(request);
 
         assertEquals("3c92d5fc4918d3e99b1d59773c483043c6c4bab8ee362a7a2dd09f20aaa9f0f3", legacy);
         assertEquals(current, fingerprintService.generateFingerprint(
                 request, AutoScheduleStrategyVersions.CURRENT));
-        assertEquals(phaseS3, current, "S3 must remain current before the activation checkpoint");
+        assertEquals(phaseS5, current,
+                "S5 must be current after the distribution activation checkpoint");
         assertNotEquals(legacy, current);
         assertNotEquals(legacy, phaseS2);
         assertNotEquals(phaseS2, current);
         assertNotEquals(phaseS3, phaseS4);
+        assertNotEquals(phaseS4, phaseS5);
     }
 
     @Test

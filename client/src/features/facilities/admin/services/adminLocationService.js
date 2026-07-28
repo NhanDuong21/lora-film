@@ -10,7 +10,6 @@ export const searchLocationSuggestions = async ({ query, limit = 8, signal }) =>
     return { success: true, data: [] };
   }
 
-  try {
     const response = await axios.get('https://nominatim.openstreetmap.org/search', {
       params: {
         q: trimmedQuery,
@@ -42,7 +41,4 @@ export const searchLocationSuggestions = async ({ query, limit = 8, signal }) =>
     });
 
     return { success: true, data: suggestions };
-  } catch (error) {
-    throw error;
-  }
 };

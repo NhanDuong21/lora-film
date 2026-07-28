@@ -15,6 +15,6 @@ public class InvalidBirthdayFormatException extends BusinessValidationException 
     }
 
     public InvalidBirthdayFormatException(String message) {
-        super(message, "AUTH_INVALID_BIRTHDAY_FORMAT");
+        super(message, null);
     }
 }

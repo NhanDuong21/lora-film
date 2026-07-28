@@ -9,26 +9,29 @@ import com.project.paymentservice.dto.response.PaymentStatusResponse;
 import com.project.paymentservice.exception.BusinessException;
 import com.project.paymentservice.security.CurrentUserProvider;
 import com.project.paymentservice.service.PaymentService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/payments")
-@Tag(name = "Payment", description = "Payment Core API")
+@Tag(name = "Payment", description = "Customer Payment API using public UUIDs")
 @SecurityRequirement(name = "bearerAuth")
 public class PaymentController {
-
     private final PaymentService paymentService;
     private final CurrentUserProvider currentUserProvider;
 
@@ -37,87 +40,104 @@ public class PaymentController {
         this.currentUserProvider = currentUserProvider;
     }
 
-    @Operation(summary = "Create Payment", description = "Idempotent payment creation")
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Payment created"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Idempotency conflict or Invalid state")
-    })
     @PostMapping
     public ResponseEntity<ApiResponse<CreatePaymentResponse>> createPayment(
-            @Parameter(description = "Required, unique per logical operation. Reuse with the same request returns deterministic replay. Reuse with different request data returns IDEMPOTENCY_KEY_REUSED.", required = true, example = "payment-create-manual-001")
             @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @Valid @RequestBody CreatePaymentRequest request) {
-
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new BusinessException("IDEMPOTENCY_KEY_REQUIRED",
-                    "Idempotency-Key header is required", HttpStatus.BAD_REQUEST);
-        }
-
-        Long accountId = currentUserProvider.getCurrentUserId();
-        CreatePaymentResponse response = paymentService.createPayment(accountId, idempotencyKey, request);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Payment created successfully", response));
+            @Valid @RequestBody CreatePaymentRequest request,
+            HttpServletRequest servletRequest) {
+        requireKey(idempotencyKey);
+        CreatePaymentResponse response = paymentService.createPayment(
+                currentUserProvider.getCurrentUserId(),
+                idempotencyKey,
+                request,
+                clientIp(servletRequest));
+        HttpStatus status = response.getPaymentUrl() == null
+                && "PROCESSING".equals(response.getStatus())
+                ? HttpStatus.ACCEPTED : HttpStatus.CREATED;
+        return ResponseEntity.status(status)
+                .body(ApiResponse.success("Đã khởi tạo giao dịch thanh toán", response));
     }
 
-    @Operation(summary = "Get Payment details", description = "Retrieve a specific payment by its ID")
-    @GetMapping("/{paymentId}")
+    @GetMapping("/{paymentPublicId:[a-fA-F0-9-]{36}}")
     public ResponseEntity<ApiResponse<PaymentDetailResponse>> getPayment(
-            @Parameter(description = "Payment ID", required = true) @PathVariable Long paymentId) {
-
-        Long accountId = currentUserProvider.getCurrentUserId();
-        PaymentDetailResponse response = paymentService.getPayment(accountId, paymentId);
-
-        return ResponseEntity.ok(ApiResponse.success("Payment retrieved successfully", response));
+            @PathVariable String paymentPublicId) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getPayment(
+                currentUserProvider.getCurrentUserId(), paymentPublicId)));
     }
 
-    @Operation(summary = "Get Payment Status", description = "Retrieve only the status of a specific payment")
-    @GetMapping("/{paymentId}/status")
+    @GetMapping("/{paymentPublicId:[a-fA-F0-9-]{36}}/status")
     public ResponseEntity<ApiResponse<PaymentStatusResponse>> getPaymentStatus(
-            @Parameter(description = "Payment ID", required = true) @PathVariable Long paymentId) {
-
-        Long accountId = currentUserProvider.getCurrentUserId();
-        PaymentStatusResponse response = paymentService.getPaymentStatus(accountId, paymentId);
-
-        return ResponseEntity.ok(ApiResponse.success("Payment status retrieved successfully", response));
+            @PathVariable String paymentPublicId) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getPaymentStatus(
+                currentUserProvider.getCurrentUserId(), paymentPublicId)));
     }
 
-    @Operation(summary = "List Payments by Booking", description = "Retrieve a paginated list of payments for a booking")
-    @GetMapping("/booking/{bookingId}")
+    @GetMapping("/booking/{bookingPublicId:[a-fA-F0-9-]{36}}")
     public ResponseEntity<ApiResponse<Page<PaymentDetailResponse>>> getPaymentsByBooking(
-            @Parameter(description = "Booking ID", required = true) @PathVariable Long bookingId,
+            @PathVariable String bookingPublicId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-
-        Long accountId = currentUserProvider.getCurrentUserId();
-        Page<PaymentDetailResponse> response = paymentService.getPaymentsByBooking(
-                accountId, bookingId,
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
-
-        return ResponseEntity.ok(ApiResponse.success("Payment history retrieved successfully", response));
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getPaymentsByBooking(
+                currentUserProvider.getCurrentUserId(), bookingPublicId,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))));
     }
 
-    @Operation(summary = "Cancel Payment", description = "Idempotent payment cancellation")
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Payment cancelled"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Payment not found"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Idempotency conflict or Invalid state")
-    })
-    @PostMapping("/{paymentId}/cancel")
+    @PostMapping("/{paymentPublicId:[a-fA-F0-9-]{36}}/cancel")
     public ResponseEntity<ApiResponse<CancelPaymentResponse>> cancelPayment(
-            @Parameter(description = "Payment ID", required = true) @PathVariable Long paymentId,
-            @Parameter(description = "Required, unique per logical operation. Reuse with the same request returns deterministic replay. Reuse with different request data returns IDEMPOTENCY_KEY_REUSED.", required = true, example = "payment-cancel-manual-001")
+            @PathVariable String paymentPublicId,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        requireKey(idempotencyKey);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã hủy giao dịch thanh toán",
+                paymentService.cancelPayment(currentUserProvider.getCurrentUserId(),
+                        idempotencyKey, paymentPublicId)));
+    }
 
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+    /** Deprecated numeric compatibility routes. */
+    @GetMapping("/{paymentId:\\d+}")
+    public ResponseEntity<ApiResponse<PaymentDetailResponse>> getPaymentCompat(
+            @PathVariable Long paymentId) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getPayment(
+                currentUserProvider.getCurrentUserId(), paymentId)));
+    }
+
+    @GetMapping("/{paymentId:\\d+}/status")
+    public ResponseEntity<ApiResponse<PaymentStatusResponse>> getPaymentStatusCompat(
+            @PathVariable Long paymentId) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getPaymentStatus(
+                currentUserProvider.getCurrentUserId(), paymentId)));
+    }
+
+    @GetMapping("/booking/{bookingId:\\d+}")
+    public ResponseEntity<ApiResponse<Page<PaymentDetailResponse>>> getByBookingCompat(
+            @PathVariable Long bookingId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getPaymentsByBooking(
+                currentUserProvider.getCurrentUserId(), bookingId,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))));
+    }
+
+    @PostMapping("/{paymentId:\\d+}/cancel")
+    public ResponseEntity<ApiResponse<CancelPaymentResponse>> cancelCompat(
+            @PathVariable Long paymentId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        requireKey(idempotencyKey);
+        return ResponseEntity.ok(ApiResponse.success(paymentService.cancelPayment(
+                currentUserProvider.getCurrentUserId(), idempotencyKey, paymentId)));
+    }
+
+    private void requireKey(String value) {
+        if (value == null || value.isBlank() || value.length() > 100) {
             throw new BusinessException("IDEMPOTENCY_KEY_REQUIRED",
-                    "Idempotency-Key header is required", HttpStatus.BAD_REQUEST);
+                    "Idempotency-Key là bắt buộc và tối đa 100 ký tự",
+                    HttpStatus.BAD_REQUEST);
         }
+    }
 
-        Long accountId = currentUserProvider.getCurrentUserId();
-        CancelPaymentResponse response = paymentService.cancelPayment(accountId, idempotencyKey, paymentId);
-
-        return ResponseEntity.ok(ApiResponse.success("Payment cancelled successfully", response));
+    private String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        return forwarded == null || forwarded.isBlank()
+                ? request.getRemoteAddr() : forwarded.split(",")[0].trim();
     }
 }

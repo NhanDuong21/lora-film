@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ScrollToTop from "@/components/common/ScrollToTop";
-import { RoleRoute, AdminRedirectGuard } from "@/components/common/RouteGuards";
+import { PermissionRoute, RoleRoute, AdminRedirectGuard } from "@/components/common/RouteGuards";
+import { ADMIN_AREA_PERMISSIONS } from "@/features/internal-staff/admin/permissionAccess";
 
 // Feature Routes
 import { authRoutes } from "@/features/auth/routes";
@@ -19,11 +20,25 @@ import { adminStaffRoutes } from "@/features/internal-staff/admin/routes";
 import { employeeStaffRoutes } from "@/features/internal-staff/employee/routes";
 import { customerScoreRoutes } from "@/features/score/customer/routes";
 import { adminScoreRoutes } from "@/features/score/admin/routes";
+import {
+    adminPaymentRoutes,
+    customerPaymentRoutes,
+    employeePaymentRoutes
+} from "@/features/payment/routes";
 
 // Layouts
 import MainLayout from "@/components/layout/MainLayout";
 import AdminLayout from "@/components/admin/AdminLayout";
 import EmployeeLayout from "@/components/employee/EmployeeLayout";
+import { ForbiddenPage, NotFoundPage, ServerErrorPage, UnauthorizedPage } from "@/features/auth/pages/ErrorPages";
+
+const adminOnly = element => (
+    <RoleRoute allowedRoles={["ADMIN"]}>{element}</RoleRoute>
+);
+
+const financeAccess = element => (
+    <PermissionRoute requiredPermissions={["PERM_VIEW_FINANCE"]}>{element}</PermissionRoute>
+);
 
 function AppRoutes() {
     return (
@@ -47,11 +62,14 @@ function AppRoutes() {
                     {customerScoreRoutes.map((route, index) => (
                         <Route key={`score-cust-${index}`} path={route.path} element={route.element} />
                     ))}
+                    {customerPaymentRoutes.map((route, index) => (
+                        <Route key={`payment-cust-${index}`} path={route.path} element={route.element} />
+                    ))}
                 </Route>
 
                 {/* Employee Routes */}
                 <Route path="/employee" element={
-                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF"]}>
+                    <RoleRoute allowedRoles={["EMPLOYEE", "STAFF", "SUPERVISOR", "ADMIN"]}>
                         <EmployeeLayout />
                     </RoleRoute>
                 }>
@@ -63,41 +81,57 @@ function AppRoutes() {
                     {employeeStaffRoutes.map((route, index) => (
                         <Route key={`staff-emp-${index}`} path={route.path} element={route.element} />
                     ))}
+                    {employeePaymentRoutes.map((route, index) => (
+                        <Route key={`payment-emp-${index}`} path={route.path} element={route.element} />
+                    ))}
                 </Route>
 
                 {/* Admin Routes */}
                 <Route path="/admin" element={
-                    <RoleRoute allowedRoles={["ADMIN"]}>
+                    <PermissionRoute requiredPermissions={ADMIN_AREA_PERMISSIONS}>
                         <AdminLayout />
-                    </RoleRoute>
+                    </PermissionRoute>
                 }>
                     {adminStaffRoutes.map((route, index) => (
-                        route.index ? 
-                            <Route key={`staff-adm-${index}`} index element={route.element} /> : 
-                            <Route key={`staff-adm-${index}`} path={route.path} element={route.element} />
+                        route.index
+                            ? <Route key={`staff-adm-${index}`} index element={route.element} />
+                            : <Route key={`staff-adm-${index}`} path={route.path} element={route.element} />
                     ))}
                     {adminCatalogRoutes.map((route, index) => (
-                        <Route key={`cat-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`cat-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminFacilitiesRoutes.map((route, index) => (
-                        <Route key={`fac-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`fac-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminSchedulingRoutes.map((route, index) => (
-                        <Route key={`sched-${index}`} path={route.path} element={route.element} />
+                        <Route key={`sched-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminPricingRoutes.map((route, index) => (
-                        <Route key={`pricing-${index}`} path={route.path} element={route.element} />
+                        <Route key={`pricing-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminConcessionRoutes.map((route, index) => (
-                        <Route key={`conc-adm-${index}`} path={route.path} element={route.element} />
+                        <Route
+                            key={`conc-adm-${index}`}
+                            path={route.path}
+                            element={route.path === 'concession-sales'
+                                ? financeAccess(route.element)
+                                : adminOnly(route.element)}
+                        />
                     ))}
                     {adminBookingRoutes.map((route, index) => (
-                        <Route key={`book-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`book-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminScoreRoutes.map((route, index) => (
-                        <Route key={`score-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`score-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
+                    ))}
+                    {adminPaymentRoutes.map((route, index) => (
+                        <Route key={`payment-adm-${index}`} path={route.path} element={financeAccess(route.element)} />
                     ))}
                 </Route>
+                <Route path="/401" element={<UnauthorizedPage />} />
+                <Route path="/403" element={<ForbiddenPage />} />
+                <Route path="/500" element={<ServerErrorPage />} />
+                <Route path="*" element={<NotFoundPage />} />
             </Routes>
         </BrowserRouter>
     );

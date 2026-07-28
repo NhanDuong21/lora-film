@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface PaymentLogRepository extends JpaRepository<PaymentLog, Long> {
 
     Page<PaymentLog> findByPaymentIdOrderByCreatedAtAsc(Long paymentId, Pageable pageable);
+    java.util.List<PaymentLog> findByPaymentIdOrderByCreatedAtAsc(Long paymentId);
 }

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import apiClient from '@/services/apiClient';
 import {
   createPaymentHandoff,
-  getOrCreatePaymentAttemptKey
+  getOrCreatePaymentAttemptKey,
+  resetPaymentAttemptKey
 } from './paymentHandoffService';
 
 vi.mock('@/services/apiClient', () => ({
@@ -55,6 +56,23 @@ describe('paymentHandoffService', () => {
     const replay = getOrCreatePaymentAttemptKey('booking-1', 'VNPAY');
 
     expect(replay).toBe(first);
+  });
+
+  it('scopes attempt keys by Booking and provider', () => {
+    const vnpay = getOrCreatePaymentAttemptKey('booking-1', 'VNPAY');
+    const momo = getOrCreatePaymentAttemptKey('booking-1', 'MOMO');
+    const anotherBooking = getOrCreatePaymentAttemptKey('booking-2', 'VNPAY');
+
+    expect(momo).not.toBe(vnpay);
+    expect(anotherBooking).not.toBe(vnpay);
+  });
+
+  it('rotates the key only after the current attempt is explicitly reset', () => {
+    const first = getOrCreatePaymentAttemptKey('booking-1', 'VNPAY');
+    resetPaymentAttemptKey('booking-1', 'VNPAY');
+    const next = getOrCreatePaymentAttemptKey('booking-1', 'VNPAY');
+
+    expect(next).not.toBe(first);
   });
 });
 

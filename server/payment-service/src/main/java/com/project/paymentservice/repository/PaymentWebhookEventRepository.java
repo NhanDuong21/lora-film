@@ -14,9 +14,11 @@ import java.util.Optional;
 
 public interface PaymentWebhookEventRepository extends JpaRepository<PaymentWebhookEvent, Long> {
 
-    Optional<PaymentWebhookEvent> findByProviderAndDeduplicationKey(String provider, String deduplicationKey);
+    Optional<PaymentWebhookEvent> findByProviderCodeAndDeduplicationKey(
+            com.project.paymentservice.enumtype.ProviderCode providerCode, String deduplicationKey);
 
     Page<PaymentWebhookEvent> findByPaymentId(Long paymentId, Pageable pageable);
+    java.util.List<PaymentWebhookEvent> findByPaymentIdOrderByReceivedAtDesc(Long paymentId);
 
     Page<PaymentWebhookEvent> findByProcessingStatus(WebhookProcessingStatus status, Pageable pageable);
 

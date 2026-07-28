@@ -18,6 +18,7 @@ import {
 import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
 
 vi.mock('../services/bookingService', () => ({
+  BOOKING_CHANGED_EVENT: 'lorafilm:booking-changed',
   cancelBooking: vi.fn(),
   finalizeCheckout: vi.fn(),
   getBookingDetails: vi.fn()
@@ -152,6 +153,106 @@ describe('BookingCheckoutPage cancellation', () => {
     expect(finalizeCheckout.mock.invocationCallOrder[0])
       .toBeLessThan(createPaymentHandoff.mock.invocationCallOrder[0]);
     expect(screen.queryByText(/mô phỏng thanh toán/i)).not.toBeInTheDocument();
+  });
+
+  it('revalidates the Booking before Payment and does not call MoMo for a cancelled order', async () => {
+    getBookingDetails
+      .mockResolvedValueOnce({
+        publicId: '11111111-1111-4111-8111-111111111111',
+        bookingCode: 'BK-CHECKOUT',
+        status: 'PENDING_PAYMENT',
+        paymentDeadline: '2099-07-26T12:05:00Z',
+        ticketAmount: 285000,
+        totalAmount: 285000,
+        snapshot: {
+          movieTitle: 'Phim thử nghiệm',
+          seats: [{ seatPublicId: 'seat-d6', label: 'D6', type: 'VIP' }]
+        }
+      })
+      .mockResolvedValueOnce({
+        publicId: '11111111-1111-4111-8111-111111111111',
+        bookingCode: 'BK-CHECKOUT',
+        status: 'CANCELLED',
+        paymentDeadline: '2099-07-26T12:05:00Z',
+        ticketAmount: 285000,
+        totalAmount: 285000,
+        snapshot: {
+          movieTitle: 'Phim thử nghiệm',
+          seats: [{ seatPublicId: 'seat-d6', label: 'D6', type: 'VIP' }]
+        }
+      });
+
+    render(
+      <MemoryRouter initialEntries={[
+        '/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111'
+      ]}>
+        <BookingCheckoutPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: /xác nhận & tiếp tục/i
+    }));
+    fireEvent.click(screen.getByRole('button', { name: /momo/i }));
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', {
+      name: /thanh toán qua momo/i
+    }));
+
+    expect(await screen.findAllByText('Đơn đã được hủy')).not.toHaveLength(0);
+    expect(screen.getAllByText(/ghế đã được trả lại/i)).not.toHaveLength(0);
+    expect(finalizeCheckout).not.toHaveBeenCalled();
+    expect(createPaymentHandoff).not.toHaveBeenCalled();
+  });
+
+  it('updates checkout immediately when the recovery banner cancels the same Booking', async () => {
+    getBookingDetails
+      .mockResolvedValueOnce({
+        publicId: '11111111-1111-4111-8111-111111111111',
+        bookingCode: 'BK-CHECKOUT',
+        status: 'PENDING_PAYMENT',
+        paymentDeadline: '2099-07-26T12:05:00Z',
+        ticketAmount: 285000,
+        totalAmount: 285000,
+        snapshot: {
+          movieTitle: 'Phim thử nghiệm',
+          seats: [{ seatPublicId: 'seat-d6', label: 'D6', type: 'VIP' }]
+        }
+      })
+      .mockResolvedValueOnce({
+        publicId: '11111111-1111-4111-8111-111111111111',
+        bookingCode: 'BK-CHECKOUT',
+        status: 'CANCELLED',
+        paymentDeadline: '2099-07-26T12:05:00Z',
+        ticketAmount: 285000,
+        totalAmount: 285000,
+        snapshot: {
+          movieTitle: 'Phim thử nghiệm',
+          seats: [{ seatPublicId: 'seat-d6', label: 'D6', type: 'VIP' }]
+        }
+      });
+
+    render(
+      <MemoryRouter initialEntries={[
+        '/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111'
+      ]}>
+        <BookingCheckoutPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Phim thử nghiệm');
+    window.dispatchEvent(new CustomEvent('lorafilm:booking-changed', {
+      detail: {
+        action: 'CANCELLED',
+        publicId: '11111111-1111-4111-8111-111111111111'
+      }
+    }));
+
+    expect(await screen.findAllByText('Đơn đã được hủy')).not.toHaveLength(0);
+    expect(screen.getByText(/VNPay và MoMo đã được khóa/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: /thanh toán qua/i
+    })).not.toBeInTheDocument();
   });
 
   it('renders the authoritative movie, seats, food lines and price breakdown', async () => {
