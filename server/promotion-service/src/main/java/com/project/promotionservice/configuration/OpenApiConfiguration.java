@@ -21,7 +21,8 @@ public class OpenApiConfiguration {
         return new OpenAPI()
                 .info(new Info()
                         .title("Promotion Service API")
-                        .description("Microservice architecture for Movie Promotion Management System")
+                        .description("Coupon, voucher and compensation APIs. New checkout integrations use "
+                                + "validate -> reserve -> confirm/rollback.")
                         .version("v1.0.0")
                         .contact(new Contact()
                                 .name("LoraFilm Architecture Team")
