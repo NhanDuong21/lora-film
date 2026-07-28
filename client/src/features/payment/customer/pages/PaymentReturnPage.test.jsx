@@ -23,6 +23,10 @@ vi.mock('@/features/booking/customer/services/paymentHandoffService', () => ({
   resetPaymentAttemptKey: vi.fn(),
 }));
 
+vi.mock('@/features/booking/customer/services/bookingService', () => ({
+  BOOKING_CHANGED_EVENT: 'lorafilm:booking-changed',
+}));
+
 describe('PaymentReturnPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -32,6 +36,8 @@ describe('PaymentReturnPage', () => {
   });
 
   it('polls the authoritative status and renders success only after Booking delivery', async () => {
+    const bookingChanged = vi.fn();
+    window.addEventListener('lorafilm:booking-changed', bookingChanged);
     let resolveStatus;
     getPaymentStatus.mockReturnValue(new Promise(resolve => {
       resolveStatus = resolve;
@@ -53,9 +59,11 @@ describe('PaymentReturnPage', () => {
       { name: 'Thanh toán thành công' },
     )).toBeInTheDocument();
     expect(getPaymentStatus).toHaveBeenCalledWith('payment-1');
+    expect(bookingChanged).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết đơn' }));
     expect(router.navigate).toHaveBeenCalledWith('/bookings/booking-1');
+    window.removeEventListener('lorafilm:booking-changed', bookingChanged);
   });
 
   it('shows reconciliation guidance and does not present a false success', async () => {

@@ -12,6 +12,7 @@ import com.project.paymentservice.provider.PaymentSession;
 import com.project.paymentservice.provider.PaymentSessionRequest;
 import com.project.paymentservice.provider.ProviderCallbackResult;
 import com.project.paymentservice.provider.ProviderCrypto;
+import com.project.paymentservice.provider.ProviderHttpClientFactory;
 import com.project.paymentservice.provider.ProviderSessionUncertainException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
@@ -42,9 +43,8 @@ public class MomoPaymentProvider implements PaymentProvider {
         require(properties.getSecretKey(), "payment.providers.momo.secret-key");
         require(properties.getRedirectUrl(), "payment.providers.momo.redirect-url");
         require(properties.getIpnUrl(), "payment.providers.momo.ipn-url");
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                .build();
+        this.httpClient = ProviderHttpClientFactory.create(
+                Duration.ofMillis(properties.getConnectTimeoutMillis()));
     }
 
     @Override

@@ -28,13 +28,30 @@ import static org.mockito.Mockito.when;
 class ProviderReturnFallbackTest {
 
     @Test
-    void verifiedReturnOnlySchedulesAuthoritativeStatusQuery() {
+    void verifiedReturnImmediatelyUsesAuthoritativeStatusQuery() {
         Fixture fixture = fixture(true);
+        when(fixture.provider.queryStatus(fixture.payment))
+                .thenReturn(Optional.of(fixture.result));
 
         ProviderCallbackService.ReturnOutcome outcome = fixture.service.verifyReturn(
                 ProviderCode.VNPAY, Map.of("vnp_TxnRef", "PAY001"));
 
         assertEquals("payment-public-id", outcome.paymentPublicId());
+        verify(fixture.transactionService).applyProviderResult(
+                ProviderCode.VNPAY, fixture.result, null);
+        verify(fixture.transactionService, never())
+                .scheduleProviderStatusCheck(any(), any());
+    }
+
+    @Test
+    void verifiedReturnSchedulesRateLimitedRetryWhenProviderIsNotTerminal() {
+        Fixture fixture = fixture(true);
+        when(fixture.provider.queryStatus(fixture.payment)).thenReturn(Optional.empty());
+        when(fixture.provider.recoveryRetryDelaySeconds()).thenReturn(305);
+
+        fixture.service.verifyReturn(
+                ProviderCode.VNPAY, Map.of("vnp_TxnRef", "PAY001"));
+
         verify(fixture.transactionService).scheduleProviderStatusCheck(
                 eq(13L), any());
         verify(fixture.transactionService, never()).applyProviderResult(
@@ -91,12 +108,14 @@ class ProviderReturnFallbackTest {
                 paymentRepository,
                 transactionService,
                 new ObjectMapper());
-        return new Fixture(service, transactionService, result);
+        return new Fixture(service, transactionService, provider, payment, result);
     }
 
     private record Fixture(
             ProviderCallbackService service,
             PaymentTransactionService transactionService,
+            PaymentProvider provider,
+            Payment payment,
             ProviderCallbackResult result) {
     }
 }

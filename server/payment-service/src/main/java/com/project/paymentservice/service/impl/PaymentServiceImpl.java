@@ -139,7 +139,7 @@ public class PaymentServiceImpl implements PaymentService {
             payment = transactionService.finalizeProviderSession(
                     payment.getId(),
                     session,
-                    Instant.now().plusSeconds(runtimeProperties.getSettlementHoldSeconds()));
+                    normalSessionRecoveryAt(payment, session));
             CreatePaymentResponse response = PaymentMapper.toCreateResponse(payment, session.getPaymentUrl());
             idempotencyService.complete(
                     reservation.record().getId(), ownerToken, payment.getId(), 201, json(response));
@@ -167,6 +167,25 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException("PAYMENT_PROVIDER_UNAVAILABLE",
                     "Không thể khởi tạo phiên thanh toán", HttpStatus.BAD_GATEWAY);
         }
+    }
+
+    /**
+     * A normal provider session must not be queried while the customer is
+     * still completing checkout. VNPay rate-limits repeated QueryDR calls and
+     * reports them as duplicate requests, which can hide the terminal result.
+     * Browser Return/IPN triggers an earlier authoritative check; this value is
+     * only the lost-browser/lost-IPN safety net.
+     */
+    static Instant normalSessionRecoveryAt(Payment payment, PaymentSession session) {
+        Instant sessionExpiry = session.getExpiresAt();
+        Instant bookingExpiry = payment.getBookingExpiresAt();
+        if (sessionExpiry == null) {
+            return bookingExpiry;
+        }
+        if (bookingExpiry == null) {
+            return sessionExpiry;
+        }
+        return sessionExpiry.isBefore(bookingExpiry) ? sessionExpiry : bookingExpiry;
     }
 
     @Override

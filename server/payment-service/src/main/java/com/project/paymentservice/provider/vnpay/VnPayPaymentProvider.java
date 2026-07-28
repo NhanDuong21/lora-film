@@ -12,7 +12,10 @@ import com.project.paymentservice.provider.PaymentSession;
 import com.project.paymentservice.provider.PaymentSessionRequest;
 import com.project.paymentservice.provider.ProviderCallbackResult;
 import com.project.paymentservice.provider.ProviderCrypto;
+import com.project.paymentservice.provider.ProviderHttpClientFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.RoundingMode;
@@ -35,6 +38,7 @@ import java.util.UUID;
 @Component
 @ConditionalOnProperty(name = "payment.providers.vnpay.enabled", havingValue = "true")
 public class VnPayPaymentProvider implements PaymentProvider {
+    private static final Logger log = LoggerFactory.getLogger(VnPayPaymentProvider.class);
     private static final DateTimeFormatter PROVIDER_TIME =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
 
@@ -49,9 +53,8 @@ public class VnPayPaymentProvider implements PaymentProvider {
         require(properties.getHashSecret(), "payment.providers.vnpay.hash-secret");
         require(properties.getReturnUrl(), "payment.providers.vnpay.return-url");
         require(properties.getQueryUrl(), "payment.providers.vnpay.query-url");
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                .build();
+        this.httpClient = ProviderHttpClientFactory.create(
+                Duration.ofMillis(properties.getConnectTimeoutMillis()));
     }
 
     @Override
@@ -150,16 +153,24 @@ public class VnPayPaymentProvider implements PaymentProvider {
             HttpResponse<String> response = httpClient.send(
                     request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("VNPay QueryDR HTTP failure: txnRef={}, status={}",
+                        transactionCode, response.statusCode());
                 return Optional.empty();
             }
             Map<String, Object> raw = objectMapper.readValue(
                     response.body(), new TypeReference<Map<String, Object>>() {});
             Map<String, String> resultValues = toStrings(raw);
             if (!"00".equals(resultValues.get("vnp_ResponseCode"))) {
+                log.info("VNPay QueryDR deferred: txnRef={}, responseCode={}, message={}",
+                        transactionCode,
+                        resultValues.get("vnp_ResponseCode"),
+                        resultValues.getOrDefault("vnp_Message", ""));
                 return Optional.empty();
             }
             ProviderCallbackResult result = verifyQueryResponse(resultValues);
             if (!queryResponseIsTrusted(payment, transactionCode, resultValues, result)) {
+                log.warn("VNPay QueryDR response rejected by integrity checks: txnRef={}",
+                        transactionCode);
                 return Optional.empty();
             }
             String transactionStatus = resultValues.getOrDefault(
@@ -170,6 +181,8 @@ public class VnPayPaymentProvider implements PaymentProvider {
                     || "06".equals(transactionStatus)
                     || "07".equals(transactionStatus)
                     || "09".equals(transactionStatus)) {
+                log.info("VNPay QueryDR is not terminal yet: txnRef={}, transactionStatus={}",
+                        transactionCode, transactionStatus);
                 return Optional.empty();
             }
             return Optional.of(result);
@@ -177,6 +190,8 @@ public class VnPayPaymentProvider implements PaymentProvider {
             Thread.currentThread().interrupt();
             return Optional.empty();
         } catch (Exception exception) {
+            log.warn("VNPay QueryDR request failed: txnRef={}, error={}",
+                    transactionCode, exception.getClass().getSimpleName());
             return Optional.empty();
         }
     }
