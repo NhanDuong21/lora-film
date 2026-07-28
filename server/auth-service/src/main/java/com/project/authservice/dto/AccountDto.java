@@ -8,6 +8,8 @@ public class AccountDto {
     private Long id;
     private String email;
     private String roleName;
+    private RoleDto role;
+    private Boolean enabled;
     private AccountStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -19,6 +21,12 @@ public class AccountDto {
     }
     public String getRoleName() {
         return this.roleName;
+    }
+    public RoleDto getRole() {
+        return role;
+    }
+    public Boolean getEnabled() {
+        return enabled;
     }
     public AccountStatus getStatus() {
         return this.status;
@@ -37,6 +45,12 @@ public class AccountDto {
     }
     public void setRoleName(String roleName) {
         this.roleName = roleName;
+    }
+    public void setRole(RoleDto role) {
+        this.role = role;
+    }
+    public void setEnabled(Boolean enabled) {
+        this.enabled = enabled;
     }
     public void setStatus(AccountStatus status) {
         this.status = status;
@@ -64,6 +78,8 @@ public class AccountDto {
         private Long id;
         private String email;
         private String roleName;
+        private RoleDto role;
+        private Boolean enabled;
         private AccountStatus status;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
@@ -80,6 +96,14 @@ public class AccountDto {
             this.roleName = roleName;
             return this;
         }
+        public AccountDtoBuilder role(RoleDto role) {
+            this.role = role;
+            return this;
+        }
+        public AccountDtoBuilder enabled(Boolean enabled) {
+            this.enabled = enabled;
+            return this;
+        }
         public AccountDtoBuilder status(AccountStatus status) {
             this.status = status;
             return this;
@@ -93,7 +117,10 @@ public class AccountDto {
             return this;
         }
         public AccountDto build() {
-            return new AccountDto(this.id, this.email, this.roleName, this.status, this.createdAt, this.updatedAt);
+            AccountDto dto = new AccountDto(this.id, this.email, this.roleName, this.status, this.createdAt, this.updatedAt);
+            dto.setRole(this.role);
+            dto.setEnabled(this.enabled);
+            return dto;
         }
     }
 }

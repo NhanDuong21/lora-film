@@ -18,15 +18,19 @@ public class AccountController {
     private final AccountService accountService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Page<AccountDto>>> getAccounts(Pageable pageable) {
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SYSTEM_CONFIGURATION', 'EMPLOYEE_CREATE')")
+    public ResponseEntity<ApiResponse<Page<AccountDto>>> getAccounts(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) AccountStatus status,
+            @RequestParam(required = false) Long roleId,
+            Pageable pageable) {
         log.info("Get accounts called");
-        Page<AccountDto> accounts = accountService.getAccounts(pageable);
+        Page<AccountDto> accounts = accountService.getAccounts(keyword, status, roleId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Success", accounts));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')")
     public ResponseEntity<ApiResponse<AccountDto>> getAccountById(@PathVariable Long id) {
         log.info("Get account by id called: {}", id);
         AccountDto account = accountService.getAccountById(id);
@@ -34,7 +38,7 @@ public class AccountController {
     }
 
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')")
     public ResponseEntity<ApiResponse<AccountDto>> updateStatus(@PathVariable Long id, @RequestParam AccountStatus status) {
         log.info("Update account status called: id={}, status={}", id, status);
         AccountDto account = accountService.updateAccountStatus(id, status);
@@ -42,8 +46,8 @@ public class AccountController {
     }
 
     @PutMapping("/{id}/role")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<AccountDto>> updateRole(@PathVariable Long id, @RequestParam Integer roleId) {
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')")
+    public ResponseEntity<ApiResponse<AccountDto>> updateRole(@PathVariable Long id, @RequestParam Long roleId) {
         log.info("Update account role called: id={}, roleId={}", id, roleId);
         AccountDto account = accountService.updateAccountRole(id, roleId);
         return ResponseEntity.ok(ApiResponse.success("Role updated successfully", account));

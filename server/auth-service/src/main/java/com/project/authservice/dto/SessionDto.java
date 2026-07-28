@@ -5,13 +5,18 @@ import java.time.LocalDateTime;
 
 public class SessionDto {
     private Long id;
+    private String deviceName;
     private String ipAddress;
     private String userAgent;
     private LocalDateTime createdAt;
+    private LocalDateTime lastActiveAt;
     private LocalDateTime expiresAt;
     private Boolean isActive;
     public Long getId() {
         return this.id;
+    }
+    public String getDeviceName() {
+        return this.deviceName;
     }
     public String getIpAddress() {
         return this.ipAddress;
@@ -22,6 +27,9 @@ public class SessionDto {
     public LocalDateTime getCreatedAt() {
         return this.createdAt;
     }
+    public LocalDateTime getLastActiveAt() {
+        return this.lastActiveAt;
+    }
     public LocalDateTime getExpiresAt() {
         return this.expiresAt;
     }
@@ -30,6 +38,9 @@ public class SessionDto {
     }
     public void setId(Long id) {
         this.id = id;
+    }
+    public void setDeviceName(String deviceName) {
+        this.deviceName = deviceName;
     }
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
@@ -40,6 +51,9 @@ public class SessionDto {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
+    public void setLastActiveAt(LocalDateTime lastActiveAt) {
+        this.lastActiveAt = lastActiveAt;
+    }
     public void setExpiresAt(LocalDateTime expiresAt) {
         this.expiresAt = expiresAt;
     }
@@ -48,11 +62,15 @@ public class SessionDto {
     }
     public SessionDto() {
     }
-    public SessionDto(Long id, String ipAddress, String userAgent, LocalDateTime createdAt, LocalDateTime expiresAt, Boolean isActive) {
+    public SessionDto(Long id, String deviceName, String ipAddress, String userAgent,
+                      LocalDateTime createdAt, LocalDateTime lastActiveAt,
+                      LocalDateTime expiresAt, Boolean isActive) {
         this.id = id;
+        this.deviceName = deviceName;
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;
         this.createdAt = createdAt;
+        this.lastActiveAt = lastActiveAt;
         this.expiresAt = expiresAt;
         this.isActive = isActive;
     }
@@ -61,14 +79,20 @@ public class SessionDto {
     }
     public static class SessionDtoBuilder {
         private Long id;
+        private String deviceName;
         private String ipAddress;
         private String userAgent;
         private LocalDateTime createdAt;
+        private LocalDateTime lastActiveAt;
         private LocalDateTime expiresAt;
         private Boolean isActive;
         SessionDtoBuilder() {}
         public SessionDtoBuilder id(Long id) {
             this.id = id;
+            return this;
+        }
+        public SessionDtoBuilder deviceName(String deviceName) {
+            this.deviceName = deviceName;
             return this;
         }
         public SessionDtoBuilder ipAddress(String ipAddress) {
@@ -83,6 +107,10 @@ public class SessionDto {
             this.createdAt = createdAt;
             return this;
         }
+        public SessionDtoBuilder lastActiveAt(LocalDateTime lastActiveAt) {
+            this.lastActiveAt = lastActiveAt;
+            return this;
+        }
         public SessionDtoBuilder expiresAt(LocalDateTime expiresAt) {
             this.expiresAt = expiresAt;
             return this;
@@ -92,7 +120,8 @@ public class SessionDto {
             return this;
         }
         public SessionDto build() {
-            return new SessionDto(this.id, this.ipAddress, this.userAgent, this.createdAt, this.expiresAt, this.isActive);
+            return new SessionDto(this.id, this.deviceName, this.ipAddress, this.userAgent,
+                    this.createdAt, this.lastActiveAt, this.expiresAt, this.isActive);
         }
     }
 }

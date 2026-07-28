@@ -11,6 +11,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 
 import com.project.authservice.entity.Account;
 import com.project.authservice.entity.Permission;
@@ -20,7 +22,10 @@ import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.repository.PermissionRepository;
 import com.project.authservice.repository.RoleRepository;
 
+import static com.project.authservice.util.SensitiveDataMasker.maskEmail;
+
 @Configuration
+@ConditionalOnProperty(prefix = "app.bootstrap", name = "enabled", havingValue = "true")
 public class SystemBootstrap {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SystemBootstrap.class);
 
@@ -28,6 +33,12 @@ public class SystemBootstrap {
     private final PermissionRepository permissionRepository;
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${app.bootstrap.admin-email:}")
+    private String adminEmail;
+
+    @Value("${app.bootstrap.admin-password:}")
+    private String adminPassword;
 
     public SystemBootstrap(
             RoleRepository roleRepository,
@@ -145,16 +156,8 @@ public class SystemBootstrap {
     }
 
     private void createRoleIfNotExists(String code, String name, Set<Permission> permissions) {
-        roleRepository.findByRoleName(code).ifPresentOrElse(
-            r -> {
-                log.debug("Role {} already exists.", code);
-                // Ensure permissions are updated if needed
-                if (r.getPermissions() == null || r.getPermissions().size() != permissions.size()) {
-                    r.setPermissions(permissions);
-                    roleRepository.save(r);
-                    log.info("Updated permissions for role {}", code);
-                }
-            },
+        roleRepository.findByCode(code).ifPresentOrElse(
+            r -> log.debug("Role {} already exists.", code),
             () -> {
                 Role r = Role.builder()
                     .code(code)
@@ -170,18 +173,22 @@ public class SystemBootstrap {
 
     @Transactional
     protected void initializeAdminAccount() {
-        String adminEmail = "admin@admin.com";
+        if (adminEmail == null || adminEmail.isBlank() || adminPassword == null || adminPassword.isBlank()) {
+            log.warn("Bootstrap admin credentials are not configured; default admin creation was skipped");
+            return;
+        }
+        adminEmail = adminEmail.trim().toLowerCase(java.util.Locale.ROOT);
         if (accountRepository.existsByEmail(adminEmail)) {
-            log.debug("Admin account {} already exists.", adminEmail);
+            log.debug("Admin account {} already exists.", maskEmail(adminEmail));
             return;
         }
 
-        Role adminRole = roleRepository.findByRoleName("ADMIN")
+        Role adminRole = roleRepository.findByCode("ADMIN")
             .orElseThrow(() -> new RuntimeException("ADMIN role not found"));
 
         Account admin = Account.builder()
             .email(adminEmail)
-            .passwordHash(passwordEncoder.encode("Admin@123456"))
+            .passwordHash(passwordEncoder.encode(adminPassword))
             .status(AccountStatus.ACTIVE)
             .isEnabled(true)
             .isDeleted(false)
@@ -189,7 +196,7 @@ public class SystemBootstrap {
             .build();
 
         accountRepository.save(admin);
-        log.info("Created default admin account: {}", adminEmail);
+        log.info("Created default admin account: {}", maskEmail(adminEmail));
     }
 
     private static class PermissionData {
