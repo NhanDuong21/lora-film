@@ -681,6 +681,10 @@ CREATE TABLE `outbox_events`
     `created_at`
         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+    `updated_at`
+        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
     UNIQUE KEY `uk_outbox_event`
         (`event_id`),
 
