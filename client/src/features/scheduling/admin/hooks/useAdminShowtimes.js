@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 
-export default function useAdminShowtimes({ triggerToast } = {}) {
+export default function useAdminShowtimes({ triggerToast, initialFilters } = {}) {
   const [showtimes, setShowtimes] = useState([]);
   const [cinemas, setCinemas] = useState([]);
   const [movies, setMovies] = useState([]);
@@ -14,18 +14,19 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
   const [cinemaSlug, setCinemaSlug] = useState('');
   const [movieSlug, setMovieSlug] = useState('');
   const [date, setDate] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(initialFilters?.status || '');
   const [format, setFormat] = useState('');
   const [audioLanguage, setAudioLanguage] = useState('');
   const [subtitleLanguage, setSubtitleLanguage] = useState('');
-  const [batchId, setBatchId] = useState('');
-  const [source, setSource] = useState('');
+  const [batchId, setBatchId] = useState(initialFilters?.batchId || '');
+  const [source, setSource] = useState(initialFilters?.source || '');
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const requestGenerationRef = useRef(0);
 
   // Fetch initial options
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
   }, []);
 
   const fetchShowtimes = useCallback(async () => {
+    const requestGeneration = ++requestGenerationRef.current;
     setIsLoading(true);
     try {
       const params = {
@@ -65,16 +67,20 @@ export default function useAdminShowtimes({ triggerToast } = {}) {
       if (source?.trim() && source !== 'ALL') params.source = source.trim();
 
       const res = await adminShowtimeService.getShowtimes(params);
-      if (res?.success && res?.data) {
+      if (requestGeneration === requestGenerationRef.current && res?.success && res?.data) {
         setShowtimes(res.data.data || []);
         setTotalPages(res.data.totalPages || 0);
         setTotalElements(res.data.totalElements || 0);
       }
     // eslint-disable-next-line no-unused-vars
     } catch (err) {
-      triggerToast?.('Không thể tải danh sách suất chiếu', 'error');
+      if (requestGeneration === requestGenerationRef.current) {
+        triggerToast?.('Không thể tải danh sách suất chiếu', 'error');
+      }
     } finally {
-      setIsLoading(false);
+      if (requestGeneration === requestGenerationRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [
     currentPage, pageSize, 

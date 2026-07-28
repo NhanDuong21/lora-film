@@ -89,6 +89,7 @@ export const SCORE_COMPONENT_PRESENTATION = Object.freeze({
   earlySlot: 'Đầu ca vận hành',
   auditoriumFit: 'Mức phù hợp phòng chiếu',
   scheduleContinuity: 'Độ liền mạch lịch phòng',
+  coverageSearchAdjustment: 'Điều chỉnh cân bằng phim',
 });
 
 export const BATCH_STATUS_REASON_PRESENTATION = Object.freeze({

@@ -176,22 +176,22 @@ class AutoScheduleGenerationQueryBudgetIntegrationTest {
     }
 
     @Test
-    void dormantS4ContextAddsExactlyOneBoundedCoverageRead() {
+    void activeS5ContextAddsExactlyOneBoundedCoverageRead() {
         clearRepositoryInvocations();
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         statistics.clear();
         NormalizedGeneratePreviewRequest normalized = new NormalizedGeneratePreviewRequest(
                 cinema.getPublicId(), scheduleDate, scheduleDate,
                 List.of(version.getPublicId()), List.of(auditoriums.getFirst().getPublicId()),
-                15, 60, "s4-context-" + UUID.randomUUID());
+                15, 60, "s5-context-" + UUID.randomUUID());
 
         long started = System.nanoTime();
         AutoScheduleGenerationContext context = contextLoader.load(
                 normalized, cinema, List.of(auditoriums.getFirst()), List.of(version),
-                AutoScheduleStrategyVersions.BALANCED_V1_S4);
+                AutoScheduleStrategyVersions.BALANCED_V1_S5);
         long wallNanos = System.nanoTime() - started;
 
-        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S4, context.getStrategyVersion());
+        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5, context.getStrategyVersion());
         assertEquals(0, context.getExistingShowtimeCounts().size());
         verify(operatingHourRepository).findByCinemaId(cinema.getId());
         verify(closureRepository).findOverlappingClosures(eq(cinema.getId()), any(), any());
@@ -204,7 +204,7 @@ class AutoScheduleGenerationQueryBudgetIntegrationTest {
                 maintenanceRepository, showtimeRepository);
 
         System.out.printf(Locale.ROOT,
-                "S4_CONTEXT_QUERY_BENCHMARK contextRepositoryReads=5 totalGenerationReads=9 "
+                "S5_CONTEXT_QUERY_BENCHMARK contextRepositoryReads=5 totalGenerationReads=9 "
                         + "coverageFacts=%d preparedStatements=%d wallMs=%.3f db=H2 profile=test%n",
                 context.getExistingShowtimeCounts().size(), statistics.getPrepareStatementCount(),
                 wallNanos / 1_000_000.0);
@@ -236,12 +236,14 @@ class AutoScheduleGenerationQueryBudgetIntegrationTest {
         verify(maintenanceRepository).findActiveOverlapsForAutoSchedule(
                 anyList(), eq(ActionStatus.ACTIVE), any(), any());
         verify(showtimeRepository).findBlockingFactsForAutoSchedule(anyList(), any(), any());
+        verify(showtimeRepository).findCoverageFactsForAutoSchedule(
+                eq(cinema.getId()), eq(List.of(version.getMovie().getId())), anyList(), any(), any());
         verifyNoMoreInteractions(cinemaRepository, previewRepository, auditoriumRepository,
                 movieVersionRepository, operatingHourRepository, closureRepository,
                 maintenanceRepository, showtimeRepository);
 
         System.out.printf(Locale.ROOT,
-                "S2_QUERY_BENCHMARK label=%s candidates=%d repositoryReads=8 contextReads=7 " +
+                "S5_QUERY_BENCHMARK label=%s candidates=%d repositoryReads=9 contextReads=5 " +
                         "preparedStatements=%d wallMs=%.3f observedHeapDeltaBytes=%d jdk=%s os=%s db=H2 profile=test warmup=Spring-context-and-fixture-only%n",
                 label, expectedCandidates, statistics.getPrepareStatementCount(),
                 wallNanos / 1_000_000.0, usedAfter - usedBefore,

@@ -69,6 +69,44 @@ class BalancedV1S4AutoScheduleGenerationStrategyTest {
     }
 
     @Test
+    void equalScoreAlternativesDoNotCollapseSelectionToOneDeterministicMovie() {
+        List<ShowtimeCandidate> candidates = new ArrayList<>();
+        for (int slot = 0; slot < 8; slot++) {
+            Instant start = DAY_START.plus(slot * 60L, ChronoUnit.MINUTES);
+            Instant end = start.plus(60, ChronoUnit.MINUTES);
+            for (int movie = 0; movie < 4; movie++) {
+                String movieKey = Character.toString((char) ('a' + movie));
+                candidates.add(candidate(
+                        1L,
+                        "aud-1",
+                        10L + movie,
+                        "movie-" + movieKey,
+                        100L + movie * 10L + slot,
+                        movieKey + "-" + (slot + 1),
+                        DATE,
+                        start,
+                        end,
+                        "80.000"));
+            }
+        }
+
+        BalancedV1S4AutoScheduleGenerationStrategy.S4Diagnostics diagnostics = strategy(candidates)
+                .scoreAndResolveWithDiagnostics(candidates, scoringContext(candidates, Map.of()));
+
+        Set<String> selectedMovies = new TreeSet<>();
+        candidates.stream()
+                .filter(ShowtimeCandidate::isSelected)
+                .map(candidate -> candidate.getMovieVersionPublicId().substring(0, 1))
+                .forEach(selectedMovies::add);
+
+        assertEquals(Set.of("a", "b", "c", "d"), selectedMovies);
+        assertEquals(8, candidates.stream().filter(ShowtimeCandidate::isSelected).count());
+        assertEquals(4, diagnostics.coverageRoundCoveredGroupCount());
+        assertTrue(diagnostics.coverageRoundWon());
+        assertExactPersistedWisOptimum(candidates);
+    }
+
+    @Test
     void existingCinemaWideCoveragePreventsAlreadyCoveredMovieFromReceivingAnchor() {
         ShowtimeCandidate existingMovie = candidate(
                 1L, "aud-1", 10L, "movie-a", 101L, "a", DATE,

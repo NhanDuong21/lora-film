@@ -47,4 +47,65 @@ describe('useAdminShowtimes source and batch filters', () => {
       batchId: 'preview-2',
     }));
   });
+
+  it('uses URL-backed initial filters on the first request', async () => {
+    const { result } = renderHook(() => useAdminShowtimes({
+      initialFilters: {
+        source: 'AUTO',
+        batchId: 'preview-initial',
+        status: 'DRAFT',
+      },
+    }));
+
+    await act(async () => result.current.fetchShowtimes());
+
+    expect(adminShowtimeService.getShowtimes).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 10,
+      source: 'AUTO',
+      batchId: 'preview-initial',
+      status: 'DRAFT',
+    });
+  });
+
+  it('ignores a slower stale response after a newer filtered request completes', async () => {
+    let resolveUnfiltered;
+    let resolveFiltered;
+    adminShowtimeService.getShowtimes
+      .mockImplementationOnce(() => new Promise(resolve => { resolveUnfiltered = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveFiltered = resolve; }));
+    const { result } = renderHook(() => useAdminShowtimes());
+
+    let firstRequest;
+    await act(async () => {
+      firstRequest = result.current.fetchShowtimes();
+    });
+    act(() => {
+      result.current.setSource('AUTO');
+      result.current.setBatchId('preview-1');
+    });
+    await waitFor(() => expect(result.current.batchId).toBe('preview-1'));
+
+    let secondRequest;
+    await act(async () => {
+      secondRequest = result.current.fetchShowtimes();
+    });
+    await act(async () => {
+      resolveFiltered({
+        success: true,
+        data: { data: [{ publicId: 'filtered-showtime' }], totalPages: 1, totalElements: 1 },
+      });
+      await secondRequest;
+    });
+    expect(result.current.showtimes).toEqual([{ publicId: 'filtered-showtime' }]);
+
+    await act(async () => {
+      resolveUnfiltered({
+        success: true,
+        data: { data: [{ publicId: 'stale-unfiltered-showtime' }], totalPages: 1, totalElements: 1 },
+      });
+      await firstRequest;
+    });
+    expect(result.current.showtimes).toEqual([{ publicId: 'filtered-showtime' }]);
+  });
 });
