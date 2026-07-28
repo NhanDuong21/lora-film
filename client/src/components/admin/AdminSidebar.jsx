@@ -68,7 +68,9 @@ export default function AdminSidebar({
   const [collapsedSections, setCollapsedSections] = useState({
     noiDung: false,
     coSo: false,
-    vanHanhTaiChinh: false,
+    vanHanhDatVe: false,
+    thanhToan: false,
+    baoCao: false,
     khachHang: false,
     nhanSu: false,
     cauHinh: false
@@ -222,38 +224,72 @@ export default function AdminSidebar({
             </div>
           )}
 
-          {/* Section 4: Operations & Finance */}
-          {(isFullAdmin || isAccountantOnly) && <div className="space-y-1">
+          {/* Section 4: Booking operations */}
+          {isFullAdmin && <div className="space-y-1">
             <button
-              onClick={() => toggleSection('vanHanhTaiChinh')}
+              onClick={() => toggleSection('vanHanhDatVe')}
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
-              <span>Vận hành & Tài chính</span>
+              <span>Vận hành đặt vé</span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.vanHanhTaiChinh ? 'rotate-180' : ''
+                !collapsedSections.vanHanhDatVe ? 'rotate-180' : ''
               }`} />
             </button>
 
-            {!collapsedSections.vanHanhTaiChinh && (
+            {!collapsedSections.vanHanhDatVe && (
               <div className="space-y-0.5">
-                {isFullAdmin && <button onClick={() => handleTabClick('bookings', '#/admin/bookings')} className={getSubLinkClass('bookings')}>
+                <button onClick={() => handleTabClick('bookings', '#/admin/bookings')} className={getSubLinkClass('bookings')}>
                   <Ticket className="w-4 h-4 shrink-0" />
-                  <span>Quản lý vé & Đơn hàng</span>
-                </button>}
+                  <span>Đơn đặt vé & giữ ghế</span>
+                </button>
+                <button onClick={() => handleTabClick('concessions', '#/admin/concessions')} className={getSubLinkClass('concessions')}>
+                  <Coffee className="w-4 h-4 shrink-0" />
+                  <span>Danh mục bắp nước</span>
+                </button>
+              </div>
+            )}
+          </div>}
+
+          {/* Section 5: Payment operations */}
+          {(isFullAdmin || isAccountantOnly) && <div className="space-y-1">
+            <button
+              onClick={() => toggleSection('thanhToan')}
+              className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
+            >
+              <span>Thanh toán</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                !collapsedSections.thanhToan ? 'rotate-180' : ''
+              }`} />
+            </button>
+
+            {!collapsedSections.thanhToan && (
+              <div className="space-y-0.5">
                 <button onClick={() => handleTabClick('payments', '#/admin/payments')} className={getSubLinkClass('payments')}>
                   <CreditCard className="w-4 h-4 shrink-0" />
                   <span>Giao dịch & Đối soát</span>
                 </button>
+              </div>
+            )}
+          </div>}
+
+          {/* Section 6: Reports */}
+          {(isFullAdmin || isAccountantOnly) && <div className="space-y-1">
+            <button
+              onClick={() => toggleSection('baoCao')}
+              className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
+            >
+              <span>Báo cáo & phân tích</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                !collapsedSections.baoCao ? 'rotate-180' : ''
+              }`} />
+            </button>
+
+            {!collapsedSections.baoCao && (
+              <div className="space-y-0.5">
                 <button onClick={() => handleTabClick('finance', '#/admin/finance')} className={getSubLinkClass('finance')}>
                   <BarChart3 className="w-4 h-4 shrink-0" />
-                  <span>Báo cáo doanh thu</span>
+                  <span>Doanh thu tổng hợp</span>
                 </button>
-                {isFullAdmin && (
-                  <button onClick={() => handleTabClick('concessions', '#/admin/concessions')} className={getSubLinkClass('concessions')}>
-                    <Coffee className="w-4 h-4 shrink-0" />
-                    <span>Danh mục bắp nước</span>
-                  </button>
-                )}
                 <button onClick={() => handleTabClick('concession-sales', '#/admin/concession-sales')} className={getSubLinkClass('concession-sales')}>
                   <Coins className="w-4 h-4 shrink-0" />
                   <span>Doanh thu bắp nước</span>
@@ -262,7 +298,7 @@ export default function AdminSidebar({
             )}
           </div>}
 
-          {/* Section 5: Customers */}
+          {/* Section 7: Customers */}
           {(isFullAdmin || canManageCustomers) && <div className="space-y-1">
             <button
               onClick={() => toggleSection('khachHang')}
@@ -299,7 +335,7 @@ export default function AdminSidebar({
             )}
           </div>}
 
-          {/* Section 6: Human Resources */}
+          {/* Section 8: Human Resources */}
           {hasHumanResourcesAccess && <div className="space-y-1">
             <button
               onClick={() => toggleSection('nhanSu')}
@@ -333,7 +369,7 @@ export default function AdminSidebar({
             )}
           </div>}
 
-          {/* Section 7: Settings */}
+          {/* Section 9: Settings */}
           {hasSystemAccess && (
             <div className="space-y-1">
               <button
