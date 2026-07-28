@@ -100,6 +100,13 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
 	}
 
+	@ExceptionHandler(DuplicateResourceException.class)
+	public ResponseEntity<ApiResponse<Object>> handleDuplicateResourceException(DuplicateResourceException exception) {
+		log.warn("Duplicate resource: {}", exception.getMessage());
+		ApiResponse<Object> response = ApiResponse.error(exception.getMessage(), "CONFLICT");
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+	}
+
 	@ExceptionHandler(UnauthorizedException.class)
 	public ResponseEntity<ApiResponse<Object>> handleUnauthorizedException(UnauthorizedException exception) {
 		log.warn("Unauthorized: {}", exception.getMessage());

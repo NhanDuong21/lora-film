@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
+import static com.project.authservice.util.SensitiveDataMasker.maskEmail;
+
 @Service
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CustomOAuth2UserService.class);
@@ -50,7 +52,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     .orElseThrow(() -> new RuntimeException("Default role CUSTOMER not found"));
             account.setRole(customerRole);
             accountRepository.save(account);
-            log.info("Registered new user from OAuth2 provider {}: {}", registrationId, email);
+            log.info("Registered new user from OAuth2 provider {}: {}", registrationId, maskEmail(email));
         }
 
         return new CustomOAuth2User(oauth2User, account);

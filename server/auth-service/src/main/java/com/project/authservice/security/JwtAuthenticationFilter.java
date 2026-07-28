@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -30,26 +31,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
             
-            // Check blacklist
-            String tokenHash = com.project.authservice.util.RefreshTokenHashUtil.hash(token);
-            if (Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + tokenHash))) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                return;
-            }
-            
             try {
                 if (jwtUtil.validateToken(token)) {
+                    String tokenHash = com.project.authservice.util.RefreshTokenHashUtil.hash(token);
+                    Long accountId = jwtUtil.extractUserId(token);
+                    Long sessionId = jwtUtil.extractSessionId(token);
+                    if (isRevoked(tokenHash, accountId, sessionId, token)) {
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        return;
+                    }
                     String username = jwtUtil.extractUsername(token);
                     String role = jwtUtil.extractRole(token);
-                    
+                    var permissions = jwtUtil.extractPermissions(token);
+                    List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+                    authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+                    permissions.stream()
+                            .map(SimpleGrantedAuthority::new)
+                            .forEach(authorities::add);
+                    if (permissions.contains("PERM_ROOT_ACCESS")
+                            && !"ADMIN".equals(role) && !"ROLE_ADMIN".equals(role)) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+                    }
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                            username, null, Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role)));
+                            username, null, authorities);
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             } catch (Exception e) {
-                // Token invalid
-                logger.error("Could not set user authentication in security context", e);
+                logger.warn("Rejected invalid access token");
             }
         }
         
@@ -58,5 +67,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     public JwtAuthenticationFilter(JwtUtil jwtUtil, StringRedisTemplate redisTemplate) {
         this.jwtUtil = jwtUtil;
         this.redisTemplate = redisTemplate;
+    }
+
+    private boolean isRevoked(String tokenHash, Long accountId, Long sessionId, String token) {
+        if (Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + tokenHash))) {
+            return true;
+        }
+        if (sessionId != null && Boolean.TRUE.equals(redisTemplate.hasKey("revoked_session:" + sessionId))) {
+            return true;
+        }
+        String revokedAt = redisTemplate.opsForValue().get("account_revoked_after:" + accountId);
+        if (revokedAt == null) {
+            return false;
+        }
+        try {
+            return jwtUtil.extractIssuedAtMillis(token) < Long.parseLong(revokedAt);
+        } catch (NumberFormatException exception) {
+            return true;
+        }
     }
 }

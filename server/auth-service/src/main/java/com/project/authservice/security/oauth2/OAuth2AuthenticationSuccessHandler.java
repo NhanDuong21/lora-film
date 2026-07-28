@@ -11,6 +11,8 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationSu
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import org.springframework.beans.factory.annotation.Value;
 @Component
 public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
@@ -18,8 +20,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     private final AuthService authService;
 
-    @Value("${app.frontend.url:http://localhost:5173}")
-    private String frontendUrl;
+    @Value("${app.frontend.oauth2-redirect-url}")
+    private String oauth2RedirectUrl;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
@@ -29,9 +31,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             
             JwtResponse jwtResponse = authService.loginOAuth2(account, request);
             
-            String targetUrl = frontendUrl + "/oauth2/redirect" + 
-                    "?accessToken=" + jwtResponse.getAccessToken() + 
-                    "&refreshToken=" + jwtResponse.getRefreshToken() + 
+            String targetUrl = oauth2RedirectUrl +
+                    "#accessToken=" + encode(jwtResponse.getAccessToken()) +
+                    "&refreshToken=" + encode(jwtResponse.getRefreshToken()) +
                     "&expiresIn=" + jwtResponse.getExpiresIn();
             
             getRedirectStrategy().sendRedirect(request, response, targetUrl);
@@ -41,5 +43,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     }
     public OAuth2AuthenticationSuccessHandler(AuthService authService) {
         this.authService = authService;
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }
