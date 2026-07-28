@@ -12,6 +12,8 @@ import {
   seatSelectionPath,
   vietnamDateKey
 } from '@/features/catalog/customer/utils/customerMovieFlow';
+import MovieBannerCrossfade from '@/features/catalog/customer/components/MovieBannerCrossfade';
+import { getMovieBannerUrls } from '@/features/catalog/customer/utils/movieBanner';
 import { formatDuration, formatGenres, getYoutubeEmbedUrl } from '@/utils/formatters';
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop stop-color='%2327272a'/><stop offset='1' stop-color='%2309090b'/></linearGradient></defs><rect width='100%25' height='100%25' fill='url(%23g)'/><text x='50%25' y='47%25' text-anchor='middle' fill='%23ff7a00' font-family='sans-serif' font-size='28' font-weight='700'>LoraFilm</text><text x='50%25' y='53%25' text-anchor='middle' fill='%23a1a1aa' font-family='sans-serif' font-size='15'>Không có ảnh bìa</text></svg>";
@@ -163,6 +165,7 @@ export default function MovieDetailPage() {
 
   const poster = movie?.primaryPoster || movie?.media?.find(item => item.mediaType === 'POSTER')?.url || FALLBACK_POSTER;
   const backdrop = movie?.media?.find(item => item.mediaType === 'BACKDROP')?.url;
+  const banners = getMovieBannerUrls(movie?.media);
   const trailerUrl = movie?.media?.find(item => item.mediaType === 'TRAILER')?.url;
 
   if (loading) {
@@ -189,9 +192,13 @@ export default function MovieDetailPage() {
   return (
     <main className="min-h-screen bg-zinc-950 pb-20 text-zinc-100">
       <section className="relative isolate overflow-hidden border-b border-white/10">
-        {backdrop && <img src={backdrop} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />}
-        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-zinc-950 via-zinc-950/90 to-zinc-950/60" />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-zinc-950 via-transparent to-black/50" />
+        <MovieBannerCrossfade
+          images={banners}
+          fallbackImage={backdrop}
+          movieTitle={movie.title}
+        />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-zinc-950/85 via-zinc-950/70 to-zinc-950/25" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-zinc-950 via-zinc-950/10 to-black/35" />
         <div className="mx-auto grid max-w-7xl gap-9 px-6 py-12 md:grid-cols-[260px_1fr] lg:py-16">
           <img
             src={poster}
