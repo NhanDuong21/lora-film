@@ -33,6 +33,7 @@ const routeNameMap = {
   'finance': 'Tài chính',
   'concessions': 'Bắp nước',
   'concession-sales': 'Doanh thu bắp nước',
+  'me': 'Tài khoản của tôi',
 };
 
 export default function Breadcrumbs() {

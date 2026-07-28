@@ -19,6 +19,7 @@ export default function AdminLayout({ onBackHome }) {
   // Derive activeTab from pathname
   const activeTab = (() => {
     const path = location.pathname;
+    if (path.endsWith('/me')) return 'my-account';
     if (path.endsWith('/movies') || path.includes('/movies/')) return 'movies';
     if (path.endsWith('/genres')) return 'genres';
     if (path.includes('/showtimes')) return 'showtimes';

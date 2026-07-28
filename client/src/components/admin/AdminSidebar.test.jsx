@@ -41,6 +41,14 @@ describe('AdminSidebar', () => {
     expect(screen.queryByText('Vận hành & Tài chính')).not.toBeInTheDocument();
   });
 
+  it('uses one admin account entry instead of customer profile links', () => {
+    renderSidebar();
+
+    expect(screen.getByRole('button', { name: 'Tài khoản của tôi' })).toBeInTheDocument();
+    expect(screen.queryByText('Hồ sơ của tôi')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bảo mật')).not.toBeInTheDocument();
+  });
+
   it('allows each operational group to be collapsed independently', () => {
     renderSidebar();
 

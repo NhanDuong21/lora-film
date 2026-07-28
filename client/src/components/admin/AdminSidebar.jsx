@@ -433,19 +433,16 @@ export default function AdminSidebar({
             </div>
           </div>
           <div className="flex flex-col gap-1 border-t border-zinc-800 pt-3 mt-1">
-            <button 
-              onClick={() => handleTabClick('my-profile', '#/profile')}
-              className="flex items-center justify-start gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors rounded hover:bg-zinc-800/50"
+            <button
+              onClick={() => handleTabClick('my-account', '#/admin/me')}
+              className={`flex items-center justify-start gap-2.5 rounded px-2 py-2 text-xs font-semibold transition-colors ${
+                activeTab === 'my-account'
+                  ? 'bg-brand-orange/10 text-brand-orange'
+                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
+              }`}
             >
               <UserCircle className="w-3.5 h-3.5" />
-              <span>Hồ sơ của tôi</span>
-            </button>
-            <button 
-              onClick={() => handleTabClick('my-security', '#/profile?tab=security')}
-              className="flex items-center justify-start gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors rounded hover:bg-zinc-800/50"
-            >
-              <Key className="w-3.5 h-3.5" />
-              <span>Bảo mật</span>
+              <span>Tài khoản của tôi</span>
             </button>
             <div className="flex items-center justify-between pt-2 mt-1 border-t border-zinc-800/50">
               <button 
