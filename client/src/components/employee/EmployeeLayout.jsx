@@ -5,7 +5,8 @@ import {
   Calendar, 
   LogOut, 
   Home,
-  User
+  User,
+  DollarSign
 } from 'lucide-react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -24,6 +25,7 @@ export default function EmployeeLayout() {
     if (path.endsWith('/pos')) return 'pos';
     if (path.endsWith('/checkin')) return 'checkin';
     if (path.endsWith('/schedules')) return 'schedules';
+    if (path.endsWith('/payroll')) return 'payroll';
     return 'pos';
   })();
 
@@ -83,6 +85,18 @@ export default function EmployeeLayout() {
             >
               <Calendar className="w-4 h-4 mr-3 shrink-0" />
               <span>Xem Lịch Chiếu</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/employee/payroll')}
+              className={`w-full text-left justify-start items-center flex pl-9 py-2.5 text-sm rounded-xl transition-all duration-200 ${
+                activeTab === 'payroll'
+                  ? 'text-amber-400 bg-amber-500/10 border-l-4 border-amber-500 font-semibold'
+                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
+              }`}
+            >
+              <DollarSign className="w-4 h-4 mr-3 shrink-0" />
+              <span>Lương Của Tôi</span>
             </button>
           </nav>
         </div>

@@ -31,7 +31,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = authHeader.substring(7);
             
             // Check blacklist
-            if (redisTemplate.hasKey("blacklist:" + token)) {
+            String tokenHash = com.project.authservice.util.RefreshTokenHashUtil.hash(token);
+            if (Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + tokenHash))) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }

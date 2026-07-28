@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { register, getRegistrationStatus } from "@/features/auth/services/authService";
+import { register } from "@/features/auth/services/authService";
 import CustomerNoticeModal from "@/components/common/CustomerNoticeModal";
 import { getCustomerErrorMessage } from "@/utils/customerErrorMessages";
 
@@ -30,20 +30,7 @@ function Register() {
         return error;
     };
 
-    const waitUntilOtpIsReady = async (requestId) => {
-        for (let attempt = 0; attempt < 40; attempt += 1) {
-            const status = await getRegistrationStatus(requestId);
-            if (status?.status === "AWAITING_VERIFICATION") return;
-            if (status?.status === "FAILED" || status?.status === "EXPIRED") {
-                throw registrationError(status.errorCode, "Registration validation failed");
-            }
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        throw registrationError(
-            "REGISTRATION_VALIDATION_TIMEOUT",
-            "Registration validation timed out"
-        );
-    };
+
 
     useEffect(() => {
         document.title = "Đăng Ký Tài Khoản - LoraFilm";

@@ -23,7 +23,11 @@ import {
   Zap,
   BadgeDollarSign,
   BarChart3,
-  Award
+  Award,
+  Key,
+  ShieldAlert,
+  UserCircle,
+  FileSearch
 } from 'lucide-react';
 
 export default function AdminSidebar({ 
@@ -262,6 +266,14 @@ export default function AdminSidebar({
                       <Shield className="w-4 h-4 shrink-0" />
                       <span>Nhân viên</span>
                     </button>
+                    <button onClick={() => handleTabClick('departments', '#/admin/departments')} className={getSubLinkClass('departments')}>
+                      <Building className="w-4 h-4 shrink-0" />
+                      <span>Phòng ban</span>
+                    </button>
+                    <button onClick={() => handleTabClick('positions', '#/admin/positions')} className={getSubLinkClass('positions')}>
+                      <BadgeDollarSign className="w-4 h-4 shrink-0" />
+                      <span>Vị trí</span>
+                    </button>
                   </>
                 )}
                 <button onClick={() => handleTabClick('payroll', '#/admin/payroll')} className={getSubLinkClass('payroll')}>
@@ -290,6 +302,22 @@ export default function AdminSidebar({
                   <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
                     <Sliders className="w-4 h-4 shrink-0" />
                     <span>Cấu hình chung</span>
+                  </button>
+                  <button onClick={() => handleTabClick('roles', '#/admin/roles')} className={getSubLinkClass('roles')}>
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    <span>Quản lý vai trò (Role)</span>
+                  </button>
+                  <button onClick={() => handleTabClick('permissions', '#/admin/permissions')} className={getSubLinkClass('permissions')}>
+                    <Key className="w-4 h-4 shrink-0" />
+                    <span>Quản lý quyền hạn (Permission)</span>
+                  </button>
+                  <button onClick={() => handleTabClick('accounts', '#/admin/accounts')} className={getSubLinkClass('accounts')}>
+                    <UserCircle className="w-4 h-4 shrink-0" />
+                    <span>Quản lý tài khoản (Account)</span>
+                  </button>
+                  <button onClick={() => handleTabClick('audits', '#/admin/audits')} className={getSubLinkClass('audits')}>
+                    <FileSearch className="w-4 h-4 shrink-0" />
+                    <span>Nhật ký truy cập (Audit)</span>
                   </button>
                 </div>
               )}

@@ -28,6 +28,7 @@ public class AuthController {
 	private final AuthService authService;
 	private final VerificationService verificationService;
 	private final com.project.authservice.util.JwtUtil jwtUtil;
+	private final com.project.authservice.service.AccountService accountService;
 
 	/**
 	 * Registers a new user.
@@ -111,6 +112,7 @@ public class AuthController {
 			String token = authHeader.substring(7);
 			String email = jwtUtil.extractUsername(token);
 			authService.logoutAll(email);
+			authService.logout(token);
 		}
 		return ResponseEntity.ok(ApiResponse.success("Logged out from all devices", null));
 	}
@@ -140,14 +142,13 @@ public class AuthController {
 	@org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
 	public ResponseEntity<ApiResponse<com.project.authservice.dto.AccountDto>> getMe(@org.springframework.security.core.annotation.AuthenticationPrincipal String username) {
 		log.info("Get me endpoint called for user={}", username);
-		com.project.authservice.dto.AccountDto account = ((com.project.authservice.service.AccountService) org.springframework.web.context.support.WebApplicationContextUtils.getRequiredWebApplicationContext(
-				((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest().getServletContext()
-		).getBean(com.project.authservice.service.AccountService.class)).getAccountByEmail(username);
+		com.project.authservice.dto.AccountDto account = accountService.getAccountByEmail(username);
 		return ResponseEntity.ok(ApiResponse.success("Success", account));
 	}
-    public AuthController(AuthService authService, VerificationService verificationService, com.project.authservice.util.JwtUtil jwtUtil) {
+    public AuthController(AuthService authService, VerificationService verificationService, com.project.authservice.util.JwtUtil jwtUtil, com.project.authservice.service.AccountService accountService) {
         this.authService = authService;
         this.verificationService = verificationService;
         this.jwtUtil = jwtUtil;
+        this.accountService = accountService;
     }
 }

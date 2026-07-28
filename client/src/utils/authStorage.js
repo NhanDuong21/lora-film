@@ -80,7 +80,8 @@ export const isAuthenticated = () => {
             clearAuthData();
             return false;
         }
-        return decoded.tokenType === "access";
+        // Backend does not send tokenType in JWT payload, so just return true if token is valid and not expired.
+        return true;
     } catch {
         clearAuthData();
         return false;

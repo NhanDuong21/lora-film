@@ -13,8 +13,18 @@ const apiClient = axios.create({
 // Request Interceptor
 apiClient.interceptors.request.use(
     (config) => {
-        // Do not attach Authorization if it's CCCD or other external URLs
-        if (config.url && !config.url.includes("/api/cccd")) {
+        const isPublicAuthEndpoint = config.url && (
+            config.url.includes("/api/auth/login") ||
+            config.url.includes("/api/auth/register") ||
+            config.url.includes("/api/auth/verify") ||
+            config.url.includes("/api/auth/send-otp") ||
+            config.url.includes("/api/auth/refresh-token") ||
+            config.url.includes("/api/auth/forgot-password") ||
+            config.url.includes("/api/auth/reset-password")
+        );
+
+        // Do not attach Authorization if it's CCCD, external URLs, or public auth endpoints
+        if (config.url && !config.url.includes("/api/cccd") && !isPublicAuthEndpoint) {
             const token = getAuthToken();
             if (token) {
                 config.headers["Authorization"] = `Bearer ${token}`;

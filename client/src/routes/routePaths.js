@@ -18,6 +18,7 @@ export const routePaths = {
     pos: '/employee/pos',
     checkin: '/employee/checkin',
     schedules: '/employee/schedules',
+    employeePayroll: '/employee/payroll',
   },
   admin: {
     root: '/admin',
@@ -34,10 +35,16 @@ export const routePaths = {
     showtimes: '/admin/showtimes',
     pricing: '/admin/pricing',
     staff: '/admin/staff',
+    departments: '/admin/departments',
+    positions: '/admin/positions',
     concessionSales: '/admin/concession-sales',
     payroll: '/admin/payroll',
     rooms: '/admin/rooms',
     roomCreate: '/admin/rooms/create',
     roomEdit: '/admin/rooms/edit/:roomId',
+    roles: '/admin/roles',
+    permissions: '/admin/permissions',
+    accounts: '/admin/accounts',
+    audits: '/admin/audits',
   }
 };

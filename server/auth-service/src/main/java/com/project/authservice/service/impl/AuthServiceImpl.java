@@ -652,7 +652,7 @@ public class AuthServiceImpl implements AuthService {
 				.orElseThrow(() -> new ResourceNotFoundException("Account not found"));
 				
 		if (!passwordEncoder.matches(request.getOldPassword(), account.getPasswordHash())) {
-			throw new RuntimeException("Old password incorrect");
+			throw new com.project.authservice.exception.BusinessException("Old password incorrect");
 		}
 		
 		account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));

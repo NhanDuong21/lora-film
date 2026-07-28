@@ -57,6 +57,9 @@ public class SecurityConfig {
 						.successHandler(oAuth2AuthenticationSuccessHandler)
 						.failureHandler(oAuth2AuthenticationFailureHandler)
 				)
+				.exceptionHandling(exceptions -> exceptions
+						.authenticationEntryPoint(new org.springframework.security.web.authentication.HttpStatusEntryPoint(org.springframework.http.HttpStatus.UNAUTHORIZED))
+				)
 				.addFilterBefore(jwtAuthenticationFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
 		return http.build();
 	}

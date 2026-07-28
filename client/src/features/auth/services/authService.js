@@ -6,10 +6,6 @@ export const register = async (userData) => {
     return response.data;
 };
 
-export const getRegistrationStatus = async (requestId) => {
-    const response = await apiClient.get(`/api/auth/registrations/${encodeURIComponent(requestId)}/status`);
-    return response.data?.data;
-};
 
 export const verifyOtp = async (email, otpCode, purpose = "REGISTRATION") => {
     const response = await apiClient.post(`/api/auth/verify`, {
@@ -61,6 +57,14 @@ export const resetPassword = async (token, newPassword) =>
 
 export const changePassword = async (oldPassword, newPassword) =>
     (await apiClient.post("/api/auth/change-password", { oldPassword, newPassword })).data;
+
+export const logout = async () => {
+    try {
+        await apiClient.post('/api/auth/logout');
+    } finally {
+        clearAuthData();
+    }
+};
 
 export const getSessions = async () =>
     (await apiClient.get("/api/auth/sessions")).data?.data || [];

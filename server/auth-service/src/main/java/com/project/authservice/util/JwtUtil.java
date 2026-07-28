@@ -25,6 +25,7 @@ public class JwtUtil {
 				.subject(email)
 				.claim("userId", userId)
 				.claim("role", role)
+				.claim("tokenType", "access")
 				.issuedAt(new Date())
 				.expiration(new Date((new Date()).getTime() + jwtExpirationMs))
 				.signWith(key())
