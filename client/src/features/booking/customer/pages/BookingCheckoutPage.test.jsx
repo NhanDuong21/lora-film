@@ -135,6 +135,16 @@ describe('BookingCheckoutPage cancellation', () => {
     fireEvent.click(await screen.findByRole('button', {
       name: /xác nhận & tiếp tục/i
     }));
+    const momoLogo = screen.getByRole('img', { name: 'Logo MoMo' });
+    expect(momoLogo).toHaveAttribute(
+      'src',
+      'https://upload.wikimedia.org/wikipedia/commons/a/a0/MoMo_Logo_App.svg'
+    );
+    fireEvent.error(momoLogo);
+    expect(momoLogo).toHaveAttribute(
+      'src',
+      expect.stringContaining('res.cloudinary.com/dqc4hufot')
+    );
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', {
       name: /thanh toán qua vnpay/i

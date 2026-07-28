@@ -33,6 +33,8 @@ import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
 
+const MOMO_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/a/a0/MoMo_Logo_App.svg';
+const MOMO_LOGO_FALLBACK_URL = 'https://res.cloudinary.com/dqc4hufot/image/upload/f_auto,q_auto,w_96/logo_jg9h5v.png';
 const CONCESSION_PAGE_SIZE = 12;
 
 const formatCurrency = value => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
@@ -921,7 +923,19 @@ export default function BookingCheckoutPage() {
                       }`}
                     >
                       <div className="w-12 aspect-[4/3] bg-pink-100 rounded-lg p-2 flex items-center justify-center">
-                        <img src="https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png" alt="Momo Logo" className="max-h-full max-w-full object-contain" />
+                        <img
+                          src={MOMO_LOGO_URL}
+                          alt="Logo MoMo"
+                          width="48"
+                          height="36"
+                          decoding="async"
+                          onError={event => {
+                            if (event.currentTarget.dataset.fallbackApplied) return;
+                            event.currentTarget.dataset.fallbackApplied = 'true';
+                            event.currentTarget.src = MOMO_LOGO_FALLBACK_URL;
+                          }}
+                          className="max-h-full max-w-full object-contain"
+                        />
                       </div>
                       <div>
                         <h4 className="text-xs font-black text-zinc-200">MoMo</h4>
