@@ -1,4 +1,12 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Clock, AlertTriangle, Search, ShieldCheck, CreditCard } from 'lucide-react';
 import {
@@ -21,8 +29,134 @@ import {
   paymentErrorCode,
   paymentErrorMessage
 } from '@/features/payment/services/paymentService';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
+
+const CONCESSION_PAGE_SIZE = 12;
+
+const formatCurrency = value => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
+
+const secondsUntil = expiresAt => {
+  const deadline = new Date(expiresAt).getTime();
+  if (!Number.isFinite(deadline)) return 0;
+  return Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+};
+
+const BookingCountdown = memo(function BookingCountdown({
+  expiresAt,
+  onExpire,
+  className = ''
+}) {
+  const [seconds, setSeconds] = useState(() => secondsUntil(expiresAt));
+  const notifiedRef = useRef(false);
+
+  useEffect(() => {
+    notifiedRef.current = false;
+    const update = () => {
+      const remaining = secondsUntil(expiresAt);
+      setSeconds(current => current === remaining ? current : remaining);
+      if (remaining === 0 && !notifiedRef.current) {
+        notifiedRef.current = true;
+        onExpire();
+      }
+    };
+
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [expiresAt, onExpire]);
+
+  const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const remainingSeconds = String(seconds % 60).padStart(2, '0');
+
+  return (
+    <span className={`${className} ${seconds < 60 ? 'text-red-500 animate-pulse' : 'text-amber-500'}`}>
+      {minutes}:{remainingSeconds}
+    </span>
+  );
+});
+
+const ConcessionProductCard = memo(function ConcessionProductCard({
+  item,
+  quantity,
+  isUpdating,
+  disabled,
+  onQuantityChange
+}) {
+  const imageUrl = getOptimizedImageUrl(item.imageUrl, { width: 192, height: 192 });
+
+  return (
+    <article
+      className="relative flex min-h-40 gap-4 overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-900 p-4 transition-colors hover:border-zinc-700/80"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '160px' }}
+    >
+      <div className="relative flex aspect-square w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/60">
+        <span className="px-2 text-center text-[8px] font-bold text-zinc-600">Chưa có ảnh</span>
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt={item.name}
+            width="80"
+            height="80"
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={event => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        )}
+      </div>
+
+      <div className="flex flex-grow flex-col justify-between space-y-3 py-0.5">
+        <div className="space-y-1">
+          <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-zinc-400">
+            {item.type || 'Combo'}
+          </span>
+          <h4 className="line-clamp-1 text-xs font-black leading-snug text-white">{item.name}</h4>
+          <p className="line-clamp-2 text-[9px] leading-normal text-zinc-500">{item.description}</p>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black text-brand-orange">{formatCurrency(item.price)}</span>
+          <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-1">
+            <button
+              type="button"
+              aria-label={`Giảm số lượng ${item.name}`}
+              disabled={quantity === 0 || isUpdating || disabled}
+              onClick={() => onQuantityChange(item, false, quantity)}
+              className={`flex h-6 w-6 items-center justify-center rounded text-xs font-black transition-colors ${
+                quantity > 0 && !isUpdating && !disabled
+                  ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                  : 'cursor-not-allowed text-zinc-700'
+              }`}
+            >
+              -
+            </button>
+            <span className="w-5 text-center text-xs font-bold text-zinc-200">
+              {isUpdating ? '...' : quantity}
+            </span>
+            <button
+              type="button"
+              aria-label={`Tăng số lượng ${item.name}`}
+              disabled={isUpdating || disabled}
+              onClick={() => onQuantityChange(item, true, quantity)}
+              className={`flex h-6 w-6 items-center justify-center rounded text-xs font-black transition-colors ${
+                !isUpdating && !disabled
+                  ? 'bg-brand-orange text-white hover:bg-opacity-90'
+                  : 'cursor-not-allowed text-zinc-700'
+              }`}
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+});
 
 const getBookingStatus = booking => booking?.bookingStatus || booking?.status;
 
@@ -103,15 +237,17 @@ export default function BookingCheckoutPage() {
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [catalogPage, setCatalogPage] = useState(1);
   
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
   const [userScore, setUserScore] = useState(null);
   const lastTerminalNoticeRef = useRef(null);
-
-  // Countdown timer state
-  const [timeLeft, setTimeLeft] = useState(null);
+  const cartUpdatingRef = useRef(false);
+  const expirationHandledRef = useRef(false);
+  const [deadlineExpired, setDeadlineExpired] = useState(false);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // Load initial data
   const fetchData = useCallback(async () => {
@@ -235,37 +371,17 @@ export default function BookingCheckoutPage() {
     };
   }, [bookingId, refreshBookingState]);
 
-  // Expiration countdown logic
-  useEffect(() => {
-    if (!booking || !booking.expiresAt) return;
-
-    const calculateTimeLeft = () => {
-      const diff = new Date(booking.expiresAt) - new Date();
-      if (diff <= 0) {
-        setTimeLeft(0);
-        return;
-      }
-      setTimeLeft(Math.floor(diff / 1000));
-    };
-
-    calculateTimeLeft();
-    const interval = setInterval(calculateTimeLeft, 1000);
-
-    return () => clearInterval(interval);
-  }, [booking]);
-
-  // Handle countdown expiration
-  useEffect(() => {
-    if (timeLeft === 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setNotice({
-        title: 'Thời gian giữ ghế đã kết thúc',
-        message: 'Đơn không còn khả dụng để thanh toán và ghế sẽ được trả lại cho khách hàng khác.',
-        variant: 'warning',
-        redirectTo: '/movies?error=expired'
-      });
-    }
-  }, [timeLeft]);
+  const handleDeadlineExpired = useCallback(() => {
+    if (expirationHandledRef.current) return;
+    expirationHandledRef.current = true;
+    setDeadlineExpired(true);
+    setNotice({
+      title: 'Thời gian giữ ghế đã kết thúc',
+      message: 'Đơn không còn khả dụng để thanh toán và ghế sẽ được trả lại cho khách hàng khác.',
+      variant: 'warning',
+      redirectTo: '/movies?error=expired'
+    });
+  }, []);
 
   // Concession categories
   const categories = useMemo(() => {
@@ -278,29 +394,47 @@ export default function BookingCheckoutPage() {
 
   // Filtered concessions
   const filteredConcessions = useMemo(() => {
+    const normalizedSearch = deferredSearchQuery.trim().toLocaleLowerCase('vi-VN');
     return concessions.filter(c => {
-      const matchSearch = (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (c.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchSearch = (c.name || '').toLocaleLowerCase('vi-VN').includes(normalizedSearch) ||
+                          (c.description || '').toLocaleLowerCase('vi-VN').includes(normalizedSearch);
       const matchCat = selectedCategory === 'ALL' || (c.type && c.type.toUpperCase() === selectedCategory);
       return matchSearch && matchCat;
     });
-  }, [concessions, searchQuery, selectedCategory]);
+  }, [concessions, deferredSearchQuery, selectedCategory]);
 
-  // Find quantity and item ID in current booking cart
-  const getItemCartInfo = useCallback((concessionId) => {
-    if (!booking || !booking.foodOrder || !booking.foodOrder.items) {
-      return { quantity: 0, itemId: null };
-    }
-    const item = booking.foodOrder.items.find(i => i.productId === concessionId);
-    return item ? { quantity: item.quantity, itemId: item.id } : { quantity: 0, itemId: null };
-  }, [booking]);
+  const catalogTotalPages = Math.max(
+    1,
+    Math.ceil(filteredConcessions.length / CONCESSION_PAGE_SIZE)
+  );
+  const currentCatalogPage = Math.min(catalogPage, catalogTotalPages);
+  const visibleConcessions = useMemo(() => {
+    const start = (currentCatalogPage - 1) * CONCESSION_PAGE_SIZE;
+    return filteredConcessions.slice(start, start + CONCESSION_PAGE_SIZE);
+  }, [currentCatalogPage, filteredConcessions]);
+
+  const foodOrderItems = booking?.foodOrder?.items;
+  const cartItemsByProductId = useMemo(() => {
+    const result = new Map();
+    const cartItems = Array.isArray(foodOrderItems)
+      ? foodOrderItems
+      : [];
+    cartItems.forEach(item => {
+      result.set(item.productId, {
+        quantity: item.quantity || 0,
+        itemId: item.id
+      });
+    });
+    return result;
+  }, [foodOrderItems]);
 
   // Handle add/modify food in cart
-  const handleQuantityChange = async (concession, increment) => {
-    if (cartUpdatingId) return; // Prevent concurrent requests
+  const handleQuantityChange = useCallback(async (concession, increment, quantity) => {
+    if (cartUpdatingRef.current) return;
+    cartUpdatingRef.current = true;
     setCartUpdatingId(concession.id);
 
-    const { quantity, itemId } = getItemCartInfo(concession.id);
+    const itemId = cartItemsByProductId.get(concession.id)?.itemId;
     const newQty = quantity + (increment ? 1 : -1);
 
     try {
@@ -345,9 +479,10 @@ export default function BookingCheckoutPage() {
         variant: 'error'
       });
     } finally {
+      cartUpdatingRef.current = false;
       setCartUpdatingId(null);
     }
-  };
+  }, [bookingId, cartItemsByProductId]);
 
   // Lock Booking-owned amount, then let Payment Service create the attempt.
   const handleStartPayment = async () => {
@@ -467,18 +602,6 @@ export default function BookingCheckoutPage() {
     }
   };
 
-  // Format countdown string
-  const formattedTimeLeft = useMemo(() => {
-    if (timeLeft === null) return '00:00';
-    const mins = String(Math.floor(timeLeft / 60)).padStart(2, '0');
-    const secs = String(timeLeft % 60).padStart(2, '0');
-    return `${mins}:${secs}`;
-  }, [timeLeft]);
-
-  const formatCurrency = (val) => {
-    return (val || 0).toLocaleString('vi-VN') + 'đ';
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#050506] text-white">
@@ -511,7 +634,7 @@ export default function BookingCheckoutPage() {
   const { snapshot } = booking;
   const bookingStatus = booking.bookingStatus || booking.status;
   const isPending = bookingStatus === 'PENDING_PAYMENT';
-  const isExpired = timeLeft === 0 || !isPending;
+  const isExpired = deadlineExpired || !isPending;
   const draftSeats = bookingDraft.selectedSeats || [];
   const snapshotSeats = Array.isArray(snapshot?.seats) ? snapshot.seats : [];
   const visibleSeats = snapshotSeats.length
@@ -532,6 +655,9 @@ export default function BookingCheckoutPage() {
     || movie?.posterUrl
     || booking.posterUrl
     || null;
+  const displayMoviePosterUrl = moviePosterUrl
+    ? getOptimizedImageUrl(moviePosterUrl, { width: 200, height: 300 })
+    : FALLBACK_POSTER;
   const seatLabel = seat => seat.label || seat.seatLabel || seat.seatCode || 'Chưa rõ';
   const seatType = seat => seat.type || seat.seatType;
   const foodItemName = item => item.productName || item.name || 'Bắp nước';
@@ -588,9 +714,11 @@ export default function BookingCheckoutPage() {
                 <Clock className="w-5 h-5 text-amber-500 shrink-0" />
                 <span className="text-xs text-zinc-400 font-bold">Thời gian giao dịch còn lại</span>
               </div>
-              <span className={`text-sm font-black tracking-widest ${timeLeft < 60 ? 'text-red-500 animate-pulse' : 'text-amber-500'}`}>
-                {formattedTimeLeft}
-              </span>
+              <BookingCountdown
+                expiresAt={booking.expiresAt}
+                onExpire={handleDeadlineExpired}
+                className="text-sm font-black tracking-widest"
+              />
             </div>
 
             {isExpired ? (
@@ -604,7 +732,7 @@ export default function BookingCheckoutPage() {
                 <h2 className="text-xl font-black text-white">
                   {bookingStatus === 'CANCELLED'
                     ? 'Đơn đã được hủy'
-                    : bookingStatus === 'EXPIRED' || timeLeft === 0
+                    : bookingStatus === 'EXPIRED' || deadlineExpired
                       ? 'Đã hết thời gian giữ ghế'
                       : ['CONFIRMED', 'COMPLETED'].includes(bookingStatus)
                         ? 'Đơn đã thanh toán thành công'
@@ -613,7 +741,7 @@ export default function BookingCheckoutPage() {
                 <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-zinc-400">
                   {bookingStatus === 'CANCELLED'
                     ? 'Ghế của đơn đã được trả lại. VNPay và MoMo đã được khóa để tránh tạo giao dịch cho đơn đã hủy.'
-                    : bookingStatus === 'EXPIRED' || timeLeft === 0
+                    : bookingStatus === 'EXPIRED' || deadlineExpired
                       ? 'Thời hạn thanh toán đã kết thúc và ghế không còn được giữ.'
                       : ['CONFIRMED', 'COMPLETED'].includes(bookingStatus)
                         ? 'Bạn có thể mở chi tiết đơn để xem thông tin vé đã phát hành.'
@@ -650,7 +778,10 @@ export default function BookingCheckoutPage() {
                     {categories.map(cat => (
                       <button
                         key={cat}
-                        onClick={() => setSelectedCategory(cat)}
+                        onClick={() => {
+                          setSelectedCategory(cat);
+                          setCatalogPage(1);
+                        }}
                         className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                           selectedCategory === cat
                             ? 'bg-brand-orange text-white'
@@ -670,7 +801,10 @@ export default function BookingCheckoutPage() {
                     type="text"
                     placeholder="Tìm bắp nước nhanh..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCatalogPage(1);
+                    }}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-brand-orange placeholder:text-zinc-600 transition-colors"
                   />
                 </div>
@@ -678,70 +812,19 @@ export default function BookingCheckoutPage() {
                 {/* Grid of concession items */}
                 {filteredConcessions.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {filteredConcessions.map(item => {
-                      const { quantity } = getItemCartInfo(item.id);
+                    {visibleConcessions.map(item => {
+                      const { quantity = 0 } = cartItemsByProductId.get(item.id) || {};
                       const isUpdating = cartUpdatingId === item.id;
 
                       return (
-                        <div key={item.id} className="bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700/80 rounded-2xl p-4 flex gap-4 transition-all relative overflow-hidden">
-                          {/* Concession Image */}
-                          <div className="relative w-20 aspect-square rounded-xl bg-zinc-950/60 overflow-hidden border border-zinc-800 shrink-0 flex items-center justify-center">
-                            <span className="px-2 text-center text-[8px] font-bold text-zinc-600">Chưa có ảnh</span>
-                            {item.imageUrl && (
-                              <img
-                                src={item.imageUrl}
-                                alt={item.name}
-                                className="absolute inset-0 w-full h-full object-cover"
-                                onError={(event) => {
-                                  event.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            )}
-                          </div>
-                          {/* Meta and selector */}
-                          <div className="flex-grow flex flex-col justify-between py-0.5 space-y-3">
-                            <div className="space-y-1">
-                              <span className="text-[8px] bg-zinc-800 text-zinc-400 font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                {item.type || 'Combo'}
-                              </span>
-                              <h4 className="text-xs font-black text-white leading-snug line-clamp-1">{item.name}</h4>
-                              <p className="text-[9px] text-zinc-550 leading-normal line-clamp-2">{item.description}</p>
-                            </div>
-
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-black text-brand-orange">{formatCurrency(item.price)}</span>
-
-                              {/* Quantity controller */}
-                              <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-lg p-1 gap-3">
-                                <button
-                                  disabled={quantity === 0 || isUpdating || isExpired}
-                                  onClick={() => handleQuantityChange(item, false)}
-                                  className={`w-6 h-6 rounded flex items-center justify-center font-black text-xs transition-colors ${
-                                    quantity > 0 && !isUpdating && !isExpired
-                                      ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
-                                      : 'text-zinc-700 cursor-not-allowed'
-                                  }`}
-                                >
-                                  -
-                                </button>
-                                <span className="w-5 text-center text-xs font-bold text-zinc-200">
-                                  {isUpdating ? '...' : quantity}
-                                </span>
-                                <button
-                                  disabled={isUpdating || isExpired}
-                                  onClick={() => handleQuantityChange(item, true)}
-                                  className={`w-6 h-6 rounded flex items-center justify-center font-black text-xs transition-colors ${
-                                    !isUpdating && !isExpired
-                                      ? 'bg-brand-orange hover:bg-opacity-90 text-white'
-                                      : 'text-zinc-700 cursor-not-allowed'
-                                  }`}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                        <ConcessionProductCard
+                          key={item.id}
+                          item={item}
+                          quantity={quantity}
+                          isUpdating={isUpdating}
+                          disabled={isExpired}
+                          onQuantityChange={handleQuantityChange}
+                        />
                       );
                     })}
                   </div>
@@ -749,6 +832,32 @@ export default function BookingCheckoutPage() {
                   <div className="text-center py-10 bg-zinc-900/20 border border-zinc-800 rounded-2xl border-dashed">
                     <span className="text-xs text-zinc-500 italic block">Không tìm thấy bắp nước phù hợp...</span>
                   </div>
+                )}
+                {catalogTotalPages > 1 && (
+                  <nav
+                    className="flex items-center justify-center gap-3 border-t border-zinc-800 pt-5"
+                    aria-label="Phân trang bắp nước"
+                  >
+                    <button
+                      type="button"
+                      disabled={currentCatalogPage === 1}
+                      onClick={() => setCatalogPage(value => Math.max(1, value - 1))}
+                      className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Trang trước
+                    </button>
+                    <span className="text-xs font-bold text-zinc-400">
+                      {currentCatalogPage}/{catalogTotalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={currentCatalogPage === catalogTotalPages}
+                      onClick={() => setCatalogPage(value => Math.min(catalogTotalPages, value + 1))}
+                      className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Trang sau
+                    </button>
+                  </nav>
                 )}
               </div>
             ) : (
@@ -851,17 +960,23 @@ export default function BookingCheckoutPage() {
                 <Clock className="w-4 h-4 text-amber-500" />
                 <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Thời gian còn lại</span>
               </div>
-              <span className={`text-base font-black tracking-widest ${timeLeft < 60 ? 'text-red-500 animate-pulse' : 'text-amber-500'}`}>
-                {formattedTimeLeft}
-              </span>
+              <BookingCountdown
+                expiresAt={booking.expiresAt}
+                onExpire={handleDeadlineExpired}
+                className="text-base font-black tracking-widest"
+              />
             </div>
 
             {/* Movie Poster & Meta details */}
             <div className="flex gap-4 items-start pb-6 border-b border-zinc-800">
               <div className="w-20 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 flex items-center justify-center">
                 <img
-                  src={moviePosterUrl || FALLBACK_POSTER}
+                  src={displayMoviePosterUrl}
                   alt={`Áp phích phim ${movieTitle}`}
+                  width="80"
+                  height="120"
+                  decoding="async"
+                  fetchPriority="high"
                   className="w-full h-full object-cover"
                   onError={(event) => {
                     event.currentTarget.onerror = null;
