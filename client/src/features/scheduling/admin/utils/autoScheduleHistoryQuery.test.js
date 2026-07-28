@@ -51,6 +51,17 @@ describe('autoScheduleHistoryQuery', () => {
       .toBe('strategyVersion=BALANCED_V1_S4');
   });
 
+  it('accepts the current S5 distribution strategy in history links', () => {
+    const parsed = parseAutoScheduleHistoryQuery(new URLSearchParams(
+      'strategyVersion=BALANCED_V1_S5',
+    ));
+
+    expect(AUTO_SCHEDULE_HISTORY_STRATEGIES).toContain('BALANCED_V1_S5');
+    expect(parsed.strategyVersion).toBe('BALANCED_V1_S5');
+    expect(serializeAutoScheduleHistoryQuery(parsed).toString())
+      .toBe('strategyVersion=BALANCED_V1_S5');
+  });
+
   it('validates reversed ranges and resets only filters and page', () => {
     const query = {
       ...AUTO_SCHEDULE_HISTORY_DEFAULTS,

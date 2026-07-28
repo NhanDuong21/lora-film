@@ -17,6 +17,8 @@ const canConfirmBatchTransition = summary => Boolean(
 const AdminShowtimePage = () => {
   const { triggerToast } = useOutletContext() || {};
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const {
     showtimes,
@@ -41,12 +43,16 @@ const AdminShowtimePage = () => {
     totalPages,
     totalElements,
     fetchShowtimes
-  } = useAdminShowtimes({ triggerToast });
+  } = useAdminShowtimes({
+    triggerToast,
+    initialFilters: {
+      batchId: searchParams.get('batchId') || '',
+      source: searchParams.get('source') || '',
+      status: searchParams.get('status') || '',
+    },
+  });
 
-  const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
   const locationStateProcessed = useRef(false);
-  const isReady = useRef(false);
   const [isBatchActionLoading, setIsBatchActionLoading] = useState(false);
   const [batchActionDialog, setBatchActionDialog] = useState(null);
 
@@ -54,7 +60,6 @@ const AdminShowtimePage = () => {
     setBatchId(searchParams.get('batchId') || '');
     setSource(searchParams.get('source') || '');
     setStatus(searchParams.get('status') || '');
-    isReady.current = true;
   }, [searchParams, setBatchId, setSource, setStatus]);
 
   useEffect(() => {
@@ -73,10 +78,8 @@ const AdminShowtimePage = () => {
   }, [location.state, setCinemaSlug, setStatus, setDate, triggerToast]);
 
   useEffect(() => {
-    if (isReady.current) {
-      fetchShowtimes();
-    }
-  }, [fetchShowtimes, isReady]);
+    fetchShowtimes();
+  }, [fetchShowtimes]);
 
   const handleOpenCreate = () => {
     navigate('/admin/showtimes/create');

@@ -14,7 +14,6 @@ import {
   MapPin,
   RefreshCw,
   Save,
-  Wand2,
   X,
 } from 'lucide-react';
 import AutoScheduleCandidateDrawer from '@/features/scheduling/admin/components/AutoScheduleCandidateDrawer';
@@ -25,6 +24,8 @@ import {
   CANDIDATE_VIEWS,
   getDefaultCandidateView,
   getCandidateMetrics,
+  getMovieDistribution,
+  getMovieDistributionSummary,
   paginateCandidates,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewCandidates';
 import {
@@ -36,7 +37,6 @@ import {
   UNKNOWN_SERVICE_DATE_KEY,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 import {
-  buildQuickNonOverlappingSelection,
   buildSelectedItemsIndex,
   findSelectionBlock,
   SELECTION_BLOCK_TYPES,
@@ -139,14 +139,13 @@ const AdminAutoSchedulePreviewPage = () => {
     pricingPreflight,
     capabilities,
     isApplying,
-    isUpdatingSelection,
     handleToggleSelection,
-    handleBulkSelection,
     handleApply,
     fetchPreview,
   } = useAutoSchedulePreview(id, { triggerToast, onSuccess: handleSuccess });
 
   const [filterAuditorium, setFilterAuditorium] = useState('');
+  const [filterMovie, setFilterMovie] = useState('');
   const [filterReason, setFilterReason] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [candidatePage, setCandidatePage] = useState(1);
@@ -175,6 +174,14 @@ const AdminAutoSchedulePreviewPage = () => {
     timezone: effectiveTimezone,
   }), [effectiveTimezone, items, selectedItemIds]);
   const sortedViewModels = useMemo(() => sortCandidateViewModels(viewModels), [viewModels]);
+  const movieDistribution = useMemo(
+    () => getMovieDistribution(viewModels),
+    [viewModels],
+  );
+  const movieDistributionSummary = useMemo(
+    () => getMovieDistributionSummary(movieDistribution),
+    [movieDistribution],
+  );
   const candidateById = useMemo(
     () => new Map(viewModels.map(candidate => [candidate.id, candidate])),
     [viewModels],
@@ -243,6 +250,9 @@ const AdminAutoSchedulePreviewPage = () => {
   const uniqueAuditoriums = useMemo(() => Array.from(new Set(
     viewModels.map(candidate => candidate.auditoriumName),
   )).sort(), [viewModels]);
+  const uniqueMovies = useMemo(() => movieDistribution
+    .map(movie => ({ key: movie.movieKey, title: movie.movieTitle }))
+    .sort((left, right) => left.title.localeCompare(right.title, 'vi')), [movieDistribution]);
   const uniqueReasons = useMemo(() => Array.from(new Set(
     viewModels.map(candidate => candidate.conciseReason).filter(Boolean),
   )).sort(), [viewModels]);
@@ -251,10 +261,11 @@ const AdminAutoSchedulePreviewPage = () => {
     candidateView,
   ).filter(candidate => {
     if (filterAuditorium && candidate.auditoriumName !== filterAuditorium) return false;
+    if (filterMovie && candidate.movieKey !== filterMovie) return false;
     if (filterReason && candidate.conciseReason !== filterReason) return false;
     if (filterDate && candidate.serviceDate !== filterDate) return false;
     return true;
-  }), [candidateView, filterAuditorium, filterDate, filterReason, sortedViewModels]);
+  }), [candidateView, filterAuditorium, filterDate, filterMovie, filterReason, sortedViewModels]);
   const pagination = useMemo(
     () => paginateCandidates(filteredCandidates, candidatePage, candidatePageSize),
     [candidatePage, candidatePageSize, filteredCandidates],
@@ -307,12 +318,6 @@ const AdminAutoSchedulePreviewPage = () => {
     setter(event.target.value);
     setCandidatePage(1);
   };
-  const handleQuickNonOverlappingSelection = () => {
-    if (capabilities.canSelect && items.length > 0) {
-      handleBulkSelection(buildQuickNonOverlappingSelection(items));
-    }
-  };
-
   if (isLoading && !preview) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center bg-zinc-950 p-8 text-zinc-300" role="status">
@@ -336,13 +341,14 @@ const AdminAutoSchedulePreviewPage = () => {
 
   return (
     <div className="flex min-h-[400px] flex-1 flex-col bg-zinc-950 text-white">
-      <header className="sticky top-0 z-20 flex flex-col gap-4 border-b border-zinc-800 bg-zinc-950/90 p-5 backdrop-blur-md md:flex-row md:items-center md:justify-between">
+      <header className="flex flex-col gap-4 border-b border-zinc-800 bg-zinc-950 p-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <button type="button" onClick={() => navigate(-1)} aria-label="Quay lại" className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"><ArrowLeft className="h-5 w-5" /></button>
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-xl font-black uppercase tracking-wider md:text-2xl">Rà soát lịch chiếu</h1>
               <span className={`rounded border px-2 py-1 text-[10px] font-black tracking-wider ${LIFECYCLE_TONE_CLASSES[capabilities.effectiveStatus] || LIFECYCLE_TONE_CLASSES.CANCELLED}`}>{getPreviewStatusPresentation(capabilities.effectiveStatus || preview.status).label}</span>
+              <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-[10px] font-bold text-zinc-400">{preview.strategyVersion || 'Chiến lược cũ'}</span>
             </div>
             <div className="mt-2 flex flex-wrap gap-4 text-sm text-zinc-400">
               <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{preview.cinemaName}</span>
@@ -362,19 +368,6 @@ const AdminAutoSchedulePreviewPage = () => {
             </Link>
           )}
           <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} aria-label="Làm mới bản xem trước" className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} /></button>
-          {capabilities.isEditable && (
-            <button
-              type="button"
-              onClick={handleQuickNonOverlappingSelection}
-              disabled={!capabilities.canSelect}
-              aria-label={isUpdatingSelection ? 'Đang tự chọn lịch không xung đột' : 'Tự chọn lịch không xung đột'}
-              title={!capabilities.canSelect && !isUpdatingSelection ? 'Bản xem trước hiện không cho phép tự chọn lịch không xung đột.' : undefined}
-              className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2.5 text-xs font-black uppercase text-blue-300 disabled:opacity-50"
-            >
-              {isUpdatingSelection ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Wand2 className="h-4 w-4" aria-hidden="true" />}
-              {isUpdatingSelection ? 'Đang tự chọn lịch không xung đột…' : 'Tự chọn lịch không xung đột'}
-            </button>
-          )}
           {capabilities.isEditable && (
             <button type="button" onClick={() => setShowApplyModal(true)} disabled={!capabilities.canApply} className="flex items-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-black uppercase text-zinc-950 disabled:opacity-50"><Save className="h-4 w-4" />Áp dụng ({selectedItemIds.size})</button>
           )}
@@ -415,20 +408,93 @@ const AdminAutoSchedulePreviewPage = () => {
         )}
         {timezoneResolution.usedFallback && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert">Múi giờ không hợp lệ; thời gian tạm hiển thị theo UTC.</section>}
 
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7" aria-label="Tóm tắt ứng viên">
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-label="Tóm tắt lịch đề xuất">
           {[
-            ['Tổng đã tạo', preview.totalCandidateCount ?? candidateMetrics.totalGenerated],
-            ['Đề xuất đã chọn', candidateMetrics.selectedRecommendations],
-            ['Hợp lệ chưa chọn', candidateMetrics.validUnselected],
-            ['Không hợp lệ', candidateMetrics.rejectedCandidates],
-            ['Xung đột / thất bại', candidateMetrics.applyConflictsFailures],
-            ['Đã tạo suất chiếu', candidateMetrics.createdShowtimes],
-            ['Không được chọn', candidateMetrics.skippedCandidates],
+            [capabilities.effectiveStatus === 'APPLIED' ? 'Suất chiếu đã tạo' : 'Suất được đề xuất', capabilities.effectiveStatus === 'APPLIED' ? candidateMetrics.createdShowtimes : candidateMetrics.selectedRecommendations],
+            ['Phim có trong lịch', `${movieDistributionSummary.representedMovieCount}/${movieDistributionSummary.eligibleMovieCount}`],
+            ['Phòng được sử dụng', selectedRoomCount],
+            ['Ứng viên cần kiểm tra', candidateMetrics.issueCandidates],
+            ['Tổng phương án đã xét', preview.totalCandidateCount ?? candidateMetrics.totalGenerated],
           ].map(([label, value]) => <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><span className="block text-[10px] font-bold uppercase text-zinc-500">{label}</span><span className={`${typeof value === 'number' ? 'text-2xl' : 'text-sm'} mt-2 block font-black text-white`}>{value}</span></div>)}
         </section>
-        <p className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-xs leading-relaxed text-zinc-400">
-          Một ứng viên là một phương án ghép phiên bản phim, phòng chiếu, thời điểm bắt đầu, thời lượng phim và thời gian dọn phòng. Ứng viên chỉ trở thành suất chiếu vận hành khi có trạng thái “Đã tạo suất chiếu”.
-        </p>
+
+        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 md:p-5" aria-labelledby="movie-distribution-title">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="movie-distribution-title" className="text-base font-black uppercase text-white">Phân bổ phim trong lịch</h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                So sánh số suất được chọn với toàn bộ phương án hợp lệ của từng phim.
+              </p>
+            </div>
+            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${
+              movieDistributionSummary.hasCoverageGap || movieDistributionSummary.isHighlyConcentrated
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+            }`}>
+              {movieDistributionSummary.representedMovieCount}/{movieDistributionSummary.eligibleMovieCount} phim được xếp lịch
+            </span>
+          </div>
+
+          {(movieDistributionSummary.hasCoverageGap || movieDistributionSummary.isHighlyConcentrated) && (
+            <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100" role="alert">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+              <div>
+                <p className="font-bold">Lịch đang phân bổ chưa cân bằng.</p>
+                {movieDistributionSummary.hasCoverageGap && (
+                  <p className="mt-1">
+                    {movieDistributionSummary.uncoveredMovies.map(movie => movie.movieTitle).join(', ')} có phương án hợp lệ nhưng chưa có suất nào.
+                  </p>
+                )}
+                {movieDistributionSummary.isHighlyConcentrated && (
+                  <p className="mt-1">
+                    {movieDistributionSummary.dominantMovieTitle} đang chiếm {movieDistributionSummary.dominantSharePercent}% lịch được chọn.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            {movieDistribution.map(movie => (
+              <button
+                key={movie.movieKey}
+                type="button"
+                onClick={() => {
+                  setFilterMovie(current => current === movie.movieKey ? '' : movie.movieKey);
+                  setCandidatePage(1);
+                }}
+                aria-pressed={filterMovie === movie.movieKey}
+                className={`rounded-xl border p-3 text-left transition-colors ${
+                  filterMovie === movie.movieKey
+                    ? 'border-brand-orange bg-brand-orange/10'
+                    : movie.hasCoverageGap
+                      ? 'border-amber-500/30 bg-amber-500/5'
+                      : 'border-zinc-800 bg-zinc-950/50 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-sm font-bold text-white">{movie.movieTitle}</span>
+                  <span className={`shrink-0 text-sm font-black ${movie.hasCoverageGap ? 'text-amber-300' : 'text-white'}`}>
+                    {movie.scheduledCount} suất · {movie.sharePercent}%
+                  </span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{
+                      width: `${Math.max(movie.sharePercent, movie.scheduledCount > 0 ? 2 : 0)}%`,
+                      backgroundColor: movie.palette?.solid || '#f97316',
+                    }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">
+                  {movie.validCount} phương án hợp lệ / {movie.generatedCount} phương án đã xét
+                  {movie.hasCoverageGap ? ' · Chưa được xếp lịch' : ''}
+                </p>
+              </button>
+            ))}
+          </div>
+        </section>
 
         {capabilities.effectiveStatus === 'APPLIED' && (
           <section className="grid gap-4 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4 text-violet-100 sm:grid-cols-2" aria-label="Kết quả áp dụng">
@@ -474,13 +540,22 @@ const AdminAutoSchedulePreviewPage = () => {
         </section>
 
         <section className="space-y-4">
-          <p className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-relaxed text-zinc-400">
-            Điểm ưu tiên là tổng các thành phần cơ bản, khung giờ cao điểm/thấp điểm, đầu ca, mức phù hợp phòng và độ liền mạch; điểm cao hơn tốt hơn, còn ứng viên không hợp lệ nhận 0 điểm. Hạng toàn cục sắp ứng viên hợp lệ trước, rồi theo điểm giảm dần và các tiêu chí thời gian/phòng/phim ổn định. Hạng chỉ là thứ tự hiển thị, không phải thứ tự chọn: S3 tối đa hóa tổng điểm của một tập không trùng nhau, nên một ứng viên hạng thấp hơn vẫn có thể được chọn.
-          </p>
+          <details className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-relaxed text-zinc-400">
+            <summary className="cursor-pointer font-bold text-zinc-300">Hệ thống đã chọn lịch như thế nào?</summary>
+            <p className="mt-2">
+              Điểm ưu tiên tổng hợp khung giờ, mức phù hợp phòng và độ liền mạch; điểm cao hơn tốt hơn. Hạng toàn cục chỉ là thứ tự rà soát, không phải thứ tự quyết định lựa chọn.
+              {preview.strategyVersion === 'BALANCED_V1_S5'
+                ? ' Chiến lược S5 cân bằng số suất giữa các phim theo từng ngày vận hành bằng cách dựng lại chuỗi giờ chiếu và thực hiện các thay thế không xung đột. Phương án mới phải giữ tối thiểu 90% chất lượng trung bình và 90% thời gian sử dụng phòng, vì vậy một số chênh lệch nhỏ vẫn có thể được giữ lại.'
+                : preview.strategyVersion === 'BALANCED_V1_S4'
+                  ? ' Chiến lược S4 chỉ bảo đảm độ phủ tối thiểu theo từng ngày, chưa giới hạn tỷ lệ của một phim; vì vậy lịch S4 vẫn có thể bị dồn suất.'
+                  : ' Đây là bản lịch sử dùng chiến lược cũ: hệ thống tối đa hóa tổng điểm của tập không trùng nhau nên có thể dồn nhiều suất vào cùng một phim.'}
+            </p>
+          </details>
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Nhóm ứng viên">
             {availableCandidateViews.map(view => <button key={view} type="button" role="tab" aria-selected={candidateView === view} onClick={() => selectCandidateView(view)} className={`rounded-xl border px-4 py-2 text-sm font-bold ${candidateView === view ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 text-zinc-400'}`}>{CANDIDATE_VIEW_LABELS[view]} ({viewCounts[view]})</button>)}
           </div>
           <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+            <select aria-label="Lọc phim" value={filterMovie} onChange={resetPageWith(setFilterMovie)} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs"><option value="">Tất cả phim</option>{uniqueMovies.map(movie => <option key={movie.key} value={movie.key}>{movie.title}</option>)}</select>
             <select aria-label="Lọc phòng chiếu" value={filterAuditorium} onChange={resetPageWith(setFilterAuditorium)} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs"><option value="">Tất cả phòng</option>{uniqueAuditoriums.map(value => <option key={value} value={value}>{value}</option>)}</select>
             <select aria-label="Lọc ngày vận hành" value={filterDate} onChange={resetPageWith(setFilterDate)} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs"><option value="">Tất cả ngày</option>{serviceDates.map(value => <option key={value} value={value}>{formatServiceDateKey(value)}</option>)}</select>
             <select aria-label="Lọc lý do" value={filterReason} onChange={resetPageWith(setFilterReason)} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs"><option value="">Tất cả lý do</option>{uniqueReasons.map(value => <option key={value} value={value}>{value}</option>)}</select>

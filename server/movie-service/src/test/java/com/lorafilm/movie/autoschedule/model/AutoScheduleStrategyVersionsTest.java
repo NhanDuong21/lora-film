@@ -14,9 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AutoScheduleStrategyVersionsTest {
 
     @Test
-    void s4IsSupportedButS3RemainsCurrentUntilActivationCheckpoint() {
-        assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
+    void s5IsSupportedAndCurrentAfterDistributionActivation() {
+        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5,
                 AutoScheduleStrategyVersions.CURRENT);
+        assertTrue(AutoScheduleStrategyVersions.isSupported(
+                AutoScheduleStrategyVersions.BALANCED_V1_S5));
         assertTrue(AutoScheduleStrategyVersions.isSupported(
                 AutoScheduleStrategyVersions.BALANCED_V1_S4));
         assertTrue(AutoScheduleStrategyVersions.SUPPORTED.contains(
@@ -29,19 +31,19 @@ class AutoScheduleStrategyVersionsTest {
     }
 
     @Test
-    void previewFactoryRetainsAnExplicitVersionWithoutChangingCurrent() {
+    void previewFactoryRetainsAnExplicitHistoricalVersionWithoutChangingCurrent() {
         Cinema cinema = new Cinema();
         cinema.setTimezone("UTC");
         LocalDate date = LocalDate.of(2026, 7, 23);
 
         ShowtimeSchedulePreview preview = ShowtimeSchedulePreview.createGenerating(
                 cinema, date, date, 15, 60,
-                AutoScheduleStrategyVersions.BALANCED_V1_S4,
+                AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
                 "key", "fingerprint", 1L, Instant.parse("2026-07-22T17:00:00Z"));
 
-        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S4,
-                preview.getStrategyVersion());
         assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
+                preview.getStrategyVersion());
+        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5,
                 AutoScheduleStrategyVersions.CURRENT);
     }
 }
