@@ -37,7 +37,7 @@ public class EmployeeDocumentController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_UPDATE')")
     @Operation(summary = "Upload an employee document")
     public ResponseEntity<ApiResponse<EmployeeDocumentResponse>> upload(
             @PathVariable Long accountId,
@@ -53,7 +53,8 @@ public class EmployeeDocumentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or #accountId == authentication.principal")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_VIEW')"
+            + " or #accountId == authentication.principal")
     @Operation(summary = "List active employee documents")
     public ResponseEntity<ApiResponse<List<EmployeeDocumentResponse>>> list(@PathVariable Long accountId) {
         return ResponseEntity.ok(ApiResponse.success("Employee documents retrieved",
@@ -61,7 +62,8 @@ public class EmployeeDocumentController {
     }
 
     @GetMapping("/history")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or #accountId == authentication.principal")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_VIEW')"
+            + " or #accountId == authentication.principal")
     @Operation(summary = "List employee document history including deleted metadata")
     public ResponseEntity<ApiResponse<List<EmployeeDocumentResponse>>> history(@PathVariable Long accountId) {
         return ResponseEntity.ok(ApiResponse.success("Employee document history retrieved",
@@ -69,7 +71,8 @@ public class EmployeeDocumentController {
     }
 
     @GetMapping("/{documentId}/file")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or #accountId == authentication.principal")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_VIEW')"
+            + " or #accountId == authentication.principal")
     @Operation(summary = "Download an employee document")
     public ResponseEntity<Resource> download(@PathVariable Long accountId, @PathVariable Long documentId) {
         EmployeeDocumentService.DocumentDownload download = service.download(accountId, documentId);
@@ -85,7 +88,7 @@ public class EmployeeDocumentController {
     }
 
     @DeleteMapping("/{documentId}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_UPDATE')")
     @Operation(summary = "Delete an employee document while retaining audit metadata")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long accountId,
                                                      @PathVariable Long documentId) {

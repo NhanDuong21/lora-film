@@ -86,7 +86,10 @@ public class UserController {
 
         Long tokenAccountId = (Long) authentication.getPrincipal();
         boolean isAdminOrStaff = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_STAFF"));
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
+                        || a.getAuthority().equals("ROLE_STAFF")
+                        || a.getAuthority().equals("CUSTOMER_VIEW")
+                        || a.getAuthority().equals("EMPLOYEE_VIEW"));
 
         if (!isAdminOrStaff && !accountId.equals(tokenAccountId)) {
             throw new ForbiddenException("You don't have permission to view this profile");
@@ -97,7 +100,8 @@ public class UserController {
     }
 
     @GetMapping("/admin/batch")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')"
+            + " or hasAnyAuthority('CUSTOMER_VIEW', 'EMPLOYEE_VIEW')")
     public ResponseEntity<ApiResponse<List<UserProfileResponse>>> getUserProfiles(
             @RequestParam List<Long> accountIds) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -106,7 +110,8 @@ public class UserController {
     }
 
     @GetMapping("/admin/search")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')"
+            + " or hasAnyAuthority('CUSTOMER_VIEW', 'EMPLOYEE_VIEW')")
     public ResponseEntity<ApiResponse<List<UserProfileResponse>>> searchUserProfiles(
             @RequestParam String query,
             @RequestParam(defaultValue = "20") int limit) {

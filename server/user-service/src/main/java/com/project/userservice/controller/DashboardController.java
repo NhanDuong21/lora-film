@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/users/dashboard")
 @io.swagger.v3.oas.annotations.tags.Tag(name = "User dashboard")
-@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('DASHBOARD_VIEW')")
 public class DashboardController {
     private final DashboardService service;
 

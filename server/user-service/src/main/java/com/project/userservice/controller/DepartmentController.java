@@ -24,33 +24,33 @@ public class DepartmentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAnyAuthority('DEPARTMENT_VIEW', 'EMPLOYEE_VIEW')")
     public ResponseEntity<ApiResponse<List<DepartmentResponse>>> list() {
         return ResponseEntity.ok(ApiResponse.success("Departments retrieved", service.list()));
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAnyAuthority('DEPARTMENT_VIEW', 'EMPLOYEE_VIEW')")
     public ResponseEntity<ApiResponse<Page<DepartmentResponse>>> search(@RequestParam(required = false) String keyword,
                                                                         Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Departments retrieved", service.search(keyword, pageable)));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('DEPARTMENT_CREATE')")
     public ResponseEntity<ApiResponse<DepartmentResponse>> create(@Valid @RequestBody DepartmentRequest request) {
         return ResponseEntity.status(201).body(ApiResponse.success("Department created", service.create(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('DEPARTMENT_UPDATE')")
     public ResponseEntity<ApiResponse<DepartmentResponse>> update(@PathVariable Long id,
                                                                    @Valid @RequestBody DepartmentRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Department updated", service.update(id, request)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('DEPARTMENT_DELETE')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         service.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Department deleted", null));

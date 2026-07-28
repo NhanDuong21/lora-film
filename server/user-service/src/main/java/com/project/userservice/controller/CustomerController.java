@@ -23,7 +23,7 @@ public class CustomerController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('CUSTOMER_VIEW')")
     @Operation(summary = "Search customers")
     public ResponseEntity<ApiResponse<Page<CustomerResponse>>> search(
             @RequestParam(required = false) String keyword,
@@ -33,19 +33,19 @@ public class CustomerController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('CUSTOMER_VIEW')")
     public ResponseEntity<ApiResponse<CustomerResponse>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Customer retrieved", service.get(id)));
     }
 
     @PutMapping("/{id}/block")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CUSTOMER_UPDATE')")
     public ResponseEntity<ApiResponse<CustomerResponse>> block(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Customer blocked", service.changeStatus(id, UserStatus.BLOCKED)));
     }
 
     @PutMapping("/{id}/unblock")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CUSTOMER_UPDATE')")
     public ResponseEntity<ApiResponse<CustomerResponse>> unblock(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Customer unblocked", service.changeStatus(id, UserStatus.ACTIVE)));
     }

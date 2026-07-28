@@ -24,7 +24,7 @@ public class PayrollController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_VIEW')")
     public ResponseEntity<ApiResponse<Page<PayrollResponse>>> search(
             @RequestParam(required = false) Long employeeId,
             @RequestParam(required = false) PayrollStatus status,
@@ -36,44 +36,46 @@ public class PayrollController {
 
     @GetMapping("/me")
     @PreAuthorize("hasAnyRole('EMPLOYEE','MANAGER','ADMIN','STAFF')")
-    public ResponseEntity<ApiResponse<Page<PayrollResponse>>> mine(Pageable pageable) {
+    public ResponseEntity<ApiResponse<Page<PayrollResponse>>> mine(
+            @RequestParam(required = false) String month,
+            Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Payrolls retrieved",
-                service.search(CurrentActor.accountId(), null, null, pageable)));
+                service.searchMine(CurrentActor.accountId(), month, pageable)));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_VIEW')")
     public ResponseEntity<ApiResponse<PayrollResponse>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Payroll retrieved", service.get(id)));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_CREATE')")
     public ResponseEntity<ApiResponse<PayrollResponse>> create(@Valid @RequestBody PayrollRequest request) {
         return ResponseEntity.status(201).body(ApiResponse.success("Payroll created", service.create(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_UPDATE')")
     public ResponseEntity<ApiResponse<PayrollResponse>> update(@PathVariable Long id,
                                                                 @Valid @RequestBody PayrollRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Payroll updated", service.update(id, request)));
     }
 
     @PutMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_APPROVE')")
     public ResponseEntity<ApiResponse<PayrollResponse>> approve(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Payroll approved", service.approve(id)));
     }
 
     @PutMapping("/{id}/paid")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_UPDATE')")
     public ResponseEntity<ApiResponse<PayrollResponse>> paid(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Payroll marked as paid", service.markPaid(id)));
     }
 
     @PutMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_UPDATE')")
     public ResponseEntity<ApiResponse<PayrollResponse>> cancel(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Payroll cancelled", service.cancel(id)));
     }
