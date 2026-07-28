@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.authservice.entity.Account;
 import com.project.authservice.enums.AccountStatus;
 import com.project.authservice.repository.AccountRepository;
+import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.service.CredentialRevocationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,13 +20,16 @@ public class UserLifecycleConsumer {
     private final ObjectMapper objectMapper;
     private final AccountRepository accountRepository;
     private final CredentialRevocationService revocationService;
+    private final RoleRepository roleRepository;
 
     public UserLifecycleConsumer(ObjectMapper objectMapper,
                                  AccountRepository accountRepository,
-                                 CredentialRevocationService revocationService) {
+                                 CredentialRevocationService revocationService,
+                                 RoleRepository roleRepository) {
         this.objectMapper = objectMapper;
         this.accountRepository = accountRepository;
         this.revocationService = revocationService;
+        this.roleRepository = roleRepository;
     }
 
     @KafkaListener(topics = "${app.kafka.topic.user-domain-events:user.domain.events.v1}",
@@ -44,6 +48,15 @@ public class UserLifecycleConsumer {
         long accountId = data.path("accountId").asLong();
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new IllegalStateException("Account does not exist for user lifecycle event"));
+        if ("EMPLOYEE_CREATED".equals(eventType)) {
+            var employeeRole = roleRepository.findByCode("EMPLOYEE")
+                    .orElseThrow(() -> new IllegalStateException("EMPLOYEE role is not configured"));
+            account.setRole(employeeRole);
+            accountRepository.save(account);
+            revocationService.revokeAll(accountId);
+            log.info("Assigned EMPLOYEE role to accountId={} from employee lifecycle event", accountId);
+            return;
+        }
         AccountStatus target = targetStatus(eventType, data.path("status").asText(), account.getAccountStatus());
         if (target == null || target == account.getAccountStatus()) {
             return;
@@ -60,6 +73,7 @@ public class UserLifecycleConsumer {
     private boolean isCredentialLifecycleEvent(String eventType) {
         return "CUSTOMER_BLOCKED".equals(eventType)
                 || "CUSTOMER_UNBLOCKED".equals(eventType)
+                || "EMPLOYEE_CREATED".equals(eventType)
                 || "EMPLOYEE_RESIGNED".equals(eventType)
                 || "EMPLOYEE_UPDATED".equals(eventType);
     }

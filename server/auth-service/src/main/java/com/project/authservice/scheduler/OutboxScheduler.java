@@ -8,6 +8,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 
@@ -18,6 +19,12 @@ public class OutboxScheduler {
     private final OutboxMessageRepository outboxMessageRepository;
     private final KafkaTemplate<String, Object> eventKafkaTemplate; // Assuming this bean exists
     private final ObjectMapper objectMapper;
+
+    @Value("${app.kafka.topic.account-lifecycle:auth.account.lifecycle.v1}")
+    private String accountLifecycleTopic;
+
+    @Value("${app.kafka.topic.auth-domain:auth.domain.events.v1}")
+    private String authDomainTopic;
 
     @Scheduled(fixedDelay = 5000)
     @Transactional
@@ -35,7 +42,8 @@ public class OutboxScheduler {
                 String topicName = determineTopic(message.getEventType());
                 if (topicName != null) {
                     JsonNode payloadNode = objectMapper.readTree(message.getPayload());
-                    eventKafkaTemplate.send(topicName, message.getAggregateId(), payloadNode).get();
+                    eventKafkaTemplate.send(topicName, message.getAggregateId(), payloadNode)
+                            .get(10, java.util.concurrent.TimeUnit.SECONDS);
                     log.info("Published outbox message id={} to topic={}", message.getId(), topicName);
                 } else {
                     log.warn("Unknown event type: {}", message.getEventType());
@@ -49,15 +57,9 @@ public class OutboxScheduler {
     }
     
     private String determineTopic(String eventType) {
-        // Map eventType to topic based on naming conventions
-        if ("ACCOUNT_VERIFIED".equals(eventType)) {
-            return "account-verified";
-        }
-        if ("REGISTRATION_VALIDATION_REQUESTED".equals(eventType)) {
-            return "registration-validation-requested";
-        }
-        // Fallback to lowercase hyphen-separated
-        return eventType.toLowerCase().replace('_', '-');
+        return eventType != null && eventType.startsWith("ACCOUNT_")
+                ? accountLifecycleTopic
+                : authDomainTopic;
     }
     public OutboxScheduler(OutboxMessageRepository outboxMessageRepository, org.springframework.kafka.core.KafkaTemplate<String, Object> eventKafkaTemplate, ObjectMapper objectMapper) {
         this.outboxMessageRepository = outboxMessageRepository;

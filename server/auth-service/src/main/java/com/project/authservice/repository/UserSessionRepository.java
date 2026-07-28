@@ -15,6 +15,10 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     List<UserSession> findByAccountIdAndIsOnlineTrue(Long accountId);
     
     Optional<UserSession> findByIdAndAccountId(Long id, Long accountId);
+
+    Optional<UserSession> findByRefreshTokenId(Long refreshTokenId);
+
+    List<UserSession> findByAccountIdAndIsOnlineTrueAndUserAgent(Long accountId, String userAgent);
     
     @Modifying
     @Query("UPDATE UserSession s SET s.isOnline = false WHERE s.id = :sessionId")

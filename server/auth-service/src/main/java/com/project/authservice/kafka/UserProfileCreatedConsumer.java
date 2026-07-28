@@ -59,7 +59,7 @@ public class UserProfileCreatedConsumer {
                 return;
             }
 
-            if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.ACTIVE || account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
+            if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
                 account.setAccountStatus(com.project.authservice.enums.AccountStatus.ACTIVE);
                 accountRepository.save(account);
                 log.info("Account {} successfully activated.", accountId);
@@ -73,7 +73,7 @@ public class UserProfileCreatedConsumer {
             redisTemplate.delete(pendingKey);
 
         } catch (Exception e) {
-            log.error("Error processing USER_PROFILE_CREATED event message: {}", message, e);
+            log.error("Error processing USER_PROFILE_CREATED event", e);
             throw new RuntimeException(e);
         }
     }
