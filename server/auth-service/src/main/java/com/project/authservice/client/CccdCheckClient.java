@@ -88,12 +88,14 @@ public class CccdCheckClient {
     
 
     public static class CccdInfo {
-        private final String cccdMasked;
-        private final String provinceCode;
-        private final String provinceName;
-        private final String gender;
-        private final int birthYear;
-        private final String note;
+        private String cccdMasked;
+        private String provinceCode;
+        private String provinceName;
+        private String gender;
+        private int birthYear;
+        private String note;
+
+        public CccdInfo() {}
 
         public CccdInfo(String cccdMasked, String provinceCode, String provinceName, String gender, int birthYear, String note) {
             this.cccdMasked = cccdMasked;

@@ -23,13 +23,33 @@ import jakarta.validation.constraints.Pattern;
 
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 
-@WebMvcTest(controllers = GlobalExceptionHandlerIntegrationTest.TestController.class)
+@WebMvcTest(
+    controllers = GlobalExceptionHandlerIntegrationTest.TestController.class,
+    excludeFilters = @org.springframework.context.annotation.ComponentScan.Filter(
+        type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
+        classes = com.project.authservice.config.SecurityConfig.class
+    ),
+    excludeAutoConfiguration = {
+        org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+    }
+)
 @Import({GlobalExceptionHandler.class, GlobalExceptionHandlerIntegrationTest.TestController.class})
 @AutoConfigureMockMvc(addFilters = false)
 class GlobalExceptionHandlerIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private com.project.authservice.util.JwtUtil jwtUtil;
+
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
+
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository;
 
     @RestController
     static class TestController {

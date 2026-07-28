@@ -46,4 +46,35 @@ public interface AuthService {
 	 * @return new jwt response with rotated tokens
 	 */
 	JwtResponse refreshToken(RefreshTokenRequest request);
+
+	/**
+	 * Logs out the user by invalidating the current token.
+	 *
+	 * @param token jwt access token
+	 */
+	void logout(String token);
+
+	/**
+	 * Logs out the user from all sessions.
+	 *
+	 * @param email user email
+	 */
+	void logoutAll(String email);
+
+	void forgotPassword(com.project.authservice.dto.request.ForgotPasswordRequest request);
+	
+	void resetPassword(com.project.authservice.dto.request.ResetPasswordRequest request);
+	
+	void changePassword(com.project.authservice.dto.request.ChangePasswordRequest request, String email);
+
+	void changeEmail(com.project.authservice.dto.request.ChangeEmailRequest request, String currentEmail);
+
+	/**
+	 * Authenticates an OAuth2 user and generates JWT token.
+	 *
+	 * @param account account
+	 * @param request servlet request
+	 * @return jwt response
+	 */
+	JwtResponse loginOAuth2(com.project.authservice.entity.Account account, jakarta.servlet.http.HttpServletRequest request);
 }

@@ -10,13 +10,10 @@ import org.springframework.context.annotation.Configuration;
 import com.project.authservice.entity.Role;
 import com.project.authservice.repository.RoleRepository;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @Configuration
-@RequiredArgsConstructor
-@Slf4j
 public class RoleInitializerConfig {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RoleInitializerConfig.class);
 
     private final RoleRepository roleRepository;
 
@@ -43,5 +40,8 @@ public class RoleInitializerConfig {
 
             log.info("Default role initialization completed successfully.");
         };
+    }
+    public RoleInitializerConfig(RoleRepository roleRepository) {
+        this.roleRepository = roleRepository;
     }
 }

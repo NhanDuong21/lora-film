@@ -7,4 +7,5 @@ import com.project.authservice.dto.response.SendOtpResponse;
 public interface VerificationService {
     SendOtpResponse sendOtp(SendOtpRequest request);
     void verify(VerifyRequest request);
+    void sendForgotPasswordEmail(Long accountId, String email, String otp);
 }

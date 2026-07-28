@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { PlusCircle, CalendarX2, Info, Clock, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
+import { PlusCircle, CalendarX2, AlertTriangle, XCircle } from 'lucide-react';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 import { LoadingState, ErrorState, EmptyState } from '@/components/common/ui/uiKit';
 
@@ -16,10 +16,12 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
   const [error, setError] = useState(null);
   const [cancelingId, setCancelingId] = useState(null);
 
-  const fetchWindows = useCallback(async () => {
+  const fetchWindows = useCallback(async (isInitialLoad = false) => {
     if (!roomId) return;
-    setIsLoading(true);
-    setError(null);
+    if (!isInitialLoad) {
+        setIsLoading(true);
+        setError(null);
+    }
     try {
       const res = await adminRoomService.getMaintenanceWindows(roomId);
       if (res?.success) {
@@ -33,7 +35,10 @@ export default function AuditoriumMaintenanceTab({ roomId, triggerToast }) {
   }, [roomId]);
 
   useEffect(() => {
-    fetchWindows();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsLoading(true);
+    setError(null);
+    fetchWindows(true);
   }, [fetchWindows]);
 
   const openAddForm = () => {

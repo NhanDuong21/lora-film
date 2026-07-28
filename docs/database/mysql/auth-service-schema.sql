@@ -1,91 +1,655 @@
-CREATE TABLE `accounts` (
-  `id` bigint PRIMARY KEY AUTO_INCREMENT COMMENT 'Primary Key - Logical Ref to User Service',
-  `email` varchar(100) UNIQUE NOT NULL COMMENT 'Dùng làm tên đăng nhập chính',
-  `password_hash` varchar(255) NOT NULL,
-  `role_id` int NOT NULL,
-  `account_status` varchar(20) DEFAULT 'PENDING' COMMENT 'PENDING, ACTIVE, SUSPENDED, BLOCKED',
-  `version` int DEFAULT 0 COMMENT 'For optimistic locking',
-  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-  `created_by` bigint,
-  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `updated_by` bigint
-);
 
-CREATE TABLE `roles` (
-  `id` int PRIMARY KEY AUTO_INCREMENT,
-  `role_name` varchar(50) UNIQUE NOT NULL COMMENT 'CUSTOMER, STAFF, ADMIN',
-  `description` varchar(255),
-  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-  `created_by` bigint,
-  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `updated_by` bigint
-);
+USE auth_db;
 
-CREATE TABLE `permissions` (
-  `id` int PRIMARY KEY AUTO_INCREMENT,
-  `permission_code` varchar(100) UNIQUE NOT NULL,
-  `description` varchar(255),
-  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-  `created_by` bigint,
-  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `updated_by` bigint
-);
 
-CREATE TABLE `roles_permissions` (
-  `role_id` int NOT NULL,
-  `permission_id` int NOT NULL,
-  PRIMARY KEY (`role_id`, `permission_id`)
-);
+-- =====================================================
+-- TABLE: accounts
+-- Quản lý tài khoản đăng nhập
+-- =====================================================
 
-CREATE TABLE `refresh_tokens` (
-  `id` bigint PRIMARY KEY AUTO_INCREMENT,
-  `account_id` bigint NOT NULL,
-  `token_hash` varchar(255) UNIQUE NOT NULL,
-  `expiry_date` timestamp NOT NULL,
-  `is_revoked` boolean DEFAULT false,
-  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-  `created_by` bigint,
-  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `updated_by` bigint
-);
+CREATE TABLE accounts
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-CREATE TABLE `audit_logs` (
-  `id` bigint PRIMARY KEY AUTO_INCREMENT,
-  `account_id` bigint,
-  `action` varchar(100) NOT NULL,
-  `ip_address` varchar(45),
-  `user_agent` varchar(255),
-  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-  `created_by` bigint,
-  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `updated_by` bigint
-);
+    email VARCHAR(255) NOT NULL,
 
-CREATE TABLE `account_providers` (
-  `id` bigint PRIMARY KEY AUTO_INCREMENT,
-  `account_id` bigint NOT NULL,
-  `provider_name` varchar(50) NOT NULL COMMENT 'google, facebook, apple, github',
-  `provider_account_id` varchar(255) NOT NULL COMMENT 'Provider specific user ID (e.g. sub in JWT)',
-  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
-  `created_by` bigint,
-  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `updated_by` bigint,
-  UNIQUE KEY `uk_provider_account` (`provider_name`, `provider_account_id`)
-);
+    password_hash VARCHAR(255) NOT NULL,
 
-ALTER TABLE `accounts` ADD CONSTRAINT `fk_accounts_roles` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE RESTRICT;
+    status ENUM(
+        'ACTIVE',
+        'INACTIVE',
+        'LOCKED',
+        'DELETED'
+    )
+    NOT NULL DEFAULT 'INACTIVE',
 
-ALTER TABLE `roles_permissions` ADD CONSTRAINT `fk_roles_permissions_roles` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
 
-ALTER TABLE `roles_permissions` ADD CONSTRAINT `fk_roles_permissions_permissions` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE;
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
 
-ALTER TABLE `refresh_tokens` ADD CONSTRAINT `fk_refresh_tokens_accounts` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
 
-ALTER TABLE `account_providers` ADD CONSTRAINT `fk_account_providers_accounts` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE;
+    last_login_at TIMESTAMP NULL,
 
-CREATE INDEX `idx_accounts_email` ON `accounts` (`email`);
-CREATE INDEX `idx_accounts_role_id` ON `accounts` (`role_id`);
-CREATE INDEX `idx_refresh_tokens_account_id` ON `refresh_tokens` (`account_id`);
-CREATE INDEX `idx_audit_logs_account_id` ON `audit_logs` (`account_id`);
-CREATE INDEX `idx_audit_logs_action` ON `audit_logs` (`action`);
-CREATE INDEX `idx_account_providers_account_id` ON `account_providers` (`account_id`);
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    created_by BIGINT NULL,
+
+    updated_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    updated_by BIGINT NULL,
+
+
+    CONSTRAINT uk_accounts_email
+        UNIQUE(email)
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE INDEX idx_accounts_status
+ON accounts(status);
+
+
+
+CREATE INDEX idx_accounts_deleted
+ON accounts(is_deleted);
+
+
+
+-- =====================================================
+-- TABLE: roles
+-- Quản lý quyền theo vai trò
+-- =====================================================
+
+CREATE TABLE roles
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+
+    code VARCHAR(50) NOT NULL,
+
+
+    name VARCHAR(100) NOT NULL,
+
+
+    description VARCHAR(255) NULL,
+
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+
+    updated_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+
+    CONSTRAINT uk_roles_code
+        UNIQUE(code)
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE INDEX idx_roles_name
+ON roles(name);
+
+
+
+-- =====================================================
+-- TABLE: permissions
+-- Quản lý quyền chi tiết
+-- =====================================================
+
+CREATE TABLE permissions
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+
+    code VARCHAR(100) NOT NULL,
+
+
+    name VARCHAR(150) NOT NULL,
+
+
+    module VARCHAR(100) NOT NULL,
+
+
+    description VARCHAR(255) NULL,
+
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+
+    updated_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+
+    CONSTRAINT uk_permissions_code
+        UNIQUE(code)
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE INDEX idx_permissions_module
+ON permissions(module);
+
+
+-- =====================================================
+-- TABLE: account_roles
+-- Quan hệ N-N giữa Account và Role
+-- =====================================================
+
+CREATE TABLE account_roles
+(
+    account_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+
+    assigned_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    assigned_by BIGINT NULL,
+
+    PRIMARY KEY (account_id, role_id),
+
+    CONSTRAINT fk_account_roles_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_account_roles_role
+        FOREIGN KEY (role_id)
+        REFERENCES roles(id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE INDEX idx_account_roles_role
+ON account_roles(role_id);
+
+
+
+
+
+-- =====================================================
+-- TABLE: roles_permissions
+-- Quan hệ N-N giữa Role và Permission
+-- =====================================================
+
+CREATE TABLE roles_permissions
+(
+    role_id BIGINT NOT NULL,
+
+    permission_id BIGINT NOT NULL,
+
+    PRIMARY KEY (role_id, permission_id),
+
+    CONSTRAINT fk_role_permissions_role
+        FOREIGN KEY (role_id)
+        REFERENCES roles(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_role_permissions_permission
+        FOREIGN KEY (permission_id)
+        REFERENCES permissions(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE INDEX idx_roles_permissions_permission
+ON roles_permissions(permission_id);
+
+
+
+
+
+-- =====================================================
+-- TABLE: refresh_tokens
+-- Refresh Token Rotation
+-- Chỉ lưu HASH của Refresh Token
+-- =====================================================
+
+CREATE TABLE refresh_tokens
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    account_id BIGINT NOT NULL,
+
+    token_hash CHAR(64) NOT NULL,
+
+    device_id VARCHAR(120) NULL,
+
+    expires_at TIMESTAMP NOT NULL,
+
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+
+    revoked_at TIMESTAMP NULL,
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uk_refresh_token_hash
+        UNIQUE(token_hash),
+
+    CONSTRAINT fk_refresh_token_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE INDEX idx_refresh_account
+ON refresh_tokens(account_id);
+
+
+CREATE INDEX idx_refresh_expired
+ON refresh_tokens(expires_at);
+
+
+CREATE INDEX idx_refresh_revoked
+ON refresh_tokens(revoked);
+
+
+
+
+
+-- =====================================================
+-- TABLE: sessions
+-- Quản lý phiên đăng nhập
+-- =====================================================
+
+CREATE TABLE sessions
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    account_id BIGINT NOT NULL,
+
+    refresh_token_id BIGINT NULL,
+
+    device_name VARCHAR(150) NULL,
+
+    device_type VARCHAR(50) NULL,
+
+    browser VARCHAR(100) NULL,
+
+    operating_system VARCHAR(100) NULL,
+
+    ip_address VARCHAR(45) NOT NULL,
+
+    user_agent VARCHAR(500) NULL,
+
+    login_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    last_active_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    expired_at TIMESTAMP NULL,
+
+    logout_at TIMESTAMP NULL,
+
+    is_online BOOLEAN NOT NULL DEFAULT TRUE,
+
+    CONSTRAINT fk_sessions_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_sessions_refresh
+        FOREIGN KEY (refresh_token_id)
+        REFERENCES refresh_tokens(id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE INDEX idx_sessions_account
+ON sessions(account_id);
+
+
+CREATE INDEX idx_sessions_online
+ON sessions(is_online);
+
+
+CREATE INDEX idx_sessions_last_active
+ON sessions(last_active_at);
+
+
+CREATE INDEX idx_sessions_ip
+ON sessions(ip_address);
+
+
+-- =====================================================
+-- TABLE: oauth_accounts
+-- Liên kết tài khoản OAuth2
+-- =====================================================
+
+CREATE TABLE oauth_accounts
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    account_id BIGINT NOT NULL,
+
+    provider ENUM(
+        'GOOGLE',
+        'FACEBOOK',
+        'GITHUB',
+        'MICROSOFT'
+    ) NOT NULL,
+
+    provider_user_id VARCHAR(255) NOT NULL,
+
+    provider_email VARCHAR(255) NULL,
+
+    linked_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uk_provider_user
+        UNIQUE(provider, provider_user_id),
+
+    CONSTRAINT fk_oauth_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE INDEX idx_oauth_account
+ON oauth_accounts(account_id);
+
+CREATE INDEX idx_oauth_provider
+ON oauth_accounts(provider);
+
+
+
+
+
+-- =====================================================
+-- TABLE: email_verifications
+-- OTP xác thực Email
+-- =====================================================
+
+CREATE TABLE email_verifications
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    account_id BIGINT NOT NULL,
+
+    otp_code CHAR(6) NOT NULL,
+
+    expired_at TIMESTAMP NOT NULL,
+
+    verified_at TIMESTAMP NULL,
+
+    attempts INT NOT NULL DEFAULT 0,
+
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_email_verification_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE INDEX idx_email_verification_account
+ON email_verifications(account_id);
+
+CREATE INDEX idx_email_verification_expired
+ON email_verifications(expired_at);
+
+CREATE INDEX idx_email_verification_verified
+ON email_verifications(is_verified);
+
+
+
+
+
+-- =====================================================
+-- TABLE: password_reset_tokens
+-- OTP đặt lại mật khẩu
+-- =====================================================
+
+CREATE TABLE password_reset_tokens
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    account_id BIGINT NOT NULL,
+
+    otp_code CHAR(6) NOT NULL,
+
+    expired_at TIMESTAMP NOT NULL,
+
+    used_at TIMESTAMP NULL,
+
+    attempts INT NOT NULL DEFAULT 0,
+
+    is_used BOOLEAN NOT NULL DEFAULT FALSE,
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_password_reset_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE INDEX idx_password_reset_account
+ON password_reset_tokens(account_id);
+
+CREATE INDEX idx_password_reset_expired
+ON password_reset_tokens(expired_at);
+
+CREATE INDEX idx_password_reset_used
+ON password_reset_tokens(is_used);
+
+-- =====================================================
+-- TABLE: login_history
+-- Lưu lịch sử đăng nhập
+-- =====================================================
+
+CREATE TABLE login_history
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    account_id BIGINT NOT NULL,
+
+    login_time TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    ip_address VARCHAR(45) NULL,
+
+    user_agent VARCHAR(255) NULL,
+
+    status VARCHAR(20) NULL,
+
+    CONSTRAINT fk_login_history_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE INDEX idx_login_history_account
+ON login_history(account_id);
+
+CREATE INDEX idx_login_history_login
+ON login_history(login_time);
+
+CREATE INDEX idx_login_history_status
+ON login_history(status);
+
+CREATE INDEX idx_login_history_ip
+ON login_history(ip_address);
+
+
+
+
+
+-- =====================================================
+-- TABLE: audit_logs
+-- Nhật ký Audit
+-- =====================================================
+
+CREATE TABLE audit_logs
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    account_id BIGINT NULL,
+
+    action VARCHAR(100) NOT NULL,
+
+    resource VARCHAR(100) NOT NULL,
+
+    resource_id VARCHAR(100) NULL,
+
+    description TEXT NULL,
+
+    ip_address VARCHAR(45) NULL,
+
+    user_agent VARCHAR(500) NULL,
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    created_by BIGINT NULL,
+
+    updated_at TIMESTAMP NULL
+        DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    updated_by BIGINT NULL,
+
+    CONSTRAINT fk_audit_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE INDEX idx_audit_account
+ON audit_logs(account_id);
+
+CREATE INDEX idx_audit_action
+ON audit_logs(action);
+
+CREATE INDEX idx_audit_resource
+ON audit_logs(resource);
+
+CREATE INDEX idx_audit_created
+ON audit_logs(created_at);
+
+
+
+
+
+-- =====================================================
+-- TABLE: outbox_messages
+-- Transactional Outbox Pattern
+-- =====================================================
+
+CREATE TABLE outbox_messages
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    aggregate_type VARCHAR(100) NOT NULL,
+
+    aggregate_id VARCHAR(100) NOT NULL,
+
+    event_type VARCHAR(100) NOT NULL,
+
+    payload TEXT NOT NULL,
+
+    processed BOOLEAN NOT NULL DEFAULT FALSE,
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
+
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE INDEX idx_outbox_status
+ON outbox_messages(processed);
+
+CREATE INDEX idx_outbox_created
+ON outbox_messages(created_at);
+
+CREATE INDEX idx_outbox_event_type
+ON outbox_messages(event_type);
+

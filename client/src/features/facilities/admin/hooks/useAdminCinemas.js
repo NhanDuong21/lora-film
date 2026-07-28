@@ -108,6 +108,7 @@ export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
     citiesList,
     fetchCinemas,
     handleDeleteCinema,
-    handleStatusChange
+    handleStatusChange,
+    error
   };
 }

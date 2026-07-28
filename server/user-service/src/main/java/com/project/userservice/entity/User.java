@@ -1,6 +1,7 @@
 package com.project.userservice.entity;
 
 import com.project.userservice.enumtype.Gender;
+import com.project.userservice.enumtype.UserStatus;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -16,13 +17,13 @@ public class User {
     @Column(name = "account_id")
     private Long accountId;
 
-    @Column(name = "full_name", nullable = false, length = 100)
+    @Column(name = "full_name", nullable = false, length = 150)
     private String fullName;
 
-    @Column(name = "email", length = 100)
+    @Column(name = "email", length = 255)
     private String email;
 
-    @Column(name = "phone_number", nullable = false, unique = true, length = 15)
+    @Column(name = "phone_number", unique = true, length = 15)
     private String phoneNumber;
 
     @Column(name = "cccd", unique = true, length = 12)
@@ -31,10 +32,10 @@ public class User {
     @Column(name = "cccd_masked", length = 20)
     private String cccdMasked;
 
-    @Column(name = "province_code", length = 10)
+    @Column(name = "province_code", length = 20)
     private String provinceCode;
 
-    @Column(name = "province_name", length = 100)
+    @Column(name = "province_name", length = 150)
     private String provinceName;
 
     @Enumerated(EnumType.STRING)
@@ -46,6 +47,26 @@ public class User {
 
     @Column(name = "birth_year")
     private Integer birthYear;
+
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private UserStatus status = UserStatus.ACTIVE;
+
+    @Version
+    @Column(name = "version")
+    private Integer version = 0;
+
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted = false;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -163,6 +184,22 @@ public class User {
         this.birthYear = birthYear;
     }
 
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
+    public UserStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(UserStatus status) {
+        this.status = status;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -177,5 +214,37 @@ public class User {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
+    }
+
+    public Boolean getIsDeleted() {
+        return isDeleted;
+    }
+
+    public void setIsDeleted(Boolean isDeleted) {
+        this.isDeleted = isDeleted;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
     }
 }

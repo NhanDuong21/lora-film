@@ -30,6 +30,8 @@ import com.project.authservice.exception.OtpRateLimitException;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.service.VerificationService;
 
+import static com.project.authservice.util.SensitiveDataMasker.maskEmail;
+
 @Service
 public class OtpVerificationServiceImpl implements VerificationService {
     private static final Logger log = LoggerFactory.getLogger(OtpVerificationServiceImpl.class);
@@ -59,7 +61,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
     }
 
     private String getRedisKey(String email) {
-        return "otp:" + email;
+        return "otp:" + normalizeEmail(email);
     }
 
     private RedisOtpData getRedisOtpData(String key) {
@@ -90,10 +92,13 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
     @Override
     public com.project.authservice.dto.response.SendOtpResponse sendOtp(SendOtpRequest request) {
-        String email = request.getEmail();
+        String email = normalizeEmail(request.getEmail());
 
         Account account = accountRepository.findByEmail(email)
                 .orElseThrow(AccountNotFoundException::new);
+        if (account.getAccountStatus() != com.project.authservice.enums.AccountStatus.INACTIVE) {
+            throw new AccountAlreadyVerifiedException();
+        }
         Long accountId = account.getId();
 
         String key = getRedisKey(email);
@@ -121,9 +126,8 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         saveRedisOtpData(key, newData);
 
-        log.info("OTP generated for email={}", email);
-
-        if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.PENDING) {
+        log.info("OTP generated for email={}", maskEmail(email));
+        if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
             String name = "Khách hàng";
             String pendingKey = "pending_registration:" + email;
             String pendingJson = redisTemplate.opsForValue().get(pendingKey);
@@ -135,7 +139,8 @@ public class OtpVerificationServiceImpl implements VerificationService {
                         name = requestNode.path("fullName").asText();
                     }
                 } catch (Exception e) {
-                    log.error("Failed to parse PendingRegistrationData for email {}: {}", email, e.getMessage());
+                    log.error("Failed to parse PendingRegistrationData for email {}: {}",
+                            maskEmail(email), e.getMessage());
                 }
             }
 
@@ -159,7 +164,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
                 String url = notificationServiceUrl + "/internal/notifications/send";
                 log.info("Sending OTP registration email request to notification-service: url={}", url);
                 restTemplate.postForEntity(url, httpEntity, Map.class);
-                log.info("OTP registration email request sent successfully for email={}", email);
+                log.info("OTP registration email request sent successfully for email={}", maskEmail(email));
             } catch (Exception e) {
                 log.warn("Failed to send OTP email via notification-service: {}", e.getMessage(), e);
             }
@@ -171,12 +176,16 @@ public class OtpVerificationServiceImpl implements VerificationService {
     @Override
     @Transactional
     public void verify(VerifyRequest request) {
-        String email = request.getEmail();
+        String email = normalizeEmail(request.getEmail());
         String otp = request.getOtp();
 
         if (email != null) {
             if (!accountRepository.existsByEmail(email)) {
                 throw new AccountNotFoundException();
+            }
+            Account account = accountRepository.findByEmail(email).orElseThrow(AccountNotFoundException::new);
+            if (account.getAccountStatus() != com.project.authservice.enums.AccountStatus.INACTIVE) {
+                throw new AccountAlreadyVerifiedException();
             }
         } else {
             throw new AccountNotFoundException();
@@ -193,7 +202,7 @@ public class OtpVerificationServiceImpl implements VerificationService {
             int attempts = existingData.getFailedAttempts() + 1;
             if (attempts >= 5) {
                 redisTemplate.delete(key);
-                log.warn("OTP max failed attempts reached for email={}. Key deleted.", email);
+                log.warn("OTP max failed attempts reached for email={}. Key deleted.", maskEmail(email));
             } else {
                 existingData.setFailedAttempts(attempts);
                 // Preserve remaining TTL when updating attempts
@@ -212,9 +221,48 @@ public class OtpVerificationServiceImpl implements VerificationService {
 
         // Success
         redisTemplate.delete(key);
-        log.info("OTP verified successfully for email={}", email);
+        log.info("OTP verified successfully for email={}", maskEmail(email));
 
         // Account status activation should be handled by the caller or Saga pattern,
         // not here.
+    }
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
+    @Override
+    public void sendForgotPasswordEmail(Long accountId, String email, String otp) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Internal-Token", internalToken);
+
+            String resetLink = frontendUrl + "/reset-password?token="
+                    + java.net.URLEncoder.encode(otp, java.nio.charset.StandardCharsets.UTF_8)
+                    + "&email="
+                    + java.net.URLEncoder.encode(email, java.nio.charset.StandardCharsets.UTF_8);
+            String content = "Chào bạn,<br/><br/>Bạn đã yêu cầu đặt lại mật khẩu. Vui lòng nhấp vào liên kết sau để đặt lại mật khẩu: <a href=\"" + resetLink + "\">Đặt lại mật khẩu</a><br/><br/>Nếu bạn không yêu cầu, vui lòng bỏ qua email này.";
+
+            Map<String, Object> body = Map.of(
+                    "eventId", "AUTH-FORGOT-PASSWORD-" + email + "-" + System.currentTimeMillis(),
+                    "requestSource", "auth-service",
+                    "title", "Yêu cầu đặt lại mật khẩu",
+                    "content", content,
+                    "userId", accountId,
+                    "recipient", email,
+                    "channelType", "EMAIL");
+
+            HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(body, headers);
+            String url = notificationServiceUrl + "/internal/notifications/send";
+            log.info("Sending forgot password email request to notification-service: url={}", url);
+            restTemplate.postForEntity(url, httpEntity, Map.class);
+            log.info("Forgot password email request sent successfully for email={}", maskEmail(email));
+        } catch (Exception e) {
+            log.warn("Failed to send forgot password email via notification-service: {}", e.getMessage(), e);
+        }
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 }

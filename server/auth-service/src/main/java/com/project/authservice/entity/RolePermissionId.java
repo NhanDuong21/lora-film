@@ -5,23 +5,15 @@ import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Embeddable
 public class RolePermissionId implements Serializable {
 
 	@Column(name = "role_id")
-	private Integer roleId;
+	private Long roleId;
 
 	@Column(name = "permission_id")
-	private Integer permissionId;
+	private Long permissionId;
 
 	@Override
 	public boolean equals(Object o) {
@@ -35,4 +27,22 @@ public class RolePermissionId implements Serializable {
 	public int hashCode() {
 		return Objects.hash(roleId, permissionId);
 	}
+    public Long getRoleId() {
+        return this.roleId;
+    }
+    public Long getPermissionId() {
+        return this.permissionId;
+    }
+    public void setRoleId(Long roleId) {
+        this.roleId = roleId;
+    }
+    public void setPermissionId(Long permissionId) {
+        this.permissionId = permissionId;
+    }
+    public RolePermissionId() {
+    }
+    public RolePermissionId(Long roleId, Long permissionId) {
+        this.roleId = roleId;
+        this.permissionId = permissionId;
+    }
 }

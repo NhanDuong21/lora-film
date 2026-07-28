@@ -24,6 +24,7 @@ import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.dto.request.SendOtpRequest;
 import com.project.authservice.service.AuthService;
 import com.project.authservice.service.VerificationService;
+import com.project.authservice.service.AccountService;
 
 @WebMvcTest(controllers = AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -37,6 +38,15 @@ class AuthControllerTest {
 
     @MockBean
     private VerificationService verificationService;
+
+    @MockBean
+    private AccountService accountService;
+
+    @MockBean
+    private com.project.authservice.security.JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockBean
+    private com.project.authservice.util.JwtUtil jwtUtil;
 
     @Autowired
     private ObjectMapper objectMapper;
