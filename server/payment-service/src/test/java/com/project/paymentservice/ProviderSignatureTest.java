@@ -105,6 +105,108 @@ class ProviderSignatureTest {
     }
 
     @Test
+    void momoCreatesSignedSessionAndQueriesAuthoritativeStatus() throws Exception {
+        String secret = "test-momo-session-secret";
+        ObjectMapper objectMapper = new ObjectMapper();
+        AtomicReference<Map<String, Object>> capturedCreate = new AtomicReference<>();
+        AtomicReference<Map<String, Object>> capturedQuery = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/create", exchange -> {
+            Map<String, Object> requestValues = objectMapper.readValue(
+                    exchange.getRequestBody(),
+                    objectMapper.getTypeFactory().constructMapType(
+                            LinkedHashMap.class, String.class, Object.class));
+            capturedCreate.set(requestValues);
+            byte[] response = objectMapper.writeValueAsBytes(Map.of(
+                    "partnerCode", "MOMO",
+                    "requestId", String.valueOf(requestValues.get("requestId")),
+                    "orderId", String.valueOf(requestValues.get("orderId")),
+                    "resultCode", 0,
+                    "message", "Successful.",
+                    "payUrl", "https://test-payment.momo.vn/pay/mock"));
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.createContext("/query", exchange -> {
+            Map<String, Object> requestValues = objectMapper.readValue(
+                    exchange.getRequestBody(),
+                    objectMapper.getTypeFactory().constructMapType(
+                            LinkedHashMap.class, String.class, Object.class));
+            capturedQuery.set(requestValues);
+            Map<String, String> responseValues = new LinkedHashMap<>();
+            responseValues.put("partnerCode", "MOMO");
+            responseValues.put("orderId", String.valueOf(requestValues.get("orderId")));
+            responseValues.put("requestId", String.valueOf(requestValues.get("requestId")));
+            responseValues.put("amount", "150000");
+            responseValues.put("orderInfo", "Thanh toan don PAY-0001");
+            responseValues.put("orderType", "momo_wallet");
+            responseValues.put("transId", "9988776655");
+            responseValues.put("resultCode", "0");
+            responseValues.put("message", "Successful.");
+            responseValues.put("payType", "qr");
+            responseValues.put("responseTime", "1785140000000");
+            responseValues.put("extraData", "");
+            responseValues.put("signature",
+                    hmacUnchecked("HmacSHA256", secret, momoSource(responseValues)));
+            byte[] response = objectMapper.writeValueAsBytes(responseValues);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            MomoProperties properties = new MomoProperties();
+            properties.setPartnerCode("MOMO");
+            properties.setAccessKey("ACCESS");
+            properties.setSecretKey(secret);
+            properties.setCreateUrl(
+                    "http://localhost:" + server.getAddress().getPort() + "/create");
+            properties.setQueryUrl(
+                    "http://localhost:" + server.getAddress().getPort() + "/query");
+            properties.setRedirectUrl("http://localhost/return");
+            properties.setIpnUrl("http://localhost/ipn");
+            MomoPaymentProvider provider =
+                    new MomoPaymentProvider(properties, objectMapper);
+
+            PaymentSession session = provider.createSession(request());
+
+            assertEquals("PAY-0001", session.getProviderOrderId());
+            assertEquals("https://test-payment.momo.vn/pay/mock", session.getPaymentUrl());
+            Map<String, Object> createPayload = capturedCreate.get();
+            assertNotNull(createPayload);
+            String createSource = "accessKey=ACCESS"
+                    + "&amount=" + createPayload.get("amount")
+                    + "&extraData=" + createPayload.get("extraData")
+                    + "&ipnUrl=" + createPayload.get("ipnUrl")
+                    + "&orderId=" + createPayload.get("orderId")
+                    + "&orderInfo=" + createPayload.get("orderInfo")
+                    + "&partnerCode=" + createPayload.get("partnerCode")
+                    + "&redirectUrl=" + createPayload.get("redirectUrl")
+                    + "&requestId=" + createPayload.get("requestId")
+                    + "&requestType=" + createPayload.get("requestType");
+            assertEquals(hmac("HmacSHA256", secret, createSource),
+                    createPayload.get("signature"));
+
+            Payment payment = new Payment();
+            payment.setPublicId("d14bd538-83b8-4778-8200-5a49de7af0df");
+            payment.setPaymentTransactionCode("PAY-0001");
+            payment.setProviderOrderId("PAY-0001");
+            Optional<ProviderCallbackResult> queried = provider.queryStatus(payment);
+
+            assertTrue(queried.isPresent());
+            assertTrue(queried.get().isSignatureValid());
+            assertEquals("SUCCESS", queried.get().getResult());
+            assertEquals("PAY-0001", queried.get().getProviderOrderId());
+            assertEquals("PAY-0001", capturedQuery.get().get("orderId"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void vnpayQueryDrVerifiesSignedSuccessWithoutIpn() throws Exception {
         String secret = "test-vnpay-query-secret";
         ObjectMapper objectMapper = new ObjectMapper();

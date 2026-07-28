@@ -110,21 +110,11 @@ public class ProviderCallbackService {
         Payment payment = paymentRepository.findByProviderCodeAndProviderOrderId(
                 provider, result.getProviderOrderId()).orElse(null);
         if (payment != null && payment.getStatus() == PaymentStatus.PROCESSING) {
-            if (adapter.verifiedReturnFallbackEnabled()) {
-                try {
-                    // Localhost cannot receive VNPay's server-to-server IPN.
-                    // The adapter already verified the signed Return payload;
-                    // the canonical transaction service still validates the
-                    // order, amount and currency before changing any state.
-                    transactionService.applyProviderResult(provider, result, null);
-                } catch (BusinessException ignored) {
-                    // Mismatches are persisted as reconciliation cases. Keep
-                    // redirecting so the customer sees that stored outcome.
-                }
-            } else {
-                transactionService.scheduleProviderStatusCheck(
-                        payment.getId(), Instant.now());
-            }
+            // Browser Return is navigation data only. A valid signature allows
+            // us to locate the payment, but never authorizes a state change.
+            // IPN/webhook or the provider status query remains authoritative.
+            transactionService.scheduleProviderStatusCheck(
+                    payment.getId(), Instant.now());
         }
         return payment == null
                 ? new ReturnOutcome(true, null, null)

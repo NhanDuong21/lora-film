@@ -3,6 +3,7 @@ package com.project.paymentservice;
 import com.project.paymentservice.client.booking.BookingPaymentClient;
 import com.project.paymentservice.client.booking.BookingPaymentResultResponse;
 import com.project.paymentservice.entity.Payment;
+import com.project.paymentservice.entity.PaymentOutboxEvent;
 import com.project.paymentservice.enumtype.OutboxDestination;
 import com.project.paymentservice.enumtype.OutboxStatus;
 import com.project.paymentservice.enumtype.PaymentMethod;
@@ -19,6 +20,8 @@ import com.project.paymentservice.repository.PaymentReconciliationCaseRepository
 import com.project.paymentservice.repository.PaymentRepository;
 import com.project.paymentservice.repository.PaymentWebhookEventRepository;
 import com.project.paymentservice.service.PaymentOutboxWorker;
+import com.project.paymentservice.service.OutboxDeliveryStateService;
+import com.project.paymentservice.service.AdminPaymentService;
 import com.project.paymentservice.service.ProviderCallbackService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +61,10 @@ class PaymentReleaseOneWorkflowTest {
     private ProviderCallbackService callbackService;
     @Autowired
     private PaymentOutboxWorker outboxWorker;
+    @Autowired
+    private OutboxDeliveryStateService outboxStateService;
+    @Autowired
+    private AdminPaymentService adminPaymentService;
     @Autowired
     private PaymentRepository paymentRepository;
     @Autowired
@@ -205,6 +212,80 @@ class PaymentReleaseOneWorkflowTest {
         assertEquals("LATE_PROVIDER_SUCCESS", stored.getReconciliationReason());
         assertEquals(1, reconciliationRepository.count());
         assertEquals(1, outboxRepository.count());
+    }
+
+    @Test
+    void invalidProviderSignatureIsAuditedWithoutChangingPayment() {
+        Payment payment = persistProcessingPayment(Instant.now().plusSeconds(600));
+        ProviderCallbackResult result = successResult(payment, "callback-invalid-signature");
+        result.setSignatureValid(false);
+        when(provider.verifyCallback(anyMap(), anyString())).thenReturn(result);
+
+        ProviderCallbackService.CallbackOutcome outcome = callbackService.process(
+                ProviderCode.VNPAY,
+                Map.of("event", "callback-invalid-signature"),
+                "invalid-signature-body");
+
+        assertFalse(outcome.signatureValid());
+        assertFalse(outcome.processed());
+        assertEquals(PaymentStatus.PROCESSING,
+                paymentRepository.findById(payment.getId()).orElseThrow().getStatus());
+        assertEquals(1, webhookRepository.count());
+        assertEquals("FAILED", webhookRepository.findAll().getFirst()
+                .getProcessingStatus().name());
+        assertEquals(0, outboxRepository.count());
+        Long webhookId = webhookRepository.findAll().getFirst().getId();
+        BusinessException replayRejected = assertThrows(
+                BusinessException.class,
+                () -> adminPaymentService.replayWebhook(webhookId));
+        assertEquals("WEBHOOK_SIGNATURE_INVALID", replayRejected.getErrorCode());
+    }
+
+    @Test
+    void kafkaOutageRetriesDeadLettersAndReplaysSameEvent() {
+        PaymentOutboxEvent event = new PaymentOutboxEvent();
+        event.setEventId(UUID.randomUUID().toString());
+        event.setAggregateType("PAYMENT");
+        event.setAggregateId(UUID.randomUUID().toString());
+        event.setEventType("PAYMENT_SUCCEEDED");
+        event.setSchemaVersion("1.0");
+        event.setDestination(OutboxDestination.ANALYTICS_KAFKA);
+        event.setPayload("{\"eventId\":\"analytics-outage\"}");
+        event.setStatus(OutboxStatus.PENDING);
+        event.setAttemptCount(0);
+        event = outboxRepository.saveAndFlush(event);
+        String originalEventId = event.getEventId();
+
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.failedFuture(
+                        new IllegalStateException("Kafka unavailable")));
+
+        for (int attempt = 1; attempt <= 8; attempt++) {
+            outboxWorker.deliver();
+            event = outboxRepository.findById(event.getId()).orElseThrow();
+            if (attempt < 8) {
+                assertEquals(OutboxStatus.FAILED, event.getStatus());
+                event.setNextRetryAt(Instant.now().minusSeconds(1));
+                outboxRepository.saveAndFlush(event);
+            }
+        }
+
+        assertEquals(OutboxStatus.DEAD_LETTER, event.getStatus());
+        assertEquals(8, event.getAttemptCount());
+
+        outboxStateService.replay(originalEventId);
+        event = outboxRepository.findById(event.getId()).orElseThrow();
+        assertEquals(OutboxStatus.PENDING, event.getStatus());
+        assertEquals(0, event.getAttemptCount());
+        assertEquals(originalEventId, event.getEventId());
+
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        outboxWorker.deliver();
+
+        event = outboxRepository.findById(event.getId()).orElseThrow();
+        assertEquals(OutboxStatus.PUBLISHED, event.getStatus());
+        assertEquals(originalEventId, event.getEventId());
     }
 
     private Payment persistProcessingPayment(Instant deadline) {

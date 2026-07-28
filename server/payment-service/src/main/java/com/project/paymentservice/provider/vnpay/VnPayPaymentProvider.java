@@ -65,11 +65,6 @@ public class VnPayPaymentProvider implements PaymentProvider {
     }
 
     @Override
-    public boolean verifiedReturnFallbackEnabled() {
-        return properties.isVerifiedReturnFallbackEnabled();
-    }
-
-    @Override
     public PaymentSession createSession(PaymentSessionRequest request) {
         Instant now = Instant.now();
         Instant expiry = request.getExpiresAt().isBefore(now.plusSeconds(900))

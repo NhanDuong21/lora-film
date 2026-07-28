@@ -100,6 +100,7 @@ public class OutboxDeliveryStateService {
         PaymentOutboxEvent event = outboxRepository.findByEventId(eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Outbox event not found"));
         event.setStatus(OutboxStatus.PENDING);
+        event.setAttemptCount(0);
         event.setNextRetryAt(Instant.now());
         event.setLastErrorSanitized(null);
         event.setLockedBy(null);
