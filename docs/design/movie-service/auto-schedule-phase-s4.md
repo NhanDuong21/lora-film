@@ -2,14 +2,10 @@
 
 ## Implementation status
 
-S4A is implemented and registered but not active. `BALANCED_V1_S4` is a
-supported generation, persistence, fingerprint, and history value, while
-`AutoScheduleStrategyVersions.CURRENT` remains `BALANCED_V1_S3`. The S3
-strategy continues to delegate to the unchanged six-component scorer and exact
-weighted-interval selector.
-
-Implementation and activation are deliberately separate. This change does not
-alter the default selections produced by current generation requests.
+S4A remains implemented and registered as an immutable historical strategy.
+New previews use `BALANCED_V1_S5`, which retains S4 coverage and adds the
+distribution pass documented in `auto-schedule-phase-s5.md`. Stored V1, V1_S2,
+V1_S3, and V1_S4 previews retain their persisted version and replay unchanged.
 
 ## Source-confirmed baseline
 
@@ -184,6 +180,7 @@ Implementation and activation are separate changes. S4 activation requires:
 - no candidate-universe, validation, overlap, manual-selection, apply, pricing,
   schema, or history-query-budget regression.
 
-Only a separately reviewed activation change may switch `CURRENT` from
-`BALANCED_V1_S3` to `BALANCED_V1_S4`. That change must contain no algorithm
-implementation or unrelated cleanup.
+The S4 activation checkpoint switched `CURRENT` from `BALANCED_V1_S3` to
+`BALANCED_V1_S4` without changing the reviewed algorithm. S5 later became
+current after production evidence showed that minimum coverage alone could
+still leave one film with more than 90% of selected showtimes.

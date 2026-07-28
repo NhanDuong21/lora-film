@@ -92,7 +92,7 @@ class AutoScheduleGenerationContextLoaderImplTest {
     }
 
     @Test
-    void loadsEveryContextRepositoryCategoryOnceAndCandidateLoopsStayRepositoryFree() {
+    void currentS5LoadsEveryContextRepositoryCategoryOnceAndCandidateLoopsStayRepositoryFree() {
         AutoScheduleGenerationContext context = loader.load(
                 request, cinema, List.of(auditorium), List.of(movieVersion));
 
@@ -116,6 +116,8 @@ class AutoScheduleGenerationContextLoaderImplTest {
         verify(maintenanceRepository, times(1)).findActiveOverlapsForAutoSchedule(
                 anyList(), eq(ActionStatus.ACTIVE), any(), any());
         verify(showtimeRepository, times(1)).findBlockingFactsForAutoSchedule(anyList(), any(), any());
+        verify(showtimeRepository, times(1)).findCoverageFactsForAutoSchedule(
+                eq(1L), eq(List.of(movieVersion.getMovie().getId())), anyList(), any(), any());
         verifyNoMoreInteractions(operatingHourRepository, closureRepository,
                 maintenanceRepository, showtimeRepository);
     }
@@ -153,19 +155,19 @@ class AutoScheduleGenerationContextLoaderImplTest {
     }
 
     @Test
-    void retainsTheExplicitNonCurrentStrategyVersionWithoutActivatingIt() {
+    void retainsTheExplicitHistoricalS3StrategyVersionWhileS5RemainsCurrent() {
         AutoScheduleGenerationContext context = loader.load(
                 request, cinema, List.of(auditorium), List.of(movieVersion),
-                AutoScheduleStrategyVersions.BALANCED_V1_S4);
+                AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3);
 
-        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S4,
-                context.getStrategyVersion());
         assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
+                context.getStrategyVersion());
+        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5,
                 AutoScheduleStrategyVersions.CURRENT);
     }
 
     @Test
-    void s4LoadsOneBoundedCinemaWideCoverageProjectionAndClassifiesCounts() {
+    void s5LoadsOneBoundedCinemaWideCoverageProjectionAndClassifiesCounts() {
         AutoScheduleExistingShowtimeFact first = fairnessFact(
                 4L, Instant.parse("2026-07-22T08:30:00Z"));
         AutoScheduleExistingShowtimeFact second = fairnessFact(
@@ -182,7 +184,7 @@ class AutoScheduleGenerationContextLoaderImplTest {
 
         AutoScheduleGenerationContext context = loader.load(
                 request, cinema, List.of(auditorium), List.of(movieVersion),
-                AutoScheduleStrategyVersions.BALANCED_V1_S4);
+                AutoScheduleStrategyVersions.BALANCED_V1_S5);
 
         assertEquals(2, context.existingShowtimeCount(
                 LocalDate.of(2026, 7, 22), 4L));

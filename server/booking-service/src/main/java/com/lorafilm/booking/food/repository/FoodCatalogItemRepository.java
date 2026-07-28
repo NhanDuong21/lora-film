@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface FoodCatalogItemRepository extends JpaRepository<FoodCatalogItem, Long> {
     Optional<FoodCatalogItem> findByCode(String code);
+
+    Optional<FoodCatalogItem> findByCodeIgnoreCase(String code);
 }

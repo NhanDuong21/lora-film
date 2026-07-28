@@ -133,6 +133,8 @@ class InternalBookingPaymentServiceTest {
         assertEquals(booking.getExpiresAt(), context.expiresAt());
         assertTrue(context.payable());
         assertEquals("Superman", context.analyticsSnapshot().movieTitle());
+        assertEquals("movie-public-101", context.analyticsSnapshot().moviePublicId());
+        assertEquals("cinema-public-201", context.analyticsSnapshot().cinemaPublicId());
         assertEquals(2, context.analyticsSnapshot().ticketCount());
     }
 
@@ -145,7 +147,35 @@ class InternalBookingPaymentServiceTest {
                 BusinessException.class,
                 () -> service.getPaymentContext(100L));
 
-        assertEquals("BOOKING_NOT_PAYABLE", exception.getErrorCode());
+        assertEquals("BOOKING_AMOUNT_NOT_LOCKED", exception.getErrorCode());
+    }
+
+    @Test
+    void reportsCancelledBookingContextWithCustomerSafeReason() {
+        booking.changeStatus(BookingStatus.CANCELLED, Instant.now());
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(booking));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.getPaymentContext(100L));
+
+        assertEquals("BOOKING_CANCELLED", exception.getErrorCode());
+        assertEquals("Đơn đặt vé đã được hủy và ghế đã được trả lại", exception.getMessage());
+        verify(reservationRepository, never()).findAllByBookingId(any());
+    }
+
+    @Test
+    void reportsExpiredBookingContextWithoutExtendingDeadline() {
+        Instant originalDeadline = Instant.now().minusSeconds(1);
+        booking.setExpiresAt(originalDeadline);
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(booking));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.getPaymentContext(100L));
+
+        assertEquals("BOOKING_PAYMENT_DEADLINE_EXPIRED", exception.getErrorCode());
+        assertEquals(originalDeadline, booking.getExpiresAt());
     }
 
     @Test
@@ -360,7 +390,9 @@ class InternalBookingPaymentServiceTest {
                 Instant.now(),
                 "VND",
                 101L,
+                "movie-public-101",
                 "Superman",
+                "cinema-public-201",
                 new BigDecimal("240000"),
                 List.of(
                         new BookingPriceSnapshotPayload.SeatPriceLine(

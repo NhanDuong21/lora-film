@@ -10,10 +10,26 @@ public record BookingPriceSnapshotPayload(
         Instant capturedAt,
         String currency,
         Long movieId,
+        String moviePublicId,
         String movieTitle,
+        String cinemaPublicId,
         BigDecimal authoritativeTicketTotal,
         List<SeatPriceLine> seats
 ) {
+    /** Compatibility constructor for snapshots without public Movie identities. */
+    public BookingPriceSnapshotPayload(
+            Long showtimeId,
+            String showtimePublicId,
+            Instant capturedAt,
+            String currency,
+            Long movieId,
+            String movieTitle,
+            BigDecimal authoritativeTicketTotal,
+            List<SeatPriceLine> seats) {
+        this(showtimeId, showtimePublicId, capturedAt, currency, movieId, null,
+                movieTitle, null, authoritativeTicketTotal, seats);
+    }
+
     public record SeatPriceLine(
             Long seatId,
             String seatLabel,

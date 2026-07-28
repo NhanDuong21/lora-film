@@ -10,7 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -47,8 +47,8 @@ public class PersistenceAndConstraintTest {
         p1.setAttemptNumber(1);
         p1.setAmount(new BigDecimal("100000"));
         p1.setPaymentMethod(PaymentMethod.VNPAY);
-        p1.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        paymentRepository.saveAndFlush(p1);
+        p1.setExpiresAt(Instant.now().plusSeconds(900));
+        p1 = paymentRepository.saveAndFlush(TestFixtures.complete(p1));
         
         Payment p2 = new Payment();
         p2.setPaymentTransactionCode("TXN-2");
@@ -57,8 +57,8 @@ public class PersistenceAndConstraintTest {
         p2.setAttemptNumber(2); // different attempt
         p2.setAmount(new BigDecimal("100000"));
         p2.setPaymentMethod(PaymentMethod.VNPAY);
-        p2.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        paymentRepository.saveAndFlush(p2);
+        p2.setExpiresAt(Instant.now().plusSeconds(900));
+        paymentRepository.saveAndFlush(TestFixtures.complete(p2));
     }
     
     @Test
@@ -71,8 +71,8 @@ public class PersistenceAndConstraintTest {
         p1.setAttemptNumber(1);
         p1.setAmount(new BigDecimal("100000"));
         p1.setPaymentMethod(PaymentMethod.VNPAY);
-        p1.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        paymentRepository.saveAndFlush(p1);
+        p1.setExpiresAt(Instant.now().plusSeconds(900));
+        p1 = paymentRepository.saveAndFlush(TestFixtures.complete(p1));
         
         Payment p3 = new Payment();
         p3.setPaymentTransactionCode("TXN-DUP-2");
@@ -81,8 +81,8 @@ public class PersistenceAndConstraintTest {
         p3.setAttemptNumber(1);
         p3.setAmount(new BigDecimal("100000"));
         p3.setPaymentMethod(PaymentMethod.VNPAY);
-        p3.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        assertThrows(Exception.class, () -> paymentRepository.saveAndFlush(p3));
+        p3.setExpiresAt(Instant.now().plusSeconds(900));
+        assertThrows(Exception.class, () -> paymentRepository.saveAndFlush(TestFixtures.complete(p3)));
     }
     
     @Test
@@ -96,8 +96,8 @@ public class PersistenceAndConstraintTest {
         p4.setAmount(new BigDecimal("100000"));
         p4.setPaymentMethod(PaymentMethod.MOMO);
         p4.setExternalTransactionId(null);
-        p4.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        paymentRepository.saveAndFlush(p4);
+        p4.setExpiresAt(Instant.now().plusSeconds(900));
+        paymentRepository.saveAndFlush(TestFixtures.complete(p4));
         
         Payment p5 = new Payment();
         p5.setPaymentTransactionCode("TXN-5");
@@ -107,8 +107,8 @@ public class PersistenceAndConstraintTest {
         p5.setAmount(new BigDecimal("100000"));
         p5.setPaymentMethod(PaymentMethod.MOMO);
         p5.setExternalTransactionId(null);
-        p5.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        paymentRepository.saveAndFlush(p5);
+        p5.setExpiresAt(Instant.now().plusSeconds(900));
+        paymentRepository.saveAndFlush(TestFixtures.complete(p5));
     }
     
     @Test
@@ -121,11 +121,11 @@ public class PersistenceAndConstraintTest {
         p1.setAttemptNumber(1);
         p1.setAmount(new BigDecimal("100000"));
         p1.setPaymentMethod(PaymentMethod.VNPAY);
-        p1.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        paymentRepository.saveAndFlush(p1);
+        p1.setExpiresAt(Instant.now().plusSeconds(900));
+        Payment savedPayment = paymentRepository.saveAndFlush(TestFixtures.complete(p1));
         
         PaymentLog log = new PaymentLog();
-        log.setPaymentId(p1.getId());
+        log.setPaymentId(savedPayment.getId());
         log.setEventType(PaymentLogEventType.PAYMENT_INITIATED);
         log.setSource("API");
         log.setActorType(ActorType.CUSTOMER);
@@ -134,7 +134,7 @@ public class PersistenceAndConstraintTest {
         
         // Hard delete should fail because of ON DELETE RESTRICT
         assertThrows(Exception.class, () -> {
-            paymentRepository.delete(p1);
+            paymentRepository.delete(savedPayment);
             paymentRepository.flush();
         });
     }
@@ -147,7 +147,7 @@ public class PersistenceAndConstraintTest {
         r1.setOperation("CREATE_PAYMENT");
         r1.setIdempotencyKey("KEY1");
         r1.setRequestHash("hash1");
-        r1.setExpiresAt(LocalDateTime.now().plusDays(1));
+        r1.setExpiresAt(Instant.now().plusSeconds(86400));
         idempotencyRepository.saveAndFlush(r1);
 
         PaymentIdempotencyRecord r2 = new PaymentIdempotencyRecord();
@@ -155,7 +155,7 @@ public class PersistenceAndConstraintTest {
         r2.setOperation("CREATE_PAYMENT");
         r2.setIdempotencyKey("KEY1");
         r2.setRequestHash("hash2");
-        r2.setExpiresAt(LocalDateTime.now().plusDays(1));
+        r2.setExpiresAt(Instant.now().plusSeconds(86400));
         assertThrows(Exception.class, () -> idempotencyRepository.saveAndFlush(r2));
     }
 }

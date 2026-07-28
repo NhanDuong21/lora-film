@@ -105,8 +105,17 @@ describe('schedulingPresentation', () => {
   });
 
   it('localizes score components while preserving raw keys', () => {
-    expect(getScoreBreakdownRows({ base: 50, custom: 3 })).toEqual([
+    expect(getScoreBreakdownRows({
+      base: 50,
+      coverageSearchAdjustment: 20,
+      custom: 3,
+    })).toEqual([
       { key: 'base', label: 'Điểm cơ bản', value: 50 },
+      {
+        key: 'coverageSearchAdjustment',
+        label: 'Điều chỉnh cân bằng phim',
+        value: 20,
+      },
       { key: 'custom', label: 'custom', value: 3 },
     ]);
   });

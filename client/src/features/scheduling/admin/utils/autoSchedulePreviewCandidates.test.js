@@ -5,6 +5,8 @@ import {
   getCandidateMetrics,
   getCandidateViewCounts,
   getDefaultCandidateView,
+  getMovieDistribution,
+  getMovieDistributionSummary,
   paginateCandidates,
 } from './autoSchedulePreviewCandidates';
 
@@ -66,5 +68,54 @@ describe('bounded candidate views', () => {
     expect(paginateCandidates(items, 1, 100).items).toHaveLength(100);
     expect(paginateCandidates(items, 999, 100)).toMatchObject({ page: 37, totalPages: 37 });
     expect(paginateCandidates(items, 1, 1000).items).toHaveLength(50);
+  });
+
+  it('exposes movie coverage gaps and concentration from the selected schedule', () => {
+    const candidates = [
+      ...Array.from({ length: 7 }, (_, index) => ({
+        movieKey: 'movie-a',
+        movieTitle: 'Phim A',
+        validationStatus: 'VALID',
+        applyStatus: 'CREATED',
+        selected: true,
+        itemPublicId: `a-${index}`,
+      })),
+      {
+        movieKey: 'movie-b',
+        movieTitle: 'Phim B',
+        validationStatus: 'VALID',
+        applyStatus: 'CREATED',
+        selected: true,
+        itemPublicId: 'b-1',
+      },
+      {
+        movieKey: 'movie-c',
+        movieTitle: 'Phim C',
+        validationStatus: 'VALID',
+        applyStatus: 'SKIPPED',
+        selected: false,
+        itemPublicId: 'c-1',
+      },
+    ];
+
+    const distribution = getMovieDistribution(candidates);
+    expect(distribution.map(row => ({
+      title: row.movieTitle,
+      scheduled: row.scheduledCount,
+      share: row.sharePercent,
+      gap: row.hasCoverageGap,
+    }))).toEqual([
+      { title: 'Phim A', scheduled: 7, share: 87.5, gap: false },
+      { title: 'Phim B', scheduled: 1, share: 12.5, gap: false },
+      { title: 'Phim C', scheduled: 0, share: 0, gap: true },
+    ]);
+    expect(getMovieDistributionSummary(distribution)).toMatchObject({
+      eligibleMovieCount: 3,
+      representedMovieCount: 2,
+      dominantMovieTitle: 'Phim A',
+      dominantSharePercent: 87.5,
+      hasCoverageGap: true,
+      isHighlyConcentrated: true,
+    });
   });
 });

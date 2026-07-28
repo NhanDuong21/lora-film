@@ -1,42 +1,37 @@
 package com.project.paymentservice.dto.request;
 
-import jakarta.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-
 public class CreatePaymentRequest {
-
-    @Schema(description = "ID of the booking to pay for", example = "1001")
-    @NotNull(message = "bookingId is required")
-    @Positive(message = "bookingId must be positive")
+    @Schema(description = "Canonical Booking public UUID")
+    private String bookingPublicId;
+    @Schema(description = "Deprecated numeric Booking identifier")
+    @Positive
     private Long bookingId;
-
-    @Schema(description = "Payment method provider", example = "MOCK", allowableValues = {"MOCK", "VNPAY", "MOMO"})
-    @NotNull(message = "paymentMethod is required")
+    @Schema(allowableValues = {"VNPAY", "MOMO", "MOCK"})
+    @NotBlank(message = "paymentMethod is required")
     private String paymentMethod;
 
     public CreatePaymentRequest() {
     }
 
+    /** Compatibility constructor. */
     public CreatePaymentRequest(Long bookingId, String paymentMethod) {
         this.bookingId = bookingId;
         this.paymentMethod = paymentMethod;
     }
 
-    public Long getBookingId() {
-        return bookingId;
-    }
-
-    public void setBookingId(Long bookingId) {
-        this.bookingId = bookingId;
-    }
-
-    public String getPaymentMethod() {
-        return paymentMethod;
-    }
-
-    public void setPaymentMethod(String paymentMethod) {
+    public CreatePaymentRequest(String bookingPublicId, String paymentMethod) {
+        this.bookingPublicId = bookingPublicId;
         this.paymentMethod = paymentMethod;
     }
+
+    public String getBookingPublicId() { return bookingPublicId; }
+    public void setBookingPublicId(String bookingPublicId) { this.bookingPublicId = bookingPublicId; }
+    public Long getBookingId() { return bookingId; }
+    public void setBookingId(Long bookingId) { this.bookingId = bookingId; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
 }

@@ -6,6 +6,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -15,8 +16,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 @TestPropertySource(properties = {
-    "payment.mock.enabled=false"
+    "payment.providers.mock.enabled=false"
 })
 public class MockProductionIsolationTest {
 
@@ -29,13 +31,13 @@ public class MockProductionIsolationTest {
     @Test
     void mockProviderShouldNotExistWhenDisabled() {
         assertFalse(applicationContext.containsBean("mockPaymentProvider"), 
-                "MockPaymentProvider bean should not exist when payment.mock.enabled is false");
+                "MockPaymentProvider bean should not exist when payment.providers.mock.enabled is false");
     }
 
     @Test
     void mockCallbackShouldNotExistWhenDisabled() {
         assertFalse(applicationContext.containsBean("mockCallbackController"), 
-                "MockCallbackController bean should not exist when payment.mock.enabled is false");
+                "MockCallbackController bean should not exist when payment.providers.mock.enabled is false");
     }
 
     @Test

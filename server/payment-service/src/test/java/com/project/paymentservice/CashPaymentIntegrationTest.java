@@ -1,12 +1,15 @@
 package com.project.paymentservice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project.paymentservice.client.booking.BookingPaymentClient;
+import com.project.paymentservice.client.booking.BookingPaymentContext;
 import com.project.paymentservice.dto.request.CashCancelRequest;
 import com.project.paymentservice.dto.request.CashCollectRequest;
 import com.project.paymentservice.entity.Payment;
 import com.project.paymentservice.enumtype.PaymentMethod;
 import com.project.paymentservice.enumtype.PaymentStatus;
 import com.project.paymentservice.repository.CashPaymentDetailRepository;
+import com.project.paymentservice.repository.BookingPaymentGuardRepository;
 import com.project.paymentservice.repository.PaymentRepository;
 import com.project.paymentservice.repository.PaymentLogRepository;
 import com.project.paymentservice.repository.PaymentIdempotencyRecordRepository;
@@ -19,13 +22,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import javax.crypto.SecretKey;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
@@ -33,6 +37,8 @@ import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -60,16 +66,30 @@ public class CashPaymentIntegrationTest {
     @Autowired
     private PaymentOutboxEventRepository paymentOutboxEventRepository;
 
+    @Autowired
+    private BookingPaymentGuardRepository bookingPaymentGuardRepository;
+
     @Value("${jwt.secret}")
     private String jwtSecret;
 
+    @MockBean
+    private BookingPaymentClient bookingClient;
+
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
-        cashPaymentDetailRepository.deleteAllInBatch();
-        paymentLogRepository.deleteAllInBatch();
-        paymentIdempotencyRecordRepository.deleteAllInBatch();
-        paymentOutboxEventRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
+        databaseCleaner.clean();
+        when(bookingClient.getPaymentContext(anyString())).thenAnswer(invocation -> {
+            BookingPaymentContext context = new BookingPaymentContext();
+            context.setBookingId(2002L);
+            context.setBookingPublicId(invocation.getArgument(0));
+            context.setAccountId(1001L);
+            context.setAmount(new BigDecimal("250000.00"));
+            context.setCurrency("VND");
+            return TestFixtures.complete(context);
+        });
     }
 
     private String generateJwt(Long userId, String email, String role) {
@@ -104,8 +124,8 @@ public class CashPaymentIntegrationTest {
         p.setPaymentMethod(PaymentMethod.CASH);
         p.setAttemptNumber(1);
         p.setStatus(PaymentStatus.PENDING);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        p = paymentRepository.save(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = savePaymentWithGuard(p);
 
         String adminToken = generateJwt(9999L, "admin@test.com", "ADMIN");
 
@@ -118,7 +138,7 @@ public class CashPaymentIntegrationTest {
                 .header("Idempotency-Key", "collect-" + p.getId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isAccepted())
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.changeAmount").value(50000.0));
     }
@@ -133,8 +153,8 @@ public class CashPaymentIntegrationTest {
         p.setPaymentMethod(PaymentMethod.CASH);
         p.setAttemptNumber(1);
         p.setStatus(PaymentStatus.PENDING);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        p = paymentRepository.save(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = savePaymentWithGuard(p);
 
         String customerToken = generateJwt(1001L, "customer@test.com", "CUSTOMER");
 
@@ -160,8 +180,8 @@ public class CashPaymentIntegrationTest {
         p.setPaymentMethod(PaymentMethod.CASH);
         p.setAttemptNumber(1);
         p.setStatus(PaymentStatus.PENDING);
-        p.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-        p = paymentRepository.save(p);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = savePaymentWithGuard(p);
 
         String adminToken = generateJwt(9999L, "admin@test.com", "ADMIN");
 
@@ -173,8 +193,14 @@ public class CashPaymentIntegrationTest {
                 .header("Idempotency-Key", "cancel-" + p.getId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isAccepted())
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+    }
+
+    private Payment savePaymentWithGuard(Payment payment) {
+        Payment saved = paymentRepository.saveAndFlush(TestFixtures.complete(payment));
+        bookingPaymentGuardRepository.saveAndFlush(TestFixtures.guard(saved));
+        return saved;
     }
 }

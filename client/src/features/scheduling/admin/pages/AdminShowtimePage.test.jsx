@@ -77,6 +77,7 @@ describe('AdminShowtimePage URL-backed batch context', () => {
 
     await waitFor(() => expect(value.setBatchId).toHaveBeenCalledWith('preview-1'));
     expect(value.setSource).toHaveBeenCalledWith('AUTO');
+    expect(value.fetchShowtimes).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Next batch' }));
     await waitFor(() => expect(value.setBatchId).toHaveBeenCalledWith('preview-2'));

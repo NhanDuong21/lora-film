@@ -48,6 +48,72 @@ export const getCandidateMetrics = (items, selectedItemIds) => {
   };
 };
 
+export const getMovieDistribution = candidates => {
+  const groups = new Map();
+
+  (candidates || []).forEach(candidate => {
+    const movieKey = candidate.movieKey
+      || candidate.moviePublicId
+      || candidate.movieVersionPublicId
+      || candidate.movieTitle
+      || 'unknown-movie';
+    if (!groups.has(movieKey)) {
+      groups.set(movieKey, {
+        movieKey,
+        movieTitle: candidate.movieTitle || 'Phim không xác định',
+        palette: candidate.palette || null,
+        generatedCount: 0,
+        validCount: 0,
+        selectedCount: 0,
+        createdCount: 0,
+      });
+    }
+    const group = groups.get(movieKey);
+    group.generatedCount += 1;
+    if (candidate.validationStatus === 'VALID') group.validCount += 1;
+    if (candidate.selected) group.selectedCount += 1;
+    if (candidate.applyStatus === 'CREATED') group.createdCount += 1;
+  });
+
+  const rows = Array.from(groups.values()).map(group => ({
+    ...group,
+    scheduledCount: group.createdCount > 0 ? group.createdCount : group.selectedCount,
+  }));
+  const totalScheduled = rows.reduce((sum, row) => sum + row.scheduledCount, 0);
+
+  return rows
+    .map(row => ({
+      ...row,
+      sharePercent: totalScheduled > 0
+        ? Math.round((row.scheduledCount / totalScheduled) * 1000) / 10
+        : 0,
+      hasCoverageGap: row.validCount > 0 && row.scheduledCount === 0,
+    }))
+    .sort((left, right) => (
+      right.scheduledCount - left.scheduledCount
+      || right.validCount - left.validCount
+      || left.movieTitle.localeCompare(right.movieTitle, 'vi')
+    ));
+};
+
+export const getMovieDistributionSummary = distribution => {
+  const rows = distribution || [];
+  const eligibleMovieCount = rows.filter(row => row.validCount > 0).length;
+  const representedMovieCount = rows.filter(row => row.scheduledCount > 0).length;
+  const dominant = rows.find(row => row.scheduledCount > 0) || null;
+  const uncoveredMovies = rows.filter(row => row.hasCoverageGap);
+
+  return {
+    eligibleMovieCount,
+    representedMovieCount,
+    uncoveredMovies,
+    dominantMovieTitle: dominant?.movieTitle || null,
+    dominantSharePercent: dominant?.sharePercent || 0,
+    hasCoverageGap: uncoveredMovies.length > 0,
+    isHighlyConcentrated: eligibleMovieCount > 1 && (dominant?.sharePercent || 0) > 60,
+  };
+};
+
 export const filterCandidatesByView = (items, view, selectedItemIds) => {
   const source = items || [];
   const selectedIds = selectedItemIds instanceof Set

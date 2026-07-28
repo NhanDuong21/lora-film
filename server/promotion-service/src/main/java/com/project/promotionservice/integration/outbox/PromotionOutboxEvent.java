@@ -82,6 +82,7 @@ public class PromotionOutboxEvent {
     public PromotionOutboxEvent() {
         this.publicId = UUID.randomUUID().toString();
         this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
     }
 
     public Long getId() {

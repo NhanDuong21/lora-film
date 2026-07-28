@@ -1,7 +1,12 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Clock, AlertTriangle, Search, ShieldCheck, CreditCard } from 'lucide-react';
-import { getBookingDetails, cancelBooking, finalizeCheckout } from '../services/bookingService';
+import {
+  BOOKING_CHANGED_EVENT,
+  getBookingDetails,
+  cancelBooking,
+  finalizeCheckout
+} from '../services/bookingService';
 import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 import BookingStepper from '../components/BookingStepper';
 import BookingCancellationModal from '../components/BookingCancellationModal';
@@ -12,8 +17,60 @@ import {
   createPaymentHandoff,
   getOrCreatePaymentAttemptKey
 } from '../services/paymentHandoffService';
+import {
+  paymentErrorCode,
+  paymentErrorMessage
+} from '@/features/payment/services/paymentService';
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
+
+const getBookingStatus = booking => booking?.bookingStatus || booking?.status;
+
+const mergeCheckoutBooking = (current, fresh) => ({
+  ...current,
+  ...fresh,
+  snapshot: fresh?.snapshot || current?.snapshot || null,
+  foodOrder: fresh?.foodOrder ?? fresh?.food ?? current?.foodOrder ?? null,
+  finalAmount: fresh?.totalAmount ?? fresh?.finalAmount ?? current?.finalAmount ?? 0,
+  ticketAmount: fresh?.ticketAmount ?? current?.ticketAmount ?? 0,
+  expiresAt: fresh?.expiresAt
+    ?? fresh?.expiredAt
+    ?? fresh?.paymentDeadline
+    ?? current?.expiresAt
+});
+
+const getTerminalBookingNotice = (status, bookingId) => {
+  if (status === 'CANCELLED') {
+    return {
+      title: 'Đơn đã được hủy',
+      message: 'Đơn này đã được hủy và ghế đã được trả lại. Bạn không thể tiếp tục thanh toán cho đơn này.',
+      variant: 'warning',
+      redirectTo: `/bookings/${bookingId}`
+    };
+  }
+  if (status === 'EXPIRED') {
+    return {
+      title: 'Đã hết thời gian giữ ghế',
+      message: 'Thời gian thanh toán của đơn đã kết thúc và ghế không còn được giữ. Vui lòng chọn lại suất chiếu và ghế.',
+      variant: 'warning',
+      redirectTo: '/movies'
+    };
+  }
+  if (['CONFIRMED', 'COMPLETED'].includes(status)) {
+    return {
+      title: 'Đơn đã được thanh toán',
+      message: 'Đơn này đã hoàn tất thanh toán. Bạn có thể mở chi tiết đơn để xem vé.',
+      variant: 'success',
+      redirectTo: `/bookings/${bookingId}`
+    };
+  }
+  return {
+    title: 'Đơn không còn thanh toán được',
+    message: 'Trạng thái mới nhất của đơn không cho phép tạo thêm giao dịch thanh toán.',
+    variant: 'warning',
+    redirectTo: `/bookings/${bookingId}`
+  };
+};
 
 export default function BookingCheckoutPage() {
   const location = useLocation();
@@ -51,6 +108,7 @@ export default function BookingCheckoutPage() {
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
   const [userScore, setUserScore] = useState(null);
+  const lastTerminalNoticeRef = useRef(null);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState(null);
@@ -71,14 +129,14 @@ export default function BookingCheckoutPage() {
       } catch {
         foodOrder = null;
       }
-      setBooking({
+      setBooking(mergeCheckoutBooking(null, {
         ...bookingData,
         foodOrder: foodOrder ?? bookingData.foodOrder ?? bookingData.food ?? null,
         finalAmount: bookingData.totalAmount ?? bookingData.finalAmount ?? 0,
         ticketAmount: bookingData.ticketAmount ?? 0,
         expiresAt: bookingData.expiresAt ?? bookingData.expiredAt ?? bookingData.paymentDeadline,
         snapshot: bookingData.snapshot ?? bookingData.presentation ?? bookingDraft.showtime ?? null
-      });
+      }));
 
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
@@ -106,6 +164,76 @@ export default function BookingCheckoutPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
+
+  const refreshBookingState = useCallback(async ({ notifyTerminal = false } = {}) => {
+    if (!bookingId) return null;
+
+    try {
+      const freshBooking = await getBookingDetails(bookingId);
+      const freshStatus = getBookingStatus(freshBooking);
+      setBooking(current => mergeCheckoutBooking(current, freshBooking));
+
+      if (
+        notifyTerminal
+        && freshStatus
+        && freshStatus !== 'PENDING_PAYMENT'
+        && lastTerminalNoticeRef.current !== freshStatus
+      ) {
+        lastTerminalNoticeRef.current = freshStatus;
+        setPaymentLoading(false);
+        setNotice(getTerminalBookingNotice(freshStatus, bookingId));
+      }
+      return freshBooking;
+    } catch {
+      // Background synchronization must not replace an already loaded checkout
+      // with a transient connection error. Commands still validate server-side.
+      return null;
+    }
+  }, [bookingId]);
+
+  useEffect(() => {
+    if (!bookingId) return undefined;
+
+    const handleBookingChanged = event => {
+      const changedBookingId = event?.detail?.publicId;
+      if (changedBookingId && changedBookingId !== bookingId) return;
+
+      if (event?.detail?.action === 'CANCELLED') {
+        setBooking(current => current
+          ? { ...current, status: 'CANCELLED', bookingStatus: 'CANCELLED' }
+          : current);
+        setPaymentLoading(false);
+        if (lastTerminalNoticeRef.current !== 'CANCELLED') {
+          lastTerminalNoticeRef.current = 'CANCELLED';
+          setNotice(getTerminalBookingNotice('CANCELLED', bookingId));
+        }
+      }
+      void refreshBookingState({ notifyTerminal: true });
+    };
+    const handleFocus = () => {
+      void refreshBookingState({ notifyTerminal: true });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshBookingState({ notifyTerminal: true });
+      }
+    };
+
+    const refreshTimer = window.setInterval(
+      () => void refreshBookingState({ notifyTerminal: true }),
+      15_000
+    );
+    window.addEventListener(BOOKING_CHANGED_EVENT, handleBookingChanged);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener(BOOKING_CHANGED_EVENT, handleBookingChanged);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [bookingId, refreshBookingState]);
 
   // Expiration countdown logic
   useEffect(() => {
@@ -233,6 +361,25 @@ export default function BookingCheckoutPage() {
     }
     setPaymentLoading(true);
     try {
+      const freshBooking = await getBookingDetails(bookingId);
+      const freshStatus = getBookingStatus(freshBooking);
+      const freshDeadline = freshBooking.expiresAt
+        ?? freshBooking.expiredAt
+        ?? freshBooking.paymentDeadline;
+      setBooking(current => mergeCheckoutBooking(current, freshBooking));
+
+      if (
+        freshStatus !== 'PENDING_PAYMENT'
+        || (freshDeadline && new Date(freshDeadline).getTime() <= Date.now())
+      ) {
+        const effectiveStatus = freshStatus === 'PENDING_PAYMENT'
+          ? 'EXPIRED'
+          : freshStatus;
+        lastTerminalNoticeRef.current = effectiveStatus;
+        setNotice(getTerminalBookingNotice(effectiveStatus, bookingId));
+        return;
+      }
+
       const finalized = await finalizeCheckout(bookingId);
       setBooking(prev => ({ ...prev, ...finalized }));
       const idempotencyKey = getOrCreatePaymentAttemptKey(
@@ -252,19 +399,47 @@ export default function BookingCheckoutPage() {
 
       setNotice({
         title: 'Đã tạo yêu cầu thanh toán',
-        message: 'Payment Service đã tiếp nhận yêu cầu. Bạn có thể tiếp tục theo dõi trạng thái của giao dịch.',
+        message: 'Hệ thống thanh toán đã tiếp nhận yêu cầu. Bạn có thể tiếp tục theo dõi trạng thái giao dịch.',
         variant: 'success',
         redirectTo: `/bookings/${bookingId}`
       });
     } catch (err) {
-      setNotice({
-        title: 'Không thể chuẩn bị thanh toán',
-        message: getBookingErrorMessage(
-          err,
-          'Không thể chuẩn bị thanh toán. Vui lòng thử lại.'
-        ),
-        variant: 'error'
-      });
+      const errorCode = paymentErrorCode(err);
+      const bookingUnavailable = [
+        'BOOKING_CANCELLED',
+        'BOOKING_NOT_PAYABLE',
+        'BOOKING_PAYMENT_DEADLINE_EXPIRED',
+        'BOOKING_SEATS_NOT_HELD'
+      ].includes(errorCode);
+      const alreadyPaid = [
+        'BOOKING_ALREADY_PAID',
+        'PAYMENT_ALREADY_SUCCESS'
+      ].includes(errorCode);
+      let latestBooking = null;
+      if (bookingUnavailable || alreadyPaid) {
+        latestBooking = await refreshBookingState();
+      }
+      const latestStatus = getBookingStatus(latestBooking);
+
+      if (latestStatus && latestStatus !== 'PENDING_PAYMENT') {
+        lastTerminalNoticeRef.current = latestStatus;
+        setNotice(getTerminalBookingNotice(latestStatus, bookingId));
+      } else {
+        setNotice({
+          title: errorCode === 'BOOKING_PAYMENT_DEADLINE_EXPIRED'
+            ? 'Đã hết thời gian giữ ghế'
+            : alreadyPaid
+              ? 'Đơn đã được thanh toán'
+              : bookingUnavailable
+                ? 'Đơn không còn thanh toán được'
+                : 'Không thể chuẩn bị thanh toán',
+          message: paymentErrorMessage(err),
+          variant: alreadyPaid ? 'success' : 'error',
+          redirectTo: bookingUnavailable || alreadyPaid
+            ? `/bookings/${bookingId}`
+            : undefined
+        });
+      }
     } finally {
       setPaymentLoading(false);
     }
@@ -418,7 +593,50 @@ export default function BookingCheckoutPage() {
               </span>
             </div>
 
-            {step === 3 ? (
+            {isExpired ? (
+              <div
+                role="status"
+                className="rounded-3xl border border-amber-500/30 bg-amber-500/5 p-8 text-center"
+              >
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-400">
+                  <AlertTriangle className="h-7 w-7" />
+                </div>
+                <h2 className="text-xl font-black text-white">
+                  {bookingStatus === 'CANCELLED'
+                    ? 'Đơn đã được hủy'
+                    : bookingStatus === 'EXPIRED' || timeLeft === 0
+                      ? 'Đã hết thời gian giữ ghế'
+                      : ['CONFIRMED', 'COMPLETED'].includes(bookingStatus)
+                        ? 'Đơn đã thanh toán thành công'
+                        : 'Đơn không còn thanh toán được'}
+                </h2>
+                <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-zinc-400">
+                  {bookingStatus === 'CANCELLED'
+                    ? 'Ghế của đơn đã được trả lại. VNPay và MoMo đã được khóa để tránh tạo giao dịch cho đơn đã hủy.'
+                    : bookingStatus === 'EXPIRED' || timeLeft === 0
+                      ? 'Thời hạn thanh toán đã kết thúc và ghế không còn được giữ.'
+                      : ['CONFIRMED', 'COMPLETED'].includes(bookingStatus)
+                        ? 'Bạn có thể mở chi tiết đơn để xem thông tin vé đã phát hành.'
+                        : 'Vui lòng mở chi tiết đơn để kiểm tra trạng thái mới nhất.'}
+                </p>
+                <div className="mt-6 flex flex-wrap justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/bookings/${bookingId}`)}
+                    className="rounded-xl bg-brand-orange px-5 py-3 text-xs font-black uppercase text-white transition-colors hover:bg-orange-600"
+                  >
+                    Xem chi tiết đơn
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/movies')}
+                    className="rounded-xl border border-zinc-700 px-5 py-3 text-xs font-black uppercase text-zinc-200 transition-colors hover:bg-zinc-800"
+                  >
+                    Chọn suất chiếu khác
+                  </button>
+                </div>
+              </div>
+            ) : step === 3 ? (
               /* Step 3: Choose Food & Beverage */
               <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
@@ -552,7 +770,7 @@ export default function BookingCheckoutPage() {
                       </span>
                     </div>
                     <p className="mt-4 text-xs font-medium leading-relaxed text-zinc-400">
-                      Việc giữ và trừ điểm phải được Payment Service xác nhận cùng giao dịch.
+                      Việc giữ và trừ điểm sẽ được hệ thống xác nhận cùng giao dịch.
                       Tính năng dùng điểm tại checkout sẽ được mở khi tích hợp thanh toán hoàn tất;
                       số tiền của đơn hiện tại vẫn do Booking Service quản lý.
                     </p>
@@ -562,7 +780,7 @@ export default function BookingCheckoutPage() {
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Phương Thức Thanh Toán</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Payment Service sẽ xác thực lại số tiền và thời hạn của đơn</p>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Hệ thống sẽ xác thực lại số tiền và thời hạn của đơn</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -608,7 +826,7 @@ export default function BookingCheckoutPage() {
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">Chuyển sang thanh toán</h2>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">
-                      LoraFilm không gửi số tiền từ trình duyệt; Payment Service lấy số tiền đã khóa trực tiếp từ Booking Service
+                      Số tiền thanh toán được lấy trực tiếp từ đơn đã chốt, không thể thay đổi từ trình duyệt
                     </p>
                   </div>
 

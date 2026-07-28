@@ -14,13 +14,15 @@ public class RealCurrentUserProvider implements CurrentUserProvider {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
                 || "anonymousUser".equals(authentication.getPrincipal())) {
-            throw new BusinessException("UNAUTHORIZED", "User not authenticated", HttpStatus.UNAUTHORIZED);
+            throw new BusinessException(
+                    "UNAUTHORIZED", "Vui lòng đăng nhập để tiếp tục", HttpStatus.UNAUTHORIZED);
         }
 
         try {
             return (Long) authentication.getPrincipal();
         } catch (ClassCastException e) {
-            throw new BusinessException("UNAUTHORIZED", "Invalid authentication token", HttpStatus.UNAUTHORIZED);
+            throw new BusinessException(
+                    "UNAUTHORIZED", "Phiên đăng nhập không hợp lệ", HttpStatus.UNAUTHORIZED);
         }
     }
 }

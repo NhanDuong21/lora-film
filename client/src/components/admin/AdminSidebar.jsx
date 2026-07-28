@@ -27,7 +27,8 @@ import {
   Key,
   ShieldAlert,
   UserCircle,
-  FileSearch
+  FileSearch,
+  CreditCard
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
 
@@ -239,6 +240,10 @@ export default function AdminSidebar({
                   <Ticket className="w-4 h-4 shrink-0" />
                   <span>Quản lý vé & Đơn hàng</span>
                 </button>}
+                <button onClick={() => handleTabClick('payments', '#/admin/payments')} className={getSubLinkClass('payments')}>
+                  <CreditCard className="w-4 h-4 shrink-0" />
+                  <span>Giao dịch & Đối soát</span>
+                </button>
                 <button onClick={() => handleTabClick('finance', '#/admin/finance')} className={getSubLinkClass('finance')}>
                   <BarChart3 className="w-4 h-4 shrink-0" />
                   <span>Báo cáo doanh thu</span>
@@ -249,10 +254,10 @@ export default function AdminSidebar({
                     <span>Danh mục bắp nước</span>
                   </button>
                 )}
-                {isFullAdmin && <button onClick={() => handleTabClick('concession-sales', '#/admin/concession-sales')} className={getSubLinkClass('concession-sales')}>
+                <button onClick={() => handleTabClick('concession-sales', '#/admin/concession-sales')} className={getSubLinkClass('concession-sales')}>
                   <Coins className="w-4 h-4 shrink-0" />
                   <span>Doanh thu bắp nước</span>
-                </button>}
+                </button>
               </div>
             )}
           </div>}

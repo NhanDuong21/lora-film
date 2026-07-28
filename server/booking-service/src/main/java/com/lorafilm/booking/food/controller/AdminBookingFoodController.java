@@ -3,12 +3,14 @@ package com.lorafilm.booking.food.controller;
 import com.lorafilm.booking.common.response.ApiResponse;
 import com.lorafilm.booking.food.client.FoodCatalogClient;
 import com.lorafilm.booking.food.client.FoodCatalogItem;
+import com.lorafilm.booking.food.dto.request.AdminFoodCatalogItemRequest;
 import com.lorafilm.booking.food.dto.response.FoodItemSalesDto;
 import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
 import com.lorafilm.booking.food.repository.FoodOrderItemRepository;
 import com.lorafilm.booking.food.service.CloudinaryService;
 import com.lorafilm.booking.food.service.FoodBookingFacadeService;
 import org.springframework.web.multipart.MultipartFile;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,8 +56,9 @@ public class AdminBookingFoodController {
     @PostMapping(value = "/foods", consumes = {"multipart/form-data"})
     @Operation(summary = "Add a new food item", description = "Admin can create a new food product")
     public ResponseEntity<ApiResponse<FoodCatalogItem>> addFood(
-            @RequestPart("item") FoodCatalogItem item,
+            @Valid @RequestPart("item") AdminFoodCatalogItemRequest request,
             @RequestPart(value = "image", required = false) MultipartFile image) {
+        FoodCatalogItem item = toCatalogItem(request);
         if (image != null && !image.isEmpty()) {
             var mediaResponse = cloudinaryService.uploadImage(image, "foods", item.getCode());
             item.setImageUrl(mediaResponse.getSecureUrl());
@@ -67,9 +70,10 @@ public class AdminBookingFoodController {
     @PutMapping(value = "/foods/{id}", consumes = {"multipart/form-data"})
     @Operation(summary = "Update a food item", description = "Admin can update details of a food product")
     public ResponseEntity<ApiResponse<FoodCatalogItem>> updateFood(
-            @PathVariable Long id, 
-            @RequestPart("item") FoodCatalogItem item,
+            @PathVariable Long id,
+            @Valid @RequestPart("item") AdminFoodCatalogItemRequest request,
             @RequestPart(value = "image", required = false) MultipartFile image) {
+        FoodCatalogItem item = toCatalogItem(request);
         if (image != null && !image.isEmpty()) {
             var mediaResponse = cloudinaryService.uploadImage(image, "foods", item.getCode());
             item.setImageUrl(mediaResponse.getSecureUrl());
@@ -77,6 +81,18 @@ public class AdminBookingFoodController {
         FoodCatalogItem updated = foodCatalogClient.updateProduct(id, item);
         if (updated != null) {
             return ResponseEntity.ok(ApiResponse.success("Food item updated successfully", updated));
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @PatchMapping("/foods/{id}/restore")
+    @Operation(
+            summary = "Restore an archived food item",
+            description = "Restores an archived product in paused state so an admin can review it before selling")
+    public ResponseEntity<ApiResponse<FoodCatalogItem>> restoreFood(@PathVariable Long id) {
+        FoodCatalogItem restored = foodCatalogClient.restoreProduct(id);
+        if (restored != null) {
+            return ResponseEntity.ok(ApiResponse.success("Food item restored successfully", restored));
         }
         return ResponseEntity.notFound().build();
     }
@@ -96,5 +112,18 @@ public class AdminBookingFoodController {
     public ResponseEntity<ApiResponse<List<FoodItemSalesDto>>> getFoodStatistics() {
         return ResponseEntity.ok(ApiResponse.success(
                 "Food statistics retrieved successfully", foodOrderItemRepository.getFoodSalesStatistics()));
+    }
+
+    private FoodCatalogItem toCatalogItem(AdminFoodCatalogItemRequest request) {
+        FoodCatalogItem item = new FoodCatalogItem();
+        item.setCode(request.code());
+        item.setName(request.name());
+        item.setType(request.type());
+        item.setImageUrl(request.imageUrl());
+        item.setPrice(request.price());
+        item.setActive(request.active());
+        item.setSellable(request.sellable());
+        item.setCurrency("VND");
+        return item;
     }
 }

@@ -109,7 +109,9 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
                     requireId(showtime.id, "showtime"),
                     requirePublicId(showtime.publicId, "showtime"),
                     requireId(firstNonNull(movieId, movie.id), "movie"),
+                    requirePublicId(movie.publicId, "movie"),
                     requireId(firstNonNull(cinemaId, cinema.id), "cinema"),
+                    requirePublicId(cinema.publicId, "cinema"),
                     requireId(firstNonNull(auditoriumId, auditorium.id), "auditorium"),
                     showtime.status,
                     toInstant(showtime.startAt),
@@ -139,6 +141,7 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
 
     private static class ResourcePayload {
         public Long id;
+        public String publicId;
         public String title;
         public String posterUrl;
         public String name;

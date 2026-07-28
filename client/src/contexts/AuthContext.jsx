@@ -164,12 +164,21 @@ export function AuthProvider({ children }) {
   // Backwards compatible combined user object
   const user = useMemo(() => {
     if (!isAuthenticated) return null;
+    const normalizedUserRole = (userRole || '').replace(/^ROLE_/, '');
+    const effectivePermissions = permissions.length > 0
+      ? permissions
+      : normalizedUserRole === 'ADMIN'
+        ? ['PERM_ROOT_ACCESS']
+        : normalizedUserRole === 'ACCOUNTANT'
+          ? ['PERM_VIEW_FINANCE']
+          : [];
+
     return {
       id: accountId,
       email: email,
       role: userRole,
       fullName: profile?.fullName || email?.split('@')[0] || 'User',
-      permissions,
+      permissions: effectivePermissions,
       profilePending: profilePending,
       profileLoading: profileLoading,
       ...profile

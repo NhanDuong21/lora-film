@@ -6,7 +6,8 @@ import {
   LogOut, 
   Home,
   User,
-  DollarSign
+  DollarSign,
+  Banknote
 } from 'lucide-react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -24,6 +25,13 @@ const EMPLOYEE_MENUS = [
     label: 'Đặt Vé Tại Quầy',
     icon: Ticket,
     permission: 'PERM_POS_ACCESS'
+  },
+  {
+    id: 'cash-payment',
+    path: '/employee/payments/cash',
+    label: 'Thu Tiền Tại Quầy',
+    icon: Banknote,
+    permission: null
   },
   {
     id: 'checkin',
@@ -65,6 +73,7 @@ export default function EmployeeLayout() {
     if (path.endsWith('/schedules')) return 'schedules';
     if (path.endsWith('/payroll')) return 'payroll';
     if (path.endsWith('/dashboard')) return 'dashboard';
+    if (path.includes('/payments/cash')) return 'cash-payment';
     return 'pos';
   })();
 
@@ -93,7 +102,8 @@ export default function EmployeeLayout() {
           <nav className="p-4 space-y-1">
             {EMPLOYEE_MENUS.map((menu) => {
               // ROOT_ACCESS implies all permissions, or check explicit permission
-              const hasPerm = user?.permissions?.includes('PERM_ROOT_ACCESS') || 
+              const hasPerm = !menu.permission ||
+                              user?.permissions?.includes('PERM_ROOT_ACCESS') ||
                               user?.permissions?.includes(menu.permission) ||
                               // Fallback if permissions aren't properly configured yet
                               !user?.permissions || user.permissions.length === 0;

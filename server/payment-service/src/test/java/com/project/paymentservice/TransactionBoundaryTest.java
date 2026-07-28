@@ -22,7 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,22 +59,17 @@ public class TransactionBoundaryTest {
     @MockBean
     private PaymentProvider paymentProvider;
 
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
-        snapshotRepository.deleteAllInBatch();
-        logRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @AfterEach
     void tearDown() {
-        snapshotRepository.deleteAllInBatch();
-        logRepository.deleteAllInBatch();
-        paymentRepository.deleteAllInBatch();
-        idempotencyRepository.deleteAllInBatch();
-        guardRepository.deleteAllInBatch();
+        databaseCleaner.clean();
     }
 
     @Test
@@ -96,13 +91,12 @@ public class TransactionBoundaryTest {
             snap.setMovieTitle("Movie");
             snap.setTicketCount(1);
             ctx.setAnalyticsSnapshot(snap);
-            return ctx;
+            return TestFixtures.complete(ctx);
         });
 
         when(providerRegistry.getProvider(any())).thenReturn(paymentProvider);
-        when(paymentProvider.supportedMethod()).thenReturn(com.project.paymentservice.enumtype.PaymentMethod.MOCK);
         when(paymentProvider.createSession(any())).thenReturn(
-                new PaymentSession("ORDER", "SESSION", "URL", LocalDateTime.now().plusMinutes(15)));
+                new PaymentSession("ORDER", "SESSION", "URL", Instant.now().plusSeconds(900)));
 
         CreatePaymentRequest req = new CreatePaymentRequest(1005L, "MOCK");
         paymentService.createPayment(15L, "idem-boundary-1", req);
@@ -127,15 +121,13 @@ public class TransactionBoundaryTest {
             snap.setMovieTitle("Movie");
             snap.setTicketCount(1);
             ctx.setAnalyticsSnapshot(snap);
-            return ctx;
+            return TestFixtures.complete(ctx);
         });
 
         when(providerRegistry.getProvider(any())).thenReturn(paymentProvider);
-        when(paymentProvider.supportedMethod()).thenReturn(com.project.paymentservice.enumtype.PaymentMethod.MOCK);
-        
         when(paymentProvider.createSession(any())).thenAnswer(invocation -> {
             isTransactionActive[0] = TransactionSynchronizationManager.isActualTransactionActive();
-            return new PaymentSession("ORDER", "SESSION", "URL", LocalDateTime.now().plusMinutes(15));
+            return new PaymentSession("ORDER", "SESSION", "URL", Instant.now().plusSeconds(900));
         });
 
         CreatePaymentRequest req = new CreatePaymentRequest(1006L, "MOCK");
