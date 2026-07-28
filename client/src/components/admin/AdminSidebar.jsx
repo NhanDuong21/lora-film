@@ -106,9 +106,9 @@ export default function AdminSidebar({
   };
 
   return (
-    <aside className="w-[280px] h-screen sticky top-0 bg-zinc-950 border-r border-zinc-800 flex flex-col justify-between shrink-0 z-30 select-none overflow-hidden font-sans">
+    <aside className="w-[280px] h-screen h-[100dvh] sticky top-0 bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0 z-30 select-none overflow-hidden font-sans">
       
-      <div>
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* Brand Top Header */}
         <div className="px-6 py-6 border-b border-zinc-800/60 flex items-center justify-between shrink-0 h-[72px]">
           <Link to={adminHomePath} className="flex items-center gap-2.5 bg-transparent p-0 m-0 shadow-none border-none select-none decoration-none group">
@@ -127,7 +127,7 @@ export default function AdminSidebar({
         </div>
 
         {/* Scrollable Navigation List */}
-        <nav className="py-4 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+        <nav className="min-h-0 flex-1 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
           
           {/* Section 1: Dashboard */}
           {can('DASHBOARD_VIEW') && (
