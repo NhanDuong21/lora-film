@@ -45,6 +45,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class AdminPaymentService {
@@ -90,9 +92,15 @@ public class AdminPaymentService {
             String query, PaymentStatus status, ProviderCode provider,
             ReconciliationStatus reconciliationStatus,
             Instant from, Instant to, Pageable pageable) {
-        return paymentRepository.findAll(specification(
-                query, status, provider, reconciliationStatus, from, to), pageable)
-                .map(this::detail);
+        Page<Payment> payments = paymentRepository.findAll(specification(
+                query, status, provider, reconciliationStatus, from, to), pageable);
+        Map<Long, PaymentAnalyticsSnapshot> snapshots = snapshotRepository.findAllById(
+                        payments.getContent().stream().map(Payment::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(
+                        PaymentAnalyticsSnapshot::getPaymentId,
+                        Function.identity()));
+        return payments.map(payment -> detail(payment, snapshots.get(payment.getId())));
     }
 
     @Transactional(readOnly = true)
@@ -103,7 +111,7 @@ public class AdminPaymentService {
                 .findByPaymentId(payment.getId()).orElse(null);
         CashPaymentDetail cash = cashRepository.findById(payment.getId()).orElse(null);
         return new AdminPaymentDetailResponse(
-                detail(payment),
+                detail(payment, snapshot),
                 snapshot(snapshot),
                 cash(cash),
                 logRepository.findByPaymentIdOrderByCreatedAtAsc(payment.getId())
@@ -292,9 +300,18 @@ public class AdminPaymentService {
         }
     }
 
-    private PaymentDetailResponse detail(Payment payment) {
+    private PaymentDetailResponse detail(
+            Payment payment,
+            PaymentAnalyticsSnapshot snapshot) {
         PaymentDetailResponse response = PaymentMapper.toDetailResponse(payment);
         response.setBookingDeliveryStatus(outboxService.deliveryStatus(payment.getPublicId()));
+        if (snapshot != null) {
+            response.setMovieTitle(snapshot.getMovieTitle());
+            response.setTicketCount(snapshot.getTicketCount());
+            response.setTicketAmount(snapshot.getTicketAmount());
+            response.setFoodAmount(snapshot.getFoodAmount());
+            response.setDiscountAmount(snapshot.getDiscountAmount());
+        }
         return response;
     }
 

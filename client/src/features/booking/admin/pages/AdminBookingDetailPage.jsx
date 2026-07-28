@@ -9,6 +9,7 @@ import { getUserProfile } from '@/features/auth/services/userService';
 import { useAuth } from '@/contexts/AuthContext';
 import { LazyImage } from '@/components/common/ui/uiKit';
 import { getBookingErrorMessage } from '../../customer/utils/bookingErrorMessages';
+import { bookingOperationalConclusion } from '../bookingAdminPresentation';
 
 export default function AdminBookingDetailPage() {
   const { bookingId } = useParams();
@@ -318,6 +319,7 @@ export default function AdminBookingDetailPage() {
     : (tickets.length > 0 ? tickets : (snapshot?.seats || []));
   const paymentAttempted = Boolean(operationalInfo.paymentAttempted);
   const attentionLabel = translateAttention(operationalInfo.attentionCode);
+  const operationalConclusion = bookingOperationalConclusion(booking, operationalInfo);
 
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-screen bg-zinc-950 text-zinc-100 space-y-6 selection:bg-[#ff7a1a] selection:text-zinc-950">
@@ -409,6 +411,41 @@ export default function AdminBookingDetailPage() {
                   : 'Không có lý do bổ sung')}
             </span>
           </div>
+        </div>
+      </div>
+
+      <div className={`rounded-3xl border p-5 md:p-6 ${
+        operationalConclusion.tone === 'success'
+          ? 'border-emerald-500/30 bg-emerald-500/5'
+          : operationalConclusion.tone === 'danger'
+            ? 'border-red-500/30 bg-red-500/5'
+            : operationalConclusion.tone === 'warning'
+              ? 'border-amber-500/30 bg-amber-500/5'
+              : operationalConclusion.tone === 'info'
+                ? 'border-sky-500/30 bg-sky-500/5'
+                : 'border-zinc-800 bg-zinc-900'
+      }`}>
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">
+              Kết luận vận hành
+            </span>
+            <h2 className="mt-2 text-lg font-black text-white">
+              {operationalConclusion.title}
+            </h2>
+            <p className="mt-2 max-w-4xl text-xs leading-6 text-zinc-400">
+              {operationalConclusion.detail}
+            </p>
+          </div>
+          {operationalConclusion.paymentLink && (
+            <button
+              type="button"
+              onClick={() => navigate(`/admin/payments?query=${booking.publicId}`)}
+              className="shrink-0 rounded-xl border border-brand-orange/40 px-4 py-2.5 text-xs font-black uppercase text-brand-orange hover:bg-brand-orange/10"
+            >
+              Xem giao dịch thanh toán
+            </button>
+          )}
         </div>
       </div>
 
@@ -743,7 +780,7 @@ export default function AdminBookingDetailPage() {
             <div className="bg-zinc-900 border border-zinc-850 rounded-3xl p-6 space-y-4 shadow-2xl">
               <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
                 <Sliders className="w-4 h-4 text-[#ff7a1a]" />
-                <span className="text-xs font-black uppercase tracking-wider text-white">Chuyển đổi Trạng Thái</span>
+                <span className="text-xs font-black uppercase tracking-wider text-white">Thao tác với đơn</span>
               </div>
 
               {isAdmin ? (
@@ -764,7 +801,7 @@ export default function AdminBookingDetailPage() {
                     </div>
                   ) : (
                     <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-[10px] leading-relaxed text-zinc-500">
-                      Trạng thái hiện tại không có thao tác thủ công. Xác nhận và hoàn tiền chỉ được áp dụng từ kết quả hợp lệ của hệ thống thanh toán; thời hạn giữ ghế do hệ thống đặt vé quản lý.
+                      Đơn hiện không có thao tác thủ công phù hợp. Xác nhận thanh toán chỉ được thực hiện từ kết quả hợp lệ của Payment; hệ thống tự quản lý thời hạn giữ và trả ghế.
                     </div>
                   )}
 

@@ -17,6 +17,7 @@ const context = vi.hoisted(() => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => context.navigate,
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
   useOutletContext: () => ({
     triggerToast: context.triggerToast,
     triggerAlert: context.triggerAlert,
@@ -68,11 +69,13 @@ describe('AdminPaymentsPage role operations', () => {
     render(<AdminPaymentsPage />);
     await waitFor(() => expect(searchAdminPayments).toHaveBeenCalled());
 
-    expect(screen.getByRole('button', { name: /Xuất CSV/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Webhook' }));
-    expect(await screen.findByText('DELIVERY_FAILED')).toBeInTheDocument();
-    expect(screen.getByText(/Kế toán: quyền chỉ đọc/)).toBeInTheDocument();
-    expect(screen.queryByTitle('Xử lý lại')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Xuất danh sách/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Công cụ kỹ thuật' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thông báo nhà cung cấp' }));
+    expect(await screen.findByText('Chưa chuyển được kết quả đến hệ thống đích'))
+      .toBeInTheDocument();
+    expect(screen.getByText(/Kế toán có quyền xem/)).toBeInTheDocument();
+    expect(screen.queryByTitle('Xử lý lại tác vụ lỗi')).not.toBeInTheDocument();
   });
 
   it('lets ADMIN confirm replay and calls the canonical operation API', async () => {
@@ -80,9 +83,11 @@ describe('AdminPaymentsPage role operations', () => {
     render(<AdminPaymentsPage />);
     await waitFor(() => expect(searchAdminPayments).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Webhook' }));
-    expect(await screen.findByText('DELIVERY_FAILED')).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle('Xử lý lại'));
+    fireEvent.click(screen.getByRole('button', { name: 'Công cụ kỹ thuật' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thông báo nhà cung cấp' }));
+    expect(await screen.findByText('Chưa chuyển được kết quả đến hệ thống đích'))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Xử lý lại tác vụ lỗi'));
 
     await waitFor(() => expect(context.triggerConfirm).toHaveBeenCalled());
     await waitFor(() => expect(replayPaymentOperation)
