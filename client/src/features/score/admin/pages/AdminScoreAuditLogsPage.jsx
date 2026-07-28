@@ -70,13 +70,13 @@ export default function AdminScoreAuditLogsPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/60 p-6 rounded-2xl border border-zinc-800/80 backdrop-blur-md">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-6 rounded-[2rem] shadow-2xl shadow-black/20">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
-            <History className="w-7 h-7 text-amber-500 shrink-0" />
-            <span>Nhật Ký Kiểm Toán (Audit Logs & Reports)</span>
+            <History className="w-7 h-7 text-brand-orange shrink-0" />
+            <span>Nhật Ký Kiểm Toán (Audit Logs)</span>
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p className="text-[11px] font-medium tracking-wide text-zinc-400 mt-1">
             Ghi vết toàn bộ hành động của Admin liên quan đến điều chỉnh điểm, đảo giao dịch và đối soát.
           </p>
         </div>
@@ -84,47 +84,47 @@ export default function AdminScoreAuditLogsPage() {
           <button
             onClick={() => handleExport('AUDIT')}
             disabled={isExporting}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 font-bold text-xs text-zinc-950 transition-all shadow-md shadow-amber-500/10 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-[10px] uppercase tracking-widest text-zinc-300 transition-all border border-white/10 shadow-inner disabled:opacity-50 cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            <span>Xuất CSV Audit</span>
+            <Download className="w-4 h-4 text-amber-400" />
+            <span>Xuất Audit</span>
           </button>
           <button
             onClick={() => handleExport('HISTORY')}
             disabled={isExporting}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 font-bold text-xs text-zinc-950 transition-all shadow-md shadow-emerald-500/10 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-[10px] uppercase tracking-widest text-zinc-300 transition-all border border-white/10 shadow-inner disabled:opacity-50 cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            <span>Xuất CSV Score History</span>
+            <Download className="w-4 h-4 text-emerald-400" />
+            <span>Xuất Score History</span>
           </button>
           <button
             onClick={() => handleSearch()}
             disabled={isLoadingOperations}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 font-bold text-xs text-white transition-all border border-zinc-700/60 shadow-sm disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 p-3 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-zinc-300 transition-all border border-white/10 shadow-inner disabled:opacity-50 cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingOperations ? 'animate-spin text-amber-400' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isLoadingOperations ? 'animate-spin text-brand-orange' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* Filter Bar */}
-      <form onSubmit={handleSearch} className="bg-zinc-900/80 p-6 rounded-2xl border border-zinc-800 flex flex-col sm:flex-row gap-4 items-end">
+      <form onSubmit={handleSearch} className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-[2rem] border border-zinc-800/50 shadow-xl shadow-black/10 flex flex-col sm:flex-row gap-5 items-end">
         <div className="flex-1 w-full">
-          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Lọc theo User ID</label>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Lọc theo User ID</label>
           <input
             type="number"
             value={filterUserId}
             onChange={(e) => setFilterUserId(e.target.value)}
             placeholder="ID khách hàng..."
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono"
+            className="w-full bg-black/20 border border-zinc-800/80 rounded-2xl px-5 py-3.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-brand-orange/50 transition-colors shadow-inner"
           />
         </div>
         <div className="flex-1 w-full">
-          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Lọc theo mã thao tác (Action)</label>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Lọc theo thao tác (Action)</label>
           <select
             value={filterAction}
             onChange={(e) => setFilterAction(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+            className="w-full bg-black/20 border border-zinc-800/80 rounded-2xl px-5 py-3.5 text-xs font-bold text-white focus:outline-none focus:border-brand-orange/50 transition-colors shadow-inner"
           >
             <option value="">Tất cả thao tác</option>
             <option value="ACTION_MANUAL_ADJUSTMENT_ADD">Cộng điểm thủ công (ADD)</option>
@@ -136,50 +136,52 @@ export default function AdminScoreAuditLogsPage() {
         <button
           type="submit"
           disabled={isLoadingOperations}
-          className="w-full sm:w-auto px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 cursor-pointer border border-zinc-700/60"
+          className="w-full sm:w-auto px-8 py-3.5 bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black rounded-2xl text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xl shadow-brand-orange/20 disabled:opacity-50"
         >
-          <Filter className="w-4 h-4 text-amber-400" />
+          <Filter className="w-4 h-4" />
           <span>Lọc dữ liệu</span>
         </button>
       </form>
 
       {/* Audit Table */}
-      <div className="bg-zinc-900/80 rounded-2xl border border-zinc-800 overflow-hidden">
-        <div className="p-5 border-b border-zinc-800 font-bold text-sm text-white flex justify-between items-center">
-          <span>Danh sách nhật ký thao tác Admin</span>
-          <span className="text-xs font-mono text-zinc-400">Tổng: {auditLogs?.totalElements || 0} bản ghi</span>
+      <div className="bg-zinc-900/40 backdrop-blur-md rounded-[2rem] border border-zinc-800/50 shadow-xl shadow-black/10 overflow-hidden">
+        <div className="p-6 border-b border-zinc-800/50 font-black text-sm text-white flex justify-between items-center bg-black/10">
+          <span className="tracking-wide">Danh sách nhật ký thao tác Admin</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 bg-black/20 px-3 py-1.5 rounded-xl border border-zinc-800/80 shadow-inner">
+            Tổng: {auditLogs?.totalElements || 0} bản ghi
+          </span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto p-4">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-zinc-800/80 text-[11px] font-bold text-zinc-400 uppercase bg-zinc-950/40">
-                <th className="py-3 px-4">ID</th>
-                <th className="py-3 px-4">Thời gian</th>
-                <th className="py-3 px-4">Operator</th>
-                <th className="py-3 px-4">User ID</th>
-                <th className="py-3 px-4">Action</th>
-                <th className="py-3 px-4">Method / URI</th>
-                <th className="py-3 px-4">IP Address</th>
-                <th className="py-3 px-4 text-right">HTTP Status</th>
+              <tr className="border-b border-zinc-800/50 text-[10px] font-black tracking-widest text-zinc-500 uppercase">
+                <th className="py-4 px-4">ID</th>
+                <th className="py-4 px-4">Thời gian</th>
+                <th className="py-4 px-4">Operator</th>
+                <th className="py-4 px-4">User ID</th>
+                <th className="py-4 px-4">Action</th>
+                <th className="py-4 px-4">Method / URI</th>
+                <th className="py-4 px-4">IP Address</th>
+                <th className="py-4 px-4 text-right">HTTP Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/60 text-xs text-zinc-300">
+            <tbody className="divide-y divide-zinc-800/30 text-xs text-zinc-300">
               {auditLogs && auditLogs.content?.length > 0 ? (
                 auditLogs.content.map((log) => (
-                  <tr key={log.id} className="hover:bg-zinc-800/40 transition-colors">
-                    <td className="py-3 px-4 font-mono text-amber-400 font-bold">#{log.id}</td>
-                    <td className="py-3 px-4 font-mono text-zinc-400">{log.createdAt?.replace('T', ' ').substring(0, 19)}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-white">{log.operatorId || 'ADMIN'}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-cyan-400">{log.userId ? `#${log.userId}` : '-'}</td>
-                    <td className="py-3 px-4 font-bold uppercase text-amber-300">{log.action}</td>
-                    <td className="py-3 px-4 font-mono text-zinc-400 max-w-xs truncate">
-                      <span className="font-bold text-white mr-1.5">{log.httpMethod}</span>
+                  <tr key={log.id} className="hover:bg-white/5 transition-colors group">
+                    <td className="py-4 px-4 font-mono text-brand-orange font-bold tracking-wide">#{log.id}</td>
+                    <td className="py-4 px-4 font-mono text-zinc-500 tracking-wide group-hover:text-zinc-400 transition-colors">{log.createdAt?.replace('T', ' ').substring(0, 19)}</td>
+                    <td className="py-4 px-4 font-mono font-black text-white tracking-wide">{log.operatorId || 'ADMIN'}</td>
+                    <td className="py-4 px-4 font-mono font-black text-cyan-400 tracking-wide">{log.userId ? `#${log.userId}` : '-'}</td>
+                    <td className="py-4 px-4 font-black uppercase text-amber-400 text-[10px] tracking-widest">{log.action}</td>
+                    <td className="py-4 px-4 font-mono text-zinc-400 max-w-xs truncate tracking-wide">
+                      <span className="font-black text-white mr-2 bg-black/40 px-2 py-1 rounded-md border border-zinc-800/80">{log.httpMethod}</span>
                       {log.requestUri}
                     </td>
-                    <td className="py-3 px-4 font-mono text-zinc-500">{log.clientIp || '127.0.0.1'}</td>
-                    <td className="py-3 px-4 text-right">
-                      <span className={`inline-flex px-2 py-0.5 rounded font-mono font-bold text-[10px] ${
-                        log.httpStatus === 200 || log.httpStatus === 201 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                    <td className="py-4 px-4 font-mono text-zinc-500 tracking-wide">{log.clientIp || '127.0.0.1'}</td>
+                    <td className="py-4 px-4 text-right">
+                      <span className={`inline-flex px-3 py-1 rounded-xl font-mono font-black text-[9px] uppercase tracking-widest shadow-inner ${
+                        log.httpStatus === 200 || log.httpStatus === 201 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
                       }`}>
                         {log.httpStatus || 200}
                       </span>
@@ -188,7 +190,7 @@ export default function AdminScoreAuditLogsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="py-8 text-center text-zinc-500">Không tìm thấy nhật ký kiểm toán nào.</td>
+                  <td colSpan="8" className="py-16 text-center text-zinc-500 font-black tracking-wide">Không tìm thấy nhật ký kiểm toán nào.</td>
                 </tr>
               )}
             </tbody>

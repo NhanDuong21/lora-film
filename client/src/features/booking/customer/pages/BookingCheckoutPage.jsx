@@ -755,25 +755,38 @@ export default function BookingCheckoutPage() {
               /* Step 4: Payment Service handoff */
               <div className="space-y-8">
                 {availableScorePoints > 0 && (
-                  <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-r from-amber-950/30 to-zinc-900/60 p-6 md:p-8">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-400">
-                          Điểm thành viên
-                        </p>
-                        <h2 className="mt-1 text-lg font-black text-white">
-                          Bạn đang có {availableScorePoints.toLocaleString('vi-VN')} điểm khả dụng
-                        </h2>
+                  <div className="relative overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-md p-6 md:p-8 shadow-2xl shadow-black/10 transition-all hover:border-brand-orange/30">
+                    <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-brand-orange/5 blur-[80px] pointer-events-none" />
+                    
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-black/20 border border-brand-orange/20 text-brand-orange shadow-inner">
+                          <ShieldCheck className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                              Loyalty Points
+                            </span>
+                            <span className="rounded-xl bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/20 shadow-inner">
+                              Đã đồng bộ
+                            </span>
+                          </div>
+                          <h3 className="text-lg font-black text-white flex items-baseline gap-1.5 tracking-tight">
+                            {availableScorePoints.toLocaleString('vi-VN')}
+                            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">điểm khả dụng</span>
+                          </h3>
+                        </div>
                       </div>
-                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-black uppercase text-amber-300">
-                        Đã đồng bộ Score Service
-                      </span>
+
+                      <div className="flex-1 max-w-sm">
+                        <div className="rounded-2xl bg-black/20 p-5 border border-zinc-800/80 shadow-inner">
+                          <p className="text-[11px] font-medium leading-relaxed text-zinc-400 tracking-wide">
+                            Việc dùng điểm sẽ được mở khi tích hợp thanh toán hoàn tất. Số tiền của đơn hiện tại vẫn do <span className="text-brand-orange font-black uppercase tracking-widest">Booking Service</span> quản lý.
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <p className="mt-4 text-xs font-medium leading-relaxed text-zinc-400">
-                      Việc giữ và trừ điểm sẽ được hệ thống xác nhận cùng giao dịch.
-                      Tính năng dùng điểm tại checkout sẽ được mở khi tích hợp thanh toán hoàn tất;
-                      số tiền của đơn hiện tại vẫn do Booking Service quản lý.
-                    </p>
                   </div>
                 )}
 
