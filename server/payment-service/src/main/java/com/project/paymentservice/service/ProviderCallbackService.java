@@ -102,15 +102,29 @@ public class ProviderCallbackService {
 
     public ReturnOutcome verifyReturn(
             ProviderCode provider, Map<String, String> parameters) {
-        ProviderCallbackResult result = registry.getProvider(provider).verifyReturn(parameters);
+        PaymentProvider adapter = registry.getProvider(provider);
+        ProviderCallbackResult result = adapter.verifyReturn(parameters);
         if (!result.isSignatureValid()) {
             return new ReturnOutcome(false, null, null);
         }
         Payment payment = paymentRepository.findByProviderCodeAndProviderOrderId(
                 provider, result.getProviderOrderId()).orElse(null);
         if (payment != null && payment.getStatus() == PaymentStatus.PROCESSING) {
-            transactionService.scheduleProviderStatusCheck(
-                    payment.getId(), Instant.now());
+            if (adapter.verifiedReturnFallbackEnabled()) {
+                try {
+                    // Localhost cannot receive VNPay's server-to-server IPN.
+                    // The adapter already verified the signed Return payload;
+                    // the canonical transaction service still validates the
+                    // order, amount and currency before changing any state.
+                    transactionService.applyProviderResult(provider, result, null);
+                } catch (BusinessException ignored) {
+                    // Mismatches are persisted as reconciliation cases. Keep
+                    // redirecting so the customer sees that stored outcome.
+                }
+            } else {
+                transactionService.scheduleProviderStatusCheck(
+                        payment.getId(), Instant.now());
+            }
         }
         return payment == null
                 ? new ReturnOutcome(true, null, null)

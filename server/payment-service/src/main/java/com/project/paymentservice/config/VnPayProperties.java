@@ -20,7 +20,8 @@ public class VnPayProperties {
     private int connectTimeoutMillis = 5000;
     private int readTimeoutMillis = 10000;
     @Min(30)
-    private int queryRetryDelaySeconds = 900;
+    private int queryRetryDelaySeconds = 305;
+    private boolean verifiedReturnFallbackEnabled;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -48,4 +49,8 @@ public class VnPayProperties {
     public void setReadTimeoutMillis(int value) { this.readTimeoutMillis = value; }
     public int getQueryRetryDelaySeconds() { return queryRetryDelaySeconds; }
     public void setQueryRetryDelaySeconds(int value) { this.queryRetryDelaySeconds = value; }
+    public boolean isVerifiedReturnFallbackEnabled() { return verifiedReturnFallbackEnabled; }
+    public void setVerifiedReturnFallbackEnabled(boolean value) {
+        this.verifiedReturnFallbackEnabled = value;
+    }
 }

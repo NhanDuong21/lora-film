@@ -19,4 +19,13 @@ public interface PaymentProvider {
     default int recoveryRetryDelaySeconds() {
         return 0;
     }
+
+    /**
+     * Local-development escape hatch for providers whose server-to-server
+     * callback cannot reach localhost. Production providers must keep this
+     * disabled and rely on IPN/webhook or an authoritative status query.
+     */
+    default boolean verifiedReturnFallbackEnabled() {
+        return false;
+    }
 }

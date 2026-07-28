@@ -32,6 +32,7 @@ const viStatus = {
   REQUIRED: 'Cần đối soát',
   IN_REVIEW: 'Đang kiểm tra',
   RESOLVED: 'Đã giải quyết',
+  NONE: 'Chưa cần đối soát',
   OPEN: 'Mới mở',
   IGNORED: 'Đã bỏ qua',
 };
