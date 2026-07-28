@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple3;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -66,9 +67,31 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         String token = authHeader.substring(7);
-        return redisTemplate.hasKey("blacklist:" + sha256(token))
-                .flatMap(revoked -> {
-                    if (Boolean.TRUE.equals(revoked)) {
+        final Claims preliminaryClaims;
+        try {
+            preliminaryClaims = jwtUtil.getAllClaimsFromToken(token);
+        } catch (Exception exception) {
+            return onError(sanitizedExchange, "Invalid or expired access token",
+                    "AUTH_TOKEN_INVALID", HttpStatus.UNAUTHORIZED);
+        }
+        Long accountId = numericClaim(preliminaryClaims.get("userId"));
+        Long sessionId = numericClaim(preliminaryClaims.get("sid"));
+        if (accountId == null) {
+            return onError(sanitizedExchange, "Access token is missing required claims",
+                    "AUTH_TOKEN_INVALID", HttpStatus.UNAUTHORIZED);
+        }
+
+        Mono<Boolean> tokenRevoked = redisTemplate.hasKey("blacklist:" + sha256(token));
+        Mono<Boolean> sessionRevoked = sessionId == null
+                ? Mono.just(false)
+                : redisTemplate.hasKey("revoked_session:" + sessionId);
+        Mono<String> accountRevokedAt = redisTemplate.opsForValue()
+                .get("account_revoked_after:" + accountId)
+                .defaultIfEmpty("");
+
+        return Mono.zip(tokenRevoked, sessionRevoked, accountRevokedAt)
+                .flatMap(revocation -> {
+                    if (isRevoked(revocation, preliminaryClaims)) {
                         return onError(sanitizedExchange, "Access token has been revoked",
                                 "AUTH_TOKEN_REVOKED", HttpStatus.UNAUTHORIZED);
                     }
@@ -77,6 +100,24 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
                 .onErrorResume(exception -> onError(sanitizedExchange,
                         "Authentication service is temporarily unavailable",
                         "AUTH_SERVICE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE));
+    }
+
+    private boolean isRevoked(Tuple3<Boolean, Boolean, String> revocation, Claims claims) {
+        if (Boolean.TRUE.equals(revocation.getT1()) || Boolean.TRUE.equals(revocation.getT2())) {
+            return true;
+        }
+        if (revocation.getT3().isBlank()) {
+            return false;
+        }
+        try {
+            Number issuedAtMs = claims.get("iatMs", Number.class);
+            long issuedAt = issuedAtMs == null
+                    ? (claims.getIssuedAt() == null ? Long.MIN_VALUE : claims.getIssuedAt().getTime())
+                    : issuedAtMs.longValue();
+            return issuedAt < Long.parseLong(revocation.getT3());
+        } catch (NumberFormatException exception) {
+            return true;
+        }
     }
 
     private Mono<Void> authenticate(ServerWebExchange sanitizedExchange,

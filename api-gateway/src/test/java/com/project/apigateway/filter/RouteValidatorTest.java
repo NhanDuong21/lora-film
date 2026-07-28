@@ -27,6 +27,7 @@ class RouteValidatorTest {
     void protectedUserAndAdminEndpointsRequireAuthentication() {
         assertThat(isSecured(HttpMethod.GET, "/api/users/1")).isTrue();
         assertThat(isSecured(HttpMethod.GET, "/api/accounts")).isTrue();
+        assertThat(isSecured(HttpMethod.GET, "/api/admin/user-audits")).isTrue();
         assertThat(isSecured(HttpMethod.POST, "/api/customer/movies")).isTrue();
     }
 
