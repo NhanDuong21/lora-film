@@ -22,7 +22,6 @@ import {
   History,
   Zap,
   BadgeDollarSign,
-  BarChart3,
   Award,
   Key,
   ShieldAlert,
@@ -244,8 +243,8 @@ export default function AdminSidebar({
                   <CreditCard className="w-4 h-4 shrink-0" />
                   <span>Giao dịch & Đối soát</span>
                 </button>
-                <button onClick={() => handleTabClick('finance', '#/admin/finance')} className={getSubLinkClass('finance')}>
-                  <BarChart3 className="w-4 h-4 shrink-0" />
+                <button onClick={() => handleTabClick('analytics', '#/admin/analytics')} className={getSubLinkClass('analytics')}>
+                  <TrendingUp className="w-4 h-4 shrink-0" />
                   <span>Báo cáo doanh thu</span>
                 </button>
                 {isFullAdmin && (

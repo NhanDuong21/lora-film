@@ -31,6 +31,7 @@ const routeNameMap = {
   'create': 'Thêm mới',
   'bookings': 'Đơn hàng',
   'finance': 'Tài chính',
+  'analytics': 'Báo cáo doanh thu',
   'concessions': 'Bắp nước',
   'concession-sales': 'Doanh thu bắp nước',
 };
