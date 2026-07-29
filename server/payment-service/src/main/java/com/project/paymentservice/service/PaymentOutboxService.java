@@ -6,6 +6,7 @@ import com.project.paymentservice.client.booking.BookingPaymentResultRequest;
 import com.project.paymentservice.entity.Payment;
 import com.project.paymentservice.entity.PaymentAnalyticsSnapshot;
 import com.project.paymentservice.entity.PaymentOutboxEvent;
+import com.project.paymentservice.entity.PaymentRefund;
 import com.project.paymentservice.enumtype.OutboxDestination;
 import com.project.paymentservice.enumtype.OutboxStatus;
 import com.project.paymentservice.repository.PaymentOutboxEventRepository;
@@ -82,6 +83,68 @@ public class PaymentOutboxService {
 
         PaymentOutboxEvent event = baseEvent(
                 payment, eventId, "PAYMENT_SUCCEEDED", OutboxDestination.ANALYTICS_KAFKA);
+        event.setCorrelationId(correlationId);
+        event.setPayload(writeJson(payload));
+        return repository.save(event);
+    }
+
+    public PaymentOutboxEvent enqueueBookingRefundResult(
+            PaymentRefund refund, boolean success, Instant occurredAt) {
+        Payment payment = refund.getPayment();
+        BookingPaymentResultRequest request = new BookingPaymentResultRequest();
+        String eventId = UUID.randomUUID().toString();
+        request.setEventId(eventId);
+        request.setSchemaVersion("1.0");
+        request.setPaymentId(payment.getId());
+        request.setPaymentPublicId(payment.getPublicId());
+        request.setPaymentTransactionCode(payment.getPaymentTransactionCode());
+        request.setPaymentProvider(payment.getProviderCode().name());
+        request.setPaymentMethod(payment.getPaymentMethod().name());
+        request.setResult(success ? "REFUND_SUCCESS" : "REFUND_FAILED");
+        request.setAmount(refund.getRequestedAmount());
+        request.setCurrency(refund.getCurrency());
+        request.setOccurredAt(occurredAt);
+        request.setExternalTransactionId(refund.getProviderRefundId());
+
+        PaymentOutboxEvent event = baseEvent(
+                payment, eventId, "REFUND_RESULT", OutboxDestination.BOOKING_SERVICE_REST);
+        event.setCorrelationId(refund.getPublicId());
+        event.setPayload(writeJson(request));
+        return repository.save(event);
+    }
+
+    public PaymentOutboxEvent enqueueAnalyticsRefund(
+            Payment payment,
+            PaymentRefund refund,
+            PaymentAnalyticsSnapshot snapshot,
+            String correlationId) {
+        String eventId = UUID.nameUUIDFromBytes(
+                ("analytics-refund:" + correlationId).getBytes(StandardCharsets.UTF_8)).toString();
+        PaymentOutboxEvent existing = repository.findByEventId(eventId).orElse(null);
+        if (existing != null) {
+            return existing;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventId", eventId);
+        payload.put("schemaVersion", "1.0");
+        payload.put("eventType", "PAYMENT_REFUNDED");
+        payload.put("refundPublicId", refund.getPublicId());
+        payload.put("paymentPublicId", payment.getPublicId());
+        payload.put("bookingPublicId", payment.getBookingPublicId());
+        payload.put("provider", refund.getProviderCode().name());
+        payload.put("refundType", refund.getRefundType().name());
+        payload.put("refundComponent", refund.getRefundComponent().name());
+        payload.put("reasonCode", refund.getReasonCode());
+        payload.put("amount", refund.getRequestedAmount());
+        payload.put("currency", refund.getCurrency());
+        payload.put("refundedAt", refund.getSucceededAt());
+        payload.put("moviePublicId", snapshot.getMoviePublicId());
+        payload.put("movieTitle", snapshot.getMovieTitle());
+        payload.put("showtimePublicId", snapshot.getShowtimePublicId());
+        payload.put("cinemaPublicId", snapshot.getCinemaPublicId());
+
+        PaymentOutboxEvent event = baseEvent(
+                payment, eventId, "PAYMENT_REFUNDED", OutboxDestination.ANALYTICS_KAFKA);
         event.setCorrelationId(correlationId);
         event.setPayload(writeJson(payload));
         return repository.save(event);

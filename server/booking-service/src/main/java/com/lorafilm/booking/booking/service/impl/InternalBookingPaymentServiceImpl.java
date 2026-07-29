@@ -287,7 +287,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
         Instant occurredAt = request.occurredAt() == null ? receiptAt : request.occurredAt();
         BookingPaymentEvent event = toEvent(booking, request, result, occurredAt, fingerprint);
 
-        if (!amountAndCurrencyMatch(booking, request)) {
+        if (!amountAndCurrencyMatch(booking, request, result)) {
             rejectWithReconciliation(
                     booking,
                     event,
@@ -409,15 +409,19 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                     "REFUND_SUCCESS_FOR_NON_CONFIRMED_BOOKING");
         }
 
-        booking.setPaymentStatus(PaymentStatus.REFUNDED);
-        if (lifecycleService != null) {
-            lifecycleService.transition(
-                    booking,
-                    BookingStatus.REFUNDED,
-                    "Authoritative Payment refund result",
-                    "PAYMENT_SERVICE");
-        } else {
-            booking.changeStatus(BookingStatus.REFUNDED, receiptAt);
+        BigDecimal alreadyRefunded = successfulRefundedAmount(booking.getId());
+        BigDecimal cumulativeRefund = alreadyRefunded.add(request.amount());
+        if (cumulativeRefund.compareTo(booking.getFinalAmount()) == 0) {
+            booking.setPaymentStatus(PaymentStatus.REFUNDED);
+            if (lifecycleService != null) {
+                lifecycleService.transition(
+                        booking,
+                        BookingStatus.REFUNDED,
+                        "Authoritative full Payment refund result",
+                        "PAYMENT_SERVICE");
+            } else {
+                booking.changeStatus(BookingStatus.REFUNDED, receiptAt);
+            }
         }
     }
 
@@ -652,13 +656,30 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
 
     private boolean amountAndCurrencyMatch(
             Booking booking,
-            InternalPaymentResultRequest request) {
-        return request.amount() != null
-                && booking.getFinalAmount() != null
-                && booking.getFinalAmount().compareTo(request.amount()) == 0
-                && Objects.equals(
-                        normalizeCurrency(booking.getCurrency()),
-                        normalizeCurrency(request.currency()));
+            InternalPaymentResultRequest request,
+            String result) {
+        if (request.amount() == null
+                || request.amount().compareTo(BigDecimal.ZERO) <= 0
+                || booking.getFinalAmount() == null
+                || !Objects.equals(
+                    normalizeCurrency(booking.getCurrency()),
+                    normalizeCurrency(request.currency()))) {
+            return false;
+        }
+        if (!"REFUND_SUCCESS".equals(result) && !"REFUND_FAILED".equals(result)) {
+            return booking.getFinalAmount().compareTo(request.amount()) == 0;
+        }
+        BigDecimal alreadyRefunded = successfulRefundedAmount(booking.getId());
+        return alreadyRefunded.add(request.amount())
+                .compareTo(booking.getFinalAmount()) <= 0;
+    }
+
+    private BigDecimal successfulRefundedAmount(Long bookingId) {
+        if (refundRepository == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal amount = refundRepository.sumSuccessfulAmountByBookingId(bookingId);
+        return amount == null ? BigDecimal.ZERO : amount;
     }
 
     private PaymentEventType eventType(String result) {

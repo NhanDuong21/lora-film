@@ -27,8 +27,11 @@ public class PaymentExpiryScheduler {
             initialDelayString = "${payment.runtime.expiry-initial-delay-millis:5000}")
     public void expirePastDeadlineAttempts() {
         Instant now = Instant.now();
-        List<Payment> due = paymentRepository.findByStatusAndBookingExpiresAtBefore(
+        List<Payment> pending = paymentRepository.findByStatusAndBookingExpiresAtBefore(
                 PaymentStatus.PENDING, now, PageRequest.of(0, 50)).getContent();
-        due.forEach(payment -> transactionService.expireAttempt(payment.getId(), now));
+        List<Payment> processing = paymentRepository.findByStatusAndBookingExpiresAtBefore(
+                PaymentStatus.PROCESSING, now, PageRequest.of(0, 50)).getContent();
+        pending.forEach(payment -> transactionService.expireAttempt(payment.getId(), now));
+        processing.forEach(payment -> transactionService.expireAttempt(payment.getId(), now));
     }
 }

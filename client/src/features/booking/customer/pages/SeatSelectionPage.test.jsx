@@ -107,6 +107,28 @@ describe('SeatSelectionPage customer errors', () => {
     });
   });
 
+  it('subscribes through Socket.IO and refreshes missed availability after reconnect', async () => {
+    render(
+      <MemoryRouter initialEntries={['/booking/seats?showtimeId=showtime-public-9']}>
+        <SeatSelectionPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('button', { name: /Ghế A1/i });
+    const connectHandler = socket.on.mock.calls
+      .find(([eventName]) => eventName === 'connect')?.[1];
+    expect(connectHandler).toBeTypeOf('function');
+
+    connectHandler();
+    const subscribeCall = socket.emit.mock.calls
+      .find(([eventName]) => eventName === 'seat:subscribe');
+    expect(subscribeCall?.[1]).toBe('showtime-public-9');
+    expect(subscribeCall?.[2]).toBeTypeOf('function');
+
+    subscribeCall[2]({ ok: true });
+    await waitFor(() => expect(getSeatAvailability).toHaveBeenCalledTimes(2));
+  });
+
   it('prevents a second order and offers resume or cancel for the active showtime', async () => {
     getActiveBookingForShowtime.mockResolvedValue({
       publicId: 'booking-active-1',

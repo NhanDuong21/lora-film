@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   Coffee,
@@ -12,8 +12,11 @@ import {
 } from 'lucide-react';
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import apiClient from '@/services/apiClient';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 import ConcessionArchiveModal from '../components/ConcessionArchiveModal';
 import ConcessionCatalogFormModal from '../components/ConcessionCatalogFormModal';
+
+const CATALOG_PAGE_SIZE = 20;
 
 const typeFilters = [
   { value: 'ALL', label: 'Tất cả loại' },
@@ -109,6 +112,7 @@ export default function AdminConcessionInventoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [page, setPage] = useState(1);
   const [editingItem, setEditingItem] = useState(undefined);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -116,6 +120,7 @@ export default function AdminConcessionInventoryPage() {
   const [archiving, setArchiving] = useState(false);
   const [restoringId, setRestoringId] = useState(null);
   const [notice, setNotice] = useState(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const fetchItems = useCallback(async ({ background = false } = {}) => {
     if (!background) setLoading(true);
@@ -146,7 +151,7 @@ export default function AdminConcessionInventoryPage() {
   }, { SELLING: 0, PAUSED: 0, ARCHIVED: 0 }), [items]);
 
   const filteredItems = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLocaleLowerCase('vi-VN');
+    const normalizedSearch = deferredSearchQuery.trim().toLocaleLowerCase('vi-VN');
 
     return items.filter(item => {
       const matchesSearch = !normalizedSearch
@@ -156,7 +161,14 @@ export default function AdminConcessionInventoryPage() {
       const matchesStatus = selectedStatus === 'ALL' || getStatus(item) === selectedStatus;
       return matchesSearch && matchesType && matchesStatus;
     });
-  }, [items, searchQuery, selectedStatus, selectedType]);
+  }, [deferredSearchQuery, items, selectedStatus, selectedType]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / CATALOG_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const visibleItems = useMemo(() => {
+    const start = (currentPage - 1) * CATALOG_PAGE_SIZE;
+    return filteredItems.slice(start, start + CATALOG_PAGE_SIZE);
+  }, [currentPage, filteredItems]);
 
   const openCreateModal = () => {
     setEditingItem(undefined);
@@ -302,7 +314,10 @@ export default function AdminConcessionInventoryPage() {
               type="search"
               placeholder="Tìm theo tên hoặc mã sản phẩm..."
               value={searchQuery}
-              onChange={event => setSearchQuery(event.target.value)}
+              onChange={event => {
+                setSearchQuery(event.target.value);
+                setPage(1);
+              }}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-3 pl-10 pr-4 text-sm text-white outline-none transition-colors focus:border-orange-500"
             />
           </div>
@@ -322,7 +337,10 @@ export default function AdminConcessionInventoryPage() {
             <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Phân loại</span>
             <select
               value={selectedType}
-              onChange={event => setSelectedType(event.target.value)}
+              onChange={event => {
+                setSelectedType(event.target.value);
+                setPage(1);
+              }}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-white outline-none focus:border-orange-500"
             >
               {typeFilters.map(option => (
@@ -334,7 +352,10 @@ export default function AdminConcessionInventoryPage() {
             <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Trạng thái vận hành</span>
             <select
               value={selectedStatus}
-              onChange={event => setSelectedStatus(event.target.value)}
+              onChange={event => {
+                setSelectedStatus(event.target.value);
+                setPage(1);
+              }}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-white outline-none focus:border-orange-500"
             >
               {statusFilters.map(option => (
@@ -384,10 +405,13 @@ export default function AdminConcessionInventoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/70">
-                {filteredItems.map(item => {
+                {visibleItems.map(item => {
                   const status = getStatus(item);
                   const presentation = statusPresentation[status];
-                  const imageUrl = resolveImageUrl(item.imageUrl);
+                  const imageUrl = getOptimizedImageUrl(
+                    resolveImageUrl(item.imageUrl),
+                    { width: 112, height: 112 }
+                  );
 
                   return (
                     <tr key={item.id} className={`transition-colors hover:bg-zinc-900/70 ${status === 'ARCHIVED' ? 'opacity-65' : ''}`}>
@@ -398,6 +422,11 @@ export default function AdminConcessionInventoryPage() {
                               <img
                                 src={imageUrl}
                                 alt={item.name}
+                                width="56"
+                                height="56"
+                                loading="lazy"
+                                decoding="async"
+                                fetchPriority="low"
                                 onError={event => {
                                   event.currentTarget.hidden = true;
                                   event.currentTarget.nextElementSibling?.classList.remove('hidden');
@@ -474,8 +503,35 @@ export default function AdminConcessionInventoryPage() {
               </tbody>
             </table>
           </div>
-          <footer className="border-t border-zinc-800 px-6 py-3 text-xs text-zinc-500">
-            Hiển thị {filteredItems.length} trong tổng số {items.length} sản phẩm.
+          <footer className="flex flex-col gap-3 border-t border-zinc-800 px-6 py-3 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Hiển thị {Math.min((currentPage - 1) * CATALOG_PAGE_SIZE + 1, filteredItems.length)}
+              –{Math.min(currentPage * CATALOG_PAGE_SIZE, filteredItems.length)} trong {filteredItems.length} kết quả
+              ({items.length} sản phẩm).
+            </span>
+            {totalPages > 1 && (
+              <nav className="flex items-center gap-2" aria-label="Phân trang danh mục bắp nước">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage(value => Math.max(1, value - 1))}
+                  className="rounded-lg border border-zinc-700 px-3 py-2 font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Trước
+                </button>
+                <span className="min-w-20 text-center font-bold text-zinc-300">
+                  Trang {currentPage}/{totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage(value => Math.min(totalPages, value + 1))}
+                  className="rounded-lg border border-zinc-700 px-3 py-2 font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Sau
+                </button>
+              </nav>
+            )}
           </footer>
         </section>
       )}

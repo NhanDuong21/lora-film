@@ -68,7 +68,9 @@ export default function AdminSidebar({
   const [collapsedSections, setCollapsedSections] = useState({
     noiDung: false,
     coSo: false,
-    vanHanhTaiChinh: false,
+    vanHanhDatVe: false,
+    thanhToan: false,
+    baoCao: false,
     khachHang: false,
     nhanSu: false,
     cauHinh: false
@@ -106,9 +108,9 @@ export default function AdminSidebar({
   };
 
   return (
-    <aside className="w-[280px] h-screen sticky top-0 bg-zinc-950 border-r border-zinc-800 flex flex-col justify-between shrink-0 z-30 select-none overflow-hidden font-sans">
+    <aside className="w-[280px] h-screen h-[100dvh] sticky top-0 bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0 z-30 select-none overflow-hidden font-sans">
       
-      <div>
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* Brand Top Header */}
         <div className="px-6 py-6 border-b border-zinc-800/60 flex items-center justify-between shrink-0 h-[72px]">
           <Link to={adminHomePath} className="flex items-center gap-2.5 bg-transparent p-0 m-0 shadow-none border-none select-none decoration-none group">
@@ -127,7 +129,7 @@ export default function AdminSidebar({
         </div>
 
         {/* Scrollable Navigation List */}
-        <nav className="py-4 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+        <nav className="min-h-0 flex-1 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
           
           {/* Section 1: Dashboard */}
           {can('DASHBOARD_VIEW') && (
@@ -222,38 +224,72 @@ export default function AdminSidebar({
             </div>
           )}
 
-          {/* Section 4: Operations & Finance */}
-          {(isFullAdmin || isAccountantOnly) && <div className="space-y-1">
+          {/* Section 4: Booking operations */}
+          {isFullAdmin && <div className="space-y-1">
             <button
-              onClick={() => toggleSection('vanHanhTaiChinh')}
+              onClick={() => toggleSection('vanHanhDatVe')}
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
-              <span>Vận hành & Tài chính</span>
+              <span>Vận hành đặt vé</span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.vanHanhTaiChinh ? 'rotate-180' : ''
+                !collapsedSections.vanHanhDatVe ? 'rotate-180' : ''
               }`} />
             </button>
 
-            {!collapsedSections.vanHanhTaiChinh && (
+            {!collapsedSections.vanHanhDatVe && (
               <div className="space-y-0.5">
-                {isFullAdmin && <button onClick={() => handleTabClick('bookings', '#/admin/bookings')} className={getSubLinkClass('bookings')}>
+                <button onClick={() => handleTabClick('bookings', '#/admin/bookings')} className={getSubLinkClass('bookings')}>
                   <Ticket className="w-4 h-4 shrink-0" />
-                  <span>Quản lý vé & Đơn hàng</span>
-                </button>}
+                  <span>Đơn đặt vé & giữ ghế</span>
+                </button>
+                <button onClick={() => handleTabClick('concessions', '#/admin/concessions')} className={getSubLinkClass('concessions')}>
+                  <Coffee className="w-4 h-4 shrink-0" />
+                  <span>Danh mục bắp nước</span>
+                </button>
+              </div>
+            )}
+          </div>}
+
+          {/* Section 5: Payment operations */}
+          {(isFullAdmin || isAccountantOnly) && <div className="space-y-1">
+            <button
+              onClick={() => toggleSection('thanhToan')}
+              className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
+            >
+              <span>Thanh toán</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                !collapsedSections.thanhToan ? 'rotate-180' : ''
+              }`} />
+            </button>
+
+            {!collapsedSections.thanhToan && (
+              <div className="space-y-0.5">
                 <button onClick={() => handleTabClick('payments', '#/admin/payments')} className={getSubLinkClass('payments')}>
                   <CreditCard className="w-4 h-4 shrink-0" />
                   <span>Giao dịch & Đối soát</span>
                 </button>
+              </div>
+            )}
+          </div>}
+
+          {/* Section 6: Reports */}
+          {(isFullAdmin || isAccountantOnly) && <div className="space-y-1">
+            <button
+              onClick={() => toggleSection('baoCao')}
+              className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
+            >
+              <span>Báo cáo & phân tích</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                !collapsedSections.baoCao ? 'rotate-180' : ''
+              }`} />
+            </button>
+
+            {!collapsedSections.baoCao && (
+              <div className="space-y-0.5">
                 <button onClick={() => handleTabClick('finance', '#/admin/finance')} className={getSubLinkClass('finance')}>
                   <BarChart3 className="w-4 h-4 shrink-0" />
-                  <span>Báo cáo doanh thu</span>
+                  <span>Doanh thu tổng hợp</span>
                 </button>
-                {isFullAdmin && (
-                  <button onClick={() => handleTabClick('concessions', '#/admin/concessions')} className={getSubLinkClass('concessions')}>
-                    <Coffee className="w-4 h-4 shrink-0" />
-                    <span>Danh mục bắp nước</span>
-                  </button>
-                )}
                 <button onClick={() => handleTabClick('concession-sales', '#/admin/concession-sales')} className={getSubLinkClass('concession-sales')}>
                   <Coins className="w-4 h-4 shrink-0" />
                   <span>Doanh thu bắp nước</span>
@@ -262,7 +298,7 @@ export default function AdminSidebar({
             )}
           </div>}
 
-          {/* Section 5: Customers */}
+          {/* Section 7: Customers */}
           {(isFullAdmin || canManageCustomers) && <div className="space-y-1">
             <button
               onClick={() => toggleSection('khachHang')}
@@ -299,7 +335,7 @@ export default function AdminSidebar({
             )}
           </div>}
 
-          {/* Section 6: Human Resources */}
+          {/* Section 8: Human Resources */}
           {hasHumanResourcesAccess && <div className="space-y-1">
             <button
               onClick={() => toggleSection('nhanSu')}
@@ -333,7 +369,7 @@ export default function AdminSidebar({
             )}
           </div>}
 
-          {/* Section 7: Settings */}
+          {/* Section 9: Settings */}
           {hasSystemAccess && (
             <div className="space-y-1">
               <button
@@ -397,19 +433,16 @@ export default function AdminSidebar({
             </div>
           </div>
           <div className="flex flex-col gap-1 border-t border-zinc-800 pt-3 mt-1">
-            <button 
-              onClick={() => handleTabClick('my-profile', '#/profile')}
-              className="flex items-center justify-start gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors rounded hover:bg-zinc-800/50"
+            <button
+              onClick={() => handleTabClick('my-account', '#/admin/me')}
+              className={`flex items-center justify-start gap-2.5 rounded px-2 py-2 text-xs font-semibold transition-colors ${
+                activeTab === 'my-account'
+                  ? 'bg-brand-orange/10 text-brand-orange'
+                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
+              }`}
             >
               <UserCircle className="w-3.5 h-3.5" />
-              <span>Hồ sơ của tôi</span>
-            </button>
-            <button 
-              onClick={() => handleTabClick('my-security', '#/profile?tab=security')}
-              className="flex items-center justify-start gap-2.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors rounded hover:bg-zinc-800/50"
-            >
-              <Key className="w-3.5 h-3.5" />
-              <span>Bảo mật</span>
+              <span>Tài khoản của tôi</span>
             </button>
             <div className="flex items-center justify-between pt-2 mt-1 border-t border-zinc-800/50">
               <button 

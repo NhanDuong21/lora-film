@@ -42,6 +42,7 @@ public class PaymentTransactionService {
     private final PaymentLogService logService;
     private final PaymentOutboxService outboxService;
     private final PaymentStateTransitionService transitionService;
+    private final RefundService refundService;
 
     public PaymentTransactionService(
             PaymentRepository paymentRepository,
@@ -53,7 +54,8 @@ public class PaymentTransactionService {
             TransactionCodeGenerator transactionCodeGenerator,
             PaymentLogService logService,
             PaymentOutboxService outboxService,
-            PaymentStateTransitionService transitionService) {
+            PaymentStateTransitionService transitionService,
+            RefundService refundService) {
         this.paymentRepository = paymentRepository;
         this.guardRepository = guardRepository;
         this.snapshotRepository = snapshotRepository;
@@ -64,6 +66,7 @@ public class PaymentTransactionService {
         this.logService = logService;
         this.outboxService = outboxService;
         this.transitionService = transitionService;
+        this.refundService = refundService;
     }
 
     @Transactional
@@ -387,8 +390,9 @@ public class PaymentTransactionService {
                         "Provider reported success after the original Booking deadline");
             }
             BookingPaymentGuard guard = lockGuard(payment);
-            if (guard.getSuccessfulPaymentId() != null
-                    && !guard.getSuccessfulPaymentId().equals(payment.getId())) {
+            boolean duplicateFinancialSuccess = guard.getSuccessfulPaymentId() != null
+                    && !guard.getSuccessfulPaymentId().equals(payment.getId());
+            if (duplicateFinancialSuccess) {
                 requireReconciliation(payment, webhookEventId, "DUPLICATE_FINANCIAL_SUCCESS",
                         result.getDeduplicationKey(),
                         "Another Payment was already successful for this Booking");
@@ -399,6 +403,19 @@ public class PaymentTransactionService {
             }
             paymentRepository.save(payment);
             outboxService.enqueueBookingResult(payment, "SUCCESS", payment.getSucceededAt());
+            if (late) {
+                refundService.createAutomaticFullRefund(
+                        payment.getId(),
+                        "automatic:late-provider-success:" + payment.getPublicId(),
+                        "LATE_PROVIDER_SUCCESS",
+                        "Nhà cung cấp ghi nhận thành công sau hạn thanh toán gốc của đơn");
+            } else if (duplicateFinancialSuccess) {
+                refundService.createAutomaticFullRefund(
+                        payment.getId(),
+                        "automatic:duplicate-capture:" + payment.getPublicId(),
+                        "DUPLICATE_CAPTURE",
+                        "Một giao dịch khác của cùng đơn đã thanh toán thành công");
+            }
             logService.log(payment.getId(), late
                             ? PaymentLogEventType.LATE_SUCCESS_DETECTED
                             : PaymentLogEventType.PAYMENT_SUCCEEDED,

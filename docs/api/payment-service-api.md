@@ -13,7 +13,10 @@ Sandbox, tiền mặt tại quầy và MOCK dành riêng cho local/test.
 - Browser Return chỉ điều hướng. IPN/callback đã xác minh mới có thẩm quyền ghi
   nhận kết quả tài chính.
 - Payment SUCCESS chỉ phát doanh thu sau khi Booking Service chấp nhận kết quả.
-- Không có provider refund trong Release 1.
+- Refund được Payment Service điều phối theo số tiền thực thu; Booking chỉ nhận kết
+  quả hoàn tiền đã xác nhận để cập nhật projection nghiệp vụ.
+- Không hỗ trợ hoàn riêng từng vé. Ghế `BOOKED` không được mở bán lại chỉ vì có
+  một khoản hoàn tiền.
 
 Response thông thường dùng wrapper:
 
@@ -113,9 +116,57 @@ Base path: `/api/admin/payments`.
 - `POST /api/admin/payments/outbox/{eventId}/replay`: replay cùng event ID.
 - `POST /api/admin/payments/reconciliations/{publicId}/assign`.
 - `POST /api/admin/payments/reconciliations/{publicId}/resolve`.
+- `GET /api/admin/payments/refunds`: danh sách yêu cầu hoàn tiền.
+- `GET /api/admin/payments/refunds/{refundPublicId}`: chi tiết hoàn tiền.
+- `POST /api/admin/payments/{paymentPublicId}/refunds`: tạo hoàn toàn phần hoặc
+  hoàn một phần; yêu cầu header `Idempotency-Key`.
+- `POST /api/admin/payments/refunds/{refundPublicId}/retry`: thử lại khoản hoàn
+  provider ở trạng thái cho phép.
+- `POST /api/admin/payments/refunds/{refundPublicId}/cash/complete`: xác nhận nhân
+  viên đã hoàn tiền mặt với mã biên nhận và ghi chú bắt buộc.
 
 `ADMIN` được đọc/export/mutation. `ACCOUNTANT` chỉ được GET/export. Resolve bắt
 buộc có mã xử lý và ghi chú.
+
+Request hoàn tiền do Admin tạo:
+
+```json
+{
+  "refundType": "PARTIAL",
+  "refundComponent": "CONCESSION",
+  "amount": 50000,
+  "reasonCode": "CONCESSION_UNAVAILABLE",
+  "note": "Quầy hết sản phẩm đã mua"
+}
+```
+
+Quy tắc authoritative:
+
+- `FULL + FULL_ORDER`: server tự lấy toàn bộ số tiền còn có thể hoàn.
+- `PARTIAL`: chỉ nhận `CONCESSION`, `PRICE_DIFFERENCE` hoặc
+  `OPERATIONAL_ADJUSTMENT`.
+- Khoản `CONCESSION` không được vượt tiền bắp nước trong snapshot bất biến.
+- Tổng các khoản đang chờ, đang xử lý, cần can thiệp và đã thành công không được
+  vượt số tiền đã thu.
+- `PARTIAL + FULL_ORDER` bị từ chối bằng `TICKET_REFUND_NOT_SUPPORTED`.
+- Nếu trước đó đã hoàn một phần, yêu cầu hoàn toàn bộ phần còn lại được gửi tới
+  provider dưới dạng partial refund an toàn.
+
+Các trường hợp tự động hoàn toàn bộ phần còn lại:
+
+- Provider báo SUCCESS sau deadline gốc (`LATE_PROVIDER_SUCCESS`).
+- Booking không chấp nhận kết quả thanh toán thành công
+  (`BOOKING_CONFIRMATION_FAILED`).
+- Có giao dịch thu tiền thành công thứ hai cho cùng Booking
+  (`DUPLICATE_CAPTURE`).
+- Movie Service chuyển Showtime sang `CANCELLED` (`SHOWTIME_CANCELLED`).
+
+Route nội bộ của Movie Service:
+
+- `POST /internal/payments/refunds/showtimes/{showtimePublicId}`
+
+Route này yêu cầu internal token, không đi qua Gateway và dùng `eventId` để chống
+tạo trùng khi outbox Movie retry.
 
 ## Booking internal contract
 
@@ -130,6 +181,13 @@ Context authoritative gồm owner, `amountLockedAt`, deadline, amount/currency v
 snapshot analytics (`moviePublicId`, `movieTitle`, `showtimePublicId`,
 `cinemaPublicId`, số lượng/tiền vé, bắp nước, giảm giá, tổng tiền).
 
+Payment gửi refund đã xác nhận về cùng `payment-results` với kết quả
+`REFUND_SUCCESS`. Booking cộng dồn các khoản refund thành công:
+
+- Chưa đủ tổng tiền đơn: Booking vẫn `CONFIRMED`, vé và ghế vẫn `BOOKED`.
+- Bằng đúng tổng tiền đơn: Booking chuyển `REFUNDED`.
+- Không trường hợp nào giải phóng ghế đã `BOOKED`.
+
 ## Mã lỗi vận hành chính
 
 | Code | HTTP | Ý nghĩa |
@@ -143,3 +201,9 @@ snapshot analytics (`moviePublicId`, `movieTitle`, `showtimePublicId`,
 | `PROVIDER_EVENT_CONFLICT` | 409 | Callback trùng khóa nhưng khác payload |
 | `PAYMENT_RECONCILIATION_REQUIRED` | 409 | Cần xử lý đối soát |
 | `BOOKING_SERVICE_UNAVAILABLE` | 503 | Chưa đọc được context authoritative |
+| `REFUND_IDEMPOTENCY_KEY_REQUIRED` | 400 | Thiếu khóa chống tạo hoàn tiền trùng |
+| `REFUND_IDEMPOTENCY_CONFLICT` | 409 | Cùng khóa nhưng nội dung hoàn tiền khác |
+| `PAYMENT_NOT_REFUNDABLE` | 409 | Giao dịch chưa thanh toán thành công |
+| `REFUND_AMOUNT_EXCEEDS_AVAILABLE` | 409 | Vượt số tiền còn có thể hoàn |
+| `TICKET_REFUND_NOT_SUPPORTED` | 409 | Chưa hỗ trợ hoàn riêng từng vé |
+| `CASH_REFUND_REQUIRES_MANUAL_SETTLEMENT` | 409 | Hoàn tiền mặt cần xử lý tại quầy |

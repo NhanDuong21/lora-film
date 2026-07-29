@@ -2,10 +2,13 @@ package com.project.paymentservice.provider.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.paymentservice.enumtype.ProviderCode;
+import com.project.paymentservice.entity.Payment;
+import com.project.paymentservice.entity.PaymentRefund;
 import com.project.paymentservice.provider.PaymentProvider;
 import com.project.paymentservice.provider.PaymentSession;
 import com.project.paymentservice.provider.PaymentSessionRequest;
 import com.project.paymentservice.provider.ProviderCallbackResult;
+import com.project.paymentservice.provider.ProviderRefundResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -51,6 +54,18 @@ public class MockPaymentProvider implements PaymentProvider {
     @Override
     public ProviderCallbackResult verifyReturn(Map<String, String> parameters) {
         throw new UnsupportedOperationException("MOCK does not use provider return");
+    }
+
+    @Override
+    public ProviderRefundResult refund(Payment payment, PaymentRefund refund) {
+        ProviderRefundResult result = new ProviderRefundResult();
+        result.setState(ProviderRefundResult.State.SUCCESS);
+        result.setProviderOrderId(refund.getRefundCode());
+        result.setProviderRequestId(refund.getPublicId());
+        result.setProviderRefundId("MOCK-REFUND-" + refund.getPublicId());
+        result.setResponseCode("00");
+        result.setSummarySanitized("{\"provider\":\"MOCK\",\"result\":\"SUCCESS\"}");
+        return result;
     }
 
     private Instant min(Instant left, Instant right) {

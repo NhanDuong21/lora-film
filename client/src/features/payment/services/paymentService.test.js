@@ -16,6 +16,14 @@ describe('paymentErrorMessage', () => {
     };
     expect(paymentErrorCode(cancelled)).toBe('BOOKING_CANCELLED');
     expect(paymentErrorMessage(cancelled)).toContain('ghế đã được trả lại');
+
+    expect(paymentErrorMessage({
+      response: { data: { errorCode: 'TICKET_REFUND_NOT_SUPPORTED' } }
+    })).toContain('chưa hỗ trợ hoàn riêng từng vé');
+
+    expect(paymentErrorMessage({
+      response: { data: { errorCode: 'REFUND_AMOUNT_EXCEEDS_AVAILABLE' } }
+    })).toContain('vượt quá số tiền còn có thể hoàn');
   });
 
   it('never exposes an unknown English backend message to customers', () => {
