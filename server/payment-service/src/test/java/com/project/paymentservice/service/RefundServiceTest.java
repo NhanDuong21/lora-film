@@ -11,6 +11,7 @@ import com.project.paymentservice.enumtype.RefundComponent;
 import com.project.paymentservice.enumtype.RefundStatus;
 import com.project.paymentservice.enumtype.RefundType;
 import com.project.paymentservice.exception.BusinessException;
+import com.project.paymentservice.provider.ProviderRefundResult;
 import com.project.paymentservice.repository.PaymentAnalyticsSnapshotRepository;
 import com.project.paymentservice.repository.PaymentRefundRepository;
 import com.project.paymentservice.repository.PaymentRepository;
@@ -22,14 +23,17 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -49,16 +53,18 @@ class RefundServiceTest {
     private PaymentOutboxService outboxService;
 
     private RefundService service;
+    private PaymentRuntimeProperties runtimeProperties;
     private Payment payment;
 
     @BeforeEach
     void setUp() {
+        runtimeProperties = new PaymentRuntimeProperties();
         service = new RefundService(
                 paymentRepository,
                 refundRepository,
                 snapshotRepository,
                 outboxService,
-                new PaymentRuntimeProperties());
+                runtimeProperties);
         payment = new Payment();
         payment.setId(10L);
         payment.setPublicId("payment-public-id");
@@ -217,6 +223,123 @@ class RefundServiceTest {
         assertEquals(RefundStatus.SUCCESS.name(), completed.getStatus());
         assertEquals(completed.getRefundPublicId(), replay.getRefundPublicId());
         verify(outboxService).enqueueBookingRefundResult(eq(entity), eq(true), any());
+    }
+
+    @Test
+    void providerProcessingStatusDoesNotEscalateByTechnicalRetryCount() {
+        PaymentRefund refund = leasedProcessingRefund(7, Instant.now().minusSeconds(30));
+        when(refundRepository.findByIdForUpdate(refund.getId()))
+                .thenReturn(Optional.of(refund));
+        when(refundRepository.save(any(PaymentRefund.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        ProviderRefundResult result = new ProviderRefundResult();
+        result.setState(ProviderRefundResult.State.PROCESSING);
+        result.setRetryAfterSeconds(305);
+        result.setFailureCode("VNPAY_REFUND_PROCESSING_05");
+        result.setMessageSanitized("VNPay đang xử lý yêu cầu hoàn tiền");
+
+        Instant beforeApply = Instant.now();
+        service.applyProviderResult(refund.getId(), "refund-worker", result);
+
+        assertEquals(RefundStatus.PROCESSING, refund.getStatus());
+        assertEquals(8, refund.getRetryCount());
+        assertTrue(refund.getNextAttemptAt()
+                .isAfter(beforeApply.plusSeconds(300)));
+        assertEquals("VNPAY_REFUND_PROCESSING_05", refund.getFailureCode());
+        verify(outboxService, never()).enqueueBookingRefundResult(
+                any(), anyBoolean(), any());
+    }
+
+    @Test
+    void providerProcessingEscalatesOnlyAfterConfiguredOperationalSla() {
+        runtimeProperties.setRefundProcessingMaxAgeHours(1);
+        PaymentRefund refund = leasedProcessingRefund(
+                1, Instant.now().minusSeconds(3601));
+        when(refundRepository.findByIdForUpdate(refund.getId()))
+                .thenReturn(Optional.of(refund));
+        when(refundRepository.save(any(PaymentRefund.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        ProviderRefundResult result = new ProviderRefundResult();
+        result.setState(ProviderRefundResult.State.PROCESSING);
+        result.setFailureCode("VNPAY_REFUND_PROCESSING_06");
+        result.setMessageSanitized("VNPay đã chuyển yêu cầu hoàn tiền sang ngân hàng");
+
+        service.applyProviderResult(refund.getId(), "refund-worker", result);
+
+        assertEquals(RefundStatus.REQUIRES_ACTION, refund.getStatus());
+        assertEquals(null, refund.getNextAttemptAt());
+        verify(outboxService, never()).enqueueBookingRefundResult(
+                any(), anyBoolean(), any());
+    }
+
+    @Test
+    void retryOfPreviouslySubmittedUncertainRefundQueriesInsteadOfResubmitting() {
+        PaymentRefund refund = leasedProcessingRefund(
+                8, Instant.now().minusSeconds(600));
+        refund.setProviderRefundId("provider-refund-id");
+        refund.setStatus(RefundStatus.REQUIRES_ACTION);
+        refund.setProviderCode(ProviderCode.VNPAY);
+        refund.setRefundType(RefundType.PARTIAL);
+        refund.setRefundComponent(RefundComponent.CONCESSION);
+        refund.setReasonCode("OPERATIONAL_ADJUSTMENT");
+        refund.setRequestedAmount(new BigDecimal("10000.00"));
+        refund.setCurrency("VND");
+        when(refundRepository.findByPublicId(refund.getPublicId()))
+                .thenReturn(Optional.of(refund));
+        when(refundRepository.findByIdForUpdate(refund.getId()))
+                .thenReturn(Optional.of(refund));
+        when(refundRepository.save(any(PaymentRefund.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.retry(refund.getPublicId());
+
+        assertEquals(RefundStatus.PROCESSING.name(), response.getStatus());
+        assertEquals(RefundStatus.PROCESSING, refund.getStatus());
+        assertEquals(0, refund.getRetryCount());
+        assertTrue(refund.getNextAttemptAt() != null);
+    }
+
+    @Test
+    void processingRefundQueriesAfterAnyProviderResponseWasObserved() {
+        PaymentRefund refund = leasedProcessingRefund(
+                1, Instant.now().minusSeconds(60));
+        when(refundRepository.findByIdForUpdate(refund.getId()))
+                .thenReturn(Optional.of(refund));
+        when(paymentRepository.findById(payment.getId()))
+                .thenReturn(Optional.of(payment));
+
+        RefundService.RefundWork work =
+                service.loadOwnedWork(refund.getId(), "refund-worker");
+
+        assertFalse(work.queryOnly());
+
+        refund.setProviderResponseCode("94");
+        RefundService.RefundWork acknowledgedWithoutProviderRefundId =
+                service.loadOwnedWork(refund.getId(), "refund-worker");
+        assertTrue(acknowledgedWithoutProviderRefundId.queryOnly());
+
+        refund.setProviderResponseCode(null);
+        refund.setProviderRefundId("provider-refund-id");
+        RefundService.RefundWork knownProviderRefund =
+                service.loadOwnedWork(refund.getId(), "refund-worker");
+        assertTrue(knownProviderRefund.queryOnly());
+    }
+
+    private PaymentRefund leasedProcessingRefund(
+            int retryCount,
+            Instant submittedAt) {
+        PaymentRefund refund = new PaymentRefund();
+        refund.setId(20L);
+        refund.setPublicId("refund-public-id");
+        refund.setRefundCode("RFD-0001");
+        refund.setPayment(payment);
+        refund.setStatus(RefundStatus.PROCESSING);
+        refund.setRetryCount(retryCount);
+        refund.setRequestedAt(submittedAt.minusSeconds(30));
+        refund.setSubmittedAt(submittedAt);
+        refund.setLockedBy("refund-worker");
+        refund.setLockedUntil(Instant.now().plusSeconds(60));
+        return refund;
     }
 
     private PaymentRefund captureLastSavedRefund() {

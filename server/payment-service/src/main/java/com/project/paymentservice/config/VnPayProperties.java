@@ -22,6 +22,8 @@ public class VnPayProperties {
     private int readTimeoutMillis = 10000;
     @Min(30)
     private int queryRetryDelaySeconds = 305;
+    @Min(60)
+    private int queryRetryMaxDelaySeconds = 3600;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -51,4 +53,8 @@ public class VnPayProperties {
     public void setReadTimeoutMillis(int value) { this.readTimeoutMillis = value; }
     public int getQueryRetryDelaySeconds() { return queryRetryDelaySeconds; }
     public void setQueryRetryDelaySeconds(int value) { this.queryRetryDelaySeconds = value; }
+    public int getQueryRetryMaxDelaySeconds() { return queryRetryMaxDelaySeconds; }
+    public void setQueryRetryMaxDelaySeconds(int value) {
+        this.queryRetryMaxDelaySeconds = value;
+    }
 }

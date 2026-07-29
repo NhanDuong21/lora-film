@@ -36,6 +36,10 @@ public class PaymentRuntimeProperties {
     private int refundMaxAttempts = 8;
     @Min(100)
     private long refundFixedDelayMillis = 3000;
+    @Min(15)
+    private int refundProcessingPollSeconds = 60;
+    @Min(1)
+    private int refundProcessingMaxAgeHours = 72;
     @NotBlank
     private String analyticsTopic = "payment-success.v1";
 
@@ -67,6 +71,14 @@ public class PaymentRuntimeProperties {
     public void setRefundMaxAttempts(int value) { this.refundMaxAttempts = value; }
     public long getRefundFixedDelayMillis() { return refundFixedDelayMillis; }
     public void setRefundFixedDelayMillis(long value) { this.refundFixedDelayMillis = value; }
+    public int getRefundProcessingPollSeconds() { return refundProcessingPollSeconds; }
+    public void setRefundProcessingPollSeconds(int value) {
+        this.refundProcessingPollSeconds = value;
+    }
+    public int getRefundProcessingMaxAgeHours() { return refundProcessingMaxAgeHours; }
+    public void setRefundProcessingMaxAgeHours(int value) {
+        this.refundProcessingMaxAgeHours = value;
+    }
     public String getAnalyticsTopic() { return analyticsTopic; }
     public void setAnalyticsTopic(String value) { this.analyticsTopic = value; }
 }

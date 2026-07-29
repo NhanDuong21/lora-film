@@ -209,7 +209,12 @@ public class RefundService {
                     "Hoàn tiền mặt cần được xử lý và ghi nhận tại quầy",
                     HttpStatus.CONFLICT);
         }
-        refund.setStatus(RefundStatus.REQUESTED);
+        boolean providerMayAlreadyHaveTheRequest =
+                refund.getStatus() == RefundStatus.REQUIRES_ACTION
+                && refund.getSubmittedAt() != null;
+        refund.setStatus(providerMayAlreadyHaveTheRequest
+                ? RefundStatus.PROCESSING
+                : RefundStatus.REQUESTED);
         refund.setRetryCount(0);
         refund.setNextAttemptAt(Instant.now());
         refund.setFailureCode(null);
@@ -305,7 +310,15 @@ public class RefundService {
         Payment payment = paymentRepository.findById(refund.getPayment().getId())
                 .orElseThrow(() -> paymentNotFound(String.valueOf(refund.getPayment().getId())));
         refund.setPayment(payment);
-        return new RefundWork(payment, refund, refund.getStatus() == RefundStatus.PROCESSING);
+        boolean providerRefundKnown = refund.getProviderRefundId() != null
+                && !refund.getProviderRefundId().isBlank();
+        boolean providerResponseObserved = refund.getProviderResponseCode() != null
+                && !refund.getProviderResponseCode().isBlank();
+        return new RefundWork(
+                payment,
+                refund,
+                refund.getStatus() == RefundStatus.PROCESSING
+                        && (providerRefundKnown || providerResponseObserved));
     }
 
     @Transactional
@@ -351,7 +364,11 @@ public class RefundService {
             return;
         }
         if (result.getState() == ProviderRefundResult.State.PROCESSING) {
-            scheduleUncertain(refund, result.getFailureCode(), result.getMessageSanitized());
+            scheduleProviderProcessing(
+                    refund,
+                    result.getFailureCode(),
+                    result.getMessageSanitized(),
+                    result.getRetryAfterSeconds());
             return;
         }
         refund.setStatus(RefundStatus.FAILED);
@@ -371,6 +388,37 @@ public class RefundService {
         PaymentRefund refund = owned(refundId, ownerToken);
         clearLease(refund);
         scheduleUncertain(refund, "PROVIDER_REFUND_RESULT_UNCERTAIN", safeMessage);
+    }
+
+    private void scheduleProviderProcessing(
+            PaymentRefund refund,
+            String code,
+            String message,
+            Integer providerRetryAfterSeconds) {
+        Instant now = Instant.now();
+        Instant processingStartedAt = refund.getSubmittedAt() != null
+                ? refund.getSubmittedAt()
+                : refund.getRequestedAt();
+        refund.setRetryCount(refund.getRetryCount() + 1);
+        refund.setFailureCode(firstNonBlank(code, "PROVIDER_REFUND_PROCESSING"));
+        refund.setFailureMessageSanitized(sanitize(message, 2000));
+        if (processingStartedAt != null
+                && !processingStartedAt
+                    .plusSeconds(properties.getRefundProcessingMaxAgeHours() * 3600L)
+                    .isAfter(now)) {
+            refund.setStatus(RefundStatus.REQUIRES_ACTION);
+            refund.setNextAttemptAt(null);
+        } else {
+            refund.setStatus(RefundStatus.PROCESSING);
+            long pollSeconds = providerRetryAfterSeconds == null
+                    ? properties.getRefundProcessingPollSeconds()
+                    : Math.max(
+                        properties.getRefundProcessingPollSeconds(),
+                        providerRetryAfterSeconds.longValue());
+            refund.setNextAttemptAt(now.plusSeconds(
+                    pollSeconds));
+        }
+        refundRepository.save(refund);
     }
 
     private void scheduleUncertain(

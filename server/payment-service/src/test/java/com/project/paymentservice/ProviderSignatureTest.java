@@ -382,11 +382,9 @@ class ProviderSignatureTest {
                     requestValues.get("vnp_TransactionType"));
             responseValues.put("vnp_TransactionStatus", "00");
             responseValues.put("vnp_OrderInfo", requestValues.get("vnp_OrderInfo"));
-            responseValues.put("vnp_PromotionCode", "");
-            responseValues.put("vnp_PromotionAmount", "");
             responseValues.put("vnp_SecureHash", hmacUnchecked(
                     "HmacSHA512", secret,
-                    vnpayQueryResponseSource(responseValues)));
+                    vnpayRefundResponseSource(responseValues)));
             byte[] response = objectMapper.writeValueAsBytes(responseValues);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, response.length);
@@ -424,6 +422,286 @@ class ProviderSignatureTest {
             returnMismatchedAmount.set(true);
             assertThrows(IllegalStateException.class,
                     () -> provider.refund(payment, refund));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void vnpayRefundDoesNotTreatAcceptedOrDuplicateRequestAsCompleted() throws Exception {
+        String secret = "test-vnpay-refund-state-secret";
+        ObjectMapper objectMapper = new ObjectMapper();
+        AtomicReference<String> responseCode = new AtomicReference<>("00");
+        AtomicReference<String> transactionStatus = new AtomicReference<>("05");
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/refund", exchange -> {
+            Map<String, String> requestValues = objectMapper.readValue(
+                    exchange.getRequestBody(),
+                    objectMapper.getTypeFactory().constructMapType(
+                            LinkedHashMap.class, String.class, String.class));
+            Map<String, String> responseValues = new LinkedHashMap<>();
+            responseValues.put("vnp_ResponseId", "REFUND-STATE-1");
+            responseValues.put("vnp_Command", "refund");
+            responseValues.put("vnp_ResponseCode", responseCode.get());
+            responseValues.put("vnp_Message", "Accepted");
+            responseValues.put("vnp_TmnCode", "TESTCODE");
+            responseValues.put("vnp_TxnRef", requestValues.get("vnp_TxnRef"));
+            responseValues.put("vnp_Amount", requestValues.get("vnp_Amount"));
+            responseValues.put("vnp_BankCode", "NCB");
+            responseValues.put("vnp_PayDate", "20260729120000");
+            responseValues.put("vnp_TransactionNo", "778899");
+            responseValues.put("vnp_TransactionType",
+                    requestValues.get("vnp_TransactionType"));
+            responseValues.put("vnp_TransactionStatus", transactionStatus.get());
+            responseValues.put("vnp_OrderInfo", requestValues.get("vnp_OrderInfo"));
+            responseValues.put("vnp_SecureHash", hmacUnchecked(
+                    "HmacSHA512", secret,
+                    vnpayRefundResponseSource(responseValues)));
+            byte[] response = objectMapper.writeValueAsBytes(responseValues);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            VnPayProperties properties = new VnPayProperties();
+            properties.setTmnCode("TESTCODE");
+            properties.setHashSecret(secret);
+            properties.setReturnUrl("http://localhost/return");
+            properties.setRefundUrl(
+                    "http://localhost:" + server.getAddress().getPort() + "/refund");
+            VnPayPaymentProvider provider =
+                    new VnPayPaymentProvider(properties, objectMapper);
+            Payment payment = paidPayment("PAY0001", "998877", "150000");
+            payment.setLatestProviderSummarySanitized(
+                    "{\"createDate\":\"20260729110000\"}");
+            PaymentRefund refund = refund(payment, RefundType.PARTIAL, "50000");
+
+            assertEquals(ProviderRefundResult.State.PROCESSING,
+                    provider.refund(payment, refund).getState());
+
+            transactionStatus.set("");
+            assertEquals(ProviderRefundResult.State.PROCESSING,
+                    provider.refund(payment, refund).getState());
+
+            responseCode.set("94");
+            assertEquals(ProviderRefundResult.State.PROCESSING,
+                    provider.refund(payment, refund).getState());
+
+            responseCode.set("00");
+            transactionStatus.set("09");
+            ProviderRefundResult rejected = provider.refund(payment, refund);
+            assertEquals(ProviderRefundResult.State.FAILED, rejected.getState());
+            assertEquals("VNPAY_REFUND_09", rejected.getFailureCode());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void vnpayRefundAcceptsSignedOptionalFieldsAndSparseDuplicateResponse()
+            throws Exception {
+        String secret = "test-vnpay-refund-optional-fields-secret";
+        ObjectMapper objectMapper = new ObjectMapper();
+        AtomicBoolean sparseDuplicate = new AtomicBoolean(false);
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/refund", exchange -> {
+            Map<String, String> requestValues = objectMapper.readValue(
+                    exchange.getRequestBody(),
+                    objectMapper.getTypeFactory().constructMapType(
+                            LinkedHashMap.class, String.class, String.class));
+            Map<String, String> responseValues = new LinkedHashMap<>();
+            responseValues.put("vnp_ResponseId", "REFUND-OPTIONAL-1");
+            responseValues.put("vnp_Command", "");
+            responseValues.put("vnp_ResponseCode",
+                    sparseDuplicate.get() ? "94" : "00");
+            responseValues.put("vnp_Message",
+                    sparseDuplicate.get() ? "Request is duplicated" : "Accepted");
+            responseValues.put("vnp_TmnCode", "");
+            responseValues.put("vnp_TxnRef", "");
+            responseValues.put("vnp_Amount", "");
+            responseValues.put("vnp_BankCode", "");
+            responseValues.put("vnp_PayDate", "");
+            responseValues.put("vnp_TransactionNo", "");
+            responseValues.put("vnp_TransactionType", "");
+            responseValues.put("vnp_TransactionStatus",
+                    sparseDuplicate.get() ? "" : "05");
+            responseValues.put("vnp_OrderInfo", "");
+            if (!sparseDuplicate.get()) {
+                responseValues.put("vnp_TxnRef", requestValues.get("vnp_TxnRef"));
+                responseValues.put("vnp_Amount", requestValues.get("vnp_Amount"));
+                responseValues.put(
+                        "vnp_TransactionType",
+                        requestValues.get("vnp_TransactionType"));
+            } else {
+                // Some VNPay sandbox error responses use the QueryDR-compatible
+                // signed shape even though these fields are optional for refund.
+                responseValues.put("vnp_PromotionCode", "");
+                responseValues.put("vnp_PromotionAmount", "");
+            }
+            if (!sparseDuplicate.get()) {
+                responseValues.put("vnp_SecureHash", hmacUnchecked(
+                        "HmacSHA512",
+                        secret,
+                        vnpayRefundResponseSource(responseValues)));
+            }
+            byte[] response = objectMapper.writeValueAsBytes(responseValues);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            VnPayProperties properties = new VnPayProperties();
+            properties.setTmnCode("TESTCODE");
+            properties.setHashSecret(secret);
+            properties.setReturnUrl("http://localhost/return");
+            properties.setRefundUrl(
+                    "http://localhost:" + server.getAddress().getPort() + "/refund");
+            VnPayPaymentProvider provider =
+                    new VnPayPaymentProvider(properties, objectMapper);
+            Payment payment = paidPayment("PAY0001", "998877", "150000");
+            payment.setLatestProviderSummarySanitized(
+                    "{\"createDate\":\"20260729110000\"}");
+            PaymentRefund refund = refund(payment, RefundType.PARTIAL, "50000");
+
+            assertEquals(
+                    ProviderRefundResult.State.PROCESSING,
+                    provider.refund(payment, refund).getState());
+
+            sparseDuplicate.set(true);
+            ProviderRefundResult duplicate = provider.refund(payment, refund);
+            assertEquals(ProviderRefundResult.State.PROCESSING, duplicate.getState());
+            assertEquals(
+                    "VNPAY_REFUND_DUPLICATE_ACCEPTED",
+                    duplicate.getFailureCode());
+            assertEquals(305, duplicate.getRetryAfterSeconds());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void vnpayQueriesRefundUntilProviderReturnsTerminalStatus() throws Exception {
+        String secret = "test-vnpay-refund-query-secret";
+        ObjectMapper objectMapper = new ObjectMapper();
+        AtomicReference<String> responseCode = new AtomicReference<>("00");
+        AtomicReference<String> transactionStatus = new AtomicReference<>("05");
+        AtomicBoolean mismatchedAmount = new AtomicBoolean(false);
+        AtomicReference<Map<String, String>> capturedRequest = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/query", exchange -> {
+            Map<String, String> requestValues = objectMapper.readValue(
+                    exchange.getRequestBody(),
+                    objectMapper.getTypeFactory().constructMapType(
+                            LinkedHashMap.class, String.class, String.class));
+            capturedRequest.set(requestValues);
+            Map<String, String> responseValues = new LinkedHashMap<>();
+            responseValues.put("vnp_ResponseId", "REFUND-QUERY-1");
+            responseValues.put("vnp_Command", "querydr");
+            responseValues.put("vnp_ResponseCode", responseCode.get());
+            responseValues.put("vnp_Message", "Success");
+            responseValues.put("vnp_TmnCode", "TESTCODE");
+            responseValues.put("vnp_TxnRef", "PAY0001");
+            responseValues.put("vnp_Amount",
+                    mismatchedAmount.get() ? "5000001" : "5000000");
+            responseValues.put("vnp_BankCode", "NCB");
+            responseValues.put("vnp_PayDate", "20260729120500");
+            responseValues.put("vnp_TransactionNo", "778899");
+            responseValues.put("vnp_TransactionType", "03");
+            responseValues.put("vnp_TransactionStatus", transactionStatus.get());
+            responseValues.put("vnp_OrderInfo", "Hoan tien RFD-0001");
+            responseValues.put("vnp_PromotionCode", "");
+            responseValues.put("vnp_PromotionAmount", "");
+            responseValues.put("vnp_SecureHash", hmacUnchecked(
+                    "HmacSHA512", secret,
+                    vnpayQueryResponseSource(responseValues)));
+            byte[] response = objectMapper.writeValueAsBytes(responseValues);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            VnPayProperties properties = new VnPayProperties();
+            properties.setTmnCode("TESTCODE");
+            properties.setHashSecret(secret);
+            properties.setReturnUrl("http://localhost/return");
+            properties.setQueryUrl(
+                    "http://localhost:" + server.getAddress().getPort() + "/query");
+            VnPayPaymentProvider provider =
+                    new VnPayPaymentProvider(properties, objectMapper);
+            Payment payment = paidPayment("PAY0001", "998877", "150000");
+            payment.setLatestProviderSummarySanitized(
+                    "{\"createDate\":\"20260729110000\"}");
+            PaymentRefund refund = refund(payment, RefundType.PARTIAL, "50000");
+            refund.setProviderRefundId("778899");
+
+            ProviderRefundResult processing =
+                    provider.queryRefund(payment, refund).orElseThrow();
+            assertEquals(ProviderRefundResult.State.PROCESSING, processing.getState());
+            assertEquals("VNPAY_REFUND_PROCESSING_05", processing.getFailureCode());
+            Map<String, String> sent = capturedRequest.get();
+            assertEquals("778899", sent.get("vnp_TransactionNo"));
+            assertEquals(hmac(
+                    "HmacSHA512", secret, vnpayQueryRequestSource(sent)),
+                    sent.get("vnp_SecureHash"));
+
+            transactionStatus.set("06");
+            assertEquals(ProviderRefundResult.State.PROCESSING,
+                    provider.queryRefund(payment, refund).orElseThrow().getState());
+
+            transactionStatus.set("00");
+            assertEquals(ProviderRefundResult.State.SUCCESS,
+                    provider.queryRefund(payment, refund).orElseThrow().getState());
+
+            transactionStatus.set("09");
+            assertEquals(ProviderRefundResult.State.FAILED,
+                    provider.queryRefund(payment, refund).orElseThrow().getState());
+
+            responseCode.set("94");
+            ProviderRefundResult duplicateQuery =
+                    provider.queryRefund(payment, refund).orElseThrow();
+            assertEquals(
+                    ProviderRefundResult.State.PROCESSING,
+                    duplicateQuery.getState());
+            assertEquals(
+                    "VNPAY_QUERYDR_RATE_LIMITED",
+                    duplicateQuery.getFailureCode());
+            assertEquals(305, duplicateQuery.getRetryAfterSeconds());
+
+            refund.setRetryCount(3);
+            ProviderRefundResult backedOffQuery =
+                    provider.queryRefund(payment, refund).orElseThrow();
+            assertEquals(
+                    ProviderRefundResult.State.PROCESSING,
+                    backedOffQuery.getState());
+            assertEquals(2440, backedOffQuery.getRetryAfterSeconds());
+
+            refund.setRetryCount(20);
+            ProviderRefundResult cappedQuery =
+                    provider.queryRefund(payment, refund).orElseThrow();
+            assertEquals(3600, cappedQuery.getRetryAfterSeconds());
+
+            refund.setRetryCount(0);
+            responseCode.set("91");
+            ProviderRefundResult notFoundQuery =
+                    provider.queryRefund(payment, refund).orElseThrow();
+            assertEquals(
+                    ProviderRefundResult.State.PROCESSING,
+                    notFoundQuery.getState());
+            assertEquals("91", notFoundQuery.getResponseCode());
+            assertEquals(
+                    "VNPAY_QUERYDR_RESPONSE_91",
+                    notFoundQuery.getFailureCode());
+            assertEquals(305, notFoundQuery.getRetryAfterSeconds());
+
+            responseCode.set("00");
+            mismatchedAmount.set(true);
+            assertTrue(provider.queryRefund(payment, refund).isEmpty());
         } finally {
             server.stop(0);
         }
@@ -611,6 +889,23 @@ class ProviderSignatureTest {
                 values.get("vnp_CreateBy"),
                 values.get("vnp_CreateDate"),
                 values.get("vnp_IpAddr"),
+                values.get("vnp_OrderInfo"));
+    }
+
+    private String vnpayRefundResponseSource(Map<String, String> values) {
+        return String.join("|",
+                values.get("vnp_ResponseId"),
+                values.get("vnp_Command"),
+                values.get("vnp_ResponseCode"),
+                values.get("vnp_Message"),
+                values.get("vnp_TmnCode"),
+                values.get("vnp_TxnRef"),
+                values.get("vnp_Amount"),
+                values.get("vnp_BankCode"),
+                values.get("vnp_PayDate"),
+                values.get("vnp_TransactionNo"),
+                values.get("vnp_TransactionType"),
+                values.get("vnp_TransactionStatus"),
                 values.get("vnp_OrderInfo"));
     }
 

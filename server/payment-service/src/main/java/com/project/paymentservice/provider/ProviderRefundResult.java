@@ -18,6 +18,7 @@ public class ProviderRefundResult {
     private String messageSanitized;
     private String summarySanitized = "{}";
     private Instant occurredAt = Instant.now();
+    private Integer retryAfterSeconds;
 
     public State getState() { return state; }
     public void setState(State value) { this.state = value; }
@@ -37,4 +38,6 @@ public class ProviderRefundResult {
     public void setSummarySanitized(String value) { this.summarySanitized = value; }
     public Instant getOccurredAt() { return occurredAt; }
     public void setOccurredAt(Instant value) { this.occurredAt = value; }
+    public Integer getRetryAfterSeconds() { return retryAfterSeconds; }
+    public void setRetryAfterSeconds(Integer value) { this.retryAfterSeconds = value; }
 }
