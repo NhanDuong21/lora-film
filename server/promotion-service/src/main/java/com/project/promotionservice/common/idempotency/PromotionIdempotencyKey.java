@@ -6,12 +6,17 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "promotion_idempotency_keys")
+@Table(
+        name = "promotion_idempotency_keys",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_idempotency_scope",
+                columnNames = {"client_id", "api_name", "idempotency_key"}))
 public class PromotionIdempotencyKey {
 
     @Id
@@ -22,7 +27,7 @@ public class PromotionIdempotencyKey {
     @Column(name = "public_id", length = 36, nullable = false, unique = true)
     private String publicId;
 
-    @Column(name = "idempotency_key", length = 255, nullable = false, unique = true)
+    @Column(name = "idempotency_key", length = 255, nullable = false)
     private String idempotencyKey;
 
     @Column(name = "request_hash", length = 64, nullable = false)
@@ -37,7 +42,7 @@ public class PromotionIdempotencyKey {
     @Column(name = "user_public_id", length = 36)
     private String userPublicId;
 
-    @Column(name = "client_id", length = 100)
+    @Column(name = "client_id", length = 100, nullable = false)
     private String clientId;
 
     @Column(name = "device_id", length = 150)
