@@ -13,11 +13,6 @@ import java.util.List;
 import java.util.UUID;
 
 @Component
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-        name = "app.scheduling.enable",
-        havingValue = "true",
-        matchIfMissing = true
-)
 public class OutboxEventPublisherScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxEventPublisherScheduler.class);
@@ -27,23 +22,29 @@ public class OutboxEventPublisherScheduler {
     private final String nodeOwnerId;
     private final int batchSize;
     private final PromotionMetricsManager metricsManager;
+    private final boolean schedulingEnabled;
 
     public OutboxEventPublisherScheduler(
             PromotionOutboxEventRepository outboxEventRepository,
             PromotionEventPublisher eventPublisher,
             OutboxDeliveryStateService stateService,
             PromotionMetricsManager metricsManager,
-            @Value("${promotion.outbox.batch-size:50}") int batchSize) {
+            @Value("${promotion.outbox.batch-size:50}") int batchSize,
+            @Value("${app.scheduling.enable:true}") boolean schedulingEnabled) {
         this.outboxEventRepository = outboxEventRepository;
         this.eventPublisher = eventPublisher;
         this.stateService = stateService;
         this.metricsManager = metricsManager;
         this.nodeOwnerId = "node-" + UUID.randomUUID().toString().substring(0, 8);
         this.batchSize = Math.max(1, Math.min(batchSize, 500));
+        this.schedulingEnabled = schedulingEnabled;
     }
 
     @Scheduled(fixedDelay = 5000) // Poll database every 5 seconds
     public void publishPendingEvents() {
+        if (!schedulingEnabled) {
+            return;
+        }
         Instant now = Instant.now();
         List<Long> claimableIds = outboxEventRepository.findClaimableIds(
                 now,

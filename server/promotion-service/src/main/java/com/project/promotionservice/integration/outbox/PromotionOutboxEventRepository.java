@@ -10,11 +10,18 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository
 public interface PromotionOutboxEventRepository extends JpaRepository<PromotionOutboxEvent, Long> {
 
     Optional<PromotionOutboxEvent> findByPublicId(String publicId);
+
+    long countByPublishStatus(OutboxStatus status);
+
+    List<PromotionOutboxEvent> findByPublishStatusIn(Collection<OutboxStatus> statuses, Pageable pageable);
+
+    List<PromotionOutboxEvent> findByPublishStatusOrderByCreatedAtAsc(OutboxStatus status, Pageable pageable);
 
     @Query("SELECT e FROM PromotionOutboxEvent e " +
            "WHERE e.publishStatus = :status " +

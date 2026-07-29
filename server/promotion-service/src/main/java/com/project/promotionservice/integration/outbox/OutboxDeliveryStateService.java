@@ -81,7 +81,7 @@ public class OutboxDeliveryStateService {
         event.setProcessingStartedAt(null);
         event.setUpdatedAt(now);
         if (retryCount >= maxRetries) {
-            event.setPublishStatus(OutboxStatus.FAILED);
+            event.setPublishStatus(OutboxStatus.DEAD_LETTER);
             event.setNextRetryAt(null);
         } else {
             event.setPublishStatus(OutboxStatus.PENDING);
