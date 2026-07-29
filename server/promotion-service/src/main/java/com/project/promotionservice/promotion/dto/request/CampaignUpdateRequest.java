@@ -10,6 +10,8 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+
 @Schema(description = "Request body to update an existing campaign")
 public class CampaignUpdateRequest {
 
@@ -37,6 +39,9 @@ public class CampaignUpdateRequest {
 
     @NotNull(message = "autoPauseWhenBudgetExceeded is required")
     private Boolean autoPauseWhenBudgetExceeded;
+
+    @jakarta.validation.constraints.Pattern(regexp = UUID_PATTERN, message = "partnerPublicId must be a valid UUID")
+    private String partnerPublicId;
 
     @NotBlank(message = "timezone is required")
     @Size(max = 60, message = "timezone must be <= 60 characters")
@@ -129,6 +134,14 @@ public class CampaignUpdateRequest {
 
     public void setAutoPauseWhenBudgetExceeded(Boolean autoPauseWhenBudgetExceeded) {
         this.autoPauseWhenBudgetExceeded = autoPauseWhenBudgetExceeded;
+    }
+
+    public String getPartnerPublicId() {
+        return partnerPublicId;
+    }
+
+    public void setPartnerPublicId(String partnerPublicId) {
+        this.partnerPublicId = partnerPublicId;
     }
 
     public String getTimezone() {

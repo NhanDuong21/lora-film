@@ -55,7 +55,7 @@ public class AdminCampaignController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF')")
     @Operation(summary = "Create a new campaign")
     public ResponseEntity<ApiResponse<CampaignResponse>> createCampaign(
             @Valid @RequestBody CampaignCreateRequest request,
@@ -67,7 +67,7 @@ public class AdminCampaignController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF')")
     @Operation(summary = "Update an existing campaign")
     public ResponseEntity<ApiResponse<CampaignResponse>> updateCampaign(
             @PathVariable("id")
@@ -94,7 +94,7 @@ public class AdminCampaignController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF', 'FINANCE', 'FINANCE_DIRECTOR', 'LEGAL_COMPLIANCE', 'OPERATIONS_MANAGER')")
     @Operation(summary = "Get campaign details (including rules)")
     public ResponseEntity<ApiResponse<CampaignDetailResponse>> getCampaign(
             @PathVariable("id")
@@ -105,7 +105,7 @@ public class AdminCampaignController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF', 'FINANCE', 'FINANCE_DIRECTOR', 'LEGAL_COMPLIANCE', 'OPERATIONS_MANAGER')")
     @Operation(summary = "Search campaigns dynamically with pagination")
     public ResponseEntity<ApiResponse<PagedResponse<CampaignResponse>>> searchCampaigns(
             @RequestParam(value = "name", required = false) @Size(max = 120) String name,
@@ -125,7 +125,7 @@ public class AdminCampaignController {
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
-    @Operation(summary = "Transition campaign status (SUBMIT, PUBLISH, ACTIVATE, PAUSE, CANCEL)")
+    @Operation(summary = "Transition campaign status (SUBMIT, PUBLISH, ACTIVATE, PAUSE, KILL_SWITCH, CANCEL)")
     public ResponseEntity<ApiResponse<CampaignResponse>> transitionCampaignStatus(
             @PathVariable("id")
             @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
@@ -143,6 +143,8 @@ public class AdminCampaignController {
             case PUBLISH -> data = campaignService.publishCampaign(publicId, actor);
             case ACTIVATE -> data = campaignService.activateCampaign(publicId, actor);
             case PAUSE -> data = campaignService.pauseCampaign(publicId, actor);
+            case KILL_SWITCH -> data = campaignService.killSwitchCampaign(
+                    publicId, comment, actor);
             case CANCEL -> data = campaignService.cancelCampaign(publicId, actor);
             default -> throw new IllegalArgumentException("Invalid status transition action: " + action);
         }
@@ -201,7 +203,7 @@ public class AdminCampaignController {
     }
 
     @GetMapping("/{id}/approval-history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF', 'FINANCE', 'FINANCE_DIRECTOR', 'LEGAL_COMPLIANCE')")
     @Operation(summary = "Get approval history for campaign")
     public ResponseEntity<ApiResponse<List<ApprovalHistoryResponse>>> getApprovalHistory(
             @PathVariable("id")

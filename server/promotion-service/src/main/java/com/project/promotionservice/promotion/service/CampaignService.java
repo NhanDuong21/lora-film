@@ -32,6 +32,8 @@ public interface CampaignService {
 
     CampaignResponse pauseCampaign(String publicId, String user);
 
+    CampaignResponse killSwitchCampaign(String publicId, String reason, String user);
+
     CampaignResponse cancelCampaign(String publicId, String user);
 
     CampaignResponse reviewLegalStatus(

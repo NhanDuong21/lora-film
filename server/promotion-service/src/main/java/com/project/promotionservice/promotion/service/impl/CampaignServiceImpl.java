@@ -20,6 +20,7 @@ import com.project.promotionservice.promotion.enums.ApprovalAction;
 import com.project.promotionservice.promotion.enums.ApprovalTargetType;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.FundingSource;
 import com.project.promotionservice.promotion.mapper.CampaignMapper;
 import com.project.promotionservice.promotion.repository.ApprovalHistoryRepository;
 import com.project.promotionservice.promotion.repository.CampaignSpecification;
@@ -30,6 +31,7 @@ import com.project.promotionservice.reservation.repository.PromotionReservationR
 import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.common.audit.Auditable;
 import com.project.promotionservice.promotion.service.CampaignService;
+import com.project.promotionservice.partner.service.PartnerService;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -56,6 +58,7 @@ public class CampaignServiceImpl implements CampaignService {
     private final ObjectMapper objectMapper;
     private final PromotionReservationRepository reservationRepository;
     private final PromotionOutboxEnvelopeFactory envelopeFactory;
+    private final PartnerService partnerService;
 
     public CampaignServiceImpl(PromotionCampaignRepository campaignRepository,
                                PromotionRuleRepository ruleRepository,
@@ -64,7 +67,8 @@ public class CampaignServiceImpl implements CampaignService {
                                CampaignMapper campaignMapper,
                                ObjectMapper objectMapper,
                                PromotionReservationRepository reservationRepository,
-                               PromotionOutboxEnvelopeFactory envelopeFactory) {
+                               PromotionOutboxEnvelopeFactory envelopeFactory,
+                               PartnerService partnerService) {
         this.campaignRepository = campaignRepository;
         this.ruleRepository = ruleRepository;
         this.approvalHistoryRepository = approvalHistoryRepository;
@@ -73,6 +77,7 @@ public class CampaignServiceImpl implements CampaignService {
         this.objectMapper = objectMapper;
         this.reservationRepository = reservationRepository;
         this.envelopeFactory = envelopeFactory;
+        this.partnerService = partnerService;
     }
 
     @Override
@@ -85,6 +90,8 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaignRepository.existsByCodeAndDeletedAtIsNull(request.getCode())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Campaign code already exists", HttpStatus.BAD_REQUEST);
         }
+
+        validatePartnerFunding(request.getFundingSource(), request.getPartnerPublicId());
 
         String slug = slugify(request.getName());
         if (campaignRepository.existsBySlugAndDeletedAtIsNull(slug)) {
@@ -120,6 +127,14 @@ public class CampaignServiceImpl implements CampaignService {
 
         if (request.getEndAt().isBefore(request.getStartAt())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "End date must be after start date", HttpStatus.BAD_REQUEST);
+        }
+
+        if (campaign.getFundingSource() == FundingSource.PARTNER) {
+            validatePartnerFunding(campaign.getFundingSource(), request.getPartnerPublicId());
+            campaign.setPartnerPublicId(request.getPartnerPublicId());
+        } else if (request.getPartnerPublicId() != null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "System-funded campaign cannot reference a partner", HttpStatus.BAD_REQUEST);
         }
 
         campaign.setName(request.getName());
@@ -289,8 +304,11 @@ public class CampaignServiceImpl implements CampaignService {
         }
 
         Instant now = Instant.now();
-        if (now.isAfter(campaign.getEndAt())) {
-            campaign.setStatus(CampaignStatus.COMPLETED);
+        if (!now.isBefore(campaign.getEndAt())) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "An ended campaign cannot be published",
+                    HttpStatus.BAD_REQUEST);
         } else if (now.isBefore(campaign.getStartAt())) {
             campaign.setStatus(CampaignStatus.SCHEDULED);
         } else {
@@ -329,10 +347,13 @@ public class CampaignServiceImpl implements CampaignService {
                     HttpStatus.BAD_REQUEST);
         }
         if (!now.isBefore(campaign.getEndAt())) {
-            campaign.setStatus(CampaignStatus.COMPLETED);
-        } else {
-            campaign.setStatus(CampaignStatus.ACTIVE);
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "An ended campaign cannot be activated",
+                    HttpStatus.BAD_REQUEST);
         }
+        campaign.setKillSwitch(false);
+        campaign.setStatus(CampaignStatus.ACTIVE);
 
         campaign.setUpdatedBy(user);
         PromotionCampaign saved = campaignRepository.save(campaign);
@@ -430,12 +451,56 @@ public class CampaignServiceImpl implements CampaignService {
 
     @Override
     @Transactional
+    @Auditable(action = "KILL_SWITCH", entityType = "PROMOTION_CAMPAIGN")
+    public CampaignResponse killSwitchCampaign(String publicId, String reason, String user) {
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "Kill switch requires an audit reason",
+                    HttpStatus.BAD_REQUEST);
+        }
+        PromotionCampaign campaign = campaignRepository.findByPublicIdForUpdate(publicId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.NOT_FOUND, "Campaign not found", HttpStatus.NOT_FOUND));
+        if (campaign.getStatus() == CampaignStatus.COMPLETED
+                || campaign.getStatus() == CampaignStatus.CANCELLED
+                || campaign.getDeletedAt() != null) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "Kill switch cannot be applied to a terminal campaign",
+                    HttpStatus.BAD_REQUEST);
+        }
+        campaign.setKillSwitch(true);
+        campaign.setStatus(CampaignStatus.PAUSED);
+        String auditNote = "Kill switch: " + reason.trim();
+        campaign.setRemarks(campaign.getRemarks() == null || campaign.getRemarks().isBlank()
+                ? auditNote
+                : campaign.getRemarks() + " | " + auditNote);
+        campaign.setUpdatedBy(user);
+        PromotionCampaign saved = campaignRepository.save(campaign);
+        recordOutboxEvent(
+                "CAMPAIGN", saved.getPublicId(), "CAMPAIGN_KILL_SWITCHED",
+                campaignMapper.toResponse(saved), "promotion.campaign.lifecycle", user);
+        return campaignMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
     public CampaignResponse cancelCampaign(String publicId, String user) {
         PromotionCampaign campaign = campaignRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Campaign not found", HttpStatus.NOT_FOUND));
 
         if (campaign.getDeletedAt() != null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Campaign is deleted", HttpStatus.BAD_REQUEST);
+        }
+        if (campaign.getStatus() == CampaignStatus.CANCELLED) {
+            return campaignMapper.toResponse(campaign);
+        }
+        if (campaign.getStatus() == CampaignStatus.COMPLETED) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "A completed campaign cannot be cancelled",
+                    HttpStatus.BAD_REQUEST);
         }
 
         campaign.setStatus(CampaignStatus.CANCELLED);
@@ -445,6 +510,23 @@ public class CampaignServiceImpl implements CampaignService {
         recordOutboxEvent("CAMPAIGN", saved.getPublicId(), "CAMPAIGN_CANCELLED", campaignMapper.toResponse(saved), "promotion.campaign.lifecycle", user);
 
         return campaignMapper.toResponse(saved);
+    }
+
+    private void validatePartnerFunding(FundingSource fundingSource, String partnerPublicId) {
+        if (fundingSource == FundingSource.PARTNER) {
+            if (partnerPublicId == null || partnerPublicId.isBlank()) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER,
+                        "Partner-funded campaign requires partnerPublicId", HttpStatus.BAD_REQUEST);
+            }
+            if (partnerService == null) {
+                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR,
+                        "Partner policy is not configured", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+            partnerService.requireActive(partnerPublicId);
+        } else if (partnerPublicId != null && !partnerPublicId.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "Only partner-funded campaigns may reference a partner", HttpStatus.BAD_REQUEST);
+        }
     }
 
     private String slugify(String text) {
