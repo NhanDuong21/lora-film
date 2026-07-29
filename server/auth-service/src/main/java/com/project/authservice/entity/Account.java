@@ -21,6 +21,7 @@ import java.util.Set;
 
 @Entity
 @Table(name = "accounts")
+@jakarta.persistence.EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 public class Account {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,15 +46,19 @@ public class Account {
 	@Column(name = "last_login_at")
 	private LocalDateTime lastLoginAt;
 
+	@org.springframework.data.annotation.CreatedDate
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
+	@org.springframework.data.annotation.CreatedBy
 	@Column(name = "created_by")
 	private Long createdBy;
 
+	@org.springframework.data.annotation.LastModifiedDate
 	@Column(name = "updated_at", nullable = false)
 	private LocalDateTime updatedAt;
 
+	@org.springframework.data.annotation.LastModifiedBy
 	@Column(name = "updated_by")
 	private Long updatedBy;
 
@@ -67,11 +72,6 @@ public class Account {
 
 	@PrePersist
 	void prePersist() {
-		LocalDateTime now = LocalDateTime.now();
-		if (createdAt == null) {
-			createdAt = now;
-		}
-		updatedAt = now;
 		if (status == null) {
 			status = AccountStatus.INACTIVE;
 		}
@@ -81,11 +81,6 @@ public class Account {
 		if (isDeleted == null) {
 			isDeleted = false;
 		}
-	}
-
-	@PreUpdate
-	void preUpdate() {
-		updatedAt = LocalDateTime.now();
 	}
 
 	public Long getId() { return id; }

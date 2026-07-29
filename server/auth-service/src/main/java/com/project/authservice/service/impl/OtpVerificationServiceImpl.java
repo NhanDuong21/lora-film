@@ -262,6 +262,34 @@ public class OtpVerificationServiceImpl implements VerificationService {
         }
     }
 
+    @Override
+    public void sendChangeEmailOtp(Long accountId, String currentEmail, String otp) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Internal-Token", internalToken);
+
+            String content = "Chào bạn,<br/><br/>Bạn đã yêu cầu thay đổi địa chỉ email của tài khoản. Vui lòng sử dụng mã OTP sau để xác nhận yêu cầu của bạn:<br/><br/><b>" + otp + "</b><br/><br/>Mã này có hiệu lực trong 5 phút. Nếu bạn không yêu cầu thay đổi email, vui lòng bỏ qua email này và kiểm tra lại bảo mật tài khoản.";
+
+            Map<String, Object> body = Map.of(
+                    "eventId", "AUTH-CHANGE-EMAIL-" + currentEmail + "-" + System.currentTimeMillis(),
+                    "requestSource", "auth-service",
+                    "title", "Mã xác nhận thay đổi email",
+                    "content", content,
+                    "userId", accountId,
+                    "recipient", currentEmail,
+                    "channelType", "EMAIL");
+
+            HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(body, headers);
+            String url = notificationServiceUrl + "/internal/notifications/send";
+            log.info("Sending change email OTP request to notification-service: url={}", url);
+            restTemplate.postForEntity(url, httpEntity, Map.class);
+            log.info("Change email OTP request sent successfully for email={}", maskEmail(currentEmail));
+        } catch (Exception e) {
+            log.warn("Failed to send change email OTP via notification-service: {}", e.getMessage(), e);
+        }
+    }
+
     private String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
     }
