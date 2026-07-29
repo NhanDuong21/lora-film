@@ -68,6 +68,22 @@ class BenefitRequestValidationTest {
         assertTrue(validator.validate(validVoucherIssueRequest()).isEmpty());
     }
 
+    @Test
+    void voucherIssueAcceptsNumericAuthAccountId() {
+        VoucherIssueRequest request = validVoucherIssueRequest();
+        request.setOwnerPublicId("123456789");
+
+        assertTrue(validator.validate(request).isEmpty());
+    }
+
+    @Test
+    void voucherIssueRejectsNonPositiveNumericAccountId() {
+        VoucherIssueRequest request = validVoucherIssueRequest();
+        request.setOwnerPublicId("0");
+
+        assertFalse(validator.validate(request).isEmpty());
+    }
+
     private CouponCreateRequest validCouponCreateRequest() {
         CouponCreateRequest request = new CouponCreateRequest();
         request.setCampaignPublicId(UUID.randomUUID().toString());

@@ -72,6 +72,7 @@ public final class BenefitResponses {
 
     public static class CouponResponse extends AuditedResponse {
         private String campaignPublicId;
+        private String partnerPublicId;
         private String code;
         private String name;
         private String description;
@@ -98,6 +99,14 @@ public final class BenefitResponses {
 
         public void setCampaignPublicId(String campaignPublicId) {
             this.campaignPublicId = campaignPublicId;
+        }
+
+        public String getPartnerPublicId() {
+            return partnerPublicId;
+        }
+
+        public void setPartnerPublicId(String partnerPublicId) {
+            this.partnerPublicId = partnerPublicId;
         }
 
         public String getCode() {
@@ -255,6 +264,7 @@ public final class BenefitResponses {
 
     public static class VoucherResponse extends AuditedResponse {
         private String campaignPublicId;
+        private String partnerPublicId;
         private String ownerPublicId;
         private String code;
         private String name;
@@ -284,6 +294,14 @@ public final class BenefitResponses {
 
         public void setCampaignPublicId(String campaignPublicId) {
             this.campaignPublicId = campaignPublicId;
+        }
+
+        public String getPartnerPublicId() {
+            return partnerPublicId;
+        }
+
+        public void setPartnerPublicId(String partnerPublicId) {
+            this.partnerPublicId = partnerPublicId;
         }
 
         public String getOwnerPublicId() {

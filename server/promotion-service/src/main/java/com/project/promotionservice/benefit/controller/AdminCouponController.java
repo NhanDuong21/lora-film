@@ -45,7 +45,7 @@ import static com.project.promotionservice.common.constant.ValidationConstants.U
 @RestController
 @Validated
 @RequestMapping("/api/admin/coupons")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF')")
 @Tag(name = "Admin Coupons", description = "Coupon creation, generation, import, export and lifecycle")
 public class AdminCouponController {
 

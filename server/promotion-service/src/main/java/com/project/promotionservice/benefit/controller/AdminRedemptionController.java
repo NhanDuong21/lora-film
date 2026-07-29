@@ -22,11 +22,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 
 import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+import static com.project.promotionservice.common.constant.ValidationConstants.USER_REFERENCE_PATTERN;
 
 @RestController
 @Validated
 @RequestMapping("/api/admin/redemptions")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE', 'FINANCE_DIRECTOR', 'OPERATIONS_MANAGER')")
 @Tag(name = "Admin Redemption History", description = "Immutable coupon and voucher redemption history")
 public class AdminRedemptionController {
 
@@ -41,7 +42,8 @@ public class AdminRedemptionController {
     public ResponseEntity<ApiResponse<PagedResponse<RedemptionResponse>>> history(
             @RequestParam(required = false) RedemptionType type,
             @RequestParam(required = false)
-            @Pattern(regexp = UUID_PATTERN, message = "userPublicId must be a valid UUID")
+            @Pattern(regexp = USER_REFERENCE_PATTERN,
+                    message = "userPublicId must be a positive account ID or a valid UUID")
             String userPublicId,
             @RequestParam(required = false)
             @Pattern(regexp = UUID_PATTERN, message = "bookingPublicId must be a valid UUID")

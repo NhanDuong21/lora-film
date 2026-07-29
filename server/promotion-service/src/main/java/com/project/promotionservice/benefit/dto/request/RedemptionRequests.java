@@ -16,6 +16,8 @@ public final class RedemptionRequests {
 
     private static final String UUID_PATTERN =
             com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+    private static final String USER_REFERENCE_PATTERN =
+            com.project.promotionservice.common.constant.ValidationConstants.USER_REFERENCE_PATTERN;
 
     private RedemptionRequests() {
     }
@@ -28,7 +30,8 @@ public final class RedemptionRequests {
 
         @NotBlank
         @Size(max = 36)
-        @Pattern(regexp = UUID_PATTERN, message = "userPublicId must be a valid UUID")
+        @Pattern(regexp = USER_REFERENCE_PATTERN,
+                message = "userPublicId must be a positive account ID or a valid UUID")
         private String userPublicId;
 
         @NotNull

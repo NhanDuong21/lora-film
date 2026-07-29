@@ -34,11 +34,12 @@ import java.time.Instant;
 import java.util.Set;
 
 import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+import static com.project.promotionservice.common.constant.ValidationConstants.USER_REFERENCE_PATTERN;
 
 @RestController
 @Validated
 @RequestMapping("/api/admin/compensation-vouchers")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'CSKH_AGENT')")
 @Tag(name = "Admin Compensation Vouchers", description = "Audited customer compensation issuance")
 public class AdminCompensationController {
 
@@ -80,7 +81,8 @@ public class AdminCompensationController {
     @Operation(summary = "Search compensation vouchers")
     public ResponseEntity<ApiResponse<PagedResponse<CompensationResponse>>> search(
             @RequestParam(required = false)
-            @Pattern(regexp = UUID_PATTERN, message = "userPublicId must be a valid UUID")
+            @Pattern(regexp = USER_REFERENCE_PATTERN,
+                    message = "userPublicId must be a positive account ID or a valid UUID")
             String userPublicId,
             @RequestParam(required = false) CompensationType type,
             @RequestParam(required = false) CompensationStatus status,

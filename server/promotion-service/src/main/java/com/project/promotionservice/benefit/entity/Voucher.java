@@ -20,6 +20,9 @@ public class Voucher extends BaseAuditableEntity {
     @Column(name = "campaign_public_id", length = 36)
     private String campaignPublicId;
 
+    @Column(name = "partner_public_id", length = 36)
+    private String partnerPublicId;
+
     @Column(name = "owner_public_id", length = 36, nullable = false)
     private String ownerPublicId;
 
@@ -98,6 +101,14 @@ public class Voucher extends BaseAuditableEntity {
 
     public void setCampaignPublicId(String campaignPublicId) {
         this.campaignPublicId = campaignPublicId;
+    }
+
+    public String getPartnerPublicId() {
+        return partnerPublicId;
+    }
+
+    public void setPartnerPublicId(String partnerPublicId) {
+        this.partnerPublicId = partnerPublicId;
     }
 
     public String getOwnerPublicId() {

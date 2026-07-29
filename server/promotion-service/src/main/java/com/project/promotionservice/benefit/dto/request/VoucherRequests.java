@@ -21,6 +21,8 @@ public final class VoucherRequests {
 
     private static final String UUID_PATTERN =
             com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+    private static final String USER_REFERENCE_PATTERN =
+            com.project.promotionservice.common.constant.ValidationConstants.USER_REFERENCE_PATTERN;
 
     private VoucherRequests() {
     }
@@ -33,7 +35,8 @@ public final class VoucherRequests {
 
         @NotBlank
         @Size(max = 36)
-        @Pattern(regexp = UUID_PATTERN, message = "ownerPublicId must be a valid UUID")
+        @Pattern(regexp = USER_REFERENCE_PATTERN,
+                message = "ownerPublicId must be a positive account ID or a valid UUID")
         private String ownerPublicId;
 
         @Size(max = 100)

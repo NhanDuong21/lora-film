@@ -36,11 +36,12 @@ import java.util.List;
 import java.util.Set;
 
 import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+import static com.project.promotionservice.common.constant.ValidationConstants.USER_REFERENCE_PATTERN;
 
 @RestController
 @Validated
 @RequestMapping("/api/admin/vouchers")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'CSKH_AGENT')")
 @Tag(name = "Admin Vouchers", description = "Voucher issuance and lifecycle")
 public class AdminVoucherController {
 
@@ -118,7 +119,8 @@ public class AdminVoucherController {
     public ResponseEntity<ApiResponse<PagedResponse<VoucherResponse>>> search(
             @RequestParam(required = false) @Size(max = 100) String keyword,
             @RequestParam(required = false)
-            @Pattern(regexp = UUID_PATTERN, message = "ownerPublicId must be a valid UUID")
+            @Pattern(regexp = USER_REFERENCE_PATTERN,
+                    message = "ownerPublicId must be a positive account ID or a valid UUID")
             String ownerPublicId,
             @RequestParam(required = false)
             @Pattern(regexp = UUID_PATTERN, message = "campaignPublicId must be a valid UUID")

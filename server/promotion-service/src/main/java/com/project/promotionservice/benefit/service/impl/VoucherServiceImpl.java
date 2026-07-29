@@ -21,7 +21,9 @@ import com.project.promotionservice.common.audit.Auditable;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.exception.ErrorCode;
 import com.project.promotionservice.common.response.PagedResponse;
+import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
+import com.project.promotionservice.partner.service.PartnerService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -45,17 +47,20 @@ public class VoucherServiceImpl implements VoucherService {
     private final BenefitMapper mapper;
     private final BenefitEventService eventService;
     private final BenefitPolicyValidator policyValidator;
+    private final PartnerService partnerService;
 
     public VoucherServiceImpl(VoucherRepository voucherRepository,
                               PromotionCampaignRepository campaignRepository,
                               BenefitMapper mapper,
                               BenefitEventService eventService,
-                              BenefitPolicyValidator policyValidator) {
+                              BenefitPolicyValidator policyValidator,
+                              PartnerService partnerService) {
         this.voucherRepository = voucherRepository;
         this.campaignRepository = campaignRepository;
         this.mapper = mapper;
         this.eventService = eventService;
         this.policyValidator = policyValidator;
+        this.partnerService = partnerService;
     }
 
     @Override
@@ -224,11 +229,15 @@ public class VoucherServiceImpl implements VoucherService {
         policyValidator.validateVoucher(
                 request.getVoucherType(), request.getReusable(), request.getMaxUsage(),
                 request.getFaceValue(), request.getConditionsJson(), request.getActionsJson());
+        PromotionCampaign campaign = null;
         if (request.getCampaignPublicId() != null && !request.getCampaignPublicId().isBlank()) {
-            campaignRepository.findByPublicId(request.getCampaignPublicId())
-                    .filter(campaign -> campaign.getDeletedAt() == null)
+            campaign = campaignRepository.findByPublicId(request.getCampaignPublicId())
+                    .filter(value -> value.getDeletedAt() == null)
                     .orElseThrow(() -> new BusinessException(
-                            ErrorCode.NOT_FOUND, "Promotion campaign not found", HttpStatus.NOT_FOUND));
+                        ErrorCode.NOT_FOUND, "Promotion campaign not found", HttpStatus.NOT_FOUND));
+            if (campaign.getPartnerPublicId() != null && partnerService != null) {
+                partnerService.requireActive(campaign.getPartnerPublicId());
+            }
         }
         if (request.getSource() == VoucherSource.BIRTHDAY
                 && request.getValidTo().isAfter(Instant.now().plus(120, ChronoUnit.DAYS))) {
@@ -244,7 +253,11 @@ public class VoucherServiceImpl implements VoucherService {
         if (voucherRepository.existsByCodeIgnoreCase(code)) {
             throw badRequest(BenefitErrorCode.VOUCHER_DUPLICATE, "Voucher code already exists");
         }
-        return voucherRepository.save(mapper.toVoucher(request, code, actor));
+        Voucher voucher = mapper.toVoucher(request, code, actor);
+        if (campaign != null) {
+            voucher.setPartnerPublicId(campaign.getPartnerPublicId());
+        }
+        return voucherRepository.save(voucher);
     }
 
     private String generateCode() {
