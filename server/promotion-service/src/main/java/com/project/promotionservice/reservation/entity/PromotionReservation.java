@@ -31,6 +31,12 @@ public class PromotionReservation extends BaseAuditableEntity {
     @Column(name = "user_public_id", length = 36, nullable = false)
     private String userPublicId;
 
+    @Column(name = "customer_phone", length = 20)
+    private String customerPhone;
+
+    @Column(name = "reservation_scope_key", length = 80, unique = true)
+    private String reservationScopeKey;
+
     @Column(name = "campaign_public_id", length = 36)
     private String campaignPublicId;
 
@@ -84,6 +90,18 @@ public class PromotionReservation extends BaseAuditableEntity {
     @Column(name = "metadata_json", columnDefinition = "JSON")
     private String metadataJson;
 
+    @Column(name = "expiration_attempts", nullable = false)
+    private Integer expirationAttempts = 0;
+
+    @Column(name = "expiration_last_attempt_at")
+    private Instant expirationLastAttemptAt;
+
+    @Column(name = "expiration_next_attempt_at")
+    private Instant expirationNextAttemptAt;
+
+    @Column(name = "expiration_error", length = 1000)
+    private String expirationError;
+
     public String getReservationCode() {
         return reservationCode;
     }
@@ -122,6 +140,22 @@ public class PromotionReservation extends BaseAuditableEntity {
 
     public void setUserPublicId(String userPublicId) {
         this.userPublicId = userPublicId;
+    }
+
+    public String getCustomerPhone() {
+        return customerPhone;
+    }
+
+    public void setCustomerPhone(String customerPhone) {
+        this.customerPhone = customerPhone;
+    }
+
+    public String getReservationScopeKey() {
+        return reservationScopeKey;
+    }
+
+    public void setReservationScopeKey(String reservationScopeKey) {
+        this.reservationScopeKey = reservationScopeKey;
     }
 
     public String getCampaignPublicId() {
@@ -258,5 +292,37 @@ public class PromotionReservation extends BaseAuditableEntity {
 
     public void setMetadataJson(String metadataJson) {
         this.metadataJson = metadataJson;
+    }
+
+    public Integer getExpirationAttempts() {
+        return expirationAttempts;
+    }
+
+    public void setExpirationAttempts(Integer expirationAttempts) {
+        this.expirationAttempts = expirationAttempts;
+    }
+
+    public Instant getExpirationLastAttemptAt() {
+        return expirationLastAttemptAt;
+    }
+
+    public void setExpirationLastAttemptAt(Instant expirationLastAttemptAt) {
+        this.expirationLastAttemptAt = expirationLastAttemptAt;
+    }
+
+    public Instant getExpirationNextAttemptAt() {
+        return expirationNextAttemptAt;
+    }
+
+    public void setExpirationNextAttemptAt(Instant expirationNextAttemptAt) {
+        this.expirationNextAttemptAt = expirationNextAttemptAt;
+    }
+
+    public String getExpirationError() {
+        return expirationError;
+    }
+
+    public void setExpirationError(String expirationError) {
+        this.expirationError = expirationError;
     }
 }

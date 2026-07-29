@@ -7,7 +7,12 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+
+import java.time.Instant;
+
+import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
 
 public final class ReservationRequests {
 
@@ -49,19 +54,8 @@ public final class ReservationRequests {
 
         @NotBlank
         @Size(max = 36)
-        private String reservationPublicId;
-
-        @NotBlank
-        @Size(max = 36)
+        @Pattern(regexp = UUID_PATTERN, message = "paymentPublicId must be a valid UUID")
         private String paymentPublicId;
-
-        public String getReservationPublicId() {
-            return reservationPublicId;
-        }
-
-        public void setReservationPublicId(String reservationPublicId) {
-            this.reservationPublicId = reservationPublicId;
-        }
 
         public String getPaymentPublicId() {
             return paymentPublicId;
@@ -72,23 +66,10 @@ public final class ReservationRequests {
         }
     }
 
-    public static class RollbackRequest {
-
-        @NotBlank
-        @Size(max = 36)
-        private String reservationPublicId;
-
+    public static class TransitionRequest {
         @NotBlank
         @Size(max = 255)
         private String reason;
-
-        public String getReservationPublicId() {
-            return reservationPublicId;
-        }
-
-        public void setReservationPublicId(String reservationPublicId) {
-            this.reservationPublicId = reservationPublicId;
-        }
 
         public String getReason() {
             return reason;
@@ -96,6 +77,34 @@ public final class ReservationRequests {
 
         public void setReason(String reason) {
             this.reason = reason;
+        }
+    }
+
+    public static class RefreshRequest {
+
+        @NotNull
+        private Instant requestedExpiredAt;
+
+        public Instant getRequestedExpiredAt() {
+            return requestedExpiredAt;
+        }
+
+        public void setRequestedExpiredAt(Instant requestedExpiredAt) {
+            this.requestedExpiredAt = requestedExpiredAt;
+        }
+    }
+
+    public static class RuntimeValidationRequest extends BenefitValidationRequest {
+
+        @NotNull
+        private RedemptionType benefitType;
+
+        public RedemptionType getBenefitType() {
+            return benefitType;
+        }
+
+        public void setBenefitType(RedemptionType benefitType) {
+            this.benefitType = benefitType;
         }
     }
 
