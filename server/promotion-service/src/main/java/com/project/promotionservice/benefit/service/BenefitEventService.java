@@ -1,12 +1,12 @@
 package com.project.promotionservice.benefit.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.exception.ErrorCode;
 import com.project.promotionservice.integration.outbox.OutboxStatus;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEvent;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEventRepository;
+import com.project.promotionservice.integration.outbox.PromotionOutboxEnvelopeFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -16,11 +16,13 @@ public class BenefitEventService {
     private static final String BENEFIT_TOPIC = "promotion.benefit.lifecycle";
 
     private final PromotionOutboxEventRepository outboxEventRepository;
-    private final ObjectMapper objectMapper;
+    private final PromotionOutboxEnvelopeFactory envelopeFactory;
 
-    public BenefitEventService(PromotionOutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
+    public BenefitEventService(
+            PromotionOutboxEventRepository outboxEventRepository,
+            PromotionOutboxEnvelopeFactory envelopeFactory) {
         this.outboxEventRepository = outboxEventRepository;
-        this.objectMapper = objectMapper;
+        this.envelopeFactory = envelopeFactory;
     }
 
     public void record(String aggregateType, String aggregatePublicId,
@@ -35,7 +37,7 @@ public class BenefitEventService {
         event.setCreatedBy(actor);
         event.setUpdatedBy(actor);
         try {
-            event.setPayload(objectMapper.writeValueAsString(payload));
+            event.setPayload(envelopeFactory.create(event, payload));
         } catch (JsonProcessingException exception) {
             throw new BusinessException(
                     ErrorCode.INTERNAL_SERVER_ERROR,

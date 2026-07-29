@@ -1,7 +1,7 @@
 package com.project.promotionservice.benefit.service;
 
-import com.project.promotionservice.benefit.dto.request.RedemptionRequests.BenefitRedeemRequest;
 import com.project.promotionservice.benefit.dto.request.RedemptionRequests.BenefitValidationRequest;
+import com.project.promotionservice.benefit.dto.request.RedemptionRequests.ReservedRedemptionRequest;
 import com.project.promotionservice.benefit.dto.response.BenefitResponses.RedemptionResponse;
 import com.project.promotionservice.benefit.dto.response.BenefitResponses.ValidationResponse;
 import com.project.promotionservice.benefit.enums.BenefitEnums.RedemptionStatus;
@@ -16,9 +16,9 @@ public interface RedemptionService {
 
     ValidationResponse validateVoucher(BenefitValidationRequest request);
 
-    RedemptionResponse confirmReservedCoupon(BenefitRedeemRequest request, String actor);
+    RedemptionResponse confirmReservedCoupon(ReservedRedemptionRequest request, String actor);
 
-    RedemptionResponse confirmReservedVoucher(BenefitRedeemRequest request, String actor);
+    RedemptionResponse confirmReservedVoucher(ReservedRedemptionRequest request, String actor);
 
     PagedResponse<RedemptionResponse> history(
             RedemptionType type, String userPublicId, String bookingPublicId,

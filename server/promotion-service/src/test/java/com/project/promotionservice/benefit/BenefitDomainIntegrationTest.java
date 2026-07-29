@@ -23,6 +23,7 @@ import com.project.promotionservice.benefit.service.CompensationService;
 import com.project.promotionservice.benefit.service.CouponService;
 import com.project.promotionservice.benefit.service.RedemptionService;
 import com.project.promotionservice.benefit.service.VoucherService;
+import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
@@ -31,24 +32,29 @@ import com.project.promotionservice.promotion.enums.FundingSource;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ConfirmRequest;
+import com.project.promotionservice.reservation.dto.request.ReservationRequests.RefreshRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ReserveRequest;
-import com.project.promotionservice.reservation.dto.request.ReservationRequests.RollbackRequest;
+import com.project.promotionservice.reservation.dto.request.ReservationRequests.RuntimeValidationRequest;
+import com.project.promotionservice.reservation.dto.request.ReservationRequests.TransitionRequest;
 import com.project.promotionservice.reservation.dto.response.ReservationResponse;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 import com.project.promotionservice.reservation.service.PromotionReservationService;
+import com.project.promotionservice.reservation.idempotency.ReservationIdempotencyExecutor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -83,13 +89,16 @@ class BenefitDomainIntegrationTest {
     private PromotionReservationService reservationService;
 
     @Autowired
+    private ReservationIdempotencyExecutor idempotencyExecutor;
+
+    @Autowired
     private PromotionReservationRepository reservationRepository;
 
     @Autowired
     private RequestMappingHandlerMapping requestMappingHandlerMapping;
 
     @Test
-    void exposesTwentySixCanonicalBenefitAndCheckoutApis() {
+    void exposesThirtyOneCanonicalBenefitAndReservationRuntimeApis() {
         long benefitMappings = requestMappingHandlerMapping.getHandlerMethods().entrySet().stream()
                 .filter(entry -> entry.getValue().getBeanType().getPackageName()
                         .startsWith("com.project.promotionservice.benefit.controller"))
@@ -100,8 +109,8 @@ class BenefitDomainIntegrationTest {
                 .count();
 
         assertThat(benefitMappings).isEqualTo(23);
-        assertThat(reservationMappings).isEqualTo(3);
-        assertThat(benefitMappings + reservationMappings).isEqualTo(26);
+        assertThat(reservationMappings).isEqualTo(8);
+        assertThat(benefitMappings + reservationMappings).isEqualTo(31);
     }
 
     @Test
@@ -161,12 +170,11 @@ class BenefitDomainIntegrationTest {
                 .getRedemptionCount()).isZero();
 
         ConfirmRequest confirmRequest = new ConfirmRequest();
-        confirmRequest.setReservationPublicId(reserved.getPublicId());
         confirmRequest.setPaymentPublicId(UUID.randomUUID().toString());
         ReservationResponse confirmed = reservationService.confirm(
-                confirmRequest, "confirm-order-1", "payment-service");
+                reserved.getPublicId(), confirmRequest, "confirm-order-1", "payment-service");
         ReservationResponse repeatedConfirm = reservationService.confirm(
-                confirmRequest, "confirm-order-1", "payment-service");
+                reserved.getPublicId(), confirmRequest, "confirm-order-1", "payment-service");
 
         assertThat(confirmed.getStatus()).isEqualTo(ReservationStatus.COMPLETED);
         assertThat(confirmed.getRedemption()).isNotNull();
@@ -182,7 +190,38 @@ class BenefitDomainIntegrationTest {
     }
 
     @Test
-    void reservationRollbackIsIdempotentAndReleasesHeldBudget() {
+    void confirmConsumesTheReservedPricingSnapshotWhenBenefitConfigurationChanges() {
+        PromotionCampaign campaign = activeCampaign();
+        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        ReservationResponse reserved = reservationService.reserve(
+                reservationRequest(RedemptionType.COUPON, coupon.getCode(), "snapshot-user"),
+                "snapshot-reserve-key",
+                "booking-service");
+
+        var couponEntity = couponRepository
+                .findByPublicIdAndDeletedAtIsNull(coupon.getPublicId())
+                .orElseThrow();
+        ObjectNode changedAction = JsonNodeFactory.instance.objectNode();
+        changedAction.put("discountType", "FIXED_AMOUNT");
+        changedAction.put("discountValue", 10_000);
+        couponEntity.setActionsJson(changedAction.toString());
+        couponRepository.saveAndFlush(couponEntity);
+
+        ConfirmRequest confirmRequest = new ConfirmRequest();
+        confirmRequest.setPaymentPublicId(UUID.randomUUID().toString());
+        ReservationResponse confirmed = reservationService.confirm(
+                reserved.getPublicId(), confirmRequest, "snapshot-confirm-key", "payment-service");
+
+        assertThat(confirmed.getDiscountAmount()).isEqualByComparingTo("20000.00");
+        assertThat(confirmed.getRedemption().getDiscountAmount()).isEqualByComparingTo("20000.00");
+        PromotionCampaign confirmedCampaign =
+                campaignRepository.findById(campaign.getId()).orElseThrow();
+        assertThat(confirmedCampaign.getBudgetReserved()).isEqualByComparingTo("0.00");
+        assertThat(confirmedCampaign.getBudgetUsed()).isEqualByComparingTo("20000.00");
+    }
+
+    @Test
+    void reservationReleaseIsIdempotentAndReleasesHeldBudget() {
         PromotionCampaign campaign = activeCampaign();
         CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
         ReserveRequest reserveRequest = reservationRequest(
@@ -190,21 +229,107 @@ class BenefitDomainIntegrationTest {
         ReservationResponse reserved = reservationService.reserve(
                 reserveRequest, "reserve-order-2", "booking-service");
 
-        RollbackRequest rollbackRequest = new RollbackRequest();
-        rollbackRequest.setReservationPublicId(reserved.getPublicId());
-        rollbackRequest.setReason("Payment failed");
-        ReservationResponse first = reservationService.rollback(
-                rollbackRequest, "rollback-order-2", "payment-service");
-        ReservationResponse repeated = reservationService.rollback(
-                rollbackRequest, "rollback-order-2", "payment-service");
+        TransitionRequest releaseRequest = new TransitionRequest();
+        releaseRequest.setReason("Payment failed");
+        ReservationResponse first = reservationService.release(
+                reserved.getPublicId(), releaseRequest, "release-order-2", "payment-service");
+        ReservationResponse repeated = reservationService.release(
+                reserved.getPublicId(), releaseRequest, "release-order-2", "payment-service");
 
-        assertThat(first.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(first.getStatus()).isEqualTo(ReservationStatus.RELEASED);
         assertThat(repeated.getPublicId()).isEqualTo(first.getPublicId());
         assertThat(repeated.getRollbackReason()).isEqualTo("Payment failed");
         assertThat(campaignRepository.findById(campaign.getId()).orElseThrow().getBudgetReserved())
                 .isEqualByComparingTo("0.00");
         assertThat(reservationRepository.findByPublicIdAndDeletedAtIsNull(reserved.getPublicId())
-                .orElseThrow().getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+                .orElseThrow().getStatus()).isEqualTo(ReservationStatus.RELEASED);
+    }
+
+    @Test
+    void multiUsePublicCouponAllowsIndependentActiveHolds() {
+        PromotionCampaign campaign = activeCampaign();
+        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        ReserveRequest firstRequest = reservationRequest(
+                RedemptionType.COUPON, coupon.getCode(), "public-coupon-user-1");
+        firstRequest.setCustomerPhone("0900000101");
+        ReserveRequest secondRequest = reservationRequest(
+                RedemptionType.COUPON, coupon.getCode(), "public-coupon-user-2");
+        secondRequest.setCustomerPhone("0900000102");
+
+        ReservationResponse first = reservationService.reserve(
+                firstRequest, "public-coupon-hold-1", "booking-service");
+        ReservationResponse second = reservationService.reserve(
+                secondRequest, "public-coupon-hold-2", "booking-service");
+
+        assertThat(first.getStatus()).isEqualTo(ReservationStatus.ACTIVE);
+        assertThat(second.getStatus()).isEqualTo(ReservationStatus.ACTIVE);
+        assertThat(campaignRepository.findById(campaign.getId()).orElseThrow().getBudgetReserved())
+                .isEqualByComparingTo("40000.00");
+    }
+
+    @Test
+    void reservationCanBeCancelledAndAppearsInFilteredHistory() {
+        PromotionCampaign campaign = activeCampaign();
+        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        ReservationResponse reserved = reservationService.reserve(
+                reservationRequest(RedemptionType.COUPON, coupon.getCode(), "cancel-user"),
+                "cancel-reserve-key",
+                "booking-service");
+
+        TransitionRequest cancelRequest = new TransitionRequest();
+        cancelRequest.setReason("Customer cancelled booking");
+        ReservationResponse cancelled = reservationService.cancel(
+                reserved.getPublicId(), cancelRequest, "cancel-key", "booking-service");
+        ReservationResponse replayed = reservationService.cancel(
+                reserved.getPublicId(), cancelRequest, "cancel-key", "booking-service");
+
+        assertThat(cancelled.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(replayed.getPublicId()).isEqualTo(cancelled.getPublicId());
+        assertThat(campaignRepository.findById(campaign.getId()).orElseThrow().getBudgetReserved())
+                .isEqualByComparingTo("0.00");
+
+        PagedResponse<ReservationResponse> history = reservationService.history(
+                RedemptionType.COUPON, ReservationStatus.CANCELLED,
+                "cancel-user", null, null, null, null, 0, 20);
+        assertThat(history.getContent()).extracting(ReservationResponse::getPublicId)
+                .contains(cancelled.getPublicId());
+    }
+
+    @Test
+    void refreshUsesAbsoluteDeadlineAndRuntimeValidationSeesActiveHold() {
+        PromotionCampaign campaign = activeCampaign();
+        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        ReserveRequest reserveRequest = reservationRequest(
+                RedemptionType.COUPON, coupon.getCode(), "refresh-user");
+
+        RuntimeValidationRequest validationRequest = new RuntimeValidationRequest();
+        validationRequest.setBenefitType(RedemptionType.COUPON);
+        validationRequest.setCode(reserveRequest.getCode());
+        validationRequest.setUserPublicId(reserveRequest.getUserPublicId());
+        validationRequest.setCustomerPhone(reserveRequest.getCustomerPhone());
+        validationRequest.setOriginalAmount(reserveRequest.getOriginalAmount());
+        validationRequest.setBookingPublicId(reserveRequest.getBookingPublicId());
+        assertThat(reservationService.validateRuntime(validationRequest).isValid()).isTrue();
+
+        ReservationResponse reserved = reservationService.reserve(
+                reserveRequest, "refresh-reserve-key", "booking-service");
+        assertThatThrownBy(() -> reservationService.validateRuntime(validationRequest))
+                .hasMessageContaining("fully reserved");
+
+        RefreshRequest refreshRequest = new RefreshRequest();
+        refreshRequest.setRequestedExpiredAt(
+                reserved.getReservationStartedAt().plus(20, ChronoUnit.MINUTES));
+        ReservationResponse refreshed = reservationService.refresh(
+                reserved.getPublicId(), refreshRequest, "refresh-key", "booking-service");
+        ReservationResponse replayed = reservationService.refresh(
+                reserved.getPublicId(), refreshRequest, "refresh-key", "booking-service");
+
+        assertThat(refreshed.getReservationExpiredAt())
+                .isEqualTo(refreshRequest.getRequestedExpiredAt());
+        assertThat(replayed.getReservationExpiredAt())
+                .isEqualTo(refreshed.getReservationExpiredAt());
+        assertThat(reservationService.getDetail(reserved.getPublicId(), "booking-service")
+                .getStatus()).isEqualTo(ReservationStatus.ACTIVE);
     }
 
     @Test
@@ -259,12 +384,11 @@ class BenefitDomainIntegrationTest {
                 request, "voucher-reserve-key", "booking-service");
 
         ConfirmRequest confirmRequest = new ConfirmRequest();
-        confirmRequest.setReservationPublicId(reserved.getPublicId());
         confirmRequest.setPaymentPublicId(UUID.randomUUID().toString());
         ReservationResponse first = reservationService.confirm(
-                confirmRequest, "voucher-confirm-key", "payment-service");
+                reserved.getPublicId(), confirmRequest, "voucher-confirm-key", "payment-service");
         ReservationResponse repeated = reservationService.confirm(
-                confirmRequest, "voucher-confirm-key", "payment-service");
+                reserved.getPublicId(), confirmRequest, "voucher-confirm-key", "payment-service");
 
         assertThat(first.getStatus()).isEqualTo(ReservationStatus.COMPLETED);
         assertThat(first.getRedemption().getCode()).isEqualTo(voucher.getCode());
@@ -275,6 +399,7 @@ class BenefitDomainIntegrationTest {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void expirationSelfHealingReleasesStaleReservation() {
         PromotionCampaign campaign = activeCampaign();
         CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
@@ -294,6 +419,93 @@ class BenefitDomainIntegrationTest {
                 .orElseThrow().getStatus()).isEqualTo(ReservationStatus.EXPIRED);
         assertThat(campaignRepository.findById(campaign.getId()).orElseThrow().getBudgetReserved())
                 .isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void durableIdempotencyReplaysWithoutExecutingReservationTwice() {
+        PromotionCampaign campaign = activeCampaign();
+        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        ReserveRequest firstRequest = reservationRequest(
+                RedemptionType.COUPON, coupon.getCode(), "idempotent-user");
+        String bookingId = firstRequest.getBookingPublicId();
+        String orderId = firstRequest.getOrderPublicId();
+        AtomicInteger executions = new AtomicInteger();
+
+        ReservationResponse first = idempotencyExecutor.execute(
+                "BOOKING_SERVICE",
+                "POST /internal/reservations",
+                "durable-idempotency-" + UUID.randomUUID(),
+                null,
+                firstRequest,
+                201,
+                () -> {
+                    executions.incrementAndGet();
+                    return reservationService.reserve(
+                            firstRequest, "domain-reserve-" + orderId, "BOOKING_SERVICE");
+                });
+
+        ReserveRequest retryRequest = reservationRequest(
+                RedemptionType.COUPON, coupon.getCode(), "idempotent-user");
+        retryRequest.setBookingPublicId(bookingId);
+        retryRequest.setOrderPublicId(orderId);
+        String replayKey = "durable-replay-" + first.getPublicId();
+        // Bind and replay a second durable key around an already idempotent domain command.
+        ReservationResponse bound = idempotencyExecutor.execute(
+                "BOOKING_SERVICE",
+                "POST /internal/reservations",
+                replayKey,
+                null,
+                retryRequest,
+                201,
+                () -> {
+                    executions.incrementAndGet();
+                    return reservationService.reserve(
+                            retryRequest, "domain-reserve-" + orderId, "BOOKING_SERVICE");
+                });
+        ReserveRequest replayRequest = reservationRequest(
+                RedemptionType.COUPON, coupon.getCode(), "idempotent-user");
+        replayRequest.setBookingPublicId(bookingId);
+        replayRequest.setOrderPublicId(orderId);
+        ReservationResponse replay = idempotencyExecutor.execute(
+                "BOOKING_SERVICE",
+                "POST /internal/reservations",
+                replayKey,
+                null,
+                replayRequest,
+                201,
+                () -> {
+                    executions.incrementAndGet();
+                    throw new AssertionError("Durable replay must not execute the domain command");
+                });
+
+        assertThat(first.getPublicId()).isEqualTo(bound.getPublicId());
+        assertThat(replay.getPublicId()).isEqualTo(bound.getPublicId());
+        assertThat(executions).hasValue(2);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void checkoutCannotHoldTwoBenefitsAtTheSameTime() {
+        PromotionCampaign campaign = activeCampaign();
+        CouponResponse firstCoupon =
+                couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse secondCoupon =
+                couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        ReserveRequest firstRequest = reservationRequest(
+                RedemptionType.COUPON, firstCoupon.getCode(), "checkout-user-1");
+        ReserveRequest secondRequest = reservationRequest(
+                RedemptionType.COUPON, secondCoupon.getCode(), "checkout-user-2");
+        secondRequest.setBookingPublicId(firstRequest.getBookingPublicId());
+        secondRequest.setOrderPublicId(firstRequest.getOrderPublicId());
+        secondRequest.setCustomerPhone("+84900000002");
+
+        reservationService.reserve(
+                firstRequest, "checkout-first-" + UUID.randomUUID(), "BOOKING_SERVICE");
+
+        assertThatThrownBy(() -> reservationService.reserve(
+                secondRequest, "checkout-second-" + UUID.randomUUID(), "BOOKING_SERVICE"))
+                .hasMessageContaining("checkout already has");
     }
 
     private PromotionCampaign activeCampaign() {
@@ -362,7 +574,7 @@ class BenefitDomainIntegrationTest {
         BenefitRedeemRequest request = new BenefitRedeemRequest();
         request.setCode(code);
         request.setUserPublicId(userPublicId);
-        request.setCustomerPhone("0900000000-" + userPublicId.charAt(userPublicId.length() - 1));
+        request.setCustomerPhone("+84900000000");
         request.setOriginalAmount(new BigDecimal("100000"));
         request.setBookingPublicId(UUID.randomUUID().toString());
         request.setOrderPublicId(UUID.randomUUID().toString());

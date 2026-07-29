@@ -9,11 +9,15 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 
 public final class CouponRequests {
+
+    private static final String UUID_PATTERN =
+            com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
 
     private CouponRequests() {
     }
@@ -34,11 +38,16 @@ public final class CouponRequests {
         @NotNull
         private DistributionType distributionType;
 
+        @NotNull
         private Boolean stackable = false;
+        @NotNull
         private Boolean transferable = false;
+        @NotNull
         private Boolean reusable = false;
+        @NotNull
         private Boolean autoApply = false;
 
+        @NotNull
         @Min(0)
         private Integer priority = 100;
 
@@ -209,6 +218,7 @@ public final class CouponRequests {
 
         @NotBlank
         @Size(max = 36)
+        @Pattern(regexp = UUID_PATTERN, message = "campaignPublicId must be a valid UUID")
         private String campaignPublicId;
 
         @NotBlank
@@ -236,6 +246,7 @@ public final class CouponRequests {
 
         @NotBlank
         @Size(max = 36)
+        @Pattern(regexp = UUID_PATTERN, message = "campaignPublicId must be a valid UUID")
         private String campaignPublicId;
 
         @Size(max = 50)

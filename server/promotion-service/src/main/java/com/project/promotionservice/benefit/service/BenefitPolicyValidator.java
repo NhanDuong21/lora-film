@@ -16,12 +16,17 @@ import java.util.Locale;
 public class BenefitPolicyValidator {
 
     private static final BigDecimal MAX_LEGAL_PERCENTAGE = new BigDecimal("50");
+    private final BenefitConditionEvaluator conditionEvaluator;
+
+    public BenefitPolicyValidator(BenefitConditionEvaluator conditionEvaluator) {
+        this.conditionEvaluator = conditionEvaluator;
+    }
 
     public void validateCoupon(
             CouponType couponType, DistributionType distributionType,
             Boolean reusable, Integer maxRedemptions, Integer maxRedemptionsPerUser,
             JsonNode conditions, JsonNode actions) {
-        requireObject("conditionsJson", conditions);
+        conditionEvaluator.validateConfiguration(conditions);
         requireSingleAction(actions);
 
         if (distributionType == DistributionType.PRIVATE
@@ -51,8 +56,9 @@ public class BenefitPolicyValidator {
     public void validateVoucher(
             VoucherType voucherType, Boolean reusable, Integer maxUsage,
             BigDecimal faceValue, JsonNode conditions, JsonNode actions) {
-        requireObject("conditionsJson", conditions);
+        conditionEvaluator.validateConfiguration(conditions);
         requireSingleAction(actions);
+        String actionType = normalizedActionType(actions);
         if (!Boolean.TRUE.equals(reusable) && maxUsage != null && maxUsage > 1) {
             invalid("Non-reusable voucher must have maxUsage=1");
         }
@@ -60,12 +66,26 @@ public class BenefitPolicyValidator {
                 && (faceValue == null || faceValue.signum() <= 0)) {
             invalid("FIXED_AMOUNT voucher requires a positive faceValue");
         }
+        if (voucherType == VoucherType.PERCENTAGE && !actionType.contains("PERCENT")) {
+            invalid("PERCENTAGE voucher requires a percentage action");
+        }
+        if (voucherType == VoucherType.FIXED_AMOUNT
+                && !(actionType.equals("FIXED_AMOUNT") || actionType.equals("AMOUNT"))) {
+            invalid("FIXED_AMOUNT voucher requires a fixed-amount action");
+        }
+        if (voucherType == VoucherType.FREE_TICKET
+                && !actionType.equals("FREE_TICKET")) {
+            invalid("FREE_TICKET voucher requires a FREE_TICKET action");
+        }
+        if (voucherType == VoucherType.FREE_COMBO
+                && !actionType.equals("FREE_COMBO")) {
+            invalid("FREE_COMBO voucher requires a FREE_COMBO action");
+        }
     }
 
-    private void requireObject(String field, JsonNode value) {
-        if (value == null || !value.isObject()) {
-            invalid(field + " must be a JSON object");
-        }
+    public void validateRule(JsonNode conditions, JsonNode actions) {
+        conditionEvaluator.validateConfiguration(conditions);
+        requireSingleAction(actions);
     }
 
     private void requireSingleAction(JsonNode actions) {
@@ -86,15 +106,15 @@ public class BenefitPolicyValidator {
         }
         String normalized = type.toUpperCase(Locale.ROOT);
         BigDecimal value = decimal(action, "discountValue", "value", "amount", "percentage");
-        if (normalized.contains("PERCENT")) {
+        if (normalized.equals("PERCENTAGE") || normalized.equals("PERCENT")) {
             if (value == null || value.signum() <= 0) {
                 invalid("Percentage discount must be greater than zero");
             }
             if (value.compareTo(MAX_LEGAL_PERCENTAGE) > 0) {
                 invalid("Percentage discount cannot exceed the legal 50% limit");
             }
-        } else if (normalized.contains("FIXED")
-                || normalized.contains("AMOUNT")
+        } else if (normalized.equals("FIXED_AMOUNT")
+                || normalized.equals("AMOUNT")
                 || normalized.equals("CASHBACK")) {
             if (value == null || value.signum() <= 0) {
                 invalid("Fixed discount amount must be greater than zero");
@@ -111,6 +131,12 @@ public class BenefitPolicyValidator {
         if (maximum != null && maximum.signum() <= 0) {
             invalid("Maximum discount amount must be greater than zero");
         }
+    }
+
+    private String normalizedActionType(JsonNode actions) {
+        JsonNode action = actions != null && actions.isArray() ? actions.get(0) : actions;
+        String type = text(action, "discountType", "type", "actionType");
+        return type == null ? "" : type.toUpperCase(Locale.ROOT);
     }
 
     private String text(JsonNode node, String... fields) {

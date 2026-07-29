@@ -10,6 +10,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -18,16 +19,21 @@ import java.util.List;
 
 public final class VoucherRequests {
 
+    private static final String UUID_PATTERN =
+            com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+
     private VoucherRequests() {
     }
 
     public static class VoucherIssueRequest {
 
         @Size(max = 36)
+        @Pattern(regexp = UUID_PATTERN, message = "campaignPublicId must be a valid UUID")
         private String campaignPublicId;
 
         @NotBlank
         @Size(max = 36)
+        @Pattern(regexp = UUID_PATTERN, message = "ownerPublicId must be a valid UUID")
         private String ownerPublicId;
 
         @Size(max = 100)
@@ -54,8 +60,11 @@ public final class VoucherRequests {
         @NotNull
         private Instant validTo;
 
+        @NotNull
         private Boolean transferable = false;
+        @NotNull
         private Boolean stackable = false;
+        @NotNull
         private Boolean reusable = false;
 
         @NotNull
