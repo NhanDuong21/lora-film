@@ -4,6 +4,7 @@ import com.project.userservice.dto.request.PositionRequest;
 import com.project.userservice.dto.response.PositionResponse;
 import com.project.userservice.entity.Position;
 import com.project.userservice.exception.BusinessException;
+import com.project.userservice.mapper.PositionMapper;
 import com.project.userservice.repository.EmployeeRepository;
 import com.project.userservice.repository.PositionRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -20,18 +21,21 @@ public class PositionService {
     private final PositionRepository repository;
     private final EmployeeRepository employeeRepository;
     private final UserAuditService auditService;
+    private final PositionMapper positionMapper;
 
     public PositionService(PositionRepository repository, EmployeeRepository employeeRepository,
-                           UserAuditService auditService) {
+                           UserAuditService auditService, PositionMapper positionMapper) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
         this.auditService = auditService;
+        this.positionMapper = positionMapper;
     }
 
     @Cacheable("positions")
     @Transactional(readOnly = true)
     public List<PositionResponse> list() {
-        return repository.findByIsDeletedFalseOrderByTitleAsc().stream().map(this::map).toList();
+        return repository.findByIsDeletedFalseOrderByTitleAsc().stream()
+                .map(positionMapper::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -40,7 +44,7 @@ public class PositionService {
                         com.project.userservice.util.PageableUtils.sanitize(pageable,
                                 java.util.Set.of("id", "code", "title", "createdAt", "updatedAt"),
                                 "title", org.springframework.data.domain.Sort.Direction.ASC))
-                .map(this::map);
+                .map(positionMapper::toResponse);
     }
 
     @CacheEvict(value = "positions", allEntries = true)
@@ -53,7 +57,7 @@ public class PositionService {
         apply(value, request);
         value = repository.save(value);
         auditService.log("POSITION_CREATED", "POSITION", value.getId(), null);
-        return map(value);
+        return positionMapper.toResponse(value);
     }
 
     @CacheEvict(value = "positions", allEntries = true)
@@ -65,7 +69,7 @@ public class PositionService {
         }
         apply(value, request);
         auditService.log("POSITION_UPDATED", "POSITION", id, null);
-        return map(repository.save(value));
+        return positionMapper.toResponse(repository.save(value));
     }
 
     @CacheEvict(value = "positions", allEntries = true)
@@ -95,7 +99,4 @@ public class PositionService {
         value.setDescription(request.description());
     }
 
-    private PositionResponse map(Position value) {
-        return new PositionResponse(value.getId(), value.getCode(), value.getTitle(), value.getDescription());
-    }
 }

@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
+@EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 public class User {
 
     @Id
@@ -62,9 +63,11 @@ public class User {
     @Column(name = "is_deleted", nullable = false)
     private Boolean isDeleted = false;
 
-    @Column(name = "created_by")
+    @org.springframework.data.annotation.CreatedBy
+    @Column(name = "created_by", updatable = false)
     private Long createdBy;
 
+    @org.springframework.data.annotation.LastModifiedBy
     @Column(name = "updated_by")
     private Long updatedBy;
 

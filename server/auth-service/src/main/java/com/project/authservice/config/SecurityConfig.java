@@ -38,6 +38,7 @@ public class SecurityConfig {
 			HttpSecurity http, 
 			com.project.authservice.security.JwtAuthenticationFilter jwtAuthenticationFilter,
 			com.project.authservice.security.oauth2.CustomOAuth2UserService customOAuth2UserService,
+			com.project.authservice.security.oauth2.CustomOidcUserService customOidcUserService,
 			com.project.authservice.security.oauth2.OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
 			com.project.authservice.security.oauth2.OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler
 	) throws Exception {
@@ -67,6 +68,7 @@ public class SecurityConfig {
 				.oauth2Login(oauth2 -> oauth2
 						.userInfoEndpoint(userInfo -> userInfo
 								.userService(customOAuth2UserService)
+								.oidcUserService(customOidcUserService)
 						)
 						.successHandler(oAuth2AuthenticationSuccessHandler)
 						.failureHandler(oAuth2AuthenticationFailureHandler)

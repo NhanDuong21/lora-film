@@ -4,6 +4,7 @@ import com.project.userservice.dto.response.UserProfileResponse;
 import com.project.userservice.dto.request.UpdateProfileRequest;
 import com.project.userservice.entity.User;
 import com.project.userservice.exception.BusinessException;
+import com.project.userservice.mapper.UserProfileMapper;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.repository.CustomerProfileRepository;
 import com.project.userservice.service.UserService;
@@ -26,14 +27,17 @@ public class UserServiceImpl implements UserService {
     private final UserAuditService auditService;
     private final UserDomainEventService eventService;
     private final CustomerProfileRepository customerProfileRepository;
+    private final UserProfileMapper userProfileMapper;
 
     public UserServiceImpl(UserRepository userRepository, UserAuditService auditService,
                            UserDomainEventService eventService,
-                           CustomerProfileRepository customerProfileRepository) {
+                           CustomerProfileRepository customerProfileRepository,
+                           UserProfileMapper userProfileMapper) {
         this.userRepository = userRepository;
         this.auditService = auditService;
         this.eventService = eventService;
         this.customerProfileRepository = customerProfileRepository;
+        this.userProfileMapper = userProfileMapper;
     }
 
     @Override
@@ -128,7 +132,7 @@ public class UserServiceImpl implements UserService {
         String customerCode = customerProfileRepository.findByAccountId(user.getAccountId())
                 .map(com.project.userservice.entity.CustomerProfile::getCustomerCode)
                 .orElse(null);
-        return mapToResponse(user, customerCode);
+        return userProfileMapper.toResponse(user, customerCode);
     }
 
     private List<UserProfileResponse> mapToResponses(List<User> users) {
@@ -145,31 +149,9 @@ public class UserServiceImpl implements UserService {
                         com.project.userservice.entity.CustomerProfile::getCustomerCode,
                         (first, ignored) -> first));
         return users.stream()
-                .map(user -> mapToResponse(user, customerCodes.get(user.getAccountId())))
+                .map(user -> userProfileMapper.toResponse(
+                        user, customerCodes.get(user.getAccountId())))
                 .toList();
-    }
-
-    private UserProfileResponse mapToResponse(User user, String customerCode) {
-        UserProfileResponse response = new UserProfileResponse();
-        response.setAccountId(user.getAccountId());
-        response.setCustomerCode(customerCode == null
-                ? formatCustomerCode(user.getAccountId())
-                : customerCode);
-        response.setFullName(user.getFullName());
-        response.setEmail(user.getEmail());
-        response.setPhoneNumber(user.getPhoneNumber());
-        response.setGender(user.getGender());
-        response.setBirthday(user.getBirthday());
-        response.setCccdMasked(user.getCccdMasked());
-        response.setProvinceName(user.getProvinceName());
-        response.setBirthYear(user.getBirthYear());
-        response.setAvatarUrl(user.getAvatarUrl());
-        response.setStatus(user.getStatus());
-        return response;
-    }
-
-    private String formatCustomerCode(Long accountId) {
-        return accountId == null ? null : String.format(Locale.ROOT, "CUS%010d", accountId);
     }
 
     private java.util.Optional<Long> parseAccountId(String query) {

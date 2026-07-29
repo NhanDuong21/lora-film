@@ -19,11 +19,11 @@ public class AvatarService {
     private final AvatarRepository avatarRepository;
     private final UserAuditService auditService;
     private final UserDomainEventService eventService;
-    private final SecureFileStorageService fileStorageService;
+    private final FileStorageService fileStorageService;
 
     public AvatarService(UserRepository userRepository, AvatarRepository avatarRepository,
                          UserAuditService auditService, UserDomainEventService eventService,
-                         SecureFileStorageService fileStorageService) {
+                         FileStorageService fileStorageService) {
         this.userRepository = userRepository;
         this.avatarRepository = avatarRepository;
         this.auditService = auditService;
@@ -36,12 +36,13 @@ public class AvatarService {
         User user = findUser(accountId);
         List<Avatar> previousAvatars =
                 avatarRepository.findByAccountIdOrderByUploadedAtDesc(accountId);
-        SecureFileStorageService.StoredFile storedFile = fileStorageService.storeAvatar(file);
+        FileStorageService.StoredFile storedFile = fileStorageService.storeAvatar(file);
+        fileStorageService.deleteOnRollback("avatars", storedFile.publicId());
         try {
             Avatar avatar = new Avatar();
             avatar.setAccountId(accountId);
-            avatar.setFileName(storedFile.fileName());
-            avatar.setFileUrl("/api/users/profile/avatar/files/" + storedFile.fileName());
+            avatar.setFileName(storedFile.publicId());
+            avatar.setFileUrl(storedFile.fileUrl());
             avatar.setContentType(storedFile.contentType());
             avatar.setFileSize(storedFile.fileSize());
             avatarRepository.save(avatar);
@@ -58,7 +59,7 @@ public class AvatarService {
             return avatar.getFileUrl();
         } catch (RuntimeException exception) {
             try {
-                fileStorageService.delete("avatars", storedFile.fileName());
+                fileStorageService.delete("avatars", storedFile.publicId());
             } catch (RuntimeException ignored) {
                 // Preserve the database or business failure that prevented metadata persistence.
             }
@@ -83,12 +84,19 @@ public class AvatarService {
     }
 
     @Transactional(readOnly = true)
-    public Resource load(String fileName) {
-        return fileStorageService.load("avatars", fileName);
+    public AvatarFile load(String fileName) {
+        Avatar avatar = avatarRepository.findFirstByFileName(fileName)
+                .orElseThrow(() -> new BusinessException("File not found", "USER_FILE_NOT_FOUND"));
+        return new AvatarFile(
+                fileStorageService.load("avatars", avatar.getFileName()),
+                avatar.getContentType());
     }
 
     private User findUser(Long accountId) {
         return userRepository.findById(accountId)
                 .orElseThrow(() -> new BusinessException("User not found", "USER_001"));
+    }
+
+    public record AvatarFile(Resource resource, String contentType) {
     }
 }

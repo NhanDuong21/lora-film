@@ -8,6 +8,8 @@ export const updateAccountStatus = async (id, status) =>
   data(await apiClient.put(`/api/accounts/${id}/status`, null, { params: { status } }));
 export const updateAccountRole = async (id, roleId) =>
   data(await apiClient.put(`/api/accounts/${id}/role`, null, { params: { roleId } }));
+export const createEmployeeAccount = async (payload) => 
+  data(await apiClient.post('/api/accounts/employee', payload));
 
 export const getRoles = async () => data(await apiClient.get('/api/roles'));
 export const getRole = async (id) => data(await apiClient.get(`/api/roles/${id}`));

@@ -255,9 +255,13 @@ export default function Header() {
             <div className="relative">
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="w-9 h-9 rounded-full bg-brand-orange/10 border border-brand-orange/40 flex items-center justify-center text-brand-orange hover:bg-brand-orange/20 transition-all font-black text-sm uppercase focus:outline-none"
+                className="w-9 h-9 rounded-full bg-brand-orange/10 border border-brand-orange/40 flex items-center justify-center text-brand-orange hover:bg-brand-orange/20 transition-all font-black text-sm uppercase focus:outline-none overflow-hidden"
               >
-                {user?.fullName ? user.fullName.charAt(0) : 'U'}
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user?.fullName} className="w-full h-full object-cover" />
+                ) : (
+                  user?.fullName ? user.fullName.charAt(0) : 'U'
+                )}
               </button>
 
               {profileDropdownOpen && (

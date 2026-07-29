@@ -142,13 +142,23 @@ public class AuthController {
 		return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
 	}
 
-	@PostMapping("/change-email")
+	@PostMapping("/change-email/request")
 	@org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
-	public ResponseEntity<ApiResponse<Void>> changeEmail(
+	public ResponseEntity<ApiResponse<Void>> requestChangeEmail(
 			@Valid @RequestBody com.project.authservice.dto.request.ChangeEmailRequest request,
 			@org.springframework.security.core.annotation.AuthenticationPrincipal String username) {
-		log.info("Change email endpoint called for authenticated account");
-		authService.changeEmail(request, username);
+		log.info("Request change email endpoint called for authenticated account");
+		authService.requestChangeEmail(request, username);
+		return ResponseEntity.ok(ApiResponse.success("OTP sent to your current email.", null));
+	}
+
+	@PostMapping("/change-email/verify")
+	@org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+	public ResponseEntity<ApiResponse<Void>> verifyChangeEmail(
+			@Valid @RequestBody com.project.authservice.dto.request.VerifyChangeEmailRequest request,
+			@org.springframework.security.core.annotation.AuthenticationPrincipal String username) {
+		log.info("Verify change email endpoint called for authenticated account");
+		authService.verifyChangeEmail(request, username);
 		return ResponseEntity.ok(ApiResponse.success("Email changed successfully. Please sign in again.", null));
 	}
 

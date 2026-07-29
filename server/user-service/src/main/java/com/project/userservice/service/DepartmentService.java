@@ -4,6 +4,7 @@ import com.project.userservice.dto.request.DepartmentRequest;
 import com.project.userservice.dto.response.DepartmentResponse;
 import com.project.userservice.entity.Department;
 import com.project.userservice.exception.BusinessException;
+import com.project.userservice.mapper.DepartmentMapper;
 import com.project.userservice.repository.DepartmentRepository;
 import com.project.userservice.repository.EmployeeRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -20,18 +21,21 @@ public class DepartmentService {
     private final DepartmentRepository repository;
     private final EmployeeRepository employeeRepository;
     private final UserAuditService auditService;
+    private final DepartmentMapper departmentMapper;
 
     public DepartmentService(DepartmentRepository repository, EmployeeRepository employeeRepository,
-                             UserAuditService auditService) {
+                             UserAuditService auditService, DepartmentMapper departmentMapper) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
         this.auditService = auditService;
+        this.departmentMapper = departmentMapper;
     }
 
     @Cacheable("departments")
     @Transactional(readOnly = true)
     public List<DepartmentResponse> list() {
-        return repository.findByIsDeletedFalseOrderByNameAsc().stream().map(this::map).toList();
+        return repository.findByIsDeletedFalseOrderByNameAsc().stream()
+                .map(departmentMapper::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -40,7 +44,7 @@ public class DepartmentService {
                         com.project.userservice.util.PageableUtils.sanitize(pageable,
                                 java.util.Set.of("id", "code", "name", "createdAt", "updatedAt"),
                                 "name", org.springframework.data.domain.Sort.Direction.ASC))
-                .map(this::map);
+                .map(departmentMapper::toResponse);
     }
 
     @CacheEvict(value = "departments", allEntries = true)
@@ -56,7 +60,7 @@ public class DepartmentService {
         apply(value, request);
         value = repository.save(value);
         auditService.log("DEPARTMENT_CREATED", "DEPARTMENT", value.getId(), null);
-        return map(value);
+        return departmentMapper.toResponse(value);
     }
 
     @CacheEvict(value = "departments", allEntries = true)
@@ -71,7 +75,7 @@ public class DepartmentService {
         }
         apply(value, request);
         auditService.log("DEPARTMENT_UPDATED", "DEPARTMENT", id, null);
-        return map(repository.save(value));
+        return departmentMapper.toResponse(repository.save(value));
     }
 
     @CacheEvict(value = "departments", allEntries = true)
@@ -101,7 +105,4 @@ public class DepartmentService {
         value.setDescription(request.description());
     }
 
-    private DepartmentResponse map(Department value) {
-        return new DepartmentResponse(value.getId(), value.getCode(), value.getName(), value.getDescription());
-    }
 }

@@ -41,7 +41,9 @@ CREATE TABLE users
 
     email VARCHAR(100) NULL,
 
-    phone_number VARCHAR(15) NOT NULL,
+    -- OAuth providers such as Google do not return a phone number.
+    -- The user can add it later from the profile page.
+    phone_number VARCHAR(15) NULL,
 
     gender ENUM
     (
