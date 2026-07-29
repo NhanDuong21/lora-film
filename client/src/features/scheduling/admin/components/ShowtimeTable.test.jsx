@@ -84,12 +84,12 @@ describe('ShowtimeTable cinema timezone', () => {
     );
 
     expect(screen.getByText('Đang mở bán')).toBeInTheDocument();
-    expect(screen.getByText('Đợt tạo tự động')).toBeInTheDocument();
+    expect(screen.getByText('Lịch tạo tự động')).toBeInTheDocument();
     expect(screen.getByText('6F1D8CA0')).toBeInTheDocument();
-    const cancelButton = screen.getByRole('button', { name: 'Hủy đợt' });
+    const cancelButton = screen.getByRole('button', { name: 'Hủy cả bản lịch' });
     expect(cancelButton).toBeDisabled();
     expect(screen.getByText('Chưa thể xác minh an toàn đặt vé')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Mở bản xem trước nguồn' }))
+    expect(screen.getByRole('link', { name: 'Mở bản lịch gốc' }))
       .toHaveAttribute('href', '/admin/showtime-schedules/6f1d8ca0-1234-5678-9999-111111111111');
     fireEvent.click(screen.getByRole('button', { name: 'Mở bán toàn bộ' }));
     expect(onTransitionBatch).toHaveBeenCalledWith('OPEN_FOR_BOOKING');

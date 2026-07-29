@@ -51,9 +51,12 @@ export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
 
   // Handle delete
   const handleDeleteCinema = async (id, name) => {
-    const shouldDelete = triggerConfirm 
-      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa cụm rạp "${name}"?`)
-      : window.confirm(`Bạn có chắc chắn muốn xóa cụm rạp "${name}"?`);
+    const shouldDelete = await triggerConfirm?.({
+      title: `Ngừng sử dụng cụm rạp “${name}”?`,
+      message: 'Nếu cụm rạp đã có lịch sử suất chiếu, hệ thống sẽ từ chối xóa và bạn nên chuyển rạp sang trạng thái đóng cửa.',
+      confirmLabel: 'Tiếp tục',
+      tone: 'danger',
+    });
 
     if (shouldDelete) {
       setIsLoading(true);

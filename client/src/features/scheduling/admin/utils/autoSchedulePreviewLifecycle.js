@@ -23,9 +23,9 @@ export const CANDIDATE_APPLY_STATE_META = CANDIDATE_APPLY_PRESENTATION;
 const LIFECYCLE_MESSAGES = Object.freeze({
   [PREVIEW_LIFECYCLE_STATUS.GENERATING]: 'Bản xem trước đang được tạo. Dữ liệu lựa chọn chưa sẵn sàng.',
   [PREVIEW_LIFECYCLE_STATUS.PREVIEWED]: 'Bản xem trước đã sẵn sàng để rà soát và áp dụng.',
-  [PREVIEW_LIFECYCLE_STATUS.APPLYING]: 'Hệ thống đang áp dụng bản xem trước. Các thao tác chỉnh sửa đã bị khóa.',
+  [PREVIEW_LIFECYCLE_STATUS.APPLYING]: 'Hệ thống đang đưa bản lịch vào vận hành. Các thao tác chỉnh sửa tạm thời bị khóa.',
   [PREVIEW_LIFECYCLE_STATUS.APPLIED]: 'Bản xem trước đã được áp dụng và hiện ở chế độ chỉ đọc.',
-  [PREVIEW_LIFECYCLE_STATUS.FAILED]: 'Không thể tạo bản xem trước. Hãy làm mới hoặc tạo một bản xem trước mới.',
+  [PREVIEW_LIFECYCLE_STATUS.FAILED]: 'Không thể tạo bản lịch. Hãy làm mới hoặc lập một bản lịch khác.',
   [PREVIEW_LIFECYCLE_STATUS.EXPIRED]: 'Bản xem trước đã hết hạn và không thể chỉnh sửa hoặc áp dụng.',
   [PREVIEW_LIFECYCLE_STATUS.CANCELLED]: 'Bản xem trước đã bị hủy và chỉ còn để tra cứu lịch sử.',
 });
@@ -81,7 +81,7 @@ export const derivePreviewCapabilities = (
     canSelect: isEditable && !mutationLocked,
     canApply: isApplicable && !mutationLocked,
     lifecycleMessage: LIFECYCLE_MESSAGES[effectiveStatus]
-      || 'Trạng thái bản xem trước chưa được hỗ trợ. Dữ liệu được hiển thị ở chế độ chỉ đọc.',
+      || 'Trạng thái bản lịch chưa được hỗ trợ. Dữ liệu đang được hiển thị ở chế độ chỉ xem.',
     failureReasonSafe: getSafePreviewFailureReason(preview),
   };
 };
@@ -89,7 +89,7 @@ export const derivePreviewCapabilities = (
 export const getCandidateApplyStateMeta = applyStatus => (
   CANDIDATE_APPLY_STATE_META[applyStatus] || {
     label: 'Không xác định',
-    description: 'Trạng thái áp dụng của ứng viên không xác định.',
+    description: 'Trạng thái của phương án này chưa xác định.',
     tone: 'zinc',
   }
 );

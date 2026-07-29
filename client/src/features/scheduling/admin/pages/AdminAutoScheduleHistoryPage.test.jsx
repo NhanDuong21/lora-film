@@ -7,7 +7,7 @@ import AdminAutoScheduleHistoryPage from './AdminAutoScheduleHistoryPage';
 vi.mock('../hooks/useAutoScheduleHistory');
 
 const statuses = ['GENERATING', 'PREVIEWED', 'APPLYING', 'APPLIED', 'EXPIRED', 'FAILED', 'CANCELLED'];
-const labels = ['Đang tạo bản xem trước', 'Sẵn sàng rà soát', 'Đang áp dụng', 'Đã áp dụng', 'Đã hết hạn', 'Thất bại', 'Đã hủy'];
+const labels = ['Đang tạo bản lịch', 'Sẵn sàng rà soát', 'Đang áp dụng', 'Đã áp dụng', 'Đã hết hạn', 'Thất bại', 'Đã hủy'];
 
 const preview = (status, index) => ({
   previewPublicId: `preview-${index}`,
@@ -79,7 +79,7 @@ describe('AdminAutoScheduleHistoryPage', () => {
   it('renders every backend display status and authoritative action flags', () => {
     renderPage();
 
-    expect(screen.getByRole('heading', { name: 'Lịch sử bản xem trước xếp lịch' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Các bản lịch nháp' })).toBeInTheDocument();
     labels.forEach(label => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
     expect(screen.getByText('Có thể áp dụng trong chi tiết')).toBeInTheDocument();
     expect(screen.getByText('Auto schedule generation failed')).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe('AdminAutoScheduleHistoryPage', () => {
       resetFilters,
     });
     renderPage();
-    expect(screen.getByText('Không có bản xem trước phù hợp với bộ lọc.')).toBeInTheDocument();
+    expect(screen.getByText('Không có bản lịch phù hợp với bộ lọc.')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Xóa bộ lọc' }).at(-1));
     expect(resetFilters).toHaveBeenCalled();
   });

@@ -49,8 +49,8 @@ const SORT_OPTIONS = [
   ['scheduleFrom,desc', 'Ngày chiếu giảm dần'],
   ['cinemaName,asc', 'Tên cụm rạp A–Z'],
   ['status,asc', 'Trạng thái A–Z'],
-  ['totalCandidateCount,desc', 'Nhiều ứng viên nhất'],
-  ['selectedCandidateCount,desc', 'Nhiều lựa chọn nhất'],
+  ['totalCandidateCount,desc', 'Nhiều phương án nhất'],
+  ['selectedCandidateCount,desc', 'Nhiều suất được chọn nhất'],
   ['appliedAt,desc', 'Áp dụng gần đây'],
 ];
 
@@ -114,9 +114,9 @@ function HistoryFilters({ history }) {
           </select>
         </label>
         <label className="space-y-1.5 text-xs font-bold text-zinc-400">
-          Phiên bản chiến lược
+          Quy tắc xếp lịch
           <select
-            aria-label="Phiên bản chiến lược"
+            aria-label="Quy tắc xếp lịch"
             value={query.strategyVersion}
             onChange={event => commitQuery({ strategyVersion: event.target.value })}
             className={controlClassName}
@@ -228,7 +228,7 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate 
     return (
       <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-red-900/40 bg-red-950/20 p-8 text-center text-red-300">
         <AlertTriangle className="h-8 w-8" />
-        <p className="text-sm">Không thể tải lịch sử bản xem trước xếp lịch: {error}</p>
+        <p className="text-sm">Không thể tải các bản lịch nháp: {error}</p>
         <button type="button" onClick={fetchHistory} className="inline-flex items-center gap-2 rounded-lg border border-red-800 px-3 py-2 text-xs font-bold hover:bg-red-900/30">
           <RefreshCw className="h-3.5 w-3.5" /> Thử lại
         </button>
@@ -245,7 +245,7 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate 
       )}
       {error && previews.length > 0 && (
         <div className="flex items-center justify-between border-b border-red-900/40 bg-red-950/20 px-4 py-2 text-xs text-red-300">
-          <span>Không thể làm mới lịch sử bản xem trước: {error}</span>
+          <span>Không thể làm mới danh sách bản lịch nháp: {error}</span>
           <button type="button" onClick={fetchHistory} className="font-bold underline">Thử lại</button>
         </div>
       )}
@@ -273,14 +273,14 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate 
                   <div className="flex flex-col items-center gap-3">
                     <CalendarClock className="h-10 w-10 text-zinc-700" />
                     <p className="text-sm">
-                      {filtered ? 'Không có bản xem trước phù hợp với bộ lọc.' : 'Chưa có lịch sử bản xem trước xếp lịch.'}
+                      {filtered ? 'Không có bản lịch phù hợp với bộ lọc.' : 'Chưa có bản lịch nháp nào.'}
                     </p>
                     <button
                       type="button"
                       onClick={filtered ? resetFilters : onCreate}
                       className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-black text-zinc-950 hover:bg-amber-400"
                     >
-                      {filtered ? 'Xóa bộ lọc' : 'Tạo bản xem trước'}
+                      {filtered ? 'Xóa bộ lọc' : 'Lập lịch tuần'}
                     </button>
                   </div>
                 </td>
@@ -341,7 +341,7 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate 
                     </div>
                   </td>
                   <td className="px-4 py-4 text-xs text-zinc-300">
-                    <p><strong className="text-zinc-100">{preview.totalCandidateCount}</strong> ứng viên</p>
+                    <p><strong className="text-zinc-100">{preview.totalCandidateCount}</strong> phương án đã xét</p>
                     <p className="mt-1 text-[10px] text-zinc-500"><span className="text-emerald-400">{preview.validCandidateCount} hợp lệ</span> · <span className="text-red-400">{preview.rejectedCandidateCount} không hợp lệ</span></p>
                     <p className="mt-1 text-[10px]"><span className="font-bold text-amber-400">{preview.selectedCandidateCount}</span> đã chọn</p>
                     <p className="mt-1 text-[10px] text-zinc-500">{validUnselected} hợp lệ chưa chọn</p>
@@ -424,8 +424,8 @@ export default function AdminAutoScheduleHistoryPage() {
     <div className="flex min-h-[400px] flex-col space-y-6 bg-zinc-950 text-white animate-fade-in">
       <header className="flex flex-col gap-4 border-b border-zinc-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-black uppercase tracking-wider text-white md:text-2xl">Lịch sử bản xem trước xếp lịch</h1>
-          <p className="mt-1 text-sm text-zinc-500">Tra cứu các bản xem trước đã tạo mà không thay đổi trạng thái lịch.</p>
+          <h1 className="text-xl font-black uppercase tracking-wider text-white md:text-2xl">Các bản lịch nháp</h1>
+          <p className="mt-1 text-sm text-zinc-500">Mở lại lịch hệ thống đã đề xuất, rà soát và áp dụng khi đã sẵn sàng.</p>
         </div>
         <div className="flex gap-2">
           <button

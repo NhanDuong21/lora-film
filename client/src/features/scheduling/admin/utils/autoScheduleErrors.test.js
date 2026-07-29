@@ -8,10 +8,10 @@ describe('getAutoScheduleError', () => {
     }).message).toContain('7 ngày');
     expect(getAutoScheduleError({ response: { data: {
       errorCode: 'AUTO_SCHEDULE_CANDIDATE_LIMIT_EXCEEDED', message: 'backend message',
-    } } }).message).toContain('quá nhiều ứng viên');
+    } } }).message).toContain('quá nhiều phương án');
     expect(getAutoScheduleError({ response: { data: {
       errorCode: 'AUTO_SCHEDULE_TOO_MANY_CANDIDATES', message: 'backend message',
-    } } }).message).toContain('quá nhiều ứng viên');
+    } } }).message).toContain('quá nhiều phương án');
     expect(getAutoScheduleError({
       errorCode: 'AUTO_SCHEDULE_INVALID_DATE_RANGE', message: 'Cannot schedule in the past',
     }).message).toContain('múi giờ của cụm rạp');

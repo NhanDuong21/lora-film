@@ -28,7 +28,9 @@ import {
   ShieldAlert,
   UserCircle,
   FileSearch,
-  CreditCard
+  CreditCard,
+  ListChecks,
+  CalendarRange
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
 
@@ -68,6 +70,7 @@ export default function AdminSidebar({
   const [collapsedSections, setCollapsedSections] = useState({
     noiDung: false,
     coSo: false,
+    lichGia: false,
     vanHanhDatVe: false,
     thanhToan: false,
     baoCao: false,
@@ -139,7 +142,19 @@ export default function AdminSidebar({
                 className={getTopLinkClass('dashboard')}
               >
                 <LayoutDashboard className="w-4 h-4 shrink-0" />
-                <span>Dashboard</span>
+                <span>Tổng quan hệ thống</span>
+              </button>
+            </div>
+          )}
+
+          {isFullAdmin && (
+            <div className="mb-2">
+              <button
+                onClick={() => handleTabClick('movie-operations', '#/admin/movie-operations')}
+                className={getTopLinkClass('movie-operations')}
+              >
+                <ListChecks className="w-4 h-4 shrink-0" />
+                <span>Trung tâm vận hành phim</span>
               </button>
             </div>
           )}
@@ -151,7 +166,7 @@ export default function AdminSidebar({
                 onClick={() => toggleSection('noiDung')}
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
-                <span>Nội dung</span>
+                <span>Nội dung & phát hành</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
                   !collapsedSections.noiDung ? 'rotate-180' : ''
                 }`} />
@@ -161,7 +176,7 @@ export default function AdminSidebar({
                 <div className="space-y-0.5">
                   <button onClick={() => handleTabClick('movies', '#/admin/movies')} className={getSubLinkClass('movies')}>
                     <Film className="w-4 h-4 shrink-0" />
-                    <span>Phim & Điện ảnh</span>
+                    <span>Danh sách phim</span>
                   </button>
                   <button onClick={() => handleTabClick('genres', '#/admin/genres')} className={getSubLinkClass('genres')}>
                     <Tags className="w-4 h-4 shrink-0" />
@@ -176,14 +191,14 @@ export default function AdminSidebar({
             </div>
           )}
 
-          {/* Section 3: Facilities & Showtimes */}
+          {/* Section 3: Facilities */}
           {isFullAdmin && (
             <div className="space-y-1">
               <button
                 onClick={() => toggleSection('coSo')}
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
-                <span>Cơ sở & Lịch chiếu</span>
+                <span>Cơ sở rạp</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
                   !collapsedSections.coSo ? 'rotate-180' : ''
                 }`} />
@@ -193,7 +208,7 @@ export default function AdminSidebar({
                 <div className="space-y-0.5">
                   <button onClick={() => handleTabClick('clusters', '#/admin/cinemas')} className={getSubLinkClass('clusters')}>
                     <Building className="w-4 h-4 shrink-0" />
-                    <span>Cụm rạp</span>
+                    <span>Cụm rạp & giờ hoạt động</span>
                   </button>
                   <button onClick={() => handleTabClick('rooms', '#/admin/rooms')} className={getSubLinkClass('rooms')}>
                     <DoorOpen className="w-4 h-4 shrink-0" />
@@ -201,30 +216,50 @@ export default function AdminSidebar({
                   </button>
                   <button onClick={() => handleTabClick('seat-types', '#/admin/seat-types')} className={getSubLinkClass('seat-types')}>
                     <Armchair className="w-4 h-4 shrink-0" />
-                    <span>Loại ghế</span>
-                  </button>
-                  <button onClick={() => handleTabClick('showtimes', '#/admin/showtimes')} className={getSubLinkClass('showtimes')}>
-                    <Calendar className="w-4 h-4 shrink-0" />
-                    <span>Lịch chiếu</span>
-                  </button>
-                  <button onClick={() => handleTabClick('pricing', '#/admin/pricing')} className={getSubLinkClass('pricing')}>
-                    <BadgeDollarSign className="w-4 h-4 shrink-0" />
-                    <span>Chính sách giá</span>
-                  </button>
-                  <button onClick={() => handleTabClick('auto-schedule-create', '#/admin/showtime-schedules/create')} className={getSubLinkClass('auto-schedule-create')}>
-                    <Zap className="w-4 h-4 shrink-0" />
-                    <span>Tạo lịch tự động</span>
-                  </button>
-                  <button onClick={() => handleTabClick('auto-schedule-history', '#/admin/showtime-schedules')} className={getSubLinkClass('auto-schedule-history')}>
-                    <History className="w-4 h-4 shrink-0" />
-                    <span>Lịch sử bản xem trước</span>
+                    <span>Cấu hình loại ghế</span>
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* Section 4: Booking operations */}
+          {/* Section 4: Scheduling and pricing */}
+          {isFullAdmin && (
+            <div className="space-y-1">
+              <button
+                onClick={() => toggleSection('lichGia')}
+                className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
+              >
+                <span>Lịch chiếu & giá vé</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                  !collapsedSections.lichGia ? 'rotate-180' : ''
+                }`} />
+              </button>
+
+              {!collapsedSections.lichGia && (
+                <div className="space-y-0.5">
+                  <button onClick={() => handleTabClick('showtimes', '#/admin/showtimes')} className={getSubLinkClass('showtimes')}>
+                    <Calendar className="w-4 h-4 shrink-0" />
+                    <span>Lịch vận hành</span>
+                  </button>
+                  <button onClick={() => handleTabClick('auto-schedule-create', '#/admin/showtime-schedules/create')} className={getSubLinkClass('auto-schedule-create')}>
+                    <Zap className="w-4 h-4 shrink-0" />
+                    <span>Lập lịch tuần</span>
+                  </button>
+                  <button onClick={() => handleTabClick('auto-schedule-history', '#/admin/showtime-schedules')} className={getSubLinkClass('auto-schedule-history')}>
+                    <History className="w-4 h-4 shrink-0" />
+                    <span>Các bản lịch nháp</span>
+                  </button>
+                  <button onClick={() => handleTabClick('pricing', '#/admin/pricing')} className={getSubLinkClass('pricing')}>
+                    <CalendarRange className="w-4 h-4 shrink-0" />
+                    <span>Mẫu giá vé</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Section 5: Booking operations */}
           {isFullAdmin && <div className="space-y-1">
             <button
               onClick={() => toggleSection('vanHanhDatVe')}

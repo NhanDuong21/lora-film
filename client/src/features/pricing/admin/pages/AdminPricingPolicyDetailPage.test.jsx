@@ -48,7 +48,7 @@ describe('AdminPricingPolicyDetailPage', () => {
 
     await waitFor(() => expect(adminPricingService.getPolicy).toHaveBeenCalled());
     expect(screen.getByText('Tạo phiên bản mới')).toBeInTheDocument();
-    expect(screen.getByText('Chính sách đang hoạt động không thể sửa trực tiếp để bảo toàn lịch sử giá. Hãy tạo một phiên bản mới để thay đổi.')).toBeInTheDocument();
+    expect(screen.getByText('Mẫu giá đang áp dụng không thể sửa trực tiếp để giá vé đã bán không bị thay đổi. Hãy tạo một bản nháp mới nếu cần điều chỉnh.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument();
   });
 });

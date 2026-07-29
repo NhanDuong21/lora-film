@@ -41,9 +41,12 @@ export default function MovieMediaTab({ movie, onUpdate }) {
   };
 
   const handleRemove = async (id) => {
-    const shouldRemove = triggerConfirm 
-      ? await triggerConfirm('Xóa hình ảnh/video này?')
-      : window.confirm('Xóa hình ảnh/video này?');
+    const shouldRemove = await triggerConfirm?.({
+      title: 'Xóa nội dung hình ảnh?',
+      message: 'Hình ảnh hoặc video này sẽ không còn hiển thị trong thông tin phim.',
+      confirmLabel: 'Xóa nội dung',
+      tone: 'danger',
+    });
       
     if (!shouldRemove) return;
     

@@ -13,9 +13,12 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
   const [isCloning, setIsCloning] = useState(false);
 
   const handleDelete = async (publicId, name) => {
-    const shouldDelete = triggerConfirm
-      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`)
-      : window.confirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`);
+    const shouldDelete = await triggerConfirm?.({
+      title: `Xóa phòng chiếu “${name}”?`,
+      message: 'Hệ thống chỉ cho phép xóa phòng chưa có lịch chiếu hoặc dữ liệu vận hành liên quan.',
+      confirmLabel: 'Xóa phòng',
+      tone: 'danger',
+    });
       
     if (shouldDelete) {
       try {
@@ -37,9 +40,12 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
     }
     
     if (targetCapacity > 0) {
-      const shouldOverwrite = triggerConfirm
-        ? await triggerConfirm(`Phòng chiếu "${targetName}" đang có sẵn ${targetCapacity} ghế. Nếu bạn tiếp tục, sơ đồ hiện tại sẽ bị xóa đè hoàn toàn bởi sơ đồ phòng mẫu. Bạn có chắc chắn?`)
-        : window.confirm(`Phòng chiếu "${targetName}" đang có sẵn ${targetCapacity} ghế. Nếu bạn tiếp tục, sơ đồ hiện tại sẽ bị xóa đè hoàn toàn bởi sơ đồ phòng mẫu. Bạn có chắc chắn?`);
+      const shouldOverwrite = await triggerConfirm?.({
+        title: `Thay toàn bộ sơ đồ ghế của “${targetName}”?`,
+        message: `Phòng đang có ${targetCapacity} ghế. Sơ đồ hiện tại sẽ được thay bằng sơ đồ của phòng mẫu.`,
+        confirmLabel: 'Thay sơ đồ',
+        tone: 'danger',
+      });
         
       if (!shouldOverwrite) {
         return;
@@ -62,9 +68,11 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast }) {
   };
 
   const handleCloneToNewRoom = async (sourceRoom) => {
-    const shouldClone = triggerConfirm
-      ? await triggerConfirm(`Nhân bản phòng chiếu "${sourceRoom.name}" thành một phòng chiếu mới hoàn toàn với cùng sức chứa và sơ đồ ghế?`)
-      : window.confirm(`Nhân bản phòng chiếu "${sourceRoom.name}" thành một phòng chiếu mới hoàn toàn với cùng sức chứa và sơ đồ ghế?`);
+    const shouldClone = await triggerConfirm?.({
+      title: `Tạo bản sao của “${sourceRoom.name}”?`,
+      message: 'Phòng mới sẽ có cùng cấu hình và sơ đồ ghế; bạn có thể đổi tên và chỉnh sửa sau.',
+      confirmLabel: 'Tạo bản sao',
+    });
       
     if (!shouldClone) return;
 

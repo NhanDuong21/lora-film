@@ -157,7 +157,7 @@ const AutoScheduleTimeline = ({
       {invalidCount > 0 && (
         <p className="flex items-center gap-2 text-sm text-amber-300" role="status">
           <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-          {invalidCount} ứng viên có thời gian không hợp lệ đã được bỏ qua khỏi timeline.
+          {invalidCount} phương án có thời gian không hợp lệ đã được bỏ qua khỏi lịch.
         </p>
       )}
 

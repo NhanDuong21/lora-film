@@ -46,9 +46,12 @@ export default function MovieVersionTab({ movie, onUpdate }) {
   };
 
   const handleRemove = async (id) => {
-    const shouldRemove = triggerConfirm 
-      ? await triggerConfirm('Xóa phiên bản này?')
-      : window.confirm('Xóa phiên bản này?');
+    const shouldRemove = await triggerConfirm?.({
+      title: 'Xóa phiên bản phim?',
+      message: 'Chỉ có thể xóa phiên bản chưa được dùng trong lịch chiếu.',
+      confirmLabel: 'Xóa phiên bản',
+      tone: 'danger',
+    });
       
     if (!shouldRemove) return;
     

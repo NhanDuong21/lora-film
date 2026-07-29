@@ -21,9 +21,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -66,43 +63,24 @@ public class BulkSeatValidationTest {
         BulkSeatItemRequest seat1 = new BulkSeatItemRequest("inactive-type", "A", 2, "A2", 1, 2, null,
                 com.lorafilm.movie.seat.domain.enums.SeatStatus.ACTIVE);
 
-        // Tạo Mock cho loại ghế INACTIVE
+        // Inactive and active types used by this replacement layout.
         SeatType inactiveType = new SeatType();
         inactiveType.setId(2L);
-        inactiveType.setPublicId("inactive-type"); // Nên set thêm ID để Service so sánh chính xác
+        inactiveType.setPublicId("inactive-type");
         inactiveType.setStatus(ActiveStatus.INACTIVE);
 
-        // Tạo thêm Mock cho loại ghế VALID (ĐÂY LÀ PHẦN BẠN CÒN THIẾU)
         SeatType validType = new SeatType();
         validType.setId(3L);
         validType.setPublicId("valid-type");
         validType.setStatus(ActiveStatus.ACTIVE);
 
-        // Trả về CẢ 2 LOẠI GHẾ
         when(seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(any()))
                 .thenReturn(List.of(inactiveType, validType));
 
-        // Seat 2: Duplicate seatCode in DB
+        // Seat 2: valid baseline item. Saving a DRAFT layout replaces the previous
+        // layout, so rows already in the database are intentionally not conflicts.
         BulkSeatItemRequest seat2 = new BulkSeatItemRequest("valid-type", "A", 3, "A3", 1, 3, null,
                 com.lorafilm.movie.seat.domain.enums.SeatStatus.ACTIVE);
-        com.lorafilm.movie.seat.repository.SeatConflictProjection conflict = new com.lorafilm.movie.seat.repository.SeatConflictProjection() {
-            @Override
-            public String getSeatCode() {
-                return "A3";
-            }
-
-            @Override
-            public Integer getPositionRow() {
-                return 99;
-            }
-
-            @Override
-            public Integer getPositionColumn() {
-                return 99;
-            }
-        };
-        when(seatRepository.findConflictDataByAuditoriumId(1L))
-                .thenReturn(List.of(conflict));
 
         // Seat 3: Duplicate position in request (duplicate with Seat 2)
         BulkSeatItemRequest seat3 = new BulkSeatItemRequest("valid-type", "A", 4, "A4", 1, 3, null,
@@ -123,8 +101,8 @@ public class BulkSeatValidationTest {
 
                     com.lorafilm.movie.seat.dto.BulkValidationErrorData errorData = (com.lorafilm.movie.seat.dto.BulkValidationErrorData) be
                             .getErrorData();
-                    org.assertj.core.api.Assertions.assertThat(errorData.errors()).hasSize(6); // Expecting 6 errors
-                                                                                               // total
+                    org.assertj.core.api.Assertions.assertThat(errorData.errors()).hasSize(4);
+                    verify(seatRepository, never()).deleteByAuditoriumId(anyLong());
                 });
     }
 }

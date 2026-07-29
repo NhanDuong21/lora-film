@@ -62,7 +62,7 @@ const CANDIDATE_VIEW_LABELS = {
   [CANDIDATE_VIEWS.RECOMMENDED]: 'Đề xuất',
   [CANDIDATE_VIEWS.UNSELECTED_VALID]: 'Hợp lệ chưa chọn',
   [CANDIDATE_VIEWS.ISSUES]: 'Không hợp lệ / xung đột',
-  [CANDIDATE_VIEWS.ALL]: 'Tất cả ứng viên',
+  [CANDIDATE_VIEWS.ALL]: 'Tất cả phương án',
   [CANDIDATE_VIEWS.CREATED]: 'Suất chiếu đã tạo',
 };
 
@@ -99,11 +99,11 @@ const getViewModelsForTab = (viewModels, view) => {
 };
 
 const getEmptyStateMessage = view => {
-  if (view === CANDIDATE_VIEWS.RECOMMENDED) return 'Không có ứng viên được đề xuất trong bộ lọc hiện tại.';
-  if (view === CANDIDATE_VIEWS.UNSELECTED_VALID) return 'Không có ứng viên hợp lệ chưa được chọn.';
-  if (view === CANDIDATE_VIEWS.ISSUES) return 'Không có ứng viên không hợp lệ hoặc gặp xung đột.';
-  if (view === CANDIDATE_VIEWS.CREATED) return 'Không có suất chiếu nào được tạo từ bản xem trước này.';
-  return 'Không có ứng viên phù hợp với bộ lọc hiện tại.';
+  if (view === CANDIDATE_VIEWS.RECOMMENDED) return 'Không có suất được đề xuất trong bộ lọc hiện tại.';
+  if (view === CANDIDATE_VIEWS.UNSELECTED_VALID) return 'Không có phương án hợp lệ nào đang chờ chọn.';
+  if (view === CANDIDATE_VIEWS.ISSUES) return 'Không có phương án lỗi hoặc trùng lịch.';
+  if (view === CANDIDATE_VIEWS.CREATED) return 'Không có suất chiếu nào được tạo từ bản lịch này.';
+  return 'Không có phương án phù hợp với bộ lọc hiện tại.';
 };
 
 const getStatusTone = candidate => {
@@ -122,7 +122,7 @@ const AdminAutoSchedulePreviewPage = () => {
   const handleSuccess = result => {
     navigate(`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(id)}`, {
       state: {
-        message: `Đã tạo ${result?.createdShowtimeCount ?? 0} suất chiếu; ${result?.skippedItemCount ?? 0} ứng viên không được chọn.`,
+        message: `Đã tạo ${result?.createdShowtimeCount ?? 0} suất chiếu; ${result?.skippedItemCount ?? 0} phương án không được chọn.`,
       },
     });
   };
@@ -305,9 +305,9 @@ const AdminAutoSchedulePreviewPage = () => {
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
-      triggerToast?.('Đã sao chép UUID bản xem trước', 'success');
+      triggerToast?.('Đã sao chép mã kỹ thuật của bản lịch', 'success');
     } catch {
-      triggerToast?.('Không thể sao chép UUID bản xem trước', 'error');
+      triggerToast?.('Không thể sao chép mã kỹ thuật của bản lịch', 'error');
     }
   };
   const selectCandidateView = view => {
@@ -322,8 +322,8 @@ const AdminAutoSchedulePreviewPage = () => {
     return (
       <div className="flex flex-1 flex-col items-center justify-center bg-zinc-950 p-8 text-zinc-300" role="status">
         <Loader2 className="mb-4 h-8 w-8 animate-spin text-brand-orange" aria-hidden="true" />
-        <p className="font-semibold">Đang tải bản xem trước…</p>
-        {loadingProgress.totalPages > 0 && <p className="mt-2 text-sm text-zinc-500">{loadingProgress.loadedPages}/{loadingProgress.totalPages} trang · {loadingProgress.loadedItems}/{loadingProgress.totalItems} ứng viên</p>}
+        <p className="font-semibold">Đang tải bản lịch nháp…</p>
+        {loadingProgress.totalPages > 0 && <p className="mt-2 text-sm text-zinc-500">{loadingProgress.loadedPages}/{loadingProgress.totalPages} trang · {loadingProgress.loadedItems}/{loadingProgress.totalItems} phương án</p>}
       </div>
     );
   }
@@ -332,8 +332,8 @@ const AdminAutoSchedulePreviewPage = () => {
     return (
       <div className="flex flex-1 flex-col items-center justify-center bg-zinc-950 p-8 text-center text-zinc-300">
         <AlertTriangle className="mb-4 h-10 w-10 text-red-400" aria-hidden="true" />
-        <h1 className="text-xl font-bold text-white">Không thể tải bản xem trước</h1>
-        <p className="mt-2 max-w-lg text-sm text-zinc-400">{snapshotError?.message || 'Bản xem trước không tồn tại hoặc hiện không khả dụng.'}</p>
+        <h1 className="text-xl font-bold text-white">Không thể tải bản lịch nháp</h1>
+        <p className="mt-2 max-w-lg text-sm text-zinc-400">{snapshotError?.message || 'Bản lịch không tồn tại hoặc hiện không khả dụng.'}</p>
         <button type="button" onClick={fetchPreview} className="mt-5 rounded-lg bg-brand-orange px-4 py-2 text-sm font-bold text-zinc-950">Thử lại</button>
       </div>
     );
@@ -346,9 +346,9 @@ const AdminAutoSchedulePreviewPage = () => {
           <button type="button" onClick={() => navigate(-1)} aria-label="Quay lại" className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"><ArrowLeft className="h-5 w-5" /></button>
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-xl font-black uppercase tracking-wider md:text-2xl">Rà soát lịch chiếu</h1>
+              <h1 className="text-xl font-black uppercase tracking-wider md:text-2xl">Rà soát bản lịch</h1>
               <span className={`rounded border px-2 py-1 text-[10px] font-black tracking-wider ${LIFECYCLE_TONE_CLASSES[capabilities.effectiveStatus] || LIFECYCLE_TONE_CLASSES.CANCELLED}`}>{getPreviewStatusPresentation(capabilities.effectiveStatus || preview.status).label}</span>
-              <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-[10px] font-bold text-zinc-400">{preview.strategyVersion || 'Chiến lược cũ'}</span>
+              <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[10px] font-bold text-zinc-400">Bản lịch tự động</span>
             </div>
             <div className="mt-2 flex flex-wrap gap-4 text-sm text-zinc-400">
               <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{preview.cinemaName}</span>
@@ -367,7 +367,7 @@ const AdminAutoSchedulePreviewPage = () => {
               <ExternalLink className="h-4 w-4" aria-hidden="true" /> Xem các suất chiếu đã tạo
             </Link>
           )}
-          <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} aria-label="Làm mới bản xem trước" className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} /></button>
+          <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} aria-label="Làm mới bản lịch" className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} /></button>
           {capabilities.isEditable && (
             <button type="button" onClick={() => setShowApplyModal(true)} disabled={!capabilities.canApply} className="flex items-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-black uppercase text-zinc-950 disabled:opacity-50"><Save className="h-4 w-4" />Áp dụng ({selectedItemIds.size})</button>
           )}
@@ -381,22 +381,22 @@ const AdminAutoSchedulePreviewPage = () => {
 
         {(isRefreshing || isSnapshotUpdating) && (
           <section className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-blue-300" role="status">
-            <p className="font-bold">Đang làm mới ảnh chụp ứng viên</p>
-            <p className="mt-1 text-sm">{loadingProgress.loadedPages}/{loadingProgress.totalPages || '…'} trang · {loadingProgress.loadedItems}/{loadingProgress.totalItems || '…'} ứng viên. Lựa chọn đang bị khóa.</p>
+            <p className="font-bold">Đang cập nhật các phương án xếp lịch</p>
+            <p className="mt-1 text-sm">{loadingProgress.loadedPages}/{loadingProgress.totalPages || '…'} trang · {loadingProgress.loadedItems}/{loadingProgress.totalItems || '…'} phương án. Lựa chọn tạm thời bị khóa.</p>
           </section>
         )}
         {snapshotError && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert"><strong>Không thể công bố ảnh chụp mới.</strong> {snapshotError.message}</section>}
         {pricingPreflight && (
           <section className={`rounded-xl border p-4 ${pricingPreflight.complete ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-red-500/30 bg-red-500/10 text-red-100'}`} role={pricingPreflight.complete ? 'status' : 'alert'}>
             <h2 className="font-black">
-              Kiểm tra giá: {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} ứng viên đầy đủ
+              Kiểm tra giá: {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} phương án đã đủ giá
             </h2>
             {pricingPreflight.reasonGroups?.map(group => {
               const displayMessage = group.displayMessage
                 || 'Không xác định — xem chi tiết kỹ thuật';
               return (
                 <div key={group.reasonCode} className="mt-3 rounded-lg border border-current/20 p-3 text-sm">
-                  <p className="font-bold">{group.count} ứng viên · {displayMessage}</p>
+                  <p className="font-bold">{group.count} phương án · {displayMessage}</p>
                   {group.affectedDates?.length > 0 && <p className="mt-1">Ngày: {group.affectedDates.join(', ')}</p>}
                   {group.auditoriums?.length > 0 && <p className="mt-1">Phòng: {group.auditoriums.map(room => room.name).join(', ')}</p>}
                   {group.seatTypes?.length > 0 && <p className="mt-1">Loại ghế: {group.seatTypes.map(seat => seat.name).join(', ')}</p>}
@@ -413,7 +413,7 @@ const AdminAutoSchedulePreviewPage = () => {
             [capabilities.effectiveStatus === 'APPLIED' ? 'Suất chiếu đã tạo' : 'Suất được đề xuất', capabilities.effectiveStatus === 'APPLIED' ? candidateMetrics.createdShowtimes : candidateMetrics.selectedRecommendations],
             ['Phim có trong lịch', `${movieDistributionSummary.representedMovieCount}/${movieDistributionSummary.eligibleMovieCount}`],
             ['Phòng được sử dụng', selectedRoomCount],
-            ['Ứng viên cần kiểm tra', candidateMetrics.issueCandidates],
+            ['Phương án cần kiểm tra', candidateMetrics.issueCandidates],
             ['Tổng phương án đã xét', preview.totalCandidateCount ?? candidateMetrics.totalGenerated],
           ].map(([label, value]) => <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><span className="block text-[10px] font-bold uppercase text-zinc-500">{label}</span><span className={`${typeof value === 'number' ? 'text-2xl' : 'text-sm'} mt-2 block font-black text-white`}>{value}</span></div>)}
         </section>
@@ -536,7 +536,7 @@ const AdminAutoSchedulePreviewPage = () => {
               onOpenDetails={openDrawer}
             />
           ) : <div className="py-12 text-center text-zinc-500">Không có ngày vận hành hợp lệ để dựng timeline.</div>}
-          <p className="text-xs text-zinc-500" data-testid="timeline-boundary-evidence">Timeline: {timelineCandidates.filter(candidate => !candidate.diagnostic).length} đề xuất đã chọn + {diagnosticCandidate ? 1 : 0} phủ chẩn đoán; dữ liệu đầy đủ {items.length} ứng viên vẫn được giữ cho kiểm tra xung đột.</p>
+          <p className="text-xs text-zinc-500" data-testid="timeline-boundary-evidence">Đang hiển thị {timelineCandidates.filter(candidate => !candidate.diagnostic).length} suất đã chọn{diagnosticCandidate ? ' và 1 phương án đang kiểm tra' : ''}. Hệ thống vẫn kiểm tra xung đột trên toàn bộ {items.length} phương án.</p>
         </section>
 
         <section className="space-y-4">
@@ -551,7 +551,7 @@ const AdminAutoSchedulePreviewPage = () => {
                   : ' Đây là bản lịch sử dùng chiến lược cũ: hệ thống tối đa hóa tổng điểm của tập không trùng nhau nên có thể dồn nhiều suất vào cùng một phim.'}
             </p>
           </details>
-          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Nhóm ứng viên">
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Nhóm phương án">
             {availableCandidateViews.map(view => <button key={view} type="button" role="tab" aria-selected={candidateView === view} onClick={() => selectCandidateView(view)} className={`rounded-xl border px-4 py-2 text-sm font-bold ${candidateView === view ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 text-zinc-400'}`}>{CANDIDATE_VIEW_LABELS[view]} ({viewCounts[view]})</button>)}
           </div>
           <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
@@ -568,7 +568,7 @@ const AdminAutoSchedulePreviewPage = () => {
           <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1050px] text-left">
-                <thead className="border-b border-zinc-800 bg-zinc-950/70 text-[10px] uppercase tracking-wider text-zinc-400"><tr><th className="px-4 py-3">Ngày / giờ</th><th className="px-4 py-3">Phòng</th><th className="px-4 py-3">Phim / phiên bản</th><th className="px-4 py-3"><span title="Điểm ưu tiên do chiến lược hiện tại tính; điểm cao hơn tốt hơn.">Điểm ưu tiên</span> / <span title="Hạng trong toàn bộ ứng viên của bản xem trước; đây là thứ tự hiển thị, không phải thứ tự quyết định lựa chọn.">Hạng toàn cục</span></th><th className="px-4 py-3">Kiểm tra / áp dụng</th><th className="px-4 py-3">Lựa chọn / hành động</th></tr></thead>
+                <thead className="border-b border-zinc-800 bg-zinc-950/70 text-[10px] uppercase tracking-wider text-zinc-400"><tr><th className="px-4 py-3">Ngày / giờ</th><th className="px-4 py-3">Phòng</th><th className="px-4 py-3">Phim / phiên bản</th><th className="px-4 py-3"><span title="Điểm ưu tiên do quy tắc xếp lịch hiện tại tính; điểm cao hơn được ưu tiên hơn.">Mức ưu tiên</span> / <span title="Thứ tự của phương án trong toàn bộ bản lịch; chỉ dùng để hỗ trợ rà soát.">Thứ tự</span></th><th className="px-4 py-3">Kết quả kiểm tra</th><th className="px-4 py-3">Lựa chọn / hành động</th></tr></thead>
                 <tbody>
                   {pagination.items.map(candidate => {
                     const selectionBlock = !candidate.selected ? findSelectionBlock(candidate.raw, selectedItemsIndex) : null;
@@ -611,9 +611,9 @@ const AdminAutoSchedulePreviewPage = () => {
         )}
 
         {pagination.totalItems > 0 && (
-          <nav className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3" aria-label="Phân trang ứng viên">
-            <label className="flex items-center gap-2 text-sm text-zinc-400">Số dòng<select aria-label="Số ứng viên mỗi trang" value={pagination.pageSize} onChange={event => { setCandidatePageSize(Number(event.target.value)); setCandidatePage(1); }} className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200">{CANDIDATE_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}</select></label>
-            <span className="text-sm text-zinc-400">Trang {pagination.page}/{pagination.totalPages} · {pagination.totalItems} ứng viên</span>
+          <nav className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3" aria-label="Phân trang phương án">
+            <label className="flex items-center gap-2 text-sm text-zinc-400">Số dòng<select aria-label="Số phương án mỗi trang" value={pagination.pageSize} onChange={event => { setCandidatePageSize(Number(event.target.value)); setCandidatePage(1); }} className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200">{CANDIDATE_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}</select></label>
+            <span className="text-sm text-zinc-400">Trang {pagination.page}/{pagination.totalPages} · {pagination.totalItems} phương án</span>
             <div className="flex gap-2"><button type="button" onClick={() => setCandidatePage(pagination.page - 1)} disabled={pagination.page <= 1} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Trước</button><button type="button" onClick={() => setCandidatePage(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Sau</button></div>
           </nav>
         )}
@@ -646,7 +646,7 @@ const AdminAutoSchedulePreviewPage = () => {
               <dt className="text-zinc-500">Cụm rạp</dt><dd className="text-right font-bold text-white">{preview.cinemaName}</dd>
               <dt className="text-zinc-500">Khoảng ngày vận hành</dt><dd className="text-right font-bold text-white">{formatPreviewDateRange(preview.scheduleFrom, preview.scheduleTo)}</dd>
               <dt className="text-zinc-500">Phòng đã chọn</dt><dd className="text-right font-bold text-white">{selectedRoomCount}</dd>
-              <dt className="text-zinc-500">Ứng viên đã chọn</dt><dd className="text-right font-bold text-white">{selectedItemIds.size}</dd>
+              <dt className="text-zinc-500">Suất đã chọn</dt><dd className="text-right font-bold text-white">{selectedItemIds.size}</dd>
               <dt className="text-zinc-500">Dự kiến tạo suất chiếu</dt><dd className="text-right font-bold text-emerald-300">{selectedItemIds.size}</dd>
               <dt className="text-zinc-500">Trạng thái ban đầu</dt><dd className="text-right font-bold text-white">{getShowtimeStatusPresentation('DRAFT').label}</dd>
               <dt className="text-zinc-500">Chế độ áp dụng</dt><dd className="text-right font-bold text-white">{getApplyModePresentation(preview.applyMode).label}</dd>
@@ -654,17 +654,17 @@ const AdminAutoSchedulePreviewPage = () => {
               <dt className="text-zinc-500">Không hợp lệ / xung đột đã chọn</dt><dd className="text-right font-bold text-amber-300">{selectedIssueCount}</dd>
             </dl>
             <div className="mt-5 space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
-              <p>Hệ thống sẽ phân giải giá cho toàn bộ ứng viên đã chọn trước khi ghi bất kỳ suất chiếu nào.</p>
+              <p>Hệ thống sẽ kiểm tra giá cho toàn bộ suất đã chọn trước khi tạo lịch chiếu.</p>
               <p>Nếu thiếu hoặc mơ hồ giá trong chế độ toàn bộ-hoặc-không, không suất chiếu nào được tạo.</p>
               <p>Sau khi áp dụng thành công, lựa chọn trở thành chỉ đọc.</p>
               <p>Nếu lỗi truyền tải xảy ra, hộp thoại vẫn mở và lần thử lại dùng cùng khóa an toàn để không tạo trùng.</p>
             </div>
             {pricingPreflight && !pricingPreflight.complete && (
               <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-100">
-                <p className="font-black">Chưa thể áp dụng: {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} ứng viên có giá đầy đủ.</p>
+                <p className="font-black">Chưa thể áp dụng: {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} phương án có giá đầy đủ.</p>
                 {pricingPreflight.reasonGroups?.map(group => (
                   <p key={group.reasonCode} className="mt-1">
-                    {group.count} ứng viên · {group.displayMessage || 'Không xác định — xem chi tiết kỹ thuật'}
+                    {group.count} phương án · {group.displayMessage || 'Chưa xác định — xem thông tin kỹ thuật'}
                   </p>
                 ))}
               </div>

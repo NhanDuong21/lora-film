@@ -77,9 +77,12 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
   };
 
   const handleDelete = async (mediaId, title) => {
-    const shouldDelete = triggerConfirm
-      ? await triggerConfirm(`Bạn có chắc muốn xóa phương tiện "${title || 'Không tên'}"?`)
-      : window.confirm(`Bạn có chắc muốn xóa phương tiện "${title || 'Không tên'}"?`);
+    const shouldDelete = await triggerConfirm?.({
+      title: 'Xóa hình ảnh rạp?',
+      message: `“${title || 'Ảnh chưa đặt tên'}” sẽ không còn hiển thị trong thông tin cụm rạp.`,
+      confirmLabel: 'Xóa ảnh',
+      tone: 'danger',
+    });
       
     if (shouldDelete) {
       await onDelete(mediaId);

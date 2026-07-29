@@ -65,20 +65,22 @@ export default function AdminMoviePage() {
     const count = Math.min(adminMovies.totalElements, 100);
     if (count <= 0) return;
 
-    const message = `Duyệt tối đa ${count} phim TMDB đang phù hợp với bộ lọc hiện tại? Máy chủ sẽ kiểm tra lại từng phim trước khi chuyển trạng thái.`;
-    const confirmed = triggerConfirm
-      ? await triggerConfirm(message)
-      : window.confirm(message);
+    const confirmed = await triggerConfirm?.({
+      title: `Duyệt ${count} phim từ TMDB?`,
+      message: 'Hệ thống sẽ kiểm tra lại dữ liệu từng phim và chỉ duyệt những phim đủ điều kiện.',
+      confirmLabel: 'Duyệt phim',
+    });
     if (!confirmed) return;
 
     await adminMovies.bulkApproveTmdbMovies(100);
   };
 
   const handleBulkArchive = async () => {
-    const message = 'Đưa các phim TMDB đã phát hành vào trạng thái Không hoạt động? Máy chủ sẽ đọc lại từng phim và chỉ xử lý các phim vẫn là DRAFT, còn tồn tại và có ngày phát hành không quá hôm nay.';
-    const confirmed = triggerConfirm
-      ? await triggerConfirm(message)
-      : window.confirm(message);
+    const confirmed = await triggerConfirm?.({
+      title: 'Lưu trữ các phim cũ?',
+      message: 'Chỉ phim nhập từ TMDB, vẫn ở trạng thái nháp và đã qua ngày phát hành mới được chuyển sang không hoạt động.',
+      confirmLabel: 'Lưu trữ',
+    });
     if (!confirmed) return;
 
     await adminMovies.bulkArchiveOldTmdbMovies(100);

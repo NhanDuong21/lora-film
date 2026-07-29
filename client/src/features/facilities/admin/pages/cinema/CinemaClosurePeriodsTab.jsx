@@ -60,9 +60,12 @@ export default function CinemaClosurePeriodsTab({ cinemaPublicId, triggerToast }
   };
 
   const handleCancel = async (id) => {
-    const shouldCancel = triggerConfirm
-      ? await triggerConfirm('Bạn có chắc muốn hủy lịch đóng cửa này? Rạp sẽ có thể mở cửa lại trong khoảng thời gian này.')
-      : window.confirm('Bạn có chắc muốn hủy lịch đóng cửa này? Rạp sẽ có thể mở cửa lại trong khoảng thời gian này.');
+    const shouldCancel = await triggerConfirm?.({
+      title: 'Hủy lịch đóng cửa?',
+      message: 'Cụm rạp sẽ có thể hoạt động và xếp lịch chiếu trở lại trong khoảng thời gian này.',
+      confirmLabel: 'Hủy lịch đóng cửa',
+      tone: 'danger',
+    });
       
     if (shouldCancel) {
       await cancelClosurePeriod(id);

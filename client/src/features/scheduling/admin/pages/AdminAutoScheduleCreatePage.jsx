@@ -224,7 +224,7 @@ const AdminAutoScheduleCreatePage = () => {
         <div>
           <h1 className="flex items-center gap-2 text-xl font-black uppercase tracking-wider md:text-2xl">
             <Settings2 className="h-6 w-6 text-brand-orange" aria-hidden="true" />
-            Cấu hình bản xem trước
+            Lập lịch chiếu theo tuần
           </h1>
           <p className="mt-1 text-sm text-zinc-500">Chọn phạm vi vận hành trước khi hệ thống tạo lịch đề xuất.</p>
         </div>
@@ -266,7 +266,7 @@ const AdminAutoScheduleCreatePage = () => {
             <div className={`${expandedSections.scope ? 'mb-5' : ''} flex items-start justify-between gap-4 border-b border-zinc-800 pb-3`}>
               <div>
                 <h2 id="scope-heading" className="text-sm font-black uppercase tracking-wider text-zinc-200">1. Phạm vi</h2>
-                <p className="mt-1 text-xs text-zinc-500">Khoảng lập kế hoạch có thể dài hơn, nhưng mỗi bản xem trước chỉ xử lý một lô từ 1–7 ngày.</p>
+                <p className="mt-1 text-xs text-zinc-500">Chọn cụm rạp và khoảng ngày cần xếp lịch. Mỗi lần hệ thống xử lý từ 1 đến 7 ngày.</p>
               </div>
               <button type="button" aria-expanded={expandedSections.scope} aria-controls="scope-content" onClick={() => toggleSection('scope')} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300">
                 <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expandedSections.scope ? 'rotate-90' : ''}`} />
@@ -344,11 +344,11 @@ const AdminAutoScheduleCreatePage = () => {
 
               <p id="date-range-help" className="flex items-start gap-1.5 text-xs leading-relaxed text-zinc-500">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                Mỗi bản xem trước tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để lập lịch trước cho cả tháng.
+                Mỗi bản lịch tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để chuẩn bị lịch cho cả tháng.
               </p>
               {dateRangeInfo.isTooLong && (
                 <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs leading-relaxed text-red-300">
-                  Khoảng đã chọn gồm {dateRangeInfo.dayCount} ngày, nhưng mỗi bản xem trước chỉ được tối đa 7 ngày. Gợi ý khoảng hợp lệ đầu tiên:{' '}
+                  Khoảng đã chọn gồm {dateRangeInfo.dayCount} ngày, nhưng mỗi bản lịch chỉ được tối đa 7 ngày. Gợi ý khoảng hợp lệ đầu tiên:{' '}
                   <strong>{formatPreviewDateRange(dateRangeInfo.suggestedScheduleFrom, dateRangeInfo.suggestedScheduleTo)}</strong>. Ngày bạn đã nhập được giữ nguyên; hãy điều chỉnh trước khi gửi.
                 </div>
               )}
@@ -759,7 +759,7 @@ const AdminAutoScheduleCreatePage = () => {
                 disabled={!moviesComplete}
                 className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-brand-orange px-4 text-xs font-black uppercase tracking-wide text-zinc-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Xem tóm tắt tạo preview <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                Xem lại phạm vi lập lịch <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             </div>}
@@ -772,7 +772,7 @@ const AdminAutoScheduleCreatePage = () => {
           >
             <summary id="settings-heading" className="cursor-pointer text-sm font-black uppercase tracking-wider text-zinc-200">
               4. Thiết lập nâng cao
-              <span className="ml-2 text-xs font-normal normal-case text-zinc-500">Khoảng thử lịch và thời hạn bản xem trước</span>
+              <span className="ml-2 text-xs font-normal normal-case text-zinc-500">Thiết lập nâng cao cho bản lịch nháp</span>
             </summary>
             <div className="mt-4 border-t border-zinc-800 pt-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -794,7 +794,7 @@ const AdminAutoScheduleCreatePage = () => {
                 {errors.slotGranularityMinutes && <p id="slot-error" className="mt-1 text-xs text-red-400">{errors.slotGranularityMinutes}</p>}
               </div>
               <div>
-                <label htmlFor="preview-ttl" className="mb-1.5 block text-xs font-bold text-zinc-400">Bản xem trước hết hạn sau (phút)</label>
+                <label htmlFor="preview-ttl" className="mb-1.5 block text-xs font-bold text-zinc-400">Bản lịch nháp hết hạn sau (phút)</label>
                 <input
                   id="preview-ttl"
                   type="number"
@@ -814,7 +814,7 @@ const AdminAutoScheduleCreatePage = () => {
             {broadScope && (
               <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-300">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                Phạm vi gồm {dateRangeInfo.dayCount} ngày, {selectedAuditoriumIds.length} phòng và {selectedMovieVersionIds.length} định dạng. Phạm vi rộng có thể mất nhiều thời gian hoặc chạm giới hạn ứng viên; hãy thu hẹp nếu hệ thống yêu cầu.
+                Phạm vi gồm {dateRangeInfo.dayCount} ngày, {selectedAuditoriumIds.length} phòng và {selectedMovieVersionIds.length} định dạng. Nếu phạm vi quá rộng, hệ thống có thể yêu cầu bạn chia thành nhiều lần lập lịch.
               </div>
             )}
             </div>
@@ -850,7 +850,7 @@ const AdminAutoScheduleCreatePage = () => {
             <dl className="space-y-3 text-xs">
               <div><dt className="text-zinc-500">Cụm rạp</dt><dd className="mt-0.5 font-bold text-zinc-200">{selectedCinema?.name || 'Chưa chọn'}</dd></div>
               <div><dt className="text-zinc-500">Múi giờ</dt><dd className="mt-0.5 font-bold text-zinc-200">{selectedCinema?.timezone || '—'}</dd></div>
-              <div><dt className="text-zinc-500">Lô xem trước</dt><dd className="mt-0.5 font-bold text-zinc-200">{formatPreviewDateRange(scheduleFrom, scheduleTo)}</dd></div>
+              <div><dt className="text-zinc-500">Khoảng ngày lập lịch</dt><dd className="mt-0.5 font-bold text-zinc-200">{formatPreviewDateRange(scheduleFrom, scheduleTo)}</dd></div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-zinc-950 p-2 text-center"><dt className="text-zinc-500">Ngày</dt><dd className="mt-1 text-base font-black text-white">{dateRangeInfo.dayCount || 0}</dd></div>
                 <div className="rounded-lg bg-zinc-950 p-2 text-center"><dt className="text-zinc-500">Phòng</dt><dd className="mt-1 text-base font-black text-white">{selectedAuditoriumIds.length}</dd></div>
@@ -860,7 +860,7 @@ const AdminAutoScheduleCreatePage = () => {
 
             <div className="mt-4" aria-live="polite">
               {isReady ? (
-                <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs font-bold text-emerald-300">Cấu hình hợp lệ và sẵn sàng tạo bản xem trước.</p>
+                <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs font-bold text-emerald-300">Thông tin đã hợp lệ. Bạn có thể tạo bản lịch nháp để rà soát trước khi mở bán.</p>
               ) : (
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
                   <p className="text-xs font-bold text-amber-300">Cần hoàn tất:</p>
@@ -878,7 +878,7 @@ const AdminAutoScheduleCreatePage = () => {
               className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 text-xs font-black uppercase tracking-wider text-zinc-950 shadow-lg shadow-brand-orange/10 transition-colors hover:bg-amber-400 focus:outline-none focus:ring-2 focus:ring-brand-orange focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
-              Tạo bản xem trước
+              Tạo bản lịch nháp
             </button>
           </div>
         </aside>

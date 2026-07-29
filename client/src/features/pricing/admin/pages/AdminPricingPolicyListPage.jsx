@@ -11,6 +11,13 @@ const statusStyle = {
   EXPIRED: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
 };
 
+const statusLabel = {
+  DRAFT: 'Bản nháp',
+  ACTIVE: 'Đang áp dụng',
+  INACTIVE: 'Đã ngừng',
+  EXPIRED: 'Hết hiệu lực',
+};
+
 export default function AdminPricingPolicyListPage() {
   const navigate = useNavigate();
   const { triggerToast } = useOutletContext() || {};
@@ -53,22 +60,24 @@ export default function AdminPricingPolicyListPage() {
     <div className="min-h-full space-y-6 bg-zinc-950 text-white">
       <div className="flex flex-col gap-4 border-b border-zinc-800 pb-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-400">Pricing control</p>
-          <h1 className="mt-2 text-3xl font-black">Chính sách giá suất chiếu</h1>
-          <p className="mt-2 text-sm text-zinc-400">Quản lý phiên bản giá theo rạp, ngày hiệu lực và quy tắc ưu tiên.</p>
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-400">Chuẩn bị giá bán</p>
+          <h1 className="mt-2 text-3xl font-black">Mẫu giá vé</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+            Tạo một mẫu giá cho từng rạp và khoảng thời gian. Hệ thống sẽ tự chọn mẫu phù hợp khi chuẩn bị giá cho suất chiếu.
+          </p>
         </div>
         <button
           type="button"
           onClick={() => navigate('/admin/pricing/create')}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black text-zinc-950 hover:bg-amber-400"
         >
-          <Plus className="h-4 w-4" /> Tạo chính sách
+          <Plus className="h-4 w-4" /> Tạo mẫu giá
         </button>
       </div>
 
       <div className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 md:grid-cols-4">
         <label className="space-y-1 text-xs font-bold text-zinc-400">
-          Rạp
+          Áp dụng tại rạp
           <select
             value={filters.cinema}
             onChange={event => setFilters(current => ({ ...current, cinema: event.target.value }))}
@@ -79,7 +88,7 @@ export default function AdminPricingPolicyListPage() {
           </select>
         </label>
         <label className="space-y-1 text-xs font-bold text-zinc-400">
-          Trạng thái
+          Tình trạng mẫu giá
           <select
             value={filters.status}
             onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}
@@ -93,7 +102,7 @@ export default function AdminPricingPolicyListPage() {
           </select>
         </label>
         <label className="space-y-1 text-xs font-bold text-zinc-400">
-          Có hiệu lực ngày
+          Kiểm tra hiệu lực vào ngày
           <input
             type="date"
             value={filters.effectiveDate}
@@ -110,11 +119,11 @@ export default function AdminPricingPolicyListPage() {
 
       <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/30">
         {loading ? (
-          <div className="p-12 text-center text-zinc-500">Đang tải chính sách giá…</div>
+          <div className="p-12 text-center text-zinc-500">Đang tải mẫu giá…</div>
         ) : policies.length === 0 ? (
           <div className="flex flex-col items-center gap-3 p-12 text-zinc-500">
             <Search className="h-8 w-8" />
-            <p>Không có chính sách phù hợp.</p>
+            <p>Không có mẫu giá phù hợp.</p>
           </div>
         ) : (
           <div className="divide-y divide-zinc-800">
@@ -127,11 +136,15 @@ export default function AdminPricingPolicyListPage() {
               >
                 <div>
                   <p className="font-black text-zinc-100">{policy.name}</p>
-                  <p className="mt-1 font-mono text-xs text-zinc-500">{policy.publicId}</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {policy.storedStatus === 'DRAFT'
+                      ? 'Có thể chỉnh sửa trước khi áp dụng'
+                      : 'Giá đã được khóa để bảo đảm nhất quán'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-bold text-zinc-300">{policy.cinemaName}</p>
-                  <p className="text-xs text-zinc-500">Ưu tiên {policy.priority}</p>
+                  <p className="text-xs text-zinc-500">Thứ tự áp dụng: {policy.priority}</p>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-400">
                   <CalendarRange className="h-4 w-4" />
@@ -139,7 +152,7 @@ export default function AdminPricingPolicyListPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${statusStyle[policy.displayStatus] || statusStyle.DRAFT}`}>
-                    {policy.displayStatus}
+                    {statusLabel[policy.displayStatus] || 'Chưa xác định'}
                   </span>
                   <ChevronRight className="h-4 w-4 text-zinc-600" />
                 </div>

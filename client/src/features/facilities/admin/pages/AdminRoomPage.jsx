@@ -63,9 +63,12 @@ export default function AdminRoomPage() {
 
   // Delete handler
   const handleDelete = async (publicId, name) => {
-    const shouldDelete = triggerConfirm
-      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`)
-      : window.confirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${name}"? Thao tác này sẽ xóa vĩnh viễn phòng chiếu và không thể hoàn tác.`);
+    const shouldDelete = await triggerConfirm?.({
+      title: `Xóa phòng chiếu “${name}”?`,
+      message: 'Hệ thống chỉ cho phép xóa phòng chưa có lịch chiếu hoặc dữ liệu vận hành liên quan.',
+      confirmLabel: 'Xóa phòng',
+      tone: 'danger',
+    });
       
     if (shouldDelete) {
       try {

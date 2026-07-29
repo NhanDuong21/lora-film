@@ -2,7 +2,8 @@ import { useState, useCallback, useMemo } from 'react';
 import { 
   Menu,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
@@ -20,6 +21,7 @@ export default function AdminLayout({ onBackHome }) {
   const activeTab = (() => {
     const path = location.pathname;
     if (path.endsWith('/me')) return 'my-account';
+    if (path.endsWith('/movie-operations')) return 'movie-operations';
     if (path.endsWith('/movies') || path.includes('/movies/')) return 'movies';
     if (path.endsWith('/genres')) return 'genres';
     if (path.includes('/showtimes')) return 'showtimes';
@@ -68,21 +70,38 @@ export default function AdminLayout({ onBackHome }) {
   }, []);
 
   // Confirm Modal System
-  const [confirmModal, setConfirmModal] = useState({ visible: false, message: '', resolve: null });
-  const triggerConfirm = useCallback((message) => {
+  const [confirmModal, setConfirmModal] = useState({
+    visible: false,
+    title: 'Xác nhận thao tác',
+    message: '',
+    confirmLabel: 'Đồng ý',
+    cancelLabel: 'Quay lại',
+    tone: 'warning',
+    resolve: null,
+  });
+  const triggerConfirm = useCallback((input) => {
+    const options = typeof input === 'string' ? { message: input } : (input || {});
     return new Promise((resolve) => {
-      setConfirmModal({ visible: true, message, resolve });
+      setConfirmModal({
+        visible: true,
+        title: options.title || 'Xác nhận thao tác',
+        message: options.message || '',
+        confirmLabel: options.confirmLabel || 'Đồng ý',
+        cancelLabel: options.cancelLabel || 'Quay lại',
+        tone: options.tone || 'warning',
+        resolve,
+      });
     });
   }, []);
 
   const handleConfirmAccept = () => {
     if (confirmModal.resolve) confirmModal.resolve(true);
-    setConfirmModal({ visible: false, message: '', resolve: null });
+    setConfirmModal(current => ({ ...current, visible: false, resolve: null }));
   };
 
   const handleConfirmCancel = () => {
     if (confirmModal.resolve) confirmModal.resolve(false);
-    setConfirmModal({ visible: false, message: '', resolve: null });
+    setConfirmModal(current => ({ ...current, visible: false, resolve: null }));
   };
 
   // Alert Modal System
@@ -95,8 +114,45 @@ export default function AdminLayout({ onBackHome }) {
     setAlertModal({ visible: false, message: '' });
   };
 
+  const [promptModal, setPromptModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    label: '',
+    placeholder: '',
+    value: '',
+    required: true,
+    confirmLabel: 'Xác nhận',
+    resolve: null,
+  });
+  const triggerPrompt = useCallback((input) => {
+    const options = typeof input === 'string' ? { title: input } : (input || {});
+    return new Promise(resolve => {
+      setPromptModal({
+        visible: true,
+        title: options.title || 'Nhập thông tin',
+        message: options.message || '',
+        label: options.label || 'Nội dung',
+        placeholder: options.placeholder || '',
+        value: options.defaultValue || '',
+        required: options.required !== false,
+        confirmLabel: options.confirmLabel || 'Xác nhận',
+        resolve,
+      });
+    });
+  }, []);
 
-  const outletContext = useMemo(() => ({ triggerToast, triggerConfirm, triggerAlert }), [triggerToast, triggerConfirm, triggerAlert]);
+  const handlePromptClose = (accepted) => {
+    const value = promptModal.value.trim();
+    if (accepted && promptModal.required && !value) return;
+    promptModal.resolve?.(accepted ? value : null);
+    setPromptModal(current => ({ ...current, visible: false, resolve: null }));
+  };
+
+  const outletContext = useMemo(
+    () => ({ triggerToast, triggerConfirm, triggerAlert, triggerPrompt }),
+    [triggerToast, triggerConfirm, triggerAlert, triggerPrompt],
+  );
 
   return (
     <div className="w-full h-screen overflow-hidden bg-zinc-950 flex font-sans relative">
@@ -116,21 +172,36 @@ export default function AdminLayout({ onBackHome }) {
       {/* Confirm Modal */}
       {confirmModal.visible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-fade-in-up">
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">Xác nhận</h3>
-            <p className="text-sm text-zinc-400 mb-6">{confirmModal.message}</p>
+          <div role="dialog" aria-modal="true" aria-labelledby="admin-confirm-title" className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-md w-full shadow-2xl animate-fade-in-up">
+            <div className="mb-4 flex items-start gap-3">
+              <span className={`rounded-xl p-2.5 ${
+                confirmModal.tone === 'danger'
+                  ? 'bg-red-500/10 text-red-400'
+                  : 'bg-amber-500/10 text-amber-400'
+              }`}>
+                <AlertTriangle className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 id="admin-confirm-title" className="text-lg font-black text-zinc-100">{confirmModal.title}</h3>
+                <p className="mt-1 text-sm leading-6 text-zinc-400">{confirmModal.message}</p>
+              </div>
+            </div>
             <div className="flex gap-3 justify-end">
               <button 
                 onClick={handleConfirmCancel}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold uppercase transition-colors"
+                className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-sm font-bold transition-colors"
               >
-                Hủy
+                {confirmModal.cancelLabel}
               </button>
               <button 
                 onClick={handleConfirmAccept}
-                className="px-4 py-2 bg-brand-orange hover:bg-opacity-90 text-white rounded-xl text-xs font-bold uppercase shadow-lg shadow-brand-orange/20 transition-all"
+                className={`px-4 py-2.5 text-white rounded-xl text-sm font-black shadow-lg transition-all ${
+                  confirmModal.tone === 'danger'
+                    ? 'bg-red-500 hover:bg-red-400 shadow-red-500/20'
+                    : 'bg-brand-orange hover:bg-orange-500 shadow-brand-orange/20'
+                }`}
               >
-                Đồng ý
+                {confirmModal.confirmLabel}
               </button>
             </div>
           </div>
@@ -156,6 +227,42 @@ export default function AdminLayout({ onBackHome }) {
                 className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold uppercase transition-colors"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {promptModal.visible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="admin-prompt-title" className="w-full max-w-md rounded-3xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl animate-fade-in-up">
+            <h3 id="admin-prompt-title" className="text-xl font-black text-zinc-100">{promptModal.title}</h3>
+            {promptModal.message && <p className="mt-2 text-sm leading-6 text-zinc-400">{promptModal.message}</p>}
+            <label className="mt-5 block text-sm font-bold text-zinc-300">
+              {promptModal.label}
+              <textarea
+                autoFocus
+                value={promptModal.value}
+                onChange={event => setPromptModal(current => ({ ...current, value: event.target.value }))}
+                placeholder={promptModal.placeholder}
+                rows={3}
+                className="mt-2 w-full resize-none rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm font-normal text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-brand-orange"
+              />
+            </label>
+            {promptModal.required && !promptModal.value.trim() && (
+              <p className="mt-2 text-xs text-amber-300">Vui lòng nhập nội dung trước khi xác nhận.</p>
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => handlePromptClose(false)} className="rounded-xl bg-zinc-800 px-4 py-2.5 text-sm font-bold text-zinc-300 hover:bg-zinc-700">
+                Quay lại
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePromptClose(true)}
+                disabled={promptModal.required && !promptModal.value.trim()}
+                className="rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-white hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {promptModal.confirmLabel}
               </button>
             </div>
           </div>

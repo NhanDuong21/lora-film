@@ -11,11 +11,16 @@ import {
 } from '../utils/pricingPresentation';
 
 const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value || 0);
+const POLICY_STATUS_LABELS = {
+  DRAFT: 'Bản nháp',
+  ACTIVE: 'Đang áp dụng',
+  INACTIVE: 'Đã ngừng áp dụng',
+};
 
 export default function AdminPricingPolicyDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { triggerToast, triggerConfirm } = useOutletContext() || {};
+  const { triggerToast, triggerConfirm, triggerPrompt } = useOutletContext() || {};
   const [policy, setPolicy] = useState(null);
   const [usage, setUsage] = useState(null);
   const [usagePage, setUsagePage] = useState(0);
@@ -30,7 +35,7 @@ export default function AdminPricingPolicyDetailPage() {
       setPolicy(policyResponse?.data);
       setUsage(usageResponse?.data);
     } catch (error) {
-      triggerToast?.(error.response?.data?.message || 'Không thể tải chính sách giá', 'error');
+      triggerToast?.(error.response?.data?.message || 'Không thể tải mẫu giá', 'error');
     }
   }, [id, triggerToast, usagePage]);
 
@@ -44,22 +49,38 @@ export default function AdminPricingPolicyDetailPage() {
     try {
       let response;
       if (action === 'activate') {
-        const accepted = await triggerConfirm?.('Kích hoạt sẽ khóa vĩnh viễn nội dung và quy tắc của phiên bản này.');
+        const accepted = await triggerConfirm?.({
+          title: 'Áp dụng mẫu giá này?',
+          message: 'Sau khi áp dụng, nội dung và quy tắc giá của phiên bản này sẽ được khóa để bảo đảm giá bán không thay đổi ngoài ý muốn.',
+          confirmLabel: 'Áp dụng mẫu giá',
+        });
         if (accepted === false) return;
         response = await adminPricingService.activatePolicy(id, policy.version);
       } else if (action === 'deactivate') {
-        const reason = window.prompt('Lý do ngừng áp dụng chính sách:');
+        const reason = await triggerPrompt?.({
+          title: 'Ngừng áp dụng mẫu giá',
+          message: 'Các suất chiếu đã chốt giá không bị thay đổi. Lý do sẽ được lưu để người vận hành khác hiểu quyết định này.',
+          label: 'Lý do ngừng áp dụng',
+          placeholder: 'Ví dụ: Thay bằng mẫu giá mùa hè',
+          confirmLabel: 'Ngừng áp dụng',
+        });
         if (!reason?.trim()) return;
         response = await adminPricingService.deactivatePolicy(id, policy.version, reason.trim());
       } else {
-        const name = window.prompt('Tên phiên bản mới:', `${policy.name} - Phiên bản mới`);
+        const name = await triggerPrompt?.({
+          title: 'Tạo bản sao để chỉnh sửa',
+          message: 'Bản đang áp dụng sẽ được giữ nguyên. Bạn sẽ chỉnh sửa trên một bản nháp mới.',
+          label: 'Tên mẫu giá mới',
+          defaultValue: `${policy.name} - Bản mới`,
+          confirmLabel: 'Tạo bản nháp',
+        });
         if (!name?.trim()) return;
         response = await adminPricingService.copyPolicy(id, policy.version, name.trim());
         navigate(`/admin/pricing/${response.data.publicId}/edit`);
         return;
       }
       setPolicy(response.data);
-      triggerToast?.('Đã cập nhật vòng đời chính sách giá', 'success');
+      triggerToast?.('Đã cập nhật mẫu giá', 'success');
       load();
     } catch (error) {
       if (error?.errorCode === 'PRICE_POLICY_OVERLAP' && Array.isArray(error?.data)) {
@@ -70,7 +91,7 @@ export default function AdminPricingPolicyDetailPage() {
           ? getPricingReasonPresentation(error.errorCode).label
           : null)
           || error?.message
-          || 'Không thể cập nhật chính sách',
+          || 'Không thể cập nhật mẫu giá',
         'error',
       );
     } finally {
@@ -78,7 +99,7 @@ export default function AdminPricingPolicyDetailPage() {
     }
   };
 
-  if (!policy) return <div className="p-12 text-center text-zinc-500">Đang tải chính sách giá…</div>;
+  if (!policy) return <div className="p-12 text-center text-zinc-500">Đang tải mẫu giá…</div>;
 
   return (
     <div className="space-y-6 bg-zinc-950 text-white">
@@ -88,9 +109,11 @@ export default function AdminPricingPolicyDetailPage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-black">{policy.name}</h1>
-              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-black text-amber-300">{policy.displayStatus}</span>
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-black text-amber-300">
+                {POLICY_STATUS_LABELS[policy.displayStatus] || POLICY_STATUS_LABELS[policy.storedStatus] || 'Chưa xác định'}
+              </span>
             </div>
-            <p className="mt-1 font-mono text-xs text-zinc-500">{policy.publicId} · v{policy.version}</p>
+            <p className="mt-1 text-xs text-zinc-500">Mẫu giá phiên bản {policy.version}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -104,28 +127,28 @@ export default function AdminPricingPolicyDetailPage() {
 
       {policy.storedStatus === 'ACTIVE' && (
         <section className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100">
-          Chính sách đang hoạt động không thể sửa trực tiếp để bảo toàn lịch sử giá. Hãy tạo một phiên bản mới để thay đổi.
+          Mẫu giá đang áp dụng không thể sửa trực tiếp để giá vé đã bán không bị thay đổi. Hãy tạo một bản nháp mới nếu cần điều chỉnh.
         </section>
       )}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 lg:col-span-2">
-          <h2 className="font-black">Thông tin phiên bản</h2>
+          <h2 className="font-black">Phạm vi áp dụng</h2>
           <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
             <div><dt className="text-xs text-zinc-500">Rạp</dt><dd className="mt-1 font-bold">{policy.cinemaName}</dd></div>
-            <div><dt className="text-xs text-zinc-500">Ưu tiên</dt><dd className="mt-1 font-bold">{policy.priority}</dd></div>
+            <div><dt className="text-xs text-zinc-500">Thứ tự ưu tiên</dt><dd className="mt-1 font-bold">{policy.priority}</dd></div>
             <div><dt className="text-xs text-zinc-500">Hiệu lực</dt><dd className="mt-1">{policy.effectiveFrom} → {policy.effectiveTo || 'Không giới hạn'}</dd></div>
             <div><dt className="text-xs text-zinc-500">Tiền tệ</dt><dd className="mt-1">{policy.currency}</dd></div>
-            <div><dt className="text-xs text-zinc-500">Kích hoạt</dt><dd className="mt-1">{policy.activatedAt || 'Chưa kích hoạt'} {policy.activatedBy ? `· #${policy.activatedBy}` : ''}</dd></div>
+            <div><dt className="text-xs text-zinc-500">Bắt đầu áp dụng</dt><dd className="mt-1">{policy.activatedAt || 'Chưa áp dụng'}</dd></div>
             <div><dt className="text-xs text-zinc-500">Ngừng áp dụng</dt><dd className="mt-1">{policy.deactivatedAt || '—'} {policy.deactivationReason ? `· ${policy.deactivationReason}` : ''}</dd></div>
           </dl>
         </section>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
           <h2 className="font-black">Mức sử dụng</h2>
           <p className="mt-5 text-3xl font-black text-amber-400">{usage?.snapshotShowtimeCount ?? 0}</p>
-          <p className="text-xs text-zinc-500">Suất chiếu đã chụp từ chính sách</p>
+          <p className="text-xs text-zinc-500">Suất chiếu đã chốt giá từ mẫu này</p>
           <p className="mt-5 text-3xl font-black text-zinc-200">{usage?.futureDraftShowtimeCount ?? 0}</p>
-          <p className="text-xs text-zinc-500">Suất chiếu nháp tương lai bị ảnh hưởng</p>
+          <p className="text-xs text-zinc-500">Suất chiếu nháp có thể cần cập nhật giá</p>
         </section>
       </div>
 
@@ -148,6 +171,12 @@ export default function AdminPricingPolicyDetailPage() {
           })}
         </section>
       )}
+
+      <details className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-4 text-xs text-zinc-500">
+        <summary className="cursor-pointer font-bold text-zinc-400">Thông tin kỹ thuật</summary>
+        <p className="mt-3 break-all font-mono">Mã mẫu: {policy.publicId}</p>
+        <p className="mt-1 font-mono">Trạng thái lưu: {policy.storedStatus} · Tiền tệ: {policy.currency}</p>
+      </details>
 
       <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/30">
         <div className="border-b border-zinc-800 p-5"><h2 className="font-black">Quy tắc giá</h2></div>

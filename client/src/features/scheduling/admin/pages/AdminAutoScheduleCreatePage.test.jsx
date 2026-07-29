@@ -74,12 +74,12 @@ describe('AdminAutoScheduleCreatePage', () => {
 
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
-    expect(screen.getByText('Mỗi bản xem trước tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để lập lịch trước cho cả tháng.')).toBeInTheDocument();
+    expect(screen.getByText('Mỗi bản lịch tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để chuẩn bị lịch cho cả tháng.')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Khoảng đã chọn gồm 8 ngày');
     expect(screen.getByRole('alert')).toHaveTextContent('22/08/2099 – 28/08/2099');
     expect(screen.getByRole('alert')).not.toHaveTextContent('2099-08-22');
     expect(screen.getByDisplayValue('2099-08-29')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Tạo bản xem trước/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Tạo bản lịch nháp/i })).toBeDisabled();
   });
 
   it('offers explicit room actions and explains ineligible movies', () => {
@@ -181,10 +181,10 @@ describe('AdminAutoScheduleCreatePage', () => {
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
     expect(screen.getByRole('button', { name: 'Bỏ chọn Phim A IMAX' })).toBeInTheDocument();
-    expect(screen.getByText('Cấu hình hợp lệ và sẵn sàng tạo bản xem trước.')).toBeInTheDocument();
+    expect(screen.getByText('Thông tin đã hợp lệ. Bạn có thể tạo bản lịch nháp để rà soát trước khi mở bán.')).toBeInTheDocument();
     expect(screen.getByText('22/08/2099 – 28/08/2099')).toBeInTheDocument();
     expect(screen.queryByText('2099-08-22 → 2099-08-28')).not.toBeInTheDocument();
-    const generate = screen.getByRole('button', { name: /Tạo bản xem trước/i });
+    const generate = screen.getByRole('button', { name: /Tạo bản lịch nháp/i });
     expect(generate).toBeEnabled();
     fireEvent.click(generate);
     expect(form.handleSubmit).toHaveBeenCalledTimes(1);

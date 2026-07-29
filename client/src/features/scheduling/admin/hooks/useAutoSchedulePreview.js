@@ -44,14 +44,14 @@ const getSelectionGuardMessage = type => {
     case SELECTION_BLOCK_TYPES.REJECTED:
       return 'Ứng viên bị từ chối không thể được chọn.';
     case SELECTION_BLOCK_TYPES.ITEM_NOT_PENDING:
-      return 'Chỉ ứng viên đang chờ mới có thể được chọn.';
+      return 'Chỉ phương án đang chờ mới có thể được chọn.';
     case SELECTION_BLOCK_TYPES.MALFORMED_ITEM:
     case SELECTION_BLOCK_TYPES.MALFORMED_SELECTED_ITEM:
-      return 'Thiếu dữ liệu chiếm phòng. Vui lòng làm mới bản xem trước.';
+      return 'Thiếu dữ liệu thời gian sử dụng phòng. Vui lòng cập nhật lại bản lịch.';
     case SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP:
       return 'Suất chiếu xung đột khoảng chiếm phòng với một suất đã chọn.';
     default:
-      return 'Không thể cập nhật lựa chọn này. Vui lòng làm mới bản xem trước.';
+      return 'Không thể cập nhật lựa chọn này. Vui lòng cập nhật lại bản lịch.';
   }
 };
 
@@ -60,7 +60,7 @@ const getSelectionBackendErrorMessage = (error, fallbackMessage) => {
     case 'AUTO_SCHEDULE_SELECTION_OVERLAP':
       return 'Không thể lưu lựa chọn vì có các suất chiếm cùng phòng bị trùng thời gian.';
     case 'AUTO_SCHEDULE_INVALID_ITEM_SELECTION':
-      return 'Không thể lưu lựa chọn vì ứng viên không còn hợp lệ. Đang tải lại dữ liệu.';
+      return 'Không thể lưu vì phương án này không còn hợp lệ. Hệ thống đang tải lại dữ liệu.';
     default:
       return fallbackMessage;
   }
@@ -73,7 +73,7 @@ const createUuid = () => (
 
 const readPage = response => {
   if (!response?.success || !response.data?.preview || !response.data?.items) {
-    throw createLoadError('INVALID_RESPONSE', 'Phản hồi bản xem trước không đầy đủ.');
+    throw createLoadError('INVALID_RESPONSE', 'Dữ liệu bản lịch chưa đầy đủ.');
   }
   return response.data;
 };
@@ -197,7 +197,7 @@ export default function useAutoSchedulePreview(
           if (String(page.preview.version) !== String(previewVersion)) {
             throw createLoadError(
               'VERSION_MISMATCH',
-              'Dữ liệu bản xem trước đã thay đổi trong lúc tải. Hãy làm mới để nhận một ảnh chụp nhất quán.',
+              'Bản lịch đã thay đổi trong lúc tải. Hãy cập nhật lại để xem dữ liệu mới nhất.',
               true,
             );
           }
@@ -223,7 +223,7 @@ export default function useAutoSchedulePreview(
       if (completedPages.size !== reportedTotalPages || allItems.length !== totalElements) {
         throw createLoadError(
           'INCOMPLETE_SNAPSHOT',
-          'Không thể tải ảnh chụp ứng viên đầy đủ. Hãy làm mới bản xem trước.',
+          'Không thể tải đầy đủ các phương án. Hãy cập nhật lại bản lịch.',
           true,
         );
       }
@@ -255,13 +255,13 @@ export default function useAutoSchedulePreview(
       controller.abort();
       const normalizedError = {
         code: error?.code || 'LOAD_FAILED',
-        message: error?.message || 'Không thể tải chi tiết bản xem trước.',
+        message: error?.message || 'Không thể tải chi tiết bản lịch.',
         blocksMutations: Boolean(error?.blocksMutations),
       };
       setSnapshotError(normalizedError);
       setLoadState(previous => ({ ...previous, active: false }));
       if (!normalizedError.blocksMutations) {
-        triggerToast?.('Không thể tải chi tiết bản xem trước', 'error');
+        triggerToast?.('Không thể tải chi tiết bản lịch', 'error');
       }
       return false;
     }

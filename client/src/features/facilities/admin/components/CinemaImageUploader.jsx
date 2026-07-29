@@ -25,8 +25,7 @@ export default function CinemaImageUploader({
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        if (triggerToast) triggerToast('Vui lòng chọn file hình ảnh hợp lệ.', 'error');
-        else alert('Vui lòng chọn file hình ảnh hợp lệ.');
+        triggerToast?.('Vui lòng chọn file hình ảnh hợp lệ.', 'error');
         return;
       }
       const reader = new FileReader();

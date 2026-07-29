@@ -10,7 +10,6 @@ import {
 } from '@/features/scheduling/admin/utils/showtimeCinemaDateTime';
 import {
   getPreviewShortCode,
-  getShowtimeSourcePresentation,
   getShowtimeStatusPresentation,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
@@ -33,7 +32,6 @@ export default function ShowtimeTable({
   totalPages,
   totalElements,
   batchId,
-  source,
   onOpenCreate,
   onOpenAutoSchedule,
   onViewDetail,
@@ -96,9 +94,12 @@ export default function ShowtimeTable({
   return (
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in">
       {/* Title Header */}
-      <div className="flex flex-col border-b border-zinc-800 pb-4">
-        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">QUẢN LÝ SUẤT CHIẾU</h1>
-        <p className="text-zinc-500 text-sm mt-1">Theo dõi, sắp xếp và vận hành lịch chiếu</p>
+      <div className="flex flex-col border-b border-zinc-800 pb-5">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orange">Lịch chiếu & giá vé</p>
+        <h1 className="mt-2 text-2xl font-black text-white md:text-3xl">Lịch vận hành rạp</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+          Xem lịch theo rạp, kiểm tra các suất chưa mở bán và xử lý từng suất khi có thay đổi.
+        </p>
       </div>
 
       {/* Batch Context Banner */}
@@ -107,12 +108,12 @@ export default function ShowtimeTable({
           <div>
             <div className="flex items-center gap-2">
               <span className="bg-blue-500 text-zinc-950 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
-                {getShowtimeSourcePresentation(source || 'AUTO').batchLabel}
+                Lịch tạo tự động
               </span>
-              <h3 className="text-blue-400 font-bold">Đang xem các suất chiếu thuộc đợt tự động</h3>
+              <h3 className="text-blue-300 font-bold">Đang xem các suất thuộc cùng một bản lịch</h3>
             </div>
-            <p className="text-xs text-blue-300/70 mt-1 flex items-center gap-2">
-              Mã rút gọn: <code className="bg-zinc-950 px-1.5 py-0.5 rounded text-blue-400 border border-blue-500/20">{getPreviewShortCode(batchId)}</code>
+            <p className="mt-1 flex items-center gap-2 text-xs text-blue-200/70">
+              Mã bản lịch: <strong className="rounded border border-blue-500/20 bg-zinc-950 px-1.5 py-0.5 text-blue-300">{getPreviewShortCode(batchId)}</strong>
             </p>
             <details className="mt-2 text-[10px] text-blue-300/70">
               <summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary>
@@ -125,7 +126,7 @@ export default function ShowtimeTable({
                   {copiedBatchId ? 'Đã sao chép UUID' : 'Sao chép UUID'}
                 </button>
                 <Link to={`/admin/showtime-schedules/${encodeURIComponent(batchId)}`} className="rounded border border-blue-500/30 px-2 py-1 font-bold text-blue-300">
-                  Mở bản xem trước nguồn
+                  Mở bản lịch gốc
                 </Link>
               </div>
             </details>
@@ -146,7 +147,7 @@ export default function ShowtimeTable({
                 title="Chưa thể xác minh an toàn đặt vé"
                 className="bg-rose-500/10 text-rose-300 border border-rose-500/20 font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 cursor-not-allowed opacity-60"
               >
-                <Trash2 className="w-3.5 h-3.5" /> Hủy đợt
+                <Trash2 className="w-3.5 h-3.5" /> Hủy cả bản lịch
               </button>
               <span className="max-w-40 text-[10px] font-semibold text-rose-300/80">Chưa thể xác minh an toàn đặt vé</span>
             </div>
@@ -163,48 +164,53 @@ export default function ShowtimeTable({
       )}
 
       {/* Filter and search bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl backdrop-blur-md">
+      <div className="grid grid-cols-1 gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 backdrop-blur-md md:grid-cols-4">
         
         {/* Cinema Filter */}
-        <div className="z-20">
+        <label className="z-20 space-y-2 text-xs font-bold text-zinc-400">
+          Cụm rạp
           <SearchableSelect
             options={cinemaOptions}
             value={cinemaSlug}
             onChange={(val) => { setCinemaSlug(val); setCurrentPage(0); }}
-            placeholder="Tất cả cụm rạp..."
+            placeholder="Tất cả cụm rạp"
             disabled={isOptionsLoading}
           />
-        </div>
+        </label>
 
         {/* Movie Filter */}
-        <div className="z-10">
+        <label className="z-10 space-y-2 text-xs font-bold text-zinc-400">
+          Phim
           <SearchableSelect
             options={movieOptions}
             value={movieSlug}
             onChange={(val) => { setMovieSlug(val); setCurrentPage(0); }}
-            placeholder="Tất cả phim..."
+            placeholder="Tất cả phim"
             disabled={isOptionsLoading}
           />
-        </div>
+        </label>
 
         {/* Date Filter */}
-        <div>
+        <label className="space-y-2 text-xs font-bold text-zinc-400">
+          Ngày chiếu
           <input
             type="date"
             value={date}
             onChange={(e) => { setDate(e.target.value); setCurrentPage(0); }}
             className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-xs transition-colors focus:outline-none"
           />
-        </div>
+        </label>
 
         {/* Status Filter */}
-        <div className="flex gap-2">
+        <label className="space-y-2 text-xs font-bold text-zinc-400">
+          Tình trạng mở bán
+          <div className="flex gap-2">
           <div className="flex-1 z-10">
             <SearchableSelect
               options={statusOptions}
               value={status}
               onChange={(val) => { setStatus(val); setCurrentPage(0); }}
-              placeholder="Tất cả trạng thái..."
+              placeholder="Tất cả tình trạng"
             />
           </div>
           <button
@@ -215,7 +221,8 @@ export default function ShowtimeTable({
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-        </div>
+          </div>
+        </label>
       </div>
 
       {/* Buttons */}
@@ -225,14 +232,14 @@ export default function ShowtimeTable({
           className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center gap-2 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>TẠO THỦ CÔNG</span>
+          <span>THÊM SUẤT CHIẾU</span>
         </button>
         <button
           onClick={onOpenAutoSchedule}
           className="bg-blue-600 hover:bg-blue-500 text-white font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-blue-500/10 flex items-center gap-2 cursor-pointer"
         >
           <Zap className="w-4 h-4" />
-          <span>XẾP LỊCH TỰ ĐỘNG</span>
+          <span>LẬP LỊCH TUẦN</span>
         </button>
       </div>
 

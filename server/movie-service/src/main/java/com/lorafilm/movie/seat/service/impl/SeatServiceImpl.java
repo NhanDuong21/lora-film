@@ -48,10 +48,6 @@ public class SeatServiceImpl implements SeatService {
             throw new BusinessException(ErrorCode.AUDITORIUM_LAYOUT_NOT_EDITABLE, errorData);
         }
         
-        // Since the room is in DRAFT status, any layout save is a full replacement.
-        // Wipe existing seats before inserting new ones.
-        seatRepository.deleteByAuditoriumId(auditorium.getId());
-
         List<BulkItemError> errors = new ArrayList<>();
         int totalItems = request.seats().size();
 
@@ -122,9 +118,6 @@ public class SeatServiceImpl implements SeatService {
                 }
             }
 
-            // Database conflicts checks removed since we hard deleted existing seats
-
-
             // Seat Type validation
             if (item.seatTypePublicId() != null && !item.seatTypePublicId().isEmpty()) {
                 SeatType type = seatTypeMap.get(item.seatTypePublicId());
@@ -161,13 +154,16 @@ public class SeatServiceImpl implements SeatService {
 
             BulkValidationErrorData errorData = new BulkValidationErrorData(
                     totalItems,
-                    totalItems - invalidCount, // Không còn bị lỗi long - int nữa
+                    totalItems - invalidCount,
                     invalidCount,
                     errors);
             throw new BusinessException(ErrorCode.BULK_SEAT_VALIDATION_ERROR,
                     errorData.invalidItems() + " invalid seat(s) found", errorData);
         }
 
+        // Saving a DRAFT room layout is a full replacement. Validate the complete
+        // incoming layout first so invalid input never executes a delete statement.
+        seatRepository.deleteByAuditoriumId(auditorium.getId());
         seatsToSave = seatRepository.saveAll(seatsToSave);
         return seatsToSave.stream().map(this::mapToResponse).collect(Collectors.toList());
     }

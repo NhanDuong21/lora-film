@@ -97,11 +97,11 @@ const AutoScheduleCandidateDrawer = ({
       >
         <header className="flex items-start justify-between gap-4 border-b border-zinc-800 p-5">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Chi tiết ứng viên</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Chi tiết phương án</p>
             <h2 id="candidate-drawer-title" className="mt-1 text-xl font-black text-white">{candidate.movieTitle}</h2>
             <p id="candidate-drawer-description" className="mt-1 text-sm text-zinc-400">{candidate.versionName} · {candidate.auditoriumName}</p>
           </div>
-          <button ref={closeButtonRef} type="button" onClick={onClose} aria-label="Đóng chi tiết ứng viên" className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange">
+          <button ref={closeButtonRef} type="button" onClick={onClose} aria-label="Đóng chi tiết phương án" className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange">
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </header>
@@ -143,7 +143,7 @@ const AutoScheduleCandidateDrawer = ({
                 className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Check className="h-4 w-4" aria-hidden="true" />
-                {candidate.selected ? 'Bỏ chọn ứng viên' : 'Chọn ứng viên'}
+                {candidate.selected ? 'Bỏ chọn phương án' : 'Chọn phương án'}
               </button>
               {selectionBlockedMessage && <p className="mt-2 text-xs text-red-300">{selectionBlockedMessage}</p>}
             </div>

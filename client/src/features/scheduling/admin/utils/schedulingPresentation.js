@@ -5,7 +5,7 @@ const UNKNOWN_PRESENTATION = Object.freeze({
 });
 
 export const PREVIEW_STATUS_PRESENTATION = Object.freeze({
-  GENERATING: { label: 'Đang tạo bản xem trước', tone: 'blue' },
+  GENERATING: { label: 'Đang tạo bản lịch', tone: 'blue' },
   PREVIEWED: { label: 'Sẵn sàng rà soát', tone: 'green' },
   APPLYING: { label: 'Đang áp dụng', tone: 'blue' },
   APPLIED: { label: 'Đã áp dụng', tone: 'violet' },
@@ -17,12 +17,12 @@ export const PREVIEW_STATUS_PRESENTATION = Object.freeze({
 export const CANDIDATE_VALIDATION_PRESENTATION = Object.freeze({
   VALID: {
     label: 'Hợp lệ',
-    description: 'Ứng viên đã vượt qua kiểm tra tại thời điểm tạo bản xem trước.',
+    description: 'Phương án đã vượt qua kiểm tra tại thời điểm tạo bản lịch.',
     tone: 'green',
   },
   REJECTED: {
     label: 'Không hợp lệ',
-    description: 'Ứng viên không vượt qua kiểm tra khi tạo bản xem trước.',
+    description: 'Phương án không vượt qua kiểm tra khi tạo bản lịch.',
     tone: 'red',
   },
 });
@@ -35,12 +35,12 @@ export const CANDIDATE_APPLY_PRESENTATION = Object.freeze({
   },
   CREATED: {
     label: 'Đã tạo suất chiếu',
-    description: 'Một suất chiếu chính thức đã được tạo từ ứng viên này.',
+    description: 'Một suất chiếu chính thức đã được tạo từ phương án này.',
     tone: 'green',
   },
   SKIPPED: {
     label: 'Không được chọn',
-    description: 'Ứng viên không được chọn khi bản xem trước được áp dụng.',
+    description: 'Phương án không được chọn khi bản lịch được áp dụng.',
     tone: 'zinc',
   },
   CONFLICT: {
@@ -50,7 +50,7 @@ export const CANDIDATE_APPLY_PRESENTATION = Object.freeze({
   },
   FAILED: {
     label: 'Thất bại',
-    description: 'Không thể tạo suất chiếu từ ứng viên này.',
+    description: 'Không thể tạo suất chiếu từ phương án này.',
     tone: 'red',
   },
 });

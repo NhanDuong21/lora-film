@@ -83,9 +83,12 @@ export default function AdminGenrePage() {
   }, [editingGenre, formData, triggerToast, fetchGenres]);
 
   const handleDelete = useCallback(async (id) => {
-    const shouldDelete = triggerConfirm 
-      ? await triggerConfirm('Bạn có chắc chắn muốn xóa thể loại này?')
-      : window.confirm('Bạn có chắc chắn muốn xóa thể loại này?');
+    const shouldDelete = await triggerConfirm?.({
+      title: 'Xóa thể loại?',
+      message: 'Chỉ có thể xóa khi thể loại chưa được phim nào sử dụng.',
+      confirmLabel: 'Xóa thể loại',
+      tone: 'danger',
+    });
       
     if (shouldDelete) {
       try {
