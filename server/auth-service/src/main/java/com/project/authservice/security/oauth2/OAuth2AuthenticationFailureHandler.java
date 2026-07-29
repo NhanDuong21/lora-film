@@ -8,6 +8,8 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationFa
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Component
 public class OAuth2AuthenticationFailureHandler extends SimpleUrlAuthenticationFailureHandler {
@@ -16,7 +18,9 @@ public class OAuth2AuthenticationFailureHandler extends SimpleUrlAuthenticationF
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException, ServletException {
         log.error("OAuth2 Authentication Failure: {}", exception.getMessage());
-        String targetUrl = "/oauth2/redirect?error=" + exception.getMessage();
+        String errorMessage = exception.getMessage() != null ? exception.getMessage() : "Authentication failed";
+        String encodedError = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
+        String targetUrl = "/oauth2/redirect?error=" + encodedError;
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }
 }
