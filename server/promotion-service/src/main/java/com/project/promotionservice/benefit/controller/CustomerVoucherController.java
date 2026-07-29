@@ -10,9 +10,13 @@ import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.configuration.security.principal.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Set;
 
 @RestController
+@Validated
 @RequestMapping("/api/customers/me/vouchers")
 @Tag(name = "Customer Voucher Wallet", description = "Authenticated customer voucher wallet")
 public class CustomerVoucherController {
@@ -38,9 +43,9 @@ public class CustomerVoucherController {
     public ResponseEntity<ApiResponse<PagedResponse<VoucherResponse>>> wallet(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(required = false) VoucherStatus status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "validTo,asc") String sort) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "validTo,asc") @Size(max = 60) String sort) {
         if (principal == null) {
             throw new BusinessException(
                     ErrorCode.UNAUTHORIZED, "Authentication is required", HttpStatus.UNAUTHORIZED);

@@ -31,6 +31,7 @@ public class CampaignMapper {
         entity.setDescription(request.getDescription());
         entity.setCampaignType(request.getCampaignType());
         entity.setFundingSource(request.getFundingSource());
+        entity.setPartnerPublicId(request.getPartnerPublicId());
         entity.setPriority(request.getPriority());
         entity.setStackable(request.getStackable());
         entity.setExclusiveCampaign(request.getExclusiveCampaign());
@@ -87,6 +88,7 @@ public class CampaignMapper {
         response.setDescription(entity.getDescription());
         response.setCampaignType(entity.getCampaignType());
         response.setFundingSource(entity.getFundingSource());
+        response.setPartnerPublicId(entity.getPartnerPublicId());
         response.setStatus(entity.getStatus());
         response.setApprovalStatus(entity.getApprovalStatus());
         response.setLegalStatus(entity.getLegalStatus());
@@ -96,6 +98,7 @@ public class CampaignMapper {
         response.setAutoActivate(entity.getAutoActivate());
         response.setAutoComplete(entity.getAutoComplete());
         response.setAutoPauseWhenBudgetExceeded(entity.getAutoPauseWhenBudgetExceeded());
+        response.setKillSwitch(entity.getKillSwitch());
         response.setTimezone(entity.getTimezone());
         response.setStartAt(entity.getStartAt());
         response.setEndAt(entity.getEndAt());

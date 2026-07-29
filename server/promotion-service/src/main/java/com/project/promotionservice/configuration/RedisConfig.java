@@ -58,7 +58,8 @@ public class RedisConfig {
                 .withInitialCacheConfigurations(Map.of(
                         "promotions", defaults.entryTtl(Duration.ofMinutes(10)),
                         "vouchers", defaults.entryTtl(Duration.ofMinutes(5)),
-                        "campaigns", defaults.entryTtl(Duration.ofMinutes(10))))
+                        "campaigns", defaults.entryTtl(Duration.ofMinutes(10)),
+                        "reservations", defaults.entryTtl(Duration.ofMinutes(1))))
                 .transactionAware()
                 .build();
     }
@@ -66,6 +67,7 @@ public class RedisConfig {
     @Bean
     @Profile("test")
     public CacheManager testCacheManager() {
-        return new ConcurrentMapCacheManager("promotions", "vouchers", "campaigns");
+        return new ConcurrentMapCacheManager(
+                "promotions", "vouchers", "campaigns", "reservations");
     }
 }

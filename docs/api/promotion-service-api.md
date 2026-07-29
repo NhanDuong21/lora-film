@@ -5,14 +5,14 @@
 | Mục | Nội dung |
 | :--- | :--- |
 | Service | `promotion-service` |
-| Feature | Campaign, Coupon, Voucher, Auto-apply Rules, Reservation and Partner Settlements |
+| Feature | Campaign, Coupon, Voucher, Rule Configuration, Reservation and Partner Settlements |
 | API liên quan | Campaign Admin, Coupon/Voucher Admin, Customer Wallet, Promotion Checkout, Partner & Settlement |
 | Contract Owner | Dương Thiện Nhân |
 | Backend Owner | Trần Lương Thiện Hoàng |
 | Reviewer | Trần Lương Thiện Hoàng |
-| Trạng thái | Approved / Ready for Implementation |
+| Trạng thái | Promotion core implemented/verified; end-to-end Booking/Payment integration pending |
 | Milestone | Sprint 2 - Core Service API Foundation & Consolidated Benefit Domain |
-| Ngày cập nhật | 28/07/2026 |
+| Ngày cập nhật | 29/07/2026 |
 
 ---
 
@@ -26,9 +26,9 @@ Tài liệu này **hợp nhất** nội dung từ đặc tả cũ của `promoti
 - **Quản lý Campaign**: Vòng đời chiến dịch khuyến mại (Draft -> Pending -> Approved -> Active -> Paused -> Completed).
 - **Quản lý Coupon**: Phát hành mã dùng chung, mã cá nhân hóa hoặc mã một lần.
 - **Quản lý Voucher**: Phát hành và theo dõi voucher nằm trong ví khách hàng (Customer Wallet).
-- **Quy tắc giảm giá tự động (Promotion Rules)**: Áp dụng Happy Wednesday, Culture Day hoặc giảm giá theo đối tượng không cần nhập mã.
+- **Promotion Rules**: Quản lý cấu hình và preview có kiểm tra schema. Automatic rule discovery/stacking không thuộc Reservation Runtime dùng mã trong issue này.
 - **Promotion Reservation (Giữ chỗ khuyến mại)**: Lock atomically coupon/voucher, quota, và budget trong quá trình checkout.
-- **Redemption & Rollback**: Confirm sử dụng khi thanh toán thành công, hoặc rollback giải phóng budget/quota khi thanh toán thất bại/hết hạn.
+- **Redemption & Reservation lifecycle**: Confirm khi thanh toán thành công; release khi thanh toán thất bại; cancel khi booking bị hủy; job tự expire phiên quá hạn. Giao dịch đã confirm phải dùng refund/compensation, không rollback ledger.
 - **Compensation (Bồi thường)**: Phát hành voucher đền bù chăm sóc khách hàng.
 - **Partner & Settlement**: Quản lý đối tác tài trợ và đối soát quyết toán tài chính.
 
@@ -244,6 +244,8 @@ CREATE TABLE promotion_reservations (
     order_public_id CHAR(36) NULL COMMENT 'Public ID đơn hàng',
     payment_public_id CHAR(36) NULL COMMENT 'Public ID thanh toán',
     user_public_id CHAR(36) NOT NULL COMMENT 'Public ID người dùng',
+    customer_phone VARCHAR(20) NULL COMMENT 'Số điện thoại đã xác thực dùng để giữ quota coupon',
+    reservation_scope_key VARCHAR(80) NULL COMMENT 'Một benefit hiệu lực trên mỗi order/booking',
     campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
     coupon_public_id CHAR(36) NULL COMMENT 'Public ID coupon',
     voucher_public_id CHAR(36) NULL COMMENT 'Public ID voucher',
@@ -261,6 +263,10 @@ CREATE TABLE promotion_reservations (
     rollback_at DATETIME(6) NULL COMMENT 'Thời điểm rollback',
     rollback_reason VARCHAR(255) NULL COMMENT 'Lý do rollback',
     metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    expiration_attempts INT NOT NULL DEFAULT 0 COMMENT 'Số lần scheduler thử hết hạn',
+    expiration_last_attempt_at DATETIME(6) NULL COMMENT 'Lần thử hết hạn gần nhất',
+    expiration_next_attempt_at DATETIME(6) NULL COMMENT 'Lần retry hết hạn tiếp theo',
+    expiration_error VARCHAR(1000) NULL COMMENT 'Lỗi hết hạn gần nhất',
     version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản dữ liệu',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
     created_by CHAR(36) NULL COMMENT 'Người tạo',
@@ -270,6 +276,7 @@ CREATE TABLE promotion_reservations (
     deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
     CONSTRAINT uk_promotion_reservation_public UNIQUE (public_id),
     CONSTRAINT uk_promotion_reservation_code UNIQUE (reservation_code),
+    CONSTRAINT uk_promotion_reservation_scope UNIQUE (reservation_scope_key),
     CONSTRAINT chk_reservation_amount CHECK (
         original_amount >= 0
         AND discount_amount >= 0
@@ -277,14 +284,68 @@ CREATE TABLE promotion_reservations (
         AND final_amount = original_amount - discount_amount
     ),
     CONSTRAINT chk_reservation_single_benefit CHECK (
-        (coupon_public_id IS NOT NULL AND voucher_public_id IS NULL)
-        OR (coupon_public_id IS NULL AND voucher_public_id IS NOT NULL)
+        (
+            reservation_type = 'COUPON'
+            AND coupon_public_id IS NOT NULL
+            AND voucher_public_id IS NULL
+        )
+        OR (
+            reservation_type = 'VOUCHER'
+            AND coupon_public_id IS NULL
+            AND voucher_public_id IS NOT NULL
+        )
+    ),
+    CONSTRAINT chk_reservation_status CHECK (
+        status IN ('ACTIVE', 'COMPLETED', 'RELEASED', 'CANCELLED', 'EXPIRED')
+    ),
+    CONSTRAINT chk_reservation_lifecycle CHECK (
+        (
+            status = 'ACTIVE'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'COMPLETED'
+            AND confirmed_at IS NOT NULL
+            AND payment_public_id IS NOT NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'RELEASED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NOT NULL
+            AND rollback_reason IS NOT NULL
+        )
+        OR (
+            status = 'CANCELLED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NOT NULL
+            AND cancelled_reason IS NOT NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'EXPIRED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
     ),
     CONSTRAINT chk_reservation_period CHECK (
         reservation_expired_at > reservation_started_at
     )
 ) COMMENT = 'Phiên giữ khuyến mãi';
 ```
+
+Schema được quản lý bằng Flyway:
+[`V1__promotion_schema.sql`](../../server/promotion-service/src/main/resources/db/migration/V1__promotion_schema.sql)
+cho database mới và
+[`V2__promotion_runtime_hardening.sql`](../../server/promotion-service/src/main/resources/db/migration/V2__promotion_runtime_hardening.sql)
+cho cả database mới/lịch sử. Database cũ được baseline ở V1 rồi tự chạy V2; file
+đối chiếu vận hành nằm tại
+[`20260728_promotion_reservation_runtime.sql`](../database/mysql/migrations/20260728_promotion_reservation_runtime.sql).
 
 ### 3.7. Bảng `compensation_vouchers`
 ```sql
@@ -361,6 +422,9 @@ CREATE TABLE partner_settlements (
     adjustment_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Khoản điều chỉnh',
     final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền quyết toán',
     currency VARCHAR(10) NOT NULL DEFAULT 'VND' COMMENT 'Đơn vị tiền tệ',
+    settlement_rule VARCHAR(50) NOT NULL DEFAULT 'PERCENTAGE_OF_DISCOUNT' COMMENT 'Quy tắc quyết toán',
+    partner_percentage DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT 'Tỷ lệ đối tác tài trợ',
+    fixed_amount_per_redemption DECIMAL(18,2) NULL COMMENT 'Mức cố định mỗi redemption',
     status VARCHAR(30) NOT NULL COMMENT 'Trạng thái đối soát',
     approved_at DATETIME(6) NULL COMMENT 'Ngày phê duyệt',
     paid_at DATETIME(6) NULL COMMENT 'Ngày thanh toán',
@@ -391,6 +455,10 @@ CREATE TABLE promotion_configurations (
     category VARCHAR(100) NOT NULL COMMENT 'Nhóm cấu hình',
     description VARCHAR(500) NULL COMMENT 'Mô tả',
     editable BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Cho phép chỉnh sửa',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Optimistic lock version',
+    requires_restart BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Chỉ có hiệu lực sau restart',
+    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/INACTIVE/DEPRECATED',
+    metadata_json JSON NULL COMMENT 'Giới hạn và metadata cấu hình',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
     created_by CHAR(36) NULL COMMENT 'Người tạo',
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
@@ -467,6 +535,8 @@ CREATE TABLE outbox_events (
     publish_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái publish',
     retry_count INT NOT NULL DEFAULT 0 COMMENT 'Số lần gửi lại',
     next_retry_at DATETIME(6) NULL COMMENT 'Lần gửi tiếp theo',
+    processing_started_at DATETIME(6) NULL COMMENT 'Thời điểm bắt đầu lease publish',
+    processing_owner VARCHAR(100) NULL COMMENT 'Instance đang giữ lease publish',
     published_at DATETIME(6) NULL COMMENT 'Ngày publish',
     error_message TEXT NULL COMMENT 'Lỗi publish',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
@@ -489,7 +559,7 @@ CREATE TABLE promotion_idempotency_keys (
     api_name VARCHAR(150) NOT NULL COMMENT 'Tên API',
     http_method VARCHAR(10) NOT NULL COMMENT 'Phương thức HTTP',
     user_public_id CHAR(36) NULL COMMENT 'Public ID người dùng',
-    client_id VARCHAR(100) NULL COMMENT 'Mã ứng dụng gọi',
+    client_id VARCHAR(100) NOT NULL COMMENT 'Service gọi đã được xác thực',
     device_id VARCHAR(150) NULL COMMENT 'Mã thiết bị',
     session_id VARCHAR(150) NULL COMMENT 'Mã phiên đăng nhập',
     request_uri VARCHAR(255) NOT NULL COMMENT 'Đường dẫn API',
@@ -511,7 +581,7 @@ CREATE TABLE promotion_idempotency_keys (
     deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
     deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
     CONSTRAINT uk_idempotency_public UNIQUE (public_id),
-    CONSTRAINT uk_idempotency_key UNIQUE (idempotency_key)
+    CONSTRAINT uk_idempotency_scope UNIQUE (client_id, api_name, idempotency_key)
 ) COMMENT = 'Lưu khóa chống xử lý trùng request';
 ```
 
@@ -564,14 +634,18 @@ CREATE TABLE promotion_rules (
   ```
 - **Internal Microservice API**:
   ```http
+  X-Service-Name: BOOKING_SERVICE | PAYMENT_SERVICE
   X-Internal-Token: <service-token>
   X-Idempotency-Key: <unique-uuid-key>
   Content-Type: application/json
   ```
+  `X-Service-Name` phải khớp token riêng của service. Booking và Payment không dùng
+  chung secret. Header trùng, thiếu hoặc khai service sai đều bị từ chối trước khi
+  vào controller. `X-Idempotency-Key` chỉ bắt buộc với năm lệnh thay đổi reservation.
 
 ### 4.2. Định Dạng Ngày Tháng & Tiền Tệ
-- **Datetime**: Định dạng ISO-8601 `YYYY-MM-DDTHH:mm:ss.SSS`. Múi giờ mặc định: `Asia/Ho_Chi_Minh`.
-- **Tiền Tệ**: Hệ thống lưu số tiền kiểu decimal. Quy đổi về kiểu dữ liệu `BigDecimal` với scale = 0 và làm tròn `HALF_UP` cho đơn vị `VND`.
+- **Datetime**: API dùng ISO-8601 có offset, ví dụ `2026-07-28T14:10:00.000000Z`; database lưu với độ chính xác microsecond.
+- **Tiền Tệ**: Hệ thống lưu số tiền kiểu decimal. Quy đổi về `BigDecimal` với scale = 2 và làm tròn `HALF_UP`; đơn vị mặc định là `VND`.
 - **Mã Ưu Đãi (Coupon Code)**: Trim khoảng trắng, uppercase trước khi lưu và so sánh không phân biệt chữ hoa/thường ở tầng API.
 
 ### 4.3. Định Dạng Phản Hồi Chung (Common Response Contract)
@@ -601,13 +675,21 @@ CREATE TABLE promotion_rules (
 Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm tránh thất thoát tài chính và gian lận:
 
 - **BR-CAMP-01 (Kích hoạt chiến dịch)**: Campaign chuyển từ `SCHEDULED` sang `ACTIVE` khi đồng thời thỏa mãn: `current_time >= start_at` VÀ `legal_status = PASSED` VÀ `budget_amount > 0`.
-- **BR-CAMP-02 (Kiểm soát ngân sách)**: Tự động chuyển chiến dịch sang `PAUSED` khi `budget_used >= budget_amount * 0.98` để dự phòng phần ngân sách đang bị hold.
+- **BR-CAMP-02 (Kiểm soát ngân sách)**: Tự động chuyển chiến dịch sang `PAUSED` khi `budget_used + budget_reserved >= budget_amount * 0.98`. Campaign chỉ được publish/activate sau khi business approval đã `APPROVED`, legal review đã `PASSED` và budget dương.
 - **BR-COUP-01 (Giới hạn mỗi khách hàng)**: Một `user_public_id` hoặc số điện thoại chỉ được áp dụng thành công mã coupon tối đa `max_redemptions_per_user` lần.
 - **BR-VOU-01 (Hạn chế vé tặng)**: Vé tặng 0đ (phát do sinh nhật hoặc nâng hạng thành viên) không áp dụng cho suất chiếu sớm (sneak show), các phòng chiếu VIP/IMAX/4DX/Gold Class và ngày Lễ Tết.
-- **BR-STACK-01 (Thứ tự pipeline áp dụng)**: Giá vé gốc -> Khuyến mại tự động (Happy Wednesday...) -> Coupon nhập tay -> Voucher ví khách hàng -> Điểm tích lũy. Mức giá tối thiểu sau giảm là 0đ (không cho phép âm).
+- **BR-STACK-01 (Phạm vi runtime hiện tại)**: Reservation Runtime nhận đúng một mã coupon hoặc voucher và mức giá sau giảm không âm. Automatic rule discovery, stacking nhiều benefit và loyalty-point saga là pipeline riêng; không được giả lập stacking bằng cách gọi reserve nhiều lần cho cùng checkout.
 - **BR-ELIG-01 (Kiểm tra điều kiện)**: Thực hiện cơ chế fail-fast: Trạng thái -> Hạng thành viên (lấy từ `score-service` qua cache ACL) -> Điều kiện giỏ vé -> Trần pháp luật (Nghị định 81/2018/NĐ-CP - tối đa giảm 50% giá trị gốc).
-- **BR-REDEEM-01 (Vòng đời Reservation)**: Phiên giữ khuyến mãi (`promotion_reservations`) ở trạng thái `ACTIVE` có TTL bằng đúng với TTL giữ ghế của `booking-service` (mặc định 900 giây). Khi quá hạn, job quét tự động hủy (`EXPIRED`) và hoàn lại ngân sách/lượt dùng.
-- **BR-POINT-01 (Trừ điểm tích lũy)**: Promotion Service không tự động cộng/trừ điểm. Nếu khách hàng chọn thanh toán một phần bằng điểm, Promotion sẽ gửi request `hold` điểm sang `score-service` trong transaction reserve, và commit khi payment hoàn tất.
+- **BR-REDEEM-01 (Vòng đời Reservation)**: State machine thực tế là `ACTIVE -> COMPLETED | RELEASED | CANCELLED | EXPIRED`; mọi trạng thái đích đều là terminal. `POST /internal/reservations` vừa validate vừa giữ atomically nên không tồn tại trạng thái `CREATED/RESERVED` trung gian. TTL từ 60 đến 1800 giây, mặc định 900 giây; job nội bộ tự chuyển phiên quá hạn sang `EXPIRED` và hoàn `budget_reserved`.
+- **BR-REDEEM-02 (Pricing snapshot)**: `originalAmount`, `discountAmount`, `finalAmount` và `currency` được chốt khi reserve. Confirm trong TTL phải ghi redemption đúng snapshot đã giữ, không tính lại theo cấu hình có thể vừa thay đổi. Refresh thì phải validate lại snapshot hiện vẫn hợp lệ.
+- **BR-REDEEM-03 (Idempotency và cạnh tranh)**: Mọi lệnh thay đổi trạng thái yêu cầu `X-Idempotency-Key`. Reserve ràng buộc key với payload; confirm/release/cancel/refresh idempotent theo reservation và dữ liệu đích. Redis lock chỉ giảm cạnh tranh; transaction, pessimistic lock và unique constraint của MySQL là nguồn bảo đảm cuối cùng.
+- **BR-REDEEM-04 (Quota của active hold)**: Active reservation được tính chung với redemption đã consume khi kiểm tra giới hạn campaign, coupon, voucher, user và số điện thoại xác thực. Coupon public nhiều lượt vẫn cho phép các khách độc lập giữ song song đến đúng quota; không khóa độc quyền cả mã.
+- **BR-REDEEM-05 (Một benefit trên checkout)**: Một `orderPublicId` (ưu tiên) hoặc `bookingPublicId` chỉ có một reservation `ACTIVE/COMPLETED` hiệu lực. Release/cancel/expire giải phóng scope; completed giữ scope để không thể áp mã mới sau thanh toán. Runtime này không hỗ trợ lách stacking bằng nhiều request.
+- **BR-REDEEM-06 (Active hold khi campaign bị dừng)**: pause/cancel/kill-switch/revoke chặn reserve và refresh mới. Hold đã tạo hợp lệ vẫn được Payment confirm trong TTL theo pricing snapshot; hết TTL thì expire. Không được xóa campaign khi còn active hold.
+- **BR-ELIG-02 (Condition schema fail-closed)**: Runtime chỉ chấp nhận các condition đã được engine hỗ trợ; field lạ, sai kiểu, alias trùng, ngày/thứ không hợp lệ hoặc mảng rỗng bị từ chối khi cấu hình. Coupon/voucher không được silently bỏ qua condition.
+- **BR-VOU-02 (Free item pricing)**: `FREE_TICKET` yêu cầu `contextJson.ticketAmount`, `FREE_COMBO` yêu cầu `contextJson.comboAmount`; số tiền phải dương và không vượt `originalAmount`. Không được giảm toàn bộ đơn hàng khi thiếu subtotal của item đủ điều kiện.
+- **BR-EVENT-01 (Transactional outbox)**: Domain và outbox được ghi cùng transaction. Worker claim từng event bằng DB lease; chỉ chuyển `PUBLISHED` sau Kafka broker ACK. Event lỗi retry exponential backoff, event `PROCESSING` quá lease được worker khác reclaim; payload dùng envelope version `1.0` và đã redact dữ liệu nhạy cảm.
+- **BR-POINT-01 (Điểm tích lũy)**: Promotion Service không sở hữu số dư và không tự cộng/trừ điểm. Saga hold/commit/release điểm với `score-service` là integration riêng, chưa nằm trong Reservation Runtime hiện tại.
 
 ---
 
@@ -620,6 +702,7 @@ Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm trán
 | | GET | `/api/admin/promotion-campaigns/{id}` | Admin/Marketing | Xem chi tiết chiến dịch |
 | | PUT | `/api/admin/promotion-campaigns/{id}` | Admin/Marketing | Cập nhật thông tin chiến dịch |
 | | PATCH | `/api/admin/promotion-campaigns/{id}/status` | Admin/Marketing | Thay đổi trạng thái hoạt động |
+| | POST | `/api/admin/promotion-campaigns/{id}/legal-review` | Admin/Legal Compliance | Ghi quyết định `PASSED/FAILED` và mã hồ sơ pháp lý trước publish |
 | **Coupon Admin** | POST | `/api/admin/coupons` | Admin/Marketing | Tạo coupon mới |
 | | POST | `/api/admin/coupons/generate` | Admin/Marketing | Phát sinh coupon hàng loạt theo lô |
 | | POST | `/api/admin/coupons/import` | Admin/Marketing | Nhập mã coupon từ file CSV/Excel |
@@ -643,9 +726,14 @@ Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm trán
 | | PUT | `/api/admin/compensation-vouchers/{id}` | Admin/CSKH | Cập nhật voucher bồi thường |
 | | GET | `/api/admin/compensation-vouchers` | Admin/CSKH | Danh sách đền bù bồi thường |
 | | GET | `/api/admin/compensation-vouchers/{id}` | Admin/CSKH | Chi tiết đền bù bồi thường |
-| **Checkout Reservation**| POST | `/internal/promotions/reserve` | Booking Service | Lock atomically benefit, quota, budget |
-| | POST | `/internal/promotions/confirm` | Payment Service | Xác nhận thanh toán & chuyển thành ledger |
-| | POST | `/internal/promotions/rollback` | Booking/Payment | Hủy phiên giữ, giải phóng quota/budget |
+| **Runtime & Reservation** | POST | `/internal/runtime/validate` | Booking Service | Preview tính hợp lệ, quota, budget và giá; không giữ tài nguyên |
+| | POST | `/internal/reservations` | Booking Service | Validate và giữ atomically benefit, quota, budget |
+| | GET | `/internal/reservations/{reservationId}` | Booking/Payment | Đọc chi tiết; tự sửa trạng thái nếu phiên đã quá hạn |
+| | POST | `/internal/reservations/{reservationId}/confirm` | Payment Service | Confirm thanh toán và tạo đúng một redemption |
+| | POST | `/internal/reservations/{reservationId}/release` | Payment Service | Thanh toán thất bại: giải phóng phiên giữ |
+| | POST | `/internal/reservations/{reservationId}/cancel` | Booking Service | Booking bị hủy: hủy phiên giữ |
+| | POST | `/internal/reservations/{reservationId}/refresh` | Booking Service | Gia hạn bằng deadline tuyệt đối |
+| | GET | `/api/admin/reservations` | Admin/Operations | Tra cứu lịch sử reservation có lọc và phân trang |
 | **Partner & Settlement**| POST | `/api/admin/partners` | Admin/Finance | Thêm đối tác tài trợ mới |
 | | GET | `/api/admin/partners` | Admin/Finance | Danh sách đối tác hệ thống |
 | | GET | `/api/admin/partners/{id}` | Admin/Finance | Xem chi tiết thông tác |
@@ -655,101 +743,236 @@ Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm trán
 | | GET | `/api/admin/partner-settlements` | Admin/Finance | Danh sách phiên đối soát tài chính |
 | | GET | `/api/admin/partner-settlements/{id}` | Admin/Finance | Chi tiết quyết toán với đối tác |
 | | PUT | `/api/admin/partner-settlements/{id}/status` | Admin/Finance | Phê duyệt/Thay đổi trạng thái đối soát |
+| **Configuration** | POST | `/api/admin/configurations` | Admin/Configuration | Tạo cấu hình động |
+| | PUT | `/api/admin/configurations/{id}` | Admin/Configuration | Cập nhật và refresh cache |
+| | DELETE | `/api/admin/configurations/{id}` | Admin/Configuration | Deprecate cấu hình (xóa mềm) |
+| | GET | `/api/admin/configurations` | Admin/Configuration | Tìm kiếm cấu hình |
+| | GET | `/api/admin/configurations/{id}` | Admin/Configuration | Chi tiết cấu hình |
+| **Integration Operations** | POST | `/internal/events/publish` | Operations Service | Ghi outbound event vào transactional outbox |
+| | POST | `/internal/events/retry/{id}` | Operations Service | Retry event lỗi (có alias body `/retry`) |
+| | POST | `/internal/events/dlq/reprocess` | Operations Service | Reprocess inbound/outbound DLQ |
+| | GET | `/internal/events/status` | Operations Service | Thống kê trạng thái event |
+| **Scheduler Hooks** | POST | `/internal/schedulers/campaigns/expire` | Operations Service | Hết hạn campaign |
+| | POST | `/internal/schedulers/coupons/expire` | Operations Service | Hết hạn coupon |
+| | POST | `/internal/schedulers/vouchers/expire` | Operations Service | Hết hạn voucher |
+| | POST | `/internal/schedulers/outbox/publish` | Operations Service | Publish outbox |
+| | POST | `/internal/schedulers/outbox/retry` | Operations Service | Retry outbox |
+| | POST | `/internal/schedulers/cache/refresh` | Operations Service | Refresh runtime configuration cache |
+| **Monitoring** | GET | `/api/admin/events` | Admin/Operations | Event history (OUTBOUND/INBOUND) |
+| | GET | `/api/admin/events/{id}` | Admin/Operations | Event detail |
+| | GET | `/api/admin/events/jobs` | Admin/Operations | Scheduler execution history |
+| | POST | `/api/admin/events/jobs/{jobName}/run` | Operations Manager | Chạy job thủ công |
 
 ---
+
+### 6.1. Runtime contract alignment (2026-07-29)
+
+The controller inventory is the source of truth for the current implementation.
+The rows above are retained for the original product contract; the following
+items make the recently added runtime APIs explicit:
+
+| Group | Method | Endpoint | Authorization |
+| :--- | :--- | :--- | :--- |
+| Promotion Rule Admin | POST/PUT/DELETE | `/api/admin/promotion-rules[/{id}]` | `ADMIN`, `MARKETING_MANAGER` |
+| Promotion Rule Admin | GET | `/api/admin/promotion-rules[/{id}]` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Promotion Rule Admin | POST | `/api/admin/promotion-rules/{id}/clone` | `ADMIN`, `MARKETING_MANAGER` |
+| Promotion Rule Admin | POST | `/api/admin/promotion-rules/preview` | `ADMIN`, `MARKETING_MANAGER` |
+| Campaign lifecycle | POST | `/api/admin/promotion-campaigns/{id}/approve` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Campaign lifecycle | POST | `/api/admin/promotion-campaigns/{id}/reject` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Campaign lifecycle | PATCH | `/api/admin/promotion-campaigns/{id}/status` with `KILL_SWITCH` | `ADMIN`, `MARKETING_MANAGER` |
+| Scheduler hook | POST | `/internal/schedulers/campaigns/activate` | trusted operations caller |
+| Internal configuration | GET | `/internal/configurations/{key}` | trusted internal caller |
+| Customer wallet | GET | `/api/customers/me/vouchers` | authenticated customer; identity comes from JWT |
+
+Admin authorization is method-level and role-specific. The broad `/api/admin/**`
+matcher only requires authentication so that `MARKETING_*`, `FINANCE_*`,
+`CSKH_AGENT`, `LEGAL_COMPLIANCE`, and `OPERATIONS_MANAGER` can reach the
+endpoints explicitly assigned to them; an endpoint without a method/class
+`@PreAuthorize` is a security defect.
+Auth bootstrap currently creates only `ADMIN`, `EMPLOYEE`, and `CUSTOMER`, so
+the Promotion-specific business roles must be created and assigned before
+these non-admin APIs are deployed.
+
+`userPublicId` and `ownerPublicId` accept either a positive numeric account ID
+(the current Auth/User/Score contract) or a legacy UUID. Promotion stores these
+references as `VARCHAR(36)` after Flyway V4. `publicId` values generated by
+Promotion itself remain UUIDs.
+
+The internal scheduler hooks are operational service-to-service hooks and must
+not be exposed through the public gateway. Reservation expiration remains an
+in-process/DB-claimed job; the hook list covers campaign activation/expiry,
+benefit expiry, outbox publish/retry, and cache refresh.
+
+An inbox/Kafka consumer is present for a future versioned event contract, but
+`promotion.integration.consumers-enabled` defaults to `false`; it must remain
+disabled until Booking/Payment publish the envelope and ownership rules agreed
+with Promotion.
 
 ## 7. Đặc Tả Chi Tiết Các API Chính
 
 ### 7.1. Nhóm Promotion Checkout (Internal APIs)
 
-#### 7.1.1. Reserve Promotion
-Validate điều kiện giỏ hàng và giữ tạm thời (soft-lock) quyền lợi coupon/voucher, cập nhật trạng thái `budget_reserved` và quota tạm thời.
+Tất cả endpoint `/internal/**` yêu cầu cặp `X-Service-Name` + `X-Internal-Token`.
+Các lệnh thay đổi reservation còn yêu cầu `X-Idempotency-Key` dài tối đa 255
+ký tự. Idempotency được lưu DB theo `(service, API, key)`, ràng buộc SHA-256
+của payload và replay nguyên response đã hoàn thành; record `PROCESSING` có lease
+để tự phục hồi khi instance chết. `benefitType` chỉ nhận `COUPON` hoặc `VOUCHER`;
+ít nhất một trong `bookingPublicId` và `orderPublicId` phải có giá trị.
 
-- **Endpoint**: `POST /internal/promotions/reserve`
-- **Headers**:
-  - `X-Internal-Token: <service-token>`
-  - `X-Idempotency-Key: <unique-uuid-key>`
+#### 7.1.1. Runtime Validate
+
+Preview điều kiện benefit, campaign, quota, active hold và ngân sách tại thời điểm gọi. API này **không giữ tài nguyên** nên kết quả chỉ mang tính advisory; checkout luôn phải dùng API reserve làm bước quyết định.
+
+- **Endpoint**: `POST /internal/runtime/validate`
 - **Request Body**:
+
   ```json
   {
-    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
-    "orderPublicId": "e58dfc02-e2bc-4402-a4f7-e7d6ab6277b0",
+    "benefitType": "COUPON",
+    "code": "LORAFILM50K",
     "userPublicId": "8f395bb2-33cc-4b77-88f5-9372f7cbe801",
     "customerPhone": "0987654321",
-    "benefitType": "COUPON", 
-    "benefitCode": "LORAFILM50K",
-    "originalAmount": 250000.00
-  }
-  ```
-  *(Lưu ý: `benefitType` có giá trị là `COUPON` hoặc `VOUCHER`)*
-
-- **Response Success (201 Created)**:
-  ```json
-  {
-    "success": true,
-    "message": "Promotion reserved successfully",
-    "data": {
-      "reservationPublicId": "a85cfc32-b2cc-4502-b4f7-d7d6ab6277c0",
-      "reservationCode": "RES-LORAFILM50K-2026",
-      "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
-      "originalAmount": 250000.00,
-      "discountAmount": 50000.00,
-      "finalAmount": 200000.00,
-      "status": "ACTIVE",
-      "reservationStartedAt": "2026-07-28T13:50:00.000",
-      "reservationExpiredAt": "2026-07-28T14:05:00.000"
-    }
+    "originalAmount": 250000.00,
+    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
+    "contextJson": {}
   }
   ```
 
-#### 7.1.2. Confirm Promotion
-Xác nhận giao dịch thanh toán thành công, chuyển đổi phiên giữ tạm thời thành ledger chính thức. Trạng thái `budget_reserved` chuyển sang `budget_used`.
+- **Response `data`**: `valid`, `benefitType`, `benefitPublicId`, `code`, `originalAmount`, `discountAmount`, `finalAmount`, `currency`, `reasonCode`, `message`.
+- `customerPhone` được canonicalize về E.164 (`0901234567` -> `+84901234567`)
+  trước khi tính quota; giá trị không hợp lệ trả `400`.
+- `contextJson` tối đa 16 KiB và phải là object. Engine hiện hỗ trợ:
+  `movieId(s)`, `cinemaId(s)`, `paymentMethod(s)`, `channel(s)`, `format(s)`,
+  `orderType(s)`, `seatType(s)`, `allowedUserIds`, `dayOfWeek`,
+  `excludeRoomType(s)`, `excludeDates`, `requiredTierCode`,
+  `requiresVerification`, `minimumOrderAmount/minOrderAmount`.
+- `allowMultipleVoucherPerOrder`, `stackableWith` và `notStackableWith` là metadata
+  policy được validate kiểu dữ liệu; chúng không mở khóa stacking trong Reservation
+  Runtime một-benefit-per-checkout.
 
-- **Endpoint**: `POST /internal/promotions/confirm`
+#### 7.1.2. Create Reservation
+
+Validate và giữ atomically coupon/voucher, campaign quota và `budget_reserved`. Cùng idempotency key và cùng payload trả lại cùng reservation; cùng key nhưng payload khác trả `409`.
+
+Mỗi checkout chỉ có một benefit hiệu lực. `orderPublicId` là scope chính; nếu chưa
+có order thì dùng `bookingPublicId`. Unique constraint tại DB là lớp bảo vệ cuối
+cùng khi nhiều pod cùng reserve.
+
+- **Endpoint**: `POST /internal/reservations`
 - **Request Body**:
+
   ```json
   {
-    "reservationPublicId": "a85cfc32-b2cc-4502-b4f7-d7d6ab6277c0",
-    "paymentPublicId": "p09f2203-d2bc-4402-a4f7-e7d6ab6299d0"
-  }
-  ```
-- **Response Success (200 OK)**:
-  ```json
-  {
-    "success": true,
-    "message": "Promotion confirmed and redemption created",
-    "data": {
-      "redemptionPublicId": "r99cfc12-c2cc-4502-b4f7-d7d6ab6277a0",
-      "reservationPublicId": "a85cfc32-b2cc-4502-b4f7-d7d6ab6277c0",
-      "status": "COMPLETED",
-      "confirmedAt": "2026-07-28T13:55:00.000"
-    }
+    "benefitType": "COUPON",
+    "code": "LORAFILM50K",
+    "userPublicId": "8f395bb2-33cc-4b77-88f5-9372f7cbe801",
+    "customerPhone": "0987654321",
+    "originalAmount": 250000.00,
+    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
+    "orderPublicId": "e58dfc02-e2bc-4402-a4f7-e7d6ab6277b0",
+    "contextJson": {},
+    "holdDurationSeconds": 900
   }
   ```
 
-#### 7.1.3. Rollback Promotion
-Hủy bỏ phiên giữ tạm thời, giải phóng hoàn toàn quota và ngân sách đang bị giữ.
+- **Response Success**: `201 Created`, `data.publicId` là reservation ID; trạng thái ban đầu là `ACTIVE`. Response chứa pricing snapshot, benefit/campaign/transaction references, thời gian bắt đầu và deadline.
 
-- **Endpoint**: `POST /internal/promotions/rollback`
+#### 7.1.3. Confirm Reservation
+
+Chuyển `ACTIVE -> COMPLETED`, chuyển `budget_reserved` thành `budget_used` và tạo đúng một coupon/voucher redemption gắn unique với reservation. Retry cùng `paymentPublicId` trả cùng redemption; payment khác trả `409`.
+
+- **Endpoint**: `POST /internal/reservations/{reservationId}/confirm`
 - **Request Body**:
+
   ```json
   {
-    "reservationPublicId": "a85cfc32-b2cc-4502-b4f7-d7d6ab6277c0",
-    "rollbackReason": "Customer cancelled booking or payment timeout"
+    "paymentPublicId": "a09f2203-d2bc-4402-a4f7-e7d6ab6299d0"
   }
   ```
-- **Response Success (200 OK)**:
+
+- Reservation hết hạn trả `409 RESERVATION_EXPIRED`.
+- Reservation đã release/cancel không thể confirm.
+- Reservation đã `COMPLETED` không được release/cancel; hoàn tiền hoặc bồi thường phải đi qua nghiệp vụ refund/compensation.
+- Campaign bị pause/cancel/kill-switch sau lúc reserve không làm mất hold đã cấp:
+  Payment vẫn được confirm trong TTL theo snapshot. Client không được refresh hold đó.
+
+#### 7.1.4. Release Reservation
+
+Dùng khi payment thất bại hoặc timeout trước confirm. Chuyển `ACTIVE -> RELEASED`, ghi `rollbackAt/rollbackReason` và hoàn phần ngân sách đang giữ.
+
+- **Endpoint**: `POST /internal/reservations/{reservationId}/release`
+- **Request Body**:
+
   ```json
   {
-    "success": true,
-    "message": "Promotion reservation rolled back successfully",
-    "data": {
-      "reservationPublicId": "a85cfc32-b2cc-4502-b4f7-d7d6ab6277c0",
-      "status": "CANCELLED",
-      "rollbackAt": "2026-07-28T14:02:00.000"
-    }
+    "reason": "Payment failed"
   }
   ```
+
+#### 7.1.5. Cancel Reservation
+
+Dùng khi booking bị khách hàng hoặc hệ thống hủy trước confirm. Chuyển `ACTIVE -> CANCELLED`, ghi `cancelledAt/cancelledReason` và hoàn phần ngân sách đang giữ.
+
+- **Endpoint**: `POST /internal/reservations/{reservationId}/cancel`
+- **Request Body**:
+
+  ```json
+  {
+    "reason": "Customer cancelled booking"
+  }
+  ```
+
+#### 7.1.6. Refresh Reservation
+
+Gia hạn một reservation `ACTIVE`. Deadline tuyệt đối giúp retry không vô tình cộng TTL nhiều lần. Deadline mới phải lớn hơn deadline hiện tại, không vượt quá 1800 giây tính từ lúc reserve, `validTo` của benefit hoặc `endAt` của campaign. Pricing snapshot phải còn validate được.
+
+- **Endpoint**: `POST /internal/reservations/{reservationId}/refresh`
+- **Request Body**:
+
+  ```json
+  {
+    "requestedExpiredAt": "2026-07-28T14:10:00.000000Z"
+  }
+  ```
+
+#### 7.1.7. Get Reservation Detail
+
+- **Endpoint**: `GET /internal/reservations/{reservationId}`
+- Trả toàn bộ pricing snapshot, lifecycle timestamps và redemption nếu đã `COMPLETED`.
+- Nếu dữ liệu vẫn là `ACTIVE` nhưng deadline đã qua, request này atomically tự chuyển sang `EXPIRED`, hoàn budget và ghi lifecycle event.
+
+#### 7.1.8. Reservation History
+
+- **Endpoint**: `GET /api/admin/reservations`
+- **Auth**: Bearer token.
+- **Query tùy chọn**: `type`, `status`, `userPublicId`, `bookingPublicId`, `orderPublicId`, `from`, `to`, `page` (mặc định 0), `size` (1-100, mặc định 20).
+- Kết quả phân trang theo `createdAt DESC`.
+
+#### Các API không tạo
+
+- Không có `/internal/runtime/check`: trùng mục đích với `validate`.
+- Không có `/internal/runtime/force-expire`: client không được ép một active hold sang expired; dùng release/cancel đúng nguyên nhân.
+- Reservation expiration itself is not exposed as a public HTTP operation:
+  `ReservationExpirationScheduler` runs in-process, claims rows in the database,
+  and processes each reservation in its own `REQUIRES_NEW` transaction. The
+  operational `/internal/schedulers/**` hooks listed in section 6.1 are
+  restricted service-to-service hooks for campaign/benefit lifecycle, outbox,
+  and cache jobs; they must not be routed through the public gateway.
+
+#### Nguồn sự thật tích hợp
+
+- The intended caller contract is Booking →
+  `validate/reserve/refresh/cancel` and Payment →
+  `detail/confirm/release`. In the current repository snapshot those clients
+  are not wired yet; the integration checklist in
+  `promotion-service-production-readiness-report.md` is a release blocker.
+- Các API đồng bộ trên là nguồn sự thật cho thay đổi trạng thái. Promotion chỉ
+  **publish** lifecycle event qua transactional outbox.
+- Không đồng thời consume `PaymentCompleted`, `PaymentFailed` hoặc
+  `BookingCancelled` trong issue này: chưa có event contract/idempotency ownership
+  được hai service thống nhất, và thêm consumer sẽ tạo hai writer cạnh tranh cho
+  cùng state machine. Khi bổ sung event-driven fallback phải có inbox table,
+  schema version và quy tắc ownership riêng.
 
 ---
 
@@ -762,13 +985,15 @@ Kiểm tra điều kiện của coupon trước khi áp dụng thực tế, khô
 - **Request Body**:
   ```json
   {
-    "couponCode": "LORAFILM50K",
+    "code": "LORAFILM50K",
     "userPublicId": "8f395bb2-33cc-4b77-88f5-9372f7cbe801",
+    "customerPhone": "0987654321",
     "originalAmount": 250000.00,
-    "conditions": {
-      "cinemaPublicId": "cin-1234",
-      "showtimePublicId": "st-5678",
-      "moviePublicId": "mov-9999"
+    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
+    "contextJson": {
+      "cinemaId": "cin-1234",
+      "showtimeId": "st-5678",
+      "movieId": "mov-9999"
     }
   }
   ```
@@ -776,13 +1001,20 @@ Kiểm tra điều kiện của coupon trước khi áp dụng thực tế, khô
   ```json
   {
     "success": true,
-    "message": "Coupon is valid",
+    "message": "Operation successful",
     "data": {
-      "couponPublicId": "cop-8888-8888",
       "valid": true,
+      "benefitType": "COUPON",
+      "benefitPublicId": "cop-8888-8888",
+      "code": "LORAFILM50K",
+      "originalAmount": 250000.00,
       "discountAmount": 50000.00,
-      "finalAmount": 200000.00
-    }
+      "finalAmount": 200000.00,
+      "currency": "VND",
+      "reasonCode": "ELIGIBLE",
+      "message": "Benefit is eligible"
+    },
+    "timestamp": "2026-07-28T14:00:00Z"
   }
   ```
 
@@ -793,22 +1025,31 @@ Kiểm tra tính hợp lệ của voucher cá nhân trong ví của user.
 - **Request Body**:
   ```json
   {
-    "voucherCode": "VCH-XYZ-123",
+    "code": "VCH-XYZ-123",
     "userPublicId": "8f395bb2-33cc-4b77-88f5-9372f7cbe801",
-    "originalAmount": 250000.00
+    "originalAmount": 250000.00,
+    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
+    "contextJson": {}
   }
   ```
 - **Response Success (200 OK)**:
   ```json
   {
     "success": true,
-    "message": "Voucher is valid",
+    "message": "Operation successful",
     "data": {
-      "voucherPublicId": "vch-7777-7777",
       "valid": true,
+      "benefitType": "VOUCHER",
+      "benefitPublicId": "vch-7777-7777",
+      "code": "VCH-XYZ-123",
+      "originalAmount": 250000.00,
       "discountAmount": 100000.00,
-      "finalAmount": 150000.00
-    }
+      "finalAmount": 150000.00,
+      "currency": "VND",
+      "reasonCode": "ELIGIBLE",
+      "message": "Benefit is eligible"
+    },
+    "timestamp": "2026-07-28T14:00:00Z"
   }
   ```
 
@@ -946,8 +1187,10 @@ Tạo đợt đối soát và quyết toán chi phí khuyến mãi với các đ
 | `LEGAL_DISCOUNT_CEILING_EXCEEDED` | 400 | Mức giảm vượt quá trần quy định của pháp luật (50%) |
 | `RESERVATION_NOT_FOUND` | 404 | Không tìm thấy phiên giữ khuyến mại |
 | `RESERVATION_EXPIRED` | 409 | Phiên giữ khuyến mại đã hết hạn TTL |
-| `RESERVATION_ALREADY_CONFIRMED` | 409 | Phiên giữ đã được confirm thanh toán trước đó |
-| `RESERVATION_ALREADY_CANCELLED` | 409 | Phiên giữ đã bị rollback trước đó |
+| `RESERVATION_CONFLICT` | 409 | Benefit/quota/budget đang được giữ hoặc dữ liệu reservation không nhất quán |
+| `RESERVATION_COMPLETED` | 409 | Không thể release/cancel reservation đã tạo redemption |
+| `RESERVATION_IDEMPOTENCY_CONFLICT` | 409 | Replay có payload, payment hoặc transition data khác request ban đầu |
+| `RESERVATION_INVALID_STATE` | 409 hoặc 400 | Chuyển trạng thái hoặc deadline không hợp lệ |
 | `PARTNER_NOT_FOUND` | 404 | Không tìm thấy đối tác |
 | `IDEMPOTENCY_CONFLICT` | 409 | Trùng Idempotency Key với dữ liệu yêu cầu khác biệt |
 | `SCORE_SERVICE_UNAVAILABLE` | 503 | Dịch vụ Loyalty Point bị lỗi (Áp dụng Circuit Breaker fallback) |
@@ -962,3 +1205,5 @@ Tạo đợt đối soát và quyết toán chi phí khuyến mãi với các đ
 | 22/06/2026 | Cập nhật theo review của Owner: lifecycle, snapshot, revert audit. | Dương Thiện Nhân |
 | 24/06/2026 | Đồng bộ timestamps với DB schema & approve | Dương Thiện Nhân |
 | 28/07/2026 | **Hợp nhất hoàn toàn đặc tả Benefit Domain (API + Business Rules + Thực tế MySQL DDL)**. Thay đổi các endpoint apply/confirm sang `/internal/promotions/...`. Xóa bỏ tệp `benefit-domain-api.md`. | Antigravity |
+| 28/07/2026 | Đồng bộ Reservation Runtime với implementation thực tế: 8 API canonical, state machine terminal, pricing snapshot, idempotency, lock, auto-expiration và lịch sử vận hành. | Codex |
+| 28/07/2026 | Production hardening: service-scoped auth/idempotency, one-benefit checkout scope, legal/budget gate, strict condition engine, E.164 phone, Kafka ACK + DB lease outbox, per-row scheduler retry và Flyway migration. | Codex |

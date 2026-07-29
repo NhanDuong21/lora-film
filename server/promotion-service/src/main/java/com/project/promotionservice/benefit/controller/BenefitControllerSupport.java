@@ -1,9 +1,7 @@
 package com.project.promotionservice.benefit.controller;
 
 import com.project.promotionservice.configuration.security.principal.UserPrincipal;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 
 import java.util.Set;
 
@@ -22,13 +20,7 @@ final class BenefitControllerSupport {
     }
 
     static Pageable pageable(int page, int size, String sort, Set<String> allowedProperties) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.max(1, Math.min(size, 100));
-        String[] parts = sort == null ? new String[0] : sort.split(",", 2);
-        String property = parts.length == 0 || !allowedProperties.contains(parts[0])
-                ? "createdAt" : parts[0];
-        Sort.Direction direction = parts.length > 1 && "asc".equalsIgnoreCase(parts[1])
-                ? Sort.Direction.ASC : Sort.Direction.DESC;
-        return PageRequest.of(safePage, safeSize, Sort.by(direction, property));
+        return com.project.promotionservice.common.web.ControllerPageSupport.pageable(
+                page, size, sort, allowedProperties, "createdAt");
     }
 }

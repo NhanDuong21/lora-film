@@ -29,9 +29,15 @@ public class JwtTokenProvider {
         if (jwtSecret == null || jwtSecret.isBlank()) {
             throw new IllegalStateException("CRITICAL SECURITY FAILURE: 'jwt.secret' configuration is missing! Must configure JWT_SECRET environment variable.");
         }
-        byte[] bytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length < 32) {
-            throw new IllegalStateException("CRITICAL SECURITY FAILURE: 'jwt.secret' is insecure! Secret key must be at least 256 bits (32 bytes).");
+        try {
+            if (getSigningKey().getEncoded().length < 32) {
+                throw new IllegalStateException(
+                        "CRITICAL SECURITY FAILURE: JWT signing key must be at least 256 bits");
+            }
+        } catch (RuntimeException invalidKey) {
+            throw new IllegalStateException(
+                    "CRITICAL SECURITY FAILURE: 'jwt.secret' is not a valid HS256-or-stronger key",
+                    invalidKey);
         }
     }
 
@@ -50,11 +56,16 @@ public class JwtTokenProvider {
             return false;
         }
         try {
-            Jwts.parser()
+            Claims claims = Jwts.parser()
                 .verifyWith(getSigningKey())
                 .build()
-                .parseSignedClaims(token);
-            return true;
+                .parseSignedClaims(token)
+                .getPayload();
+            Object userId = claims.get("userId");
+            return "access".equals(claims.get("tokenType", String.class))
+                    && claims.getSubject() != null
+                    && !claims.getSubject().isBlank()
+                    && positiveUserId(userId);
         } catch (SignatureException e) {
             log.error("Invalid JWT signature: {}", e.getMessage());
         } catch (MalformedJwtException e) {
@@ -67,6 +78,20 @@ public class JwtTokenProvider {
             log.error("JWT claims string is empty: {}", e.getMessage());
         }
         return false;
+    }
+
+    private boolean positiveUserId(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue() > 0;
+        }
+        if (value == null) {
+            return false;
+        }
+        try {
+            return Long.parseLong(value.toString()) > 0;
+        } catch (NumberFormatException invalidUserId) {
+            return false;
+        }
     }
 
     public Claims getClaimsFromToken(String token) {

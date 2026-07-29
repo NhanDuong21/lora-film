@@ -53,7 +53,7 @@ class PromotionReservationConcurrencyTest {
     private PromotionReservationService reservationService;
 
     @Test
-    void onlyOneConcurrentTransactionCanHoldTheSameBenefit() throws Exception {
+    void onlyOneConcurrentTransactionCanHoldTheSameCouponForOneVerifiedPhone() throws Exception {
         PromotionCampaign campaign = activeCampaign();
         CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
         CountDownLatch ready = new CountDownLatch(2);

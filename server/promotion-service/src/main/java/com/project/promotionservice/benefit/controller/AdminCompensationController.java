@@ -12,10 +12,15 @@ import com.project.promotionservice.configuration.security.principal.UserPrincip
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,9 +33,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.util.Set;
 
+import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+import static com.project.promotionservice.common.constant.ValidationConstants.USER_REFERENCE_PATTERN;
+
 @RestController
+@Validated
 @RequestMapping("/api/admin/compensation-vouchers")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'CSKH_AGENT')")
 @Tag(name = "Admin Compensation Vouchers", description = "Audited customer compensation issuance")
 public class AdminCompensationController {
 
@@ -57,7 +66,9 @@ public class AdminCompensationController {
     @PutMapping("/{id}")
     @Operation(summary = "Update or cancel compensation voucher")
     public ResponseEntity<ApiResponse<CompensationResponse>> update(
-            @PathVariable("id") String publicId,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
             @Valid @RequestBody CompensationUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -69,14 +80,17 @@ public class AdminCompensationController {
     @GetMapping
     @Operation(summary = "Search compensation vouchers")
     public ResponseEntity<ApiResponse<PagedResponse<CompensationResponse>>> search(
-            @RequestParam(required = false) String userPublicId,
+            @RequestParam(required = false)
+            @Pattern(regexp = USER_REFERENCE_PATTERN,
+                    message = "userPublicId must be a positive account ID or a valid UUID")
+            String userPublicId,
             @RequestParam(required = false) CompensationType type,
             @RequestParam(required = false) CompensationStatus status,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "issuedAt,desc") String sort) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "issuedAt,desc") @Size(max = 60) String sort) {
         PagedResponse<CompensationResponse> data = compensationService.search(
                 userPublicId, type, status, from, to,
                 BenefitControllerSupport.pageable(page, size, sort, SORT_FIELDS));
@@ -86,7 +100,9 @@ public class AdminCompensationController {
     @GetMapping("/{id}")
     @Operation(summary = "Get compensation voucher detail and approval history")
     public ResponseEntity<ApiResponse<CompensationResponse>> get(
-            @PathVariable("id") String publicId) {
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId) {
         return ResponseEntity.ok(ApiResponse.success(compensationService.get(publicId)));
     }
 }

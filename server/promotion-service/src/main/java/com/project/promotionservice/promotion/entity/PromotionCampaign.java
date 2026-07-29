@@ -40,6 +40,9 @@ public class PromotionCampaign extends BaseAuditableEntity {
     @Column(name = "funding_source", length = 50, nullable = false)
     private FundingSource fundingSource;
 
+    @Column(name = "partner_public_id", length = 36)
+    private String partnerPublicId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private CampaignStatus status = CampaignStatus.DRAFT;
@@ -215,6 +218,14 @@ public class PromotionCampaign extends BaseAuditableEntity {
 
     public void setFundingSource(FundingSource fundingSource) {
         this.fundingSource = fundingSource;
+    }
+
+    public String getPartnerPublicId() {
+        return partnerPublicId;
+    }
+
+    public void setPartnerPublicId(String partnerPublicId) {
+        this.partnerPublicId = partnerPublicId;
     }
 
     public CampaignStatus getStatus() {

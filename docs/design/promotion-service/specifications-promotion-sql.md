@@ -11944,3 +11944,17 @@ Tài liệu này đã hoàn thành toàn bộ thiết kế cơ sở dữ liệu 
 ---
 
 **Kết thúc Phase 18 - Hoàn thành Promotion Service Database Design Specification**
+
+## 23. Runtime schema reconciliation (2026-07-29)
+
+The Flyway files under `server/promotion-service/src/main/resources/db/migration`
+are authoritative for deployment. The current sequence is V1 (base schema),
+V2 (reservation/outbox hardening), V3 (partner/configuration/integration), and
+V4 (normalization of legacy `CHAR(n)` columns to `VARCHAR(n)`). V4 is
+data-preserving and aligns Hibernate validation with the numeric account IDs
+now emitted by Auth/User/Score while retaining UUID compatibility.
+
+This SQL design describes the full target domain. The implemented checkout
+runtime intentionally remains one coupon or one voucher; multi-benefit
+stacking, automatic discovery and the points saga require separate
+cross-service contracts and are not silently enabled by the schema.

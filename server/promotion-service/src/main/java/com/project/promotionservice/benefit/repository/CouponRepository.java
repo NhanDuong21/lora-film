@@ -10,6 +10,10 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.time.Instant;
+import java.util.Collection;
+import com.project.promotionservice.benefit.enums.BenefitEnums.CouponStatus;
+import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface CouponRepository extends JpaRepository<Coupon, Long>, JpaSpecificationExecutor<Coupon> {
@@ -27,4 +31,12 @@ public interface CouponRepository extends JpaRepository<Coupon, Long>, JpaSpecif
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Coupon c where c.publicId = :publicId and c.deletedAt is null")
     Optional<Coupon> findByPublicIdForUpdate(@Param("publicId") String publicId);
+
+    @Query("""
+            select c.publicId from Coupon c
+            where c.status in :statuses and c.validTo <= :now and c.deletedAt is null
+            order by c.validTo asc
+            """)
+    java.util.List<String> findExpirableIds(@Param("statuses") Collection<CouponStatus> statuses,
+                                            @Param("now") Instant now, Pageable pageable);
 }
