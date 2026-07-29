@@ -52,6 +52,14 @@ public class AccountController {
         AccountDto account = accountService.updateAccountRole(id, roleId);
         return ResponseEntity.ok(ApiResponse.success("Role updated successfully", account));
     }
+
+    @PostMapping("/employee")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('EMPLOYEE_CREATE')")
+    public ResponseEntity<ApiResponse<AccountDto>> createEmployeeAccount(@jakarta.validation.Valid @RequestBody com.project.authservice.dto.request.EmployeeAccountRequest request) {
+        log.info("Create employee account called: email={}", request.getEmail());
+        AccountDto account = accountService.createEmployeeAccount(request);
+        return ResponseEntity.status(201).body(ApiResponse.success("Employee account created successfully", account));
+    }
     public AccountController(AccountService accountService) {
         this.accountService = accountService;
     }

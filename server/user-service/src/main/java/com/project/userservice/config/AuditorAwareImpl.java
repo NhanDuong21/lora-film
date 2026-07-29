@@ -1,4 +1,4 @@
-package com.project.authservice.config;
+package com.project.userservice.config;
 
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.security.core.Authentication;
@@ -16,16 +16,16 @@ public class AuditorAwareImpl implements AuditorAware<Long> {
             return Optional.empty();
         }
 
-        Object credentials = authentication.getCredentials();
-        if (credentials instanceof Long value) {
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof Long value) {
             return Optional.of(value);
         }
-        if (credentials instanceof Number value) {
+        if (principal instanceof Number value) {
             return Optional.of(value.longValue());
         }
-
+        
         try {
-            return Optional.of(Long.valueOf(authentication.getName()));
+            return Optional.of(Long.valueOf(principal.toString()));
         } catch (NumberFormatException e) {
             return Optional.empty();
         }

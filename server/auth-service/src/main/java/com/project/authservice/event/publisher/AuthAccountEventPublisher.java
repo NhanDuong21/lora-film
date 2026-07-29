@@ -107,4 +107,35 @@ public class AuthAccountEventPublisher {
             throw new RuntimeException("Kafka publish failed for accountId=" + accountId, ex);
         }
     }
+
+    public void publishEmployeeAccountCreated(Account savedAccount, String fullName) {
+        Long accountId = savedAccount.getId();
+        String email = savedAccount.getEmail();
+
+        log.info("Building ACCOUNT_VERIFIED event for employee accountId={} email={}",
+                accountId, maskEmail(email));
+
+        AccountVerifiedEventData data = AccountVerifiedEventData.builder()
+                .requestId(UUID.randomUUID().toString())
+                .accountId(accountId)
+                .email(email)
+                .role(savedAccount.getRole().getRoleName())
+                .fullName(fullName)
+                .build();
+
+        com.project.authservice.event.dto.AccountVerifiedEvent event = 
+            com.project.authservice.event.dto.AccountVerifiedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .occurredAt(Instant.now())
+                .data(data)
+                .build();
+
+        try {
+            kafkaTemplate.send(accountVerifiedTopic, String.valueOf(accountId), event).get();
+            log.info("Published ACCOUNT_VERIFIED event for employee accountId={}", accountId);
+        } catch (Exception ex) {
+            log.error("Failed to publish ACCOUNT_VERIFIED event for employee accountId={}", accountId, ex);
+            throw new RuntimeException("Kafka publish failed for accountId=" + accountId, ex);
+        }
+    }
 }
