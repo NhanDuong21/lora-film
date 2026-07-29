@@ -260,6 +260,8 @@ CREATE TABLE promotion_reservations (
     order_public_id CHAR(36) NULL COMMENT 'Public ID đơn hàng',
     payment_public_id CHAR(36) NULL COMMENT 'Public ID thanh toán',
     user_public_id CHAR(36) NOT NULL COMMENT 'Public ID người dùng',
+    customer_phone VARCHAR(20) NULL COMMENT 'Số điện thoại đã xác thực dùng để giữ quota coupon',
+    reservation_scope_key VARCHAR(80) NULL COMMENT 'Một benefit hiệu lực trên mỗi order/booking',
     campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
     coupon_public_id CHAR(36) NULL COMMENT 'Public ID coupon',
     voucher_public_id CHAR(36) NULL COMMENT 'Public ID voucher',
@@ -277,6 +279,10 @@ CREATE TABLE promotion_reservations (
     rollback_at DATETIME(6) NULL COMMENT 'Thời điểm rollback',
     rollback_reason VARCHAR(255) NULL COMMENT 'Lý do rollback',
     metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    expiration_attempts INT NOT NULL DEFAULT 0 COMMENT 'Số lần scheduler thử hết hạn',
+    expiration_last_attempt_at DATETIME(6) NULL COMMENT 'Lần thử hết hạn gần nhất',
+    expiration_next_attempt_at DATETIME(6) NULL COMMENT 'Lần retry hết hạn tiếp theo',
+    expiration_error VARCHAR(1000) NULL COMMENT 'Lỗi hết hạn gần nhất',
     version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản dữ liệu',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
     created_by CHAR(36) NULL COMMENT 'Người tạo',
@@ -286,6 +292,7 @@ CREATE TABLE promotion_reservations (
     deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
     CONSTRAINT uk_promotion_reservation_public UNIQUE (public_id),
     CONSTRAINT uk_promotion_reservation_code UNIQUE (reservation_code),
+    CONSTRAINT uk_promotion_reservation_scope UNIQUE (reservation_scope_key),
     CONSTRAINT chk_reservation_amount CHECK (
         original_amount >= 0
         AND discount_amount >= 0
@@ -293,8 +300,54 @@ CREATE TABLE promotion_reservations (
         AND final_amount = original_amount - discount_amount
     ),
     CONSTRAINT chk_reservation_single_benefit CHECK (
-        (coupon_public_id IS NOT NULL AND voucher_public_id IS NULL)
-        OR (coupon_public_id IS NULL AND voucher_public_id IS NOT NULL)
+        (
+            reservation_type = 'COUPON'
+            AND coupon_public_id IS NOT NULL
+            AND voucher_public_id IS NULL
+        )
+        OR (
+            reservation_type = 'VOUCHER'
+            AND coupon_public_id IS NULL
+            AND voucher_public_id IS NOT NULL
+        )
+    ),
+    CONSTRAINT chk_reservation_status CHECK (
+        status IN ('ACTIVE', 'COMPLETED', 'RELEASED', 'CANCELLED', 'EXPIRED')
+    ),
+    CONSTRAINT chk_reservation_lifecycle CHECK (
+        (
+            status = 'ACTIVE'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'COMPLETED'
+            AND confirmed_at IS NOT NULL
+            AND payment_public_id IS NOT NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'RELEASED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NOT NULL
+            AND rollback_reason IS NOT NULL
+        )
+        OR (
+            status = 'CANCELLED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NOT NULL
+            AND cancelled_reason IS NOT NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'EXPIRED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
     ),
     CONSTRAINT chk_reservation_period CHECK (
         reservation_expired_at > reservation_started_at
@@ -319,14 +372,33 @@ CREATE INDEX idx_reservation_expired ON promotion_reservations (reservation_expi
 
 CREATE INDEX idx_reservation_deleted ON promotion_reservations (deleted_at);
 
+CREATE INDEX idx_reservation_expiration_due
+    ON promotion_reservations (status, reservation_expired_at, expiration_next_attempt_at);
+
 CREATE INDEX idx_reservation_coupon_active
     ON promotion_reservations (coupon_public_id, status, reservation_expired_at);
+
+CREATE INDEX idx_reservation_coupon_user_active
+    ON promotion_reservations (
+        coupon_public_id, user_public_id, status, reservation_expired_at
+    );
+
+CREATE INDEX idx_reservation_coupon_phone_active
+    ON promotion_reservations (
+        coupon_public_id, customer_phone, status, reservation_expired_at
+    );
 
 CREATE INDEX idx_reservation_voucher_active
     ON promotion_reservations (voucher_public_id, status, reservation_expired_at);
 
 CREATE INDEX idx_reservation_campaign_active
     ON promotion_reservations (campaign_public_id, status, reservation_expired_at);
+
+CREATE INDEX idx_reservation_history
+    ON promotion_reservations (status, reservation_type, created_at);
+
+CREATE INDEX idx_reservation_created
+    ON promotion_reservations (created_at);
 
 -- ============================================================
 -- COMPENSATION VOUCHERS
@@ -573,6 +645,8 @@ CREATE TABLE outbox_events (
     publish_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái publish',
     retry_count INT NOT NULL DEFAULT 0 COMMENT 'Số lần gửi lại',
     next_retry_at DATETIME(6) NULL COMMENT 'Lần gửi tiếp theo',
+    processing_started_at DATETIME(6) NULL COMMENT 'Thời điểm bắt đầu lease publish',
+    processing_owner VARCHAR(100) NULL COMMENT 'Instance đang giữ lease publish',
     published_at DATETIME(6) NULL COMMENT 'Ngày publish',
     error_message TEXT NULL COMMENT 'Lỗi publish',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
@@ -589,6 +663,9 @@ CREATE INDEX idx_outbox_status ON outbox_events (publish_status);
 CREATE INDEX idx_outbox_topic ON outbox_events (topic_name);
 
 CREATE INDEX idx_outbox_retry ON outbox_events (next_retry_at);
+
+CREATE INDEX idx_outbox_claim
+    ON outbox_events (publish_status, next_retry_at, processing_started_at, created_at);
 
 CREATE INDEX idx_outbox_aggregate ON outbox_events (
     aggregate_type,
@@ -611,7 +688,7 @@ CREATE TABLE promotion_idempotency_keys (
     api_name VARCHAR(150) NOT NULL COMMENT 'Tên API',
     http_method VARCHAR(10) NOT NULL COMMENT 'Phương thức HTTP',
     user_public_id CHAR(36) NULL COMMENT 'Public ID người dùng',
-    client_id VARCHAR(100) NULL COMMENT 'Mã ứng dụng gọi',
+    client_id VARCHAR(100) NOT NULL COMMENT 'Service gọi đã được xác thực',
     device_id VARCHAR(150) NULL COMMENT 'Mã thiết bị',
     session_id VARCHAR(150) NULL COMMENT 'Mã phiên đăng nhập',
     request_uri VARCHAR(255) NOT NULL COMMENT 'Đường dẫn API',
@@ -633,7 +710,7 @@ CREATE TABLE promotion_idempotency_keys (
     deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
     deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
     CONSTRAINT uk_idempotency_public UNIQUE (public_id),
-    CONSTRAINT uk_idempotency_key UNIQUE (idempotency_key)
+    CONSTRAINT uk_idempotency_scope UNIQUE (client_id, api_name, idempotency_key)
 ) COMMENT = 'Lưu khóa chống xử lý trùng request';
 
 CREATE INDEX idx_idempotency_user ON promotion_idempotency_keys (user_public_id);
