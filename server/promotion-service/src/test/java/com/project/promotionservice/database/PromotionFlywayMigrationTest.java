@@ -31,13 +31,19 @@ class PromotionFlywayMigrationTest {
                 .baselineVersion("1")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(2);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(4);
         assertColumnExists("promotion_reservations", "reservation_scope_key");
         assertColumnExists("promotion_reservations", "expiration_next_attempt_at");
         assertColumnExists("outbox_events", "processing_started_at");
         assertIndexExists("promotion_reservations", "uk_promotion_reservation_scope");
         assertIndexExists("promotion_idempotency_keys", "uk_idempotency_scope");
         assertIndexExists("outbox_events", "idx_outbox_claim");
+        assertColumnExists("partners", "version");
+        assertColumnExists("promotion_configurations", "requires_restart");
+        assertColumnExists("promotion_integration_events", "schema_version");
+        assertIndexExists("promotion_scheduler_locks", "PRIMARY");
+        assertColumnType("promotion_reservations", "user_public_id", "varchar");
+        assertColumnType("promotion_idempotency_keys", "request_hash", "varchar");
     }
 
     private void assertColumnExists(String tableName, String columnName) throws Exception {
@@ -60,6 +66,26 @@ class PromotionFlywayMigrationTest {
                   AND index_name = ?
                 """;
         assertThat(queryCount(sql, tableName, indexName)).isEqualTo(1);
+    }
+
+    private void assertColumnType(String tableName, String columnName, String expectedType)
+            throws Exception {
+        String sql = """
+                SELECT DATA_TYPE
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = ?
+                  AND column_name = ?
+                """;
+        try (Connection connection = MYSQL.createConnection("");
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, tableName);
+            statement.setString(2, columnName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                assertThat(resultSet.getString(1)).isEqualTo(expectedType);
+            }
+        }
     }
 
     private long queryCount(String sql, String first, String second) throws Exception {
