@@ -65,7 +65,9 @@ public class PaymentOutboxService {
         payload.put("schemaVersion", "1.0");
         payload.put("paymentPublicId", payment.getPublicId());
         payload.put("bookingPublicId", payment.getBookingPublicId());
+        payload.put("userPublicId", String.valueOf(payment.getAccountId()));
         payload.put("provider", payment.getProviderCode().name());
+        payload.put("paymentMethod", payment.getPaymentMethod().name());
         payload.put("amount", payment.getAmount());
         payload.put("currency", payment.getCurrency());
         payload.put("succeededAt", payment.getSucceededAt());
