@@ -922,3 +922,15 @@ Với các khuyến mãi **đồng tài trợ** (co-funded) bởi đối tác th
 ---
 
 *Tài liệu v2 được xây dựng dựa trên phân tích mô hình vận hành thực tế của CGV Cinemas, Galaxy Cinema tại Việt Nam, kết hợp nguyên tắc DDD/Bounded Context, và quy định pháp luật Việt Nam về khuyến mại (Nghị định 81/2018/NĐ-CP, Thông tư 39/2025/TT-BCT). Ranh giới với `score-service` đã được tách bạch hoàn toàn: score-service là nguồn sự thật duy nhất cho điểm & hạng thành viên; Promotion Service chỉ tiêu thụ dữ liệu đó qua hợp đồng API/event rõ ràng (mục 52).*
+
+## 57. Runtime reconciliation (2026-07-29)
+
+This plan is the target architecture, not a promise that every cross-service
+feature is already wired. The current production core supports one coupon or
+one voucher per checkout, deterministic rule evaluation, atomic reservation,
+confirmation/release/cancel, transactional outbox, partner settlement and
+campaign lifecycle jobs. Automatic discovery, multi-benefit stacking and the
+Score point saga remain roadmap items until Booking, Payment and Score publish
+the agreed contracts. See
+`promotion-service-production-readiness-report.md` for the release gate and
+the read-only findings from related services.

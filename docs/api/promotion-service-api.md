@@ -10,9 +10,9 @@
 | Contract Owner | Dương Thiện Nhân |
 | Backend Owner | Trần Lương Thiện Hoàng |
 | Reviewer | Trần Lương Thiện Hoàng |
-| Trạng thái | Approved; Benefit & Reservation Runtime implemented/verified |
+| Trạng thái | Promotion core implemented/verified; end-to-end Booking/Payment integration pending |
 | Milestone | Sprint 2 - Core Service API Foundation & Consolidated Benefit Domain |
-| Ngày cập nhật | 28/07/2026 |
+| Ngày cập nhật | 29/07/2026 |
 
 ---
 
@@ -422,6 +422,9 @@ CREATE TABLE partner_settlements (
     adjustment_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Khoản điều chỉnh',
     final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền quyết toán',
     currency VARCHAR(10) NOT NULL DEFAULT 'VND' COMMENT 'Đơn vị tiền tệ',
+    settlement_rule VARCHAR(50) NOT NULL DEFAULT 'PERCENTAGE_OF_DISCOUNT' COMMENT 'Quy tắc quyết toán',
+    partner_percentage DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT 'Tỷ lệ đối tác tài trợ',
+    fixed_amount_per_redemption DECIMAL(18,2) NULL COMMENT 'Mức cố định mỗi redemption',
     status VARCHAR(30) NOT NULL COMMENT 'Trạng thái đối soát',
     approved_at DATETIME(6) NULL COMMENT 'Ngày phê duyệt',
     paid_at DATETIME(6) NULL COMMENT 'Ngày thanh toán',
@@ -452,6 +455,10 @@ CREATE TABLE promotion_configurations (
     category VARCHAR(100) NOT NULL COMMENT 'Nhóm cấu hình',
     description VARCHAR(500) NULL COMMENT 'Mô tả',
     editable BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Cho phép chỉnh sửa',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Optimistic lock version',
+    requires_restart BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Chỉ có hiệu lực sau restart',
+    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/INACTIVE/DEPRECATED',
+    metadata_json JSON NULL COMMENT 'Giới hạn và metadata cấu hình',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
     created_by CHAR(36) NULL COMMENT 'Người tạo',
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
@@ -736,8 +743,70 @@ Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm trán
 | | GET | `/api/admin/partner-settlements` | Admin/Finance | Danh sách phiên đối soát tài chính |
 | | GET | `/api/admin/partner-settlements/{id}` | Admin/Finance | Chi tiết quyết toán với đối tác |
 | | PUT | `/api/admin/partner-settlements/{id}/status` | Admin/Finance | Phê duyệt/Thay đổi trạng thái đối soát |
+| **Configuration** | POST | `/api/admin/configurations` | Admin/Configuration | Tạo cấu hình động |
+| | PUT | `/api/admin/configurations/{id}` | Admin/Configuration | Cập nhật và refresh cache |
+| | DELETE | `/api/admin/configurations/{id}` | Admin/Configuration | Deprecate cấu hình (xóa mềm) |
+| | GET | `/api/admin/configurations` | Admin/Configuration | Tìm kiếm cấu hình |
+| | GET | `/api/admin/configurations/{id}` | Admin/Configuration | Chi tiết cấu hình |
+| **Integration Operations** | POST | `/internal/events/publish` | Operations Service | Ghi outbound event vào transactional outbox |
+| | POST | `/internal/events/retry/{id}` | Operations Service | Retry event lỗi (có alias body `/retry`) |
+| | POST | `/internal/events/dlq/reprocess` | Operations Service | Reprocess inbound/outbound DLQ |
+| | GET | `/internal/events/status` | Operations Service | Thống kê trạng thái event |
+| **Scheduler Hooks** | POST | `/internal/schedulers/campaigns/expire` | Operations Service | Hết hạn campaign |
+| | POST | `/internal/schedulers/coupons/expire` | Operations Service | Hết hạn coupon |
+| | POST | `/internal/schedulers/vouchers/expire` | Operations Service | Hết hạn voucher |
+| | POST | `/internal/schedulers/outbox/publish` | Operations Service | Publish outbox |
+| | POST | `/internal/schedulers/outbox/retry` | Operations Service | Retry outbox |
+| | POST | `/internal/schedulers/cache/refresh` | Operations Service | Refresh runtime configuration cache |
+| **Monitoring** | GET | `/api/admin/events` | Admin/Operations | Event history (OUTBOUND/INBOUND) |
+| | GET | `/api/admin/events/{id}` | Admin/Operations | Event detail |
+| | GET | `/api/admin/events/jobs` | Admin/Operations | Scheduler execution history |
+| | POST | `/api/admin/events/jobs/{jobName}/run` | Operations Manager | Chạy job thủ công |
 
 ---
+
+### 6.1. Runtime contract alignment (2026-07-29)
+
+The controller inventory is the source of truth for the current implementation.
+The rows above are retained for the original product contract; the following
+items make the recently added runtime APIs explicit:
+
+| Group | Method | Endpoint | Authorization |
+| :--- | :--- | :--- | :--- |
+| Promotion Rule Admin | POST/PUT/DELETE | `/api/admin/promotion-rules[/{id}]` | `ADMIN`, `MARKETING_MANAGER` |
+| Promotion Rule Admin | GET | `/api/admin/promotion-rules[/{id}]` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Promotion Rule Admin | POST | `/api/admin/promotion-rules/{id}/clone` | `ADMIN`, `MARKETING_MANAGER` |
+| Promotion Rule Admin | POST | `/api/admin/promotion-rules/preview` | `ADMIN`, `MARKETING_MANAGER` |
+| Campaign lifecycle | POST | `/api/admin/promotion-campaigns/{id}/approve` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Campaign lifecycle | POST | `/api/admin/promotion-campaigns/{id}/reject` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Campaign lifecycle | PATCH | `/api/admin/promotion-campaigns/{id}/status` with `KILL_SWITCH` | `ADMIN`, `MARKETING_MANAGER` |
+| Scheduler hook | POST | `/internal/schedulers/campaigns/activate` | trusted operations caller |
+| Internal configuration | GET | `/internal/configurations/{key}` | trusted internal caller |
+| Customer wallet | GET | `/api/customers/me/vouchers` | authenticated customer; identity comes from JWT |
+
+Admin authorization is method-level and role-specific. The broad `/api/admin/**`
+matcher only requires authentication so that `MARKETING_*`, `FINANCE_*`,
+`CSKH_AGENT`, `LEGAL_COMPLIANCE`, and `OPERATIONS_MANAGER` can reach the
+endpoints explicitly assigned to them; an endpoint without a method/class
+`@PreAuthorize` is a security defect.
+Auth bootstrap currently creates only `ADMIN`, `EMPLOYEE`, and `CUSTOMER`, so
+the Promotion-specific business roles must be created and assigned before
+these non-admin APIs are deployed.
+
+`userPublicId` and `ownerPublicId` accept either a positive numeric account ID
+(the current Auth/User/Score contract) or a legacy UUID. Promotion stores these
+references as `VARCHAR(36)` after Flyway V4. `publicId` values generated by
+Promotion itself remain UUIDs.
+
+The internal scheduler hooks are operational service-to-service hooks and must
+not be exposed through the public gateway. Reservation expiration remains an
+in-process/DB-claimed job; the hook list covers campaign activation/expiry,
+benefit expiry, outbox publish/retry, and cache refresh.
+
+An inbox/Kafka consumer is present for a future versioned event contract, but
+`promotion.integration.consumers-enabled` defaults to `false`; it must remain
+disabled until Booking/Payment publish the envelope and ownership rules agreed
+with Promotion.
 
 ## 7. Đặc Tả Chi Tiết Các API Chính
 
@@ -883,11 +952,20 @@ Gia hạn một reservation `ACTIVE`. Deadline tuyệt đối giúp retry không
 
 - Không có `/internal/runtime/check`: trùng mục đích với `validate`.
 - Không có `/internal/runtime/force-expire`: client không được ép một active hold sang expired; dùng release/cancel đúng nguyên nhân.
-- Không expose scheduler/retry qua HTTP. Job `ReservationExpirationScheduler` chạy nội bộ theo cấu hình, claim theo DB, mỗi reservation dùng transaction `REQUIRES_NEW`; một dòng lỗi không rollback cả batch và được retry bằng exponential backoff. `EXPIRED` là terminal nên không có nghiệp vụ “retry expired”.
+- Reservation expiration itself is not exposed as a public HTTP operation:
+  `ReservationExpirationScheduler` runs in-process, claims rows in the database,
+  and processes each reservation in its own `REQUIRES_NEW` transaction. The
+  operational `/internal/schedulers/**` hooks listed in section 6.1 are
+  restricted service-to-service hooks for campaign/benefit lifecycle, outbox,
+  and cache jobs; they must not be routed through the public gateway.
 
 #### Nguồn sự thật tích hợp
 
-- Booking gọi `validate/reserve/refresh/cancel`; Payment gọi `validate/detail/confirm/release`.
+- The intended caller contract is Booking →
+  `validate/reserve/refresh/cancel` and Payment →
+  `detail/confirm/release`. In the current repository snapshot those clients
+  are not wired yet; the integration checklist in
+  `promotion-service-production-readiness-report.md` is a release blocker.
 - Các API đồng bộ trên là nguồn sự thật cho thay đổi trạng thái. Promotion chỉ
   **publish** lifecycle event qua transactional outbox.
 - Không đồng thời consume `PaymentCompleted`, `PaymentFailed` hoặc
