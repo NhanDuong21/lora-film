@@ -5,6 +5,7 @@ import com.project.userservice.entity.Employee;
 import com.project.userservice.entity.EmployeeDocument;
 import com.project.userservice.enumtype.EmployeeDocumentType;
 import com.project.userservice.exception.BusinessException;
+import com.project.userservice.mapper.EmployeeDocumentMapper;
 import com.project.userservice.repository.EmployeeDocumentRepository;
 import com.project.userservice.repository.EmployeeRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -36,7 +37,7 @@ class EmployeeDocumentServiceTest {
     @Mock
     private EmployeeDocumentRepository documentRepository;
     @Mock
-    private SecureFileStorageService fileStorageService;
+    private FileStorageService fileStorageService;
     @Mock
     private UserAuditService auditService;
     @Mock
@@ -47,7 +48,7 @@ class EmployeeDocumentServiceTest {
     @BeforeEach
     void setUp() {
         service = new EmployeeDocumentService(employeeRepository, documentRepository,
-                fileStorageService, auditService, eventService);
+                fileStorageService, auditService, eventService, new EmployeeDocumentMapper());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(99L, null, List.of()));
     }
@@ -65,7 +66,10 @@ class EmployeeDocumentServiceTest {
                 new byte[]{'%', 'P', 'D', 'F'});
         when(employeeRepository.findById(42L)).thenReturn(Optional.of(employee));
         when(fileStorageService.storeEmployeeDocument(file))
-                .thenReturn(new SecureFileStorageService.StoredFile("generated.pdf", "application/pdf", 4));
+                .thenReturn(new FileStorageService.StoredFile(
+                        "generated.pdf",
+                        "https://res.cloudinary.com/test/raw/authenticated/generated.pdf",
+                        "application/pdf", 4));
         when(documentRepository.save(any(EmployeeDocument.class))).thenAnswer(invocation -> {
             EmployeeDocument document = invocation.getArgument(0);
             ReflectionTestUtils.setField(document, "id", 7L);

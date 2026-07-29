@@ -2,6 +2,7 @@ package com.project.userservice.service;
 
 import com.project.userservice.dto.response.UserProfileResponse;
 import com.project.userservice.entity.User;
+import com.project.userservice.mapper.UserProfileMapper;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.service.impl.UserServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +39,8 @@ class UserServiceImplTest {
     @BeforeEach
     void setUp() {
         userService = new UserServiceImpl(
-                userRepository, auditService, eventService, customerProfileRepository);
+                userRepository, auditService, eventService, customerProfileRepository,
+                new UserProfileMapper());
     }
 
     @Test
