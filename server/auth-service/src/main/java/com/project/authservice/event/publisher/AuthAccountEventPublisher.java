@@ -138,4 +138,35 @@ public class AuthAccountEventPublisher {
             throw new RuntimeException("Kafka publish failed for accountId=" + accountId, ex);
         }
     }
+
+    public void publishOAuthAccountLinked(
+            Account account, String fullName, String avatarUrl) {
+        Long accountId = account.getId();
+        String requestId = UUID.randomUUID().toString();
+
+        AccountVerifiedEventData data = AccountVerifiedEventData.builder()
+                .requestId(requestId)
+                .accountId(accountId)
+                .email(account.getEmail())
+                .role(account.getRole().getRoleName())
+                .fullName(fullName)
+                .avatarUrl(avatarUrl)
+                .build();
+
+        com.project.authservice.event.dto.AccountVerifiedEvent event =
+                com.project.authservice.event.dto.AccountVerifiedEvent.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .occurredAt(Instant.now())
+                        .data(data)
+                        .build();
+
+        try {
+            kafkaTemplate.send(accountVerifiedTopic, String.valueOf(accountId), event).get();
+            log.info("Published OAuth profile data for accountId={}", accountId);
+        } catch (Exception exception) {
+            log.error("Failed to publish OAuth profile data for accountId={}", accountId, exception);
+            throw new RuntimeException(
+                    "Kafka publish failed for OAuth accountId=" + accountId, exception);
+        }
+    }
 }

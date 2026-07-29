@@ -25,21 +25,25 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
-        if (authentication.getPrincipal() instanceof CustomOAuth2User) {
-            CustomOAuth2User oauthUser = (CustomOAuth2User) authentication.getPrincipal();
-            Account account = oauthUser.getAccount();
-            
-            JwtResponse jwtResponse = authService.loginOAuth2(account, request);
-            
+        if (!(authentication.getPrincipal() instanceof AccountOAuth2Principal oauthPrincipal)) {
+            Object principal = authentication.getPrincipal();
+            log.error("OAuth2 authentication succeeded with an unsupported principal type: {}",
+                    principal == null ? "null" : principal.getClass().getName());
             String targetUrl = oauth2RedirectUrl +
-                    "#accessToken=" + encode(jwtResponse.getAccessToken()) +
-                    "&refreshToken=" + encode(jwtResponse.getRefreshToken()) +
-                    "&expiresIn=" + jwtResponse.getExpiresIn();
-            
+                    "#error=" + encode("Unsupported OAuth2 principal");
             getRedirectStrategy().sendRedirect(request, response, targetUrl);
-        } else {
-            super.onAuthenticationSuccess(request, response, authentication);
+            return;
         }
+
+        Account account = oauthPrincipal.getAccount();
+        JwtResponse jwtResponse = authService.loginOAuth2(account, request);
+
+        String targetUrl = oauth2RedirectUrl +
+                "#accessToken=" + encode(jwtResponse.getAccessToken()) +
+                "&refreshToken=" + encode(jwtResponse.getRefreshToken()) +
+                "&expiresIn=" + jwtResponse.getExpiresIn();
+
+        getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }
     public OAuth2AuthenticationSuccessHandler(AuthService authService) {
         this.authService = authService;
