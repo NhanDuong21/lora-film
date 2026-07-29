@@ -7,10 +7,13 @@ import {
   getUserAccountId,
   getAuthToken,
   getRefreshToken,
+  getUserPermissions,
+  hasRefreshToken,
   clearAuthData,
   setAuthData as saveAuthData
 } from '@/utils/authStorage';
 import { getUserProfile } from '@/features/auth/services/userService';
+import { logout as revokeAuthSession, refreshToken as renewAuthSession } from '@/features/auth/services/authService';
 
 const AuthContext = createContext();
 
@@ -21,6 +24,7 @@ export function AuthProvider({ children }) {
   const [email, setEmail] = useState(() => getUserEmail());
   const [accessToken, setAccessToken] = useState(() => getAuthToken());
   const [refreshToken, setRefreshToken] = useState(() => getRefreshToken());
+  const [permissions, setPermissions] = useState(() => getUserPermissions());
   
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -71,94 +75,83 @@ export function AuthProvider({ children }) {
     return null;
   }, []);
 
-  const initializeAuth = useCallback(async () => {
-    const authed = checkAuthenticated();
+  const syncSessionState = useCallback((authed = checkAuthenticated()) => {
     setIsAuthenticated(authed);
     if (authed) {
       const storedAccountId = getUserAccountId();
-      const storedRole = getUserRole();
-      const storedEmail = getUserEmail();
-      const storedToken = getAuthToken();
-      const storedRefresh = getRefreshToken();
-
       setAccountId(storedAccountId);
-      setUserRole(storedRole);
-      setEmail(storedEmail);
-      setAccessToken(storedToken);
-      setRefreshToken(storedRefresh);
-
-      if (storedAccountId) {
-        // Fire and forget: don't block app initialization on profile fetch
-        loadProfile(storedAccountId).catch(console.error);
-      }
+      setUserRole(getUserRole());
+      setEmail(getUserEmail());
+      setAccessToken(getAuthToken());
+      setRefreshToken(getRefreshToken());
+      setPermissions(getUserPermissions());
+      return storedAccountId;
     }
-    setIsInitializing(false);
-  }, [loadProfile]);
-
-  useEffect(() => {
-    initializeAuth();
-    
-    const handleStorageChange = () => {
-      const authed = checkAuthenticated();
-      setIsAuthenticated(authed);
-      if (authed) {
-        setAccountId(getUserAccountId());
-        setUserRole(getUserRole());
-        setEmail(getUserEmail());
-        setAccessToken(getAuthToken());
-        setRefreshToken(getRefreshToken());
-        loadProfile(getUserAccountId());
-      } else {
-        setAccountId(null);
-        setUserRole(null);
-        setEmail(null);
-        setAccessToken(null);
-        setRefreshToken(null);
-        setProfile(null);
-        setProfilePending(false);
-        setProfileError(null);
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [initializeAuth, loadProfile]);
-
-  const login = async (authSessionData) => {
-    saveAuthData(authSessionData);
-    
-    setIsAuthenticated(true);
-    const storedAccountId = authSessionData.accountId || getUserAccountId();
-    const storedRole = authSessionData.role || getUserRole();
-    const storedEmail = authSessionData.email || getUserEmail();
-    const storedToken = authSessionData.accessToken || getAuthToken();
-    const storedRefresh = authSessionData.refreshToken || getRefreshToken();
-
-    setAccountId(storedAccountId);
-    setUserRole(storedRole);
-    setEmail(storedEmail);
-    setAccessToken(storedToken);
-    setRefreshToken(storedRefresh);
-
-    if (storedAccountId) {
-      // Fire and forget: don't block login transition on profile fetch
-      loadProfile(storedAccountId).catch(console.error);
-    }
-  };
-
-  const logout = () => {
-    clearAuthData();
-    setIsAuthenticated(false);
     setAccountId(null);
     setUserRole(null);
     setEmail(null);
     setAccessToken(null);
     setRefreshToken(null);
+    setPermissions([]);
     setProfile(null);
     setProfilePending(false);
     setProfileError(null);
-  };
+    return null;
+  }, []);
 
-  const updateUser = (updatedFields) => {
+  const initializeAuth = useCallback(async () => {
+    let authed = checkAuthenticated();
+    if (!authed && hasRefreshToken()) {
+      try {
+        await renewAuthSession(getRefreshToken(), { redirectOnFailure: false });
+        authed = checkAuthenticated();
+      } catch {
+        authed = false;
+      }
+    }
+
+    const storedAccountId = syncSessionState(authed);
+    if (authed && storedAccountId) {
+      loadProfile(storedAccountId).catch(() => undefined);
+    }
+    setIsInitializing(false);
+  }, [loadProfile, syncSessionState]);
+
+  useEffect(() => {
+    initializeAuth();
+    
+    const handleStorageChange = () => {
+      const storedAccountId = syncSessionState();
+      if (storedAccountId) {
+        loadProfile(storedAccountId);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [initializeAuth, loadProfile, syncSessionState]);
+
+  const login = useCallback(async (authSessionData) => {
+    saveAuthData(authSessionData);
+    
+    const storedAccountId = syncSessionState(true);
+
+    if (storedAccountId) {
+      // Fire and forget: don't block login transition on profile fetch
+      loadProfile(storedAccountId).catch(() => undefined);
+    }
+  }, [loadProfile, syncSessionState]);
+
+  const logout = useCallback(async () => {
+    try {
+      await revokeAuthSession();
+    } catch {
+      clearAuthData();
+    } finally {
+      syncSessionState(false);
+    }
+  }, [syncSessionState]);
+
+  const updateUser = useCallback((updatedFields) => {
     setProfile(prev => {
       if (!prev) return updatedFields;
       return {
@@ -166,26 +159,31 @@ export function AuthProvider({ children }) {
         ...updatedFields
       };
     });
-  };
+  }, []);
 
   // Backwards compatible combined user object
   const user = useMemo(() => {
     if (!isAuthenticated) return null;
+    const normalizedUserRole = (userRole || '').replace(/^ROLE_/, '');
+    const effectivePermissions = permissions.length > 0
+      ? permissions
+      : normalizedUserRole === 'ADMIN'
+        ? ['PERM_ROOT_ACCESS']
+        : normalizedUserRole === 'ACCOUNTANT'
+          ? ['PERM_VIEW_FINANCE']
+          : [];
+
     return {
       id: accountId,
       email: email,
       role: userRole,
       fullName: profile?.fullName || email?.split('@')[0] || 'User',
-      permissions: (userRole || '').replace(/^ROLE_/, '') === 'ADMIN'
-        ? ['PERM_ROOT_ACCESS']
-        : (userRole || '').replace(/^ROLE_/, '') === 'ACCOUNTANT'
-          ? ['PERM_VIEW_FINANCE']
-          : [],
+      permissions: effectivePermissions,
       profilePending: profilePending,
       profileLoading: profileLoading,
       ...profile
     };
-  }, [isAuthenticated, accountId, email, userRole, profile, profilePending, profileLoading]);
+  }, [isAuthenticated, accountId, email, userRole, permissions, profile, profilePending, profileLoading]);
 
   return (
     <AuthContext.Provider value={{ 

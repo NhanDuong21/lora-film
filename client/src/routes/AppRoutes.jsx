@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ScrollToTop from "@/components/common/ScrollToTop";
-import { RoleRoute, AdminRedirectGuard } from "@/components/common/RouteGuards";
+import { PermissionRoute, RoleRoute, AdminRedirectGuard } from "@/components/common/RouteGuards";
+import { ADMIN_AREA_PERMISSIONS } from "@/features/internal-staff/admin/permissionAccess";
 
 // Feature Routes
 import { authRoutes } from "@/features/auth/routes";
@@ -29,18 +30,15 @@ import {
 import MainLayout from "@/components/layout/MainLayout";
 import AdminLayout from "@/components/admin/AdminLayout";
 import EmployeeLayout from "@/components/employee/EmployeeLayout";
-import { useAuth } from "@/contexts/AuthContext";
+import { ForbiddenPage, NotFoundPage, ServerErrorPage, UnauthorizedPage } from "@/features/auth/pages/ErrorPages";
 
 const adminOnly = element => (
     <RoleRoute allowedRoles={["ADMIN"]}>{element}</RoleRoute>
 );
 
-function AdminRoleLanding() {
-    const { userRole } = useAuth();
-    return (userRole || '').replace(/^ROLE_/, '') === 'ACCOUNTANT'
-        ? <Navigate to="/admin/payments" replace />
-        : adminStaffRoutes.find(route => route.index)?.element;
-}
+const financeAccess = element => (
+    <PermissionRoute requiredPermissions={["PERM_VIEW_FINANCE"]}>{element}</PermissionRoute>
+);
 
 function AppRoutes() {
     return (
@@ -90,18 +88,14 @@ function AppRoutes() {
 
                 {/* Admin Routes */}
                 <Route path="/admin" element={
-                    <RoleRoute allowedRoles={["ADMIN", "ACCOUNTANT"]}>
+                    <PermissionRoute requiredPermissions={ADMIN_AREA_PERMISSIONS}>
                         <AdminLayout />
-                    </RoleRoute>
+                    </PermissionRoute>
                 }>
                     {adminStaffRoutes.map((route, index) => (
                         route.index
-                            ? <Route key={`staff-adm-${index}`} index element={<AdminRoleLanding />} />
-                            : <Route
-                                key={`staff-adm-${index}`}
-                                path={route.path}
-                                element={['finance'].includes(route.path) ? route.element : adminOnly(route.element)}
-                              />
+                            ? <Route key={`staff-adm-${index}`} index element={route.element} />
+                            : <Route key={`staff-adm-${index}`} path={route.path} element={route.element} />
                     ))}
                     {adminCatalogRoutes.map((route, index) => (
                         <Route key={`cat-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
@@ -119,7 +113,9 @@ function AppRoutes() {
                         <Route
                             key={`conc-adm-${index}`}
                             path={route.path}
-                            element={route.path === 'concession-sales' ? route.element : adminOnly(route.element)}
+                            element={route.path === 'concession-sales'
+                                ? financeAccess(route.element)
+                                : adminOnly(route.element)}
                         />
                     ))}
                     {adminBookingRoutes.map((route, index) => (
@@ -129,9 +125,13 @@ function AppRoutes() {
                         <Route key={`score-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminPaymentRoutes.map((route, index) => (
-                        <Route key={`payment-adm-${index}`} path={route.path} element={route.element} />
+                        <Route key={`payment-adm-${index}`} path={route.path} element={financeAccess(route.element)} />
                     ))}
                 </Route>
+                <Route path="/401" element={<UnauthorizedPage />} />
+                <Route path="/403" element={<ForbiddenPage />} />
+                <Route path="/500" element={<ServerErrorPage />} />
+                <Route path="*" element={<NotFoundPage />} />
             </Routes>
         </BrowserRouter>
     );

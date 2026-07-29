@@ -8,13 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.project.authservice.client.CccdCheckClient;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.entity.Account;
 import com.project.authservice.event.dto.AccountVerifiedEventData;
+
+import static com.project.authservice.util.SensitiveDataMasker.maskEmail;
 
 
 @Service
@@ -38,7 +39,8 @@ public class AuthAccountEventPublisher {
 
 
     public void publishRegistrationValidationRequested(RegisterRequest request, String requestId) {
-        log.info("Building REGISTRATION_VALIDATION_REQUESTED event for requestId={} email={}", requestId, request.getEmail());
+        log.info("Building REGISTRATION_VALIDATION_REQUESTED event for requestId={} email={}",
+                requestId, maskEmail(request.getEmail()));
 
         com.project.authservice.event.dto.RegistrationValidationRequestedEventData data = 
             com.project.authservice.event.dto.RegistrationValidationRequestedEventData.builder()
@@ -70,7 +72,7 @@ public class AuthAccountEventPublisher {
         String cccdMasked = cccdInfo.getCccdMasked();
 
         log.info("Building ACCOUNT_VERIFIED event for accountId={} email={} cccdMasked={}",
-                accountId, email, cccdMasked);
+                accountId, maskEmail(email), cccdMasked);
 
         LocalDate birthday = LocalDate.parse(request.getBirthday().trim());
 

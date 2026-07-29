@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { 
-  ChevronDown, Menu, X, Bell, Star, Search, User, LogOut 
+  ChevronDown, Menu, X, Bell, Star, Search, User, LogOut, KeyRound, Mail
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -23,8 +23,8 @@ export default function Header() {
   const [searchQuery, setSearchQuery] = useState('');
  
 
-  const handleLogoutClick = () => {
-    logout();
+  const handleLogoutClick = async () => {
+    await logout();
     setProfileDropdownOpen(false);
     navigate('/');
   };
@@ -56,7 +56,7 @@ export default function Header() {
   };
 
   return (
-    <header className="fixed top-0 left-0 w-full z-50 bg-zinc-950/95 backdrop-blur-md px-6 md:px-12 py-3.5 flex justify-between items-center border-b border-zinc-800/80 transition-all duration-300">
+    <header className="fixed top-0 left-0 w-full z-50 bg-zinc-950/95 backdrop-blur-md px-3 sm:px-6 md:px-12 py-3.5 flex justify-between items-center border-b border-zinc-800/80 transition-all duration-300">
       
       {/* LEFT SECTION: Brand Logo & Mua Ve Coupon Stub */}
       <div className="flex items-center gap-6">
@@ -225,8 +225,8 @@ export default function Header() {
       </nav>
 
       {/* RIGHT SECTION: Live Auth Session Status Dropdown */}
-      <div className="flex items-center gap-4">
-        <div className="relative">
+      <div className="flex items-center gap-1 sm:gap-4">
+        <div className="relative hidden xl:block">
           <div className="relative w-64 md:w-72 bg-zinc-900/90 border border-zinc-800 focus-within:border-brand-orange/60 rounded-full px-4 h-10 flex items-center text-xs text-zinc-100 transition-colors duration-200 outline-none">
             <input
               type="text"
@@ -295,6 +295,37 @@ export default function Header() {
                   )}
 
                   <button
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      navigate('/change-email');
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Thay đổi email</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      navigate('/change-password');
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Đổi mật khẩu</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      navigate('/sessions');
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Phiên đăng nhập</span>
+                  </button>
+
+                  <button
                     onClick={handleLogoutClick}
                     className="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-950/20 hover:text-red-300 font-bold border-t border-zinc-800 mt-1 flex items-center gap-2"
                   >
@@ -308,7 +339,7 @@ export default function Header() {
         ) : (
           <button
             onClick={() => navigate('/login')}
-            className="bg-brand-orange hover:bg-orange-600 text-white text-xs font-black py-2.5 px-5 rounded-full transition-all duration-300 shadow-lg shadow-brand-orange/10 uppercase tracking-wider focus:outline-none"
+            className="hidden sm:block bg-brand-orange hover:bg-orange-600 text-white text-xs font-black py-2.5 px-5 rounded-full transition-all duration-300 shadow-lg shadow-brand-orange/10 uppercase tracking-wider focus:outline-none"
           >
             Đăng Nhập
           </button>
@@ -316,6 +347,9 @@ export default function Header() {
 
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label={mobileMenuOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-navigation"
           className="lg:hidden flex items-center justify-center p-2 text-zinc-400 hover:text-white focus:outline-none"
         >
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -325,7 +359,18 @@ export default function Header() {
 
       {/* MOBILE DRAWERS */}
       {mobileMenuOpen && (
-        <div className="absolute top-[65px] left-0 w-full bg-zinc-950 border-b border-zinc-800 px-6 py-6 flex flex-col gap-4 lg:hidden z-40 animate-in slide-in-from-top duration-300">
+        <div id="mobile-navigation" className="absolute top-[65px] left-0 w-full bg-zinc-950 border-b border-zinc-800 px-6 py-6 flex flex-col gap-4 lg:hidden z-40 animate-in slide-in-from-top duration-300">
+          {!isAuthenticated && (
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigate('/login');
+              }}
+              className="sm:hidden w-full border border-brand-orange text-brand-orange py-3 rounded-xl text-xs font-black uppercase tracking-wider"
+            >
+              Đăng Nhập
+            </button>
+          )}
           <button
             onClick={() => {
               setMobileMenuOpen(false);

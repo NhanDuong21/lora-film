@@ -5,6 +5,22 @@ export const getUserProfile = async (accountId) => {
     return response.data.data;
 };
 
+export const updateUserProfile = async (payload) => {
+    const response = await apiClient.put("/api/users/profile", payload);
+    return response.data.data;
+};
+
+export const uploadAvatar = async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await apiClient.post("/api/users/profile/avatar", formData);
+    return response.data.data;
+};
+
+export const deleteAvatar = async () => {
+    await apiClient.delete("/api/users/profile/avatar");
+};
+
 export const getUserProfiles = async (accountIds = []) => {
     if (!accountIds.length) return [];
     const response = await apiClient.get('/api/users/admin/batch', {

@@ -10,6 +10,8 @@ import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import CustomerBookingHistory from '@/features/booking/customer/components/CustomerBookingHistory';
 import useCustomerScore from '@/features/score/customer/hooks/useCustomerScore';
 import LoyaltyCenterPage from '@/features/score/customer/pages/LoyaltyCenterPage';
+import { updateUserProfile, uploadAvatar } from '@/features/auth/services/userService';
+import { changePassword } from '@/features/auth/services/authService';
 
 const normalizeDateForInput = (value) => {
   if (!value) return '';
@@ -17,6 +19,8 @@ const normalizeDateForInput = (value) => {
 };
 
 const hasImageSource = value => typeof value === 'string' && value.trim().length > 0;
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const resolveMediaUrl = value => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;
 
 export default function CustomerProfileView({ onBackHome, initialTab = 'info' }) {
   const navigate = useNavigate();
@@ -31,7 +35,8 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
     profileLoading,
     profilePending,
     profileError,
-    refreshProfile
+    refreshProfile,
+    logout
   } = useAuth();
 
   useEffect(() => {
@@ -100,15 +105,16 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   const [showPasswordRaw, setShowPasswordRaw] = useState(false);
 
   const [isEditingAvatar, setIsEditingAvatar] = useState(false);
-  const [tempAvatarUrl, setTempAvatarUrl] = useState(avatarUrl);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [tempAvatarUrl, setTempAvatarUrl] = useState(resolveMediaUrl(avatarUrl));
 
   useEffect(() => {
     if (profile || sessionEmail) {
       const timer = setTimeout(() => {
         setEmail(sessionEmail || '');
         setPhone(profile?.phoneNumber ?? '');
-        setAvatarUrl(profile?.avatarUrl || '');
-        setTempAvatarUrl(profile?.avatarUrl || '');
+        setAvatarUrl(resolveMediaUrl(profile?.avatarUrl || ''));
+        setTempAvatarUrl(resolveMediaUrl(profile?.avatarUrl || ''));
         setNewEmail(sessionEmail || '');
       }, 0);
       return () => clearTimeout(timer);
@@ -146,44 +152,36 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   };
 
   // Profile Form submit (Updates Email & SĐT)
-  const handleUpdateProfile = (e) => {
+  const handleUpdateProfile = async (e) => {
     e.preventDefault();
     if (!phone.trim()) {
       showErrorNotice('Số điện thoại không được để trống!');
       return;
     }
 
-    updateUser({
-      email,
-      phoneNumber: phone,
-      avatarUrl,
-      totalSpending,
-      points
-    });
-
-    showSuccessToast('Cập nhật thông tin cá nhân thành công!');
+    try {
+      const updated = await updateUserProfile({ phoneNumber: phone.trim() });
+      updateUser(updated);
+      showSuccessToast('Cập nhật thông tin cá nhân thành công!');
+    } catch (reason) {
+      showErrorNotice(reason?.message || 'Không thể cập nhật hồ sơ.');
+    }
   };
 
   // Change Email Action
   const handleSaveEmail = () => {
-    if (!newEmail.includes('@')) {
-      showErrorNotice('Email không đúng định dạng!');
-      return;
-    }
-    setEmail(newEmail);
-    updateUser({ email: newEmail });
     setIsChangingEmail(false);
-    showSuccessToast('Đổi địa chỉ email thành công!');
+    navigate('/change-email', { state: { newEmail } });
   };
 
   // Change Password Action
-  const handleSavePassword = () => {
+  const handleSavePassword = async () => {
     if (!currentPassword) {
       showErrorNotice('Vui lòng nhập mật khẩu hiện tại!');
       return;
     }
-    if (newPassword.length < 6) {
-      showErrorNotice('Mật khẩu mới phải có ít nhất 6 ký tự!');
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,50}$/.test(newPassword)) {
+      showErrorNotice('Mật khẩu mới cần ít nhất 8 ký tự, chữ hoa, chữ thường, số và ký tự đặc biệt.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -191,20 +189,39 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
       return;
     }
 
-    // Password change is currently handled via a separate auth flow or not supported in this view yet
-    showErrorNotice('Tính năng đổi mật khẩu đang được nâng cấp!');
+    try {
+      await changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setIsChangingPassword(false);
+      await logout();
+      navigate('/login', {
+        replace: true,
+        state: { message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.' }
+      });
+    } catch (reason) {
+      showErrorNotice(reason?.message || 'Không thể đổi mật khẩu.');
+    }
   };
 
   // Change Avatar Action
-  const handleSaveAvatar = () => {
-    if (!tempAvatarUrl.trim()) {
-      showErrorNotice('Đường dẫn ảnh không được để trống!');
+  const handleSaveAvatar = async () => {
+    if (!avatarFile) {
+      showErrorNotice('Vui lòng chọn ảnh JPEG, PNG hoặc WebP.');
       return;
     }
-    setAvatarUrl(tempAvatarUrl);
-    updateUser({ avatarUrl: tempAvatarUrl });
-    setIsEditingAvatar(false);
-    showSuccessToast('Cập nhật ảnh đại diện thành công!');
+    try {
+      const result = await uploadAvatar(avatarFile);
+      const resolvedUrl = resolveMediaUrl(result.avatarUrl);
+      setAvatarUrl(resolvedUrl);
+      updateUser({ avatarUrl: result.avatarUrl });
+      setAvatarFile(null);
+      setIsEditingAvatar(false);
+      showSuccessToast('Cập nhật ảnh đại diện thành công!');
+    } catch (reason) {
+      showErrorNotice(reason?.message || 'Không thể tải ảnh đại diện.');
+    }
   };
 
   if (!accountId) {
@@ -329,6 +346,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
                     type="button"
                     onClick={() => {
                       setTempAvatarUrl(avatarUrl);
+                      setAvatarFile(null);
                       setIsEditingAvatar(true);
                     }}
                     className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300 focus:outline-none"
@@ -866,7 +884,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6 animate-in zoom-in duration-300">
             <div>
               <h3 className="text-base font-black text-white uppercase tracking-wider">CẬP NHẬT ẢNH ĐẠI DIỆN</h3>
-              <p className="text-zinc-500 text-[10px] mt-0.5">Dán đường dẫn (URL) hình ảnh bạn muốn sử dụng làm Avatar</p>
+              <p className="text-zinc-500 text-[10px] mt-0.5">Chọn ảnh JPEG, PNG hoặc WebP có dung lượng tối đa 5 MB.</p>
             </div>
 
             <div className="space-y-4">
@@ -890,36 +908,17 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Đường dẫn ảnh (Image URL)</label>
+                <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Tệp ảnh</label>
                 <input
-                  type="text"
-                  value={tempAvatarUrl}
-                  onChange={(e) => setTempAvatarUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    setAvatarFile(file);
+                    setTempAvatarUrl(file ? URL.createObjectURL(file) : avatarUrl);
+                  }}
                   className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl py-3 px-4 text-xs font-semibold text-white focus:outline-none transition-colors"
                 />
-              </div>
-
-              {/* Presets options */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Hoặc chọn ảnh có sẵn:</span>
-                <div className="flex gap-2">
-                  {[
-                    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-                    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
-                    'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80'
-                  ].map((url, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setTempAvatarUrl(url)}
-                      className="w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-800 hover:border-brand-orange transition-colors shrink-0"
-                    >
-                      <img src={url} alt={`Preset ${i}`} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 

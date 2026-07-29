@@ -7,12 +7,12 @@ public class RegistrationValidationResultEvent {
     private final String eventType = "REGISTRATION_VALIDATION_RESULT";
     private final String eventVersion = "1.0";
     private final String source = "user-service";
-    private final Instant occurredAt;
+    private final String occurredAt;
     private final RegistrationValidationResultPayload data;
 
     public RegistrationValidationResultEvent(String eventId, Instant occurredAt, RegistrationValidationResultPayload data) {
         this.eventId = eventId;
-        this.occurredAt = occurredAt;
+        this.occurredAt = occurredAt != null ? occurredAt.toString() : null;
         this.data = data;
     }
 
@@ -20,6 +20,6 @@ public class RegistrationValidationResultEvent {
     public String getEventType() { return eventType; }
     public String getEventVersion() { return eventVersion; }
     public String getSource() { return source; }
-    public Instant getOccurredAt() { return occurredAt; }
+    public String getOccurredAt() { return occurredAt; }
     public RegistrationValidationResultPayload getData() { return data; }
 }

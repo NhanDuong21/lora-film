@@ -1,6 +1,7 @@
 package com.project.userservice.dto.response;
 
 import com.project.userservice.enumtype.Gender;
+import com.project.userservice.enumtype.UserStatus;
 
 import java.time.LocalDate;
 
@@ -16,6 +17,8 @@ public class UserProfileResponse {
     private String cccdMasked;
     private String provinceName;
     private Integer birthYear;
+    private String avatarUrl;
+    private UserStatus status;
 
 
     public UserProfileResponse() {
@@ -112,6 +115,22 @@ public class UserProfileResponse {
 
     public void setBirthYear(Integer birthYear) {
         this.birthYear = birthYear;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
+    public UserStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(UserStatus status) {
+        this.status = status;
     }
 
 }
