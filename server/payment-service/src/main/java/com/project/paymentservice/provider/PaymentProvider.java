@@ -2,6 +2,7 @@ package com.project.paymentservice.provider;
 
 import com.project.paymentservice.enumtype.ProviderCode;
 import com.project.paymentservice.entity.Payment;
+import com.project.paymentservice.entity.PaymentRefund;
 
 import java.util.Map;
 import java.util.Optional;
@@ -20,12 +21,15 @@ public interface PaymentProvider {
         return 0;
     }
 
-    /**
-     * Local-development escape hatch for providers whose server-to-server
-     * callback cannot reach localhost. Production providers must keep this
-     * disabled and rely on IPN/webhook or an authoritative status query.
-     */
-    default boolean verifiedReturnFallbackEnabled() {
-        return false;
+    default ProviderRefundResult refund(Payment payment, PaymentRefund refund) {
+        ProviderRefundResult result = new ProviderRefundResult();
+        result.setState(ProviderRefundResult.State.FAILED);
+        result.setFailureCode("REFUND_PROVIDER_UNSUPPORTED");
+        result.setMessageSanitized("Provider does not support automatic refund");
+        return result;
+    }
+
+    default Optional<ProviderRefundResult> queryRefund(Payment payment, PaymentRefund refund) {
+        return Optional.empty();
     }
 }

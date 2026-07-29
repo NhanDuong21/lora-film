@@ -139,6 +139,9 @@ CREATE INDEX idx_coupon_redemption_deleted ON coupon_redemptions (deleted_at);
 
 CREATE INDEX idx_coupon_redemption_created ON coupon_redemptions (created_at);
 
+CREATE UNIQUE INDEX uk_coupon_redemption_reservation
+    ON coupon_redemptions (reservation_public_id);
+
 -- ============================================================
 -- PHASE 3 - VOUCHER
 -- ============================================================
@@ -242,6 +245,9 @@ CREATE INDEX idx_voucher_redemption_deleted ON voucher_redemptions (deleted_at);
 
 CREATE INDEX idx_voucher_redemption_created ON voucher_redemptions (created_at);
 
+CREATE UNIQUE INDEX uk_voucher_redemption_reservation
+    ON voucher_redemptions (reservation_public_id);
+
 -- ============================================================
 -- PHASE 4 - PROMOTION RESERVATION
 -- ============================================================
@@ -254,6 +260,8 @@ CREATE TABLE promotion_reservations (
     order_public_id CHAR(36) NULL COMMENT 'Public ID đơn hàng',
     payment_public_id CHAR(36) NULL COMMENT 'Public ID thanh toán',
     user_public_id CHAR(36) NOT NULL COMMENT 'Public ID người dùng',
+    customer_phone VARCHAR(20) NULL COMMENT 'Số điện thoại đã xác thực dùng để giữ quota coupon',
+    reservation_scope_key VARCHAR(80) NULL COMMENT 'Một benefit hiệu lực trên mỗi order/booking',
     campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
     coupon_public_id CHAR(36) NULL COMMENT 'Public ID coupon',
     voucher_public_id CHAR(36) NULL COMMENT 'Public ID voucher',
@@ -271,6 +279,10 @@ CREATE TABLE promotion_reservations (
     rollback_at DATETIME(6) NULL COMMENT 'Thời điểm rollback',
     rollback_reason VARCHAR(255) NULL COMMENT 'Lý do rollback',
     metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    expiration_attempts INT NOT NULL DEFAULT 0 COMMENT 'Số lần scheduler thử hết hạn',
+    expiration_last_attempt_at DATETIME(6) NULL COMMENT 'Lần thử hết hạn gần nhất',
+    expiration_next_attempt_at DATETIME(6) NULL COMMENT 'Lần retry hết hạn tiếp theo',
+    expiration_error VARCHAR(1000) NULL COMMENT 'Lỗi hết hạn gần nhất',
     version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản dữ liệu',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
     created_by CHAR(36) NULL COMMENT 'Người tạo',
@@ -280,7 +292,63 @@ CREATE TABLE promotion_reservations (
     deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
     CONSTRAINT uk_promotion_reservation_public UNIQUE (public_id),
     CONSTRAINT uk_promotion_reservation_code UNIQUE (reservation_code),
-    CONSTRAINT chk_reservation_amount CHECK (final_amount >= 0),
+    CONSTRAINT uk_promotion_reservation_scope UNIQUE (reservation_scope_key),
+    CONSTRAINT chk_reservation_amount CHECK (
+        original_amount >= 0
+        AND discount_amount >= 0
+        AND final_amount >= 0
+        AND final_amount = original_amount - discount_amount
+    ),
+    CONSTRAINT chk_reservation_single_benefit CHECK (
+        (
+            reservation_type = 'COUPON'
+            AND coupon_public_id IS NOT NULL
+            AND voucher_public_id IS NULL
+        )
+        OR (
+            reservation_type = 'VOUCHER'
+            AND coupon_public_id IS NULL
+            AND voucher_public_id IS NOT NULL
+        )
+    ),
+    CONSTRAINT chk_reservation_status CHECK (
+        status IN ('ACTIVE', 'COMPLETED', 'RELEASED', 'CANCELLED', 'EXPIRED')
+    ),
+    CONSTRAINT chk_reservation_lifecycle CHECK (
+        (
+            status = 'ACTIVE'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'COMPLETED'
+            AND confirmed_at IS NOT NULL
+            AND payment_public_id IS NOT NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'RELEASED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NOT NULL
+            AND rollback_reason IS NOT NULL
+        )
+        OR (
+            status = 'CANCELLED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NOT NULL
+            AND cancelled_reason IS NOT NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'EXPIRED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+    ),
     CONSTRAINT chk_reservation_period CHECK (
         reservation_expired_at > reservation_started_at
     )
@@ -303,6 +371,34 @@ CREATE INDEX idx_reservation_status ON promotion_reservations (status);
 CREATE INDEX idx_reservation_expired ON promotion_reservations (reservation_expired_at);
 
 CREATE INDEX idx_reservation_deleted ON promotion_reservations (deleted_at);
+
+CREATE INDEX idx_reservation_expiration_due
+    ON promotion_reservations (status, reservation_expired_at, expiration_next_attempt_at);
+
+CREATE INDEX idx_reservation_coupon_active
+    ON promotion_reservations (coupon_public_id, status, reservation_expired_at);
+
+CREATE INDEX idx_reservation_coupon_user_active
+    ON promotion_reservations (
+        coupon_public_id, user_public_id, status, reservation_expired_at
+    );
+
+CREATE INDEX idx_reservation_coupon_phone_active
+    ON promotion_reservations (
+        coupon_public_id, customer_phone, status, reservation_expired_at
+    );
+
+CREATE INDEX idx_reservation_voucher_active
+    ON promotion_reservations (voucher_public_id, status, reservation_expired_at);
+
+CREATE INDEX idx_reservation_campaign_active
+    ON promotion_reservations (campaign_public_id, status, reservation_expired_at);
+
+CREATE INDEX idx_reservation_history
+    ON promotion_reservations (status, reservation_type, created_at);
+
+CREATE INDEX idx_reservation_created
+    ON promotion_reservations (created_at);
 
 -- ============================================================
 -- COMPENSATION VOUCHERS
@@ -549,6 +645,8 @@ CREATE TABLE outbox_events (
     publish_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái publish',
     retry_count INT NOT NULL DEFAULT 0 COMMENT 'Số lần gửi lại',
     next_retry_at DATETIME(6) NULL COMMENT 'Lần gửi tiếp theo',
+    processing_started_at DATETIME(6) NULL COMMENT 'Thời điểm bắt đầu lease publish',
+    processing_owner VARCHAR(100) NULL COMMENT 'Instance đang giữ lease publish',
     published_at DATETIME(6) NULL COMMENT 'Ngày publish',
     error_message TEXT NULL COMMENT 'Lỗi publish',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
@@ -565,6 +663,9 @@ CREATE INDEX idx_outbox_status ON outbox_events (publish_status);
 CREATE INDEX idx_outbox_topic ON outbox_events (topic_name);
 
 CREATE INDEX idx_outbox_retry ON outbox_events (next_retry_at);
+
+CREATE INDEX idx_outbox_claim
+    ON outbox_events (publish_status, next_retry_at, processing_started_at, created_at);
 
 CREATE INDEX idx_outbox_aggregate ON outbox_events (
     aggregate_type,
@@ -587,7 +688,7 @@ CREATE TABLE promotion_idempotency_keys (
     api_name VARCHAR(150) NOT NULL COMMENT 'Tên API',
     http_method VARCHAR(10) NOT NULL COMMENT 'Phương thức HTTP',
     user_public_id CHAR(36) NULL COMMENT 'Public ID người dùng',
-    client_id VARCHAR(100) NULL COMMENT 'Mã ứng dụng gọi',
+    client_id VARCHAR(100) NOT NULL COMMENT 'Service gọi đã được xác thực',
     device_id VARCHAR(150) NULL COMMENT 'Mã thiết bị',
     session_id VARCHAR(150) NULL COMMENT 'Mã phiên đăng nhập',
     request_uri VARCHAR(255) NOT NULL COMMENT 'Đường dẫn API',
@@ -609,7 +710,7 @@ CREATE TABLE promotion_idempotency_keys (
     deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
     deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
     CONSTRAINT uk_idempotency_public UNIQUE (public_id),
-    CONSTRAINT uk_idempotency_key UNIQUE (idempotency_key)
+    CONSTRAINT uk_idempotency_scope UNIQUE (client_id, api_name, idempotency_key)
 ) COMMENT = 'Lưu khóa chống xử lý trùng request';
 
 CREATE INDEX idx_idempotency_user ON promotion_idempotency_keys (user_public_id);
@@ -679,3 +780,108 @@ CREATE INDEX idx_rule_execution ON promotion_rules (execution_order);
 CREATE INDEX idx_rule_effective ON promotion_rules (effective_from, effective_to);
 
 CREATE INDEX idx_rule_deleted ON promotion_rules (deleted_at);
+
+-- ============================================================
+-- RUNTIME ALIGNMENT (V3 - PARTNER / CONFIGURATION / INTEGRATION)
+-- ============================================================
+-- The Flyway V3 migration is the authoritative upgrade path for existing
+-- installations. These statements keep this canonical bootstrap schema in
+-- sync with the runtime entities and can be applied after the tables above.
+
+ALTER TABLE promotion_campaigns
+    ADD COLUMN partner_public_id CHAR(36) NULL COMMENT 'Partner funding this campaign'
+        AFTER funding_source;
+CREATE INDEX idx_campaign_partner ON promotion_campaigns (partner_public_id);
+
+ALTER TABLE coupons
+    ADD COLUMN partner_public_id CHAR(36) NULL COMMENT 'Partner funding this coupon'
+        AFTER campaign_public_id;
+CREATE INDEX idx_coupon_partner ON coupons (partner_public_id);
+
+ALTER TABLE vouchers
+    ADD COLUMN partner_public_id CHAR(36) NULL COMMENT 'Partner funding this voucher'
+        AFTER campaign_public_id;
+CREATE INDEX idx_voucher_partner ON vouchers (partner_public_id);
+
+ALTER TABLE partners
+    ADD COLUMN version INT NOT NULL DEFAULT 1 COMMENT 'Optimistic lock version'
+        AFTER settlement_cycle;
+
+ALTER TABLE partner_settlements
+    ADD COLUMN version INT NOT NULL DEFAULT 1 AFTER status,
+    ADD COLUMN settlement_rule VARCHAR(50) NOT NULL DEFAULT 'PERCENTAGE_OF_DISCOUNT'
+        AFTER currency,
+    ADD COLUMN partner_percentage DECIMAL(5,2) NOT NULL DEFAULT 0
+        AFTER settlement_rule,
+    ADD COLUMN fixed_amount_per_redemption DECIMAL(18,2) NULL
+        AFTER partner_percentage;
+CREATE INDEX idx_settlement_period
+    ON partner_settlements (partner_public_id, settlement_period_from, settlement_period_to);
+
+ALTER TABLE promotion_configurations
+    ADD COLUMN version INT NOT NULL DEFAULT 1 AFTER editable,
+    ADD COLUMN requires_restart BOOLEAN NOT NULL DEFAULT FALSE AFTER editable,
+    ADD COLUMN status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' AFTER requires_restart,
+    ADD COLUMN metadata_json JSON NULL AFTER status;
+CREATE INDEX idx_configuration_status ON promotion_configurations (status);
+
+CREATE TABLE promotion_integration_events (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    public_id CHAR(36) NOT NULL,
+    source_service VARCHAR(60) NOT NULL,
+    event_id VARCHAR(150) NOT NULL,
+    event_type VARCHAR(150) NOT NULL,
+    schema_version VARCHAR(30) NOT NULL,
+    correlation_id VARCHAR(100) NULL,
+    trace_id VARCHAR(100) NULL,
+    payload JSON NOT NULL,
+    processing_status VARCHAR(30) NOT NULL DEFAULT 'RECEIVED',
+    retry_count INT NOT NULL DEFAULT 0,
+    next_retry_at DATETIME(6) NULL,
+    last_error VARCHAR(4000) NULL,
+    processed_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT uk_integration_event_public UNIQUE (public_id),
+    CONSTRAINT uk_integration_event_source_id UNIQUE (source_service, event_id)
+) COMMENT = 'Inbound integration event inbox and deduplication ledger';
+CREATE INDEX idx_integration_event_status
+    ON promotion_integration_events (processing_status, next_retry_at, created_at);
+CREATE INDEX idx_integration_event_type
+    ON promotion_integration_events (event_type, created_at);
+
+CREATE TABLE promotion_scheduler_job_executions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    public_id CHAR(36) NOT NULL,
+    job_name VARCHAR(100) NOT NULL,
+    trigger_type VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    instance_id VARCHAR(100) NOT NULL,
+    started_at DATETIME(6) NOT NULL,
+    finished_at DATETIME(6) NULL,
+    processed_count INT NOT NULL DEFAULT 0,
+    error_message VARCHAR(4000) NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT uk_scheduler_execution_public UNIQUE (public_id)
+);
+CREATE INDEX idx_scheduler_execution_job
+    ON promotion_scheduler_job_executions (job_name, started_at);
+CREATE INDEX idx_scheduler_execution_status
+    ON promotion_scheduler_job_executions (status, started_at);
+
+CREATE TABLE promotion_scheduler_locks (
+    job_name VARCHAR(100) PRIMARY KEY,
+    owner VARCHAR(100) NOT NULL,
+    locked_until DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+        ON UPDATE CURRENT_TIMESTAMP(6)
+);
+
+-- ============================================================
+-- RUNTIME ALIGNMENT (V4 - PUBLIC REFERENCE TYPES)
+-- ============================================================
+-- Flyway V4 converts every legacy CHAR(n) column to VARCHAR(n), preserving
+-- nullability/defaults/comments. This is required because Auth/User/Score
+-- currently exchange numeric account IDs while Promotion-generated public IDs
+-- remain UUID strings. The migration is data-preserving and keeps existing
+-- unique indexes intact.

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BookingCheckoutPage from './BookingCheckoutPage';
@@ -135,6 +135,16 @@ describe('BookingCheckoutPage cancellation', () => {
     fireEvent.click(await screen.findByRole('button', {
       name: /xác nhận & tiếp tục/i
     }));
+    const momoLogo = screen.getByRole('img', { name: 'Logo MoMo' });
+    expect(momoLogo).toHaveAttribute(
+      'src',
+      'https://upload.wikimedia.org/wikipedia/commons/a/a0/MoMo_Logo_App.svg'
+    );
+    fireEvent.error(momoLogo);
+    expect(momoLogo).toHaveAttribute(
+      'src',
+      expect.stringContaining('res.cloudinary.com/dqc4hufot')
+    );
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', {
       name: /thanh toán qua vnpay/i
@@ -275,5 +285,71 @@ describe('BookingCheckoutPage cancellation', () => {
     expect(screen.getAllByText('50.000đ')).toHaveLength(2);
     expect(screen.getByText('335.000đ')).toBeInTheDocument();
     expect(screen.queryByText(/Tiền vé \(0 ghế\)/)).not.toBeInTheDocument();
+  });
+
+  it('paginates the catalog and requests thumbnail-sized lazy images', async () => {
+    getConcessions.mockResolvedValue(Array.from({ length: 13 }, (_, index) => ({
+      id: index + 1,
+      name: `Bắp nước ${index + 1}`,
+      description: 'Sản phẩm dùng khi xem phim',
+      type: 'FOOD',
+      price: 39000,
+      imageUrl: `https://images.unsplash.com/photo-${index + 1}`
+    })));
+
+    render(
+      <MemoryRouter initialEntries={[
+        '/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111'
+      ]}>
+        <BookingCheckoutPage />
+      </MemoryRouter>
+    );
+
+    const firstThumbnail = await screen.findByRole('img', { name: 'Bắp nước 1' });
+    expect(firstThumbnail).toHaveAttribute('loading', 'lazy');
+    expect(firstThumbnail).toHaveAttribute('decoding', 'async');
+    expect(firstThumbnail.getAttribute('src')).toContain('w=192');
+    expect(firstThumbnail.getAttribute('src')).toContain('h=192');
+    expect(screen.queryByText('Bắp nước 13')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+    expect(await screen.findByText('Bắp nước 13')).toBeInTheDocument();
+    expect(screen.queryByText('Bắp nước 1')).not.toBeInTheDocument();
+  });
+
+  it('does not rerender concession cards when the hold countdown ticks', async () => {
+    let nameReads = 0;
+    const concession = {
+      id: 99,
+      description: 'Sản phẩm kiểm tra render',
+      type: 'FOOD',
+      price: 39000,
+      imageUrl: 'https://images.unsplash.com/photo-render-test'
+    };
+    Object.defineProperty(concession, 'name', {
+      enumerable: true,
+      get: () => {
+        nameReads += 1;
+        return 'Bắp tối ưu render';
+      }
+    });
+    getConcessions.mockResolvedValue([concession]);
+
+    render(
+      <MemoryRouter initialEntries={[
+        '/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111'
+      ]}>
+        <BookingCheckoutPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Bắp tối ưu render')).toBeInTheDocument();
+    const readsAfterInitialRender = nameReads;
+
+    await act(async () => {
+      await new Promise(resolve => window.setTimeout(resolve, 1100));
+    });
+
+    expect(nameReads).toBe(readsAfterInitialRender);
   });
 });

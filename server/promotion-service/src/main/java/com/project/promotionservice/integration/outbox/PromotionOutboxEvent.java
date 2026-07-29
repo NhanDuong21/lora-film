@@ -55,6 +55,12 @@ public class PromotionOutboxEvent {
     @Column(name = "next_retry_at")
     private Instant nextRetryAt;
 
+    @Column(name = "processing_started_at")
+    private Instant processingStartedAt;
+
+    @Column(name = "processing_owner", length = 100)
+    private String processingOwner;
+
     @Column(name = "published_at")
     private Instant publishedAt;
 
@@ -179,6 +185,22 @@ public class PromotionOutboxEvent {
 
     public void setNextRetryAt(Instant nextRetryAt) {
         this.nextRetryAt = nextRetryAt;
+    }
+
+    public Instant getProcessingStartedAt() {
+        return processingStartedAt;
+    }
+
+    public void setProcessingStartedAt(Instant processingStartedAt) {
+        this.processingStartedAt = processingStartedAt;
+    }
+
+    public String getProcessingOwner() {
+        return processingOwner;
+    }
+
+    public void setProcessingOwner(String processingOwner) {
+        this.processingOwner = processingOwner;
     }
 
     public Instant getPublishedAt() {

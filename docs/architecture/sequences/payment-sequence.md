@@ -101,3 +101,41 @@ kết quả cũ. CASH cũng đi qua đúng outbox Booking và Analytics như pro
   khi cho retry.
 - Outbox dùng owner token + lease; network call chạy ngoài transaction.
 - Replay giữ nguyên event ID để downstream dedupe.
+
+## Hoàn tiền
+
+```mermaid
+sequenceDiagram
+    participant Trigger as Hệ thống/Admin
+    participant P as Payment Service
+    participant Provider as VNPay/MoMo/CASH
+    participant B as Booking Service
+    participant K as Analytics
+
+    Trigger->>P: Tạo refund idempotent
+    P->>P: Kiểm tra SUCCESS, snapshot và số tiền còn lại
+    alt Online
+        P->>Provider: Full/partial refund
+        Provider-->>P: SUCCESS/FAILED/UNKNOWN
+        opt UNKNOWN
+            P->>Provider: Query refund trước khi retry
+        end
+    else CASH
+        P->>P: REQUIRES_ACTION
+        Trigger->>P: Xác nhận biên nhận hoàn tại quầy
+    end
+    P->>B: REFUND_SUCCESS qua outbox
+    alt Booking chấp nhận
+        B->>B: Cộng dồn refunded amount
+        B-->>P: accepted
+        P->>K: PAYMENT_REFUNDED
+    else Booking từ chối
+        B-->>P: reconciliationRequired
+        P->>P: Tạo hồ sơ đối soát
+    end
+```
+
+Refund tự động được tạo khi thanh toán thành công đến trễ, Booking từ chối xác
+nhận, thu trùng hoặc suất chiếu bị hủy. Admin chỉ tạo hoàn một phần cho bắp nước,
+chênh lệch giá và điều chỉnh nghiệp vụ. Chưa có hoàn riêng từng vé; refund không
+thay đổi sức chứa phòng hoặc mở lại ghế `BOOKED`.

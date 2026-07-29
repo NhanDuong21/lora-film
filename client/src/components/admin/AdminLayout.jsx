@@ -20,6 +20,7 @@ export default function AdminLayout({ onBackHome }) {
   // Derive activeTab from pathname
   const activeTab = (() => {
     const path = location.pathname;
+    if (path.endsWith('/me')) return 'my-account';
     if (path.endsWith('/movies') || path.includes('/movies/')) return 'movies';
     if (path.endsWith('/genres')) return 'genres';
     if (path.includes('/showtimes')) return 'showtimes';
@@ -30,7 +31,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/cinemas') || path.includes('/cinemas')) return 'clusters';
     if (path.endsWith('/rooms') || path.includes('/rooms')) return 'rooms';
     if (path.endsWith('/seat-types') || path.includes('/seat-types')) return 'seat-types';
-    if (path.endsWith('/finance')) return 'tickets';
+    if (path.endsWith('/finance')) return 'finance';
     if (path.endsWith('/payments') || path.includes('/payments/')) return 'payments';
     if (path.endsWith('/bookings') || path.includes('/bookings/')) return 'bookings';
     if (path.endsWith('/concessions')) return 'concessions';

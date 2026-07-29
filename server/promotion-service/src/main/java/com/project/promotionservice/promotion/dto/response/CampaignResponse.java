@@ -18,6 +18,7 @@ public class CampaignResponse {
     private String description;
     private CampaignType campaignType;
     private FundingSource fundingSource;
+    private String partnerPublicId;
     private CampaignStatus status;
     private CampaignApprovalStatus approvalStatus;
     private LegalStatus legalStatus;
@@ -27,6 +28,7 @@ public class CampaignResponse {
     private Boolean autoActivate;
     private Boolean autoComplete;
     private Boolean autoPauseWhenBudgetExceeded;
+    private Boolean killSwitch;
     private String timezone;
     private Instant startAt;
     private Instant endAt;
@@ -106,6 +108,14 @@ public class CampaignResponse {
         this.fundingSource = fundingSource;
     }
 
+    public String getPartnerPublicId() {
+        return partnerPublicId;
+    }
+
+    public void setPartnerPublicId(String partnerPublicId) {
+        this.partnerPublicId = partnerPublicId;
+    }
+
     public CampaignStatus getStatus() {
         return status;
     }
@@ -176,6 +186,14 @@ public class CampaignResponse {
 
     public void setAutoPauseWhenBudgetExceeded(Boolean autoPauseWhenBudgetExceeded) {
         this.autoPauseWhenBudgetExceeded = autoPauseWhenBudgetExceeded;
+    }
+
+    public Boolean getKillSwitch() {
+        return killSwitch;
+    }
+
+    public void setKillSwitch(Boolean killSwitch) {
+        this.killSwitch = killSwitch;
     }
 
     public String getTimezone() {

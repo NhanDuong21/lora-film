@@ -64,7 +64,12 @@ public class RetryTaskScheduler {
                     log.info("Ignored OUTBOX_PUBLISH task as it is handled by OutboxEventPublisherScheduler");
                     task.setStatus(RetryTaskStatus.SUCCESS);
                 } else {
-                    throw new UnsupportedOperationException("Task type " + task.getTaskType() + " is not yet implemented");
+                    task.setErrorCode("NO_RETRY_HANDLER");
+                    task.setRetryCount(task.getMaxRetry());
+                    task.setLastRetryAt(Instant.now());
+                    task.setErrorMessage("No retry handler is registered for task type " + task.getTaskType());
+                    moveToDeadLetter(task);
+                    continue;
                 }
                 retryTaskRepository.save(task);
 
@@ -75,22 +80,7 @@ public class RetryTaskScheduler {
                 task.setErrorMessage(e.getMessage());
 
                 if (count >= task.getMaxRetry()) {
-                    task.setStatus(RetryTaskStatus.DEAD_LETTER);
-                    log.error("Retry task publicId: {} failed and reached max retries. Moved to DEAD_LETTER.", task.getPublicId());
-
-                    BookingDeadLetterEvent dlEvent = new BookingDeadLetterEvent();
-                    dlEvent.setPublicId(UUID.randomUUID().toString());
-                    dlEvent.setEventId(task.getPublicId());
-                    dlEvent.setSourceTable("booking_retry_tasks");
-                    dlEvent.setAggregateType(task.getReferenceType());
-                    dlEvent.setAggregateId(task.getReferenceId());
-                    dlEvent.setEventType(task.getTaskType() != null ? task.getTaskType().name() : "UNKNOWN");
-                    dlEvent.setPayload(task.getPayload());
-                    dlEvent.setRetryCount(count);
-                    dlEvent.setErrorCode(task.getErrorCode());
-                    dlEvent.setErrorMessage(task.getErrorMessage());
-                    dlEvent.setMovedAt(Instant.now());
-                    deadLetterEventRepository.save(dlEvent);
+                    moveToDeadLetter(task);
                 } else {
                     task.setStatus(RetryTaskStatus.PENDING);
                     // Exponential backoff: 30s, 60s, 120s...
@@ -102,5 +92,26 @@ public class RetryTaskScheduler {
                 retryTaskRepository.save(task);
             }
         }
+    }
+
+    private void moveToDeadLetter(BookingRetryTask task) {
+        task.setStatus(RetryTaskStatus.DEAD_LETTER);
+        log.error("Retry task publicId: {} cannot be retried. Moved to DEAD_LETTER.",
+                task.getPublicId());
+
+        BookingDeadLetterEvent dlEvent = new BookingDeadLetterEvent();
+        dlEvent.setPublicId(UUID.randomUUID().toString());
+        dlEvent.setEventId(task.getPublicId());
+        dlEvent.setSourceTable("booking_retry_tasks");
+        dlEvent.setAggregateType(task.getReferenceType());
+        dlEvent.setAggregateId(task.getReferenceId());
+        dlEvent.setEventType(task.getTaskType() != null ? task.getTaskType().name() : "UNKNOWN");
+        dlEvent.setPayload(task.getPayload());
+        dlEvent.setRetryCount(task.getRetryCount());
+        dlEvent.setErrorCode(task.getErrorCode());
+        dlEvent.setErrorMessage(task.getErrorMessage());
+        dlEvent.setMovedAt(Instant.now());
+        deadLetterEventRepository.save(dlEvent);
+        retryTaskRepository.save(task);
     }
 }

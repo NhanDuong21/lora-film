@@ -13,6 +13,8 @@ import com.project.paymentservice.provider.ProviderCallbackResult;
 import com.project.paymentservice.repository.PaymentRepository;
 import com.project.paymentservice.repository.PaymentWebhookEventRepository;
 import org.springframework.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,7 @@ import java.util.Map;
 
 @Service
 public class ProviderCallbackService {
+    private static final Logger log = LoggerFactory.getLogger(ProviderCallbackService.class);
     private final PaymentProviderRegistry registry;
     private final PaymentWebhookEventRepository webhookRepository;
     private final PaymentRepository paymentRepository;
@@ -110,25 +113,33 @@ public class ProviderCallbackService {
         Payment payment = paymentRepository.findByProviderCodeAndProviderOrderId(
                 provider, result.getProviderOrderId()).orElse(null);
         if (payment != null && payment.getStatus() == PaymentStatus.PROCESSING) {
-            if (adapter.verifiedReturnFallbackEnabled()) {
-                try {
-                    // Localhost cannot receive VNPay's server-to-server IPN.
-                    // The adapter already verified the signed Return payload;
-                    // the canonical transaction service still validates the
-                    // order, amount and currency before changing any state.
-                    transactionService.applyProviderResult(provider, result, null);
-                } catch (BusinessException ignored) {
-                    // Mismatches are persisted as reconciliation cases. Keep
-                    // redirecting so the customer sees that stored outcome.
-                }
-            } else {
-                transactionService.scheduleProviderStatusCheck(
-                        payment.getId(), Instant.now());
-            }
+            resolveVerifiedReturn(provider, adapter, payment);
         }
         return payment == null
                 ? new ReturnOutcome(true, null, null)
                 : new ReturnOutcome(true, payment.getPublicId(), payment.getBookingPublicId());
+    }
+
+    private void resolveVerifiedReturn(
+            ProviderCode provider, PaymentProvider adapter, Payment payment) {
+        try {
+            // Browser Return remains navigation data only. It merely prompts a
+            // server-to-server provider query; only that authoritative query
+            // result is allowed to mutate Payment and Booking.
+            var authoritativeResult = adapter.queryStatus(payment);
+            if (authoritativeResult.isPresent()) {
+                transactionService.applyProviderResult(
+                        provider, authoritativeResult.get(), null);
+                return;
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Authoritative provider query failed after verified Return: "
+                            + "provider={}, paymentId={}, error={}",
+                    provider, payment.getId(), exception.getClass().getSimpleName());
+        }
+        int retryDelaySeconds = Math.max(5, adapter.recoveryRetryDelaySeconds());
+        transactionService.scheduleProviderStatusCheck(
+                payment.getId(), Instant.now().plusSeconds(retryDelaySeconds));
     }
 
     @Transactional

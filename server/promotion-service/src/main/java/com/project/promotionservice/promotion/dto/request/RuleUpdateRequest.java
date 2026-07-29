@@ -17,16 +17,21 @@ public class RuleUpdateRequest {
 
     private String description;
 
+    @NotNull(message = "priority is required")
     @Min(value = 0, message = "priority must be >= 0")
     private Integer priority;
 
+    @NotNull(message = "executionOrder is required")
     @Min(value = 1, message = "executionOrder must be >= 1")
     private Integer executionOrder;
 
+    @NotNull(message = "stackable is required")
     private Boolean stackable;
 
+    @NotNull(message = "stopFurtherRules is required")
     private Boolean stopFurtherRules;
 
+    @NotNull(message = "enabled is required")
     private Boolean enabled;
 
     @NotBlank(message = "conditionsJson is required")

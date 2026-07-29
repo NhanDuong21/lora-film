@@ -12,21 +12,32 @@ import com.project.promotionservice.promotion.service.RuleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Set;
+
+import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+import static com.project.promotionservice.common.web.ControllerPageSupport.pageable;
 
 @RestController
+@Validated
 @RequestMapping("/api/admin/promotion-rules")
 @Tag(name = "Admin Rule Management", description = "APIs for creating and configuring rules of campaigns")
 public class AdminRuleController {
+
+    private static final Set<String> SORT_FIELDS =
+            Set.of("createdAt", "updatedAt", "code", "name", "priority", "enabled");
 
     private final RuleService ruleService;
 
@@ -50,7 +61,9 @@ public class AdminRuleController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
     @Operation(summary = "Update an existing rule details")
     public ResponseEntity<ApiResponse<RuleResponse>> updateRule(
-            @PathVariable("id") String publicId,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
             @Valid @RequestBody RuleUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         String actor = getActor(userPrincipal);
@@ -62,7 +75,9 @@ public class AdminRuleController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
     @Operation(summary = "Soft delete a rule")
     public ResponseEntity<ApiResponse<Void>> deleteRule(
-            @PathVariable("id") String publicId,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         String actor = getActor(userPrincipal);
         ruleService.deleteRule(publicId, actor);
@@ -72,7 +87,10 @@ public class AdminRuleController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR')")
     @Operation(summary = "Get rule details")
-    public ResponseEntity<ApiResponse<RuleResponse>> getRule(@PathVariable("id") String publicId) {
+    public ResponseEntity<ApiResponse<RuleResponse>> getRule(
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId) {
         RuleResponse data = ruleService.getRule(publicId);
         return ResponseEntity.ok(new ApiResponse<>(true, "Rule retrieved successfully", data));
     }
@@ -81,17 +99,16 @@ public class AdminRuleController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR')")
     @Operation(summary = "Search rules dynamically with pagination")
     public ResponseEntity<ApiResponse<PagedResponse<RuleResponse>>> searchRules(
-            @RequestParam(value = "campaignPublicId", required = false) String campaignPublicId,
-            @RequestParam(value = "code", required = false) String code,
+            @RequestParam(value = "campaignPublicId", required = false)
+            @Pattern(regexp = UUID_PATTERN, message = "campaignPublicId must be a valid UUID")
+            String campaignPublicId,
+            @RequestParam(value = "code", required = false) @Size(max = 50) String code,
             @RequestParam(value = "enabled", required = false) Boolean enabled,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "10") int size,
-            @RequestParam(value = "sort", defaultValue = "createdAt,desc") String sort) {
+            @RequestParam(value = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(value = "size", defaultValue = "10") @Min(1) @Max(100) int size,
+            @RequestParam(value = "sort", defaultValue = "createdAt,desc") @Size(max = 60) String sort) {
 
-        String[] sortParams = sort.split(",");
-        Sort sortOrder = Sort.by(sortParams.length > 1 && "asc".equalsIgnoreCase(sortParams[1]) ? Sort.Direction.ASC : Sort.Direction.DESC, sortParams[0]);
-        Pageable pageable = PageRequest.of(page, size, sortOrder);
-
+        Pageable pageable = pageable(page, size, sort, SORT_FIELDS, "createdAt");
         PagedResponse<RuleResponse> data = ruleService.searchRules(campaignPublicId, code, enabled, pageable);
         return ResponseEntity.ok(new ApiResponse<>(true, "Rule search results retrieved", data));
     }
@@ -100,7 +117,9 @@ public class AdminRuleController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
     @Operation(summary = "Clone an existing rule into new campaign")
     public ResponseEntity<ApiResponse<RuleResponse>> cloneRule(
-            @PathVariable("id") String publicId,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
             @Valid @RequestBody RuleCloneRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         String actor = getActor(userPrincipal);

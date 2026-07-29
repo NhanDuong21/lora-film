@@ -5,9 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.common.exception.ErrorCode;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
+import com.project.promotionservice.benefit.service.BenefitPolicyValidator;
+import com.project.promotionservice.benefit.service.BenefitConditionEvaluator;
+import com.project.promotionservice.benefit.dto.request.RedemptionRequests.BenefitValidationRequest;
 import com.project.promotionservice.integration.outbox.OutboxStatus;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEvent;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEventRepository;
+import com.project.promotionservice.integration.outbox.PromotionOutboxEnvelopeFactory;
 import com.project.promotionservice.promotion.dto.request.RuleCreateRequest;
 import com.project.promotionservice.promotion.dto.request.RuleUpdateRequest;
 import com.project.promotionservice.promotion.dto.request.RuleCloneRequest;
@@ -28,6 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Locale;
 import java.util.List;
 
 @Service
@@ -38,17 +45,26 @@ public class RuleServiceImpl implements RuleService {
     private final PromotionOutboxEventRepository outboxEventRepository;
     private final RuleMapper ruleMapper;
     private final ObjectMapper objectMapper;
+    private final BenefitPolicyValidator benefitPolicyValidator;
+    private final BenefitConditionEvaluator conditionEvaluator;
+    private final PromotionOutboxEnvelopeFactory envelopeFactory;
 
     public RuleServiceImpl(PromotionRuleRepository ruleRepository,
                            PromotionCampaignRepository campaignRepository,
                            PromotionOutboxEventRepository outboxEventRepository,
                            RuleMapper ruleMapper,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           BenefitPolicyValidator benefitPolicyValidator,
+                           BenefitConditionEvaluator conditionEvaluator,
+                           PromotionOutboxEnvelopeFactory envelopeFactory) {
         this.ruleRepository = ruleRepository;
         this.campaignRepository = campaignRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.ruleMapper = ruleMapper;
         this.objectMapper = objectMapper;
+        this.benefitPolicyValidator = benefitPolicyValidator;
+        this.conditionEvaluator = conditionEvaluator;
+        this.envelopeFactory = envelopeFactory;
     }
 
     @Override
@@ -60,12 +76,14 @@ public class RuleServiceImpl implements RuleService {
         if (campaign.getDeletedAt() != null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Campaign is deleted", HttpStatus.BAD_REQUEST);
         }
+        requireDraftCampaign(campaign);
 
         if (ruleRepository.existsByCodeAndCampaignPublicIdAndDeletedAtIsNull(request.getCode(), request.getCampaignPublicId())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Rule code already exists in this campaign", HttpStatus.BAD_REQUEST);
         }
 
         validateRuleJson(request.getConditionsJson(), request.getActionsJson());
+        requireEffectivePeriod(request.getEffectiveFrom(), request.getEffectiveTo());
 
         PromotionRule rule = ruleMapper.toEntity(request);
         rule.setCreatedBy(creator);
@@ -87,8 +105,11 @@ public class RuleServiceImpl implements RuleService {
         if (rule.getDeletedAt() != null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Rule is deleted", HttpStatus.BAD_REQUEST);
         }
+        PromotionCampaign campaign = requireRuleCampaign(rule);
+        requireDraftCampaign(campaign);
 
         validateRuleJson(request.getConditionsJson(), request.getActionsJson());
+        requireEffectivePeriod(request.getEffectiveFrom(), request.getEffectiveTo());
 
         rule.setName(request.getName());
         rule.setDescription(request.getDescription());
@@ -120,6 +141,7 @@ public class RuleServiceImpl implements RuleService {
         if (rule.getDeletedAt() != null) {
             return;
         }
+        requireDraftCampaign(requireRuleCampaign(rule));
 
         rule.setDeletedAt(Instant.now());
         rule.setDeletedBy(deleter);
@@ -186,6 +208,9 @@ public class RuleServiceImpl implements RuleService {
         if (campaign.getDeletedAt() != null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Target Campaign is deleted", HttpStatus.BAD_REQUEST);
         }
+        requireDraftCampaign(campaign);
+        validateRuleJson(source.getConditionsJson(), source.getActionsJson());
+        requireEffectivePeriod(source.getEffectiveFrom(), source.getEffectiveTo());
 
         PromotionRule cloned = new PromotionRule();
         cloned.setCampaignPublicId(campaignId);
@@ -216,13 +241,14 @@ public class RuleServiceImpl implements RuleService {
     @Override
     public boolean validateRuleJson(String conditionsJson, String actionsJson) {
         try {
-            if (conditionsJson != null && !conditionsJson.isBlank()) {
-                objectMapper.readTree(conditionsJson);
-            }
-            if (actionsJson != null && !actionsJson.isBlank()) {
-                objectMapper.readTree(actionsJson);
-            }
+            JsonNode conditions = conditionsJson == null || conditionsJson.isBlank()
+                    ? null : objectMapper.readTree(conditionsJson);
+            JsonNode actions = actionsJson == null || actionsJson.isBlank()
+                    ? null : objectMapper.readTree(actionsJson);
+            benefitPolicyValidator.validateRule(conditions, actions);
             return true;
+        } catch (BusinessException exception) {
+            throw exception;
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Invalid JSON formatting in conditions or actions: " + e.getMessage(), HttpStatus.BAD_REQUEST);
         }
@@ -232,37 +258,118 @@ public class RuleServiceImpl implements RuleService {
     public double previewDiscount(String conditionsJson, String actionsJson, String contextJson) {
         validateRuleJson(conditionsJson, actionsJson);
         try {
-            double orderAmount = 0.0;
-            if (contextJson != null && !contextJson.isBlank()) {
-                JsonNode contextNode = objectMapper.readTree(contextJson);
-                if (contextNode.has("orderAmount")) {
-                    orderAmount = contextNode.get("orderAmount").asDouble();
-                }
+            JsonNode context = contextJson == null || contextJson.isBlank()
+                    ? objectMapper.createObjectNode()
+                    : objectMapper.readTree(contextJson);
+            if (!context.isObject()) {
+                throw invalidRule("contextJson must be a JSON object");
             }
-
-            JsonNode actionsNode = objectMapper.readTree(actionsJson);
-            double discount = 0.0;
-            if (actionsNode.has("discountType") && actionsNode.has("discountValue")) {
-                String type = actionsNode.get("discountType").asText();
-                double value = actionsNode.get("discountValue").asDouble();
-
-                if ("PERCENTAGE".equalsIgnoreCase(type)) {
-                    discount = orderAmount * (value / 100.0);
-                    if (actionsNode.has("maxDiscountAmount")) {
-                        double maxDiscount = actionsNode.get("maxDiscountAmount").asDouble();
-                        if (discount > maxDiscount) {
-                            discount = maxDiscount;
-                        }
-                    }
-                } else if ("FIXED_AMOUNT".equalsIgnoreCase(type)) {
-                    discount = value;
-                }
+            BigDecimal orderAmount = decimal(context, "orderAmount");
+            if (orderAmount == null || orderAmount.signum() <= 0) {
+                throw invalidRule("contextJson.orderAmount must be greater than zero");
             }
+            BenefitValidationRequest request = new BenefitValidationRequest();
+            request.setCode("RULE_PREVIEW");
+            request.setUserPublicId(context.path("userPublicId").asText("RULE_PREVIEW"));
+            request.setOriginalAmount(orderAmount);
+            request.setContextJson(context);
+            conditionEvaluator.evaluate(objectMapper.readTree(conditionsJson), request);
 
-            return Math.min(discount, orderAmount);
+            JsonNode actions = objectMapper.readTree(actionsJson);
+            JsonNode action = actions.isArray() ? actions.get(0) : actions;
+            String type = text(action, "discountType", "type", "actionType");
+            BigDecimal value = decimal(
+                    action, "discountValue", "value", "amount", "percentage");
+            BigDecimal discount;
+            String normalized = type.toUpperCase(Locale.ROOT);
+            if (normalized.equals("PERCENTAGE") || normalized.equals("PERCENT")) {
+                discount = orderAmount.multiply(value)
+                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                BigDecimal maximum = decimal(
+                        action, "maxDiscountAmount", "maximumDiscountAmount", "maxAmount");
+                if (maximum != null) {
+                    discount = discount.min(maximum);
+                }
+            } else if (normalized.equals("FREE")
+                    || normalized.equals("FULL_DISCOUNT")) {
+                discount = orderAmount;
+            } else if (normalized.equals("FREE_TICKET")) {
+                discount = requirePreviewEligibleAmount(
+                        context, "ticketAmount", orderAmount);
+            } else if (normalized.equals("FREE_COMBO")) {
+                discount = requirePreviewEligibleAmount(
+                        context, "comboAmount", orderAmount);
+            } else {
+                discount = value;
+            }
+            return discount.min(orderAmount)
+                    .setScale(2, RoundingMode.HALF_UP)
+                    .doubleValue();
+        } catch (BusinessException exception) {
+            throw exception;
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Failed to preview discount due to invalid payload schemas: " + e.getMessage(), HttpStatus.BAD_REQUEST);
         }
+    }
+
+    private PromotionCampaign requireRuleCampaign(PromotionRule rule) {
+        return campaignRepository.findByPublicId(rule.getCampaignPublicId())
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.NOT_FOUND, "Campaign not found", HttpStatus.NOT_FOUND));
+    }
+
+    private void requireDraftCampaign(PromotionCampaign campaign) {
+        if (campaign.getStatus() != com.project.promotionservice.promotion.enums.CampaignStatus.DRAFT) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "Promotion rules can only be changed while the campaign is DRAFT",
+                    HttpStatus.CONFLICT);
+        }
+    }
+
+    private void requireEffectivePeriod(Instant from, Instant to) {
+        if (to != null && !to.isAfter(from)) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "effectiveTo must be after effectiveFrom",
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private String text(JsonNode node, String... fields) {
+        for (String field : fields) {
+            JsonNode value = node.get(field);
+            if (value != null && !value.isNull() && !value.asText().isBlank()) {
+                return value.asText();
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal decimal(JsonNode node, String... fields) {
+        for (String field : fields) {
+            JsonNode value = node.get(field);
+            if (value != null && !value.isNull()) {
+                return value.isNumber()
+                        ? value.decimalValue()
+                        : new BigDecimal(value.asText());
+            }
+        }
+        return null;
+    }
+
+    private BusinessException invalidRule(String message) {
+        return new BusinessException(
+                ErrorCode.INVALID_REQUEST_PARAMETER, message, HttpStatus.BAD_REQUEST);
+    }
+
+    private BigDecimal requirePreviewEligibleAmount(
+            JsonNode context, String field, BigDecimal orderAmount) {
+        BigDecimal amount = decimal(context, field);
+        if (amount == null || amount.signum() <= 0 || amount.compareTo(orderAmount) > 0) {
+            throw invalidRule(field + " must be greater than zero and not exceed orderAmount");
+        }
+        return amount;
     }
 
     private void recordOutboxEvent(String aggregateType, String aggregatePublicId, String eventType, Object payload, String topic, String actor) {
@@ -272,7 +379,7 @@ public class RuleServiceImpl implements RuleService {
             event.setAggregatePublicId(aggregatePublicId);
             event.setEventType(eventType);
             event.setEventKey(aggregatePublicId);
-            event.setPayload(objectMapper.writeValueAsString(payload));
+            event.setPayload(envelopeFactory.create(event, payload));
             event.setTopicName(topic);
             event.setPublishStatus(OutboxStatus.PENDING);
             event.setCreatedBy(actor);

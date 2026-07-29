@@ -38,7 +38,7 @@ public class BookingPaymentClientTest {
         }
 
         client = new BookingPaymentClientImpl(
-                objectMapper, baseUrl, "test-token", 1000, 2000);
+                objectMapper, baseUrl, "test-token", 1000, 2000, 5);
     }
 
     @AfterEach
@@ -48,7 +48,56 @@ public class BookingPaymentClientTest {
 
     @Test
     void getPaymentContext_Success() {
-        String json = """
+        String json = paymentContextResponse(
+                Instant.now().minusSeconds(10),
+                Instant.now().plusSeconds(900));
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(json)
+                .addHeader("Content-Type", "application/json"));
+
+        BookingPaymentContext context = client.getPaymentContext(1001L);
+
+        assertNotNull(context);
+        assertEquals(1001L, context.getBookingId());
+        assertEquals(15L, context.getAccountId());
+        assertEquals(0, new BigDecimal("150000").compareTo(context.getAmount()));
+        assertEquals("VND", context.getCurrency());
+        assertEquals(1L, context.getAnalyticsSnapshot().getMovieId());
+    }
+
+    @Test
+    void getPaymentContext_AcceptsAmountLockWithinConfiguredClockSkew() {
+        Instant amountLockedAt = Instant.now().plusSeconds(2);
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(paymentContextResponse(
+                        amountLockedAt,
+                        Instant.now().plusSeconds(900)))
+                .addHeader("Content-Type", "application/json"));
+
+        BookingPaymentContext context = client.getPaymentContext(1001L);
+
+        assertNotNull(context);
+        assertEquals(amountLockedAt, context.getAmountLockedAt());
+    }
+
+    @Test
+    void getPaymentContext_RejectsAmountLockBeyondConfiguredClockSkew() {
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(paymentContextResponse(
+                        Instant.now().plusSeconds(30),
+                        Instant.now().plusSeconds(900)))
+                .addHeader("Content-Type", "application/json"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> client.getPaymentContext(1001L));
+
+        assertEquals("BOOKING_NOT_PAYABLE", exception.getErrorCode());
+    }
+
+    private String paymentContextResponse(Instant amountLockedAt, Instant expiresAt) {
+        return """
             {
               "success": true,
               "data": {
@@ -76,20 +125,7 @@ public class BookingPaymentClientTest {
                 }
               }
             }
-            """.formatted(Instant.now().minusSeconds(10), Instant.now().plusSeconds(900));
-
-        mockWebServer.enqueue(new MockResponse()
-                .setBody(json)
-                .addHeader("Content-Type", "application/json"));
-
-        BookingPaymentContext context = client.getPaymentContext(1001L);
-
-        assertNotNull(context);
-        assertEquals(1001L, context.getBookingId());
-        assertEquals(15L, context.getAccountId());
-        assertEquals(0, new BigDecimal("150000").compareTo(context.getAmount()));
-        assertEquals("VND", context.getCurrency());
-        assertEquals(1L, context.getAnalyticsSnapshot().getMovieId());
+            """.formatted(amountLockedAt, expiresAt);
     }
 
     @Test

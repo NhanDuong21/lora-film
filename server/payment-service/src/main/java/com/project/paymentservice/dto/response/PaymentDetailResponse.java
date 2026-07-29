@@ -22,6 +22,18 @@ public class PaymentDetailResponse {
     private String reconciliationStatus;
     private String bookingDeliveryStatus;
     private String externalTransactionId;
+    private String movieTitle;
+    private Integer ticketCount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal ticketAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal foodAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal discountAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal refundedAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal refundableAmount;
     private Instant expiresAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -56,6 +68,20 @@ public class PaymentDetailResponse {
     public void setBookingDeliveryStatus(String value) { this.bookingDeliveryStatus = value; }
     public String getExternalTransactionId() { return externalTransactionId; }
     public void setExternalTransactionId(String value) { this.externalTransactionId = value; }
+    public String getMovieTitle() { return movieTitle; }
+    public void setMovieTitle(String value) { this.movieTitle = value; }
+    public Integer getTicketCount() { return ticketCount; }
+    public void setTicketCount(Integer value) { this.ticketCount = value; }
+    public BigDecimal getTicketAmount() { return ticketAmount; }
+    public void setTicketAmount(BigDecimal value) { this.ticketAmount = value; }
+    public BigDecimal getFoodAmount() { return foodAmount; }
+    public void setFoodAmount(BigDecimal value) { this.foodAmount = value; }
+    public BigDecimal getDiscountAmount() { return discountAmount; }
+    public void setDiscountAmount(BigDecimal value) { this.discountAmount = value; }
+    public BigDecimal getRefundedAmount() { return refundedAmount; }
+    public void setRefundedAmount(BigDecimal value) { this.refundedAmount = value; }
+    public BigDecimal getRefundableAmount() { return refundableAmount; }
+    public void setRefundableAmount(BigDecimal value) { this.refundableAmount = value; }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
     public Instant getCreatedAt() { return createdAt; }

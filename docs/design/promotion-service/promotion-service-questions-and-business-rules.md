@@ -188,3 +188,13 @@
 - Mọi rule đánh dấu **🟡 ASSUMPTION** là giả định kỹ thuật hợp lý dựa trên khảo sát thực tế ngành, **bắt buộc phải được Marketing/Finance/Legal xác nhận lại bằng số liệu chính thức của doanh nghiệp** trước khi đưa vào production — đây chính là mục đích của Phần A (Bộ câu hỏi khảo sát).
 - Khuyến nghị: tổ chức 1 buổi **Business Rule Workshop** với đại diện Marketing, Finance, Legal, CSKH, Vận hành rạp, dùng trực tiếp Phần A làm agenda — mỗi câu trả lời sẽ xác nhận hoặc điều chỉnh rule tương ứng ở Phần B, sau đó review lại `promotion-service-plan.md` (mục 15–23) để đồng bộ Rule Engine.
 - Mỗi Business Rule ở Phần B nên được ánh xạ trực tiếp thành **1 test case** trong Testing Strategy (mục 55 của kế hoạch chính) trước khi release.
+
+## Runtime status note (2026-07-29)
+
+Rules in this document include business assumptions that still require
+Marketing/Finance/Legal confirmation. Implemented runtime behavior is narrower:
+one benefit per checkout, no automatic rule discovery/stacking, and no Score
+point mutation. Campaign legal/approval gates, the 50% percentage cap,
+reservation TTL/idempotency and partner settlement are enforced in
+Promotion. Cross-service eligibility is accepted only from a trusted caller
+until User/Movie/Score contracts are connected.

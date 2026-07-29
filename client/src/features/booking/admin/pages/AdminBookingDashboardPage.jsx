@@ -455,18 +455,30 @@ export default function AdminBookingDashboardPage() {
         </div>
       )}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
-        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+        <button
+          type="button"
+          onClick={handleResetFilters}
+          className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 text-left shadow-lg transition-colors hover:border-zinc-600"
+        >
           <span className="block text-[10px] font-bold uppercase text-zinc-500">Tổng đơn toàn hệ thống</span>
           <span className="mt-1 text-xl font-black text-white">{operationsSummary?.totalBookings ?? '—'}</span>
           <span className="mt-1 block text-[9px] text-zinc-500">
             Bộ lọc hiện tại: <strong className="text-zinc-300">{bookingPage?.totalElements ?? 0}</strong> đơn
           </span>
-        </div>
-        <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setStatus('PENDING_PAYMENT');
+            setAttention('ALL');
+            setPage(0);
+          }}
+          className="flex flex-col justify-between rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-left shadow-lg transition-colors hover:border-amber-400"
+        >
           <span className="block text-[10px] font-bold uppercase text-amber-500">Đang chờ thanh toán</span>
           <span className="mt-1 text-xl font-black text-amber-400">{operationsSummary?.pendingPayment ?? '—'}</span>
           <span className="mt-1 block text-[9px] text-zinc-500">Tất cả đơn còn ở bước thanh toán</span>
-        </div>
+        </button>
         <div className="flex flex-col justify-between rounded-2xl border border-zinc-850 bg-zinc-900/60 p-4 shadow-lg">
           <span className="block text-[10px] font-bold uppercase text-emerald-500">Đã xác nhận / hoàn thành</span>
           <span className="mt-1 text-xl font-black text-emerald-400">

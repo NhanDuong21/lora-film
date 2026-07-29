@@ -62,3 +62,28 @@ Không tạo event chuẩn khi:
 
 Khi Kafka unavailable, outbox giữ event và retry exponential. Sau ngưỡng cấu
 hình, event chuyển `DEAD_LETTER`; Admin có thể replay mà không đổi `eventId`.
+
+## Payload `PAYMENT_REFUNDED`
+
+Sự kiện chỉ được tạo sau khi Booking Service chấp nhận `REFUND_SUCCESS`:
+
+```json
+{
+  "eventId": "9b293c1c-23a3-4de5-a13a-fdc85be0eff1",
+  "eventType": "PAYMENT_REFUNDED",
+  "schemaVersion": "1.0",
+  "refundPublicId": "32ee6d62-008e-43f9-8bfd-3bb113a23534",
+  "paymentPublicId": "d14bd538-83b8-4778-8200-5a49de7af0df",
+  "bookingPublicId": "74bbbca7-b513-482b-851e-e7cc7a8cf66a",
+  "provider": "VNPAY",
+  "refundType": "PARTIAL",
+  "refundComponent": "CONCESSION",
+  "reasonCode": "CONCESSION_UNAVAILABLE",
+  "amount": 50000,
+  "currency": "VND",
+  "refundedAt": "2026-07-29T05:00:00Z"
+}
+```
+
+Kafka message key là `paymentPublicId`; `eventId` không đổi khi replay. Analytics
+phải ghi nhận đây là khoản giảm trừ doanh thu, không phải một Payment âm mới.

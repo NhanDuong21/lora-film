@@ -24,6 +24,12 @@ class RouteValidatorTest {
     }
 
     @Test
+    void socketIoHandshakeIsPublicBecauseItOnlyProjectsSeatAvailability() {
+        assertThat(isSecured(HttpMethod.GET,
+                "/socket.io/?EIO=4&transport=websocket")).isFalse();
+    }
+
+    @Test
     void protectedUserAndAdminEndpointsRequireAuthentication() {
         assertThat(isSecured(HttpMethod.GET, "/api/users/1")).isTrue();
         assertThat(isSecured(HttpMethod.GET, "/api/accounts")).isTrue();

@@ -11,6 +11,7 @@ import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
+import com.lorafilm.movie.showtime.service.ShowtimeRefundOutboxService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +46,8 @@ class ShowtimeStatusTransitionServiceImplTest {
 
     @Mock
     private ShowtimePricingService showtimePricingService;
+    @Mock
+    private ShowtimeRefundOutboxService refundOutboxService;
 
     private Clock fixedClock;
 
@@ -54,7 +57,9 @@ class ShowtimeStatusTransitionServiceImplTest {
     void setUp() {
         fixedClock = Clock.fixed(Instant.parse("2026-07-10T10:00:00Z"), ZoneId.of("UTC"));
         transitionService = new ShowtimeStatusTransitionServiceImpl(
-                showtimeRepository, historyService, currentUserProvider, adminShowtimeMapper, fixedClock, showtimePricingService);
+                showtimeRepository, historyService, currentUserProvider,
+                adminShowtimeMapper, fixedClock, showtimePricingService,
+                refundOutboxService);
     }
 
     @Test
@@ -136,6 +141,7 @@ class ShowtimeStatusTransitionServiceImplTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
 
         Showtime showtime = new Showtime();
+        showtime.setPublicId("pub-id");
         showtime.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
         showtime.setBookingOpenTime(Instant.parse("2026-07-10T09:00:00Z"));
 
@@ -151,6 +157,7 @@ class ShowtimeStatusTransitionServiceImplTest {
         assertEquals(ShowtimeStatus.CANCELLED, showtime.getStatus());
         assertEquals("Technical issue", showtime.getCancellationReason());
         assertEquals(Instant.parse("2026-07-10T10:00:00Z"), showtime.getBookingCloseTime());
+        verify(refundOutboxService).enqueueCancellation("pub-id", "Technical issue");
     }
 
     @Test

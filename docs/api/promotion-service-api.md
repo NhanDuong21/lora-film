@@ -1,468 +1,655 @@
-  # Promotion Service API Specification
-
-  ## 1. Thông Tin Chung
-
-  | Mục            | Nội dung                                                                  |
-  | -------------- | ------------------------------------------------------------------------- |
-  | Service        | `promotion-service`                                                       |
-  | Feature        | Campaign, Promotion Code, Discount Validation and Usage Tracking          |
-  | API liên quan  | Campaign Query, Promotion Query, Validate, Apply, Usage, Admin Management |
-  | Contract Owner | Dương Thiện Nhân                                                          |
-  | Backend Owner  | Trần Lương Thiện Hoàng                                                    |
-  | Reviewer       | Trần Lương Thiện Hoàng                                                    |
-  | Trạng thái     | Approved / Ready for Implementation                                      |
-  | Milestone      | Sprint 2 - Core Service API Foundation                                    |
-  | Ngày cập nhật  | 24/06/2026                                                                |
-
-  ---
-
-  ## 2. Mục Tiêu Tài Liệu
-
-  Tài liệu này đặc tả API Contract cho `promotion-service` của hệ thống **LoraFilm**.
-
-  Mục tiêu:
-
-  * Thống nhất contract giữa Frontend, API Gateway, Booking Service, Payment Service và Promotion Service.
-  * Làm cơ sở implement campaign, promotion code, validation, discount calculation và usage tracking.
-  * Xác định rõ Promotion Service là source of truth cho promotion rule.
-  * Không cho Frontend tự tính hoặc tự quyết định discount cuối cùng.
-  * Chuẩn hóa request, response, validation, HTTP status và error code.
-  * Xác định rõ global usage limit, per-user usage limit và idempotency.
-  * Ghi rõ các điểm có thể mismatch với schema Sprint 0 để service owner review.
-  * Làm cơ sở tách implementation issue sau khi contract được duyệt.
-
-  ---
-
-  ## 3. Phạm Vi Promotion Service
-
-  Promotion Service chịu trách nhiệm:
-
-  * Quản lý promotion campaign.
-  * Quản lý promotion code.
-  * Kiểm tra thời gian hiệu lực.
-  * Kiểm tra trạng thái campaign và promotion.
-  * Kiểm tra minimum order amount.
-  * Kiểm tra global usage limit.
-  * Kiểm tra per-user usage limit.
-  * Tính discount preview.
-  * Apply promotion vào booking.
-  * Ghi nhận promotion usage.
-  * Revert usage khi booking/payment thất bại nếu nghiệp vụ cho phép.
-  * Quản lý thống kê usage cơ bản.
-  * Bảo đảm việc apply promotion idempotent.
-
-  Promotion Service không chịu trách nhiệm:
-
-  * Quản lý booking.
-  * Tính giá vé gốc.
-  * Quản lý payment.
-  * Quản lý điểm thưởng.
-  * Quản lý movie/showtime/seat.
-  * Gửi notification.
-  * Truy cập trực tiếp database của Booking hoặc User Service.
-  * Recommendation Engine hoặc promotion personalization.
-
-  ---
-
-  ## 4. Physical Schema Sprint 0
-
-  ### 4.1. Bảng `promotion_campaigns`
-
-  ```sql
-  CREATE TABLE `promotion_campaigns` (
-    `id` bigint PRIMARY KEY AUTO_INCREMENT COMMENT 'Primary Key - Campaign ID',
-    `campaign_name` varchar(150) NOT NULL,
-    `description` text,
-    `start_date` timestamp NOT NULL,
-    `end_date` timestamp NOT NULL,
-    `is_active` boolean DEFAULT true,
-    `created_at` timestamp DEFAULT (now()),
-    `updated_at` timestamp DEFAULT (now())
-  );
-  ```
-
-  ### 4.2. Bảng `promotions`
-
-  ```sql
-  CREATE TABLE `promotions` (
-    `id` bigint PRIMARY KEY AUTO_INCREMENT COMMENT 'Primary Key - Promotion/Voucher ID',
-    `campaign_id` bigint NOT NULL COMMENT 'Foreign Key noi bo ket noi voi promotion_campaigns',
-    `promotion_code` varchar(50) UNIQUE NOT NULL COMMENT 'Ma voucher khach hang nhap, e.g., LORAFILM2026',
-    `description` text,
-    `discount_type` varchar(20) NOT NULL COMMENT 'PERCENTAGE, FIXED_AMOUNT',
-    `discount_value` decimal(10,2) NOT NULL COMMENT 'Gia tri giam, e.g., 10.00 cho percent hoac 20000.00 cho fixed',
-    `max_discount_amount` decimal(10,2) COMMENT 'So tien giam toi da neu dung PERCENTAGE, Null neu dung FIXED_AMOUNT',
-    `min_order_amount` decimal(10,2) DEFAULT 0 COMMENT 'Gia tri don hang toi thieu de duoc ap dung ma',
-    `usage_limit` int NOT NULL COMMENT 'Tong so lan ma nay duoc phep su dung tren toan he thong',
-    `used_count` int DEFAULT 0 COMMENT 'So lan ma nay da thuc te duoc dung, used_count <= usage_limit',
-    `limit_per_user` int DEFAULT 1 COMMENT 'So lan toi da mot khach hang duoc dung ma nay',
-    `start_date` timestamp NOT NULL,
-    `end_date` timestamp NOT NULL,
-    `is_active` boolean DEFAULT true,
-    `created_at` timestamp DEFAULT (now()),
-    `updated_at` timestamp DEFAULT (now())
-  );
-  ```
-
-  ### 4.3. Bảng `promotion_usages`
-
-  ```sql
-  CREATE TABLE `promotion_usages` (
-    `id` bigint PRIMARY KEY AUTO_INCREMENT,
-    `promotion_id` bigint NOT NULL,
-    `user_id` bigint NOT NULL COMMENT 'Logical Ref sang users.account_id cua User Service',
-    `booking_id` bigint UNIQUE NOT NULL COMMENT 'Logical Ref sang bookings.id cua Booking Service',
-    `applied_at` timestamp DEFAULT (now())
-  );
-  ```
-
-  ### 4.4. Quan hệ nội bộ
-
-  ```sql
-  ALTER TABLE `promotions`
-  ADD FOREIGN KEY (`campaign_id`)
-  REFERENCES `promotion_campaigns` (`id`)
-  ON DELETE CASCADE;
-
-  ALTER TABLE `promotion_usages`
-  ADD FOREIGN KEY (`promotion_id`)
-  REFERENCES `promotions` (`id`)
-  ON DELETE CASCADE;
-  ```
-
-  ---
-
-  ## 5. Phân Tích Schema và Quyết Định Chính Thức
-
-  ### 5.1. Những nghiệp vụ schema Sprint 0 hỗ trợ
-
-  Schema hiện tại hỗ trợ:
-
-  * Tạo và quản lý campaign.
-  * Tạo promotion code unique.
-  * Hai loại discount: phần trăm và số tiền cố định.
-  * Minimum booking amount.
-  * Maximum discount cho percentage promotion.
-  * Global usage limit.
-  * Per-user usage limit.
-  * Promotion activation theo thời gian.
-  * Ghi nhận promotion đã được áp dụng vào booking.
-  * Mỗi booking chỉ được gắn với một usage record.
-
-  ### 5.2. Một promotion cho mỗi booking
-
-  Sprint 2 giữ constraint:
-
-  ```txt
-  promotion_usages.booking_id UNIQUE
-  ```
-
-  Điều này có nghĩa:
-
-  ```txt
-  Một booking chỉ được áp dụng tối đa một promotion.
-  ```
-
-  Promotion stacking không nằm trong Sprint 2.
-
-  ### 5.3. Promotion Usage Lifecycle
-
-  Lifecycle chính thức:
-
-  ```txt
-  RESERVED
-  APPLIED
-  REVERTED
-  ```
-
-  Allowed transitions:
-
-  ```txt
-  RESERVED → APPLIED
-  RESERVED → REVERTED
-  ```
-
-  Không cho:
-
-  ```txt
-  APPLIED → RESERVED
-  REVERTED → RESERVED
-  REVERTED → APPLIED
-  ```
-
-  Usage được tạo ngay khi Apply:
-
-  ```txt
-  Apply
-  → Create RESERVED usage
-  → Increment used_count
-  ```
-
-  Payment success:
-
-  ```txt
-  RESERVED → APPLIED
-  ```
-
-  Booking cancelled hoặc expired:
-
-  ```txt
-  RESERVED → REVERTED
-  → Decrement used_count đúng một lần
-  ```
-
-  Payment `FAILED` nhưng booking vẫn còn thời gian retry:
-
-  ```txt
-  Giữ usage ở RESERVED
-  ```
-
-  ### 5.4. Discount Snapshot và Source of Truth
-
-  Promotion Service bắt buộc lưu snapshot tại thời điểm apply:
-
-  ```txt
-  original_amount
-  discount_amount
-  final_amount
-  ```
-
-  Source of truth được chốt:
-
-  ```txt
-  Promotion Service
-  → tính discount
-  → lưu discount snapshot để audit
-
-  Booking Service
-  → lưu finalAmount chính thức của booking
-
-  Payment Service
-  → lấy payable amount từ Booking Service
-  → không tự tính lại discount
-  ```
-
-  ### 5.5. Revert Audit và Expiration
-
-  Promotion usage phải lưu:
-
-  ```txt
-  reverted_at
-  revert_reason
-  updated_at
-  expires_at
-  ```
-
-  `expires_at` là snapshot của `booking.expires_at` tại thời điểm apply.
-
-  Booking Service vẫn là source of truth của booking expiry.
-
-  Promotion Service dùng `promotion_usages.expires_at` cho:
-
-  * Reconciliation.
-  * Cleanup usage bị treo.
-  * Phục hồi khi internal call từ Booking Service bị lỗi.
-
-  ### 5.6. Concurrency và Optimistic Locking
-
-  Schema phải bổ sung:
-
-  ```txt
-  promotions.version
-  promotion_usages.version
-  ```
-
-  Entity tương ứng dùng `@Version`.
-
-  Ngoài optimistic locking, tăng `used_count` vẫn phải dùng atomic conditional update để không vượt `usage_limit`.
-
-  ### 5.7. Delete Policy
-
-  Sprint 2 không hard delete campaign hoặc promotion.
-
-  Chỉ disable bằng:
-
-  ```txt
-  is_active = false
-  ```
-
-  Foreign key nội bộ phải dùng `ON DELETE RESTRICT` hoặc behavior tương đương để tránh mất usage history.
-
-  ### 5.8. Schema Alignment Bắt Buộc
-
-  Trước Backend implementation, schema phải bổ sung:
-
-  ```txt
-  promotion_usages.status
-  promotion_usages.original_amount
-  promotion_usages.discount_amount
-  promotion_usages.final_amount
-  promotion_usages.expires_at
-  promotion_usages.reverted_at
-  promotion_usages.revert_reason
-  promotion_usages.updated_at
-  promotion_usages.version
-  promotions.version
-  index (promotion_id, user_id, status)
-  index (status, expires_at)
-  ```
-
-  Schema được cập nhật trong issue:
-
-  ```txt
-  [Database] Align Promotion Schema with Promotion API Contract
-  ```
-
-  ## 6. Database-per-Service và Logical Reference
-
-  Các field sau là logical references:
-
-  ```txt
-  promotion_usages.user_id
-  promotion_usages.booking_id
-  ```
-
-  Promotion Service:
-
-  * Không tạo foreign key vật lý sang User hoặc Booking database.
-  * Không đọc trực tiếp database của service khác.
-  * Không tự sửa booking total bằng SQL.
-  * Phải giao tiếp qua API hoặc event contract.
-
-  ### Source of truth
-
-  | Dữ liệu                    | Source of truth   |
-  | -------------------------- | ----------------- |
-  | Campaign và promotion rule | Promotion Service |
-  | Promotion usage            | Promotion Service |
-  | User identity              | User/Auth Service |
-  | Booking amount và status   | Booking Service   |
-  | Payment status             | Payment Service   |
-  | Movie/showtime/seat        | Movie Service     |
-
-  ---
-
-  ## 7. API Gateway và Service URL
-
-  ### 7.1. API Gateway
-
-  Frontend chỉ gọi:
-
-  ```txt
-  http://localhost:8080
-  ```
-
-  ### 7.2. Promotion Service Direct URL
-
-  Chỉ dùng để debug hoặc backend integration:
-
-  ```txt
-  http://localhost:8087
-  ```
-
-  Port chính thức lấy từ cấu hình project.
-
-  ### 7.3. Request Flow
-
-  ```txt
-  React Frontend
-  → API Gateway
-  → Promotion Service
-  → Promotion Database
-  ```
-
-  ### 7.4. Apply Flow
-
-  ```txt
-  Frontend chọn promotion
-  → Booking Service cung cấp booking amount hợp lệ
-  → Promotion Service validate
-  → Promotion Service tính discount
-  → Promotion Service ghi nhận usage
-  → Booking/Payment dùng finalAmount đã được xác nhận
-  ```
-
-  Promotion Service không tin booking amount do Frontend tự gửi làm source of truth cuối cùng.
-
-  ---
-
-  ## 8. Quy Ước Chung
-
-  ### 8.1. Protected API Header
-
+# Promotion Service API Specification (v2 - Consolidated)
+
+## 1. Thông Tin Chung
+
+| Mục | Nội dung |
+| :--- | :--- |
+| Service | `promotion-service` |
+| Feature | Campaign, Coupon, Voucher, Rule Configuration, Reservation and Partner Settlements |
+| API liên quan | Campaign Admin, Coupon/Voucher Admin, Customer Wallet, Promotion Checkout, Partner & Settlement |
+| Contract Owner | Dương Thiện Nhân |
+| Backend Owner | Trần Lương Thiện Hoàng |
+| Reviewer | Trần Lương Thiện Hoàng |
+| Trạng thái | Promotion core implemented/verified; end-to-end Booking/Payment integration pending |
+| Milestone | Sprint 2 - Core Service API Foundation & Consolidated Benefit Domain |
+| Ngày cập nhật | 29/07/2026 |
+
+---
+
+## 2. Mục Tiêu Tài Liệu & Phạm Vi
+
+Tài liệu này đặc tả toàn bộ API Contract cho `promotion-service` của hệ thống **LoraFilm**. 
+
+Tài liệu này **hợp nhất** nội dung từ đặc tả cũ của `promotion-service-api.md` và `benefit-domain-api.md`, đồng thời loại bỏ tài liệu `benefit-domain-api.md` riêng biệt. Thiết kế ưu tiên tính đúng khi checkout, tránh vượt ngân sách, vượt quota, dùng quyền lợi hai lần hoặc mất quyền lợi khi thanh toán thất bại.
+
+### Phạm Vi Của Promotion Service
+- **Quản lý Campaign**: Vòng đời chiến dịch khuyến mại (Draft -> Pending -> Approved -> Active -> Paused -> Completed).
+- **Quản lý Coupon**: Phát hành mã dùng chung, mã cá nhân hóa hoặc mã một lần.
+- **Quản lý Voucher**: Phát hành và theo dõi voucher nằm trong ví khách hàng (Customer Wallet).
+- **Promotion Rules**: Quản lý cấu hình và preview có kiểm tra schema. Automatic rule discovery/stacking không thuộc Reservation Runtime dùng mã trong issue này.
+- **Promotion Reservation (Giữ chỗ khuyến mại)**: Lock atomically coupon/voucher, quota, và budget trong quá trình checkout.
+- **Redemption & Reservation lifecycle**: Confirm khi thanh toán thành công; release khi thanh toán thất bại; cancel khi booking bị hủy; job tự expire phiên quá hạn. Giao dịch đã confirm phải dùng refund/compensation, không rollback ledger.
+- **Compensation (Bồi thường)**: Phát hành voucher đền bù chăm sóc khách hàng.
+- **Partner & Settlement**: Quản lý đối tác tài trợ và đối soát quyết toán tài chính.
+
+### Nằm Ngoài Phạm Vi (Out of Scope)
+- Lưu trữ điểm tích lũy hoặc xếp hạng thành viên (thuộc về `score-service`). Promotion Service chỉ tích hợp qua API/Event để đọc hạng thành viên hoặc yêu cầu hold/commit/release điểm.
+- Độc lập hoàn toàn với `movie-service` (phim/suất chiếu) và `user-service` (thông tin đăng ký).
+
+---
+
+## 3. Physical Database Schema
+
+Hệ thống sử dụng MySQL làm Database chính, bao gồm 15 bảng nghiệp vụ và hạ tầng đã được align:
+
+### 3.1. Bảng `promotion_campaigns`
+```sql
+CREATE TABLE promotion_campaigns (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    code VARCHAR(100) NOT NULL COMMENT 'Mã chiến dịch',
+    name VARCHAR(255) NOT NULL COMMENT 'Tên chiến dịch',
+    slug VARCHAR(255) NOT NULL COMMENT 'Slug duy nhất',
+    description TEXT NULL COMMENT 'Mô tả chiến dịch',
+    campaign_type VARCHAR(50) NOT NULL COMMENT 'Loại chiến dịch',
+    funding_source VARCHAR(50) NOT NULL COMMENT 'Nguồn tài trợ',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái chiến dịch',
+    approval_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái phê duyệt',
+    legal_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái pháp lý',
+    priority INT NOT NULL DEFAULT 100 COMMENT 'Độ ưu tiên',
+    stackable BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Cho phép cộng dồn',
+    exclusive_campaign BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Chiến dịch độc quyền',
+    auto_activate BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Tự động kích hoạt',
+    auto_complete BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Tự động kết thúc',
+    auto_pause_when_budget_exceeded BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Tự động tạm dừng khi hết ngân sách',
+    kill_switch BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Dừng khẩn cấp',
+    timezone VARCHAR(60) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh' COMMENT 'Múi giờ',
+    start_at DATETIME(6) NOT NULL COMMENT 'Thời gian bắt đầu',
+    end_at DATETIME(6) NOT NULL COMMENT 'Thời gian kết thúc',
+    published_at DATETIME(6) NULL COMMENT 'Thời gian công bố',
+    approved_at DATETIME(6) NULL COMMENT 'Thời gian phê duyệt',
+    approved_by CHAR(36) NULL COMMENT 'Người phê duyệt',
+    budget_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Tổng ngân sách',
+    budget_used DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Ngân sách đã sử dụng',
+    budget_reserved DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Ngân sách đang giữ',
+    budget_remaining DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Ngân sách còn lại',
+    max_redemptions INT NULL COMMENT 'Số lượt sử dụng tối đa',
+    redemption_count INT NOT NULL DEFAULT 0 COMMENT 'Số lượt đã sử dụng',
+    max_redemptions_per_user INT NOT NULL DEFAULT 1 COMMENT 'Số lượt tối đa mỗi người dùng',
+    legal_notification_ref VARCHAR(150) NULL COMMENT 'Mã hồ sơ thông báo khuyến mại',
+    remarks TEXT NULL COMMENT 'Ghi chú nội bộ',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản dữ liệu',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_campaign_public UNIQUE (public_id),
+    CONSTRAINT uk_campaign_code UNIQUE (code)
+) COMMENT = 'Thông tin chiến dịch khuyến mãi';
+```
+
+### 3.2. Bảng `coupons`
+```sql
+CREATE TABLE coupons (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    campaign_public_id CHAR(36) NOT NULL COMMENT 'Public ID chiến dịch',
+    code VARCHAR(100) NOT NULL COMMENT 'Mã coupon',
+    name VARCHAR(255) NOT NULL COMMENT 'Tên coupon',
+    description TEXT NULL COMMENT 'Mô tả coupon',
+    coupon_type VARCHAR(50) NOT NULL COMMENT 'Loại coupon',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái',
+    distribution_type VARCHAR(30) NOT NULL COMMENT 'Hình thức phát hành',
+    stackable BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Cho phép cộng dồn',
+    transferable BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Cho phép chuyển nhượng',
+    reusable BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Cho phép sử dụng lại',
+    auto_apply BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Tự động áp dụng',
+    priority INT NOT NULL DEFAULT 100 COMMENT 'Độ ưu tiên',
+    max_redemptions INT NULL COMMENT 'Số lượt tối đa toàn hệ thống',
+    redemption_count INT NOT NULL DEFAULT 0 COMMENT 'Số lượt đã sử dụng',
+    max_redemptions_per_user INT NOT NULL DEFAULT 1 COMMENT 'Số lượt tối đa mỗi người',
+    valid_from DATETIME(6) NOT NULL COMMENT 'Ngày bắt đầu hiệu lực',
+    valid_to DATETIME(6) NOT NULL COMMENT 'Ngày kết thúc hiệu lực',
+    conditions_json JSON NOT NULL COMMENT 'Điều kiện áp dụng',
+    actions_json JSON NOT NULL COMMENT 'Hành động giảm giá',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_coupon_public UNIQUE (public_id),
+    CONSTRAINT uk_coupon_code UNIQUE (code),
+    CONSTRAINT chk_coupon_period CHECK (valid_to > valid_from)
+) COMMENT = 'Danh sách coupon';
+```
+
+### 3.3. Bảng `coupon_redemptions`
+```sql
+CREATE TABLE coupon_redemptions (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai',
+    coupon_public_id CHAR(36) NOT NULL COMMENT 'Public ID coupon',
+    campaign_public_id CHAR(36) NOT NULL COMMENT 'Public ID chiến dịch',
+    reservation_public_id CHAR(36) NULL COMMENT 'Public ID phiên giữ khuyến mãi',
+    booking_public_id CHAR(36) NULL COMMENT 'Public ID booking',
+    order_public_id CHAR(36) NULL COMMENT 'Public ID đơn hàng',
+    payment_public_id CHAR(36) NULL COMMENT 'Public ID thanh toán',
+    user_public_id CHAR(36) NOT NULL COMMENT 'Public ID người dùng',
+    customer_phone VARCHAR(20) NULL COMMENT 'Số điện thoại xác thực',
+    redeemed_code VARCHAR(100) NOT NULL COMMENT 'Mã coupon đã sử dụng',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái sử dụng',
+    discount_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền giảm',
+    original_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị đơn trước giảm',
+    final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị sau giảm',
+    rollback_reason VARCHAR(255) NULL COMMENT 'Lý do rollback',
+    rollback_at DATETIME(6) NULL COMMENT 'Thời điểm rollback',
+    confirmed_at DATETIME(6) NULL COMMENT 'Thời điểm xác nhận',
+    expired_at DATETIME(6) NULL COMMENT 'Thời điểm hết hạn giữ',
+    metadata_json JSON NULL COMMENT 'Thông tin bổ sung',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_coupon_redemption_public UNIQUE (public_id)
+) COMMENT = 'Lịch sử sử dụng coupon';
+```
+
+### 3.4. Bảng `vouchers`
+```sql
+CREATE TABLE vouchers (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
+    owner_public_id CHAR(36) NOT NULL COMMENT 'Public ID người sở hữu',
+    code VARCHAR(100) NOT NULL COMMENT 'Mã voucher',
+    name VARCHAR(255) NOT NULL COMMENT 'Tên voucher',
+    description TEXT NULL COMMENT 'Mô tả voucher',
+    voucher_type VARCHAR(50) NOT NULL COMMENT 'Loại voucher',
+    source VARCHAR(50) NOT NULL COMMENT 'Nguồn phát hành',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái',
+    issue_reason VARCHAR(255) NULL COMMENT 'Lý do phát hành',
+    issued_by CHAR(36) NULL COMMENT 'Người phát hành',
+    issued_at DATETIME(6) NOT NULL COMMENT 'Ngày phát hành',
+    valid_from DATETIME(6) NOT NULL COMMENT 'Ngày bắt đầu hiệu lực',
+    valid_to DATETIME(6) NOT NULL COMMENT 'Ngày hết hiệu lực',
+    transferable BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Cho phép chuyển nhượng',
+    stackable BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Cho phép cộng dồn',
+    reusable BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Cho phép sử dụng lại',
+    max_usage INT NOT NULL DEFAULT 1 COMMENT 'Số lượt sử dụng tối đa',
+    usage_count INT NOT NULL DEFAULT 0 COMMENT 'Số lượt đã sử dụng',
+    face_value DECIMAL(18, 2) NULL COMMENT 'Giá trị voucher',
+    minimum_order_amount DECIMAL(18, 2) NULL COMMENT 'Đơn hàng tối thiểu',
+    conditions_json JSON NOT NULL COMMENT 'Điều kiện sử dụng',
+    actions_json JSON NOT NULL COMMENT 'Nội dung ưu đãi',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_voucher_public UNIQUE (public_id),
+    CONSTRAINT uk_voucher_code UNIQUE (code),
+    CONSTRAINT chk_voucher_period CHECK (valid_to > valid_from)
+) COMMENT = 'Danh sách voucher';
+```
+
+### 3.5. Bảng `voucher_redemptions`
+```sql
+CREATE TABLE voucher_redemptions (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai',
+    voucher_public_id CHAR(36) NOT NULL COMMENT 'Public ID voucher',
+    campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
+    reservation_public_id CHAR(36) NULL COMMENT 'Public ID phiên giữ',
+    booking_public_id CHAR(36) NULL COMMENT 'Public ID booking',
+    order_public_id CHAR(36) NULL COMMENT 'Public ID đơn hàng',
+    payment_public_id CHAR(36) NULL COMMENT 'Public ID thanh toán',
+    owner_public_id CHAR(36) NOT NULL COMMENT 'Public ID người sở hữu',
+    redeemed_by CHAR(36) NOT NULL COMMENT 'Public ID người sử dụng',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái sử dụng',
+    original_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị trước giảm',
+    discount_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị giảm',
+    final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị sau giảm',
+    confirmed_at DATETIME(6) NULL COMMENT 'Ngày xác nhận',
+    rollback_at DATETIME(6) NULL COMMENT 'Ngày rollback',
+    rollback_reason VARCHAR(255) NULL COMMENT 'Lý do rollback',
+    expired_at DATETIME(6) NULL COMMENT 'Ngày hết giữ',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_voucher_redemption_public UNIQUE (public_id)
+) COMMENT = 'Lịch sử sử dụng voucher';
+```
+
+### 3.6. Bảng `promotion_reservations`
+```sql
+CREATE TABLE promotion_reservations (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    reservation_code VARCHAR(100) NOT NULL COMMENT 'Mã giữ khuyến mãi',
+    booking_public_id CHAR(36) NULL COMMENT 'Public ID booking',
+    order_public_id CHAR(36) NULL COMMENT 'Public ID đơn hàng',
+    payment_public_id CHAR(36) NULL COMMENT 'Public ID thanh toán',
+    user_public_id CHAR(36) NOT NULL COMMENT 'Public ID người dùng',
+    customer_phone VARCHAR(20) NULL COMMENT 'Số điện thoại đã xác thực dùng để giữ quota coupon',
+    reservation_scope_key VARCHAR(80) NULL COMMENT 'Một benefit hiệu lực trên mỗi order/booking',
+    campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
+    coupon_public_id CHAR(36) NULL COMMENT 'Public ID coupon',
+    voucher_public_id CHAR(36) NULL COMMENT 'Public ID voucher',
+    reservation_type VARCHAR(30) NOT NULL COMMENT 'Loại giữ',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái giữ',
+    original_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị trước giảm',
+    discount_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị giảm',
+    final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị sau giảm',
+    currency VARCHAR(10) NOT NULL DEFAULT 'VND' COMMENT 'Đơn vị tiền tệ',
+    reservation_started_at DATETIME(6) NOT NULL COMMENT 'Thời điểm bắt đầu giữ',
+    reservation_expired_at DATETIME(6) NOT NULL COMMENT 'Thời điểm hết hạn giữ',
+    confirmed_at DATETIME(6) NULL COMMENT 'Thời điểm xác nhận',
+    cancelled_at DATETIME(6) NULL COMMENT 'Thời điểm hủy',
+    cancelled_reason VARCHAR(255) NULL COMMENT 'Lý do hủy',
+    rollback_at DATETIME(6) NULL COMMENT 'Thời điểm rollback',
+    rollback_reason VARCHAR(255) NULL COMMENT 'Lý do rollback',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    expiration_attempts INT NOT NULL DEFAULT 0 COMMENT 'Số lần scheduler thử hết hạn',
+    expiration_last_attempt_at DATETIME(6) NULL COMMENT 'Lần thử hết hạn gần nhất',
+    expiration_next_attempt_at DATETIME(6) NULL COMMENT 'Lần retry hết hạn tiếp theo',
+    expiration_error VARCHAR(1000) NULL COMMENT 'Lỗi hết hạn gần nhất',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản dữ liệu',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_promotion_reservation_public UNIQUE (public_id),
+    CONSTRAINT uk_promotion_reservation_code UNIQUE (reservation_code),
+    CONSTRAINT uk_promotion_reservation_scope UNIQUE (reservation_scope_key),
+    CONSTRAINT chk_reservation_amount CHECK (
+        original_amount >= 0
+        AND discount_amount >= 0
+        AND final_amount >= 0
+        AND final_amount = original_amount - discount_amount
+    ),
+    CONSTRAINT chk_reservation_single_benefit CHECK (
+        (
+            reservation_type = 'COUPON'
+            AND coupon_public_id IS NOT NULL
+            AND voucher_public_id IS NULL
+        )
+        OR (
+            reservation_type = 'VOUCHER'
+            AND coupon_public_id IS NULL
+            AND voucher_public_id IS NOT NULL
+        )
+    ),
+    CONSTRAINT chk_reservation_status CHECK (
+        status IN ('ACTIVE', 'COMPLETED', 'RELEASED', 'CANCELLED', 'EXPIRED')
+    ),
+    CONSTRAINT chk_reservation_lifecycle CHECK (
+        (
+            status = 'ACTIVE'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'COMPLETED'
+            AND confirmed_at IS NOT NULL
+            AND payment_public_id IS NOT NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'RELEASED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NOT NULL
+            AND rollback_reason IS NOT NULL
+        )
+        OR (
+            status = 'CANCELLED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NOT NULL
+            AND cancelled_reason IS NOT NULL
+            AND rollback_at IS NULL
+        )
+        OR (
+            status = 'EXPIRED'
+            AND confirmed_at IS NULL
+            AND cancelled_at IS NULL
+            AND rollback_at IS NULL
+        )
+    ),
+    CONSTRAINT chk_reservation_period CHECK (
+        reservation_expired_at > reservation_started_at
+    )
+) COMMENT = 'Phiên giữ khuyến mãi';
+```
+
+Schema được quản lý bằng Flyway:
+[`V1__promotion_schema.sql`](../../server/promotion-service/src/main/resources/db/migration/V1__promotion_schema.sql)
+cho database mới và
+[`V2__promotion_runtime_hardening.sql`](../../server/promotion-service/src/main/resources/db/migration/V2__promotion_runtime_hardening.sql)
+cho cả database mới/lịch sử. Database cũ được baseline ở V1 rồi tự chạy V2; file
+đối chiếu vận hành nằm tại
+[`20260728_promotion_reservation_runtime.sql`](../database/mysql/migrations/20260728_promotion_reservation_runtime.sql).
+
+### 3.7. Bảng `compensation_vouchers`
+```sql
+CREATE TABLE compensation_vouchers (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    voucher_public_id CHAR(36) NOT NULL COMMENT 'Public ID voucher bồi thường',
+    reservation_public_id CHAR(36) NULL COMMENT 'Public ID phiên giữ',
+    booking_public_id CHAR(36) NULL COMMENT 'Public ID booking',
+    order_public_id CHAR(36) NULL COMMENT 'Public ID đơn hàng',
+    user_public_id CHAR(36) NOT NULL COMMENT 'Public ID người nhận',
+    compensation_type VARCHAR(50) NOT NULL COMMENT 'Loại bồi thường',
+    reason VARCHAR(255) NOT NULL COMMENT 'Lý do bồi thường',
+    amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Giá trị bồi thường',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái',
+    issued_at DATETIME(6) NOT NULL COMMENT 'Ngày phát hành',
+    expired_at DATETIME(6) NULL COMMENT 'Ngày hết hạn',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_compensation_public UNIQUE (public_id)
+) COMMENT = 'Voucher bồi thường';
+```
+
+### 3.8. Bảng `partners`
+```sql
+CREATE TABLE partners (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    code VARCHAR(100) NOT NULL COMMENT 'Mã đối tác',
+    name VARCHAR(255) NOT NULL COMMENT 'Tên đối tác',
+    partner_type VARCHAR(50) NOT NULL COMMENT 'Loại đối tác',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái',
+    tax_code VARCHAR(50) NULL COMMENT 'Mã số thuế',
+    email VARCHAR(255) NULL COMMENT 'Email liên hệ',
+    phone VARCHAR(30) NULL COMMENT 'Số điện thoại',
+    contact_person VARCHAR(255) NULL COMMENT 'Người liên hệ',
+    address VARCHAR(500) NULL COMMENT 'Địa chỉ',
+    website VARCHAR(255) NULL COMMENT 'Website',
+    contract_number VARCHAR(100) NULL COMMENT 'Số hợp đồng',
+    contract_start_at DATETIME(6) NULL COMMENT 'Ngày bắt đầu hợp đồng',
+    contract_end_at DATETIME(6) NULL COMMENT 'Ngày kết thúc hợp đồng',
+    settlement_cycle VARCHAR(30) NOT NULL COMMENT 'Chu kỳ đối soát',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_partner_public UNIQUE (public_id),
+    CONSTRAINT uk_partner_code UNIQUE (code)
+) COMMENT = 'Thông tin đối tác';
+```
+
+### 3.9. Bảng `partner_settlements`
+```sql
+CREATE TABLE partner_settlements (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    partner_public_id CHAR(36) NOT NULL COMMENT 'Public ID đối tác',
+    campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
+    settlement_code VARCHAR(100) NOT NULL COMMENT 'Mã đối soát',
+    settlement_period_from DATETIME(6) NOT NULL COMMENT 'Kỳ đối soát từ',
+    settlement_period_to DATETIME(6) NOT NULL COMMENT 'Kỳ đối soát đến',
+    total_orders INT NOT NULL DEFAULT 0 COMMENT 'Tổng số đơn',
+    total_discount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Tổng tiền giảm',
+    partner_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền đối tác thanh toán',
+    platform_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền hệ thống chịu',
+    adjustment_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Khoản điều chỉnh',
+    final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền quyết toán',
+    currency VARCHAR(10) NOT NULL DEFAULT 'VND' COMMENT 'Đơn vị tiền tệ',
+    settlement_rule VARCHAR(50) NOT NULL DEFAULT 'PERCENTAGE_OF_DISCOUNT' COMMENT 'Quy tắc quyết toán',
+    partner_percentage DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT 'Tỷ lệ đối tác tài trợ',
+    fixed_amount_per_redemption DECIMAL(18,2) NULL COMMENT 'Mức cố định mỗi redemption',
+    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái đối soát',
+    approved_at DATETIME(6) NULL COMMENT 'Ngày phê duyệt',
+    paid_at DATETIME(6) NULL COMMENT 'Ngày thanh toán',
+    note TEXT NULL COMMENT 'Ghi chú',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_settlement_public UNIQUE (public_id),
+    CONSTRAINT uk_settlement_code UNIQUE (settlement_code),
+    CONSTRAINT chk_settlement_period CHECK (
+        settlement_period_to > settlement_period_from
+    )
+) COMMENT = 'Đối soát với đối tác';
+```
+
+### 3.10. Bảng `promotion_configurations`
+```sql
+CREATE TABLE promotion_configurations (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    config_key VARCHAR(150) NOT NULL COMMENT 'Khóa cấu hình',
+    config_value TEXT NOT NULL COMMENT 'Giá trị cấu hình',
+    value_type VARCHAR(30) NOT NULL COMMENT 'Kiểu dữ liệu',
+    category VARCHAR(100) NOT NULL COMMENT 'Nhóm cấu hình',
+    description VARCHAR(500) NULL COMMENT 'Mô tả',
+    editable BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Cho phép chỉnh sửa',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Optimistic lock version',
+    requires_restart BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Chỉ có hiệu lực sau restart',
+    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/INACTIVE/DEPRECATED',
+    metadata_json JSON NULL COMMENT 'Giới hạn và metadata cấu hình',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_configuration_public UNIQUE (public_id),
+    CONSTRAINT uk_configuration_key UNIQUE (config_key)
+) COMMENT = 'Cấu hình Promotion Service';
+```
+
+### 3.11. Bảng `approval_histories`
+```sql
+CREATE TABLE approval_histories (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    target_type VARCHAR(50) NOT NULL COMMENT 'Loại đối tượng',
+    target_public_id CHAR(36) NOT NULL COMMENT 'Public ID đối tượng',
+    action VARCHAR(50) NOT NULL COMMENT 'Hành động',
+    old_status VARCHAR(30) NULL COMMENT 'Trạng thái trước',
+    new_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái sau',
+    approver_public_id CHAR(36) NOT NULL COMMENT 'Public ID người phê duyệt',
+    comment TEXT NULL COMMENT 'Ghi chú phê duyệt',
+    approved_at DATETIME(6) NOT NULL COMMENT 'Ngày phê duyệt',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_approval_public UNIQUE (public_id)
+) COMMENT = 'Lịch sử phê duyệt';
+```
+
+### 3.12. Bảng `audit_logs`
+```sql
+CREATE TABLE audit_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    entity_type VARCHAR(50) NOT NULL COMMENT 'Loại dữ liệu',
+    entity_public_id CHAR(36) NOT NULL COMMENT 'Public ID dữ liệu',
+    action VARCHAR(50) NOT NULL COMMENT 'Hành động',
+    actor_public_id CHAR(36) NULL COMMENT 'Người thực hiện',
+    actor_type VARCHAR(30) NULL COMMENT 'Loại người thực hiện',
+    ip_address VARCHAR(100) NULL COMMENT 'Địa chỉ IP',
+    user_agent TEXT NULL COMMENT 'Thông tin trình duyệt',
+    request_id VARCHAR(100) NULL COMMENT 'Mã request',
+    trace_id VARCHAR(100) NULL COMMENT 'Trace ID',
+    before_data JSON NULL COMMENT 'Dữ liệu trước thay đổi',
+    after_data JSON NULL COMMENT 'Dữ liệu sau thay đổi',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_audit_public UNIQUE (public_id)
+) COMMENT = 'Nhật ký thao tác';
+```
+
+### 3.13. Bảng `outbox_events`
+```sql
+CREATE TABLE outbox_events (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    aggregate_type VARCHAR(50) NOT NULL COMMENT 'Loại aggregate',
+    aggregate_public_id CHAR(36) NOT NULL COMMENT 'Public ID aggregate',
+    event_type VARCHAR(100) NOT NULL COMMENT 'Loại sự kiện',
+    event_key VARCHAR(100) NULL COMMENT 'Khóa phân vùng Kafka',
+    payload JSON NOT NULL COMMENT 'Dữ liệu sự kiện',
+    headers_json JSON NULL COMMENT 'Header sự kiện',
+    topic_name VARCHAR(150) NOT NULL COMMENT 'Tên Kafka topic',
+    publish_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái publish',
+    retry_count INT NOT NULL DEFAULT 0 COMMENT 'Số lần gửi lại',
+    next_retry_at DATETIME(6) NULL COMMENT 'Lần gửi tiếp theo',
+    processing_started_at DATETIME(6) NULL COMMENT 'Thời điểm bắt đầu lease publish',
+    processing_owner VARCHAR(100) NULL COMMENT 'Instance đang giữ lease publish',
+    published_at DATETIME(6) NULL COMMENT 'Ngày publish',
+    error_message TEXT NULL COMMENT 'Lỗi publish',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_outbox_public UNIQUE (public_id)
+) COMMENT = 'Outbox Event';
+```
+
+### 3.14. Bảng `promotion_idempotency_keys`
+```sql
+CREATE TABLE promotion_idempotency_keys (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    idempotency_key VARCHAR(255) NOT NULL COMMENT 'Khóa chống gửi trùng',
+    request_hash CHAR(64) NOT NULL COMMENT 'Hash nội dung request',
+    api_name VARCHAR(150) NOT NULL COMMENT 'Tên API',
+    http_method VARCHAR(10) NOT NULL COMMENT 'Phương thức HTTP',
+    user_public_id CHAR(36) NULL COMMENT 'Public ID người dùng',
+    client_id VARCHAR(100) NOT NULL COMMENT 'Service gọi đã được xác thực',
+    device_id VARCHAR(150) NULL COMMENT 'Mã thiết bị',
+    session_id VARCHAR(150) NULL COMMENT 'Mã phiên đăng nhập',
+    request_uri VARCHAR(255) NOT NULL COMMENT 'Đường dẫn API',
+    request_body JSON NULL COMMENT 'Nội dung request',
+    response_body JSON NULL COMMENT 'Nội dung response',
+    response_status INT NULL COMMENT 'Mã trạng thái HTTP',
+    reservation_public_id CHAR(36) NULL COMMENT 'Public ID phiên giữ',
+    booking_public_id CHAR(36) NULL COMMENT 'Public ID booking',
+    payment_public_id CHAR(36) NULL COMMENT 'Public ID thanh toán',
+    processing_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái xử lý',
+    first_request_at DATETIME(6) NOT NULL COMMENT 'Lần gọi đầu tiên',
+    completed_at DATETIME(6) NULL COMMENT 'Thời điểm hoàn thành',
+    expired_at DATETIME(6) NOT NULL COMMENT 'Thời điểm hết hiệu lực',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_idempotency_public UNIQUE (public_id),
+    CONSTRAINT uk_idempotency_scope UNIQUE (client_id, api_name, idempotency_key)
+) COMMENT = 'Lưu khóa chống xử lý trùng request';
+```
+
+### 3.15. Bảng `promotion_rules`
+```sql
+CREATE TABLE promotion_rules (
+    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
+    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
+    campaign_public_id CHAR(36) NOT NULL COMMENT 'Public ID chiến dịch',
+    code VARCHAR(100) NOT NULL COMMENT 'Mã rule',
+    name VARCHAR(255) NOT NULL COMMENT 'Tên rule',
+    description TEXT NULL COMMENT 'Mô tả rule',
+    rule_type VARCHAR(50) NOT NULL COMMENT 'Loại rule',
+    priority INT NOT NULL DEFAULT 100 COMMENT 'Độ ưu tiên thực thi',
+    execution_order INT NOT NULL DEFAULT 1 COMMENT 'Thứ tự thực thi',
+    stackable BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Cho phép cộng dồn',
+    stop_further_rules BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Dừng các rule tiếp theo nếu thỏa',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Cho phép áp dụng',
+    conditions_json JSON NOT NULL COMMENT 'Điều kiện áp dụng',
+    actions_json JSON NOT NULL COMMENT 'Hành động ưu đãi',
+    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
+    effective_from DATETIME(6) NOT NULL COMMENT 'Thời gian bắt đầu hiệu lực',
+    effective_to DATETIME(6) NULL COMMENT 'Thời gian kết thúc hiệu lực',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản rule',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
+    created_by CHAR(36) NULL COMMENT 'Người tạo',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
+    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
+    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
+    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
+    CONSTRAINT uk_promotion_rule_public UNIQUE (public_id),
+    CONSTRAINT chk_rule_priority CHECK (priority >= 0),
+    CONSTRAINT chk_rule_execution_order CHECK (execution_order > 0),
+    CONSTRAINT chk_rule_period CHECK (
+        effective_to IS NULL
+        OR effective_to > effective_from
+    )
+) COMMENT = 'Danh sách rule của chiến dịch khuyến mãi';
+```
+
+---
+
+## 4. Quy Ước Chung & Tích Hợp Hệ Thống
+
+### 4.1. Headers Truy Cập
+- **Protected Customer API**:
   ```http
   Authorization: Bearer <accessToken>
   Content-Type: application/json
   ```
-
-  ### 8.2. Internal API Header
-
+- **Internal Microservice API**:
   ```http
-  X-Internal-Token: <internal-token>
+  X-Service-Name: BOOKING_SERVICE | PAYMENT_SERVICE
+  X-Internal-Token: <service-token>
+  X-Idempotency-Key: <unique-uuid-key>
   Content-Type: application/json
   ```
+  `X-Service-Name` phải khớp token riêng của service. Booking và Payment không dùng
+  chung secret. Header trùng, thiếu hoặc khai service sai đều bị từ chối trước khi
+  vào controller. `X-Idempotency-Key` chỉ bắt buộc với năm lệnh thay đổi reservation.
 
-  Cơ chế internal authentication phải đồng bộ với API Gateway và service security design.
+### 4.2. Định Dạng Ngày Tháng & Tiền Tệ
+- **Datetime**: API dùng ISO-8601 có offset, ví dụ `2026-07-28T14:10:00.000000Z`; database lưu với độ chính xác microsecond.
+- **Tiền Tệ**: Hệ thống lưu số tiền kiểu decimal. Quy đổi về `BigDecimal` với scale = 2 và làm tròn `HALF_UP`; đơn vị mặc định là `VND`.
+- **Mã Ưu Đãi (Coupon Code)**: Trim khoảng trắng, uppercase trước khi lưu và so sánh không phân biệt chữ hoa/thường ở tầng API.
 
-  ### 8.3. Datetime
-
-  Sử dụng ISO-8601:
-
-  ```txt
-  YYYY-MM-DDTHH:mm:ss
-  ```
-
-  Timezone nghiệp vụ:
-
-  ```txt
-  Asia/Ho_Chi_Minh
-  ```
-
-  ### 8.4. Currency
-
-  Sprint 2 chỉ hỗ trợ:
-
-  ```txt
-  VND
-  ```
-
-  Các amount trả về dạng number:
-
-  ```json
-  {
-    "discountAmount": 20000,
-    "finalAmount": 220000
-  }
-  ```
-
-  ### 8.5. Promotion Code Normalization
-
-  Promotion code phải được:
-
-  * Trim khoảng trắng.
-  * Chuyển về uppercase trước khi lưu và tìm kiếm.
-  * So sánh không phân biệt hoa/thường ở tầng API.
-
-  Ví dụ:
-
-  ```txt
-  lorafilm2026
-  LORAFILM2026
-  LORAFILM2026
-  ```
-
-  đều được normalize thành:
-
-  ```txt
-  LORAFILM2026
-  ```
-
-  ---
-
-  ## 9. Common Response Contract
-
-  ### 9.1. Success
-
+### 4.3. Định Dạng Phản Hồi Chung (Common Response Contract)
+- **Thành Công (2xx)**:
   ```json
   {
     "success": true,
@@ -470,2143 +657,553 @@
     "data": {}
   }
   ```
-
-  ### 9.2. Error
-
+- **Thất bại / Lỗi nghiệp vụ (4xx/5xx)**:
   ```json
   {
     "success": false,
-    "message": "Operation failed",
-    "errorCode": "ERROR_CODE",
+    "message": "Error details message",
+    "errorCode": "ERROR_CODE_NAME",
     "data": null,
     "errors": null
   }
   ```
 
-  ### 9.3. Validation Error
+---
+
+## 5. Các Quy Tắc Nghiệp Vụ Chính (Business Rules)
+
+Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm tránh thất thoát tài chính và gian lận:
+
+- **BR-CAMP-01 (Kích hoạt chiến dịch)**: Campaign chuyển từ `SCHEDULED` sang `ACTIVE` khi đồng thời thỏa mãn: `current_time >= start_at` VÀ `legal_status = PASSED` VÀ `budget_amount > 0`.
+- **BR-CAMP-02 (Kiểm soát ngân sách)**: Tự động chuyển chiến dịch sang `PAUSED` khi `budget_used + budget_reserved >= budget_amount * 0.98`. Campaign chỉ được publish/activate sau khi business approval đã `APPROVED`, legal review đã `PASSED` và budget dương.
+- **BR-COUP-01 (Giới hạn mỗi khách hàng)**: Một `user_public_id` hoặc số điện thoại chỉ được áp dụng thành công mã coupon tối đa `max_redemptions_per_user` lần.
+- **BR-VOU-01 (Hạn chế vé tặng)**: Vé tặng 0đ (phát do sinh nhật hoặc nâng hạng thành viên) không áp dụng cho suất chiếu sớm (sneak show), các phòng chiếu VIP/IMAX/4DX/Gold Class và ngày Lễ Tết.
+- **BR-STACK-01 (Phạm vi runtime hiện tại)**: Reservation Runtime nhận đúng một mã coupon hoặc voucher và mức giá sau giảm không âm. Automatic rule discovery, stacking nhiều benefit và loyalty-point saga là pipeline riêng; không được giả lập stacking bằng cách gọi reserve nhiều lần cho cùng checkout.
+- **BR-ELIG-01 (Kiểm tra điều kiện)**: Thực hiện cơ chế fail-fast: Trạng thái -> Hạng thành viên (lấy từ `score-service` qua cache ACL) -> Điều kiện giỏ vé -> Trần pháp luật (Nghị định 81/2018/NĐ-CP - tối đa giảm 50% giá trị gốc).
+- **BR-REDEEM-01 (Vòng đời Reservation)**: State machine thực tế là `ACTIVE -> COMPLETED | RELEASED | CANCELLED | EXPIRED`; mọi trạng thái đích đều là terminal. `POST /internal/reservations` vừa validate vừa giữ atomically nên không tồn tại trạng thái `CREATED/RESERVED` trung gian. TTL từ 60 đến 1800 giây, mặc định 900 giây; job nội bộ tự chuyển phiên quá hạn sang `EXPIRED` và hoàn `budget_reserved`.
+- **BR-REDEEM-02 (Pricing snapshot)**: `originalAmount`, `discountAmount`, `finalAmount` và `currency` được chốt khi reserve. Confirm trong TTL phải ghi redemption đúng snapshot đã giữ, không tính lại theo cấu hình có thể vừa thay đổi. Refresh thì phải validate lại snapshot hiện vẫn hợp lệ.
+- **BR-REDEEM-03 (Idempotency và cạnh tranh)**: Mọi lệnh thay đổi trạng thái yêu cầu `X-Idempotency-Key`. Reserve ràng buộc key với payload; confirm/release/cancel/refresh idempotent theo reservation và dữ liệu đích. Redis lock chỉ giảm cạnh tranh; transaction, pessimistic lock và unique constraint của MySQL là nguồn bảo đảm cuối cùng.
+- **BR-REDEEM-04 (Quota của active hold)**: Active reservation được tính chung với redemption đã consume khi kiểm tra giới hạn campaign, coupon, voucher, user và số điện thoại xác thực. Coupon public nhiều lượt vẫn cho phép các khách độc lập giữ song song đến đúng quota; không khóa độc quyền cả mã.
+- **BR-REDEEM-05 (Một benefit trên checkout)**: Một `orderPublicId` (ưu tiên) hoặc `bookingPublicId` chỉ có một reservation `ACTIVE/COMPLETED` hiệu lực. Release/cancel/expire giải phóng scope; completed giữ scope để không thể áp mã mới sau thanh toán. Runtime này không hỗ trợ lách stacking bằng nhiều request.
+- **BR-REDEEM-06 (Active hold khi campaign bị dừng)**: pause/cancel/kill-switch/revoke chặn reserve và refresh mới. Hold đã tạo hợp lệ vẫn được Payment confirm trong TTL theo pricing snapshot; hết TTL thì expire. Không được xóa campaign khi còn active hold.
+- **BR-ELIG-02 (Condition schema fail-closed)**: Runtime chỉ chấp nhận các condition đã được engine hỗ trợ; field lạ, sai kiểu, alias trùng, ngày/thứ không hợp lệ hoặc mảng rỗng bị từ chối khi cấu hình. Coupon/voucher không được silently bỏ qua condition.
+- **BR-VOU-02 (Free item pricing)**: `FREE_TICKET` yêu cầu `contextJson.ticketAmount`, `FREE_COMBO` yêu cầu `contextJson.comboAmount`; số tiền phải dương và không vượt `originalAmount`. Không được giảm toàn bộ đơn hàng khi thiếu subtotal của item đủ điều kiện.
+- **BR-EVENT-01 (Transactional outbox)**: Domain và outbox được ghi cùng transaction. Worker claim từng event bằng DB lease; chỉ chuyển `PUBLISHED` sau Kafka broker ACK. Event lỗi retry exponential backoff, event `PROCESSING` quá lease được worker khác reclaim; payload dùng envelope version `1.0` và đã redact dữ liệu nhạy cảm.
+- **BR-POINT-01 (Điểm tích lũy)**: Promotion Service không sở hữu số dư và không tự cộng/trừ điểm. Saga hold/commit/release điểm với `score-service` là integration riêng, chưa nằm trong Reservation Runtime hiện tại.
+
+---
+
+## 6. Danh Sách API Endpoints
+
+| Nhóm | Method | Endpoint | Caller / Quyền | Tác dụng |
+| :--- | :--- | :--- | :--- | :--- |
+| **Campaign Admin** | POST | `/api/admin/promotion-campaigns` | Admin/Marketing | Tạo chiến dịch khuyến mại |
+| | GET | `/api/admin/promotion-campaigns` | Admin/Marketing | Danh sách chiến dịch (Phân trang) |
+| | GET | `/api/admin/promotion-campaigns/{id}` | Admin/Marketing | Xem chi tiết chiến dịch |
+| | PUT | `/api/admin/promotion-campaigns/{id}` | Admin/Marketing | Cập nhật thông tin chiến dịch |
+| | PATCH | `/api/admin/promotion-campaigns/{id}/status` | Admin/Marketing | Thay đổi trạng thái hoạt động |
+| | POST | `/api/admin/promotion-campaigns/{id}/legal-review` | Admin/Legal Compliance | Ghi quyết định `PASSED/FAILED` và mã hồ sơ pháp lý trước publish |
+| **Coupon Admin** | POST | `/api/admin/coupons` | Admin/Marketing | Tạo coupon mới |
+| | POST | `/api/admin/coupons/generate` | Admin/Marketing | Phát sinh coupon hàng loạt theo lô |
+| | POST | `/api/admin/coupons/import` | Admin/Marketing | Nhập mã coupon từ file CSV/Excel |
+| | GET | `/api/admin/coupons/export` | Admin/Marketing | Xuất file danh sách mã coupon |
+| | PUT | `/api/admin/coupons/{id}` | Admin/Marketing | Cập nhật cấu hình coupon |
+| | DELETE | `/api/admin/coupons/{id}` | Admin/Marketing | Vô hiệu hóa coupon (Xóa mềm) |
+| | GET | `/api/admin/coupons` | Admin/Marketing | Tìm kiếm và lọc danh sách coupon |
+| | GET | `/api/admin/coupons/{id}` | Admin/Marketing | Xem chi tiết coupon quản trị |
+| **Voucher Admin** | POST | `/api/admin/vouchers` | Admin/CSKH | Phát voucher cho một người dùng |
+| | POST | `/api/admin/vouchers/batch` | Admin/CSKH | Phát voucher hàng loạt cho nhóm user |
+| | PUT | `/api/admin/vouchers/{id}` | Admin/CSKH | Cập nhật thời hạn hoặc điều kiện |
+| | POST | `/api/admin/vouchers/{id}/revoke` | Admin/CSKH | Thu hồi voucher chưa sử dụng |
+| | POST | `/api/admin/vouchers/{id}/extend` | Admin/CSKH | Gia hạn ngày hết hạn voucher |
+| | GET | `/api/admin/vouchers` | Admin/CSKH | Xem danh sách voucher hệ thống |
+| | GET | `/api/admin/vouchers/{id}` | Admin/CSKH | Chi tiết thông tin voucher |
+| **Customer Wallet** | GET | `/api/customers/me/vouchers` | Customer | Lấy danh sách ví voucher của tôi |
+| **Validation & History**| POST | `/internal/coupons/validate` | Booking / Gate | Preview điều kiện & tính tiền giảm coupon |
+| | POST | `/internal/vouchers/validate` | Booking / Gate | Preview điều kiện & tính tiền giảm voucher |
+| | GET | `/api/admin/redemptions` | Admin/Finance | Lấy lịch sử sử dụng (redemption ledger) |
+| **Compensation** | POST | `/api/admin/compensation-vouchers` | Admin/CSKH | Phát voucher bồi thường sự cố |
+| | PUT | `/api/admin/compensation-vouchers/{id}` | Admin/CSKH | Cập nhật voucher bồi thường |
+| | GET | `/api/admin/compensation-vouchers` | Admin/CSKH | Danh sách đền bù bồi thường |
+| | GET | `/api/admin/compensation-vouchers/{id}` | Admin/CSKH | Chi tiết đền bù bồi thường |
+| **Runtime & Reservation** | POST | `/internal/runtime/validate` | Booking Service | Preview tính hợp lệ, quota, budget và giá; không giữ tài nguyên |
+| | POST | `/internal/reservations` | Booking Service | Validate và giữ atomically benefit, quota, budget |
+| | GET | `/internal/reservations/{reservationId}` | Booking/Payment | Đọc chi tiết; tự sửa trạng thái nếu phiên đã quá hạn |
+| | POST | `/internal/reservations/{reservationId}/confirm` | Payment Service | Confirm thanh toán và tạo đúng một redemption |
+| | POST | `/internal/reservations/{reservationId}/release` | Payment Service | Thanh toán thất bại: giải phóng phiên giữ |
+| | POST | `/internal/reservations/{reservationId}/cancel` | Booking Service | Booking bị hủy: hủy phiên giữ |
+| | POST | `/internal/reservations/{reservationId}/refresh` | Booking Service | Gia hạn bằng deadline tuyệt đối |
+| | GET | `/api/admin/reservations` | Admin/Operations | Tra cứu lịch sử reservation có lọc và phân trang |
+| **Partner & Settlement**| POST | `/api/admin/partners` | Admin/Finance | Thêm đối tác tài trợ mới |
+| | GET | `/api/admin/partners` | Admin/Finance | Danh sách đối tác hệ thống |
+| | GET | `/api/admin/partners/{id}` | Admin/Finance | Xem chi tiết thông tác |
+| | PUT | `/api/admin/partners/{id}` | Admin/Finance | Cập nhật thông tin đối tác |
+| | DELETE | `/api/admin/partners/{id}` | Admin/Finance | Xóa mềm đối tác |
+| | POST | `/api/admin/partner-settlements` | Admin/Finance | Tạo phiên đối soát quyết toán kỳ hạn |
+| | GET | `/api/admin/partner-settlements` | Admin/Finance | Danh sách phiên đối soát tài chính |
+| | GET | `/api/admin/partner-settlements/{id}` | Admin/Finance | Chi tiết quyết toán với đối tác |
+| | PUT | `/api/admin/partner-settlements/{id}/status` | Admin/Finance | Phê duyệt/Thay đổi trạng thái đối soát |
+| **Configuration** | POST | `/api/admin/configurations` | Admin/Configuration | Tạo cấu hình động |
+| | PUT | `/api/admin/configurations/{id}` | Admin/Configuration | Cập nhật và refresh cache |
+| | DELETE | `/api/admin/configurations/{id}` | Admin/Configuration | Deprecate cấu hình (xóa mềm) |
+| | GET | `/api/admin/configurations` | Admin/Configuration | Tìm kiếm cấu hình |
+| | GET | `/api/admin/configurations/{id}` | Admin/Configuration | Chi tiết cấu hình |
+| **Integration Operations** | POST | `/internal/events/publish` | Operations Service | Ghi outbound event vào transactional outbox |
+| | POST | `/internal/events/retry/{id}` | Operations Service | Retry event lỗi (có alias body `/retry`) |
+| | POST | `/internal/events/dlq/reprocess` | Operations Service | Reprocess inbound/outbound DLQ |
+| | GET | `/internal/events/status` | Operations Service | Thống kê trạng thái event |
+| **Scheduler Hooks** | POST | `/internal/schedulers/campaigns/expire` | Operations Service | Hết hạn campaign |
+| | POST | `/internal/schedulers/coupons/expire` | Operations Service | Hết hạn coupon |
+| | POST | `/internal/schedulers/vouchers/expire` | Operations Service | Hết hạn voucher |
+| | POST | `/internal/schedulers/outbox/publish` | Operations Service | Publish outbox |
+| | POST | `/internal/schedulers/outbox/retry` | Operations Service | Retry outbox |
+| | POST | `/internal/schedulers/cache/refresh` | Operations Service | Refresh runtime configuration cache |
+| **Monitoring** | GET | `/api/admin/events` | Admin/Operations | Event history (OUTBOUND/INBOUND) |
+| | GET | `/api/admin/events/{id}` | Admin/Operations | Event detail |
+| | GET | `/api/admin/events/jobs` | Admin/Operations | Scheduler execution history |
+| | POST | `/api/admin/events/jobs/{jobName}/run` | Operations Manager | Chạy job thủ công |
+
+---
+
+### 6.1. Runtime contract alignment (2026-07-29)
+
+The controller inventory is the source of truth for the current implementation.
+The rows above are retained for the original product contract; the following
+items make the recently added runtime APIs explicit:
+
+| Group | Method | Endpoint | Authorization |
+| :--- | :--- | :--- | :--- |
+| Promotion Rule Admin | POST/PUT/DELETE | `/api/admin/promotion-rules[/{id}]` | `ADMIN`, `MARKETING_MANAGER` |
+| Promotion Rule Admin | GET | `/api/admin/promotion-rules[/{id}]` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Promotion Rule Admin | POST | `/api/admin/promotion-rules/{id}/clone` | `ADMIN`, `MARKETING_MANAGER` |
+| Promotion Rule Admin | POST | `/api/admin/promotion-rules/preview` | `ADMIN`, `MARKETING_MANAGER` |
+| Campaign lifecycle | POST | `/api/admin/promotion-campaigns/{id}/approve` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Campaign lifecycle | POST | `/api/admin/promotion-campaigns/{id}/reject` | `ADMIN`, `MARKETING_MANAGER`, `FINANCE_DIRECTOR` |
+| Campaign lifecycle | PATCH | `/api/admin/promotion-campaigns/{id}/status` with `KILL_SWITCH` | `ADMIN`, `MARKETING_MANAGER` |
+| Scheduler hook | POST | `/internal/schedulers/campaigns/activate` | trusted operations caller |
+| Internal configuration | GET | `/internal/configurations/{key}` | trusted internal caller |
+| Customer wallet | GET | `/api/customers/me/vouchers` | authenticated customer; identity comes from JWT |
+
+Admin authorization is method-level and role-specific. The broad `/api/admin/**`
+matcher only requires authentication so that `MARKETING_*`, `FINANCE_*`,
+`CSKH_AGENT`, `LEGAL_COMPLIANCE`, and `OPERATIONS_MANAGER` can reach the
+endpoints explicitly assigned to them; an endpoint without a method/class
+`@PreAuthorize` is a security defect.
+Auth bootstrap currently creates only `ADMIN`, `EMPLOYEE`, and `CUSTOMER`, so
+the Promotion-specific business roles must be created and assigned before
+these non-admin APIs are deployed.
+
+`userPublicId` and `ownerPublicId` accept either a positive numeric account ID
+(the current Auth/User/Score contract) or a legacy UUID. Promotion stores these
+references as `VARCHAR(36)` after Flyway V4. `publicId` values generated by
+Promotion itself remain UUIDs.
+
+The internal scheduler hooks are operational service-to-service hooks and must
+not be exposed through the public gateway. Reservation expiration remains an
+in-process/DB-claimed job; the hook list covers campaign activation/expiry,
+benefit expiry, outbox publish/retry, and cache refresh.
+
+An inbox/Kafka consumer is present for a future versioned event contract, but
+`promotion.integration.consumers-enabled` defaults to `false`; it must remain
+disabled until Booking/Payment publish the envelope and ownership rules agreed
+with Promotion.
+
+## 7. Đặc Tả Chi Tiết Các API Chính
+
+### 7.1. Nhóm Promotion Checkout (Internal APIs)
+
+Tất cả endpoint `/internal/**` yêu cầu cặp `X-Service-Name` + `X-Internal-Token`.
+Các lệnh thay đổi reservation còn yêu cầu `X-Idempotency-Key` dài tối đa 255
+ký tự. Idempotency được lưu DB theo `(service, API, key)`, ràng buộc SHA-256
+của payload và replay nguyên response đã hoàn thành; record `PROCESSING` có lease
+để tự phục hồi khi instance chết. `benefitType` chỉ nhận `COUPON` hoặc `VOUCHER`;
+ít nhất một trong `bookingPublicId` và `orderPublicId` phải có giá trị.
+
+#### 7.1.1. Runtime Validate
+
+Preview điều kiện benefit, campaign, quota, active hold và ngân sách tại thời điểm gọi. API này **không giữ tài nguyên** nên kết quả chỉ mang tính advisory; checkout luôn phải dùng API reserve làm bước quyết định.
+
+- **Endpoint**: `POST /internal/runtime/validate`
+- **Request Body**:
 
   ```json
   {
-    "success": false,
-    "message": "Validation failed",
-    "errorCode": "VALIDATION_ERROR",
-    "data": null,
-    "errors": [
-      {
-        "field": "promotionCode",
-        "message": "Promotion code is required"
-      }
-    ]
+    "benefitType": "COUPON",
+    "code": "LORAFILM50K",
+    "userPublicId": "8f395bb2-33cc-4b77-88f5-9372f7cbe801",
+    "customerPhone": "0987654321",
+    "originalAmount": 250000.00,
+    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
+    "contextJson": {}
   }
   ```
 
-  ---
-
-  ## 10. Enum Definitions
-
-  ### 10.1. DiscountType
-
-  ```txt
-  PERCENTAGE
-  FIXED_AMOUNT
-  ```
-
-  ### 10.2. Promotion Availability Status
-
-  Status này có thể được derive từ `is_active`, thời gian và usage:
-
-  ```txt
-  UPCOMING
-  ACTIVE
-  EXPIRED
-  DISABLED
-  OUT_OF_USAGE
-  ```
-
-  Không nhất thiết lưu trực tiếp trong database.
-
-  ### 10.3. PromotionUsageStatus
-
-  ```txt
-  RESERVED
-  APPLIED
-  REVERTED
-  ```
-
-  | Status   | Mô tả                                                  |
-  | -------- | ------------------------------------------------------ |
-  | RESERVED | Đã giữ một lượt dùng cho booking đang chờ hoàn tất     |
-  | APPLIED  | Booking/payment đã thành công, lượt dùng được xác nhận |
-  | REVERTED | Booking thất bại/hủy và lượt dùng đã được hoàn lại     |
-
-  Status này là bắt buộc và đã được schema alignment trước implementation.
-
-  ### 10.4. Promotion Usage Timestamp Semantics
-
-  API response sử dụng các field lifecycle sau:
-
-  ```txt
-  reservedAt
-  confirmedAt
-  revertedAt
-  revertReason
-  ```
-
-  Quy ước:
-
-  | Field | Ý nghĩa |
-  |---|---|
-  | `reservedAt` | Thời điểm tạo usage ở trạng thái `RESERVED`; luôn có giá trị |
-  | `confirmedAt` | Thời điểm chuyển `RESERVED → APPLIED`; null nếu chưa confirm |
-  | `revertedAt` | Thời điểm chuyển `RESERVED → REVERTED`; null nếu chưa revert |
-  | `revertReason` | Lý do nghiệp vụ khi revert; null nếu usage chưa `REVERTED` |
-
-  Không sử dụng field `appliedAt` vì tên này gây nhầm lẫn giữa thời điểm reserve và thời điểm confirm.
-
-  Mapping schema:
-
-  ```txt
-  reservedAt  ↔ promotion_usages.reserved_at
-  confirmedAt ↔ promotion_usages.confirmed_at
-  revertedAt  ↔ promotion_usages.reverted_at
-  revertReason ↔ promotion_usages.revert_reason
-  ```
-
-  ---
-
-  ## 11. Campaign Lifecycle
-
-  Campaign được xem là `ACTIVE` khi đồng thời:
-
-  ```txt
-  isActive = true
-  currentTime >= startDate
-  currentTime <= endDate
-  ```
-
-  Các trạng thái derive:
-
-  ```txt
-  UPCOMING:
-  currentTime < startDate
-
-  ACTIVE:
-  isActive = true
-  và nằm trong thời gian hiệu lực
-
-  EXPIRED:
-  currentTime > endDate
-
-  DISABLED:
-  isActive = false
-  ```
-
-  Không hard delete campaign đã có promotion hoặc usage.
-
-  ---
-
-  ## 12. Promotion Availability Rules
-
-  Promotion hợp lệ khi tất cả điều kiện sau đúng:
-
-  ```txt
-  promotion.isActive = true
-  campaign.isActive = true
-  currentTime nằm trong campaign time range
-  currentTime nằm trong promotion time range
-  usedCount < usageLimit
-  userUsageCount < limitPerUser
-  bookingAmount >= minOrderAmount
-  booking chưa apply promotion khác
-  ```
-
-  Nếu bất kỳ điều kiện nào không đạt, promotion không được apply.
-
-  ---
-
-  ## 13. Discount Calculation Rules
-
-  ### 13.1. Percentage Discount
-
-  Công thức:
-
-  ```txt
-  rawDiscount = bookingAmount × discountValue / 100
-  ```
-
-  Nếu có `maxDiscountAmount`:
-
-  ```txt
-  discountAmount = min(rawDiscount, maxDiscountAmount)
-  ```
-
-  Nếu không có:
-
-  ```txt
-  discountAmount = rawDiscount
-  ```
-
-  Ví dụ:
-
-  ```txt
-  bookingAmount = 500000
-  discountValue = 10
-  maxDiscountAmount = 30000
-
-  rawDiscount = 50000
-  discountAmount = 30000
-  finalAmount = 470000
-  ```
-
-  ### 13.2. Fixed Amount Discount
-
-  ```txt
-  discountAmount = min(discountValue, bookingAmount)
-  ```
-
-  Ví dụ:
-
-  ```txt
-  bookingAmount = 100000
-  discountValue = 150000
-
-  discountAmount = 100000
-  finalAmount = 0
-  ```
-
-  ### 13.3. Final Amount
-
-  ```txt
-  finalAmount = max(bookingAmount - discountAmount, 0)
-  ```
-
-  Không được trả final amount âm.
-
-  ### 13.4. Rounding
-
-  Discount calculation dùng:
-
-  ```txt
-  Data type: BigDecimal
-  Rounding mode: HALF_UP
-  Scale: 0 đối với VND
-  ```
-
-  Không dùng `double` hoặc `float` cho phép tính tài chính.
-
-  Ví dụ:
-
-  ```java
-  discountAmount = rawDiscount.setScale(0, RoundingMode.HALF_UP);
-  finalAmount = bookingAmount.subtract(discountAmount).max(BigDecimal.ZERO);
-  ```
-
-  ## 14. API Classification
-
-  ### 14.1. Public APIs
-
-  ```txt
-  GET /api/promotions/active
-  GET /api/promotions/{promotionId}
-  ```
-
-  Public response không trả dữ liệu usage cá nhân.
-
-  ### 14.2. Protected Customer APIs
-
-  ```txt
-  POST /api/promotions/validate
-  POST /api/promotions/preview
-  GET  /api/promotions/me/usages
-  ```
-
-  ### 14.3. Internal APIs
-
-  ```txt
-  POST /internal/promotions/apply
-  POST /internal/promotions/usages/{usageId}/confirm
-  POST /internal/promotions/usages/{usageId}/revert
-  GET  /internal/promotions/bookings/{bookingId}
-  ```
-
-  Apply chính thức nên đi qua internal API do Booking Service gọi, không để Frontend tự ghi usage.
-
-  ### 14.4. Admin APIs
-
-  ```txt
-  POST   /api/admin/promotion-campaigns
-  GET    /api/admin/promotion-campaigns
-  GET    /api/admin/promotion-campaigns/{campaignId}
-  PUT    /api/admin/promotion-campaigns/{campaignId}
-  PATCH  /api/admin/promotion-campaigns/{campaignId}/status
-
-  POST   /api/admin/promotions
-  GET    /api/admin/promotions
-  GET    /api/admin/promotions/{promotionId}
-  PUT    /api/admin/promotions/{promotionId}
-  PATCH  /api/admin/promotions/{promotionId}/status
-
-  GET    /api/admin/promotions/{promotionId}/usages
-  GET    /api/admin/promotions/{promotionId}/statistics
-  ```
-
-  ---
-
-  ## 15. Endpoint Summary
-
-  | Method | Endpoint                                     | Access    | Mục đích                    |
-  | ------ | -------------------------------------------- | --------- | --------------------------- |
-  | GET    | `/api/promotions/active`                     | Public    | Danh sách promotion active  |
-  | GET    | `/api/promotions/{id}`                       | Public    | Promotion detail            |
-  | POST   | `/api/promotions/validate`                   | Protected | Validate promotion code     |
-  | POST   | `/api/promotions/preview`                    | Protected | Tính discount preview       |
-  | GET    | `/api/promotions/me/usages`                  | Protected | Usage của user              |
-  | POST   | `/internal/promotions/apply`                 | Internal  | Apply promotion vào booking |
-  | POST   | `/internal/promotions/usages/{id}/confirm`   | Internal  | Xác nhận usage              |
-  | POST   | `/internal/promotions/usages/{id}/revert`    | Internal  | Revert usage                |
-  | GET    | `/internal/promotions/bookings/{bookingId}`  | Internal  | Usage theo booking          |
-  | POST   | `/api/admin/promotion-campaigns`             | Admin     | Tạo campaign                |
-  | GET    | `/api/admin/promotion-campaigns`             | Admin     | Danh sách campaign          |
-  | GET    | `/api/admin/promotion-campaigns/{id}`        | Admin     | Campaign detail             |
-  | PUT    | `/api/admin/promotion-campaigns/{id}`        | Admin     | Cập nhật campaign           |
-  | PATCH  | `/api/admin/promotion-campaigns/{id}/status` | Admin     | Enable/disable campaign     |
-  | POST   | `/api/admin/promotions`                      | Admin     | Tạo promotion               |
-  | GET    | `/api/admin/promotions`                      | Admin     | Danh sách promotion         |
-  | GET    | `/api/admin/promotions/{id}`                 | Admin     | Promotion detail quản trị   |
-  | PUT    | `/api/admin/promotions/{id}`                 | Admin     | Cập nhật promotion          |
-  | PATCH  | `/api/admin/promotions/{id}/status`          | Admin     | Enable/disable promotion    |
-  | GET    | `/api/admin/promotions/{id}/usages`          | Admin     | Usage list                  |
-  | GET    | `/api/admin/promotions/{id}/statistics`      | Admin     | Usage statistics            |
-
-  ---
-
-  # 16. Public Promotion APIs
-
-  ## 16.1. Get Active Promotions
-
-  ### Endpoint
-
-  ```http
-  GET /api/promotions/active
-  ```
-
-  ### Query Parameters
-
-  | Parameter      | Type    | Required | Validation      |
-  | -------------- | ------- | -------: | --------------- |
-  | page           | integer |       No | >= 0            |
-  | size           | integer |       No | 1–50            |
-  | discountType   | string  |       No | Enum hợp lệ     |
-  | minOrderAmount | number  |       No | >= 0            |
-  | sort           | string  |       No | field,direction |
-
-  ### Response Success
+- **Response `data`**: `valid`, `benefitType`, `benefitPublicId`, `code`, `originalAmount`, `discountAmount`, `finalAmount`, `currency`, `reasonCode`, `message`.
+- `customerPhone` được canonicalize về E.164 (`0901234567` -> `+84901234567`)
+  trước khi tính quota; giá trị không hợp lệ trả `400`.
+- `contextJson` tối đa 16 KiB và phải là object. Engine hiện hỗ trợ:
+  `movieId(s)`, `cinemaId(s)`, `paymentMethod(s)`, `channel(s)`, `format(s)`,
+  `orderType(s)`, `seatType(s)`, `allowedUserIds`, `dayOfWeek`,
+  `excludeRoomType(s)`, `excludeDates`, `requiredTierCode`,
+  `requiresVerification`, `minimumOrderAmount/minOrderAmount`.
+- `allowMultipleVoucherPerOrder`, `stackableWith` và `notStackableWith` là metadata
+  policy được validate kiểu dữ liệu; chúng không mở khóa stacking trong Reservation
+  Runtime một-benefit-per-checkout.
+
+#### 7.1.2. Create Reservation
+
+Validate và giữ atomically coupon/voucher, campaign quota và `budget_reserved`. Cùng idempotency key và cùng payload trả lại cùng reservation; cùng key nhưng payload khác trả `409`.
+
+Mỗi checkout chỉ có một benefit hiệu lực. `orderPublicId` là scope chính; nếu chưa
+có order thì dùng `bookingPublicId`. Unique constraint tại DB là lớp bảo vệ cuối
+cùng khi nhiều pod cùng reserve.
+
+- **Endpoint**: `POST /internal/reservations`
+- **Request Body**:
 
   ```json
   {
-    "success": true,
-    "message": "Active promotions retrieved successfully",
-    "data": {
-      "content": [
-        {
-          "promotionId": 101,
-          "promotionCode": "LORAFILM2026",
-          "description": "Giảm 10% tối đa 30000 VND",
-          "discountType": "PERCENTAGE",
-          "discountValue": 10,
-          "maxDiscountAmount": 30000,
-          "minOrderAmount": 200000,
-          "startDate": "2026-06-20T00:00:00",
-          "endDate": "2026-07-20T23:59:59",
-          "availabilityStatus": "ACTIVE"
-        }
-      ],
-      "page": 0,
-      "size": 10,
-      "totalElements": 1,
-      "totalPages": 1,
-      "first": true,
-      "last": true
+    "benefitType": "COUPON",
+    "code": "LORAFILM50K",
+    "userPublicId": "8f395bb2-33cc-4b77-88f5-9372f7cbe801",
+    "customerPhone": "0987654321",
+    "originalAmount": 250000.00,
+    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
+    "orderPublicId": "e58dfc02-e2bc-4402-a4f7-e7d6ab6277b0",
+    "contextJson": {},
+    "holdDurationSeconds": 900
+  }
+  ```
+
+- **Response Success**: `201 Created`, `data.publicId` là reservation ID; trạng thái ban đầu là `ACTIVE`. Response chứa pricing snapshot, benefit/campaign/transaction references, thời gian bắt đầu và deadline.
+
+#### 7.1.3. Confirm Reservation
+
+Chuyển `ACTIVE -> COMPLETED`, chuyển `budget_reserved` thành `budget_used` và tạo đúng một coupon/voucher redemption gắn unique với reservation. Retry cùng `paymentPublicId` trả cùng redemption; payment khác trả `409`.
+
+- **Endpoint**: `POST /internal/reservations/{reservationId}/confirm`
+- **Request Body**:
+
+  ```json
+  {
+    "paymentPublicId": "a09f2203-d2bc-4402-a4f7-e7d6ab6299d0"
+  }
+  ```
+
+- Reservation hết hạn trả `409 RESERVATION_EXPIRED`.
+- Reservation đã release/cancel không thể confirm.
+- Reservation đã `COMPLETED` không được release/cancel; hoàn tiền hoặc bồi thường phải đi qua nghiệp vụ refund/compensation.
+- Campaign bị pause/cancel/kill-switch sau lúc reserve không làm mất hold đã cấp:
+  Payment vẫn được confirm trong TTL theo snapshot. Client không được refresh hold đó.
+
+#### 7.1.4. Release Reservation
+
+Dùng khi payment thất bại hoặc timeout trước confirm. Chuyển `ACTIVE -> RELEASED`, ghi `rollbackAt/rollbackReason` và hoàn phần ngân sách đang giữ.
+
+- **Endpoint**: `POST /internal/reservations/{reservationId}/release`
+- **Request Body**:
+
+  ```json
+  {
+    "reason": "Payment failed"
+  }
+  ```
+
+#### 7.1.5. Cancel Reservation
+
+Dùng khi booking bị khách hàng hoặc hệ thống hủy trước confirm. Chuyển `ACTIVE -> CANCELLED`, ghi `cancelledAt/cancelledReason` và hoàn phần ngân sách đang giữ.
+
+- **Endpoint**: `POST /internal/reservations/{reservationId}/cancel`
+- **Request Body**:
+
+  ```json
+  {
+    "reason": "Customer cancelled booking"
+  }
+  ```
+
+#### 7.1.6. Refresh Reservation
+
+Gia hạn một reservation `ACTIVE`. Deadline tuyệt đối giúp retry không vô tình cộng TTL nhiều lần. Deadline mới phải lớn hơn deadline hiện tại, không vượt quá 1800 giây tính từ lúc reserve, `validTo` của benefit hoặc `endAt` của campaign. Pricing snapshot phải còn validate được.
+
+- **Endpoint**: `POST /internal/reservations/{reservationId}/refresh`
+- **Request Body**:
+
+  ```json
+  {
+    "requestedExpiredAt": "2026-07-28T14:10:00.000000Z"
+  }
+  ```
+
+#### 7.1.7. Get Reservation Detail
+
+- **Endpoint**: `GET /internal/reservations/{reservationId}`
+- Trả toàn bộ pricing snapshot, lifecycle timestamps và redemption nếu đã `COMPLETED`.
+- Nếu dữ liệu vẫn là `ACTIVE` nhưng deadline đã qua, request này atomically tự chuyển sang `EXPIRED`, hoàn budget và ghi lifecycle event.
+
+#### 7.1.8. Reservation History
+
+- **Endpoint**: `GET /api/admin/reservations`
+- **Auth**: Bearer token.
+- **Query tùy chọn**: `type`, `status`, `userPublicId`, `bookingPublicId`, `orderPublicId`, `from`, `to`, `page` (mặc định 0), `size` (1-100, mặc định 20).
+- Kết quả phân trang theo `createdAt DESC`.
+
+#### Các API không tạo
+
+- Không có `/internal/runtime/check`: trùng mục đích với `validate`.
+- Không có `/internal/runtime/force-expire`: client không được ép một active hold sang expired; dùng release/cancel đúng nguyên nhân.
+- Reservation expiration itself is not exposed as a public HTTP operation:
+  `ReservationExpirationScheduler` runs in-process, claims rows in the database,
+  and processes each reservation in its own `REQUIRES_NEW` transaction. The
+  operational `/internal/schedulers/**` hooks listed in section 6.1 are
+  restricted service-to-service hooks for campaign/benefit lifecycle, outbox,
+  and cache jobs; they must not be routed through the public gateway.
+
+#### Nguồn sự thật tích hợp
+
+- The intended caller contract is Booking →
+  `validate/reserve/refresh/cancel` and Payment →
+  `detail/confirm/release`. In the current repository snapshot those clients
+  are not wired yet; the integration checklist in
+  `promotion-service-production-readiness-report.md` is a release blocker.
+- Các API đồng bộ trên là nguồn sự thật cho thay đổi trạng thái. Promotion chỉ
+  **publish** lifecycle event qua transactional outbox.
+- Không đồng thời consume `PaymentCompleted`, `PaymentFailed` hoặc
+  `BookingCancelled` trong issue này: chưa có event contract/idempotency ownership
+  được hai service thống nhất, và thêm consumer sẽ tạo hai writer cạnh tranh cho
+  cùng state machine. Khi bổ sung event-driven fallback phải có inbox table,
+  schema version và quy tắc ownership riêng.
+
+---
+
+### 7.2. Nhóm Validation (Internal APIs)
+
+#### 7.2.1. Validate Coupon
+Kiểm tra điều kiện của coupon trước khi áp dụng thực tế, không lock ngân sách.
+
+- **Endpoint**: `POST /internal/coupons/validate`
+- **Request Body**:
+  ```json
+  {
+    "code": "LORAFILM50K",
+    "userPublicId": "8f395bb2-33cc-4b77-88f5-9372f7cbe801",
+    "customerPhone": "0987654321",
+    "originalAmount": 250000.00,
+    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
+    "contextJson": {
+      "cinemaId": "cin-1234",
+      "showtimeId": "st-5678",
+      "movieId": "mov-9999"
     }
   }
   ```
-
-  Không trả:
-
-  ```txt
-  usedCount chi tiết nếu không cần
-  user usage history
-  internal configuration
-  ```
-
-  ---
-
-  ## 16.2. Get Promotion Detail
-
-  ### Endpoint
-
-  ```http
-  GET /api/promotions/{promotionId}
-  ```
-
-  ### Response Success
-
+- **Response Success (200 OK)**:
   ```json
   {
     "success": true,
-    "message": "Promotion retrieved successfully",
-    "data": {
-      "promotionId": 101,
-      "campaignId": 10,
-      "campaignName": "LoraFilm Summer 2026",
-      "promotionCode": "LORAFILM2026",
-      "description": "Giảm 10% tối đa 30000 VND",
-      "discountType": "PERCENTAGE",
-      "discountValue": 10,
-      "maxDiscountAmount": 30000,
-      "minOrderAmount": 200000,
-      "limitPerUser": 1,
-      "startDate": "2026-06-20T00:00:00",
-      "endDate": "2026-07-20T23:59:59",
-      "availabilityStatus": "ACTIVE"
-    }
-  }
-  ```
-
-  ### Error: Not Found
-
-  Status: `404 Not Found`
-
-  ```json
-  {
-    "success": false,
-    "message": "Promotion not found",
-    "errorCode": "PROMOTION_NOT_FOUND",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ---
-
-  # 17. Validate Promotion API
-
-  ## 17.1. Endpoint
-
-  ```http
-  POST /api/promotions/validate
-  ```
-
-  ### Headers
-
-  ```http
-  Authorization: Bearer <accessToken>
-  Content-Type: application/json
-  ```
-
-  ### Request Body
-
-  ```json
-  {
-    "promotionCode": "LORAFILM2026",
-    "bookingId": 1001
-  }
-  ```
-
-  Frontend không gửi `userId`.
-
-  Promotion Service lấy user từ JWT.
-
-  `bookingId` được dùng để Promotion Service hoặc backend orchestration lấy booking amount hợp lệ.
-
-  ### Không khuyến nghị
-
-  ```json
-  {
-    "promotionCode": "LORAFILM2026",
-    "bookingAmount": 240000
-  }
-  ```
-
-  vì amount do Frontend gửi không phải source of truth.
-
-  ### Processing Flow
-
-  ```txt
-  Normalize promotion code
-  → Resolve authenticated user
-  → Find promotion
-  → Validate campaign
-  → Validate promotion status/time
-  → Validate booking ownership/status
-  → Get booking amount từ Booking Service
-  → Check global usage limit
-  → Check per-user usage limit
-  → Check booking chưa dùng promotion
-  → Check minimum booking amount
-  → Calculate discount
-  → Return validation result
-  ```
-
-  Validate chỉ kiểm tra và tính toán.
-
-  Validate không:
-
-  * Tăng `used_count`.
-  * Tạo `promotion_usages`.
-  * Thay đổi booking.
-
-  ### Response Valid
-
-  ```json
-  {
-    "success": true,
-    "message": "Promotion is valid",
+    "message": "Operation successful",
     "data": {
       "valid": true,
-      "promotionId": 101,
-      "promotionCode": "LORAFILM2026",
-      "bookingId": 1001,
-      "originalAmount": 240000,
-      "discountType": "PERCENTAGE",
-      "discountValue": 10,
-      "discountAmount": 24000,
-      "finalAmount": 216000,
-      "expiresAt": "2026-07-20T23:59:59"
-    }
-  }
-  ```
-
-  ### Response Invalid
-
-  Với lỗi business rule, API có thể trả HTTP tương ứng thay vì `valid: false`.
-
-  Contract này ưu tiên:
-
-  ```txt
-  200 khi hợp lệ
-  4xx khi không hợp lệ
-  ```
-
-  để Frontend xử lý rõ theo `errorCode`.
-
-  ---
-
-  ## 17.2. Promotion Disabled
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "Promotion is disabled",
-    "errorCode": "PROMOTION_DISABLED",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ## 17.3. Promotion Not Started
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "Promotion has not started yet",
-    "errorCode": "PROMOTION_NOT_STARTED",
-    "data": {
-      "startDate": "2026-07-01T00:00:00"
-    },
-    "errors": null
-  }
-  ```
-
-  ## 17.4. Promotion Expired
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "Promotion has expired",
-    "errorCode": "PROMOTION_EXPIRED",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ## 17.5. Usage Limit Reached
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "Promotion usage limit has been reached",
-    "errorCode": "PROMOTION_USAGE_LIMIT_REACHED",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ## 17.6. User Limit Reached
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "You have reached the usage limit for this promotion",
-    "errorCode": "PROMOTION_USER_LIMIT_REACHED",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ## 17.7. Minimum Amount Not Met
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "Booking amount does not meet the promotion minimum",
-    "errorCode": "PROMOTION_MINIMUM_AMOUNT_NOT_MET",
-    "data": {
-      "minimumAmount": 200000,
-      "currentAmount": 150000
-    },
-    "errors": null
-  }
-  ```
-
-  ## 17.8. Booking Already Has Promotion
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "Booking already has an applied promotion",
-    "errorCode": "PROMOTION_BOOKING_ALREADY_APPLIED",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ---
-
-  # 18. Discount Preview API
-
-  ## 18.1. Endpoint
-
-  ```http
-  POST /api/promotions/preview
-  ```
-
-  ### Request
-
-  ```json
-  {
-    "promotionCode": "LORAFILM2026",
-    "bookingId": 1001
-  }
-  ```
-
-  ### Response
-
-  ```json
-  {
-    "success": true,
-    "message": "Discount preview calculated successfully",
-    "data": {
-      "promotionId": 101,
-      "promotionCode": "LORAFILM2026",
-      "originalAmount": 240000,
-      "discountAmount": 24000,
-      "finalAmount": 216000,
+      "benefitType": "COUPON",
+      "benefitPublicId": "cop-8888-8888",
+      "code": "LORAFILM50K",
+      "originalAmount": 250000.00,
+      "discountAmount": 50000.00,
+      "finalAmount": 200000.00,
       "currency": "VND",
-      "previewOnly": true
-    }
+      "reasonCode": "ELIGIBLE",
+      "message": "Benefit is eligible"
+    },
+    "timestamp": "2026-07-28T14:00:00Z"
   }
   ```
 
-  Preview:
+#### 7.2.2. Validate Voucher
+Kiểm tra tính hợp lệ của voucher cá nhân trong ví của user.
 
-  * Không tạo usage.
-  * Không giữ lượt dùng.
-  * Không đảm bảo promotion vẫn còn khả dụng khi apply sau đó.
-  * Frontend phải hiểu đây chỉ là kết quả tạm thời.
-
-  ---
-
-  # 19. Apply Promotion Internal API
-
-  ## 19.1. Endpoint
-
-  ```http
-  POST /internal/promotions/apply
-  ```
-
-  API này do Booking Service hoặc orchestration layer gọi.
-
-  Frontend không được gọi trực tiếp.
-
-  ### Request Body
-
+- **Endpoint**: `POST /internal/vouchers/validate`
+- **Request Body**:
   ```json
   {
-    "promotionCode": "LORAFILM2026",
-    "bookingId": 1001,
-    "userId": 15,
-    "bookingAmount": 240000
+    "code": "VCH-XYZ-123",
+    "userPublicId": "8f395bb2-33cc-4b77-88f5-9372f7cbe801",
+    "originalAmount": 250000.00,
+    "bookingPublicId": "c86e0c03-5182-4bf3-a3d8-a99f1fa43ab5",
+    "contextJson": {}
   }
   ```
-
-  Trong internal flow, `bookingAmount` có thể được Booking Service gửi vì Booking Service là source of truth.
-
-  Promotion Service vẫn có thể xác minh lại nếu cần.
-
-  ### Field Definitions
-
-  | Field         | Type   | Required | Validation            |
-  | ------------- | ------ | -------: | --------------------- |
-  | promotionCode | string |      Yes | Không rỗng, tối đa 50 |
-  | bookingId     | number |      Yes | > 0                   |
-  | userId        | number |      Yes | > 0                   |
-  | bookingAmount | number |      Yes | >= 0                  |
-
-  ### Processing Flow
-
-  ```txt
-  Normalize code
-  → Validate promotion/campaign/time
-  → Validate limits
-  → Validate bookingId chưa có usage
-  → Calculate discount
-  → Atomically reserve usage capacity
-  → Insert promotion_usages
-  → Increment used_count
-  → Return discount result
-  ```
-
-  ### Response Success
-
-  Status: `201 Created`
-
+- **Response Success (200 OK)**:
   ```json
   {
     "success": true,
-    "message": "Promotion applied successfully",
+    "message": "Operation successful",
     "data": {
-      "usageId": 5001,
-      "promotionId": 101,
-      "promotionCode": "LORAFILM2026",
-      "bookingId": 1001,
-      "userId": 15,
-      "originalAmount": 240000,
-      "discountAmount": 24000,
-      "finalAmount": 216000,
-      "usageStatus": "RESERVED",
-      "expiresAt": "2026-06-21T20:30:00",
-      "reservedAt": "2026-06-21T20:15:00",
-      "confirmedAt": null,
-      "revertedAt": null,
-      "revertReason": null
-    }
+      "valid": true,
+      "benefitType": "VOUCHER",
+      "benefitPublicId": "vch-7777-7777",
+      "code": "VCH-XYZ-123",
+      "originalAmount": 250000.00,
+      "discountAmount": 100000.00,
+      "finalAmount": 150000.00,
+      "currency": "VND",
+      "reasonCode": "ELIGIBLE",
+      "message": "Benefit is eligible"
+    },
+    "timestamp": "2026-07-28T14:00:00Z"
   }
   ```
 
-  `usageStatus` được lưu trực tiếp trong `promotion_usages.status`.
+---
 
-  `expiresAt` được copy từ `booking.expires_at` tại thời điểm apply.
+### 7.3. Ví Voucher Khách Hàng (Customer APIs)
 
-  `reservedAt` là thời điểm tạo usage ở trạng thái `RESERVED`.
+#### 7.3.1. Get My Vouchers
+Lấy danh sách các voucher thuộc quyền sở hữu của khách hàng đang đăng nhập.
 
-  `confirmedAt` chỉ có giá trị khi usage chuyển `RESERVED → APPLIED`.
-
-  `revertedAt` và `revertReason` chỉ có giá trị khi usage chuyển `RESERVED → REVERTED`.
-
-  ---
-
-  ## 19.2. Idempotent Apply
-
-  Idempotency key nghiệp vụ:
-
-  ```txt
-  bookingId
-  ```
-
-  Do schema có:
-
-  ```txt
-  promotion_usages.booking_id UNIQUE
-  ```
-
-  Nếu cùng booking gọi apply lại cùng promotion:
-
-  ```txt
-  Trả usage hiện tại
-  Không insert thêm
-  Không tăng used_count thêm
-  ```
-
-  Response:
-
+- **Endpoint**: `GET /api/customers/me/vouchers`
+- **Headers**:
+  - `Authorization: Bearer <accessToken>`
+- **Query Parameters**:
+  - `status`: Lọc theo trạng thái (`ACTIVE`, `USED`, `EXPIRED`, `REVOKED`)
+  - `page`: Số trang (mặc định: 0)
+  - `size`: Kích thước trang (mặc định: 10)
+- **Response Success (200 OK)**:
   ```json
   {
     "success": true,
-    "message": "Promotion was already applied to this booking",
-    "data": {
-      "usageId": 5001,
-      "promotionId": 101,
-      "bookingId": 1001,
-      "idempotent": true
-    }
-  }
-  ```
-
-  Nếu cùng booking gọi promotion code khác:
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "Booking already has another promotion",
-    "errorCode": "PROMOTION_BOOKING_ALREADY_APPLIED",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ---
-
-  # 20. Confirm Usage API
-
-  ## 20.1. Endpoint
-
-  ```http
-  POST /internal/promotions/usages/{usageId}/confirm
-  ```
-
-  Dùng khi booking/payment đã hoàn tất.
-
-  ### Request
-
-  ```json
-  {
-    "bookingId": 1001,
-    "confirmedAt": "2026-06-21T20:20:00"
-  }
-  ```
-
-  ### Allowed Transition
-
-  ```txt
-  RESERVED → APPLIED
-  ```
-
-  ### Response
-
-  ```json
-  {
-    "success": true,
-    "message": "Promotion usage confirmed successfully",
-    "data": {
-      "usageId": 5001,
-      "bookingId": 1001,
-      "status": "APPLIED",
-      "reservedAt": "2026-06-21T20:15:00",
-      "confirmedAt": "2026-06-21T20:20:00",
-      "revertedAt": null,
-      "revertReason": null
-    }
-  }
-  ```
-
-  ### Idempotency
-
-  Nếu usage đã `APPLIED`:
-
-  * Trả `200 OK`.
-  * Không tăng `used_count`.
-  * Không tạo duplicate effect.
-
-  ---
-
-  # 21. Revert Usage API
-
-  ## 21.1. Endpoint
-
-  ```http
-  POST /internal/promotions/usages/{usageId}/revert
-  ```
-
-  ### Request
-
-  ```json
-  {
-    "bookingId": 1001,
-    "reason": "Booking expired before payment"
-  }
-  ```
-
-  ### Allowed Conditions
-
-  Có thể revert khi:
-
-  ```txt
-  Booking bị CANCELLED
-  Booking bị EXPIRED
-  Payment thất bại và booking không còn khả năng thanh toán
-  Booking creation rollback
-  ```
-
-  ### Response
-
-  ```json
-  {
-    "success": true,
-    "message": "Promotion usage reverted successfully",
-    "data": {
-      "usageId": 5001,
-      "bookingId": 1001,
-      "status": "REVERTED",
-      "reservedAt": "2026-06-21T20:15:00",
-      "confirmedAt": null,
-      "revertedAt": "2026-06-21T20:25:00",
-      "revertReason": "Booking expired before payment"
-    }
-  }
-  ```
-
-  ### Side Effects
-
-  Khi revert:
-
-  ```txt
-  promotion_usages.status → REVERTED
-  promotions.used_count → used_count - 1
-  ```
-
-  Không để `used_count` nhỏ hơn `0`.
-
-  ### Audit Fields
-
-  Khi revert phải cập nhật:
-
-  ```txt
-  status = REVERTED
-  reverted_at = thời điểm revert
-  revert_reason = lý do nghiệp vụ
-  updated_at = thời điểm cập nhật
-  ```
-
-  Không xóa `promotion_usages` vì phải giữ lịch sử audit.
-
-  ---
-
-  # 22. Get Usage by Booking
-
-  ## 22.1. Endpoint
-
-  ```http
-  GET /internal/promotions/bookings/{bookingId}
-  ```
-
-  ### Response Success
-
-  ```json
-  {
-    "success": true,
-    "message": "Promotion usage retrieved successfully",
-    "data": {
-      "usageId": 5001,
-      "promotionId": 101,
-      "promotionCode": "LORAFILM2026",
-      "bookingId": 1001,
-      "userId": 15,
-      "status": "APPLIED",
-      "reservedAt": "2026-06-21T20:15:00",
-      "confirmedAt": "2026-06-21T20:20:00",
-      "revertedAt": null,
-      "revertReason": null
-    }
-  }
-  ```
-
-  ### No Usage
-
-  Status: `404 Not Found`
-
-  ```json
-  {
-    "success": false,
-    "message": "No promotion usage found for this booking",
-    "errorCode": "PROMOTION_USAGE_NOT_FOUND",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ---
-
-  # 23. Get Current User Promotion Usages
-
-  ## 23.1. Endpoint
-
-  ```http
-  GET /api/promotions/me/usages
-  ```
-
-  ### Query Parameters
-
-  | Parameter   | Type     | Required |
-  | ----------- | -------- | -------: |
-  | page        | integer  |       No |
-  | size        | integer  |       No |
-  | promotionId | number   |       No |
-  | status      | string   |       No |
-  | from        | datetime |       No |
-  | to          | datetime |       No |
-
-  ### Response
-
-  ```json
-  {
-    "success": true,
-    "message": "Promotion usages retrieved successfully",
+    "message": "Vouchers retrieved successfully",
     "data": {
       "content": [
         {
-          "usageId": 5001,
-          "promotionId": 101,
-          "promotionCode": "LORAFILM2026",
-          "bookingId": 1001,
-          "status": "APPLIED",
-          "reservedAt": "2026-06-21T20:15:00",
-          "confirmedAt": "2026-06-21T20:20:00",
-          "revertedAt": null,
-          "revertReason": null
+          "voucherPublicId": "vch-7777-7777",
+          "code": "VCH-XYZ-123",
+          "name": "Voucher Nâng Hạng VIP",
+          "description": "Giảm ngay 100K cho mọi loại vé phim",
+          "status": "ACTIVE",
+          "issuedAt": "2026-07-20T10:00:00.000",
+          "validFrom": "2026-07-20T00:00:00.000",
+          "validTo": "2026-10-20T23:59:59.000",
+          "faceValue": 100000.00,
+          "minimumOrderAmount": 150000.00
         }
       ],
       "page": 0,
       "size": 10,
       "totalElements": 1,
       "totalPages": 1,
-      "first": true,
       "last": true
     }
   }
   ```
 
-  ---
+---
 
-  # 24. Campaign Admin APIs
+### 7.4. Nhóm Campaign Admin (Admin APIs)
 
-  ## 24.1. Create Campaign
-
-  ### Endpoint
-
-  ```http
-  POST /api/admin/promotion-campaigns
-  ```
-
-  ### Request
-
+#### 7.4.1. Create Campaign
+- **Endpoint**: `POST /api/admin/promotion-campaigns`
+- **Request Body**:
   ```json
   {
-    "campaignName": "LoraFilm Summer 2026",
-    "description": "Ưu đãi mùa hè",
-    "startDate": "2026-07-01T00:00:00",
-    "endDate": "2026-07-31T23:59:59",
-    "isActive": true
+    "code": "LORAFILM_SUMMER_2026",
+    "name": "LoraFilm Summer Campaign 2026",
+    "description": "Chiến dịch ưu đãi vé hè 2026",
+    "campaignType": "COUPON",
+    "fundingSource": "PLATFORM",
+    "priority": 100,
+    "startAt": "2026-08-01T00:00:00.000",
+    "endAt": "2026-08-31T23:59:59.000",
+    "budgetAmount": 50000000.00,
+    "maxRedemptions": 1000,
+    "maxRedemptionsPerUser": 2,
+    "legalNotificationRef": "CV-81/2026/SCT"
   }
   ```
-
-  ### Validation
-
-  | Field        | Rule                         |
-  | ------------ | ---------------------------- |
-  | campaignName | Required, tối đa 150         |
-  | description  | Optional                     |
-  | startDate    | Required                     |
-  | endDate      | Required, phải sau startDate |
-  | isActive     | Optional, mặc định true      |
-
-  ### Response
-
-  Status: `201 Created`
-
+- **Response Success (201 Created)**:
   ```json
   {
     "success": true,
-    "message": "Promotion campaign created successfully",
+    "message": "Campaign created successfully",
     "data": {
-      "campaignId": 10,
-      "campaignName": "LoraFilm Summer 2026",
-      "description": "Ưu đãi mùa hè",
-      "startDate": "2026-07-01T00:00:00",
-      "endDate": "2026-07-31T23:59:59",
-      "isActive": true,
-      "availabilityStatus": "UPCOMING",
-      "createdAt": "2026-06-21T20:00:00"
+      "campaignPublicId": "cam-1010-1010",
+      "code": "LORAFILM_SUMMER_2026",
+      "status": "DRAFT",
+      "approvalStatus": "PENDING",
+      "legalStatus": "PENDING"
     }
   }
   ```
 
-  ---
+---
 
-  ## 24.2. Get Campaign List
+### 7.5. Nhóm Partner & Settlement (Admin APIs)
 
-  ```http
-  GET /api/admin/promotion-campaigns
-  ```
+#### 7.5.1. Create Partner Settlement
+Tạo đợt đối soát và quyết toán chi phí khuyến mãi với các đối tác ví điện tử / ngân hàng.
 
-  Query:
-
-  ```txt
-  page
-  size
-  isActive
-  availabilityStatus
-  from
-  to
-  sort
-  ```
-
-  Trả pagination theo common format.
-
-  ---
-
-  ## 24.3. Get Campaign Detail
-
-  ```http
-  GET /api/admin/promotion-campaigns/{campaignId}
-  ```
-
-  Response có thể bao gồm:
-
+- **Endpoint**: `POST /api/admin/partner-settlements`
+- **Request Body**:
   ```json
   {
-    "campaignId": 10,
-    "campaignName": "LoraFilm Summer 2026",
-    "promotionCount": 3,
-    "startDate": "2026-07-01T00:00:00",
-    "endDate": "2026-07-31T23:59:59",
-    "isActive": true,
-    "availabilityStatus": "UPCOMING"
+    "partnerPublicId": "part-9999-9999",
+    "campaignPublicId": "cam-1010-1010",
+    "settlementPeriodFrom": "2026-07-01T00:00:00.000",
+    "settlementPeriodTo": "2026-07-31T23:59:59.000"
   }
   ```
-
-  ---
-
-  ## 24.4. Update Campaign
-
-  ```http
-  PUT /api/admin/promotion-campaigns/{campaignId}
-  ```
-
-  ### Business Rule
-
-  Không được cập nhật thời gian làm campaign trở nên không hợp lệ:
-
-  ```txt
-  endDate <= startDate
-  ```
-
-  Nếu campaign đã có promotion đang được sử dụng, thay đổi thời gian phải được kiểm tra tác động.
-
-  ---
-
-  ## 24.5. Enable/Disable Campaign
-
-  ```http
-  PATCH /api/admin/promotion-campaigns/{campaignId}/status
-  ```
-
-  Request:
-
-  ```json
-  {
-    "isActive": false
-  }
-  ```
-
-  Khi campaign bị disable:
-
-  * Tất cả promotion thuộc campaign không còn được validate/apply.
-  * Không tự động xóa promotion hoặc usage cũ.
-  * Usage đã `APPLIED` vẫn được giữ để audit.
-
-  ---
-
-  # 25. Promotion Admin APIs
-
-  ## 25.1. Create Promotion
-
-  ### Endpoint
-
-  ```http
-  POST /api/admin/promotions
-  ```
-
-  ### Request — Percentage
-
-  ```json
-  {
-    "campaignId": 10,
-    "promotionCode": "LORAFILM2026",
-    "description": "Giảm 10% tối đa 30000 VND",
-    "discountType": "PERCENTAGE",
-    "discountValue": 10,
-    "maxDiscountAmount": 30000,
-    "minOrderAmount": 200000,
-    "usageLimit": 1000,
-    "limitPerUser": 1,
-    "startDate": "2026-07-01T00:00:00",
-    "endDate": "2026-07-31T23:59:59",
-    "isActive": true
-  }
-  ```
-
-  ### Request — Fixed Amount
-
-  ```json
-  {
-    "campaignId": 10,
-    "promotionCode": "GIAM20K",
-    "description": "Giảm 20000 VND",
-    "discountType": "FIXED_AMOUNT",
-    "discountValue": 20000,
-    "maxDiscountAmount": null,
-    "minOrderAmount": 100000,
-    "usageLimit": 500,
-    "limitPerUser": 1,
-    "startDate": "2026-07-01T00:00:00",
-    "endDate": "2026-07-31T23:59:59",
-    "isActive": true
-  }
-  ```
-
-  ### Validation Rules
-
-  #### Common
-
-  * Campaign phải tồn tại.
-  * Promotion time range phải hợp lệ.
-  * Promotion time nên nằm trong campaign time range.
-  * Code unique sau normalize.
-  * `usageLimit > 0`.
-  * `limitPerUser > 0`.
-  * `minOrderAmount >= 0`.
-
-  #### Percentage
-
-  ```txt
-  0 < discountValue <= 100
-  maxDiscountAmount > 0 nếu được cung cấp
-  ```
-
-  #### Fixed Amount
-
-  ```txt
-  discountValue > 0
-  maxDiscountAmount phải null
-  ```
-
-  ### Response
-
-  Status: `201 Created`
-
+- **Response Success (201 Created)**:
   ```json
   {
     "success": true,
-    "message": "Promotion created successfully",
+    "message": "Partner settlement session initialized successfully",
     "data": {
-      "promotionId": 101,
-      "campaignId": 10,
-      "promotionCode": "LORAFILM2026",
-      "discountType": "PERCENTAGE",
-      "discountValue": 10,
-      "maxDiscountAmount": 30000,
-      "minOrderAmount": 200000,
-      "usageLimit": 1000,
-      "usedCount": 0,
-      "limitPerUser": 1,
-      "isActive": true
+      "settlementPublicId": "set-1111-2222",
+      "settlementCode": "SET-MOMO-JULY26",
+      "totalOrders": 120,
+      "totalDiscount": 6000000.00,
+      "partnerAmount": 3000000.00,
+      "platformAmount": 3000000.00,
+      "finalAmount": 3000000.00,
+      "status": "PENDING_APPROVAL"
     }
   }
   ```
 
-  ---
-
-  ## 25.2. Duplicate Code
-
-  Status: `409 Conflict`
-
-  ```json
-  {
-    "success": false,
-    "message": "Promotion code already exists",
-    "errorCode": "PROMOTION_CODE_ALREADY_EXISTS",
-    "data": null,
-    "errors": null
-  }
-  ```
-
-  ---
-
-  ## 25.3. Get Promotion List
-
-  ```http
-  GET /api/admin/promotions
-  ```
-
-  Query parameters:
-
-  | Parameter          | Type     |
-  | ------------------ | -------- |
-  | page               | integer  |
-  | size               | integer  |
-  | campaignId         | number   |
-  | code               | string   |
-  | discountType       | string   |
-  | isActive           | boolean  |
-  | availabilityStatus | string   |
-  | from               | datetime |
-  | to                 | datetime |
-  | sort               | string   |
-
-  ---
-
-  ## 25.4. Get Admin Promotion Detail
-
-  ```http
-  GET /api/admin/promotions/{promotionId}
-  ```
-
-  Response có thể trả đầy đủ:
-
-  ```json
-  {
-    "success": true,
-    "message": "Promotion retrieved successfully",
-    "data": {
-      "promotionId": 101,
-      "campaignId": 10,
-      "promotionCode": "LORAFILM2026",
-      "description": "Giảm 10% tối đa 30000 VND",
-      "discountType": "PERCENTAGE",
-      "discountValue": 10,
-      "maxDiscountAmount": 30000,
-      "minOrderAmount": 200000,
-      "usageLimit": 1000,
-      "usedCount": 125,
-      "remainingUsage": 875,
-      "limitPerUser": 1,
-      "startDate": "2026-07-01T00:00:00",
-      "endDate": "2026-07-31T23:59:59",
-      "isActive": true,
-      "availabilityStatus": "ACTIVE"
-    }
-  }
-  ```
-
-  ---
-
-  ## 25.5. Update Promotion
-
-  ```http
-  PUT /api/admin/promotions/{promotionId}
-  ```
-
-  ### Update Restrictions
-
-  Nếu promotion đã có usage:
-
-  * Không nên đổi `promotionCode`.
-  * Không nên đổi `discountType`.
-  * Không nên sửa `discountValue` theo hướng ảnh hưởng booking đã apply.
-  * Không được đặt `usageLimit < usedCount`.
-  * Có thể disable promotion.
-  * Có thể tăng usage limit.
-  * Có thể thay đổi end date nếu business cho phép.
-
-  Promotion usage cũ vẫn phải giữ discount snapshot đã áp dụng.
-
-  Schema hiện chưa lưu snapshot trong `promotion_usages`; đây là điểm cần review.
-
-  ---
-
-  ## 25.6. Enable/Disable Promotion
-
-  ```http
-  PATCH /api/admin/promotions/{promotionId}/status
-  ```
-
-  Request:
-
-  ```json
-  {
-    "isActive": false
-  }
-  ```
-
-  Disable promotion:
-
-  * Ngăn validate/apply mới.
-  * Không xóa usage cũ.
-  * Không tự động revert booking đã áp dụng.
-
-  ---
-
-  # 26. Usage Statistics APIs
-
-  ## 26.1. Get Usage List
-
-  ```http
-  GET /api/admin/promotions/{promotionId}/usages
-  ```
-
-  Query:
-
-  ```txt
-  page
-  size
-  userId
-  bookingId
-  status
-  from
-  to
-  ```
-
-  Response:
-
-  ```json
-  {
-    "success": true,
-    "message": "Promotion usages retrieved successfully",
-    "data": {
-      "content": [
-        {
-          "usageId": 5001,
-          "userId": 15,
-          "bookingId": 1001,
-          "status": "APPLIED",
-          "reservedAt": "2026-06-21T20:15:00",
-          "confirmedAt": "2026-06-21T20:20:00",
-          "revertedAt": null,
-          "revertReason": null
-        }
-      ],
-      "page": 0,
-      "size": 10,
-      "totalElements": 1,
-      "totalPages": 1
-    }
-  }
-  ```
-
-  ---
-
-  ## 26.2. Get Basic Statistics
-
-  ```http
-  GET /api/admin/promotions/{promotionId}/statistics
-  ```
-
-  Response:
-
-  ```json
-  {
-    "success": true,
-    "message": "Promotion statistics retrieved successfully",
-    "data": {
-      "promotionId": 101,
-      "usageLimit": 1000,
-      "usedCount": 125,
-      "remainingUsage": 875,
-      "reservedUsageCount": 5,
-      "appliedUsageCount": 115,
-      "revertedUsageCount": 5
-    }
-  }
-  ```
-
-  Các số liệu theo status chỉ khả dụng nếu schema có usage status.
-
-  ---
-
-  # 27. Concurrency Rules
-
-  ## 27.1. Global Usage Limit
-
-  Hai request đồng thời không được làm:
-
-  ```txt
-  usedCount > usageLimit
-  ```
-
-  Không dùng flow không atomic:
-
-  ```txt
-  SELECT used_count
-  → kiểm tra
-  → UPDATE
-  ```
-
-  Khuyến nghị dùng atomic conditional update:
-
-  ```sql
-  UPDATE promotions
-  SET used_count = used_count + 1
-  WHERE id = :promotionId
-    AND used_count < usage_limit;
-  ```
-
-  Nếu affected rows bằng `0`:
-
-  ```txt
-  PROMOTION_USAGE_LIMIT_REACHED
-  ```
-
-  ## 27.2. Per-user Limit
-
-  Phải đếm active usage của user theo promotion.
-
-  Khuyến nghị có index:
-
-  ```txt
-  promotion_id + user_id
-  ```
-
-  Nếu dùng status:
-
-  ```txt
-  Chỉ tính RESERVED và APPLIED
-  Không tính REVERTED
-  ```
-
-  ## 27.3. One Promotion per Booking
-
-  Dựa trên:
-
-  ```txt
-  UNIQUE booking_id
-  ```
-
-  Hai apply request đồng thời cho cùng booking:
-
-  * Chỉ một usage được tạo.
-  * Request còn lại phải trả idempotent result hoặc conflict.
-
-  ## 27.4. Transaction Boundary
-
-  Apply promotion phải thực hiện trong một transaction:
-
-  ```txt
-  Validate limits
-  → Increment usedCount
-  → Insert promotion usage
-  → Commit
-  ```
-
-  Nếu insert usage thất bại:
-
-  ```txt
-  Rollback usedCount
-  ```
-
-  ---
-
-  # 28. Idempotency Rules
-
-  ### Validate/Preview
-
-  Không thay đổi dữ liệu nên tự nhiên idempotent.
-
-  ### Apply
-
-  Idempotency theo:
-
-  ```txt
-  bookingId
-  ```
-
-  ### Confirm Usage
-
-  Gọi lại cùng `usageId`:
-
-  ```txt
-  Không thay đổi usedCount
-  Không tạo duplicate effect
-  ```
-
-  ### Revert Usage
-
-  Gọi revert nhiều lần:
-
-  ```txt
-  Chỉ decrement usedCount một lần
-  Các lần sau trả trạng thái REVERTED
-  ```
-
-  ---
-
-  # 29. Booking và Payment Integration Direction
-
-  ## 29.1. Recommended Flow
-
-  ```txt
-  Booking được tạo với original amount
-  → User nhập promotion code
-  → Frontend gọi validate/preview
-  → Booking Service gọi internal apply
-  → Promotion Service tính discount
-  → Promotion Service lưu discount snapshot
-  → Promotion Service trả discountAmount/finalAmount
-  → Booking Service lưu finalAmount chính thức
-  → Payment Service lấy payable amount từ Booking Service
-  → Payment success
-  → Promotion usage được confirm APPLIED
-  ```
-
-  ## 29.2. Booking Failure
-
-  ```txt
-  Booking CANCELLED hoặc EXPIRED
-  → Booking Service gọi revert usage
-  → Promotion Service chuyển RESERVED → REVERTED
-  → Promotion Service giảm used_count đúng một lần
-  ```
-
-  ## 29.3. Payment Failure
-
-  Payment `FAILED` nhưng Booking vẫn còn thời gian retry:
-
-  ```txt
-  Không revert usage
-  Giữ usage ở RESERVED
-  ```
-
-  Chỉ revert khi Booking Service xác nhận booking đã:
-
-  ```txt
-  CANCELLED
-  EXPIRED
-  ```
-
-  ## 29.4. Source of Truth cho Amount
-
-  ```txt
-  Promotion Service
-  → source of truth cho promotion rule và discount calculation
-  → lưu originalAmount, discountAmount, finalAmount để audit
-
-  Booking Service
-  → source of truth cho finalAmount chính thức của booking
-
-  Payment Service
-  → chỉ lấy payable amount từ Booking Service
-  → không tự gọi Promotion Service để tính lại discount
-  ```
-
-  ## 29.5. Internal Communication
-
-  Sprint 2 dùng Internal REST API:
-
-  ```txt
-  POST /internal/promotions/apply
-  POST /internal/promotions/usages/{usageId}/confirm
-  POST /internal/promotions/usages/{usageId}/revert
-  GET  /internal/promotions/bookings/{bookingId}
-  ```
-
-  Internal API sử dụng:
-
-  ```http
-  X-Internal-Token: <internal-token>
-  ```
-
-  Frontend không được gọi trực tiếp các endpoint này.
-
-  # 30. Usage Reservation Timeout
-
-  Booking Service là source of truth của booking expiry.
-
-  Khi tạo usage:
-
-  ```txt
-  promotion_usages.expires_at = booking.expires_at
-  ```
-
-  Nếu booking hết hạn:
-
-  ```txt
-  RESERVED → REVERTED
-  → decrement used_count đúng một lần
-  ```
-
-  Promotion Service có thể nhận internal call từ Booking Service hoặc chạy reconciliation worker dựa trên:
-
-  ```txt
-  status = RESERVED
-  AND expires_at < now
-  ```
-
-  Worker chỉ là cơ chế phục hồi; không thay thế Booking Service notification.
-
-  Worker phải idempotent và không được revert usage đã `APPLIED` hoặc `REVERTED`.
-
-  # 31. Security Rules
-
-  * Public API chỉ trả promotion đang có thể công khai.
-  * Validate và preview yêu cầu authentication.
-  * Apply/revert/confirm chỉ dùng internal API.
-  * Frontend không được trực tiếp tạo `promotion_usages`.
-  * Frontend không được gửi `userId`.
-  * Frontend không phải source of truth của booking amount.
-  * Admin API yêu cầu role/permission phù hợp.
-  * Internal endpoint không expose công khai qua API Gateway.
-  * Không log dữ liệu cá nhân không cần thiết.
-  * Promotion code có thể hiển thị công khai nếu nghiệp vụ cho phép.
-
-  Permission đề xuất:
-
-  ```txt
-  PROMOTION_READ
-  PROMOTION_CREATE
-  PROMOTION_UPDATE
-  PROMOTION_MANAGE
-  PROMOTION_USAGE_READ
-  ```
-
-  ---
-
-  # 32. Delete Policy
-
-  Sprint 2 không expose Hard Delete API cho campaign hoặc promotion.
-
-  Campaign và promotion chỉ được disable bằng:
-
-  ```txt
-  is_active = false
-  ```
-
-  Lý do:
-
-  * Giữ lịch sử booking.
-  * Hỗ trợ audit.
-  * Không phá dữ liệu usage.
-  * Không làm mất thông tin đối soát.
-
-  Foreign key nội bộ phải dùng:
-
-  ```txt
-  ON DELETE RESTRICT
-  ```
-
-  hoặc behavior tương đương.
-
-  Không dùng `ON DELETE CASCADE` nếu có thể làm mất `promotion_usages`.
-
-  # 33. Error Code Catalog
-
-  | Error Code                             | HTTP | Ý nghĩa                        |
-  | -------------------------------------- | ---: | ------------------------------ |
-  | `CAMPAIGN_NOT_FOUND`                   |  404 | Không tìm thấy campaign        |
-  | `CAMPAIGN_DISABLED`                    |  409 | Campaign bị disable            |
-  | `CAMPAIGN_NOT_STARTED`                 |  409 | Campaign chưa bắt đầu          |
-  | `CAMPAIGN_EXPIRED`                     |  409 | Campaign đã hết hạn            |
-  | `CAMPAIGN_INVALID_DATE_RANGE`          |  400 | Khoảng thời gian không hợp lệ  |
-  | `PROMOTION_NOT_FOUND`                  |  404 | Không tìm thấy promotion       |
-  | `PROMOTION_CODE_ALREADY_EXISTS`        |  409 | Code đã tồn tại                |
-  | `PROMOTION_DISABLED`                   |  409 | Promotion bị disable           |
-  | `PROMOTION_NOT_STARTED`                |  409 | Promotion chưa bắt đầu         |
-  | `PROMOTION_EXPIRED`                    |  409 | Promotion đã hết hạn           |
-  | `PROMOTION_INVALID_DISCOUNT_TYPE`      |  400 | Discount type sai              |
-  | `PROMOTION_INVALID_DISCOUNT_VALUE`     |  400 | Discount value sai             |
-  | `PROMOTION_INVALID_DATE_RANGE`         |  400 | Time range sai                 |
-  | `PROMOTION_USAGE_LIMIT_REACHED`        |  409 | Hết lượt toàn hệ thống         |
-  | `PROMOTION_USER_LIMIT_REACHED`         |  409 | User hết lượt                  |
-  | `PROMOTION_MINIMUM_AMOUNT_NOT_MET`     |  409 | Chưa đạt giá trị tối thiểu     |
-  | `PROMOTION_BOOKING_ALREADY_APPLIED`    |  409 | Booking đã có promotion        |
-  | `PROMOTION_USAGE_NOT_FOUND`            |  404 | Không tìm thấy usage           |
-  | `PROMOTION_USAGE_ALREADY_CONFIRMED`    |  409 | Usage đã confirm               |
-  | `PROMOTION_USAGE_ALREADY_REVERTED`     |  409 | Usage đã revert                |
-  | `PROMOTION_USAGE_INVALID_TRANSITION`   |  409 | Chuyển trạng thái sai          |
-  | `PROMOTION_OPTIMISTIC_LOCK_CONFLICT`    |  409 | Dữ liệu bị cập nhật đồng thời  |
-  | `PROMOTION_BOOKING_NOT_FOUND`          |  404 | Booking không tồn tại          |
-  | `PROMOTION_BOOKING_NOT_ELIGIBLE`       |  409 | Booking không đủ điều kiện     |
-  | `PROMOTION_BOOKING_OWNERSHIP_MISMATCH` |  403 | Booking không thuộc user       |
-  | `BOOKING_SERVICE_UNAVAILABLE`          |  503 | Booking Service không khả dụng |
-  | `VALIDATION_ERROR`                     |  400 | Validation lỗi                 |
-  | `UNAUTHORIZED`                         |  401 | Chưa đăng nhập                 |
-  | `FORBIDDEN`                            |  403 | Không có quyền                 |
-  | `INTERNAL_SERVER_ERROR`                |  500 | Lỗi hệ thống                   |
-
-  ---
-
-  # 34. Schema Alignment Notes
-
-  ## 34.1. Usage Status
-
-  Bắt buộc bổ sung:
-
-  ```txt
-  promotion_usages.status
-  ```
-
-  Allowed values:
-
-  ```txt
-  RESERVED
-  APPLIED
-  REVERTED
-  ```
-
-  ## 34.2. Discount Snapshot
-
-  Bắt buộc lưu:
-
-  ```txt
-  original_amount
-  discount_amount
-  final_amount
-  ```
-
-  Promotion Service lưu snapshot này để audit.
-
-  Booking Service lưu `finalAmount` chính thức của booking.
-
-  ## 34.3. Usage Lifecycle Timestamps
-
-  Schema chính thức sử dụng:
-
-  ```txt
-  reserved_at
-  confirmed_at
-  reverted_at
-  revert_reason
-  ```
-
-  API Contract tương ứng sử dụng:
-
-  ```txt
-  reservedAt
-  confirmedAt
-  revertedAt
-  revertReason
-  ```
-
-  Không dùng `applied_at` hoặc `appliedAt` trong schema/API chính thức.
-
-  ## 34.4. Revert Tracking
-
-  Bắt buộc bổ sung:
-
-  ```txt
-  reverted_at
-  revert_reason
-  updated_at
-  ```
-
-  Không xóa usage record khi revert.
-
-  ## 34.5. Usage Expiration
-
-  Bắt buộc bổ sung:
-
-  ```txt
-  expires_at
-  ```
-
-  Giá trị được copy từ `booking.expires_at` khi apply.
-
-  ## 34.6. User Usage Index
-
-  Bắt buộc bổ sung:
-
-  ```txt
-  (promotion_id, user_id, status)
-  ```
-
-  để tối ưu kiểm tra per-user limit trên usage `RESERVED` và `APPLIED`.
-
-  ## 34.7. Expiration Index
-
-  Bắt buộc bổ sung:
-
-  ```txt
-  (status, expires_at)
-  ```
-
-  để hỗ trợ reconciliation worker.
-
-  ## 34.8. Usage Uniqueness
-
-  Tiếp tục giữ:
-
-  ```txt
-  booking_id UNIQUE
-  ```
-
-  Sprint 2 không hỗ trợ promotion stacking.
-
-  ## 34.9. Optimistic Locking
-
-  Bắt buộc bổ sung:
-
-  ```txt
-  promotions.version
-  promotion_usages.version
-  ```
-
-  Entity sử dụng `@Version`.
-
-  ## 34.10. Cascade Delete
-
-  Rà soát và loại bỏ `ON DELETE CASCADE` có thể làm mất usage history.
-
-  Dùng `ON DELETE RESTRICT` hoặc disable bằng `is_active = false`.
-
-  ## 34.11. Used Count Consistency
-
-  Apply phải atomic:
-
-  ```txt
-  Increment used_count
-  +
-  Insert RESERVED usage
-  ```
-
-  Revert phải atomic:
-
-  ```txt
-  RESERVED → REVERTED
-  +
-  Decrement used_count đúng một lần
-  ```
-
-  Có thể bổ sung reconciliation job để phát hiện lệch dữ liệu.
-
-  ## 34.12. Related Schema Issue
-
-  ```txt
-  [Database] Align Promotion Schema with Promotion API Contract
-  ```
-
-  Schema Alignment MR phải merge trước Backend implementation.
-
-  # 35. Out of Scope
-
-  * Recommendation Engine.
-  * Personalized promotion.
-  * Promotion stacking.
-  * Multiple promotion trên một booking.
-  * Dynamic segmentation.
-  * Coupon distribution campaign.
-  * Referral code.
-  * Gift card.
-  * Cashback.
-  * Score redemption.
-  * Production Kafka/outbox implementation.
-  * Booking integration implementation thật.
-  * Payment integration implementation thật.
-  * Advanced analytics dashboard.
-  * Hard delete API.
-  * Backend code trong issue contract này.
-
-  ---
-
-  # 36. Implementation Issue Direction
-
-  Implementation chỉ bắt đầu sau khi:
-
-  ```txt
-  Promotion Contract MR được merge
-  +
-  Promotion Schema Alignment MR được merge
-  +
-  SQL và Physical ERD đã đồng bộ
-  ```
-
-  Các implementation issue đề xuất:
-
-  ```txt
-  [Backend] Implement Promotion Campaign Management APIs
-
-  [Backend] Implement Promotion Management and Query APIs
-
-  [Backend] Implement Promotion Validation and Discount Calculation
-
-  [Backend] Implement Promotion Usage Apply, Confirm and Revert Flow
-
-  [Backend] Implement Promotion Usage Reconciliation Worker
-  ```
-
-  Thứ tự đề xuất:
-
-  ```txt
-  Schema Alignment
-  → Campaign/Promotion Management
-  → Validate/Preview
-  → Apply RESERVED Usage
-  → Confirm/Revert Flow
-  → Reconciliation Worker
-  ```
-
-  Mọi thay đổi endpoint, request, response hoặc business rule phải cập nhật contract trong cùng MR.
-
-  # 37. Acceptance Criteria
-
-  * [x] Có schema Sprint 0 baseline.
-  * [x] Có campaign APIs.
-  * [x] Có promotion management APIs.
-  * [x] Có public/protected/internal/admin classification.
-  * [x] Có validate API.
-  * [x] Có discount preview API.
-  * [x] Có apply API.
-  * [x] Có confirm/revert usage direction.
-  * [x] Có lifecycle timestamp contract: reservedAt, confirmedAt, revertedAt, revertReason.
-  * [x] Có discount calculation rules.
-  * [x] Có global usage limit.
-  * [x] Có per-user usage limit.
-  * [x] Có minimum booking amount rule.
-  * [x] Có max percentage discount rule.
-  * [x] Có fixed discount cap rule.
-  * [x] Có concurrency rules.
-  * [x] Có atomic used_count update.
-  * [x] Có idempotency theo booking.
-  * [x] Có logical reference notes.
-  * [x] Có Booking/Payment integration direction.
-  * [x] Có security notes.
-  * [x] Có status/error code.
-  * [x] Có schema alignment requirements.
-  * [x] Có discount snapshot source-of-truth decision.
-  * [x] Có usage expiry và reconciliation direction.
-  * [x] Có optimistic locking direction.
-  * [x] Có soft-delete/restrict delete policy.
-  * [x] Hoàng review feasibility.
-  * [x] Contract sẵn sàng cho implementation.
-  * [x] MR target `develop`.
-
-  ---
-
-  # 38. Review Decisions
-
-  Promotion Service Owner đã review và xác nhận:
-
-  1. Promotion Usage Lifecycle:
-
-    ```txt
-    RESERVED
-    APPLIED
-    REVERTED
-    ```
-
-  2. Usage được tạo và `used_count` tăng ngay khi Apply.
-
-  3. Payment Success chuyển usage:
-
-    ```txt
-    RESERVED → APPLIED
-    ```
-
-  4. Booking `CANCELLED` hoặc `EXPIRED` chuyển usage:
-
-    ```txt
-    RESERVED → REVERTED
-    ```
-
-  5. Payment `FAILED` không revert nếu booking vẫn còn thời gian retry.
-
-  6. Một booking chỉ áp dụng một promotion trong Sprint 2.
-
-  7. Tiếp tục giữ:
-
-    ```txt
-    promotion_usages.booking_id UNIQUE
-    ```
-
-  8. Promotion Service lưu:
-
-    ```txt
-    originalAmount
-    discountAmount
-    finalAmount
-    ```
-
-    để audit.
-
-  9. Booking Service lưu `finalAmount` chính thức của booking.
-
-  10. Payment Service chỉ lấy payable amount từ Booking Service.
-
-  11. Promotion usage lưu:
-
-      ```txt
-      reverted_at
-      revert_reason
-      updated_at
-      expires_at
-      ```
-
-  12. `expires_at` được copy từ booking expiry.
-
-  13. Internal integration sử dụng REST và `X-Internal-Token` trong Sprint 2.
-
-  14. Discount calculation sử dụng:
-
-      ```txt
-      BigDecimal
-      RoundingMode.HALF_UP
-      Scale 0 cho VND
-      ```
-
-  15. Bắt buộc có optimistic locking bằng `version` cho `promotions` và `promotion_usages`.
-
-  16. Bắt buộc có index:
-
-      ```txt
-      (promotion_id, user_id, status)
-      (status, expires_at)
-      ```
-
-  17. Không hard delete campaign hoặc promotion trong Sprint 2.
-
-  18. Phải rà soát và loại bỏ `ON DELETE CASCADE` có thể làm mất usage history.
-
-  19. Schema alignment đã hoàn thành và khớp với API Contract trước Backend implementation.
-
-  20. Usage lifecycle timestamp chính thức:
-
-      ```txt
-      reservedAt  ↔ reserved_at
-      confirmedAt ↔ confirmed_at
-      revertedAt  ↔ reverted_at
-      revertReason ↔ revert_reason
-      ```
-
-  21. Không sử dụng `appliedAt` trong response chính thức vì field này không phân biệt được reserve và confirm.
-
-  22. Contract được chốt ở trạng thái:
-
-      ```txt
-      Approved / Ready for Implementation
-      ```
-
-  # 39. Lịch Sử Chỉnh Sửa
-
-  | Ngày       | Nội dung                                                         | Người thực hiện  |
-  | ---------- | ---------------------------------------------------------------- | ---------------- |
-  | 21/06/2026 | Khởi tạo Promotion Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
-  | 22/06/2026 | Cập nhật theo review của Promotion Service Owner: usage lifecycle, discount snapshot, revert audit, expiry, optimistic locking, indexes và delete policy | Dương Thiện Nhân |
-
-  Các thay đổi schema chỉ được ghi nhận tại đây sau khi schema MR tương ứng đã được merge.
-
-
-  | 24/06/2026 | Đồng bộ lifecycle timestamps với schema và approve implementation | Dương Thiện Nhân |
+---
+
+## 8. Danh Mục Mã Lỗi (Error Catalog)
+
+| Error Code | HTTP Status | Ý nghĩa |
+| :--- | :---: | :--- |
+| `CAMPAIGN_NOT_FOUND` | 404 | Chiến dịch không tồn tại |
+| `CAMPAIGN_INACTIVE` | 409 | Chiến dịch đang không hoạt động (Disabled hoặc Paused) |
+| `CAMPAIGN_EXPIRED` | 409 | Chiến dịch đã hết hạn hiệu lực |
+| `PROMOTION_NOT_FOUND` | 404 | Coupon / Voucher không tồn tại |
+| `PROMOTION_DISABLED` | 409 | Ưu đãi đã bị vô hiệu hóa |
+| `PROMOTION_EXPIRED` | 409 | Thời gian sử dụng ưu đãi đã hết hạn |
+| `PROMOTION_USAGE_LIMIT_REACHED` | 409 | Vượt quá số lượt sử dụng tối đa toàn hệ thống |
+| `PROMOTION_USER_LIMIT_REACHED` | 409 | Vượt quá lượt sử dụng tối đa của người dùng này |
+| `PROMOTION_MINIMUM_AMOUNT_NOT_MET`| 400 | Không đạt giá trị đơn hàng tối thiểu |
+| `LEGAL_DISCOUNT_CEILING_EXCEEDED` | 400 | Mức giảm vượt quá trần quy định của pháp luật (50%) |
+| `RESERVATION_NOT_FOUND` | 404 | Không tìm thấy phiên giữ khuyến mại |
+| `RESERVATION_EXPIRED` | 409 | Phiên giữ khuyến mại đã hết hạn TTL |
+| `RESERVATION_CONFLICT` | 409 | Benefit/quota/budget đang được giữ hoặc dữ liệu reservation không nhất quán |
+| `RESERVATION_COMPLETED` | 409 | Không thể release/cancel reservation đã tạo redemption |
+| `RESERVATION_IDEMPOTENCY_CONFLICT` | 409 | Replay có payload, payment hoặc transition data khác request ban đầu |
+| `RESERVATION_INVALID_STATE` | 409 hoặc 400 | Chuyển trạng thái hoặc deadline không hợp lệ |
+| `PARTNER_NOT_FOUND` | 404 | Không tìm thấy đối tác |
+| `IDEMPOTENCY_CONFLICT` | 409 | Trùng Idempotency Key với dữ liệu yêu cầu khác biệt |
+| `SCORE_SERVICE_UNAVAILABLE` | 503 | Dịch vụ Loyalty Point bị lỗi (Áp dụng Circuit Breaker fallback) |
+
+---
+
+## 9. Lịch Sử Chỉnh Sửa
+
+| Ngày | Nội dung chỉnh sửa | Người thực hiện |
+| :--- | :--- | :--- |
+| 21/06/2026 | Khởi tạo Promotion Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
+| 22/06/2026 | Cập nhật theo review của Owner: lifecycle, snapshot, revert audit. | Dương Thiện Nhân |
+| 24/06/2026 | Đồng bộ timestamps với DB schema & approve | Dương Thiện Nhân |
+| 28/07/2026 | **Hợp nhất hoàn toàn đặc tả Benefit Domain (API + Business Rules + Thực tế MySQL DDL)**. Thay đổi các endpoint apply/confirm sang `/internal/promotions/...`. Xóa bỏ tệp `benefit-domain-api.md`. | Antigravity |
+| 28/07/2026 | Đồng bộ Reservation Runtime với implementation thực tế: 8 API canonical, state machine terminal, pricing snapshot, idempotency, lock, auto-expiration và lịch sử vận hành. | Codex |
+| 28/07/2026 | Production hardening: service-scoped auth/idempotency, one-benefit checkout scope, legal/budget gate, strict condition engine, E.164 phone, Kafka ACK + DB lease outbox, per-row scheduler retry và Flyway migration. | Codex |

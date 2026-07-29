@@ -2,6 +2,7 @@ package com.project.promotionservice.common.filter;
 
 import com.project.promotionservice.common.monitoring.PromotionMetricsManager;
 import com.project.promotionservice.configuration.security.principal.UserPrincipal;
+import com.project.promotionservice.configuration.security.principal.InternalServicePrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,30 +59,34 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             }
 
             // Extract User ID from Security Context
-            Long userId = null;
+            String actor = null;
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth != null && auth.getPrincipal() instanceof UserPrincipal) {
-                userId = ((UserPrincipal) auth.getPrincipal()).getId();
+            if (auth != null && auth.getPrincipal() instanceof UserPrincipal principal) {
+                actor = principal.getId() == null ? principal.getUsername()
+                        : principal.getId().toString();
+            } else if (auth != null
+                    && auth.getPrincipal() instanceof InternalServicePrincipal principal) {
+                actor = principal.getServiceName();
             }
 
-            if (userId != null) {
-                MDC.put("userId", String.valueOf(userId));
+            if (actor != null) {
+                MDC.put("actor", actor);
             } else {
-                MDC.remove("userId");
+                MDC.remove("actor");
             }
 
             MDC.put("action", "API_REQUEST");
 
-            log.info("Request processed: method={} uri={} status={} duration={}ms userId={} correlationId={}",
+            log.info("Request processed: method={} uri={} status={} duration={}ms actor={} correlationId={}",
                     request.getMethod(),
                     request.getRequestURI(),
                     status,
                     duration,
-                    userId != null ? userId : "anonymous",
+                    actor != null ? actor : "anonymous",
                     MDC.get("correlationId")
             );
 
-            MDC.remove("userId");
+            MDC.remove("actor");
             MDC.remove("action");
         }
     }

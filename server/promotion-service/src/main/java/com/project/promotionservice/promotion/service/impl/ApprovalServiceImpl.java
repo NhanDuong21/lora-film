@@ -6,6 +6,7 @@ import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.integration.outbox.OutboxStatus;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEvent;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEventRepository;
+import com.project.promotionservice.integration.outbox.PromotionOutboxEnvelopeFactory;
 import com.project.promotionservice.promotion.dto.response.ApprovalHistoryResponse;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.entity.ApprovalHistory;
@@ -40,19 +41,22 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final CampaignMapper campaignMapper;
     private final ApprovalMapper approvalMapper;
     private final ObjectMapper objectMapper;
+    private final PromotionOutboxEnvelopeFactory envelopeFactory;
 
     public ApprovalServiceImpl(PromotionCampaignRepository campaignRepository,
             ApprovalHistoryRepository approvalHistoryRepository,
             PromotionOutboxEventRepository outboxEventRepository,
             CampaignMapper campaignMapper,
             ApprovalMapper approvalMapper,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PromotionOutboxEnvelopeFactory envelopeFactory) {
         this.campaignRepository = campaignRepository;
         this.approvalHistoryRepository = approvalHistoryRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.campaignMapper = campaignMapper;
         this.approvalMapper = approvalMapper;
         this.objectMapper = objectMapper;
+        this.envelopeFactory = envelopeFactory;
     }
 
     @Override
@@ -210,7 +214,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             event.setAggregatePublicId(aggregatePublicId);
             event.setEventType(eventType);
             event.setEventKey(aggregatePublicId);
-            event.setPayload(objectMapper.writeValueAsString(payload));
+            event.setPayload(envelopeFactory.create(event, payload));
             event.setTopicName(topic);
             event.setPublishStatus(OutboxStatus.PENDING);
             event.setCreatedBy(actor);

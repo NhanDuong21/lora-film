@@ -6,6 +6,7 @@ import com.project.paymentservice.dto.request.ReconciliationAssignRequest;
 import com.project.paymentservice.dto.request.ReconciliationResolveRequest;
 import com.project.paymentservice.dto.response.AdminPaymentDetailResponse;
 import com.project.paymentservice.dto.response.PaymentDetailResponse;
+import com.project.paymentservice.dto.response.RefundResponse;
 import com.project.paymentservice.entity.CashPaymentDetail;
 import com.project.paymentservice.entity.Payment;
 import com.project.paymentservice.entity.PaymentAnalyticsSnapshot;
@@ -28,6 +29,7 @@ import com.project.paymentservice.repository.PaymentLogRepository;
 import com.project.paymentservice.repository.PaymentOutboxEventRepository;
 import com.project.paymentservice.repository.PaymentReconciliationCaseRepository;
 import com.project.paymentservice.repository.PaymentRepository;
+import com.project.paymentservice.repository.PaymentRefundRepository;
 import com.project.paymentservice.repository.PaymentWebhookEventRepository;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -45,6 +47,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.EnumSet;
+import com.project.paymentservice.enumtype.RefundStatus;
 
 @Service
 public class AdminPaymentService {
@@ -55,6 +61,7 @@ public class AdminPaymentService {
     private final PaymentWebhookEventRepository webhookRepository;
     private final PaymentOutboxEventRepository outboxRepository;
     private final PaymentReconciliationCaseRepository reconciliationRepository;
+    private final PaymentRefundRepository refundRepository;
     private final PaymentOutboxService outboxService;
     private final OutboxDeliveryStateService outboxStateService;
     private final PaymentTransactionService transactionService;
@@ -68,6 +75,7 @@ public class AdminPaymentService {
             PaymentWebhookEventRepository webhookRepository,
             PaymentOutboxEventRepository outboxRepository,
             PaymentReconciliationCaseRepository reconciliationRepository,
+            PaymentRefundRepository refundRepository,
             PaymentOutboxService outboxService,
             OutboxDeliveryStateService outboxStateService,
             PaymentTransactionService transactionService,
@@ -79,6 +87,7 @@ public class AdminPaymentService {
         this.webhookRepository = webhookRepository;
         this.outboxRepository = outboxRepository;
         this.reconciliationRepository = reconciliationRepository;
+        this.refundRepository = refundRepository;
         this.outboxService = outboxService;
         this.outboxStateService = outboxStateService;
         this.transactionService = transactionService;
@@ -90,9 +99,15 @@ public class AdminPaymentService {
             String query, PaymentStatus status, ProviderCode provider,
             ReconciliationStatus reconciliationStatus,
             Instant from, Instant to, Pageable pageable) {
-        return paymentRepository.findAll(specification(
-                query, status, provider, reconciliationStatus, from, to), pageable)
-                .map(this::detail);
+        Page<Payment> payments = paymentRepository.findAll(specification(
+                query, status, provider, reconciliationStatus, from, to), pageable);
+        Map<Long, PaymentAnalyticsSnapshot> snapshots = snapshotRepository.findAllById(
+                        payments.getContent().stream().map(Payment::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(
+                        PaymentAnalyticsSnapshot::getPaymentId,
+                        Function.identity()));
+        return payments.map(payment -> detail(payment, snapshots.get(payment.getId())));
     }
 
     @Transactional(readOnly = true)
@@ -103,7 +118,7 @@ public class AdminPaymentService {
                 .findByPaymentId(payment.getId()).orElse(null);
         CashPaymentDetail cash = cashRepository.findById(payment.getId()).orElse(null);
         return new AdminPaymentDetailResponse(
-                detail(payment),
+                detail(payment, snapshot),
                 snapshot(snapshot),
                 cash(cash),
                 logRepository.findByPaymentIdOrderByCreatedAtAsc(payment.getId())
@@ -113,7 +128,9 @@ public class AdminPaymentService {
                 outboxRepository.findByAggregateIdOrderByCreatedAtDesc(payment.getPublicId())
                         .stream().map(this::outbox).toList(),
                 reconciliationRepository.findByPaymentIdOrderByCreatedAtDesc(payment.getId())
-                        .stream().map(this::reconciliation).toList());
+                        .stream().map(this::reconciliation).toList(),
+                refundRepository.findByPaymentIdOrderByCreatedAtDesc(payment.getId())
+                        .stream().map(RefundResponse::from).toList());
     }
 
     @Transactional(readOnly = true)
@@ -292,9 +309,29 @@ public class AdminPaymentService {
         }
     }
 
-    private PaymentDetailResponse detail(Payment payment) {
+    private PaymentDetailResponse detail(
+            Payment payment,
+            PaymentAnalyticsSnapshot snapshot) {
         PaymentDetailResponse response = PaymentMapper.toDetailResponse(payment);
         response.setBookingDeliveryStatus(outboxService.deliveryStatus(payment.getPublicId()));
+        if (snapshot != null) {
+            response.setMovieTitle(snapshot.getMovieTitle());
+            response.setTicketCount(snapshot.getTicketCount());
+            response.setTicketAmount(snapshot.getTicketAmount());
+            response.setFoodAmount(snapshot.getFoodAmount());
+            response.setDiscountAmount(snapshot.getDiscountAmount());
+        }
+        BigDecimal reserved = refundRepository.sumReservedAmount(
+                payment.getId(),
+                EnumSet.of(
+                        RefundStatus.REQUESTED,
+                        RefundStatus.PROCESSING,
+                        RefundStatus.SUCCESS,
+                        RefundStatus.REQUIRES_ACTION));
+        BigDecimal succeeded = refundRepository.sumReservedAmount(
+                payment.getId(), EnumSet.of(RefundStatus.SUCCESS));
+        response.setRefundedAmount(succeeded);
+        response.setRefundableAmount(payment.getAmount().subtract(reserved).max(BigDecimal.ZERO));
         return response;
     }
 
