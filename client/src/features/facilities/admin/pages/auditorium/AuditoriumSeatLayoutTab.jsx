@@ -4,6 +4,7 @@ import adminRoomService from '@/features/facilities/admin/services/adminRoomServ
 import BrushToolbar from '@/features/facilities/admin/components/BrushToolbar';
 import StatsPanel from '@/features/facilities/admin/components/StatsPanel';
 import SeatGridDesigner from '@/features/facilities/admin/components/SeatGridDesigner';
+import { getAuditoriumStatus } from '@/features/facilities/admin/utils/facilityPresentation';
 
 export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo, onUpdateSeats, triggerToast }) {
   // Seating grid dimensions
@@ -24,6 +25,7 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
 
   const initialStatus = auditorium?.auditoriumStatus || 'DRAFT';
   const isLayoutEditable = initialStatus === 'DRAFT';
+  const statusPresentation = getAuditoriumStatus(initialStatus);
 
   useEffect(() => {
     const loadSeatTypes = async () => {
@@ -347,13 +349,16 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
           <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-4 rounded-2xl flex items-start gap-3 mb-8 max-w-2xl shadow-xl shadow-black/20 select-none">
             <Info className="w-5 h-5 shrink-0 mt-0.5" />
             <div className="text-xs space-y-1">
-              <h4 className="font-extrabold uppercase">Sơ đồ ghế ở chế độ chỉ xem (Read-Only)</h4>
+              <h4 className="font-extrabold uppercase">Sơ đồ ghế đang ở chế độ chỉ xem</h4>
               <p className="font-semibold text-zinc-300">
-                Chỉ cho phép thay đổi sơ đồ phòng chiếu khi phòng đang ở trạng thái <strong>DRAFT (Bản nháp)</strong>. 
-                Hiện tại phòng này đang ở trạng thái <strong>{initialStatus}</strong>.
+                Để bảo vệ các suất chiếu và đơn đặt vé, chỉ phòng ở bước
+                <strong> Đang thiết lập</strong> mới được thay đổi sơ đồ ghế.
+                Phòng này hiện đang <strong>{statusPresentation.label}</strong>.
               </p>
               <p className="font-semibold text-zinc-450 mt-1">
-                Mẹo: Chuyển trạng thái sang INACTIVE, lưu lại, sau đó chuyển về DRAFT ở tab CẤU HÌNH để có thể sửa sơ đồ.
+                Cách thực hiện: vào tab Tổng quan & tác vụ, tạm ngừng phòng, sau đó
+                chọn “Chuyển sang thiết lập” và quay lại đây. Hãy kiểm tra lịch chiếu
+                và khách đã đặt vé trước khi thay đổi.
               </p>
             </div>
           </div>
@@ -366,7 +371,6 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
             cols={cols}
             skipIO={skipIO}
             isLayoutEditable={isLayoutEditable}
-            skipIO={skipIO}
             onCellMouseDown={handleCellMouseDown}
             onCellMouseEnter={handleCellMouseEnter}
           />

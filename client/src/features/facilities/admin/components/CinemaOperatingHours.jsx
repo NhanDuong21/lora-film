@@ -1,107 +1,114 @@
-// eslint-disable-next-line no-unused-vars
-import React from 'react';
-import { Calendar } from 'lucide-react';
+import { Calendar, Copy, MoonStar } from 'lucide-react';
+import { getHoursDescription, isOvernight } from '../utils/facilityPresentation';
+
+const DAY_NAMES = [
+  'Thứ Hai',
+  'Thứ Ba',
+  'Thứ Tư',
+  'Thứ Năm',
+  'Thứ Sáu',
+  'Thứ Bảy',
+  'Chủ Nhật',
+];
 
 export default function CinemaOperatingHours({ operatingHours, onHoursChange }) {
+  const copyMonday = (lastIndex) => {
+    const monday = operatingHours[0];
+    if (!monday) return;
+    for (let index = 1; index <= lastIndex; index += 1) {
+      onHoursChange(index, 'isClosed', monday.isClosed);
+      onHoursChange(index, 'openTime', monday.openTime);
+      onHoursChange(index, 'closeTime', monday.closeTime);
+    }
+  };
+
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 flex flex-col gap-4">
-      <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3">
-        <Calendar className="w-4 h-4 text-orange-500" />
-        <h2 className="text-sm font-bold uppercase tracking-wider text-white">Giờ Hoạt Động (Theo Thứ)</h2>
+    <section className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+      <div className="flex items-start gap-2 border-b border-zinc-800 pb-3">
+        <Calendar className="mt-0.5 h-4 w-4 text-orange-500" />
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-white">
+            Giờ mở cửa hằng tuần
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Giờ kết thúc nhỏ hơn giờ mở cửa sẽ được hiểu là kết thúc vào ngày hôm sau.
+          </p>
+        </div>
       </div>
 
-      <div className="flex gap-2 justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
         <button
           type="button"
-          onClick={() => {
-            const monday = operatingHours[0];
-            if (!monday) return;
-            // Apply Monday to Mon-Fri (index 0 to 4)
-            for (let i = 1; i <= 4; i++) {
-              onHoursChange(i, 'isClosed', monday.isClosed);
-              onHoursChange(i, 'openTime', monday.openTime);
-              onHoursChange(i, 'closeTime', monday.closeTime);
-            }
-          }}
-          className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-orange border border-zinc-800 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-colors"
+          onClick={() => copyMonday(4)}
+          className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-orange-400 hover:bg-zinc-800"
         >
-          Áp Dụng T2-T6
+          <Copy className="h-3.5 w-3.5" />
+          Sao chép Thứ Hai cho ngày thường
         </button>
         <button
           type="button"
-          onClick={() => {
-            const monday = operatingHours[0];
-            if (!monday) return;
-            // Apply Monday to all (index 1 to 6)
-            for (let i = 1; i <= 6; i++) {
-              onHoursChange(i, 'isClosed', monday.isClosed);
-              onHoursChange(i, 'openTime', monday.openTime);
-              onHoursChange(i, 'closeTime', monday.closeTime);
-            }
-          }}
-          className="text-[10px] bg-zinc-950 hover:bg-zinc-800 text-brand-orange border border-zinc-800 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-colors"
+          onClick={() => copyMonday(6)}
+          className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-orange-400 hover:bg-zinc-800"
         >
-          Áp Dụng Tất Cả
+          <Copy className="h-3.5 w-3.5" />
+          Sao chép cho cả tuần
         </button>
       </div>
 
       <div className="flex flex-col gap-3">
-        {[
-          'Thứ Hai',
-          'Thứ Ba',
-          'Thứ Tư',
-          'Thứ Năm',
-          'Thứ Sáu',
-          'Thứ Bảy',
-          'Chủ Nhật'
-        ].map((dayName, idx) => {
-          const oh = operatingHours[idx];
-          if (!oh) return null;
+        {DAY_NAMES.map((dayName, index) => {
+          const hours = operatingHours[index];
+          if (!hours) return null;
+          const overnight = !hours.isClosed && isOvernight(hours.openTime, hours.closeTime);
+
           return (
-            <div key={idx} className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-900 gap-4">
-              <div className="flex items-center gap-3 shrink-0">
-                <input
-                  type="checkbox"
-                  checked={!oh.isClosed}
-                  onChange={e => onHoursChange(idx, 'isClosed', !e.target.checked)}
-                  className="w-4 h-4 text-orange-500 bg-zinc-900 border-zinc-800 rounded focus:ring-orange-500/40 focus:ring-2 cursor-pointer"
-                />
-                <span className="text-xs font-bold text-zinc-300 w-16">{dayName}</span>
+            <div
+              key={dayName}
+              className="rounded-xl border border-zinc-900 bg-zinc-950 p-3"
+            >
+              <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                <label className="flex min-w-40 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={!hours.isClosed}
+                    onChange={(event) => onHoursChange(index, 'isClosed', !event.target.checked)}
+                    className="h-4 w-4 cursor-pointer rounded border-zinc-800 bg-zinc-900 accent-orange-500"
+                  />
+                  <span className="text-xs font-bold text-zinc-300">{dayName}</span>
+                  <span className={`text-[10px] font-bold ${hours.isClosed ? 'text-zinc-500' : 'text-emerald-400'}`}>
+                    {hours.isClosed ? 'Đóng cửa' : 'Mở cửa'}
+                  </span>
+                </label>
+
+                {!hours.isClosed && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      aria-label={`Giờ mở cửa ${dayName}`}
+                      type="time"
+                      value={hours.openTime || ''}
+                      onChange={(event) => onHoursChange(index, 'openTime', event.target.value)}
+                      className="w-28 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2 text-center text-xs text-zinc-100 outline-none focus:border-orange-500/50"
+                    />
+                    <span className="text-xs text-zinc-600">đến</span>
+                    <input
+                      aria-label={`Giờ đóng cửa ${dayName}`}
+                      type="time"
+                      value={hours.closeTime || ''}
+                      onChange={(event) => onHoursChange(index, 'closeTime', event.target.value)}
+                      className="w-28 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-2 text-center text-xs text-zinc-100 outline-none focus:border-orange-500/50"
+                    />
+                  </div>
+                )}
               </div>
 
-              {!oh.isClosed ? (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <input
-                    type="time"
-                    max="23:59"
-                    value={oh.openTime || ''}
-                    onChange={e => {
-                      const val = e.target.value;
-                      onHoursChange(idx, 'openTime', val);
-                    }}
-                    className="bg-zinc-900 border border-zinc-800 focus:border-orange-500/40 rounded-lg p-1.5 px-1 w-20 text-center text-[10px] text-zinc-100 focus:outline-none shrink-0"
-                  />
-                  <span className="text-[9px] text-zinc-600 font-bold uppercase shrink-0">đến</span>
-                  <input
-                    type="time"
-                    max="23:59"
-                    value={oh.closeTime || ''}
-                    onChange={e => {
-                      const val = e.target.value;
-                      onHoursChange(idx, 'closeTime', val);
-                    }}
-                    className="bg-zinc-900 border border-zinc-800 focus:border-orange-500/40 rounded-lg p-1.5 px-1 w-20 text-center text-[10px] text-zinc-100 focus:outline-none shrink-0"
-                  />
-                </div>
-              ) : (
-                <span className="text-[10px] font-black text-rose-500/80 bg-rose-500/5 border border-rose-500/10 px-3 py-1 rounded-lg uppercase tracking-wider">
-                  Nghỉ / Đóng Cửa
-                </span>
-              )}
+              <div className={`mt-2 flex items-center gap-2 text-[11px] ${overnight ? 'text-amber-300' : 'text-zinc-500'}`}>
+                {overnight && <MoonStar className="h-3.5 w-3.5" />}
+                <span>{getHoursDescription(hours)}</span>
+              </div>
             </div>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

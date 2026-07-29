@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { UploadCloud, Image as ImageIcon, Trash2 } from 'lucide-react';
 import ImageCropDialog from './ImageCropDialog';
 import { useOutletContext } from 'react-router-dom';
@@ -19,7 +19,18 @@ export default function CinemaImageUploader({
   // value is expected to be a File object (Blob) when locally selected and cropped, 
   // or a string URL if it's already uploaded.
   
-  const previewUrl = value ? (typeof value === 'string' ? value : URL.createObjectURL(value)) : null;
+  const previewUrl = useMemo(
+    () => (value ? (typeof value === 'string' ? value : URL.createObjectURL(value)) : null),
+    [value]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && typeof value !== 'string') {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl, value]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -69,22 +80,22 @@ export default function CinemaImageUploader({
         {previewUrl ? (
           <>
             <img src={previewUrl} alt={label} className="w-full h-full object-cover opacity-90" />
-            <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+            <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="p-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors shadow-lg"
-                title="Thay đổi ảnh"
+                className="inline-flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-xs font-bold text-white shadow-lg transition-colors hover:bg-zinc-700"
               >
                 <UploadCloud className="w-5 h-5" />
+                Chọn ảnh khác
               </button>
               <button
                 type="button"
                 onClick={handleRemove}
-                className="p-2 bg-zinc-800 hover:bg-red-500/20 text-white hover:text-red-400 rounded-lg transition-colors shadow-lg"
-                title="Xóa ảnh"
+                className="inline-flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-xs font-bold text-white shadow-lg transition-colors hover:bg-red-500/20 hover:text-red-400"
               >
                 <Trash2 className="w-5 h-5" />
+                Bỏ ảnh
               </button>
             </div>
           </>

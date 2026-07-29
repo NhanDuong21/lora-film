@@ -1,198 +1,249 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Edit3, Info, Search, ShieldCheck } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/ui/uiKit';
 import useAdminSeatTypes from '../hooks/useAdminSeatTypes';
-import { Search, Edit } from 'lucide-react';
-import { LoadingState, ErrorState, EmptyState } from '@/components/common/ui/uiKit';
+
+const STATUS_PRESENTATION = {
+  ACTIVE: {
+    label: 'Đang sử dụng',
+    description: 'Có thể gán cho ghế trong phòng chiếu.',
+    className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
+  },
+  INACTIVE: {
+    label: 'Tạm ngừng',
+    description: 'Không dùng cho cấu hình phòng mới; dữ liệu cũ vẫn được giữ.',
+    className: 'border-zinc-700 bg-zinc-800 text-zinc-400',
+  },
+};
 
 export default function AdminSeatTypePage() {
   const { triggerToast } = useOutletContext() || {};
-  const { seatTypes, isLoading, error, fetchSeatTypes, updateSeatType } = useAdminSeatTypes(triggerToast);
+  const { userRole } = useAuth();
+  const {
+    seatTypes,
+    isLoading,
+    error,
+    fetchSeatTypes,
+    updateSeatType,
+  } = useAdminSeatTypes(triggerToast);
 
+  const normalizedRole = String(userRole || '').replace(/^ROLE_/, '');
+  const canConfigure = normalizedRole === 'ADMIN';
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     code: '',
     name: '',
     description: '',
-    status: 'ACTIVE'
+    status: 'ACTIVE',
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-
   useEffect(() => {
-     
     fetchSeatTypes();
   }, [fetchSeatTypes]);
 
-  const filteredSeatTypes = seatTypes.filter(st => 
-    st.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    st.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSeatTypes = useMemo(() => {
+    const keyword = searchTerm.trim().toLocaleLowerCase('vi');
+    if (!keyword) return seatTypes;
+    return seatTypes.filter((seatType) => (
+      seatType.name?.toLocaleLowerCase('vi').includes(keyword)
+      || seatType.description?.toLocaleLowerCase('vi').includes(keyword)
+    ));
+  }, [searchTerm, seatTypes]);
 
-  const openEditForm = (st) => {
+  const openEditForm = (seatType) => {
+    if (!canConfigure) return;
     setFormData({
-      code: st.code,
-      name: st.name,
-      description: st.description || '',
-      status: st.status || 'ACTIVE'
+      code: seatType.code,
+      name: seatType.name,
+      description: seatType.description || '',
+      status: seatType.status || 'ACTIVE',
     });
-    setEditingId(st.publicId);
-    setIsFormOpen(true);
+    setEditingId(seatType.publicId);
   };
 
   const closeForm = () => {
-    setIsFormOpen(false);
     setEditingId(null);
   };
 
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
+  const handleFormSubmit = async (event) => {
+    event.preventDefault();
+    if (!canConfigure || !editingId) return;
     setIsSubmitting(true);
-    let success;
-    if (editingId) {
-      success = await updateSeatType(editingId, formData);
-    }
+    const success = await updateSeatType(editingId, formData);
     setIsSubmitting(false);
-    if (success) {
-      closeForm();
-    }
+    if (success) closeForm();
   };
 
   return (
-    <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 font-sans">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-zinc-900 pb-4 gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-zinc-50">CẤU HÌNH LOẠI GHẾ HỆ THỐNG</h1>
-          <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wider">Cấu hình tên, mô tả, trạng thái của các loại ghế cố định</p>
-        </div>
-      </div>
+    <div className="flex min-h-[400px] flex-1 flex-col space-y-6 overflow-auto bg-zinc-950 p-6 text-white md:p-8">
+      <header className="border-b border-zinc-900 pb-5">
+        <h1 className="text-xl font-black uppercase tracking-wide text-zinc-50 md:text-2xl">
+          Loại ghế dùng trong rạp
+        </h1>
+        <p className="mt-1 text-xs text-zinc-400">
+          Quản lý tên hiển thị, mô tả và khả năng sử dụng của các nhóm ghế cố định.
+        </p>
+      </header>
 
-      <div className="flex items-center bg-zinc-900/20 border border-zinc-900 p-4 rounded-2xl">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+      <section className={`rounded-2xl border p-5 ${
+        canConfigure
+          ? 'border-emerald-500/20 bg-emerald-500/5'
+          : 'border-amber-500/20 bg-amber-500/5'
+      }`}>
+        <div className="flex gap-3">
+          {canConfigure
+            ? <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-400" />
+            : <Info className="h-5 w-5 shrink-0 text-amber-400" />}
+          <div>
+            <h2 className="text-sm font-black text-white">
+              {canConfigure ? 'Bạn có quyền thay đổi cấu hình loại ghế' : 'Chế độ chỉ xem'}
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-zinc-400">
+              Loại ghế được dùng chung cho toàn hệ thống. Việc tạm ngừng một loại ghế
+              không xóa ghế hoặc dữ liệu lịch sử đã có.
+              {!canConfigure && ' Chỉ quản trị viên hệ thống mới được thay đổi cấu hình này.'}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-900 bg-zinc-900/20 p-4">
+        <div className="relative max-w-lg">
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
           <input
-            type="text"
-            placeholder="Tìm theo mã hoặc tên..."
+            type="search"
+            placeholder="Tìm theo tên hoặc mô tả loại ghế..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none focus:border-brand-orange transition-colors"
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-3 pl-11 pr-4 text-sm text-zinc-200 outline-none transition-colors focus:border-brand-orange"
           />
         </div>
-      </div>
+      </section>
 
-      <div className="bg-zinc-900/20 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl relative">
-        {isLoading && <LoadingState message="Đang tải loại ghế..." />}
+      <section className="relative overflow-hidden rounded-3xl border border-zinc-900 bg-zinc-900/20">
+        {isLoading && <LoadingState message="Đang tải danh sách loại ghế..." />}
         {!isLoading && error && <ErrorState message={error} onRetry={fetchSeatTypes} />}
-        
-        {!isLoading && !error && filteredSeatTypes.length === 0 ? (
-          <EmptyState message="Không tìm thấy loại ghế nào" />
-        ) : (
-          !isLoading && !error && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-zinc-900 text-[10px] font-black text-zinc-500 uppercase tracking-wider bg-zinc-950/40">
-                    <th className="py-4 px-6">Mã (Code)</th>
-                    <th className="py-4 px-6">Tên</th>
-                    <th className="py-4 px-6">Mô tả</th>
-                    <th className="py-4 px-6">Trạng thái</th>
-                    <th className="py-4 px-6 text-right">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-900/60 text-xs font-semibold">
-                  {filteredSeatTypes.map((st) => (
-                    <tr key={st.publicId} className="hover:bg-zinc-900/10 transition-colors">
-                      <td className="py-4 px-6 text-brand-orange font-mono">{st.code}</td>
-                      <td className="py-4 px-6 font-bold">{st.name}</td>
-                      <td className="py-4 px-6 text-zinc-400">{st.description || '-'}</td>
-                      <td className="py-4 px-6">
-                        {st.status === 'ACTIVE' 
-                          ? <span className="text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded text-[10px]">Đang hoạt động</span>
-                          : <span className="text-red-400 bg-red-400/10 px-2 py-1 rounded text-[10px]">Ngừng hoạt động</span>}
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <button
-                          onClick={() => openEditForm(st)}
-                          className="p-2 bg-zinc-950 border border-zinc-800 hover:border-amber-500/50 text-zinc-400 hover:text-amber-500 rounded-xl transition-all"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+        {!isLoading && !error && filteredSeatTypes.length === 0 && (
+          <EmptyState message="Không tìm thấy loại ghế phù hợp" />
         )}
-      </div>
+        {!isLoading && !error && filteredSeatTypes.length > 0 && (
+          <div className="divide-y divide-zinc-900">
+            {filteredSeatTypes.map((seatType) => {
+              const presentation = STATUS_PRESENTATION[seatType.status]
+                || STATUS_PRESENTATION.INACTIVE;
+              return (
+                <article
+                  key={seatType.publicId}
+                  className="grid gap-4 p-5 transition-colors hover:bg-zinc-900/30 lg:grid-cols-[1fr_2fr_1fr_auto] lg:items-center"
+                >
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                      Loại ghế
+                    </p>
+                    <p className="mt-1 text-sm font-black text-white">{seatType.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                      Mô tả cho nhân viên
+                    </p>
+                    <p className="mt-1 text-sm leading-5 text-zinc-400">
+                      {seatType.description || 'Chưa có mô tả'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className={`inline-flex rounded-lg border px-3 py-1.5 text-[10px] font-black ${presentation.className}`}>
+                      {presentation.label}
+                    </span>
+                    <p className="mt-2 max-w-xs text-[11px] leading-4 text-zinc-500">
+                      {presentation.description}
+                    </p>
+                  </div>
+                  {canConfigure && (
+                    <button
+                      type="button"
+                      onClick={() => openEditForm(seatType)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:border-brand-orange hover:text-brand-orange"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      Chỉnh sửa
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
-      {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-zinc-950 border border-zinc-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
-            <h2 className="text-lg font-black uppercase mb-4">Cập nhật Cấu hình Ghế</h2>
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Mã (Code)</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.code}
-                  onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-zinc-500 uppercase cursor-not-allowed"
-                  placeholder="Vd: VIP, STANDARD"
-                  disabled={true}
-                />
-                <p className="text-[10px] text-amber-500 mt-1">Loại ghế hệ thống (Cố định, không thể đổi mã)</p>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Tên hiển thị</label>
+      {editingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+            <h2 className="text-lg font-black uppercase text-white">Chỉnh sửa loại ghế</h2>
+            <p className="mt-1 text-xs leading-5 text-zinc-500">
+              Thay đổi này áp dụng cho cách hiển thị và lựa chọn loại ghế trên toàn hệ thống.
+            </p>
+            <form onSubmit={handleFormSubmit} className="mt-6 space-y-4">
+              <label className="block space-y-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                Tên hiển thị
                 <input
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-white"
-                  placeholder="Vd: Ghế VIP"
+                  onChange={(event) => setFormData((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-brand-orange"
                 />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Mô tả</label>
+              </label>
+              <label className="block space-y-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                Mô tả dễ hiểu
                 <textarea
+                  rows={3}
                   value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-white"
-                  rows={2}
+                  onChange={(event) => setFormData((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-brand-orange"
                 />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Trạng thái</label>
+              </label>
+              <label className="block space-y-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                Khả năng sử dụng
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({...formData, status: e.target.value})}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:border-brand-orange outline-none text-white cursor-pointer"
+                  onChange={(event) => setFormData((current) => ({
+                    ...current,
+                    status: event.target.value,
+                  }))}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-brand-orange"
                 >
-                  <option value="ACTIVE">Hoạt động</option>
-                  <option value="INACTIVE">Ngừng hoạt động</option>
+                  <option value="ACTIVE">Đang sử dụng</option>
+                  <option value="INACTIVE">Tạm ngừng sử dụng</option>
                 </select>
+              </label>
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-amber-100/80">
+                Tạm ngừng không xóa dữ liệu cũ. Hãy kiểm tra các phòng đang dùng loại
+                ghế này trước khi lưu thay đổi.
               </div>
-              
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={closeForm}
-                  className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold py-2.5 rounded-xl uppercase tracking-wider text-xs transition-colors"
+                  className="flex-1 rounded-xl border border-zinc-700 py-3 text-xs font-bold text-zinc-300"
                 >
-                  Hủy
+                  Quay lại
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-brand-orange hover:bg-opacity-90 text-white font-bold py-2.5 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-brand-orange py-3 text-xs font-black text-white disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Đang lưu...' : 'Lưu lại'}
+                  {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>

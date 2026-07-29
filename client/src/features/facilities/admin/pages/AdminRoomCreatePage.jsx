@@ -34,7 +34,6 @@ export default function AdminRoomCreatePage() {
   const [screenType, setScreenType] = useState('STANDARD');
   const [soundType, setSoundType] = useState('STANDARD');
   const [cleaningBuffer, setCleaningBuffer] = useState(15);
-  const [status, setStatus] = useState('DRAFT');
 
   // Seating grid dimensions
   const [rows, setRows] = useState(10);
@@ -56,7 +55,7 @@ export default function AdminRoomCreatePage() {
   // Load initial cinema detail and seat types
   useEffect(() => {
     if (!cinemaId) {
-      triggerToast?.('Lỗi: Thiếu Cinema ID để tạo phòng chiếu!', 'error');
+      triggerToast?.('Không xác định được cụm rạp cần thêm phòng chiếu.', 'error');
       navigate('/admin/rooms');
       return;
     }
@@ -247,7 +246,7 @@ export default function AdminRoomCreatePage() {
 
       for (const tCode of paintedTypes) {
         if (!typeMapping[tCode]) {
-          throw new Error(`Loại ghế "${tCode}" chưa được khởi tạo trên Database.`);
+          throw new Error(`Loại ghế "${tCode}" chưa được cấu hình trong hệ thống.`);
         }
       }
 
@@ -336,19 +335,9 @@ export default function AdminRoomCreatePage() {
         throw new Error(bulkRes?.message || 'Không thể đồng bộ danh sách ghế');
       }
 
-      // 5. If status chosen is ACTIVE/INACTIVE, update status
-      if (status !== 'DRAFT') {
-        await adminRoomService.updateAuditorium(roomPublicId, {
-          name: roomName.trim(),
-          screenType,
-          soundType,
-          capacity: stats.activeSeats,
-          cleaningBufferMinutes: parseInt(cleaningBuffer) || 15,
-          status
-        });
-      }
-
-      triggerToast?.(`Tạo phòng chiếu "${roomName}" thành công với ${stats.activeSeats} ghế!`);
+      triggerToast?.(
+        `Đã tạo phòng "${roomName}" với ${stats.activeSeats} ghế. Phòng đang ở bước thiết lập để bạn kiểm tra trước khi mở bán.`
+      );
       navigate('/admin/rooms');
     } catch (err) {
       console.error('Failed to save room:', err);
@@ -358,12 +347,6 @@ export default function AdminRoomCreatePage() {
     }
   };
 
-  const availableStatuses = [
-    { value: 'DRAFT', label: 'Bản nháp (DRAFT)' },
-    { value: 'ACTIVE', label: 'Hoạt động (ACTIVE)' },
-    { value: 'INACTIVE', label: 'Ngưng hoạt động (INACTIVE)' }
-  ];
-
   return (
     <div className="flex flex-col flex-1 h-screen overflow-hidden bg-zinc-950 font-sans text-white">
       
@@ -372,9 +355,10 @@ export default function AdminRoomCreatePage() {
         <div className="flex items-center gap-3">
           <button 
             onClick={() => navigate('/admin/rooms')}
-            className="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl transition-all"
+            className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-all hover:bg-zinc-800 hover:text-white"
           >
             <ArrowLeft className="w-5 h-5" />
+            Quay lại
           </button>
           <div>
             <h2 className="text-sm font-black text-zinc-50 uppercase tracking-wider">
@@ -422,11 +406,8 @@ export default function AdminRoomCreatePage() {
               setSoundType={setSoundType}
               cleaningBuffer={cleaningBuffer}
               setCleaningBuffer={setCleaningBuffer}
-              status={status}
-              setStatus={setStatus}
               capacity={stats.activeSeats}
               isCreateMode={true}
-              availableStatuses={availableStatuses}
             />
 
             {/* Grid Dimensions */}
