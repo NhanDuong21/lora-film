@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -13,7 +13,14 @@ import {
   ShieldAlert,
   Wrench,
 } from 'lucide-react';
-import { getAdminPayment, paymentErrorMessage } from '../../services/paymentService';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  completeCashRefund,
+  createAdminRefund,
+  getAdminPayment,
+  paymentErrorMessage,
+  retryAdminRefund,
+} from '../../services/paymentService';
 import {
   DELIVERY_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
@@ -32,21 +39,43 @@ const money = (value, currency = 'VND') =>
 export default function AdminPaymentDetailPage() {
   const { paymentPublicId } = useParams();
   const navigate = useNavigate();
-  const { triggerAlert } = useOutletContext() || {};
+  const { userRole } = useAuth();
+  const { triggerAlert, triggerConfirm, triggerToast } = useOutletContext() || {};
+  const isAdmin = (userRole || '').replace(/^ROLE_/, '') === 'ADMIN';
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [refundAction, setRefundAction] = useState(null);
+  const [refundForm, setRefundForm] = useState({
+    scope: 'FULL_ORDER',
+    amount: '',
+    reasonCode: 'CUSTOMER_SERVICE_APPROVED',
+    note: '',
+    providerReference: '',
+  });
+  const [refundRequestKey, setRefundRequestKey] = useState('');
+
+  const load = useCallback(async () => {
+    const result = await getAdminPayment(paymentPublicId);
+    setDetail(result);
+  }, [paymentPublicId]);
 
   useEffect(() => {
     let active = true;
-    getAdminPayment(paymentPublicId)
-      .then(result => active && setDetail(result))
-      .catch(error => {
-        triggerAlert?.(paymentErrorMessage(error));
-        navigate('/admin/payments');
-      })
-      .finally(() => active && setLoading(false));
-    return () => { active = false; };
-  }, [navigate, paymentPublicId, triggerAlert]);
+    const timer = window.setTimeout(() => {
+      load()
+        .catch(error => {
+          if (!active) return;
+          triggerAlert?.(paymentErrorMessage(error));
+          navigate('/admin/payments');
+        })
+        .finally(() => active && setLoading(false));
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [load, navigate, triggerAlert]);
 
   if (loading) {
     return <div className="py-24 text-center text-zinc-500">Đang tải giao dịch...</div>;
@@ -58,8 +87,76 @@ export default function AdminPaymentDetailPage() {
   const cash = detail.cashDetail || {};
   const conclusion = paymentConclusion(payment);
   const reconciliationCases = detail.reconciliationCases || [];
+  const refunds = detail.refunds || [];
   const openReconciliation = reconciliationCases.find(item =>
     !['RESOLVED', 'IGNORED'].includes(item.status));
+  const canCreateRefund = isAdmin
+    && payment.status === 'SUCCESS'
+    && Number(payment.refundableAmount || 0) > 0;
+
+  const openCreateRefund = () => {
+    setRefundForm({
+      scope: 'FULL_ORDER',
+      amount: '',
+      reasonCode: 'CUSTOMER_SERVICE_APPROVED',
+      note: '',
+      providerReference: '',
+    });
+    setRefundRequestKey(crypto.randomUUID());
+    setRefundAction({ mode: 'create' });
+  };
+
+  const submitRefund = async event => {
+    event.preventDefault();
+    if (!isAdmin || !refundAction) return;
+    setSubmitting(true);
+    try {
+      if (refundAction.mode === 'cash') {
+        await completeCashRefund(refundAction.refund.refundPublicId, {
+          providerReference: refundForm.providerReference.trim(),
+          note: refundForm.note.trim(),
+        });
+        triggerToast?.('Đã ghi nhận tiền mặt được trả lại cho khách.');
+      } else {
+        const isFull = refundForm.scope === 'FULL_ORDER';
+        await createAdminRefund(
+          payment.paymentPublicId,
+          {
+            refundType: isFull ? 'FULL' : 'PARTIAL',
+            refundComponent: refundForm.scope,
+            amount: isFull ? null : Number(refundForm.amount),
+            reasonCode: refundForm.reasonCode,
+            note: refundForm.note.trim(),
+          },
+          refundRequestKey,
+        );
+        triggerToast?.('Đã tiếp nhận yêu cầu hoàn tiền.');
+      }
+      setRefundAction(null);
+      await load();
+    } catch (error) {
+      triggerAlert?.(paymentErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const retryRefund = async refund => {
+    if (!isAdmin) return;
+    const accepted = triggerConfirm
+      ? await triggerConfirm(
+          `Thử lại yêu cầu ${refund.refundCode}? Hệ thống sẽ không tạo thêm khoản hoàn trùng.`,
+        )
+      : true;
+    if (!accepted) return;
+    try {
+      await retryAdminRefund(refund.refundPublicId);
+      triggerToast?.('Đã đưa yêu cầu hoàn tiền vào hàng đợi xử lý lại.');
+      await load();
+    } catch (error) {
+      triggerAlert?.(paymentErrorMessage(error));
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-[1500px] space-y-6 text-white">
@@ -113,6 +210,15 @@ export default function AdminPaymentDetailPage() {
             className="flex items-center gap-2 rounded-xl border border-amber-500/30 px-4 py-2.5 text-xs font-black uppercase text-amber-300"
           >
             <ShieldAlert className="h-4 w-4" /> Mở hồ sơ cần xử lý
+          </button>
+        )}
+        {canCreateRefund && (
+          <button
+            type="button"
+            onClick={openCreateRefund}
+            className="flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-2.5 text-xs font-black uppercase text-red-300 hover:bg-red-500/10"
+          >
+            <Banknote className="h-4 w-4" /> Tạo yêu cầu hoàn tiền
           </button>
         )}
       </div>
@@ -184,6 +290,23 @@ export default function AdminPaymentDetailPage() {
         </section>
       )}
 
+      <RefundSection
+        refunds={refunds}
+        payment={payment}
+        isAdmin={isAdmin}
+        onRetry={retryRefund}
+        onCompleteCash={refund => {
+          setRefundForm({
+            scope: 'FULL_ORDER',
+            amount: '',
+            reasonCode: refund.reasonCode || 'CASH_REFUND',
+            note: '',
+            providerReference: '',
+          });
+          setRefundAction({ mode: 'cash', refund });
+        }}
+      />
+
       <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6">
         <h2 className="flex items-center gap-2 text-sm font-black uppercase">
           <ReceiptText className="h-5 w-5 text-brand-orange" /> Diễn biến giao dịch
@@ -228,6 +351,285 @@ export default function AdminPaymentDetailPage() {
           </div>
         </div>
       </details>
+
+      {refundAction && (
+        <RefundModal
+          mode={refundAction.mode}
+          payment={payment}
+          refund={refundAction.refund}
+          form={refundForm}
+          setForm={setRefundForm}
+          submitting={submitting}
+          onClose={() => setRefundAction(null)}
+          onSubmit={submitRefund}
+        />
+      )}
+    </div>
+  );
+}
+
+const REFUND_STATUS_LABELS = {
+  REQUESTED: 'Đã tiếp nhận',
+  PROCESSING: 'Đang hoàn qua nhà cung cấp',
+  SUCCESS: 'Đã hoàn cho khách',
+  FAILED: 'Hoàn tiền thất bại',
+  REQUIRES_ACTION: 'Cần nhân viên xử lý',
+  CANCELLED: 'Đã hủy yêu cầu',
+};
+
+const REFUND_COMPONENT_LABELS = {
+  FULL_ORDER: 'Toàn bộ phần tiền còn lại',
+  CONCESSION: 'Bắp nước',
+  PRICE_DIFFERENCE: 'Chênh lệch giá',
+  OPERATIONAL_ADJUSTMENT: 'Điều chỉnh nghiệp vụ',
+};
+
+function RefundSection({
+  refunds,
+  payment,
+  isAdmin,
+  onRetry,
+  onCompleteCash,
+}) {
+  const refundedAmount = Number(payment.refundedAmount || 0);
+  const refundableAmount = Number(payment.refundableAmount || 0);
+  return (
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6">
+      <div className="flex flex-col justify-between gap-4 border-b border-zinc-800 pb-4 md:flex-row md:items-center">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-black uppercase">
+            <Banknote className="h-5 w-5 text-brand-orange" /> Tiền đã trả lại khách
+          </h2>
+          <p className="mt-2 text-xs text-zinc-500">
+            Không hỗ trợ hoàn riêng từng vé; hoàn một phần chỉ áp dụng cho bắp nước,
+            chênh lệch giá hoặc điều chỉnh nghiệp vụ.
+          </p>
+        </div>
+        <div className="flex gap-6 text-right text-xs">
+          <div>
+            <span className="block text-zinc-500">Đã hoàn thành</span>
+            <strong className="mt-1 block text-emerald-400">
+              {money(refundedAmount, payment.currency)}
+            </strong>
+          </div>
+          <div>
+            <span className="block text-zinc-500">Còn có thể hoàn</span>
+            <strong className="mt-1 block text-brand-orange">
+              {money(refundableAmount, payment.currency)}
+            </strong>
+          </div>
+        </div>
+      </div>
+      {refunds.length === 0 ? (
+        <p className="py-10 text-center text-sm text-zinc-600">
+          Giao dịch này chưa phát sinh hoàn tiền.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {refunds.map(refund => (
+            <article
+              key={refund.refundPublicId}
+              className="flex flex-col justify-between gap-4 rounded-2xl bg-zinc-950 p-4 lg:flex-row lg:items-center"
+            >
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong>{refund.refundCode}</strong>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${
+                    refund.status === 'SUCCESS'
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                      : ['FAILED', 'CANCELLED'].includes(refund.status)
+                        ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                        : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                  }`}>
+                    {REFUND_STATUS_LABELS[refund.status] || refund.status}
+                  </span>
+                  {refund.automatic && (
+                    <span className="rounded-full bg-sky-500/10 px-2 py-1 text-[10px] font-bold text-sky-300">
+                      Hệ thống tự động
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-sm font-bold text-zinc-300">
+                  {REFUND_COMPONENT_LABELS[refund.refundComponent] || refund.refundComponent}
+                  {' · '}
+                  <span className="text-brand-orange">
+                    {money(refund.amount, refund.currency)}
+                  </span>
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {reasonLabel(refund.reasonCode)} · {formatTime(refund.requestedAt)}
+                </p>
+                {refund.failureMessage && (
+                  <p className="mt-2 text-xs text-red-300">
+                    {humanizeSystemMessage(refund.failureMessage)}
+                  </p>
+                )}
+              </div>
+              {isAdmin && (
+                <div className="flex shrink-0 gap-2">
+                  {refund.provider === 'CASH' && refund.status === 'REQUIRES_ACTION' && (
+                    <button
+                      type="button"
+                      onClick={() => onCompleteCash(refund)}
+                      className="rounded-xl bg-brand-orange px-4 py-2 text-xs font-black uppercase"
+                    >
+                      Xác nhận đã trả tại quầy
+                    </button>
+                  )}
+                  {refund.provider !== 'CASH'
+                    && ['FAILED', 'REQUIRES_ACTION'].includes(refund.status) && (
+                      <button
+                        type="button"
+                        onClick={() => onRetry(refund)}
+                        className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-black uppercase hover:bg-zinc-800"
+                      >
+                        Thử lại
+                      </button>
+                  )}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RefundModal({
+  mode,
+  payment,
+  refund,
+  form,
+  setForm,
+  submitting,
+  onClose,
+  onSubmit,
+}) {
+  const isCash = mode === 'cash';
+  const scopeHelp = {
+    FULL_ORDER: 'Hoàn toàn bộ số tiền còn lại của giao dịch. Ghế/vé chỉ chuyển sang đã hoàn khi tổng tiền hoàn bằng toàn bộ giá trị đơn.',
+    CONCESSION: 'Chỉ hoàn phần bắp nước và không thể vượt quá tiền bắp nước đã lưu trong đơn.',
+    PRICE_DIFFERENCE: 'Dùng khi cần trả lại phần chênh lệch giá đã được nghiệp vụ xác minh.',
+    OPERATIONAL_ADJUSTMENT: 'Dùng cho khoản điều chỉnh dịch vụ có căn cứ, không phải hoàn riêng từng vé.',
+  }[form.scope];
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-xl rounded-3xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl"
+      >
+        <h2 className="text-xl font-black">
+          {isCash ? 'Xác nhận đã hoàn tiền mặt' : 'Tạo yêu cầu hoàn tiền'}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">
+          {isCash
+            ? `Ghi nhận biên nhận sau khi đã trả ${money(refund.amount, refund.currency)} cho khách tại quầy.`
+            : `Số tiền còn có thể hoàn: ${money(payment.refundableAmount, payment.currency)}.`}
+        </p>
+        {isCash ? (
+          <label className="mt-6 block text-xs font-black uppercase text-zinc-400">
+            Mã biên nhận tại quầy
+            <input
+              required
+              maxLength={150}
+              value={form.providerReference}
+              onChange={event => setForm(current => ({
+                ...current,
+                providerReference: event.target.value,
+              }))}
+              placeholder="Ví dụ: CASH-RFD-20260729-001"
+              className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-sm normal-case text-white outline-none focus:border-brand-orange"
+            />
+          </label>
+        ) : (
+          <div className="mt-6 space-y-4">
+            <label className="block text-xs font-black uppercase text-zinc-400">
+              Phạm vi hoàn tiền
+              <select
+                value={form.scope}
+                onChange={event => setForm(current => ({
+                  ...current,
+                  scope: event.target.value,
+                  amount: '',
+                  reasonCode: event.target.value === 'CONCESSION'
+                    ? 'CONCESSION_ISSUE'
+                    : event.target.value === 'PRICE_DIFFERENCE'
+                      ? 'PRICE_CORRECTION'
+                      : event.target.value === 'OPERATIONAL_ADJUSTMENT'
+                        ? 'OPERATIONAL_ADJUSTMENT'
+                        : 'CUSTOMER_SERVICE_APPROVED',
+                }))}
+                className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-sm normal-case text-white"
+              >
+                <option value="FULL_ORDER">Hoàn toàn bộ số tiền còn lại</option>
+                <option value="CONCESSION">Hoàn tiền bắp nước</option>
+                <option value="PRICE_DIFFERENCE">Hoàn chênh lệch giá</option>
+                <option value="OPERATIONAL_ADJUSTMENT">Điều chỉnh nghiệp vụ</option>
+              </select>
+            </label>
+            <p className="rounded-xl bg-zinc-950 p-3 text-xs leading-5 text-zinc-400">
+              {scopeHelp}
+            </p>
+            {form.scope !== 'FULL_ORDER' && (
+              <label className="block text-xs font-black uppercase text-zinc-400">
+                Số tiền hoàn
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  max={Number(payment.refundableAmount || 0)}
+                  step="1"
+                  value={form.amount}
+                  onChange={event => setForm(current => ({
+                    ...current,
+                    amount: event.target.value,
+                  }))}
+                  className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-sm normal-case text-white outline-none focus:border-brand-orange"
+                />
+              </label>
+            )}
+          </div>
+        )}
+        <label className="mt-4 block text-xs font-black uppercase text-zinc-400">
+          Ghi chú và căn cứ
+          <textarea
+            required
+            maxLength={isCash ? 1000 : 2000}
+            rows={4}
+            value={form.note}
+            onChange={event => setForm(current => ({
+              ...current,
+              note: event.target.value,
+            }))}
+            placeholder={isCash
+              ? 'Ghi rõ hình thức trả tiền, người nhận và chứng từ liên quan...'
+              : 'Ghi rõ lý do, căn cứ phê duyệt và thông tin đã kiểm tra...'}
+            className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-sm normal-case text-white outline-none focus:border-brand-orange"
+          />
+        </label>
+        {!isCash && (
+          <p className="mt-4 text-xs leading-5 text-amber-300">
+            Không chọn từng vé tại đây. Việc hoàn riêng từng vé chỉ được mở sau khi có nghiệp vụ
+            hủy vé, tính lại giá và quyết định mở bán lại ghế.
+          </p>
+        )}
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-zinc-700 px-5 py-2.5 text-xs font-black uppercase"
+          >
+            Quay lại
+          </button>
+          <button
+            disabled={submitting}
+            className="rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-black uppercase disabled:opacity-50"
+          >
+            {submitting ? 'Đang xử lý...' : isCash ? 'Xác nhận đã trả' : 'Tạo yêu cầu'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

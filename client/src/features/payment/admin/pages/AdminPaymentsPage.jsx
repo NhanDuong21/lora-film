@@ -15,9 +15,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   assignReconciliation,
   exportAdminPayments,
+  getAdminRefunds,
   getPaymentOperations,
   paymentErrorMessage,
   replayPaymentOperation,
+  retryAdminRefund,
   resolveReconciliation,
   searchAdminPayments,
 } from '../../services/paymentService';
@@ -37,6 +39,7 @@ import {
 
 const BUSINESS_TABS = [
   { key: 'transactions', label: 'Giao dịch thanh toán' },
+  { key: 'refunds', label: 'Hoàn tiền' },
   { key: 'reconciliations', label: 'Cần xử lý' },
 ];
 
@@ -118,7 +121,9 @@ export default function AdminPaymentsPage() {
     try {
       const result = activeTab === 'transactions'
         ? await searchAdminPayments(params)
-        : await getPaymentOperations(activeTab, { page, size: 20 });
+        : activeTab === 'refunds'
+          ? await getAdminRefunds({ page, size: 20 })
+          : await getPaymentOperations(activeTab, { page, size: 20 });
       setItems(result?.content || []);
       setPageInfo({
         number: result?.number || 0,
@@ -163,6 +168,23 @@ export default function AdminPaymentsPage() {
     try {
       await replayPaymentOperation(kind, id);
       triggerToast?.('Đã đưa tác vụ vào hàng đợi xử lý lại.');
+      await load();
+    } catch (error) {
+      triggerAlert?.(paymentErrorMessage(error));
+    }
+  };
+
+  const retryRefund = async refundPublicId => {
+    if (!isAdmin) return;
+    const accepted = triggerConfirm
+      ? await triggerConfirm(
+          'Thử gửi lại yêu cầu hoàn tiền này? Hệ thống giữ nguyên mã yêu cầu để không hoàn trùng.',
+        )
+      : true;
+    if (!accepted) return;
+    try {
+      await retryAdminRefund(refundPublicId);
+      triggerToast?.('Đã đưa yêu cầu hoàn tiền vào hàng đợi xử lý lại.');
       await load();
     } catch (error) {
       triggerAlert?.(paymentErrorMessage(error));
@@ -229,7 +251,7 @@ export default function AdminPaymentsPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <QuickCard
           title="Tất cả giao dịch"
           description="Tra cứu mọi lần khách thanh toán"
@@ -252,6 +274,13 @@ export default function AdminPaymentsPage() {
               reconciliationStatus: '',
             }));
           }}
+        />
+        <QuickCard
+          title="Hoàn tiền"
+          description="Theo dõi tiền đã trả hoặc đang chờ trả lại khách"
+          tone="warning"
+          active={activeTab === 'refunds'}
+          onClick={() => changeTab('refunds')}
         />
         <QuickCard
           title="Cần nhân viên kiểm tra"
@@ -378,6 +407,7 @@ export default function AdminPaymentsPage() {
             </span>
             <p className="mt-1 text-xs text-zinc-500">
               {activeTab === 'transactions' && 'Mỗi dòng là một lần thử thanh toán, không phải một đơn đặt vé.'}
+              {activeTab === 'refunds' && 'Mỗi dòng là một khoản tiền trả lại khách; yêu cầu tự động được đánh dấu riêng.'}
               {activeTab === 'reconciliations' && 'Chỉ kết luận sau khi đã kiểm tra nhà cung cấp và trạng thái đơn.'}
               {activeTab === 'webhooks' && 'Thông báo máy chủ nhận trực tiếp từ cổng thanh toán.'}
               {activeTab === 'outbox' && 'Tác vụ chuyển kết quả sang Booking và hệ thống báo cáo.'}
@@ -397,7 +427,16 @@ export default function AdminPaymentsPage() {
           <div className="overflow-x-auto">
             {activeTab === 'transactions'
               ? <TransactionTable items={items} navigate={navigate} />
-              : (
+              : activeTab === 'refunds'
+                ? (
+                  <RefundTable
+                    items={items}
+                    navigate={navigate}
+                    isAdmin={isAdmin}
+                    onRetry={retryRefund}
+                  />
+                )
+                : (
                 <OperationTable
                   kind={activeTab}
                   items={items}
@@ -550,6 +589,7 @@ function TabButton({ tab, activeTab, onClick }) {
 function EmptyState({ activeTab }) {
   const copy = {
     transactions: ['Không có giao dịch phù hợp', 'Hãy đổi bộ lọc hoặc kiểm tra lại mã cần tìm.'],
+    refunds: ['Chưa có yêu cầu hoàn tiền', 'Khi có khoản cần trả lại khách, trạng thái xử lý sẽ xuất hiện tại đây.'],
     reconciliations: ['Không có hồ sơ cần xử lý', 'Các giao dịch hiện không có chênh lệch cần nhân viên kiểm tra.'],
     webhooks: ['Chưa có thông báo nhà cung cấp', 'Đây là trạng thái bình thường khi chưa có callback phù hợp.'],
     outbox: ['Chưa có tác vụ giao nhận', 'Không có tác vụ hệ thống phù hợp với trang hiện tại.'],
@@ -560,6 +600,100 @@ function EmptyState({ activeTab }) {
       <strong className="mt-4 text-zinc-300">{copy[0]}</strong>
       <p className="mt-2 text-sm text-zinc-600">{copy[1]}</p>
     </div>
+  );
+}
+
+const REFUND_STATUS_LABELS = {
+  REQUESTED: 'Đã tiếp nhận',
+  PROCESSING: 'Đang hoàn qua nhà cung cấp',
+  SUCCESS: 'Đã hoàn cho khách',
+  FAILED: 'Hoàn tiền thất bại',
+  REQUIRES_ACTION: 'Cần nhân viên xử lý',
+  CANCELLED: 'Đã hủy yêu cầu',
+};
+
+const REFUND_COMPONENT_LABELS = {
+  FULL_ORDER: 'Toàn bộ phần tiền còn lại',
+  CONCESSION: 'Bắp nước',
+  PRICE_DIFFERENCE: 'Chênh lệch giá',
+  OPERATIONAL_ADJUSTMENT: 'Điều chỉnh nghiệp vụ',
+};
+
+function RefundTable({ items, navigate, isAdmin, onRetry }) {
+  return (
+    <table className="w-full min-w-[1120px] text-left text-sm">
+      <thead className="bg-zinc-950/60 text-[10px] uppercase tracking-wider text-zinc-500">
+        <tr>
+          <th className="p-4">Yêu cầu hoàn</th>
+          <th>Giao dịch / đơn</th>
+          <th>Lý do</th>
+          <th>Số tiền</th>
+          <th>Kết quả</th>
+          <th>Thời điểm</th>
+          <th>Hành động</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-zinc-800">
+        {items.map(item => (
+          <tr key={item.refundPublicId} className="hover:bg-zinc-800/30">
+            <td className="p-4">
+              <strong className="block">{item.refundCode}</strong>
+              <span className="mt-1 block text-[10px] text-zinc-500">
+                {item.automatic ? 'Hệ thống tự động tạo' : 'Quản trị viên tạo'}
+              </span>
+            </td>
+            <td>
+              <button
+                type="button"
+                onClick={() => navigate(`/admin/payments/${item.paymentPublicId}`)}
+                className="font-bold text-brand-orange hover:underline"
+              >
+                Mở giao dịch gốc
+              </button>
+              <span className="mt-1 block max-w-[220px] truncate text-[10px] text-zinc-500">
+                Đơn: {item.bookingPublicId}
+              </span>
+            </td>
+            <td>
+              <strong>{REFUND_COMPONENT_LABELS[item.refundComponent] || item.refundComponent}</strong>
+              <span className="mt-1 block max-w-[260px] text-xs text-zinc-500">
+                {reasonLabel(item.reasonCode)}
+              </span>
+            </td>
+            <td className="font-black text-brand-orange">{money(item.amount, item.currency)}</td>
+            <td>
+              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${badge(item.status)}`}>
+                {REFUND_STATUS_LABELS[item.status] || item.status}
+              </span>
+              {item.failureMessage && (
+                <span className="mt-2 block max-w-[230px] text-xs text-red-300">
+                  {humanizeSystemMessage(item.failureMessage)}
+                </span>
+              )}
+            </td>
+            <td className="text-xs text-zinc-400">{formatTime(item.requestedAt)}</td>
+            <td>
+              {isAdmin
+                && ['FAILED', 'REQUIRES_ACTION'].includes(item.status)
+                && item.provider !== 'CASH' && (
+                  <button
+                    type="button"
+                    onClick={() => onRetry(item.refundPublicId)}
+                    className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-[10px] font-black uppercase hover:bg-zinc-800"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Thử lại
+                  </button>
+              )}
+              {item.provider === 'CASH' && item.status === 'REQUIRES_ACTION' && (
+                <span className="text-xs font-bold text-amber-300">
+                  Mở giao dịch để xác nhận đã trả tại quầy
+                </span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

@@ -5,12 +5,14 @@ import com.project.paymentservice.entity.Payment;
 import com.project.paymentservice.entity.PaymentAnalyticsSnapshot;
 import com.project.paymentservice.entity.PaymentOutboxEvent;
 import com.project.paymentservice.entity.PaymentReconciliationCase;
+import com.project.paymentservice.entity.PaymentRefund;
 import com.project.paymentservice.enumtype.OutboxStatus;
 import com.project.paymentservice.enumtype.ReconciliationStatus;
 import com.project.paymentservice.repository.PaymentAnalyticsSnapshotRepository;
 import com.project.paymentservice.repository.PaymentOutboxEventRepository;
 import com.project.paymentservice.repository.PaymentReconciliationCaseRepository;
 import com.project.paymentservice.repository.PaymentRepository;
+import com.project.paymentservice.repository.PaymentRefundRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,22 +26,28 @@ public class OutboxDeliveryStateService {
     private final PaymentRepository paymentRepository;
     private final PaymentAnalyticsSnapshotRepository snapshotRepository;
     private final PaymentReconciliationCaseRepository reconciliationRepository;
+    private final PaymentRefundRepository refundRepository;
     private final PaymentOutboxService outboxService;
     private final PaymentRuntimeProperties properties;
+    private final RefundService refundService;
 
     public OutboxDeliveryStateService(
             PaymentOutboxEventRepository outboxRepository,
             PaymentRepository paymentRepository,
             PaymentAnalyticsSnapshotRepository snapshotRepository,
             PaymentReconciliationCaseRepository reconciliationRepository,
+            PaymentRefundRepository refundRepository,
             PaymentOutboxService outboxService,
-            PaymentRuntimeProperties properties) {
+            PaymentRuntimeProperties properties,
+            RefundService refundService) {
         this.outboxRepository = outboxRepository;
         this.paymentRepository = paymentRepository;
         this.snapshotRepository = snapshotRepository;
         this.reconciliationRepository = reconciliationRepository;
+        this.refundRepository = refundRepository;
         this.outboxService = outboxService;
         this.properties = properties;
+        this.refundService = refundService;
     }
 
     @Transactional
@@ -60,12 +68,31 @@ public class OutboxDeliveryStateService {
                 .orElseThrow(() -> new IllegalStateException("Payment aggregate missing"));
         if (!accepted) {
             requireReconciliation(payment, event, reconciliationReason);
+            if ("PAYMENT_RESULT".equals(event.getEventType())
+                    && payment.getStatus()
+                    == com.project.paymentservice.enumtype.PaymentStatus.SUCCESS) {
+                refundService.createAutomaticFullRefund(
+                        payment.getId(),
+                        "automatic:booking-rejected:" + event.getEventId(),
+                        "BOOKING_CONFIRMATION_FAILED",
+                        "Booking Service không chấp nhận kết quả thanh toán thành công");
+            }
         } else if ("PAYMENT_RESULT".equals(event.getEventType())
                 && payment.getStatus() == com.project.paymentservice.enumtype.PaymentStatus.SUCCESS
                 && payment.getReconciliationStatus() == ReconciliationStatus.NONE) {
             PaymentAnalyticsSnapshot snapshot = snapshotRepository.findByPaymentId(payment.getId())
                     .orElseThrow(() -> new IllegalStateException("Payment analytics snapshot missing"));
             outboxService.enqueueAnalyticsSuccess(payment, snapshot, event.getEventId());
+        } else if (accepted && "REFUND_RESULT".equals(event.getEventType())) {
+            PaymentRefund refund = refundRepository.findByPublicId(event.getCorrelationId())
+                    .orElseThrow(() -> new IllegalStateException("Refund aggregate missing"));
+            if (refund.getStatus() == com.project.paymentservice.enumtype.RefundStatus.SUCCESS) {
+                PaymentAnalyticsSnapshot snapshot = snapshotRepository.findByPaymentId(payment.getId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Payment analytics snapshot missing"));
+                outboxService.enqueueAnalyticsRefund(
+                        payment, refund, snapshot, event.getEventId());
+            }
         }
         publish(event);
     }

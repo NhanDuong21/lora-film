@@ -6,13 +6,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.paymentservice.config.VnPayProperties;
 import com.project.paymentservice.entity.Payment;
+import com.project.paymentservice.entity.PaymentRefund;
 import com.project.paymentservice.enumtype.ProviderCode;
+import com.project.paymentservice.enumtype.RefundType;
 import com.project.paymentservice.provider.PaymentProvider;
 import com.project.paymentservice.provider.PaymentSession;
 import com.project.paymentservice.provider.PaymentSessionRequest;
 import com.project.paymentservice.provider.ProviderCallbackResult;
 import com.project.paymentservice.provider.ProviderCrypto;
 import com.project.paymentservice.provider.ProviderHttpClientFactory;
+import com.project.paymentservice.provider.ProviderRefundResult;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +56,7 @@ public class VnPayPaymentProvider implements PaymentProvider {
         require(properties.getHashSecret(), "payment.providers.vnpay.hash-secret");
         require(properties.getReturnUrl(), "payment.providers.vnpay.return-url");
         require(properties.getQueryUrl(), "payment.providers.vnpay.query-url");
+        require(properties.getRefundUrl(), "payment.providers.vnpay.refund-url");
         this.httpClient = ProviderHttpClientFactory.create(
                 Duration.ofMillis(properties.getConnectTimeoutMillis()));
     }
@@ -204,6 +208,144 @@ public class VnPayPaymentProvider implements PaymentProvider {
     @Override
     public ProviderCallbackResult verifyReturn(Map<String, String> parameters) {
         return verify(parameters, "RETURN");
+    }
+
+    @Override
+    public ProviderRefundResult refund(Payment payment, PaymentRefund refund) {
+        String requestId = refund.getPublicId().replace("-", "");
+        String createDate = PROVIDER_TIME.format(Instant.now());
+        String transactionDate = originalTransactionDate(payment);
+        if (transactionDate == null
+                || payment.getExternalTransactionId() == null
+                || payment.getExternalTransactionId().isBlank()) {
+            throw new IllegalStateException("VNPay original transaction data is incomplete");
+        }
+        String transactionType = refund.getRefundType() == RefundType.FULL ? "02" : "03";
+        String transactionCode = payment.getProviderOrderId() == null
+                ? payment.getPaymentTransactionCode() : payment.getProviderOrderId();
+        String amount = refund.getRequestedAmount().movePointRight(2)
+                .setScale(0, RoundingMode.UNNECESSARY).toPlainString();
+        String orderInfo = "Hoan tien " + payment.getPaymentTransactionCode();
+        String createBy = "LoraFilm";
+        String ipAddress = normalizeIp(properties.getQueryIpAddress());
+
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("vnp_RequestId", requestId);
+        values.put("vnp_Version", properties.getVersion());
+        values.put("vnp_Command", "refund");
+        values.put("vnp_TmnCode", properties.getTmnCode());
+        values.put("vnp_TransactionType", transactionType);
+        values.put("vnp_TxnRef", transactionCode);
+        values.put("vnp_Amount", amount);
+        values.put("vnp_TransactionNo", payment.getExternalTransactionId());
+        values.put("vnp_TransactionDate", transactionDate);
+        values.put("vnp_CreateBy", createBy);
+        values.put("vnp_CreateDate", createDate);
+        values.put("vnp_IpAddr", ipAddress);
+        values.put("vnp_OrderInfo", orderInfo);
+        String signatureSource = String.join("|",
+                requestId,
+                properties.getVersion(),
+                "refund",
+                properties.getTmnCode(),
+                transactionType,
+                transactionCode,
+                amount,
+                payment.getExternalTransactionId(),
+                transactionDate,
+                createBy,
+                createDate,
+                ipAddress,
+                orderInfo);
+        values.put("vnp_SecureHash", ProviderCrypto.hmacHex(
+                "HmacSHA512", properties.getHashSecret(), signatureSource));
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(properties.getRefundUrl()))
+                    .timeout(Duration.ofMillis(properties.getReadTimeoutMillis()))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            objectMapper.writeValueAsString(values)))
+                    .build();
+            HttpResponse<String> response = httpClient.send(
+                    request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("VNPay refund HTTP " + response.statusCode());
+            }
+            Map<String, String> body = toStrings(objectMapper.readValue(
+                    response.body(), new TypeReference<Map<String, Object>>() {}));
+            return refundResponse(refund, body);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("VNPay refund interrupted", exception);
+        } catch (Exception exception) {
+            throw new IllegalStateException("VNPay refund result is uncertain", exception);
+        }
+    }
+
+    private ProviderRefundResult refundResponse(
+            PaymentRefund refund,
+            Map<String, String> values) {
+        String signatureSource = String.join("|",
+                value(values, "vnp_ResponseId"),
+                value(values, "vnp_Command"),
+                value(values, "vnp_ResponseCode"),
+                value(values, "vnp_Message"),
+                value(values, "vnp_TmnCode"),
+                value(values, "vnp_TxnRef"),
+                value(values, "vnp_Amount"),
+                value(values, "vnp_BankCode"),
+                value(values, "vnp_PayDate"),
+                value(values, "vnp_TransactionNo"),
+                value(values, "vnp_TransactionType"),
+                value(values, "vnp_TransactionStatus"),
+                value(values, "vnp_OrderInfo"),
+                value(values, "vnp_PromotionCode"),
+                value(values, "vnp_PromotionAmount"));
+        String expected = ProviderCrypto.hmacHex(
+                "HmacSHA512", properties.getHashSecret(), signatureSource);
+        if (!properties.getTmnCode().equals(value(values, "vnp_TmnCode"))
+                || !"refund".equalsIgnoreCase(value(values, "vnp_Command"))
+                || !ProviderCrypto.constantTimeEquals(
+                    expected, values.get("vnp_SecureHash"))) {
+            throw new IllegalStateException("VNPay refund response failed integrity checks");
+        }
+        Payment payment = refund.getPayment();
+        String expectedTransactionCode = payment.getProviderOrderId() == null
+                ? payment.getPaymentTransactionCode() : payment.getProviderOrderId();
+        String expectedAmount = refund.getRequestedAmount().movePointRight(2)
+                .setScale(0, RoundingMode.UNNECESSARY).toPlainString();
+        String expectedTransactionType =
+                refund.getRefundType() == RefundType.FULL ? "02" : "03";
+        if (!expectedTransactionCode.equals(value(values, "vnp_TxnRef"))
+                || !expectedAmount.equals(value(values, "vnp_Amount"))
+                || !expectedTransactionType.equals(
+                    value(values, "vnp_TransactionType"))) {
+            throw new IllegalStateException(
+                    "VNPay refund response does not match the requested transaction");
+        }
+        ProviderRefundResult result = new ProviderRefundResult();
+        result.setProviderOrderId(refund.getRefundCode());
+        result.setProviderRequestId(refund.getPublicId());
+        result.setProviderRefundId(value(values, "vnp_TransactionNo"));
+        result.setResponseCode(value(values, "vnp_ResponseCode"));
+        result.setMessageSanitized(value(values, "vnp_Message"));
+        Map<String, String> sanitized = new LinkedHashMap<>(values);
+        sanitized.remove("vnp_SecureHash");
+        result.setSummarySanitized(json(sanitized));
+        String status = value(values, "vnp_TransactionStatus");
+        if ("00".equals(result.getResponseCode())
+                && (status.isBlank() || "00".equals(status))) {
+            result.setState(ProviderRefundResult.State.SUCCESS);
+        } else if ("05".equals(status) || "06".equals(status)) {
+            result.setState(ProviderRefundResult.State.PROCESSING);
+        } else {
+            result.setState(ProviderRefundResult.State.FAILED);
+            result.setFailureCode("VNPAY_REFUND_"
+                    + (status.isBlank() ? result.getResponseCode() : status));
+        }
+        return result;
     }
 
     private ProviderCallbackResult verify(Map<String, String> parameters, String eventType) {

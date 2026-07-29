@@ -60,6 +60,9 @@ export const EVENT_LABELS = {
   LATE_SUCCESS_DETECTED: 'Ghi nhận thanh toán thành công sau hạn',
   PAYMENT_RESULT: 'Kết quả thanh toán gửi sang đơn đặt vé',
   PAYMENT_SUCCEEDED_EVENT: 'Sự kiện doanh thu gửi sang báo cáo',
+  REFUND_RESULT: 'Kết quả hoàn tiền gửi sang đơn đặt vé',
+  REFUND_SUCCEEDED: 'Hoàn tiền thành công',
+  REFUND_FAILED: 'Hoàn tiền chưa thành công',
   IPN: 'Thông báo thanh toán từ nhà cung cấp',
   QUERY: 'Kết quả truy vấn nhà cung cấp',
 };
@@ -79,6 +82,13 @@ export const REASON_LABELS = {
   PROVIDER_EVENT_PAYLOAD_CONFLICT: 'Nhà cung cấp gửi các kết quả mâu thuẫn',
   BOOKING_RESULT_REJECTED: 'Hệ thống đặt vé không chấp nhận kết quả thanh toán',
   BOOKING_DELIVERY_REJECTED: 'Hệ thống đặt vé từ chối cập nhật kết quả',
+  SHOWTIME_CANCELLED: 'Suất chiếu đã bị hủy',
+  BOOKING_CONFIRMATION_FAILED: 'Đã thu tiền nhưng đơn đặt vé không thể xác nhận',
+  DUPLICATE_CAPTURE: 'Nhà cung cấp ghi nhận thu tiền trùng',
+  CUSTOMER_SERVICE_APPROVED: 'Hoàn toàn bộ theo quyết định chăm sóc khách hàng',
+  CONCESSION_ISSUE: 'Hoàn phần bắp nước theo xác minh dịch vụ',
+  PRICE_CORRECTION: 'Hoàn phần chênh lệch giá',
+  OPERATIONAL_ADJUSTMENT: 'Điều chỉnh nghiệp vụ đã được phê duyệt',
 };
 
 export const RESOLUTION_OPTIONS = [

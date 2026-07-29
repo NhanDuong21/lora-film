@@ -73,9 +73,22 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
     @Override
     public BookingPaymentResultResponse notifyPaymentResult(
             String bookingPublicId, BookingPaymentResultRequest request) {
+        return notifyResult(
+                "/internal/bookings/" + bookingPublicId + "/payment-results", request);
+    }
+
+    @Override
+    public BookingPaymentResultResponse notifyRefundResult(
+            String bookingPublicId, BookingPaymentResultRequest request) {
+        return notifyResult(
+                "/internal/bookings/" + bookingPublicId + "/refund-results", request);
+    }
+
+    private BookingPaymentResultResponse notifyResult(
+            String path, BookingPaymentResultRequest request) {
         try {
             HttpResponse<String> response = send(
-                    "/internal/bookings/" + bookingPublicId + "/payment-results",
+                    path,
                     "POST",
                     objectMapper.writeValueAsString(request));
             if (response.statusCode() == 200) {

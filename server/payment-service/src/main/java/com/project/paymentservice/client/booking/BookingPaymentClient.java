@@ -6,4 +6,6 @@ public interface BookingPaymentClient {
     BookingPaymentContext getPaymentContextByCode(String bookingCode);
     BookingPaymentResultResponse notifyPaymentResult(
             String bookingPublicId, BookingPaymentResultRequest request);
+    BookingPaymentResultResponse notifyRefundResult(
+            String bookingPublicId, BookingPaymentResultRequest request);
 }

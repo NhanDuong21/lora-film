@@ -12,6 +12,7 @@ public class VnPayProperties {
     private String hashSecret;
     private String paymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
     private String queryUrl = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction";
+    private String refundUrl = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction";
     private String returnUrl;
     private String version = "2.1.0";
     private String command = "pay";
@@ -34,6 +35,8 @@ public class VnPayProperties {
     public void setQueryUrl(String value) { this.queryUrl = value; }
     public String getReturnUrl() { return returnUrl; }
     public void setReturnUrl(String value) { this.returnUrl = value; }
+    public String getRefundUrl() { return refundUrl; }
+    public void setRefundUrl(String value) { this.refundUrl = value; }
     public String getVersion() { return version; }
     public void setVersion(String value) { this.version = value; }
     public String getCommand() { return command; }

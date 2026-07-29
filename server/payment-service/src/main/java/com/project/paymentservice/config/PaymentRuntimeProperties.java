@@ -28,6 +28,14 @@ public class PaymentRuntimeProperties {
     private long providerRecoveryFixedDelayMillis = 5000;
     @Min(100)
     private long expiryFixedDelayMillis = 5000;
+    @Min(1)
+    private int refundBatchSize = 10;
+    @Min(1)
+    private int refundLeaseSeconds = 45;
+    @Min(1)
+    private int refundMaxAttempts = 8;
+    @Min(100)
+    private long refundFixedDelayMillis = 3000;
     @NotBlank
     private String analyticsTopic = "payment-success.v1";
 
@@ -51,6 +59,14 @@ public class PaymentRuntimeProperties {
     public void setProviderRecoveryFixedDelayMillis(long value) { this.providerRecoveryFixedDelayMillis = value; }
     public long getExpiryFixedDelayMillis() { return expiryFixedDelayMillis; }
     public void setExpiryFixedDelayMillis(long value) { this.expiryFixedDelayMillis = value; }
+    public int getRefundBatchSize() { return refundBatchSize; }
+    public void setRefundBatchSize(int value) { this.refundBatchSize = value; }
+    public int getRefundLeaseSeconds() { return refundLeaseSeconds; }
+    public void setRefundLeaseSeconds(int value) { this.refundLeaseSeconds = value; }
+    public int getRefundMaxAttempts() { return refundMaxAttempts; }
+    public void setRefundMaxAttempts(int value) { this.refundMaxAttempts = value; }
+    public long getRefundFixedDelayMillis() { return refundFixedDelayMillis; }
+    public void setRefundFixedDelayMillis(long value) { this.refundFixedDelayMillis = value; }
     public String getAnalyticsTopic() { return analyticsTopic; }
     public void setAnalyticsTopic(String value) { this.analyticsTopic = value; }
 }

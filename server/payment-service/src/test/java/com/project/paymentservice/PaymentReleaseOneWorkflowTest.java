@@ -18,6 +18,7 @@ import com.project.paymentservice.repository.BookingPaymentGuardRepository;
 import com.project.paymentservice.repository.PaymentOutboxEventRepository;
 import com.project.paymentservice.repository.PaymentReconciliationCaseRepository;
 import com.project.paymentservice.repository.PaymentRepository;
+import com.project.paymentservice.repository.PaymentRefundRepository;
 import com.project.paymentservice.repository.PaymentWebhookEventRepository;
 import com.project.paymentservice.service.PaymentOutboxWorker;
 import com.project.paymentservice.service.OutboxDeliveryStateService;
@@ -75,6 +76,8 @@ class PaymentReleaseOneWorkflowTest {
     private PaymentOutboxEventRepository outboxRepository;
     @Autowired
     private PaymentReconciliationCaseRepository reconciliationRepository;
+    @Autowired
+    private PaymentRefundRepository refundRepository;
     @Autowired
     private TestDatabaseCleaner databaseCleaner;
     @Autowired
@@ -195,6 +198,9 @@ class PaymentReleaseOneWorkflowTest {
         assertFalse(outboxRepository.findAll().stream()
                 .anyMatch(event -> event.getDestination() == OutboxDestination.ANALYTICS_KAFKA));
         verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        assertEquals(1, refundRepository.count());
+        assertEquals("BOOKING_CONFIRMATION_FAILED",
+                refundRepository.findAll().getFirst().getReasonCode());
     }
 
     @Test
@@ -212,6 +218,39 @@ class PaymentReleaseOneWorkflowTest {
         assertEquals("LATE_PROVIDER_SUCCESS", stored.getReconciliationReason());
         assertEquals(1, reconciliationRepository.count());
         assertEquals(1, outboxRepository.count());
+        assertEquals(1, refundRepository.count());
+        assertEquals("LATE_PROVIDER_SUCCESS",
+                refundRepository.findAll().getFirst().getReasonCode());
+    }
+
+    @Test
+    void secondFinancialSuccessForSameBookingCreatesAutomaticFullRefund() {
+        Payment first = persistProcessingPayment(Instant.now().plusSeconds(600));
+        when(provider.verifyCallback(anyMap(), anyString()))
+                .thenReturn(successResult(first, "callback-first-success"));
+        callbackService.process(
+                ProviderCode.VNPAY,
+                Map.of("event", "callback-first-success"),
+                "first-success-body");
+
+        Payment duplicate = persistAdditionalProcessingPayment(first);
+        when(provider.verifyCallback(anyMap(), anyString()))
+                .thenReturn(successResult(duplicate, "callback-duplicate-capture"));
+        callbackService.process(
+                ProviderCode.VNPAY,
+                Map.of("event", "callback-duplicate-capture"),
+                "duplicate-capture-body");
+
+        Payment stored = paymentRepository.findById(duplicate.getId()).orElseThrow();
+        assertEquals(PaymentStatus.SUCCESS, stored.getStatus());
+        assertEquals(ReconciliationStatus.REQUIRED, stored.getReconciliationStatus());
+        assertEquals("DUPLICATE_FINANCIAL_SUCCESS", stored.getReconciliationReason());
+        assertEquals(1, refundRepository.count());
+        assertTrue(refundRepository.findAll().getFirst().isAutomatic());
+        assertEquals("DUPLICATE_CAPTURE",
+                refundRepository.findAll().getFirst().getReasonCode());
+        assertEquals(0, duplicate.getAmount().compareTo(
+                refundRepository.findAll().getFirst().getRequestedAmount()));
     }
 
     @Test
@@ -329,6 +368,34 @@ class PaymentReleaseOneWorkflowTest {
                 BigDecimal.ZERO,
                 new BigDecimal("325000"),
                 "VND");
+        return payment;
+    }
+
+    private Payment persistAdditionalProcessingPayment(Payment successfulPayment) {
+        Payment payment = new Payment();
+        payment.setPublicId(UUID.randomUUID().toString());
+        payment.setPaymentTransactionCode("PAY-" + UUID.randomUUID());
+        payment.setBookingPublicId(successfulPayment.getBookingPublicId());
+        payment.setBookingId(successfulPayment.getBookingId());
+        payment.setAccountId(successfulPayment.getAccountId());
+        payment.setAttemptNumber(2);
+        payment.setAmount(successfulPayment.getAmount());
+        payment.setCurrency(successfulPayment.getCurrency());
+        payment.setBookingAmountLockedAt(successfulPayment.getBookingAmountLockedAt());
+        payment.setBookingExpiresAt(Instant.now().plusSeconds(600));
+        payment.setPaymentMethod(PaymentMethod.ONLINE);
+        payment.setProviderCode(ProviderCode.VNPAY);
+        payment.setProviderOrderId("ORDER-" + UUID.randomUUID());
+        payment.setProviderSessionId("SESSION-" + UUID.randomUUID());
+        payment.setStatus(PaymentStatus.PROCESSING);
+        payment.setReconciliationStatus(ReconciliationStatus.NONE);
+        payment = paymentRepository.saveAndFlush(payment);
+
+        var guard = guardRepository.findById(successfulPayment.getBookingPublicId())
+                .orElseThrow();
+        guard.setActivePaymentId(payment.getId());
+        guard.setNextAttemptNumber(3);
+        guardRepository.saveAndFlush(guard);
         return payment;
     }
 

@@ -30,6 +30,10 @@ public class PaymentDetailResponse {
     private BigDecimal foodAmount;
     @JsonSerialize(using = MoneyJsonSerializer.class)
     private BigDecimal discountAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal refundedAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal refundableAmount;
     private Instant expiresAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -74,6 +78,10 @@ public class PaymentDetailResponse {
     public void setFoodAmount(BigDecimal value) { this.foodAmount = value; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
     public void setDiscountAmount(BigDecimal value) { this.discountAmount = value; }
+    public BigDecimal getRefundedAmount() { return refundedAmount; }
+    public void setRefundedAmount(BigDecimal value) { this.refundedAmount = value; }
+    public BigDecimal getRefundableAmount() { return refundableAmount; }
+    public void setRefundableAmount(BigDecimal value) { this.refundableAmount = value; }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
     public Instant getCreatedAt() { return createdAt; }

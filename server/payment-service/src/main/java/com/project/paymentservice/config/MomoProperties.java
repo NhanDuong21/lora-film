@@ -10,10 +10,12 @@ public class MomoProperties {
     private String secretKey;
     private String createUrl = "https://test-payment.momo.vn/v2/gateway/api/create";
     private String queryUrl = "https://test-payment.momo.vn/v2/gateway/api/query";
+    private String refundUrl = "https://test-payment.momo.vn/v2/gateway/api/refund";
+    private String refundQueryUrl = "https://test-payment.momo.vn/v2/gateway/api/refund/query";
     private String redirectUrl;
     private String ipnUrl;
     private int connectTimeoutMillis = 5000;
-    private int readTimeoutMillis = 10000;
+    private int readTimeoutMillis = 30000;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -27,6 +29,10 @@ public class MomoProperties {
     public void setCreateUrl(String value) { this.createUrl = value; }
     public String getQueryUrl() { return queryUrl; }
     public void setQueryUrl(String value) { this.queryUrl = value; }
+    public String getRefundUrl() { return refundUrl; }
+    public void setRefundUrl(String value) { this.refundUrl = value; }
+    public String getRefundQueryUrl() { return refundQueryUrl; }
+    public void setRefundQueryUrl(String value) { this.refundQueryUrl = value; }
     public String getRedirectUrl() { return redirectUrl; }
     public void setRedirectUrl(String value) { this.redirectUrl = value; }
     public String getIpnUrl() { return ipnUrl; }
