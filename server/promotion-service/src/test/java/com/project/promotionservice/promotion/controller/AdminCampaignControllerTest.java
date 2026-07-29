@@ -84,18 +84,19 @@ class AdminCampaignControllerTest {
 
     @Test
     void getCampaign_success() throws Exception {
+        String campaignId = "3aa198f5-8175-44cb-a31b-d378ca4bfae1";
         CampaignDetailResponse response = new CampaignDetailResponse();
-        response.setPublicId("campaign-uuid");
+        response.setPublicId(campaignId);
         response.setCode("PROMO1");
         response.setName("Promo 1 Detail");
         response.setRules(Collections.emptyList());
 
-        when(campaignService.getCampaign("campaign-uuid")).thenReturn(response);
+        when(campaignService.getCampaign(campaignId)).thenReturn(response);
 
-        mockMvc.perform(get("/api/admin/promotion-campaigns/{id}", "campaign-uuid"))
+        mockMvc.perform(get("/api/admin/promotion-campaigns/{id}", campaignId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.publicId").value("campaign-uuid"))
+                .andExpect(jsonPath("$.data.publicId").value(campaignId))
                 .andExpect(jsonPath("$.data.code").value("PROMO1"));
     }
 }

@@ -3,6 +3,7 @@ package com.project.promotionservice.promotion.service;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.promotion.dto.request.CampaignCreateRequest;
 import com.project.promotionservice.promotion.dto.request.CampaignUpdateRequest;
+import com.project.promotionservice.promotion.dto.request.LegalReviewRequest;
 import com.project.promotionservice.promotion.dto.response.CampaignDetailResponse;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
@@ -32,4 +33,7 @@ public interface CampaignService {
     CampaignResponse pauseCampaign(String publicId, String user);
 
     CampaignResponse cancelCampaign(String publicId, String user);
+
+    CampaignResponse reviewLegalStatus(
+            String publicId, LegalReviewRequest request, String reviewer);
 }
