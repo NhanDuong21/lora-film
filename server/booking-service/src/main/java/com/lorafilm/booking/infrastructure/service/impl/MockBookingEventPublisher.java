@@ -5,8 +5,10 @@ import com.lorafilm.booking.infrastructure.service.BookingEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Profile;
 
 @Service
+@Profile("mock-booking-events")
 public class MockBookingEventPublisher implements BookingEventPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(MockBookingEventPublisher.class);
