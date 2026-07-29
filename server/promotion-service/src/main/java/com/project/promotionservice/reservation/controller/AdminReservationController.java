@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,10 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 
 import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+import static com.project.promotionservice.common.constant.ValidationConstants.USER_REFERENCE_PATTERN;
 
 @RestController
 @Validated
 @RequestMapping("/api/admin/reservations")
+@PreAuthorize("hasAnyRole('ADMIN', 'OPERATIONS_MANAGER')")
 @Tag(name = "Admin Reservation APIs", description = "Reservation history and operational lookup")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminReservationController {
@@ -43,7 +46,8 @@ public class AdminReservationController {
             @RequestParam(required = false) RedemptionType type,
             @RequestParam(required = false) ReservationStatus status,
             @RequestParam(required = false)
-            @Pattern(regexp = UUID_PATTERN, message = "userPublicId must be a valid UUID")
+            @Pattern(regexp = USER_REFERENCE_PATTERN,
+                    message = "userPublicId must be a positive account ID or a valid UUID")
             String userPublicId,
             @RequestParam(required = false)
             @Pattern(regexp = UUID_PATTERN, message = "bookingPublicId must be a valid UUID")

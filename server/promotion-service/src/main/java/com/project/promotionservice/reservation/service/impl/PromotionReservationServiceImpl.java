@@ -26,6 +26,7 @@ import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.common.time.DatabaseTimeProvider;
 import com.project.promotionservice.common.monitoring.PromotionMetricsManager;
+import com.project.promotionservice.configuration.domain.ConfigurationService;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.LegalStatus;
@@ -101,6 +102,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
     private final TransactionTemplate requiresNewTransaction;
     private final DatabaseTimeProvider databaseTimeProvider;
     private final PromotionMetricsManager metricsManager;
+    private final ConfigurationService configurationService;
 
     public PromotionReservationServiceImpl(
             PromotionReservationRepository reservationRepository,
@@ -118,7 +120,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             VerifiedPhoneNormalizer phoneNormalizer,
             PlatformTransactionManager transactionManager,
             DatabaseTimeProvider databaseTimeProvider,
-            PromotionMetricsManager metricsManager) {
+            PromotionMetricsManager metricsManager,
+            ConfigurationService configurationService) {
         this.reservationRepository = reservationRepository;
         this.couponRepository = couponRepository;
         this.voucherRepository = voucherRepository;
@@ -137,6 +140,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
                 TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.databaseTimeProvider = databaseTimeProvider;
         this.metricsManager = metricsManager;
+        this.configurationService = configurationService;
     }
 
     @Override
@@ -149,6 +153,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
     })
     public ReservationResponse reserve(ReserveRequest request, String idempotencyKey, String actor) {
         request.setCustomerPhone(phoneNormalizer.normalizeNullable(request.getCustomerPhone()));
+        request.setHoldDurationSeconds(effectiveHoldDurationSeconds(request.getHoldDurationSeconds()));
         String reservationCode = reservationCode(actor, idempotencyKey);
         Instant now = databaseInstant();
 
@@ -164,6 +169,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             }
             return response(existing, existingRedemption(existing));
         }
+
+        requireBenefitFeatureEnabled(request.getBenefitType());
 
         lockManager.lockCheckout(request.getOrderPublicId(), request.getBookingPublicId());
         LockedBenefit resolvedBenefit = findBenefit(request);
@@ -1041,6 +1048,37 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private void requireBenefitFeatureEnabled(RedemptionType type) {
+        if (configurationService == null || type == null) {
+            return;
+        }
+        String key = type == RedemptionType.COUPON ? "ENABLE_COUPON" : "ENABLE_VOUCHER";
+        if (!configurationService.getBoolean(key, true)) {
+            throw new BusinessException(
+                    BenefitErrorCode.BENEFIT_CONFIGURATION_INVALID,
+                    key + " feature is disabled",
+                    HttpStatus.CONFLICT);
+        }
+    }
+
+    /**
+     * PROMOTION_RESERVATION_TIMEOUT is stored in minutes in the configuration
+     * catalogue. The request remains the lower bound so callers cannot extend
+     * a reservation beyond the centrally managed safety window.
+     */
+    private int effectiveHoldDurationSeconds(int requestedSeconds) {
+        int defaultMinutes = 15;
+        int configuredMinutes = configurationService == null
+                ? defaultMinutes
+                : configurationService.getInt("PROMOTION_RESERVATION_TIMEOUT", defaultMinutes);
+        if (configuredMinutes < 1 || configuredMinutes > 30) {
+            configuredMinutes = defaultMinutes;
+        }
+        long configuredSeconds = configuredMinutes * 60L;
+        long effective = Math.min(Math.max(60L, requestedSeconds), configuredSeconds);
+        return (int) Math.min(MAX_RESERVATION_LIFETIME_SECONDS, effective);
     }
 
     private String metadata(ReserveRequest request) {

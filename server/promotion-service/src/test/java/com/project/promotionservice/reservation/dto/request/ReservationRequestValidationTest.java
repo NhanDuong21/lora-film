@@ -51,6 +51,14 @@ class ReservationRequestValidationTest {
     }
 
     @Test
+    void runtimeValidationAcceptsNumericAuthAccountId() {
+        RuntimeValidationRequest request = validRuntimeRequest();
+        request.setUserPublicId("42");
+
+        assertTrue(validator.validate(request).isEmpty());
+    }
+
+    @Test
     void confirmRejectsMalformedPaymentIdentifier() {
         ConfirmRequest request = new ConfirmRequest();
         request.setPaymentPublicId("payment-123");
