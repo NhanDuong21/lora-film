@@ -8,6 +8,7 @@ import { parseApiError } from '@/utils/apiErrorHandler';
 
 const getGenreId = genre => genre?.publicId || genre?.id;
 const getGenreName = genre => (typeof genre === 'string' ? genre : genre?.name);
+const isGenreActive = genre => (genre?.status || 'ACTIVE') === 'ACTIVE';
 
 export default function MovieGenreTab({ movie, onUpdate }) {
   const { triggerToast } = useOutletContext() || {};
@@ -52,11 +53,24 @@ export default function MovieGenreTab({ movie, onUpdate }) {
     setSelectedIds(originalIds);
   }, [originalIds]);
 
+  const assignableGenres = useMemo(
+    () => genres.filter(genre => isGenreActive(genre) || originalIds.includes(getGenreId(genre))),
+    [genres, originalIds],
+  );
+
   const filteredGenres = useMemo(() => {
     const normalized = searchTerm.trim().toLocaleLowerCase('vi');
-    if (!normalized) return genres;
-    return genres.filter(genre => getGenreName(genre)?.toLocaleLowerCase('vi').includes(normalized));
-  }, [genres, searchTerm]);
+    if (!normalized) return assignableGenres;
+    return assignableGenres.filter(genre => getGenreName(genre)?.toLocaleLowerCase('vi').includes(normalized));
+  }, [assignableGenres, searchTerm]);
+
+  const inactiveSelectedCount = useMemo(
+    () => selectedIds.filter(id => {
+      const genre = genres.find(item => getGenreId(item) === id);
+      return genre && !isGenreActive(genre);
+    }).length,
+    [genres, selectedIds],
+  );
 
   const isDirty = selectedIds.length !== originalIds.length
     || selectedIds.some(id => !originalIds.includes(id));
@@ -122,9 +136,18 @@ export default function MovieGenreTab({ movie, onUpdate }) {
             {selectedIds.length > 0 ? (
               selectedIds.map(id => {
                 const genre = genres.find(item => getGenreId(item) === id);
+                const active = isGenreActive(genre);
                 return (
-                  <span key={id} className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-semibold text-orange-200">
+                  <span
+                    key={id}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                      active
+                        ? 'border-orange-500/30 bg-orange-500/10 text-orange-200'
+                        : 'border-zinc-700 bg-zinc-800/70 text-zinc-400'
+                    }`}
+                  >
                     {getGenreName(genre) || 'Thể loại không xác định'}
+                    {!active && ' · Ngừng sử dụng'}
                   </span>
                 );
               })
@@ -132,6 +155,11 @@ export default function MovieGenreTab({ movie, onUpdate }) {
               <span className="text-sm italic text-zinc-600">Chưa chọn thể loại nào.</span>
             )}
           </div>
+          {inactiveSelectedCount > 0 && (
+            <p className="mt-3 text-xs leading-5 text-amber-300">
+              Có {inactiveSelectedCount} thể loại đã ngừng sử dụng. Bạn có thể bỏ chọn, nhưng không thể gắn lại sau khi lưu.
+            </p>
+          )}
         </div>
 
         <div className="relative">
@@ -151,6 +179,7 @@ export default function MovieGenreTab({ movie, onUpdate }) {
             {filteredGenres.map(genre => {
               const id = getGenreId(genre);
               const selected = selectedIds.includes(id);
+              const active = isGenreActive(genre);
               return (
                 <button
                   key={id}
@@ -159,11 +188,18 @@ export default function MovieGenreTab({ movie, onUpdate }) {
                   onClick={() => toggleGenre(id)}
                   className={`flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition ${
                     selected
-                      ? 'border-orange-500 bg-orange-500/10 text-orange-200'
+                      ? active
+                        ? 'border-orange-500 bg-orange-500/10 text-orange-200'
+                        : 'border-zinc-600 bg-zinc-800/70 text-zinc-300'
                       : 'border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
                   }`}
                 >
-                  <span className="truncate">{getGenreName(genre)}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate">{getGenreName(genre)}</span>
+                    {!active && (
+                      <span className="mt-0.5 block text-[10px] font-medium text-zinc-500">Đã ngừng sử dụng</span>
+                    )}
+                  </span>
                   {selected && <Check className="h-4 w-4 shrink-0 text-orange-400" />}
                 </button>
               );

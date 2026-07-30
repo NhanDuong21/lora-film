@@ -13,6 +13,11 @@ import org.springframework.data.repository.query.Param;
 
 @Repository
 public interface MovieGenreRepository extends JpaRepository<MovieGenre, MovieGenreId> {
+    interface GenreMovieCount {
+        Long getGenreId();
+        Long getMovieCount();
+    }
+
     List<MovieGenre> findByMovieId(Long movieId);
 
     @Query("SELECT mg FROM MovieGenre mg JOIN FETCH mg.genre WHERE mg.movie.id IN :movieIds")
@@ -26,4 +31,14 @@ public interface MovieGenreRepository extends JpaRepository<MovieGenre, MovieGen
 
     @org.springframework.data.jpa.repository.Query("SELECT COUNT(mg) > 0 FROM MovieGenre mg JOIN mg.movie m WHERE mg.genre.id = :genreId AND m.deletedAt IS NULL")
     boolean existsByGenreIdAndMovieDeletedAtIsNull(@org.springframework.data.repository.query.Param("genreId") Long genreId);
+
+    @Query("""
+            SELECT mg.genre.id AS genreId, COUNT(DISTINCT mg.movie.id) AS movieCount
+            FROM MovieGenre mg
+            JOIN mg.movie m
+            WHERE mg.genre.id IN :genreIds
+              AND m.deletedAt IS NULL
+            GROUP BY mg.genre.id
+            """)
+    List<GenreMovieCount> countMoviesByGenreIds(@Param("genreIds") List<Long> genreIds);
 }
