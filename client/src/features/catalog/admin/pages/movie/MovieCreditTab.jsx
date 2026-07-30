@@ -26,7 +26,6 @@ export default function MovieCreditTab({ movie, onUpdate }) {
       const mappedCredits = allCredits.map((c, i) => ({ ...c, localId: Date.now() + i, displayOrder: i + 1 }));
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCredits(mappedCredits);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsDirty(false);
     }
   }, [movie]);
@@ -110,7 +109,10 @@ export default function MovieCreditTab({ movie, onUpdate }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-zinc-100">Đội ngũ làm phim</h3>
+        <div>
+          <h3 className="text-base font-bold text-zinc-100">Diễn viên & ê-kíp</h3>
+          <p className="mt-1 text-xs text-zinc-500">Thông tin khuyến nghị để khách hàng biết ai tham gia bộ phim.</p>
+        </div>
         <button
           onClick={handleSave}
           disabled={isSaving || !isDirty}

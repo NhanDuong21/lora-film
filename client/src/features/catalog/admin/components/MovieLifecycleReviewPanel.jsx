@@ -1,26 +1,41 @@
 import { useState } from 'react';
-import { ShieldCheck, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleHelp,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { MOVIE_TRANSITIONS } from '../config/movieLifecycleConfig';
 import { getMovieReadinessView, getPublishChecklist } from '../utils/movieReadiness';
 import useMovieStatusTransition from '../hooks/useMovieStatusTransition';
 import MovieStatusTransitionDialog from './MovieStatusTransitionDialog';
 
-export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate }) {
+const CHECKLIST = [
+  { key: 'hasGenre', label: 'Chọn ít nhất một thể loại', tab: 'genres' },
+  { key: 'hasActiveVersion', label: 'Có bản chiếu đang hoạt động', tab: 'versions' },
+  { key: 'hasPrimaryPoster', label: 'Có poster chính đang hoạt động', tab: 'media' },
+];
+
+export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate, onNavigateToTab }) {
   const [selectedTransition, setSelectedTransition] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [warningAcknowledged, setWarningAcknowledged] = useState(false);
   const { triggerToast } = useOutletContext() || {};
 
   const handleSuccess = async () => {
-    if (triggerToast) triggerToast('Cập nhật trạng thái phim thành công!', 'success');
+    triggerToast?.('Đã cập nhật trạng thái phim.', 'success');
     setIsDialogOpen(false);
-    if (onUpdate) {
-      await onUpdate();
-    }
+    await onUpdate?.();
   };
 
-  const { isPending, error, transitionStatus, resetError } = useMovieStatusTransition(movie?.publicId, handleSuccess);
+  const {
+    isPending,
+    error,
+    transitionStatus,
+    resetError,
+  } = useMovieStatusTransition(movie?.publicId, handleSuccess);
 
   if (!movie) return null;
 
@@ -28,8 +43,13 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate 
   const allowedTransitions = MOVIE_TRANSITIONS[currentStatus] || [];
   const readiness = getMovieReadinessView(movie);
   const checklist = getPublishChecklist(readiness);
+  const isDraft = currentStatus === 'DRAFT';
+  const passedCount = CHECKLIST.filter(item => checklist[item.key] === 'PASS').length;
+  const hasMissing = CHECKLIST.some(item => checklist[item.key] === 'MISSING');
 
-  const handleActionClick = (transition) => {
+  if (!isDraft && allowedTransitions.length === 0) return null;
+
+  const handleActionClick = transition => {
     resetError();
     setSelectedTransition(transition);
     setWarningAcknowledged(false);
@@ -37,167 +57,171 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate 
   };
 
   const handleConfirmTransition = async () => {
-    if (!selectedTransition) return;
-    await transitionStatus(selectedTransition.target);
+    if (selectedTransition) await transitionStatus(selectedTransition.target);
   };
 
-  const handleCloseDialog = () => {
-    if (!isPending) {
-      setIsDialogOpen(false);
-      setTimeout(() => setSelectedTransition(null), 200);
-    }
-  };
-
-  const renderChecklistItem = (label, status) => {
-    let Icon = HelpCircle;
-    let colorClass = 'text-zinc-500';
-    let statusText = 'Đang kiểm tra...';
-
+  const renderChecklistStatus = status => {
     if (status === 'PASS') {
-      Icon = CheckCircle2;
-      colorClass = 'text-green-500';
-      statusText = 'Đạt';
-    } else if (status === 'MISSING') {
-      Icon = XCircle;
-      colorClass = 'text-red-500';
-      statusText = 'Thiếu';
+      return {
+        icon: CheckCircle2,
+        label: 'Đã đủ',
+        className: 'border-emerald-500/20 bg-emerald-500/5 text-emerald-300',
+      };
     }
-
-    return (
-      <div className="flex flex-col gap-1 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Icon size={18} className={colorClass} />
-            <span className="text-sm text-zinc-300">{label}</span>
-          </div>
-          <span className={`text-xs font-medium px-2 py-1 rounded-md ${
-            status === 'PASS' ? 'bg-green-500/10 text-green-500' :
-            status === 'MISSING' ? 'bg-red-500/10 text-red-500' :
-            'bg-zinc-800 text-zinc-400'
-          }`}>
-            {statusText}
-          </span>
-        </div>
-      </div>
-    );
+    if (status === 'MISSING') {
+      return {
+        icon: XCircle,
+        label: 'Cần bổ sung',
+        className: 'border-red-500/20 bg-red-500/5 text-red-300',
+      };
+    }
+    return {
+      icon: CircleHelp,
+      label: 'Đang kiểm tra',
+      className: 'border-zinc-800 bg-zinc-900/60 text-zinc-400',
+    };
   };
-
-  const isDraft = currentStatus === 'DRAFT';
-
-  // Always show review panel for DRAFT, or if there are lifecycle actions
-  if (!isDraft && allowedTransitions.length === 0) return null;
 
   return (
     <>
-      <div id="movie-lifecycle-actions" className="bg-[#0a0a0a] border border-zinc-800 rounded-2xl overflow-hidden mt-6">
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-brand-orange/10 flex items-center justify-center text-brand-orange">
-              <ShieldCheck size={20} />
-            </div>
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/35" aria-labelledby="movie-review-title">
+        <div className="flex flex-col gap-4 border-b border-zinc-800 p-5 md:flex-row md:items-start md:justify-between md:p-6">
+          <div className="flex items-start gap-3">
+            <span className="rounded-xl bg-orange-500/10 p-2.5 text-orange-400">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
             <div>
-              <h3 className="text-lg font-semibold text-white">Việc cần hoàn thiện trước khi phát hành</h3>
-              <p className="text-sm text-zinc-400">Hoàn tất các mục dưới đây để phim có thể hiển thị và được xếp lịch.</p>
+              <h2 id="movie-review-title" className="text-lg font-bold text-white">
+                {isDraft ? 'Kiểm tra trước khi duyệt phim' : 'Trạng thái vận hành'}
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
+                {isDraft
+                  ? 'Hoàn thiện các mục bắt buộc bên dưới. Khi tất cả đều đạt, bạn có thể đưa phim sang trạng thái sắp chiếu.'
+                  : 'Các thao tác bên dưới thay đổi việc phim có được hiển thị và nhận lịch chiếu hay không.'}
+              </p>
             </div>
           </div>
-
           {isDraft && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium text-zinc-300">Nội dung bắt buộc</h4>
-                <div className="space-y-2">
-                  {renderChecklistItem('Có thể loại', checklist.hasGenre)}
-                  {renderChecklistItem('Có phiên bản đang hoạt động', checklist.hasActiveVersion)}
-                  {renderChecklistItem('Có poster chính đang hoạt động', checklist.hasPrimaryPoster)}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium text-zinc-300">Nội dung nên kiểm tra</h4>
-                <div className="space-y-2">
-                  {readiness.healthStatus === 'UNKNOWN' ? (
-                    <div className="flex items-center gap-3 p-3 bg-zinc-500/10 border border-zinc-500/20 rounded-xl text-zinc-400">
-                      <HelpCircle size={18} className="shrink-0" />
-                      <span className="text-sm">Chưa xác định trạng thái sẵn sàng từ máy chủ.</span>
-                    </div>
-                  ) : readiness.warnings.length > 0 ? (
-                    readiness.warnings.map((warning, index) => (
-                      <div key={`${warning.code || 'warning'}-${index}`} className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500">
-                        <AlertTriangle size={18} className="shrink-0" />
-                        <span className="text-sm text-amber-500/90">{warning.message || warning.code}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-500">
-                      <CheckCircle2 size={18} className="shrink-0" />
-                      <span className="text-sm text-green-500/90">Không có cảnh báo dữ liệu</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+            <div className="shrink-0 rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-left md:text-right">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">Tiến độ bắt buộc</p>
+              <p className={`mt-1 text-xl font-black ${passedCount === CHECKLIST.length ? 'text-emerald-300' : 'text-orange-300'}`}>
+                {passedCount}/{CHECKLIST.length}
+              </p>
             </div>
           )}
+        </div>
 
-          {allowedTransitions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 pt-6 border-t border-zinc-800">
-              {allowedTransitions.map((transition, index) => {
-                const isPrimary = index === 0 && transition.variant === 'primary';
-                const isWarning = transition.variant === 'warning';
-                const isSecondary = transition.variant === 'secondary';
-                
-                let isDisabled = false;
-                let disableReason = '';
-
-                if (transition.requiresPublishChecklist) {
-                  if (readiness.healthStatus === 'BLOCKED') {
-                    isDisabled = true;
-                    disableReason = 'Chưa thể duyệt phim. Hãy bổ sung các điều kiện còn thiếu.';
-                  } else if (readiness.healthStatus === 'UNKNOWN') {
-                    isDisabled = true;
-                    disableReason = 'Chưa thể xác minh điều kiện phát hành.';
-                  }
-                  if (movie.source === 'TMDB' && currentStatus === 'DRAFT' && tmdbReview?.canApprove === false) {
-                    isDisabled = true;
-                    disableReason = tmdbReview.approvalBlockers?.[0] || 'Máy chủ xác định phim chưa đủ điều kiện duyệt.';
-                  }
-                }
-                
-                let buttonClass = 'px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ';
-                if (transition.variant === 'danger') {
-                  buttonClass += 'bg-red-500/10 text-red-500 hover:bg-red-500/20';
-                } else if (isWarning) {
-                  buttonClass += 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20';
-                } else if (isSecondary) {
-                  buttonClass += 'border border-zinc-700 text-zinc-300 hover:bg-zinc-800';
-                } else if (isPrimary) {
-                  buttonClass += 'bg-brand-orange text-black hover:bg-brand-orange/90';
-                } else {
-                  buttonClass += 'bg-zinc-800 text-white hover:bg-zinc-700';
-                }
-                
+        {isDraft && (
+          <div className="p-5 md:p-6">
+            <div className="grid gap-2 md:grid-cols-3">
+              {CHECKLIST.map(item => {
+                const status = renderChecklistStatus(checklist[item.key]);
+                const Icon = status.icon;
+                const isMissing = checklist[item.key] === 'MISSING';
                 return (
-                  <div key={transition.target} className="flex flex-col gap-1 items-start">
-                    <button
-                      className={buttonClass}
-                      onClick={() => handleActionClick(transition)}
-                      disabled={isDisabled}
-                    >
-                      {transition.label}
-                    </button>
-                    {isDisabled && disableReason && (
-                      <span className="text-xs text-red-400 mt-1">{disableReason}</span>
-                    )}
+                  <div key={item.key} className={`rounded-xl border p-3 ${status.className}`}>
+                    <div className="flex items-start gap-2">
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{item.label}</p>
+                        <p className="mt-1 text-xs opacity-80">{status.label}</p>
+                        {isMissing && onNavigateToTab && (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToTab(item.tab)}
+                            className="mt-2 text-xs font-bold underline underline-offset-4"
+                          >
+                            Bổ sung ngay
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
-      </div>
+
+            <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+              <div className="flex items-start gap-2 text-sm">
+                {readiness.healthStatus === 'UNKNOWN' ? (
+                  <>
+                    <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
+                    <span className="text-zinc-400">Máy chủ chưa trả về kết quả kiểm tra đầy đủ.</span>
+                  </>
+                ) : readiness.warnings.length > 0 ? (
+                  <>
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                    <span className="text-amber-200">{readiness.warnings[0].message || readiness.warnings[0].code}</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                    <span className="text-emerald-200">Không có cảnh báo bổ sung.</span>
+                  </>
+                )}
+              </div>
+              {readiness.warnings.length > 1 && (
+                <p className="mt-2 pl-6 text-xs text-zinc-500">
+                  Còn {readiness.warnings.length - 1} cảnh báo khác trong hồ sơ.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {allowedTransitions.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-zinc-800 p-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
+            <p className="text-xs text-zinc-500">
+              {hasMissing
+                ? 'Phim chưa thể duyệt. Hãy bổ sung đủ các mục bắt buộc.'
+                : 'Bạn đang chuẩn bị thay đổi trạng thái phục vụ của phim.'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {allowedTransitions.map((transition, index) => {
+                let isDisabled = false;
+                let disableReason = '';
+                if (transition.requiresPublishChecklist) {
+                  if (readiness.healthStatus === 'BLOCKED') {
+                    isDisabled = true;
+                    disableReason = 'Còn mục bắt buộc chưa hoàn thiện.';
+                  } else if (readiness.healthStatus === 'UNKNOWN') {
+                    isDisabled = true;
+                    disableReason = 'Chưa kiểm tra được điều kiện phát hành.';
+                  }
+                  if (movie.source === 'TMDB' && currentStatus === 'DRAFT' && tmdbReview?.canApprove === false) {
+                    isDisabled = true;
+                    disableReason = tmdbReview.approvalBlockers?.[0] || 'Phim nhập tự động chưa đủ điều kiện duyệt.';
+                  }
+                }
+
+                return (
+                  <div key={transition.target} className="flex flex-col items-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleActionClick(transition)}
+                      disabled={isDisabled || isPending}
+                      className={`rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                        transition.variant === 'danger'
+                          ? 'bg-red-500/10 text-red-300 hover:bg-red-500/20'
+                          : index === 0
+                            ? 'bg-orange-500 text-zinc-950 hover:bg-orange-400'
+                            : 'border border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      {transition.label}
+                    </button>
+                    {isDisabled && <span className="max-w-56 text-right text-[11px] text-red-300">{disableReason}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
 
       <MovieStatusTransitionDialog
         isOpen={isDialogOpen}
-        onClose={handleCloseDialog}
+        onClose={() => !isPending && setIsDialogOpen(false)}
         config={selectedTransition}
         checklist={checklist}
         readiness={readiness}

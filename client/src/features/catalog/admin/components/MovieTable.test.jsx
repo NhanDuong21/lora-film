@@ -46,8 +46,8 @@ describe('MovieTable', () => {
 
     renderMovieTable({ onOpenDetail, onOpenEdit });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Xem và xử lý' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mở hồ sơ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa nhanh' }));
 
     expect(onOpenDetail).toHaveBeenCalledWith(movie);
     expect(onOpenEdit).toHaveBeenCalledWith(movie);

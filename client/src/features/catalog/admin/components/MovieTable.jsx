@@ -14,15 +14,15 @@ import { formatDate } from '@/utils/movieHelpers';
 
 const READINESS_STATUS_CONFIG = Object.freeze({
   READY: {
-    label: 'Sẵn sàng phát hành',
+    label: 'Đã đủ thông tin',
     className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
   },
   WARNING: {
-    label: 'Cần bổ sung',
+    label: 'Nên kiểm tra',
     className: 'border-amber-500/30 bg-amber-500/10 text-amber-300'
   },
   BLOCKED: {
-    label: 'Chưa thể phát hành',
+    label: 'Thiếu thông tin bắt buộc',
     className: 'border-red-500/30 bg-red-500/10 text-red-300'
   },
   UNKNOWN: {
@@ -36,7 +36,7 @@ const getIssueText = (issue) => (
 );
 
 const getSourceLabel = (source) => (
-  String(source || '').toUpperCase() === 'TMDB' ? 'Nhập tự động' : 'Tạo thủ công'
+  String(source || '').toUpperCase() === 'TMDB' ? 'Hệ thống nhập tự động' : 'Nhân viên tạo thủ công'
 );
 
 function Pagination({
@@ -166,9 +166,9 @@ function MovieTable({
           <thead className="border-b border-zinc-800 bg-black/30 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
             <tr>
               <th className="w-[29%] px-5 py-4">Phim</th>
-              <th className="w-[24%] px-5 py-4">Tình trạng nội dung</th>
-              <th className="w-[16%] px-5 py-4">Lịch phát hành</th>
-              <th className="w-[15%] px-5 py-4">Trạng thái phục vụ</th>
+              <th className="w-[24%] px-5 py-4">Cần làm</th>
+              <th className="w-[16%] px-5 py-4">Khởi chiếu</th>
+              <th className="w-[15%] px-5 py-4">Hiển thị với khách</th>
               <th className="w-[16%] px-5 py-4 text-right">Hành động</th>
             </tr>
           </thead>
@@ -279,7 +279,7 @@ function MovieTable({
                         onClick={() => onOpenDetail(movie)}
                         className="rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-extrabold text-black transition hover:bg-orange-400"
                       >
-                        Xem và xử lý
+                        Mở hồ sơ
                       </button>
                       <button
                         type="button"
@@ -287,7 +287,7 @@ function MovieTable({
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-bold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
                       >
                         <Pencil size={14} />
-                        Chỉnh sửa
+                        Sửa nhanh
                       </button>
                       {canDelete && (
                         <button
