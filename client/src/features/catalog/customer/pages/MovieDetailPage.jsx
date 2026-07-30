@@ -103,9 +103,12 @@ export default function MovieDetailPage() {
     setShowtimeLoading(true);
     setShowtimeError(null);
     try {
+      const bookingWindowStart = movie.releaseDate && movie.releaseDate > today
+        ? movie.releaseDate
+        : today;
       setOptions(await getBookingOptions(movie.slug, {
-        from: today,
-        to: addCalendarDays(today, 13),
+        from: bookingWindowStart,
+        to: addCalendarDays(bookingWindowStart, 13),
         signal
       }));
     } catch (requestError) {
