@@ -20,6 +20,7 @@ import { adminStaffRoutes } from "@/features/internal-staff/admin/routes";
 import { employeeStaffRoutes } from "@/features/internal-staff/employee/routes";
 import { customerScoreRoutes } from "@/features/score/customer/routes";
 import { adminScoreRoutes } from "@/features/score/admin/routes";
+import { adminNotificationRoutes } from "@/features/notifications/admin/routes";
 import {
     adminPaymentRoutes,
     customerPaymentRoutes,
@@ -126,6 +127,9 @@ function AppRoutes() {
                     ))}
                     {adminPaymentRoutes.map((route, index) => (
                         <Route key={`payment-adm-${index}`} path={route.path} element={financeAccess(route.element)} />
+                    ))}
+                    {adminNotificationRoutes.map((route, index) => (
+                        <Route key={`notification-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                 </Route>
                 <Route path="/401" element={<UnauthorizedPage />} />

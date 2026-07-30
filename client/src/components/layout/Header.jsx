@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Bell,
   ChevronDown,
   KeyRound,
   LogOut,
@@ -14,6 +13,7 @@ import {
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getCinemas } from '@/features/catalog/customer/services/movieService';
+import CustomerNotificationBell from '@/features/notifications/customer/components/CustomerNotificationBell';
 
 const dropdownPanelClass =
   'overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/95 p-2 shadow-[0_20px_55px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl';
@@ -368,17 +368,7 @@ export default function Header() {
 
             {isAuthenticated ? (
               <div className="flex items-center gap-2.5">
-                {isCustomer && (
-                  <button
-                    type="button"
-                    onClick={() => handleInfoOptionClick('Thông báo thành viên')}
-                    aria-label="Thông báo"
-                    className={`relative flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white ${focusRingClass}`}
-                  >
-                    <Bell aria-hidden="true" className="h-[18px] w-[18px]" />
-                    <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-zinc-900 bg-brand-orange" />
-                  </button>
-                )}
+                {isCustomer && <CustomerNotificationBell />}
 
                 <div className="relative">
                   <button
@@ -390,9 +380,17 @@ export default function Header() {
                       setActiveDropdown(null);
                       setProfileDropdownOpen(current => !current);
                     }}
-                    className={`flex h-11 w-11 items-center justify-center rounded-full border border-brand-orange/50 bg-brand-orange/10 text-sm font-black uppercase text-brand-orange transition hover:bg-brand-orange/20 ${focusRingClass}`}
+                    className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-brand-orange/50 bg-brand-orange/10 text-sm font-black uppercase text-brand-orange transition hover:bg-brand-orange/20 ${focusRingClass}`}
                   >
-                    {user?.fullName?.charAt(0) || 'U'}
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user?.fullName || 'Ảnh đại diện'}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      user?.fullName?.charAt(0) || 'U'
+                    )}
                   </button>
 
                   {profileDropdownOpen && (

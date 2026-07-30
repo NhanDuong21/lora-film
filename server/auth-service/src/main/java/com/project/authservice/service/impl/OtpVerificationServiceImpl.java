@@ -3,6 +3,7 @@ package com.project.authservice.service.impl;
 import java.security.SecureRandom;
 import java.time.Duration;
 
+import com.project.authservice.client.NotificationClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -15,12 +16,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.project.authservice.dto.request.SendOtpRequest;
 import com.project.authservice.dto.request.VerifyRequest;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import java.util.Map;
 import com.project.authservice.entity.Account;
 import com.project.authservice.entity.RedisOtpData;
 import com.project.authservice.exception.AccountAlreadyVerifiedException;
@@ -41,22 +36,16 @@ public class OtpVerificationServiceImpl implements VerificationService {
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final SecureRandom secureRandom = new SecureRandom();
-    private final RestTemplate restTemplate;
-
-    @Value("${app.internal-token}")
-    private String internalToken;
-
-    @Value("${app.notification-service.url}")
-    private String notificationServiceUrl;
+    private final NotificationClient notificationClient;
 
     public OtpVerificationServiceImpl(AccountRepository accountRepository,
             StringRedisTemplate redisTemplate,
             PasswordEncoder passwordEncoder,
-            RestTemplate restTemplate) {
+            NotificationClient notificationClient) {
         this.accountRepository = accountRepository;
         this.redisTemplate = redisTemplate;
         this.passwordEncoder = passwordEncoder;
-        this.restTemplate = restTemplate;
+        this.notificationClient = notificationClient;
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     }
 
@@ -144,30 +133,8 @@ public class OtpVerificationServiceImpl implements VerificationService {
                 }
             }
 
-            try {
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.set("X-Internal-Token", internalToken);
-
-                Map<String, Object> body = Map.of(
-                        "eventId", "AUTH-OTP-REGISTRATION-" + email + "-" + System.currentTimeMillis(),
-                        "requestSource", "auth-service",
-                        "templateCode", "OTP_REGISTRATION",
-                        "userId", accountId,
-                        "recipient", email,
-                        "channelType", "EMAIL",
-                        "variables", Map.of(
-                                "name", name,
-                                "otp", otp));
-
-                HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(body, headers);
-                String url = notificationServiceUrl + "/internal/notifications/send";
-                log.info("Sending OTP registration email request to notification-service: url={}", url);
-                restTemplate.postForEntity(url, httpEntity, Map.class);
-                log.info("OTP registration email request sent successfully for email={}", maskEmail(email));
-            } catch (Exception e) {
-                log.warn("Failed to send OTP email via notification-service: {}", e.getMessage(), e);
-            }
+            notificationClient.sendRegistrationOtp(accountId, email, name, otp);
+            log.info("OTP registration email accepted for email={}", maskEmail(email));
         }
 
         return new com.project.authservice.dto.response.SendOtpResponse(accountId, 300L);
@@ -227,39 +194,16 @@ public class OtpVerificationServiceImpl implements VerificationService {
         // not here.
     }
 
-    @Value("${app.frontend.url:http://localhost:5173}")
-    private String frontendUrl;
-
     @Override
     public void sendForgotPasswordEmail(Long accountId, String email, String otp) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("X-Internal-Token", internalToken);
+        notificationClient.sendForgotPasswordOtp(accountId, email, otp);
+        log.info("Forgot password OTP email accepted for email={}", maskEmail(email));
+    }
 
-            String resetLink = frontendUrl + "/reset-password?token="
-                    + java.net.URLEncoder.encode(otp, java.nio.charset.StandardCharsets.UTF_8)
-                    + "&email="
-                    + java.net.URLEncoder.encode(email, java.nio.charset.StandardCharsets.UTF_8);
-            String content = "Chào bạn,<br/><br/>Bạn đã yêu cầu đặt lại mật khẩu. Vui lòng nhấp vào liên kết sau để đặt lại mật khẩu: <a href=\"" + resetLink + "\">Đặt lại mật khẩu</a><br/><br/>Nếu bạn không yêu cầu, vui lòng bỏ qua email này.";
-
-            Map<String, Object> body = Map.of(
-                    "eventId", "AUTH-FORGOT-PASSWORD-" + email + "-" + System.currentTimeMillis(),
-                    "requestSource", "auth-service",
-                    "title", "Yêu cầu đặt lại mật khẩu",
-                    "content", content,
-                    "userId", accountId,
-                    "recipient", email,
-                    "channelType", "EMAIL");
-
-            HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(body, headers);
-            String url = notificationServiceUrl + "/internal/notifications/send";
-            log.info("Sending forgot password email request to notification-service: url={}", url);
-            restTemplate.postForEntity(url, httpEntity, Map.class);
-            log.info("Forgot password email request sent successfully for email={}", maskEmail(email));
-        } catch (Exception e) {
-            log.warn("Failed to send forgot password email via notification-service: {}", e.getMessage(), e);
-        }
+    @Override
+    public void sendChangeEmailOtp(Long accountId, String currentEmail, String newEmail, String otp) {
+        notificationClient.sendChangeEmailOtp(accountId, currentEmail, newEmail, otp);
+        log.info("Change email OTP accepted for email={}", maskEmail(currentEmail));
     }
 
     private String normalizeEmail(String email) {

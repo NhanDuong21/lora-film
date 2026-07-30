@@ -42,12 +42,25 @@ public class AdminMembershipTierControllerIntegrationTest {
     @Autowired
     private UserScoreRepository userScoreRepository;
 
+    @Autowired
+    private com.project.scoreservice.repository.ScoreHistoryRepository scoreHistoryRepository;
+
+    @Autowired
+    private com.project.scoreservice.repository.PointExpirationBucketRepository pointExpirationBucketRepository;
+
+    @Autowired
+    private com.project.scoreservice.repository.MembershipTierHistoryRepository membershipTierHistoryRepository;
+
     private MembershipTier silver;
     private MembershipTier gold;
 
     @BeforeEach
     void setUp() {
+        pointExpirationBucketRepository.deleteAll();
+        membershipTierHistoryRepository.deleteAll();
+        scoreHistoryRepository.deleteAll();
         userScoreRepository.deleteAll();
+
 
         silver = membershipTierRepository.findByTierName("SILVER")
                 .orElseThrow(() -> new RuntimeException("Default tier SILVER not found"));

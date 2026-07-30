@@ -9,6 +9,7 @@ import com.project.userservice.entity.User;
 import com.project.userservice.enumtype.EmployeeStatus;
 import com.project.userservice.enumtype.UserStatus;
 import com.project.userservice.exception.BusinessException;
+import com.project.userservice.mapper.EmployeeMapper;
 import com.project.userservice.repository.DepartmentRepository;
 import com.project.userservice.repository.EmployeeRepository;
 import com.project.userservice.repository.PositionRepository;
@@ -31,16 +32,19 @@ public class EmployeeService {
     private final PositionRepository positionRepository;
     private final UserAuditService auditService;
     private final UserDomainEventService eventService;
+    private final EmployeeMapper employeeMapper;
 
     public EmployeeService(EmployeeRepository employeeRepository, UserRepository userRepository,
                            DepartmentRepository departmentRepository, PositionRepository positionRepository,
-                           UserAuditService auditService, UserDomainEventService eventService) {
+                           UserAuditService auditService, UserDomainEventService eventService,
+                           EmployeeMapper employeeMapper) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
         this.departmentRepository = departmentRepository;
         this.positionRepository = positionRepository;
         this.auditService = auditService;
         this.eventService = eventService;
+        this.employeeMapper = employeeMapper;
     }
 
     @Transactional(readOnly = true)
@@ -54,7 +58,8 @@ public class EmployeeService {
         Map<Long, User> users = userRepository.findAllById(
                         page.getContent().stream().map(Employee::getAccountId).toList())
                 .stream().collect(Collectors.toMap(User::getAccountId, Function.identity()));
-        return page.map(employee -> map(employee, users.get(employee.getAccountId())));
+        return page.map(employee -> employeeMapper.toResponse(
+                employee, users.get(employee.getAccountId())));
     }
 
     @Transactional(readOnly = true)
@@ -62,7 +67,7 @@ public class EmployeeService {
         Employee employee = find(accountId);
         User user = userRepository.findById(accountId)
                 .orElseThrow(() -> new BusinessException("User not found", "USER_001"));
-        return map(employee, user);
+        return employeeMapper.toResponse(employee, user);
     }
 
     @Transactional
@@ -85,7 +90,7 @@ public class EmployeeService {
         auditService.log("EMPLOYEE_CREATED", "EMPLOYEE", employee.getAccountId(), null);
         eventService.record("EMPLOYEE_CREATED", "EMPLOYEE", employee.getAccountId(),
                 eventData(employee));
-        return map(employee, user);
+        return employeeMapper.toResponse(employee, user);
     }
 
     @Transactional
@@ -183,15 +188,4 @@ public class EmployeeService {
                 "status", employee.getStatus().name());
     }
 
-    private EmployeeResponse map(Employee employee, User user) {
-        if (user == null) {
-            throw new BusinessException("User not found", "USER_001");
-        }
-        return new EmployeeResponse(employee.getAccountId(), employee.getEmployeeCode(),
-                user.getFullName(), user.getPhoneNumber(),
-                employee.getDepartment().getId(), employee.getDepartment().getCode(),
-                employee.getDepartment().getName(), employee.getPosition().getId(),
-                employee.getPosition().getCode(), employee.getPosition().getTitle(),
-                employee.getHireDate(), employee.getBaseSalary(), employee.getStatus());
-    }
 }

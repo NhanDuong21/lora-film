@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.MediaType;
-import org.springframework.http.MediaTypeFactory;
+import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
@@ -72,14 +72,23 @@ public class UserController {
 
     @GetMapping("/profile/avatar/files/{fileName:.+}")
     public ResponseEntity<Resource> getAvatarFile(@PathVariable String fileName) {
-        Resource resource = avatarService.load(fileName);
-        MediaType mediaType = MediaTypeFactory.getMediaType(fileName)
-                .orElse(MediaType.APPLICATION_OCTET_STREAM);
+        AvatarService.AvatarFile avatarFile = avatarService.load(fileName);
         return ResponseEntity.ok()
-                .contentType(mediaType)
+                .contentType(safeMediaType(avatarFile.contentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
-                .body(resource);
+                .body(avatarFile.resource());
     }
+
+    private MediaType safeMediaType(String contentType) {
+        try {
+            return contentType == null
+                    ? MediaType.APPLICATION_OCTET_STREAM
+                    : MediaType.parseMediaType(contentType);
+        } catch (InvalidMediaTypeException exception) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+    }
+
     @GetMapping("/{accountId}")
     public ResponseEntity<ApiResponse<UserProfileResponse>> getUserProfile(@PathVariable Long accountId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

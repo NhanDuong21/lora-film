@@ -27,7 +27,18 @@ const scoreCustomerService = {
   redeemPreview: async (data) => {
     const response = await apiClient.post(`${SCORE_API_URL}/redeem-preview`, data);
     return response.data;
+  },
+
+  getExpiringPoints: async () => {
+    const response = await apiClient.get(`${SCORE_API_URL}/expiring`);
+    return response.data;
+  },
+
+  getTierHistory: async () => {
+    const response = await apiClient.get(`${SCORE_API_URL}/tier-history`);
+    return response.data;
   }
 };
 
 export default scoreCustomerService;
+

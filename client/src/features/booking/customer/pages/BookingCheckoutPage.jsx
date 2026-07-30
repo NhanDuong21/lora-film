@@ -20,6 +20,7 @@ import BookingStepper from '../components/BookingStepper';
 import BookingCancellationModal from '../components/BookingCancellationModal';
 import BookingNoticeModal from '../components/BookingNoticeModal';
 import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
+import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
 import {
   createPaymentHandoff,
   getOrCreatePaymentAttemptKey
@@ -249,10 +250,11 @@ export default function BookingCheckoutPage() {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogExpanded, setCatalogExpanded] = useState(false);
-  
+
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
+  const [userScore, setUserScore] = useState(null);
   const lastTerminalNoticeRef = useRef(null);
   const cartUpdatingRef = useRef(false);
   const expirationHandledRef = useRef(false);
@@ -286,6 +288,15 @@ export default function BookingCheckoutPage() {
 
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
+
+      try {
+        const scoreResponse = await scoreCustomerService.getScoreBalance();
+        setUserScore(scoreResponse?.data ?? scoreResponse ?? null);
+      } catch {
+        // Score Service is optional for checkout. Its outage must not prevent
+        // the customer from completing the current Booking.
+        setUserScore(null);
+      }
 
     } catch (err) {
       setError(getBookingErrorMessage(
@@ -673,6 +684,10 @@ export default function BookingCheckoutPage() {
     ?? booking.foodOrder?.totalAmount
     ?? booking.foodAmount
     ?? 0;
+  const availableScorePoints = Math.max(
+    0,
+    Number(userScore?.currentPoints || 0) - Number(userScore?.heldPoints || 0)
+  );
   const isPaymentPhase = phase === CHECKOUT_PHASE.PAYMENT;
 
   return (
@@ -888,6 +903,42 @@ export default function BookingCheckoutPage() {
             ) : (
               /* Step 4: Payment Service handoff */
               <div className="space-y-5">
+                {availableScorePoints > 0 && (
+                  <div className="relative overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-md p-6 md:p-8 shadow-2xl shadow-black/10 transition-all hover:border-brand-orange/30">
+                    <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-brand-orange/5 blur-[80px] pointer-events-none" />
+
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-black/20 border border-brand-orange/20 text-brand-orange shadow-inner">
+                          <ShieldCheck className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                              Loyalty Points
+                            </span>
+                            <span className="rounded-xl bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/20 shadow-inner">
+                              Đã đồng bộ
+                            </span>
+                          </div>
+                          <h3 className="text-lg font-black text-white flex items-baseline gap-1.5 tracking-tight">
+                            {availableScorePoints.toLocaleString('vi-VN')}
+                            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">điểm khả dụng</span>
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 max-w-sm">
+                        <div className="rounded-2xl bg-black/20 p-5 border border-zinc-800/80 shadow-inner">
+                          <p className="text-[11px] font-medium leading-relaxed text-zinc-400 tracking-wide">
+                            Việc dùng điểm sẽ được mở khi tích hợp thanh toán hoàn tất. Số tiền của đơn hiện tại vẫn do <span className="text-brand-orange font-black uppercase tracking-widest">Booking Service</span> quản lý.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-5 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 p-5 md:p-6">
                   <div>
                     <h2 className="text-lg font-black text-white">Chọn phương thức thanh toán</h2>

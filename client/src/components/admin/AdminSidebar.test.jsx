@@ -53,6 +53,14 @@ describe('AdminSidebar', () => {
     expect(screen.queryByText('Bảo mật')).not.toBeInTheDocument();
   });
 
+  it('shows notification administration links for full administrators', () => {
+    renderSidebar();
+
+    expect(screen.getByRole('button', { name: 'Tổng quan thông báo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mẫu thông báo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vận hành gửi thông báo' })).toBeInTheDocument();
+  });
+
   it('allows each operational group to be collapsed independently', () => {
     renderSidebar();
 

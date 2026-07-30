@@ -24,10 +24,22 @@ const accessToken = [
   'signature'
 ].join('.');
 
+const customerAccessToken = [
+  encode({ alg: 'none', typ: 'JWT' }),
+  encode({
+    sub: 'customer@example.com',
+    role: 'CUSTOMER',
+    userId: 17,
+    exp: Math.floor(Date.now() / 1000) + 300
+  }),
+  'signature'
+].join('.');
+
 const renderCallback = entry => render(
   <MemoryRouter initialEntries={[entry]}>
     <Routes>
       <Route path="/oauth2/redirect" element={<OAuth2RedirectHandler />} />
+      <Route path="/" element={<div>Home destination</div>} />
       <Route path="/admin" element={<div>Admin destination</div>} />
       <Route path="/login" element={<div>Login destination</div>} />
     </Routes>
@@ -63,5 +75,17 @@ describe('OAuth2RedirectHandler', () => {
 
     expect(await screen.findByText('Login destination')).toBeInTheDocument();
     await waitFor(() => expect(login).not.toHaveBeenCalled());
+  });
+
+  it('redirects a Google customer login to home', async () => {
+    renderCallback(
+      `/oauth2/redirect#accessToken=${customerAccessToken}&refreshToken=refresh-token&expiresIn=900000`
+    );
+
+    expect(await screen.findByText('Home destination')).toBeInTheDocument();
+    expect(login).toHaveBeenCalledWith(expect.objectContaining({
+      accessToken: customerAccessToken,
+      role: 'CUSTOMER'
+    }));
   });
 });

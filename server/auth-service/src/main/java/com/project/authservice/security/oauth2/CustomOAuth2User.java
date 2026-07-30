@@ -9,7 +9,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
-public class CustomOAuth2User implements OAuth2User {
+public class CustomOAuth2User implements OAuth2User, AccountOAuth2Principal {
 
     private final OAuth2User oauth2User;
     private final Account account;
@@ -36,6 +36,7 @@ public class CustomOAuth2User implements OAuth2User {
     public OAuth2User getOauth2User() {
         return this.oauth2User;
     }
+    @Override
     public Account getAccount() {
         return this.account;
     }

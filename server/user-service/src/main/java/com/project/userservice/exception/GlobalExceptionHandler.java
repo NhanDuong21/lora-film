@@ -29,6 +29,10 @@ public class GlobalExceptionHandler {
         if (code.contains("DUPLICATE") || code.contains("ALREADY_EXISTS")
                 || code.endsWith("_IN_USE") || "USER_010".equals(code)) {
             status = HttpStatus.CONFLICT;
+        } else if ("USER_FILE_TOO_LARGE".equals(code)) {
+            status = HttpStatus.PAYLOAD_TOO_LARGE;
+        } else if ("USER_STORAGE_UNAVAILABLE".equals(code)) {
+            status = HttpStatus.SERVICE_UNAVAILABLE;
         } else if ("USER_NOT_FOUND".equals(code) || "USER_001".equals(code)
                 || "USER_002".equals(code) || "USER_003".equals(code)
                 || "USER_004".equals(code) || "USER_005".equals(code)
@@ -123,8 +127,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
+        // If the client aborted the connection, we don't need to try to write an error response
+        if (ex.getClass().getName().contains("ClientAbortException")) {
+            log.warn("Client aborted connection: {}", ex.getMessage());
+            return null;
+        }
         log.error("Unhandled user-service exception", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Internal server error", "INTERNAL_SERVER_ERROR"));
+    }
+
+    @ExceptionHandler(org.springframework.web.context.request.async.AsyncRequestNotUsableException.class)
+    public void handleAsyncRequestNotUsableException(org.springframework.web.context.request.async.AsyncRequestNotUsableException ex) {
+        log.warn("Client disconnected during async request: {}", ex.getMessage());
     }
 }

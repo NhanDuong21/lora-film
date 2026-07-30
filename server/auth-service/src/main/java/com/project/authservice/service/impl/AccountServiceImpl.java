@@ -26,6 +26,8 @@ public class AccountServiceImpl implements AccountService {
     private final HttpServletRequest servletRequest;
     private final CredentialRevocationService credentialRevocationService;
     private final AuthOutboxService authOutboxService;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -115,6 +117,35 @@ public class AccountServiceImpl implements AccountService {
                 .updatedAt(account.getUpdatedAt())
                 .build();
     }
+
+    @Override
+    @Transactional
+    public AccountDto createEmployeeAccount(com.project.authservice.dto.request.EmployeeAccountRequest request) {
+        String email = request.getEmail().trim().toLowerCase(java.util.Locale.ROOT);
+        
+        if (accountRepository.existsByEmail(email)) {
+            throw new com.project.authservice.exception.BusinessException("Email is already registered");
+        }
+
+        Role role = roleRepository.findByRoleName("EMPLOYEE")
+                .orElseThrow(() -> new ResourceNotFoundException("Role EMPLOYEE not found"));
+
+        Account account = new Account();
+        account.setEmail(email);
+        account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        account.setRole(role);
+        account.setAccountStatus(AccountStatus.ACTIVE);
+        account.setIsEnabled(true);
+        account.setIsDeleted(false);
+        
+        account = accountRepository.save(account);
+
+        auditLogService.log(account.getId(), "CREATE_EMPLOYEE_ACCOUNT", servletRequest);
+        
+        eventPublisher.publishEmployeeAccountCreated(account, request.getFullName());
+
+        return mapToDto(account);
+    }
     private Pageable sanitize(Pageable pageable) {
         java.util.Set<String> allowedSorts = java.util.Set.of("id", "email", "status", "createdAt", "updatedAt");
         org.springframework.data.domain.Sort sort = pageable.getSort().stream()
@@ -134,12 +165,16 @@ public class AccountServiceImpl implements AccountService {
     public AccountServiceImpl(AccountRepository accountRepository, RoleRepository roleRepository,
                               AuditLogService auditLogService, HttpServletRequest servletRequest,
                               CredentialRevocationService credentialRevocationService,
-                              AuthOutboxService authOutboxService) {
+                              AuthOutboxService authOutboxService,
+                              org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
+                              com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher) {
         this.accountRepository = accountRepository;
         this.roleRepository = roleRepository;
         this.auditLogService = auditLogService;
         this.servletRequest = servletRequest;
         this.credentialRevocationService = credentialRevocationService;
         this.authOutboxService = authOutboxService;
+        this.passwordEncoder = passwordEncoder;
+        this.eventPublisher = eventPublisher;
     }
 }
