@@ -16,6 +16,10 @@ vi.mock('./Footer', () => ({
   default: () => <footer>Footer</footer>
 }));
 
+vi.mock('@/features/booking/customer/components/BookingFlowHeader', () => ({
+  default: () => <header>Thanh toán an toàn</header>
+}));
+
 vi.mock('@/features/booking/customer/components/ActiveBookingRecoveryBanner', () => ({
   default: () => <aside data-testid="active-booking-recovery">Đang giữ ghế</aside>
 }));
@@ -40,5 +44,22 @@ describe('MainLayout active booking recovery', () => {
 
     expect(screen.getByText('Màn hình danh sách phim')).toBeInTheDocument();
     expect(screen.getAllByTestId('active-booking-recovery')).toHaveLength(1);
+  });
+
+  it('uses the focused shell and hides recovery UI inside checkout', () => {
+    render(
+      <MemoryRouter initialEntries={['/bookings/checkout?bookingId=booking-1']}>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route path="/bookings/checkout" element={<div>Màn hình thanh toán</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Màn hình thanh toán')).toBeInTheDocument();
+    expect(screen.getByText('Thanh toán an toàn')).toBeInTheDocument();
+    expect(screen.queryByTestId('active-booking-recovery')).not.toBeInTheDocument();
+    expect(screen.queryByText('Footer')).not.toBeInTheDocument();
   });
 });

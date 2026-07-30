@@ -13,10 +13,10 @@ export default function BookingFailedPage() {
   }, [location.search]);
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange font-sans font-medium">
+    <div className="min-h-screen bg-zinc-950 px-4 pb-16 pt-6 font-sans font-medium text-zinc-100 selection:bg-brand-orange md:px-12">
       <div className="max-w-4xl mx-auto w-full space-y-8">
         {/* Booking Stepper - Highlight step 5 in Red or alert state */}
-        <BookingStepper currentStep={5} />
+        <BookingStepper currentStep={4} />
 
         <div className="bg-zinc-900 border border-red-500/25 rounded-3xl p-8 md:p-12 text-center space-y-6 max-w-2xl mx-auto shadow-2xl">
           <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mx-auto border border-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.15)]">

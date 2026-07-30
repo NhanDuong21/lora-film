@@ -490,48 +490,49 @@ export default function SeatSelectionPage() {
   const totalAmount = selectedSeats.reduce((sum, seat) => sum + (Number(seat.price) || 0), 0);
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 pb-28 pt-28 text-zinc-100 sm:px-6">
+    <main className="min-h-screen bg-zinc-950 px-4 pb-40 pt-6 text-zinc-100 sm:px-6">
       <div className="mx-auto max-w-7xl">
         {/* Booking Stepper */}
         <BookingStepper currentStep={2} />
 
-        <button onClick={() => navigate(backPath)} className={`mb-6 flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-brand-orange ${focus}`}>
-          <ArrowLeft size={16} /> Quay lại phim
-        </button>
-
-        {/* Selected Movie Info Summary */}
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-zinc-900 to-zinc-950 p-5 shadow-2xl shadow-black/30 md:p-7 mb-8">
-          <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
-            <div className="flex items-start gap-4">
-              <div className="rounded-2xl border border-brand-orange/30 bg-brand-orange/10 p-3 text-brand-orange">
-                <Film />
+        <section className="mb-5 rounded-2xl border border-white/10 bg-zinc-900/80 p-4 shadow-xl">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="rounded-xl border border-brand-orange/30 bg-brand-orange/10 p-2.5 text-brand-orange">
+                <Film className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-black uppercase tracking-[.22em] text-brand-orange">Suất chiếu đã chọn</p>
-                <h1 className="mt-1 text-2xl font-black text-white">{layout.movie?.title}</h1>
-                <p className="mt-2 text-sm text-zinc-400">
-                  {layout.movieVersion?.versionName || layout.movieVersion?.format}
-                  {layout.auditorium?.screenType && ` · ${layout.auditorium.screenType}`}
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[.18em] text-brand-orange">
+                  Suất chiếu đã chọn
                 </p>
+                <h1 className="truncate text-lg font-black text-white">{layout.movie?.title}</h1>
               </div>
             </div>
-            <dl className="grid gap-3 text-sm sm:grid-cols-3">
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <dt className="flex items-center gap-2 text-xs text-zinc-500"><MapPin size={14} />Rạp</dt>
-                <dd className="mt-1 font-bold text-zinc-200">{layout.cinema?.name} · {layout.auditorium?.name}</dd>
+
+            <dl className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-300">
+              <div className="flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+                <dd className="font-bold">{layout.cinema?.name} · {layout.auditorium?.name}</dd>
               </div>
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <dt className="flex items-center gap-2 text-xs text-zinc-500"><CalendarDays size={14} />Ngày phục vụ</dt>
-                <dd className="mt-1 font-bold text-zinc-200">{formatServiceDate(layout.serviceDate)}</dd>
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 text-zinc-500" />
+                <dd className="font-bold">{formatServiceDate(layout.serviceDate)}</dd>
               </div>
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <dt className="flex items-center gap-2 text-xs text-zinc-500"><Clock3 size={14} />Giờ tại rạp</dt>
-                <dd className="mt-1 font-bold text-zinc-200">
+              <div className="flex items-center gap-1.5">
+                <Clock3 className="h-3.5 w-3.5 text-zinc-500" />
+                <dd className="font-bold text-white">
                   {formatLocalClock(layout.localStartTime)}
                   {layout.localEndTime && ` – ${formatLocalClock(layout.localEndTime)}`}
                 </dd>
               </div>
             </dl>
+
+            <button
+              onClick={() => navigate(backPath)}
+              className={`flex shrink-0 items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-xs font-bold text-zinc-300 transition-colors hover:border-brand-orange/50 hover:text-brand-orange ${focus}`}
+            >
+              <ArrowLeft size={14} /> Đổi suất chiếu
+            </button>
           </div>
         </section>
 
@@ -565,8 +566,38 @@ export default function SeatSelectionPage() {
           </div>
         )}
 
+        <section className="mb-4 rounded-2xl border border-white/10 bg-zinc-900/60 p-4" aria-labelledby="seat-legend-title">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 id="seat-legend-title" className="text-sm font-black text-white">Chọn ghế ngồi</h2>
+              <p className="mt-1 text-xs text-zinc-500">Chọn tối đa {layout.maxSeatsPerBooking || 8} ghế · Vuốt ngang để xem toàn bộ sơ đồ</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {legend.map(seat => {
+                const type = seatTypePresentation(seat.seatType);
+                return (
+                  <div key={seat.seatType} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+                    <span className={`h-5 rounded border ${type.wide ? 'w-8' : 'w-5'} ${type.className}`} aria-hidden="true" />
+                    <span className="text-[10px] font-bold text-zinc-300">
+                      {seat.seatTypeName || type.label} · {money(seat.price)}
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+                <span className="h-5 w-5 rounded border-2 border-brand-orange bg-white" aria-hidden="true" />
+                <span className="text-[10px] font-bold text-zinc-300">Đang chọn</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+                <span className="h-5 w-5 rounded border border-zinc-700 bg-zinc-900 opacity-60" aria-hidden="true" />
+                <span className="text-[10px] font-bold text-zinc-300">Không khả dụng</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Projector Screen & Seating Map */}
-        <section className="overflow-x-auto rounded-3xl border border-white/10 bg-zinc-900/70 p-5 shadow-2xl shadow-black/20 md:p-8 mb-8">
+        <section className="mb-8 overflow-x-auto rounded-3xl border border-white/10 bg-zinc-900/70 p-4 shadow-2xl shadow-black/20 md:p-6">
           <div className="mx-auto min-w-[680px]">
             <div className="mx-auto max-w-3xl mb-12">
               <div className="h-2 rounded-[100%] bg-gradient-to-r from-transparent via-brand-orange to-transparent shadow-[0_8px_28px_rgba(255,122,0,0.35)]" />
@@ -599,6 +630,7 @@ export default function SeatSelectionPage() {
                             type="button"
                             onClick={() => handleSeatClick(seat)}
                             disabled={!seat.sellable || seat.blockedForShowtime}
+                            aria-pressed={isSelected}
                             aria-label={accessibleLabel}
                             title={accessibleLabel}
                             style={{
@@ -608,7 +640,7 @@ export default function SeatSelectionPage() {
                               presentation.wide ? 'rounded-xl border-2' : 'rounded-t-lg rounded-b-xl'
                             } ${
                               isSelected
-                                ? 'bg-brand-orange border-brand-orange text-white shadow-[0_0_12px_rgba(255,122,0,0.4)] scale-105'
+                                ? 'border-brand-orange bg-white text-zinc-950 ring-2 ring-brand-orange/80 shadow-[0_0_14px_rgba(255,122,0,0.45)] scale-105'
                                 : presentation.className
                             } ${
                               seat.sellable && !seat.blockedForShowtime
@@ -634,68 +666,47 @@ export default function SeatSelectionPage() {
           </div>
         </section>
 
-        {/* Seat Category Legend */}
-        <section className="rounded-2xl border border-white/10 bg-zinc-900/60 p-5 mb-8" aria-labelledby="seat-legend-title">
-          <h2 id="seat-legend-title" className="text-sm font-black uppercase tracking-wider text-zinc-300">Loại ghế và giá suất chiếu</h2>
-          <div className="mt-4 flex flex-wrap gap-3">
-            {legend.map(seat => {
-              const type = seatTypePresentation(seat.seatType);
-              return (
-                <div key={seat.seatType} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                  <span className={`h-7 rounded-t-md rounded-b-lg border ${type.wide ? 'w-12' : 'w-7'} ${type.className}`} aria-hidden="true" />
-                  <span>
-                    <strong className="block text-sm text-zinc-100">{seat.seatTypeName || type.label}</strong>
-                    <span className="text-xs text-zinc-400">{money(seat.price)}</span>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+      </div>
 
-        {/* Selected Summary & Action Footer */}
-        <section className="rounded-2xl border border-white/10 bg-zinc-900 p-6 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="space-y-2 text-center md:text-left">
-            <span className="text-xs text-zinc-500 uppercase tracking-widest font-black">Ghế đã chọn</span>
-            <div className="flex flex-wrap justify-center md:justify-start gap-1.5 mt-1">
-              {selectedSeats.length > 0 ? (
-                selectedSeats.map(s => (
-                  <span key={s.publicId} className="bg-brand-orange text-white text-xs font-black px-3 py-1 rounded-lg">
-                    {s.seatCode}
-                  </span>
-                ))
-              ) : (
-                <span className="text-xs text-zinc-500 italic">Vui lòng chọn vị trí ngồi ưa thích của bạn</span>
+      <section
+        aria-label="Ghế đã chọn và tổng tiền"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-700/80 bg-zinc-950/95 px-4 py-3 shadow-[0_-12px_35px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:px-6"
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Ghế đã chọn</span>
+            <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-x-auto">
+              {selectedSeats.length > 0 ? selectedSeats.map(seat => (
+                <span key={seat.publicId} className="shrink-0 rounded-lg bg-brand-orange/15 px-2.5 py-1 text-xs font-black text-brand-orange">
+                  {seat.seatCode}
+                </span>
+              )) : (
+                <span className="truncate text-xs text-zinc-500">Chọn ghế trên sơ đồ để tiếp tục</span>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
-            <div className="text-right flex items-center gap-4 border-r border-zinc-800 pr-6 mr-2">
-              <div className="hidden sm:block">
-                <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Tiền Vé</span>
-                <span className="text-lg font-bold text-zinc-300">{money(totalAmount)}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Tổng thanh toán</span>
-              <span className="text-2xl font-black text-brand-orange">{money(totalAmount)}</span>
-            </div>
-
-            <button
-              disabled={selectedSeats.length === 0 || reservationLoading}
-              onClick={handleContinue}
-              className={`px-8 py-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg ${
-                selectedSeats.length > 0 && !reservationLoading
-                  ? 'bg-brand-orange text-white cursor-pointer hover:bg-orange-600 hover:scale-105 shadow-brand-orange/20'
-                  : 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed'
-              }`}
-            >
-              {reservationLoading ? 'Đang đặt chỗ...' : 'Tiếp Tục'}
-            </button>
+          <div className="shrink-0 text-right">
+            <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500">Tổng tiền</span>
+            <span className="text-lg font-black text-white sm:text-xl">{money(totalAmount)}</span>
           </div>
-        </section>
-      </div>
+
+          <button
+            aria-label="Tiếp tục"
+            disabled={selectedSeats.length === 0 || reservationLoading}
+            onClick={handleContinue}
+            className={`shrink-0 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-wider transition-all sm:px-7 ${
+              selectedSeats.length > 0 && !reservationLoading
+                ? 'cursor-pointer bg-brand-orange text-white shadow-lg shadow-brand-orange/20 hover:bg-orange-600'
+                : 'cursor-not-allowed border border-zinc-700 bg-zinc-800 text-zinc-500'
+            }`}
+          >
+            {reservationLoading
+              ? 'Đang giữ ghế...'
+              : <><span className="sm:hidden">Tiếp tục</span><span className="hidden sm:inline">Tiếp tục · {money(totalAmount)}</span></>}
+          </button>
+        </div>
+      </section>
 
       {notice && (
         <BookingNoticeModal

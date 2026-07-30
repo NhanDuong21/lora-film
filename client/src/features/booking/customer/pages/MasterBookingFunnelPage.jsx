@@ -189,7 +189,7 @@ export default function MasterBookingFunnelPage() {
   }
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-8 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
+    <div className="min-h-screen bg-zinc-950 px-4 pb-16 pt-6 font-sans font-medium text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 md:px-8">
       {notice && (
         <CustomerNoticeModal
           title={notice.title}
