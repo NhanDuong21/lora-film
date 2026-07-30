@@ -123,15 +123,15 @@ describe('AdminShowtimePage URL-backed batch context', () => {
     renderPage('/admin/showtimes?source=AUTO&batchId=preview-1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
-    expect(await screen.findByRole('dialog', { name: 'Xác nhận mở bán toàn bộ' })).toHaveTextContent('25');
+    expect(await screen.findByRole('dialog', { name: 'Bạn sắp mở bán 20 suất chiếu' })).toHaveTextContent('25');
     expect(screen.getByRole('dialog')).toHaveTextContent('20');
-    fireEvent.click(screen.getByRole('button', { name: 'Mở bán toàn bộ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mở bán 20 suất' }));
 
     await waitFor(() => expect(adminShowtimeService.transitionBatchStatus).toHaveBeenCalledWith(
       'preview-1',
       { status: 'OPEN_FOR_BOOKING' },
     ));
-    expect(await screen.findByRole('dialog', { name: 'Kết quả mở bán toàn bộ' })).toHaveTextContent('20');
+    expect(await screen.findByRole('dialog', { name: 'Kết quả mở bán lịch chiếu' })).toHaveTextContent('20');
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(adminShowtimeService.deleteBatch).toBeUndefined();
     confirmSpy.mockRestore();
@@ -164,7 +164,7 @@ describe('AdminShowtimePage URL-backed batch context', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
     expect(await screen.findByText('1 suất · Chưa có bảng giá đầy đủ')).toBeInTheDocument();
     expect(await screen.findByText('Không thể mở bán một phần. Không có suất chiếu nào được thay đổi.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mở bán toàn bộ' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Mở bán 1 suất' })).toBeDisabled();
     expect(adminShowtimeService.transitionBatchStatus).not.toHaveBeenCalled();
   });
 
@@ -193,7 +193,7 @@ describe('AdminShowtimePage URL-backed batch context', () => {
     expect(await screen.findByText(
       '1 suất · Không xác định — xem chi tiết kỹ thuật',
     )).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mở bán toàn bộ' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Mở bán 0 suất' })).toBeDisabled();
   });
 
   it('disables confirmation when no showtime is eligible even if actionAllowed is inconsistent', async () => {
@@ -218,7 +218,7 @@ describe('AdminShowtimePage URL-backed batch context', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
 
-    expect(await screen.findByRole('button', { name: 'Mở bán toàn bộ' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Mở bán 0 suất' })).toBeDisabled();
     expect(adminShowtimeService.transitionBatchStatus).not.toHaveBeenCalled();
   });
 });

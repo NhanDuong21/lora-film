@@ -240,19 +240,19 @@ export default function AdminSidebar({
                 <div className="space-y-0.5">
                   <button onClick={() => handleTabClick('showtimes', '#/admin/showtimes')} className={getSubLinkClass('showtimes')}>
                     <Calendar className="w-4 h-4 shrink-0" />
-                    <span>Lịch vận hành</span>
+                    <span>Lịch chiếu</span>
                   </button>
                   <button onClick={() => handleTabClick('auto-schedule-create', '#/admin/showtime-schedules/create')} className={getSubLinkClass('auto-schedule-create')}>
                     <Zap className="w-4 h-4 shrink-0" />
-                    <span>Lập lịch tuần</span>
+                    <span>Tạo lịch tuần</span>
                   </button>
                   <button onClick={() => handleTabClick('auto-schedule-history', '#/admin/showtime-schedules')} className={getSubLinkClass('auto-schedule-history')}>
                     <History className="w-4 h-4 shrink-0" />
-                    <span>Các bản lịch nháp</span>
+                    <span>Lịch đang soạn</span>
                   </button>
                   <button onClick={() => handleTabClick('pricing', '#/admin/pricing')} className={getSubLinkClass('pricing')}>
                     <CalendarRange className="w-4 h-4 shrink-0" />
-                    <span>Mẫu giá vé</span>
+                    <span>Bảng giá</span>
                   </button>
                 </div>
               )}

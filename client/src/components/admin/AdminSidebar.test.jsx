@@ -23,10 +23,10 @@ describe('AdminSidebar', () => {
     expect(screen.getByRole('button', { name: 'Nội dung & phát hành' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cơ sở rạp' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lịch chiếu & giá vé' })).toBeInTheDocument();
-    expect(screen.getByText('Lịch vận hành')).toBeInTheDocument();
-    expect(screen.getByText('Lập lịch tuần')).toBeInTheDocument();
-    expect(screen.getByText('Các bản lịch nháp')).toBeInTheDocument();
-    expect(screen.getByText('Mẫu giá vé')).toBeInTheDocument();
+    expect(screen.getByText('Lịch chiếu')).toBeInTheDocument();
+    expect(screen.getByText('Tạo lịch tuần')).toBeInTheDocument();
+    expect(screen.getByText('Lịch đang soạn')).toBeInTheDocument();
+    expect(screen.getByText('Bảng giá')).toBeInTheDocument();
   });
 
   it('separates booking, payment and reporting operations for administrators', () => {

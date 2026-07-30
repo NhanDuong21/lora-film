@@ -15,6 +15,13 @@ import {
   getShowtimeTransitionActionPresentation,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
+const transitionConsequences = {
+  OPEN_FOR_BOOKING: 'Sau khi xác nhận, khách có thể đặt vé cho suất chiếu này ngay.',
+  CLOSED: 'Sau khi xác nhận, khách sẽ không thể tạo đơn đặt vé mới cho suất chiếu này.',
+  CANCELLED: 'Suất chiếu sẽ được đánh dấu đã hủy. Hãy kiểm tra các đơn đã đặt trước khi tiếp tục.',
+  FINISHED: 'Suất chiếu sẽ được đánh dấu đã chiếu xong và không thể mở bán lại.',
+};
+
 const formatCurrency = (amount, currency = 'VND') => {
   if (amount == null) return 'N/A';
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency }).format(amount);
@@ -95,19 +102,17 @@ const AdminShowtimeDetailPage = () => {
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">
-                CHI TIẾT SUẤT CHIẾU
+              <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">
+                Chi tiết suất chiếu
               </h1>
               <span
                 aria-label={`Trạng thái hiện tại: ${getShowtimeStatusPresentation(showtime.status).label}`}
-                className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border ${getStatusColor(showtime.status)}`}
+                className={`px-2.5 py-1 text-xs font-bold rounded-full border ${getStatusColor(showtime.status)}`}
               >
                 {getShowtimeStatusPresentation(showtime.status).label}
               </span>
             </div>
-            <p className="text-zinc-500 text-sm mt-1 flex gap-2">
-              <span className="font-mono text-xs">{showtime.showtimePublicId}</span>
-            </p>
+            <p className="text-zinc-500 text-sm mt-1">Kiểm tra thông tin phim, phòng và giá trước khi mở bán.</p>
           </div>
         </div>
 
@@ -133,7 +138,7 @@ const AdminShowtimeDetailPage = () => {
                   title={isUpdatingStatus
                     ? 'Đang cập nhật trạng thái suất chiếu; vui lòng đợi.'
                     : (t === 'OPEN_FOR_BOOKING' && prices?.complete === false
-                      ? 'Không thể mở bán khi snapshot giá chưa đầy đủ.'
+                      ? 'Không thể mở bán vì chưa đủ giá cho tất cả loại ghế.'
                       : undefined)}
                   className="bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-zinc-200 font-bold px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-colors"
                 >
@@ -152,7 +157,7 @@ const AdminShowtimeDetailPage = () => {
           
           {/* Main Info Card */}
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6">
-            <h2 className="text-sm font-black uppercase tracking-wider text-zinc-300 flex items-center gap-2 border-b border-zinc-800 pb-3 mb-4">
+              <h2 className="text-base font-black text-zinc-200 flex items-center gap-2 border-b border-zinc-800 pb-3 mb-4">
               <Film className="w-4 h-4 text-brand-orange" />
               Thông tin lịch chiếu
             </h2>
@@ -160,11 +165,11 @@ const AdminShowtimeDetailPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div>
-                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Phim</span>
+                  <span className="text-xs text-zinc-500 font-bold">Phim</span>
                   <p className="font-bold text-white text-lg mt-1">{showtime.movie?.title}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Định dạng</span>
+                  <span className="text-xs text-zinc-500 font-bold">Định dạng</span>
                   <div className="flex flex-wrap gap-2 mt-1.5">
                     <span className="bg-zinc-800 px-2 py-0.5 rounded text-xs">{showtime.movieVersion?.versionName}</span>
                     <span className="bg-zinc-800 px-2 py-0.5 rounded text-xs">{showtime.movieVersion?.format}</span>
@@ -175,17 +180,18 @@ const AdminShowtimeDetailPage = () => {
 
               <div className="space-y-4">
                 <div>
-                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Địa điểm</span>
+                  <span className="text-xs text-zinc-500 font-bold">Rạp và phòng</span>
                   <p className="text-white mt-1 flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-zinc-400" />
                     <span>{showtime.cinema?.name} - Phòng: <strong>{showtime.auditorium?.name}</strong></span>
                   </p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Múi giờ: {timezoneResolution.usedFallback ? 'UTC dự phòng' : timezoneResolution.timezone}
+                    Giờ địa phương: {timezoneResolution.usedFallback ? 'Mặc định' : 'Theo rạp'}
+                    <span className="sr-only"> Múi giờ: {timezoneResolution.timezone}</span>
                   </p>
                 </div>
                 <div>
-                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Thời gian</span>
+                  <span className="text-xs text-zinc-500 font-bold">Thời gian chiếu</span>
                   <p className="text-white mt-1 flex items-center gap-2 text-lg">
                     <Clock className="w-4 h-4 text-zinc-400" />
                     <span className="font-bold text-brand-orange">{formatShowtimeCinemaTime(showtime.startTime, cinemaTimezone)}</span>
@@ -197,7 +203,7 @@ const AdminShowtimeDetailPage = () => {
                   </p>
                   {timezoneResolution.usedFallback && (
                     <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-300" role="status">
-                      Múi giờ cụm rạp không hợp lệ hoặc bị thiếu; thời gian đang hiển thị theo UTC dự phòng.
+                      Cấu hình giờ của rạp đang bị lỗi; thời gian tạm hiển thị theo giờ chuẩn hệ thống.
                     </p>
                   )}
                 </div>
@@ -208,26 +214,26 @@ const AdminShowtimeDetailPage = () => {
           {/* Pricing Info */}
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6">
             <div className="mb-4 flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h2 className="text-sm font-black uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+              <h2 className="text-base font-black text-zinc-200 flex items-center gap-2">
                 <DollarSign className="w-4 h-4 text-brand-orange" />
-                Bảng giá áp dụng (Snapshot)
+                Giá vé của suất chiếu
               </h2>
               <button
                 type="button"
                 onClick={() => navigate(`/admin/showtimes/${id}/pricing`)}
                 className="text-xs font-bold text-brand-orange hover:underline"
               >
-                Nguồn & chẩn đoán
+                Kiểm tra giá
               </button>
             </div>
 
             {prices?.complete === false && (
               <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
-                Snapshot giá chưa đầy đủ. Còn thiếu {prices.missingSeatTypes?.length || 0} loại ghế
+                Giá vé chưa đầy đủ. Chưa thể mở bán; còn thiếu {prices.missingSeatTypes?.length || 0} loại ghế
                 {prices.ambiguousSeatTypes?.length ? ` và ${prices.ambiguousSeatTypes.length} loại ghế bị mơ hồ` : ''}.
                 {showtime.status === 'DRAFT' && (
                   <button type="button" onClick={() => navigate(`/admin/showtimes/${id}/pricing`)} className="ml-2 font-black underline">
-                    Phân giải giá
+                    Bổ sung giá
                   </button>
                 )}
               </div>
@@ -242,7 +248,7 @@ const AdminShowtimeDetailPage = () => {
                     <span className="text-sm text-zinc-200 font-bold mb-1 block">{p.seatTypeName || 'Loại ghế chưa đặt tên'}</span>
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2 block">{p.seatTypeCode || 'Không có mã'}</span>
                     <span className="text-lg font-black text-green-400">{formatCurrency(p.price, prices.currency)}</span>
-                    <p className="mt-2 text-[10px] font-bold text-zinc-500">{p.pricingSource || 'LEGACY'}</p>
+                    <p className="mt-2 text-[10px] text-zinc-500">{p.pricingSource ? 'Theo bảng giá của rạp' : 'Giá nhập trực tiếp'}</p>
                     <details className="mt-2 text-[10px] text-zinc-500">
                       <summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary>
                       <p className="mt-1 break-all font-mono">seatTypeId: {p.seatTypeId}</p>
@@ -257,9 +263,9 @@ const AdminShowtimeDetailPage = () => {
         {/* Right Column: History */}
         <div className="lg:col-span-1 space-y-8">
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 h-full">
-            <h2 className="text-sm font-black uppercase tracking-wider text-zinc-300 flex items-center gap-2 border-b border-zinc-800 pb-3 mb-6">
-              <History className="w-4 h-4 text-brand-orange" />
-              Lịch sử trạng thái
+              <h2 className="text-base font-black text-zinc-200 flex items-center gap-2 border-b border-zinc-800 pb-3 mb-6">
+                <History className="w-4 h-4 text-brand-orange" />
+              Lịch sử thay đổi
             </h2>
 
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-2.5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-zinc-800 before:to-transparent">
@@ -294,7 +300,7 @@ const AdminShowtimeDetailPage = () => {
                           onClick={() => navigate(`/admin/showtime-schedules/${encodeURIComponent(h.previewPublicId)}`)}
                           className="mt-2 text-[10px] font-bold text-brand-orange hover:underline"
                         >
-                          Mở bản xem trước nguồn
+                          Mở lịch đã tạo suất này
                         </button>
                       )}
                       <details className="mt-2 text-[10px] text-zinc-500">
@@ -321,16 +327,21 @@ const AdminShowtimeDetailPage = () => {
       {statusModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">Chuyển trạng thái</h3>
+            <h3 className="text-lg font-bold text-white mb-2">
+              {getShowtimeTransitionActionPresentation(targetStatus).label} suất chiếu này?
+            </h3>
             <p className="text-sm text-zinc-400 mb-4">
-              Bạn đang chuyển trạng thái suất chiếu sang <strong className={`px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider uppercase border ${getStatusColor(targetStatus)}`}>{getShowtimeStatusPresentation(targetStatus).label}</strong>.
+              Bạn đang đổi tình trạng suất chiếu sang <strong className={`px-1.5 py-0.5 rounded text-xs font-bold border ${getStatusColor(targetStatus)}`}>{getShowtimeStatusPresentation(targetStatus).label}</strong>.
+            </p>
+            <p className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm leading-6 text-amber-100">
+              {transitionConsequences[targetStatus] || 'Thay đổi này sẽ được ghi vào lịch sử suất chiếu.'}
             </p>
             
             <label className="block text-xs font-semibold text-zinc-400 mb-1">Lý do thay đổi (Tuỳ chọn)</label>
             <textarea
               value={statusReason}
               onChange={(e) => setStatusReason(e.target.value)}
-              placeholder="Ghi chú lý do thay đổi trạng thái..."
+              placeholder="Bạn có thể ghi chú lý do thay đổi (không bắt buộc)…"
               className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 focus:border-brand-orange/40 rounded-xl py-2 px-3 text-sm transition-colors focus:outline-none min-h-[80px]"
             />
 
@@ -347,7 +358,7 @@ const AdminShowtimeDetailPage = () => {
                 className="bg-brand-orange text-zinc-950 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-opacity-90 disabled:opacity-50"
               >
                 {isUpdatingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <Edit className="w-4 h-4" />}
-                Xác nhận
+                {getShowtimeTransitionActionPresentation(targetStatus).label}
               </button>
             </div>
           </div>

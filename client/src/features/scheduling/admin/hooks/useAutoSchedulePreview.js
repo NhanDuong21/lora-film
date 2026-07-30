@@ -42,14 +42,14 @@ const createLoadError = (code, message, blocksMutations = false) => {
 const getSelectionGuardMessage = type => {
   switch (type) {
     case SELECTION_BLOCK_TYPES.REJECTED:
-      return 'Ứng viên bị từ chối không thể được chọn.';
+      return 'Suất đề xuất không hợp lệ nên không thể được chọn.';
     case SELECTION_BLOCK_TYPES.ITEM_NOT_PENDING:
-      return 'Chỉ phương án đang chờ mới có thể được chọn.';
+      return 'Chỉ suất đề xuất đang chờ kiểm tra mới có thể được chọn.';
     case SELECTION_BLOCK_TYPES.MALFORMED_ITEM:
     case SELECTION_BLOCK_TYPES.MALFORMED_SELECTED_ITEM:
       return 'Thiếu dữ liệu thời gian sử dụng phòng. Vui lòng cập nhật lại bản lịch.';
     case SELECTION_BLOCK_TYPES.OCCUPANCY_OVERLAP:
-      return 'Suất chiếu xung đột khoảng chiếm phòng với một suất đã chọn.';
+      return 'Suất đề xuất bị trùng thời gian sử dụng phòng với một suất đã chọn.';
     default:
       return 'Không thể cập nhật lựa chọn này. Vui lòng cập nhật lại bản lịch.';
   }
@@ -60,7 +60,7 @@ const getSelectionBackendErrorMessage = (error, fallbackMessage) => {
     case 'AUTO_SCHEDULE_SELECTION_OVERLAP':
       return 'Không thể lưu lựa chọn vì có các suất chiếm cùng phòng bị trùng thời gian.';
     case 'AUTO_SCHEDULE_INVALID_ITEM_SELECTION':
-      return 'Không thể lưu vì phương án này không còn hợp lệ. Hệ thống đang tải lại dữ liệu.';
+      return 'Không thể lưu vì suất đề xuất này không còn hợp lệ. Hệ thống đang tải lại dữ liệu.';
     default:
       return fallbackMessage;
   }
@@ -154,7 +154,7 @@ export default function useAutoSchedulePreview(
       if (previewVersion === null || previewVersion === undefined) {
         throw createLoadError(
           'MISSING_VERSION',
-          'Bản xem trước không cung cấp phiên bản nhất quán. Hãy làm mới dữ liệu.',
+          'Dữ liệu lịch tải về chưa đồng nhất. Hãy làm mới để kiểm tra lại.',
           true,
         );
       }
@@ -223,7 +223,7 @@ export default function useAutoSchedulePreview(
       if (completedPages.size !== reportedTotalPages || allItems.length !== totalElements) {
         throw createLoadError(
           'INCOMPLETE_SNAPSHOT',
-          'Không thể tải đầy đủ các phương án. Hãy cập nhật lại bản lịch.',
+          'Không thể tải đầy đủ các suất đề xuất. Hãy cập nhật lại lịch.',
           true,
         );
       }
@@ -293,7 +293,7 @@ export default function useAutoSchedulePreview(
 
   const handleToggleSelection = async (itemPublicId, currentSelectedState) => {
     if (!capabilities.canSelect) {
-      triggerToast?.('Bản xem trước hiện không cho phép chỉnh sửa lựa chọn.', 'error');
+      triggerToast?.('Lịch này hiện không cho phép thay đổi các suất đã chọn.', 'error');
       return;
     }
 
@@ -346,7 +346,7 @@ export default function useAutoSchedulePreview(
 
   const handleBulkSelection = async selectedIdsArray => {
     if (!capabilities.canSelect) {
-      triggerToast?.('Bản xem trước hiện không cho phép chỉnh sửa lựa chọn.', 'error');
+      triggerToast?.('Lịch này hiện không cho phép thay đổi các suất đã chọn.', 'error');
       return;
     }
 
@@ -394,7 +394,7 @@ export default function useAutoSchedulePreview(
 
   const handleApply = async () => {
     if (!capabilities.canApply) {
-      triggerToast?.('Bản xem trước chưa sẵn sàng để áp dụng.', 'error');
+      triggerToast?.('Lịch này chưa sẵn sàng để tạo suất chiếu.', 'error');
       return null;
     }
 
@@ -420,7 +420,7 @@ export default function useAutoSchedulePreview(
           reasonGroups: [],
           candidates: [],
         });
-        triggerToast?.('Đã áp dụng lịch chiếu thành công', 'success');
+        triggerToast?.('Đã tạo các suất chiếu ở trạng thái đang soạn.', 'success');
         applyIdempotencyRef.current = { fingerprint: '', key: '' };
         onSuccess?.(response.data);
         return response.data;
@@ -435,7 +435,7 @@ export default function useAutoSchedulePreview(
       }
       const message = error?.message
         || error?.response?.data?.message
-        || 'Lỗi áp dụng lịch chiếu';
+        || 'Không thể tạo suất chiếu từ lịch này.';
       triggerToast?.(message, 'error');
       return null;
     } finally {

@@ -59,7 +59,7 @@ describe('ShowtimeTable cinema timezone', () => {
     render(<ShowtimeTable {...defaultProps} showtimes={[showtime('Invalid/Timezone')]} />);
 
     expect(screen.getByText('18:30')).toBeInTheDocument();
-    expect(screen.getByText('UTC dự phòng')).toBeInTheDocument();
+    expect(screen.getByText('Giờ hiển thị tạm thời')).toBeInTheDocument();
   });
 
   it('clears source and batch context through the shared clear-filter action', () => {
@@ -91,7 +91,7 @@ describe('ShowtimeTable cinema timezone', () => {
     expect(screen.getByText('Chưa thể xác minh an toàn đặt vé')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Mở bản lịch gốc' }))
       .toHaveAttribute('href', '/admin/showtime-schedules/6f1d8ca0-1234-5678-9999-111111111111');
-    fireEvent.click(screen.getByRole('button', { name: 'Mở bán toàn bộ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra để mở bán' }));
     expect(onTransitionBatch).toHaveBeenCalledWith('OPEN_FOR_BOOKING');
   });
 });

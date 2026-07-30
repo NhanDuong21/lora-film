@@ -124,7 +124,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(screen.getByTestId('timeline-candidate-item-2')).toBeInTheDocument();
     expect(screen.queryByTestId('timeline-candidate-item-1')).not.toBeInTheDocument();
     expect(screen.getByText('Tạo lúc 10:00 23/07/2026')).toBeInTheDocument();
-    expect(screen.getByText(/Mã rút gọn:/)).toHaveTextContent('PREVIEW1');
+    expect(screen.getByText(/Mã lịch:/)).toHaveTextContent('PREVIEW1');
     expect(screen.getByText('previewPublicId: preview-1')).toBeInTheDocument();
   });
 
@@ -171,11 +171,11 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     renderPage();
 
     fireEvent.click(screen.getByRole('tab', { name: /Không hợp lệ \/ xung đột \(2\)/i }));
-    const overlayActions = screen.getAllByRole('button', { name: 'Xem trên timeline' });
+    const overlayActions = screen.getAllByRole('button', { name: 'Xem trên sơ đồ' });
     fireEvent.click(overlayActions[0]);
     expect(screen.getByRole('button', { name: '25/07/2026' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('timeline-candidate-item-2')).toHaveAttribute('data-diagnostic', 'true');
-    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('0 suất đã chọn và 1 phương án đang kiểm tra');
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('0 suất đã chọn và 1 suất đang kiểm tra');
 
     fireEvent.click(overlayActions[1]);
     expect(screen.getByRole('button', { name: '26/07/2026' })).toHaveAttribute('aria-pressed', 'true');
@@ -200,9 +200,9 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     renderPage();
 
     fireEvent.click(screen.getByRole('tab', { name: /Không hợp lệ \/ xung đột/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Xem trên timeline' }));
-    expect(screen.getByRole('status')).toHaveTextContent('xung đột khoảng chiếm phòng');
-    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 2 phương án');
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trên sơ đồ' }));
+    expect(screen.getByRole('status')).toHaveTextContent('bị trùng khoảng sử dụng phòng');
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 2 suất đề xuất');
   });
 
   it('sorts concise rows by selected state before date, room, local start, rank, and stable ID', () => {
@@ -218,10 +218,10 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(within(rows[0]).getByText('Phim 1')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Phim 2')).toBeInTheDocument();
     expect(within(rows[2]).getByText('Phim 3')).toBeInTheDocument();
-    expect(within(rows[0]).getByText((_, element) => element?.tagName === 'TD' && element.textContent === '89 / 2')).toBeInTheDocument();
-    expect(within(rows[0]).getByText('Dữ liệu mở rộng')).toBeInTheDocument();
+    expect(within(rows[0]).getByText((_, element) => element?.tagName === 'TD' && element.textContent === '89')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Thông tin nâng cao')).toBeInTheDocument();
     expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('điểm cao hơn tốt hơn');
-    expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('Hạng toàn cục chỉ là thứ tự rà soát');
+    expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('Thứ tự rà soát không phải thứ tự quyết định lựa chọn');
     expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('có thể dồn nhiều suất vào cùng một phim');
   });
 
@@ -256,7 +256,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     renderPage();
 
     expect(screen.getByText('2/3 phim được xếp lịch')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Phim C có phương án hợp lệ nhưng chưa có suất nào');
+    expect(screen.getByRole('alert')).toHaveTextContent('Phim C có giờ chiếu hợp lệ nhưng chưa có suất nào');
     expect(screen.getByRole('alert')).toHaveTextContent('Phim A đang chiếm 87.5%');
     expect(screen.getByRole('button', { name: /Phim C.*0 suất/i })).toBeInTheDocument();
   });
@@ -296,11 +296,11 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     useAutoSchedulePreview.mockReturnValue(hookValue({ status: 'CANCELLED', items, selectedIds: new Set() }));
     renderPage();
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Số phương án mỗi trang' }), { target: { value: '100' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Số suất mỗi trang' }), { target: { value: '100' } });
     expect(screen.getAllByTestId('candidate-row')).toHaveLength(100);
-    expect(screen.getByText('Trang 1/37 · 3615 phương án')).toBeInTheDocument();
+    expect(screen.getByText('Trang 1/37 · 3615 suất')).toBeInTheDocument();
     expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('0 suất đã chọn');
-    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 3615 phương án');
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 3615 suất đề xuất');
   });
 
   it('opens an accessible drawer from a semantic timeline button and restores focus on close', async () => {
@@ -310,7 +310,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     fireEvent.click(timelineButton);
 
     expect(screen.getByRole('dialog', { name: 'Phim 1' })).toBeInTheDocument();
-    const closeButton = screen.getByRole('button', { name: 'Đóng chi tiết phương án' });
+    const closeButton = screen.getByRole('button', { name: 'Đóng chi tiết suất đề xuất' });
     await waitFor(() => expect(closeButton).toHaveFocus());
     fireEvent.click(closeButton);
     await waitFor(() => expect(timelineButton).toHaveFocus());
@@ -320,10 +320,10 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     useAutoSchedulePreview.mockReturnValue(hookValue({ isRefreshing: true }));
     renderPage();
 
-    expect(screen.getByText('Đang cập nhật các phương án xếp lịch')).toBeInTheDocument();
-    expect(screen.getByText(/2\/4 trang · 200\/361 phương án/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Áp dụng \(1\)/i })).toBeDisabled();
-    expect(screen.getByRole('tab', { name: /Đề xuất \(1\)/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Đang cập nhật các suất chiếu đề xuất')).toBeInTheDocument();
+    expect(screen.getByText(/2\/4 trang · 200\/361 suất đề xuất/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Tạo 1 suất chiếu/i })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: /^Đề xuất \(1\)$/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('checkbox', { name: /Chọn Phim 1/i })).toBeDisabled();
   });
 
@@ -346,7 +346,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     renderPage();
 
     expect(screen.getByRole('tab', { name: /Suất chiếu đã tạo \(1\)/i })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('button', { name: /Áp dụng \(/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tạo \d+ suất chiếu/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
@@ -362,13 +362,13 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     }));
     renderPage();
 
-    expect(screen.getByText('Đã áp dụng lúc')).toBeInTheDocument();
+    expect(screen.getByText('Đã tạo suất chiếu lúc')).toBeInTheDocument();
     expect(screen.getAllByText('1 suất chiếu đã tạo').length).toBeGreaterThan(0);
     const batchLink = screen.getByRole('link', { name: 'Xem các suất chiếu đã tạo' });
     expect(batchLink).toHaveAttribute('href', '/admin/showtimes?source=AUTO&batchId=preview-1');
     expect(batchLink).not.toHaveAttribute('href', expect.stringContaining('status=DRAFT'));
 
-    fireEvent.click(screen.getByRole('tab', { name: /Tất cả phương án \(2\)/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Tất cả đề xuất \(2\)/i }));
     expect(screen.getByRole('link', { name: 'Mở suất chiếu showtime-1' }))
       .toHaveAttribute('href', '/admin/showtimes/showtime-1');
     expect(screen.queryByText('should-not-link')).not.toBeInTheDocument();
@@ -406,17 +406,16 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     useAutoSchedulePreview.mockReturnValue(value);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /Áp dụng \(1\)/i }));
-    const dialog = screen.getByRole('dialog', { name: 'Xác nhận áp dụng lịch chiếu' });
+    fireEvent.click(screen.getByRole('button', { name: /Tạo 1 suất chiếu/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Tạo 1 suất chiếu từ lịch này?' });
     expect(dialog).toHaveTextContent('Lora Cinema');
     expect(dialog).toHaveTextContent('24/07/2026 – 26/07/2026');
-    expect(dialog).toHaveTextContent('Bản nháp');
-    expect(dialog).toHaveTextContent('Tất cả hoặc không tạo');
-    expect(dialog).toHaveTextContent('Không hợp lệ / xung đột toàn bản');
-    expect(dialog).toHaveTextContent('lần thử lại dùng cùng khóa an toàn');
+    expect(dialog).toHaveTextContent('Đang soạn');
+    expect(dialog).toHaveTextContent('Suất lỗi trong toàn bộ đề xuất');
+    expect(dialog).toHaveTextContent('lần thử lại sẽ dùng cùng khóa an toàn');
 
-    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Kiểm tra giá và áp dụng' })));
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo 1 suất chiếu' })));
     expect(value.handleApply).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('dialog', { name: 'Xác nhận áp dụng lịch chiếu' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Tạo 1 suất chiếu từ lịch này?' })).toBeInTheDocument();
   });
 });

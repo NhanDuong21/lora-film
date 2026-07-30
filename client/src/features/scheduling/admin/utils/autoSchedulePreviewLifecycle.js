@@ -21,13 +21,13 @@ export const CANDIDATE_APPLY_STATE = Object.freeze({
 export const CANDIDATE_APPLY_STATE_META = CANDIDATE_APPLY_PRESENTATION;
 
 const LIFECYCLE_MESSAGES = Object.freeze({
-  [PREVIEW_LIFECYCLE_STATUS.GENERATING]: 'Bản xem trước đang được tạo. Dữ liệu lựa chọn chưa sẵn sàng.',
-  [PREVIEW_LIFECYCLE_STATUS.PREVIEWED]: 'Bản xem trước đã sẵn sàng để rà soát và áp dụng.',
-  [PREVIEW_LIFECYCLE_STATUS.APPLYING]: 'Hệ thống đang đưa bản lịch vào vận hành. Các thao tác chỉnh sửa tạm thời bị khóa.',
-  [PREVIEW_LIFECYCLE_STATUS.APPLIED]: 'Bản xem trước đã được áp dụng và hiện ở chế độ chỉ đọc.',
+  [PREVIEW_LIFECYCLE_STATUS.GENERATING]: 'Hệ thống đang xếp giờ chiếu. Danh sách đề xuất sẽ xuất hiện sau ít phút.',
+  [PREVIEW_LIFECYCLE_STATUS.PREVIEWED]: 'Lịch đề xuất đã sẵn sàng để bạn kiểm tra trước khi tạo suất chiếu.',
+  [PREVIEW_LIFECYCLE_STATUS.APPLYING]: 'Hệ thống đang tạo các suất chiếu ở trạng thái đang soạn. Các thao tác chỉnh sửa tạm thời bị khóa.',
+  [PREVIEW_LIFECYCLE_STATUS.APPLIED]: 'Các suất chiếu đã được tạo ở trạng thái đang soạn và lịch này hiện chỉ còn để xem.',
   [PREVIEW_LIFECYCLE_STATUS.FAILED]: 'Không thể tạo bản lịch. Hãy làm mới hoặc lập một bản lịch khác.',
-  [PREVIEW_LIFECYCLE_STATUS.EXPIRED]: 'Bản xem trước đã hết hạn và không thể chỉnh sửa hoặc áp dụng.',
-  [PREVIEW_LIFECYCLE_STATUS.CANCELLED]: 'Bản xem trước đã bị hủy và chỉ còn để tra cứu lịch sử.',
+  [PREVIEW_LIFECYCLE_STATUS.EXPIRED]: 'Lịch đang soạn đã hết hạn. Hãy tạo lịch mới để tiếp tục.',
+  [PREVIEW_LIFECYCLE_STATUS.CANCELLED]: 'Lịch này đã bị hủy và chỉ còn để tra cứu lịch sử.',
 });
 
 const toEpoch = value => {
@@ -89,7 +89,7 @@ export const derivePreviewCapabilities = (
 export const getCandidateApplyStateMeta = applyStatus => (
   CANDIDATE_APPLY_STATE_META[applyStatus] || {
     label: 'Không xác định',
-    description: 'Trạng thái của phương án này chưa xác định.',
+    description: 'Trạng thái của suất đề xuất này chưa xác định.',
     tone: 'zinc',
   }
 );

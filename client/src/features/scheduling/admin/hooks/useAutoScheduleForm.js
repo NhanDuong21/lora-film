@@ -206,7 +206,7 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
       issues.push('Khoảng cách thử lịch phải từ 5 đến 60 phút.');
     }
     if (Number(previewTtlMinutes) < 5 || Number(previewTtlMinutes) > 120) {
-      issues.push('Thời gian giữ bản lịch nháp phải từ 5 đến 120 phút.');
+      issues.push('Thời gian giữ lịch để kiểm tra phải từ 5 đến 120 phút.');
     }
     return [...new Set(issues)];
   }, [
@@ -272,7 +272,7 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
       });
       if (response?.success) {
         idempotencyRef.current = { fingerprint: '', key: '' };
-        triggerToast?.('Đã tạo bản lịch nháp', 'success');
+        triggerToast?.('Đã tạo lịch để kiểm tra', 'success');
         onSuccess?.(response.data?.previewPublicId);
         return true;
       }

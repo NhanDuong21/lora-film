@@ -74,12 +74,15 @@ describe('AdminAutoScheduleCreatePage', () => {
 
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
-    expect(screen.getByText('Mỗi bản lịch tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để chuẩn bị lịch cho cả tháng.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Mỗi bản lịch tối đa 7 ngày. Bạn có thể tạo nhiều bản liên tiếp để chuẩn bị lịch cho cả tháng.',
+    );
     expect(screen.getByRole('alert')).toHaveTextContent('Khoảng đã chọn gồm 8 ngày');
     expect(screen.getByRole('alert')).toHaveTextContent('22/08/2099 – 28/08/2099');
     expect(screen.getByRole('alert')).not.toHaveTextContent('2099-08-22');
     expect(screen.getByDisplayValue('2099-08-29')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Tạo bản lịch nháp/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Phòng chiếu.*hoàn tất/i })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Tạo lịch để kiểm tra/i })).not.toBeInTheDocument();
   });
 
   it('offers explicit room actions and explains ineligible movies', () => {
@@ -100,10 +103,12 @@ describe('AdminAutoScheduleCreatePage', () => {
 
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
+    fireEvent.click(screen.getByRole('button', { name: /Phòng chiếu.*hoàn tất/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Chọn tất cả đang hoạt động' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xóa chọn' }));
     expect(form.selectAllActiveAuditoriums).toHaveBeenCalledTimes(1);
     expect(form.clearAuditoriums).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /Phim.*hoàn tất/i }));
     expect(screen.queryByText('Phim chưa phát hành')).not.toBeInTheDocument();
     expect(screen.queryByText('Khoảng ngày tạo lịch nằm ngoài thời gian phát hành của phim.')).not.toBeInTheDocument();
 
@@ -129,6 +134,7 @@ describe('AdminAutoScheduleCreatePage', () => {
       'movie-1': [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE', format: '2D' }],
     };
     form.selectedMovieVersionIds = ['version-1'];
+    form.selectedAuditoriumIds = ['aud-1'];
     useAutoScheduleForm.mockReturnValue(form);
 
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
@@ -136,6 +142,7 @@ describe('AdminAutoScheduleCreatePage', () => {
     fireEvent.click(screen.getByRole('button', { name: '3 ngày' }));
     expect(form.setScheduleFrom).toHaveBeenCalledWith('2099-08-22');
     expect(form.setScheduleTo).toHaveBeenCalledWith('2099-08-24');
+    fireEvent.click(screen.getByRole('button', { name: /Phim.*hoàn tất/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Chọn phim đủ điều kiện' }));
     fireEvent.click(screen.getByRole('button', { name: 'Bỏ chọn tất cả' }));
     expect(form.selectEligibleMovieVersions).toHaveBeenCalledWith(['movie-1']);
@@ -157,10 +164,12 @@ describe('AdminAutoScheduleCreatePage', () => {
     form.versionsByMovie = {
       'movie-1': [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE', format: '2D' }],
     };
+    form.selectedAuditoriumIds = ['aud-1'];
     useAutoScheduleForm.mockReturnValue(form);
 
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
+    fireEvent.click(screen.getByRole('button', { name: /Phim.*hoàn tất/i }));
     const poster = screen.getByRole('img', { name: 'Poster Phim có poster' });
     expect(poster).toHaveAttribute('src', 'https://cdn.example.test/poster.jpg');
     fireEvent.error(poster);
@@ -181,23 +190,24 @@ describe('AdminAutoScheduleCreatePage', () => {
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
     expect(screen.getByRole('button', { name: 'Bỏ chọn Phim A IMAX' })).toBeInTheDocument();
-    expect(screen.getByText('Thông tin đã hợp lệ. Bạn có thể tạo bản lịch nháp để rà soát trước khi mở bán.')).toBeInTheDocument();
     expect(screen.getByText('22/08/2099 – 28/08/2099')).toBeInTheDocument();
     expect(screen.queryByText('2099-08-22 → 2099-08-28')).not.toBeInTheDocument();
-    const generate = screen.getByRole('button', { name: /Tạo bản lịch nháp/i });
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra.*hoàn tất/i }));
+    expect(screen.getByText('Thông tin đã hợp lệ. Bạn có thể tạo lịch để kiểm tra trước khi mở bán.')).toBeInTheDocument();
+    const generate = screen.getByRole('button', { name: /Tạo lịch để kiểm tra/i });
     expect(generate).toBeEnabled();
     fireEvent.click(generate);
     expect(form.handleSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it('starts with the scope step open and exposes the room/movie steps through the progress nav', () => {
+  it('starts at scope and moves through the wizard progress navigation', () => {
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
-    const scopeToggle = screen.getAllByRole('button', { name: 'Thu gọn' })[0];
-    expect(scopeToggle).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(screen.getAllByRole('button', { name: /2Phòng chiếu/ })[0]);
-    expect(scopeToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByText('4. Thiết lập nâng cao').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByRole('heading', { name: 'Chọn rạp và khoảng ngày' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Phòng chiếu.*hoàn tất/i }));
+    expect(screen.queryByRole('heading', { name: 'Chọn rạp và khoảng ngày' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Chọn phòng chiếu' })).toBeInTheDocument();
+    expect(screen.getByText('Tùy chọn nâng cao').closest('details')).not.toHaveAttribute('open');
   });
 
   it('automatically opens advanced settings when an advanced validation error exists', () => {
@@ -207,7 +217,7 @@ describe('AdminAutoScheduleCreatePage', () => {
     });
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
 
-    expect(screen.getByText('4. Thiết lập nâng cao').closest('details')).toHaveAttribute('open');
+    expect(screen.getByText('Tùy chọn nâng cao').closest('details')).toHaveAttribute('open');
     expect(screen.getByText('Giá trị từ 5 đến 120')).toBeInTheDocument();
   });
 
@@ -222,6 +232,7 @@ describe('AdminAutoScheduleCreatePage', () => {
     };
     const form = {
       ...baseForm(),
+      selectedAuditoriumIds: ['aud-1'],
       movies: [movie],
       versionsByMovie: {
         'movie-1': [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE', format: '2D' }],
@@ -229,6 +240,7 @@ describe('AdminAutoScheduleCreatePage', () => {
     };
     useAutoScheduleForm.mockReturnValue(form);
     const { unmount } = render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /Phim.*hoàn tất/i }));
     fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm phim' }), { target: { value: 'không tồn tại' } });
     expect(screen.getByText(/Không tìm thấy phim khớp từ khóa/)).toBeInTheDocument();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm phim' }), { target: { value: '' } });
@@ -236,18 +248,21 @@ describe('AdminAutoScheduleCreatePage', () => {
     expect(screen.getByText('Chưa có định dạng nào được chọn để hiển thị.')).toBeInTheDocument();
     unmount();
 
-    useAutoScheduleForm.mockReturnValue({ ...baseForm(), movies: [] });
+    useAutoScheduleForm.mockReturnValue({ ...baseForm(), selectedAuditoriumIds: ['aud-1'], movies: [] });
     const initialEmpty = render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /Phim.*hoàn tất/i }));
     expect(screen.getByText(/Chưa có phim đủ điều kiện trong khoảng ngày đã chọn/)).toBeInTheDocument();
     initialEmpty.unmount();
 
     const retryMovies = vi.fn();
     useAutoScheduleForm.mockReturnValue({
       ...baseForm(),
+      selectedAuditoriumIds: ['aud-1'],
       movieLoadError: 'Không thể xác minh điều kiện phim cho khoảng ngày đã chọn.',
       retryMovies,
     });
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /Phim.*hoàn tất/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Thử tải lại' }));
     expect(retryMovies).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Không thể tải danh sách phim/)).toBeInTheDocument();

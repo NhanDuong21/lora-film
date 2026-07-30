@@ -54,7 +54,9 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
     useShowtimeDetail.mockReturnValue(detailValue('Invalid/Timezone'));
     renderPage();
 
-    expect(screen.getByRole('status')).toHaveTextContent('UTC dự phòng');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Cấu hình giờ của rạp đang bị lỗi; thời gian tạm hiển thị theo giờ chuẩn hệ thống.',
+    );
     expect(screen.getByText('18:30')).toBeInTheDocument();
   });
 
@@ -121,8 +123,8 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
 
     const open = screen.getByRole('button', { name: 'Mở bán' });
     expect(open).toBeDisabled();
-    expect(open).toHaveAttribute('title', 'Không thể mở bán khi snapshot giá chưa đầy đủ.');
-    expect(screen.getByText(/Snapshot giá chưa đầy đủ/)).toBeInTheDocument();
+    expect(open).toHaveAttribute('title', 'Không thể mở bán vì chưa đủ giá cho tất cả loại ghế.');
+    expect(screen.getByText(/Giá vé chưa đầy đủ/)).toBeInTheDocument();
   });
 
   it('renders pricing names and an audit timeline with localized fallbacks and preview link', () => {
@@ -159,12 +161,12 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
     expect(screen.getByText('Ghế VIP')).toBeInTheDocument();
     expect(screen.getByText('VIP')).toBeInTheDocument();
     expect(screen.getByText(/120.000/)).toBeInTheDocument();
-    expect(screen.getByText('Khởi tạo → Bản nháp')).toBeInTheDocument();
-    expect(screen.getByText('Bản nháp → Đang mở bán')).toBeInTheDocument();
+    expect(screen.getByText('Khởi tạo → Đang soạn')).toBeInTheDocument();
+    expect(screen.getByText('Đang soạn → Đang mở bán')).toBeInTheDocument();
     expect(screen.getByText('Đã tạo suất chiếu')).toBeInTheDocument();
     expect(screen.getByText('Không ghi nhận lý do')).toBeInTheDocument();
     expect(screen.getByText(/Người dùng #42 · Tạo tự động/)).toBeInTheDocument();
     expect(screen.getByText(/Không xác định · Tạo thủ công/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Mở bản xem trước nguồn' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mở lịch đã tạo suất này' }));
   });
 });
