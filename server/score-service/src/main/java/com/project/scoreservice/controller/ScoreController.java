@@ -7,6 +7,7 @@ import com.project.scoreservice.exception.BusinessException;
 import com.project.scoreservice.service.ScoreService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping({"/api/scores/me", "/api/scores"})
+@RequestMapping("/api/scores/me")
 @Tag(name = "Customer Score Balance", description = "Endpoints for logged-in customer's score balance and history")
 public class ScoreController {
 
@@ -74,9 +75,26 @@ public class ScoreController {
 
     @PostMapping("/redeem-preview")
     @Operation(summary = "Preview point redemption", description = "Check if customer is eligible to redeem specified points and calculate discount amount")
-    public ResponseEntity<ApiResponse<RedeemPreviewResponse>> previewRedeem(@RequestBody RedeemPreviewRequest request) {
+    public ResponseEntity<ApiResponse<RedeemPreviewResponse>> previewRedeem(@Valid @RequestBody RedeemPreviewRequest request) {
         Long userId = getCurrentUserId();
         RedeemPreviewResponse response = scoreService.previewRedeem(userId, request);
         return ResponseEntity.ok(ApiResponse.success("Redeem preview calculated successfully", response));
     }
+
+    @GetMapping("/expiring")
+    @Operation(summary = "Get expiring points", description = "Retrieve list of point buckets that are active and when they will expire")
+    public ResponseEntity<ApiResponse<java.util.List<ExpiringPointResponse>>> getExpiringPoints() {
+        Long userId = getCurrentUserId();
+        java.util.List<ExpiringPointResponse> response = scoreService.getExpiringPoints(userId);
+        return ResponseEntity.ok(ApiResponse.success("Expiring points retrieved successfully", response));
+    }
+
+    @GetMapping("/tier-history")
+    @Operation(summary = "Get membership tier history", description = "Retrieve chronological list of membership tier changes for the customer")
+    public ResponseEntity<ApiResponse<java.util.List<TierHistoryItemResponse>>> getTierHistory() {
+        Long userId = getCurrentUserId();
+        java.util.List<TierHistoryItemResponse> response = scoreService.getTierHistory(userId);
+        return ResponseEntity.ok(ApiResponse.success("Tier history retrieved successfully", response));
+    }
 }
+

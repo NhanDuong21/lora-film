@@ -40,6 +40,12 @@ public class ScorePersistenceIntegrationTest {
     private ScoreHistoryRepository scoreHistoryRepository;
 
     @Autowired
+    private com.project.scoreservice.repository.PointExpirationBucketRepository pointExpirationBucketRepository;
+
+    @Autowired
+    private com.project.scoreservice.repository.MembershipTierHistoryRepository membershipTierHistoryRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Autowired
@@ -53,12 +59,15 @@ public class ScorePersistenceIntegrationTest {
         transactionTemplate.execute(status -> {
             // Nullify self-references first to avoid constraint issues during clean-up
             entityManager.createQuery("UPDATE ScoreHistory s SET s.referenceHistory = null").executeUpdate();
+            pointExpirationBucketRepository.deleteAll();
+            membershipTierHistoryRepository.deleteAll();
             scoreHistoryRepository.deleteAll();
             userScoreRepository.deleteAll();
             membershipTierRepository.deleteAll();
             return null;
         });
     }
+
 
     private MembershipTier createAndSaveTier(String tierName, int minPoints, double earningRate) {
         return transactionTemplate.execute(status -> {

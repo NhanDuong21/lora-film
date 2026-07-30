@@ -10,7 +10,9 @@ export default function MembershipCard({ scoreData, user }) {
   const currentPoints = scoreData?.currentPoints ?? 0;
   const heldPoints = scoreData?.heldPoints ?? 0;
   const accumulatedPoints = scoreData?.accumulatedPoints ?? 0;
+  const outstandingPoints = scoreData?.outstandingPoints ?? 0;
   const earningRatePct = Math.round((currentTier.earningRate || 0.05) * 100);
+
 
   const getTierStyle = (code) => {
     switch (code?.toUpperCase()) {
@@ -45,66 +47,81 @@ export default function MembershipCard({ scoreData, user }) {
   const style = getTierStyle(currentTier.tierCode);
 
   return (
-    <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${style.gradient} p-8 text-white shadow-2xl border ${style.border} transition-all duration-300 hover:scale-[1.01]`}>
+    <div className={`relative overflow-hidden rounded-[2rem] bg-gradient-to-br ${style.gradient} p-8 text-white shadow-2xl shadow-black/40 border-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-black/60`}>
       {/* Decorative Glow */}
-      <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-black/20 blur-2xl pointer-events-none" />
+      <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-white/5 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-black/40 blur-3xl pointer-events-none" />
+
+      {/* Inner glass border */}
+      <div className={`absolute inset-0 rounded-[2rem] border ${style.border} opacity-50 pointer-events-none`} />
 
       {/* Card Header */}
       <div className="flex items-start justify-between relative z-10">
-        <div className="flex items-center gap-3">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-black/30 backdrop-blur-md border ${style.border}`}>
-            <Award className={`h-6 w-6 ${style.iconColor}`} />
+        <div className="flex items-center gap-4">
+          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 backdrop-blur-xl border ${style.border} shadow-inner`}>
+            <Award className={`h-7 w-7 ${style.iconColor}`} />
           </div>
           <div>
-            <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${style.badgeBg}`}>
-              <Sparkles className="h-3 w-3" />
-              {currentTier.tierName}
-            </span>
-            <p className="mt-1 text-xs text-zinc-300 font-medium">
-              Tích lũy trọn đời: <span className="font-bold text-white">{accumulatedPoints.toLocaleString('vi-VN')}</span> điểm
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest backdrop-blur-md ${style.badgeBg}`}>
+                <Sparkles className="h-3 w-3" />
+                {currentTier.tierName}
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 font-medium tracking-wide">
+              Tích lũy: <span className="font-bold text-white">{accumulatedPoints.toLocaleString('vi-VN')}</span> điểm
             </p>
           </div>
         </div>
         <div className="text-right">
-          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-300 block">Tỷ lệ hoàn điểm</span>
-          <span className="text-xl font-black text-white flex items-center justify-end gap-1">
+          <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block mb-1">Tỷ lệ hoàn</span>
+          <span className="text-lg font-black text-white flex items-center justify-end gap-1.5 bg-black/20 px-2 py-1 rounded-xl backdrop-blur-sm border border-white/5">
             <TrendingUp className="h-4 w-4 text-emerald-400" />
-            +{earningRatePct}%
+            {earningRatePct}%
           </span>
         </div>
       </div>
 
       {/* Card Body / Main Points Display */}
-      <div className="mt-8 pt-6 border-t border-white/10 relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="mt-10 mb-8 relative z-10 flex flex-col gap-6">
         <div>
-          <span className="text-xs font-black uppercase tracking-wider text-zinc-300 block mb-1">Điểm khả dụng hiện tại</span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl md:text-5xl font-black tracking-tight text-white">
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block mb-2">Điểm khả dụng</span>
+          <div className="flex items-end gap-3">
+            <span className="text-5xl md:text-6xl font-black tracking-tighter text-white drop-shadow-lg">
               {currentPoints.toLocaleString('vi-VN')}
             </span>
-            <span className="text-sm font-bold text-zinc-300 uppercase">Điểm</span>
+            <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest pb-1.5">PTS</span>
           </div>
         </div>
 
-        {heldPoints > 0 && (
-          <div className="flex items-center gap-2 rounded-xl bg-black/30 backdrop-blur-md px-4 py-2.5 border border-amber-500/30 text-amber-300">
-            <Lock className="h-4 w-4 shrink-0" />
-            <div className="text-xs">
-              <span className="font-bold">{heldPoints.toLocaleString('vi-VN')}</span> điểm đang tạm giữ
+        <div className="flex flex-wrap items-center gap-3">
+          {heldPoints > 0 && (
+            <div className="flex items-center gap-2 rounded-xl bg-amber-950/40 backdrop-blur-md px-3.5 py-2 border border-amber-500/20 text-amber-300">
+              <Lock className="h-3.5 w-3.5 shrink-0" />
+              <div className="text-[11px] font-medium tracking-wide">
+                <span className="font-black">{heldPoints.toLocaleString('vi-VN')}</span> tạm giữ
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          {outstandingPoints > 0 && (
+            <div className="flex items-center gap-2 rounded-xl bg-red-950/40 backdrop-blur-md px-3.5 py-2 border border-red-500/20 text-red-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+              <div className="text-[11px] font-medium tracking-wide">
+                <span className="font-black">{outstandingPoints.toLocaleString('vi-VN')}</span> nợ
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Card Footer */}
-      <div className="mt-6 flex items-center justify-between text-[11px] text-zinc-300 font-medium relative z-10">
-        <div className="flex items-center gap-1.5">
-          <ShieldCheck className="h-4 w-4 text-emerald-400" />
-          <span>Hội viên chính thức</span>
+      <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium relative z-10 pt-5 border-t border-white/10">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4 text-emerald-500" />
+          <span className="tracking-wide">Thành viên chính thức</span>
         </div>
-        <div className="uppercase tracking-widest font-black text-zinc-300">
-          {user?.fullName || 'Khách hàng thành viên'}
+        <div className="uppercase tracking-widest font-black text-white/90">
+          {user?.fullName || 'LORA MEMBER'}
         </div>
       </div>
     </div>

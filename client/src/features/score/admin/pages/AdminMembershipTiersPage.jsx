@@ -59,28 +59,28 @@ export default function AdminMembershipTiersPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-3xl shadow-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-6 rounded-[2rem] shadow-2xl shadow-black/20">
         <div>
-          <div className="flex items-center gap-2 text-brand-orange mb-1">
+          <div className="flex items-center gap-2 text-brand-orange mb-1.5">
             <Award className="h-5 w-5" />
-            <span className="text-xs font-black uppercase tracking-widest">Hệ thống Loyalty</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Hệ thống Loyalty</span>
           </div>
-          <h1 className="text-2xl font-black text-white">Quản lý Hạng thẻ Thành viên</h1>
-          <p className="text-xs text-zinc-400 mt-1">Thiết lập các mốc thăng hạng và tỷ lệ tích điểm thưởng cho khách hàng</p>
+          <h1 className="text-2xl font-black text-white tracking-tight">Quản lý Hạng thẻ Thành viên</h1>
+          <p className="text-[11px] text-zinc-400 mt-1 font-medium tracking-wide">Thiết lập các mốc thăng hạng và tỷ lệ tích điểm thưởng cho khách hàng</p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={fetchTiers}
             disabled={isLoadingTiers}
-            className="p-3 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 transition-colors disabled:opacity-50"
+            className="p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition-colors disabled:opacity-50 shadow-inner"
             title="Làm mới"
           >
             <RefreshCw className={`h-4 w-4 ${isLoadingTiers ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={handleOpenCreate}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-brand-orange hover:bg-opacity-95 text-zinc-950 font-black text-xs uppercase tracking-wider transition-all shadow-lg cursor-pointer"
+            className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black text-[11px] uppercase tracking-widest transition-all shadow-xl shadow-brand-orange/20 cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             <span>Thêm hạng thẻ mới</span>
@@ -90,77 +90,77 @@ export default function AdminMembershipTiersPage() {
 
       {/* Error */}
       {errorTiers && (
-        <div className="rounded-3xl bg-red-500/10 border border-red-500/20 p-6 flex items-center gap-4 text-red-400">
+        <div className="rounded-3xl bg-red-950/40 border border-red-500/30 p-6 flex items-center gap-4 text-red-400 backdrop-blur-md shadow-xl">
           <AlertCircle className="h-6 w-6 shrink-0" />
           <div>
-            <h4 className="text-sm font-bold">Không thể tải dữ liệu hạng thẻ</h4>
-            <p className="text-xs mt-0.5 opacity-90">{errorTiers}</p>
+            <h4 className="text-sm font-black tracking-wide">Không thể tải dữ liệu hạng thẻ</h4>
+            <p className="text-[11px] mt-1 text-red-400/80 font-medium">{errorTiers}</p>
           </div>
         </div>
       )}
 
       {/* Tiers List */}
-      <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 shadow-xl backdrop-blur-md overflow-hidden">
+      <div className="bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 rounded-[2rem] p-8 shadow-xl shadow-black/10 overflow-hidden">
         {isLoadingTiers && tiers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-3">
+          <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-4">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-orange border-t-transparent" />
-            <span className="text-xs font-medium">Đang tải danh sách hạng thành viên...</span>
+            <span className="text-xs font-medium tracking-wide">Đang tải danh sách hạng thành viên...</span>
           </div>
         ) : tiers.length === 0 ? (
-          <div className="text-center py-16 text-zinc-500">
-            <Award className="h-10 w-10 mx-auto text-zinc-700 mb-2" />
-            <p className="text-sm font-bold text-zinc-400">Chưa cấu hình hạng thành viên nào</p>
-            <p className="text-xs text-zinc-600 mt-1">Nhấn nút "Thêm hạng thẻ mới" để khởi tạo các hạng Bạc, Vàng, Kim Cương.</p>
+          <div className="text-center py-20 text-zinc-500">
+            <Award className="h-12 w-12 mx-auto text-zinc-700 mb-3" />
+            <p className="text-sm font-black tracking-wide">Chưa cấu hình hạng thành viên nào</p>
+            <p className="text-[11px] font-medium text-zinc-500 mt-1.5 max-w-sm mx-auto">Nhấn nút "Thêm hạng thẻ mới" để khởi tạo các hạng Bạc, Vàng, Kim Cương.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-zinc-800 text-[11px] font-black uppercase tracking-wider text-zinc-500">
-                  <th className="py-4 px-4">Mã hạng (Code)</th>
-                  <th className="py-4 px-4">Tên hạng hiển thị</th>
-                  <th className="py-4 px-4 text-right">Điểm tích lũy tối thiểu</th>
-                  <th className="py-4 px-4 text-right">Tỷ lệ hoàn điểm</th>
-                  <th className="py-4 px-4">Trạng thái</th>
-                  <th className="py-4 px-4">Mô tả</th>
-                  <th className="py-4 px-4 text-right">Thao tác</th>
+                <tr className="border-b border-zinc-800/50 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                  <th className="py-4 px-4 font-black">Mã hạng (Code)</th>
+                  <th className="py-4 px-4 font-black">Tên hạng hiển thị</th>
+                  <th className="py-4 px-4 text-right font-black">Điểm tối thiểu</th>
+                  <th className="py-4 px-4 text-right font-black">Tỷ lệ hoàn</th>
+                  <th className="py-4 px-4 font-black">Trạng thái</th>
+                  <th className="py-4 px-4 font-black">Mô tả</th>
+                  <th className="py-4 px-4 text-right font-black">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60 text-xs text-zinc-300">
+              <tbody className="divide-y divide-zinc-800/30 text-xs text-zinc-300">
                 {tiers.map((tier) => (
-                  <tr key={tier.tierCode} className="hover:bg-zinc-800/40 transition-colors group">
-                    <td className="py-4 px-4 font-mono font-black text-amber-400 uppercase whitespace-nowrap">
+                  <tr key={tier.tierCode} className="hover:bg-white/5 transition-colors group">
+                    <td className="py-4 px-4 font-mono font-black text-brand-orange uppercase whitespace-nowrap tracking-wide">
                       {tier.tierCode}
                     </td>
-                    <td className="py-4 px-4 font-bold text-white whitespace-nowrap">
+                    <td className="py-4 px-4 font-black text-white whitespace-nowrap tracking-wide">
                       {tier.tierName}
                     </td>
-                    <td className="py-4 px-4 text-right font-black text-white whitespace-nowrap">
-                      {(tier.minAccumulatedPoints || 0).toLocaleString('vi-VN')} điểm
+                    <td className="py-4 px-4 text-right font-black text-white whitespace-nowrap tracking-wider">
+                      {(tier.minAccumulatedPoints || 0).toLocaleString('vi-VN')} <span className="text-[9px] text-zinc-500 uppercase tracking-widest ml-0.5">pts</span>
                     </td>
-                    <td className="py-4 px-4 text-right font-bold text-emerald-400 whitespace-nowrap">
+                    <td className="py-4 px-4 text-right font-black text-emerald-400 whitespace-nowrap tracking-wide">
                       {Math.round((tier.earningRate || 0.05) * 100)}%
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap">
                       {tier.active !== false ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400 border border-emerald-500/20">
+                        <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/20 shadow-inner">
                           <CheckCircle className="h-3 w-3" />
-                          Đang hoạt động
+                          Hoạt động
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-2.5 py-1 text-[11px] font-bold text-zinc-400 border border-zinc-700">
+                        <span className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-800/50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-zinc-400 border border-zinc-700/50 shadow-inner">
                           <XCircle className="h-3 w-3" />
                           Tạm khóa
                         </span>
                       )}
                     </td>
-                    <td className="py-4 px-4 text-zinc-400 max-w-xs truncate" title={tier.description}>
+                    <td className="py-4 px-4 text-[11px] text-zinc-400 font-medium max-w-[12rem] truncate" title={tier.description}>
                       {tier.description || '—'}
                     </td>
                     <td className="py-4 px-4 text-right whitespace-nowrap">
                       <button
                         onClick={() => handleOpenEdit(tier)}
-                        className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors border border-zinc-700"
+                        className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/10 shadow-sm"
                         title="Chỉnh sửa hạng thẻ"
                       >
                         <Edit2 className="h-4 w-4" />
