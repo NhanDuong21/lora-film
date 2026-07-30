@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import MovieDiscoveryView from './MovieDiscoveryPage';
 import { getGenres, getMovies } from '../services/movieService';
 
@@ -36,7 +37,11 @@ describe('MovieDiscoveryView', () => {
   });
 
   it('renders public movie and genre identities without duplicate-key warnings', async () => {
-    render(<MovieDiscoveryView />);
+    render(
+      <MemoryRouter>
+        <MovieDiscoveryView />
+      </MemoryRouter>
+    );
 
     expect(await screen.findAllByText('Nhà Có Năm Nàng Tiên')).not.toHaveLength(0);
     expect(screen.getByRole('option', { name: 'Hành động' })).toHaveValue(
@@ -47,6 +52,21 @@ describe('MovieDiscoveryView', () => {
       const keyWarnings = consoleError.mock.calls.filter(call =>
         String(call[0]).includes('unique "key" prop'));
       expect(keyWarnings).toHaveLength(0);
+    });
+  });
+
+  it('applies search and status filters received from the header URL', async () => {
+    render(
+      <MemoryRouter initialEntries={['/movies?search=Dune&status=UPCOMING']}>
+        <MovieDiscoveryView />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(getMovies).toHaveBeenCalledWith(expect.objectContaining({
+        search: 'Dune',
+        status: 'UPCOMING'
+      }));
     });
   });
 });

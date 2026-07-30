@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Play, RefreshCw, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import TrailerModal from '@/components/common/TrailerModal';
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import { getMovies, getGenres } from '@/features/catalog/customer/services/movieService';
@@ -23,6 +24,7 @@ const SORT_LIST = [
 ];
 
 export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [movies, setMovies] = useState([]);
   const [genres, setGenres] = useState([{ label: 'Tất cả thể loại', value: 'ALL' }]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,12 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
 
   const [activeTrailerUrl, setActiveTrailerUrl] = useState(null);
   const [notice, setNotice] = useState(null);
+  const routeStatus = searchParams.get('status');
+  const searchTerm = (searchParams.get('search') || '').trim();
+  const selectedRouteStatus = STATUS_LIST.some(item => item.value === routeStatus)
+    ? routeStatus
+    : null;
+  const effectiveStatus = selectedRouteStatus || selectedStatus;
 
   useEffect(() => {
     const fetchGenres = async () => {
@@ -72,8 +80,11 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
         if (selectedGenre !== 'ALL') {
           queryParams.genreId = selectedGenre;
         }
-        if (selectedStatus !== 'ALL') {
-          queryParams.status = selectedStatus;
+        if (effectiveStatus !== 'ALL') {
+          queryParams.status = effectiveStatus;
+        }
+        if (searchTerm) {
+          queryParams.search = searchTerm;
         }
 
         const moviesData = await getMovies(queryParams);
@@ -93,9 +104,10 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
       }
     };
     fetchMoviesData();
-  }, [currentPage, selectedGenre, selectedStatus, selectedSort]);
+  }, [currentPage, selectedGenre, effectiveStatus, searchTerm, selectedSort]);
 
   const handleResetFilters = () => {
+    setSearchParams({}, { replace: true });
     setSelectedGenre('ALL');
     setSelectedStatus('ALL');
     setSelectedSort('createdAt,desc');
@@ -108,6 +120,9 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
   };
 
   const handleStatusChange = (e) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('status');
+    setSearchParams(nextParams, { replace: true });
     setSelectedStatus(e.target.value);
     setCurrentPage(0);
   };
@@ -164,7 +179,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
             <div className="flex flex-col gap-1.5 flex-grow sm:flex-grow-0">
               <label className="text-[9px] text-zinc-500 font-black uppercase tracking-wider pl-1">Trạng Thái</label>
               <select
-                value={selectedStatus}
+                value={effectiveStatus}
                 onChange={handleStatusChange}
                 className="bg-zinc-950 border border-zinc-800 hover:border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl py-2.5 px-3 focus:border-brand-orange focus:outline-none transition-colors"
               >
