@@ -234,7 +234,20 @@ export default function SeatSelectionPage() {
         return next;
       });
     };
-    const subscribe = () => socket.emit('seat:subscribe', showtimePublicId);
+    const subscribe = () => socket.emit(
+      'seat:subscribe',
+      showtimePublicId,
+      acknowledgement => {
+        if (acknowledgement?.ok) {
+          // Recover any committed changes missed while the socket was
+          // disconnected before continuing with incremental events.
+          refreshAvailability().catch(() => {
+            // The initial layout remains usable; the next reconnect or
+            // mutation conflict will refresh authoritative availability.
+          });
+        }
+      }
+    );
 
     socket.on('seat:availability-changed', onAvailabilityChanged);
     socket.on('connect', subscribe);
@@ -246,7 +259,7 @@ export default function SeatSelectionPage() {
       socket.off('seat:availability-changed', onAvailabilityChanged);
       socket.disconnect();
     };
-  }, [showtimePublicId, showNotice]);
+  }, [refreshAvailability, showtimePublicId, showNotice]);
 
   const rows = useMemo(() => {
     const grouped = new Map();

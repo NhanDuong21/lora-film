@@ -39,6 +39,11 @@ public class RouteValidator {
                 String path = request.getURI().getPath();
                 return request.getMethod() != HttpMethod.OPTIONS
                         && !OPEN_ENDPOINTS.contains(path)
+                        // Seat availability is a public, read-only projection.
+                        // Browser WebSocket handshakes cannot attach our Bearer
+                        // header, so requiring gateway authentication here
+                        // rejects Socket.IO upgrades with HTTP 401.
+                        && !path.startsWith("/socket.io/")
                         && !(request.getMethod() == HttpMethod.GET && isPublicGetPath(path))
                         && !REGISTRATION_STATUS.matcher(path).matches()
                         && !path.startsWith("/oauth2/")

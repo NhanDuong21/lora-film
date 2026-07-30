@@ -2,7 +2,6 @@ package com.project.userservice.service;
 
 import com.project.userservice.dto.request.PayrollDetailRequest;
 import com.project.userservice.dto.request.PayrollRequest;
-import com.project.userservice.dto.response.PayrollDetailResponse;
 import com.project.userservice.dto.response.PayrollResponse;
 import com.project.userservice.entity.Employee;
 import com.project.userservice.entity.Payroll;
@@ -12,6 +11,7 @@ import com.project.userservice.enumtype.PayrollDetailType;
 import com.project.userservice.enumtype.PayrollStatus;
 import com.project.userservice.enumtype.EmployeeStatus;
 import com.project.userservice.exception.BusinessException;
+import com.project.userservice.mapper.PayrollMapper;
 import com.project.userservice.repository.EmployeeRepository;
 import com.project.userservice.repository.PayrollRepository;
 import com.project.userservice.repository.UserRepository;
@@ -26,7 +26,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.util.Collections;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -38,15 +37,17 @@ public class PayrollService {
     private final UserRepository userRepository;
     private final UserAuditService auditService;
     private final UserDomainEventService eventService;
+    private final PayrollMapper payrollMapper;
 
     public PayrollService(PayrollRepository payrollRepository, EmployeeRepository employeeRepository,
                           UserRepository userRepository, UserAuditService auditService,
-                          UserDomainEventService eventService) {
+                          UserDomainEventService eventService, PayrollMapper payrollMapper) {
         this.payrollRepository = payrollRepository;
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
         this.auditService = auditService;
         this.eventService = eventService;
+        this.payrollMapper = payrollMapper;
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +70,8 @@ public class PayrollService {
         Map<Long, User> users = userRepository.findAllById(page.getContent().stream()
                         .map(p -> p.getEmployee().getAccountId()).distinct().toList())
                 .stream().collect(Collectors.toMap(User::getAccountId, Function.identity()));
-        return page.map(p -> map(p, users.get(p.getEmployee().getAccountId()), false));
+        return page.map(payroll -> payrollMapper.toResponse(payroll,
+                users.get(payroll.getEmployee().getAccountId()), false));
     }
 
     @Transactional(readOnly = true)
@@ -78,7 +80,7 @@ public class PayrollService {
                 .orElseThrow(() -> new BusinessException("Payroll not found", "USER_006"));
         User user = userRepository.findById(payroll.getEmployee().getAccountId())
                 .orElseThrow(() -> new BusinessException("User not found", "USER_001"));
-        return map(payroll, user, true);
+        return payrollMapper.toResponse(payroll, user, true);
     }
 
     @Transactional
@@ -241,17 +243,6 @@ public class PayrollService {
         return Map.of("payrollId", payroll.getId(), "employeeId", payroll.getEmployee().getAccountId(),
                 "salaryMonth", payroll.getSalaryMonth().toString(), "totalSalary", payroll.getTotalSalary(),
                 "status", payroll.getStatus().name());
-    }
-
-    private PayrollResponse map(Payroll payroll, User user, boolean includeDetails) {
-        return new PayrollResponse(payroll.getId(), payroll.getEmployee().getAccountId(),
-                payroll.getEmployee().getEmployeeCode(), user == null ? null : user.getFullName(),
-                payroll.getSalaryMonth(), payroll.getBasicSalary(), payroll.getAllowance(), payroll.getBonus(),
-                payroll.getDeduction(), payroll.getTotalSalary(), payroll.getStatus(), payroll.getApprovedBy(),
-                payroll.getApprovedAt(), payroll.getPaidAt(),
-                includeDetails ? payroll.getDetails().stream()
-                        .map(d -> new PayrollDetailResponse(d.getId(), d.getType(), d.getDescription(), d.getAmount()))
-                        .toList() : Collections.emptyList());
     }
 
     private Pageable sanitize(Pageable pageable) {

@@ -20,6 +20,7 @@ const AdminEmployeeDocumentPage = lazy(() => import('./pages/AdminEmployeeDocume
 const AdminAccountPage = lazy(() => import('./pages/AdminAccountPage'));
 const AdminUserAuditPage = lazy(() => import('./pages/AdminUserAuditPage'));
 const AdminAnalyticsPage = lazy(() => import('@/features/analytics/admin/pages/AdminAnalyticsPage'));
+const AdminMyAccountPage = lazy(() => import('./pages/AdminMyAccountPage'));
 
 const lazyPage = (element) => (
     <Suspense fallback={<PageLoader />}>
@@ -53,6 +54,7 @@ function AdminLanding() {
 
 export const adminStaffRoutes = [
     { index: true, element: <AdminLanding /> },
+    { path: 'me', element: lazyPage(<AdminMyAccountPage />) },
     { path: 'events', element: requireAdminRole(<AdminEventView />) },
     { path: 'finance', element: <Navigate to="/admin/analytics" replace /> },
     { path: 'analytics', element: requirePermission(<AdminAnalyticsPage />, 'PERM_VIEW_FINANCE', 'DASHBOARD_VIEW') },

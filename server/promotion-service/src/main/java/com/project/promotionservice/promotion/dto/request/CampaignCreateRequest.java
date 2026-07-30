@@ -14,6 +14,8 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+
 @Schema(description = "Request body to create a new promotion campaign")
 public class CampaignCreateRequest {
 
@@ -34,20 +36,30 @@ public class CampaignCreateRequest {
     @NotNull(message = "fundingSource is required")
     private FundingSource fundingSource;
 
+    @Pattern(regexp = UUID_PATTERN, message = "partnerPublicId must be a valid UUID")
+    private String partnerPublicId;
+
+    @NotNull(message = "priority is required")
     @Min(value = 0, message = "priority must be >= 0")
     private Integer priority = 100;
 
+    @NotNull(message = "stackable is required")
     private Boolean stackable = false;
 
+    @NotNull(message = "exclusiveCampaign is required")
     private Boolean exclusiveCampaign = false;
 
+    @NotNull(message = "autoActivate is required")
     private Boolean autoActivate = true;
 
+    @NotNull(message = "autoComplete is required")
     private Boolean autoComplete = true;
 
+    @NotNull(message = "autoPauseWhenBudgetExceeded is required")
     private Boolean autoPauseWhenBudgetExceeded = true;
 
     @NotBlank(message = "timezone is required")
+    @Size(max = 60, message = "timezone must be <= 60 characters")
     private String timezone = "Asia/Ho_Chi_Minh";
 
     @NotNull(message = "startAt is required")
@@ -63,6 +75,7 @@ public class CampaignCreateRequest {
     @Min(value = 1, message = "maxRedemptions must be >= 1")
     private Integer maxRedemptions;
 
+    @NotNull(message = "maxRedemptionsPerUser is required")
     @Min(value = 1, message = "maxRedemptionsPerUser must be >= 1")
     private Integer maxRedemptionsPerUser = 1;
 
@@ -112,6 +125,14 @@ public class CampaignCreateRequest {
 
     public void setFundingSource(FundingSource fundingSource) {
         this.fundingSource = fundingSource;
+    }
+
+    public String getPartnerPublicId() {
+        return partnerPublicId;
+    }
+
+    public void setPartnerPublicId(String partnerPublicId) {
+        this.partnerPublicId = partnerPublicId;
     }
 
     public Integer getPriority() {

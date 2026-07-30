@@ -65,8 +65,11 @@ export const resetPassword = async (token, newPassword, email) =>
 export const changePassword = async (oldPassword, newPassword) =>
     (await apiClient.post("/api/auth/change-password", { oldPassword, newPassword })).data;
 
-export const changeEmail = async (newEmail, password) =>
-    (await apiClient.post("/api/auth/change-email", { newEmail, password })).data;
+export const requestChangeEmail = async (newEmail, password) =>
+    (await apiClient.post("/api/auth/change-email/request", { newEmail, currentPassword: password })).data;
+
+export const verifyChangeEmail = async (otp) =>
+    (await apiClient.post("/api/auth/change-email/verify", { otp })).data;
 
 export const getCurrentAccount = async () =>
     (await apiClient.get("/api/auth/me")).data?.data;

@@ -34,6 +34,18 @@ const ERROR_MESSAGES = {
   PROVIDER_EVENT_CONFLICT: 'Kết quả từ cổng thanh toán có mâu thuẫn và đang được đối soát.',
   PAYMENT_RECONCILIATION_REQUIRED: 'Giao dịch đang cần đối soát. Nhân viên sẽ kiểm tra kết quả thanh toán.',
   WEBHOOK_SIGNATURE_INVALID: 'Thông báo từ cổng thanh toán không hợp lệ nên không thể xử lý lại.',
+  PAYMENT_NOT_REFUNDABLE: 'Chỉ giao dịch đã thanh toán thành công mới có thể hoàn tiền.',
+  REFUND_NOT_FOUND: 'Không tìm thấy yêu cầu hoàn tiền.',
+  REFUND_IDEMPOTENCY_KEY_REQUIRED: 'Yêu cầu hoàn tiền đang thiếu mã chống xử lý trùng.',
+  REFUND_IDEMPOTENCY_CONFLICT: 'Mã chống xử lý trùng đã được dùng cho một yêu cầu hoàn tiền khác.',
+  REFUND_AMOUNT_REQUIRED: 'Vui lòng nhập số tiền cần hoàn.',
+  REFUND_AMOUNT_EXCEEDS_AVAILABLE: 'Số tiền hoàn vượt quá số tiền còn có thể hoàn.',
+  REFUND_COMPONENT_INVALID: 'Phạm vi hoàn tiền không phù hợp với hình thức đã chọn.',
+  TICKET_REFUND_NOT_SUPPORTED: 'Hiện chưa hỗ trợ hoàn riêng từng vé. Vui lòng xử lý ở cấp toàn bộ đơn.',
+  REFUND_NOT_RETRYABLE: 'Yêu cầu hoàn tiền này không thể thử lại ở trạng thái hiện tại.',
+  CASH_REFUND_REQUIRES_MANUAL_SETTLEMENT: 'Hoàn tiền mặt cần được trả và xác nhận tại quầy.',
+  CASH_REFUND_REFERENCE_REQUIRED: 'Vui lòng nhập mã biên nhận hoàn tiền tại quầy.',
+  CASH_REFUND_NOTE_REQUIRED: 'Vui lòng ghi chú cách thức đã trả tiền cho khách.',
   MOCK_RESULT_INVALID: 'Kết quả thanh toán mô phỏng không hợp lệ.',
   VALIDATION_ERROR: 'Thông tin gửi lên chưa hợp lệ. Vui lòng kiểm tra lại.',
   INTERNAL_SERVER_ERROR: 'Hệ thống thanh toán đang bận. Vui lòng thử lại sau.',
@@ -92,6 +104,25 @@ export const getAdminPayment = async paymentPublicId =>
 
 export const getPaymentOperations = async (kind, params) =>
   unwrap(await apiClient.get(`/api/admin/payments/${kind}`, { params }));
+
+export const getAdminRefunds = async params =>
+  unwrap(await apiClient.get('/api/admin/payments/refunds', { params }));
+
+export const createAdminRefund = async (paymentPublicId, payload, idempotencyKey) =>
+  unwrap(await apiClient.post(
+    `/api/admin/payments/${paymentPublicId}/refunds`,
+    payload,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  ));
+
+export const retryAdminRefund = async refundPublicId =>
+  unwrap(await apiClient.post(`/api/admin/payments/refunds/${refundPublicId}/retry`));
+
+export const completeCashRefund = async (refundPublicId, payload) =>
+  unwrap(await apiClient.post(
+    `/api/admin/payments/refunds/${refundPublicId}/cash/complete`,
+    payload,
+  ));
 
 export const replayPaymentOperation = async (kind, id) =>
   unwrap(await apiClient.post(`/api/admin/payments/${kind}/${id}/replay`));

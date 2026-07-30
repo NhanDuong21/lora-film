@@ -5,6 +5,7 @@ import com.project.userservice.entity.Employee;
 import com.project.userservice.entity.EmployeeDocument;
 import com.project.userservice.enumtype.EmployeeDocumentType;
 import com.project.userservice.exception.BusinessException;
+import com.project.userservice.mapper.EmployeeDocumentMapper;
 import com.project.userservice.repository.EmployeeDocumentRepository;
 import com.project.userservice.repository.EmployeeRepository;
 import com.project.userservice.security.CurrentActor;
@@ -25,20 +26,23 @@ public class EmployeeDocumentService {
 
     private final EmployeeRepository employeeRepository;
     private final EmployeeDocumentRepository documentRepository;
-    private final SecureFileStorageService fileStorageService;
+    private final FileStorageService fileStorageService;
     private final UserAuditService auditService;
     private final UserDomainEventService eventService;
+    private final EmployeeDocumentMapper documentMapper;
 
     public EmployeeDocumentService(EmployeeRepository employeeRepository,
                                    EmployeeDocumentRepository documentRepository,
-                                   SecureFileStorageService fileStorageService,
+                                   FileStorageService fileStorageService,
                                    UserAuditService auditService,
-                                   UserDomainEventService eventService) {
+                                   UserDomainEventService eventService,
+                                   EmployeeDocumentMapper documentMapper) {
         this.employeeRepository = employeeRepository;
         this.documentRepository = documentRepository;
         this.fileStorageService = fileStorageService;
         this.auditService = auditService;
         this.eventService = eventService;
+        this.documentMapper = documentMapper;
     }
 
     @Transactional
@@ -48,14 +52,15 @@ public class EmployeeDocumentService {
         Employee employee = findEmployee(accountId);
         validateDates(issuedDate, expiredDate);
         String normalizedName = normalizeDocumentName(documentName, file);
-        SecureFileStorageService.StoredFile storedFile = fileStorageService.storeEmployeeDocument(file);
+        FileStorageService.StoredFile storedFile = fileStorageService.storeEmployeeDocument(file);
+        fileStorageService.deleteOnRollback(STORAGE_DIRECTORY, storedFile.publicId());
 
         try {
             EmployeeDocument document = new EmployeeDocument();
             document.setEmployee(employee);
             document.setDocumentType(documentType);
             document.setDocumentName(normalizedName);
-            document.setFileName(storedFile.fileName());
+            document.setFileName(storedFile.publicId());
             document.setFileUrl("/api/users/employees/" + accountId + "/documents");
             document.setFileSize(storedFile.fileSize());
             document.setMimeType(storedFile.contentType());
@@ -69,10 +74,10 @@ public class EmployeeDocumentService {
                     "employeeId=" + accountId + ", type=" + documentType);
             eventService.record("EMPLOYEE_DOCUMENT_UPLOADED", "EMPLOYEE", accountId,
                     eventData(document));
-            return toResponse(document);
+            return documentMapper.toResponse(document);
         } catch (RuntimeException exception) {
             try {
-                fileStorageService.delete(STORAGE_DIRECTORY, storedFile.fileName());
+                fileStorageService.delete(STORAGE_DIRECTORY, storedFile.publicId());
             } catch (RuntimeException ignored) {
                 // Preserve the database or business failure that prevented metadata persistence.
             }
@@ -86,7 +91,7 @@ public class EmployeeDocumentService {
         List<EmployeeDocument> documents = includeDeleted
                 ? documentRepository.findByEmployeeAccountIdOrderByUploadedAtDesc(accountId)
                 : documentRepository.findByEmployeeAccountIdAndDeletedAtIsNullOrderByUploadedAtDesc(accountId);
-        return documents.stream().map(this::toResponse).toList();
+        return documents.stream().map(documentMapper::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -146,22 +151,6 @@ public class EmployeeDocumentService {
                     "USER_EMPLOYEE_DOCUMENT_NAME");
         }
         return normalized;
-    }
-
-    private EmployeeDocumentResponse toResponse(EmployeeDocument document) {
-        return new EmployeeDocumentResponse(
-                document.getId(),
-                document.getEmployee().getAccountId(),
-                document.getDocumentType(),
-                document.getDocumentName(),
-                document.getFileUrl(),
-                document.getFileSize(),
-                document.getMimeType(),
-                document.getIssuedDate(),
-                document.getExpiredDate(),
-                document.getUploadedAt(),
-                document.isDeleted(),
-                document.getDeletedAt());
     }
 
     private Map<String, Object> eventData(EmployeeDocument document) {

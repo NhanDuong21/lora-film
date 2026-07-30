@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Clock3, LoaderCircle } from 'lucide-react';
 import { getPaymentStatus, paymentErrorMessage } from '../../services/paymentService';
 import { resetPaymentAttemptKey } from '@/features/booking/customer/services/paymentHandoffService';
+import { BOOKING_CHANGED_EVENT } from '@/features/booking/customer/services/bookingService';
 
 const TERMINAL = new Set(['FAILED', 'CANCELLED', 'EXPIRED']);
 
@@ -49,6 +50,14 @@ export default function PaymentReturnPage() {
           || current.reconciliationStatus === 'REQUIRED'
           || current.reconciliationStatus === 'IN_REVIEW'
           || (current.status === 'SUCCESS' && current.bookingDeliveryStatus === 'DELIVERED');
+        if (done) {
+          window.dispatchEvent(new CustomEvent(BOOKING_CHANGED_EVENT, {
+            detail: {
+              action: current.status,
+              publicId: current.bookingPublicId || bookingPublicId,
+            },
+          }));
+        }
         if (!done && attempts < 60) {
           timer = window.setTimeout(poll, 2000);
         } else if (!done) {

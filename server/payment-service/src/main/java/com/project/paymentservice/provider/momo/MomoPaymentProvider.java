@@ -7,11 +7,14 @@ import com.project.paymentservice.config.MomoProperties;
 import com.project.paymentservice.enumtype.ProviderCode;
 import com.project.paymentservice.exception.BusinessException;
 import com.project.paymentservice.entity.Payment;
+import com.project.paymentservice.entity.PaymentRefund;
 import com.project.paymentservice.provider.PaymentProvider;
 import com.project.paymentservice.provider.PaymentSession;
 import com.project.paymentservice.provider.PaymentSessionRequest;
 import com.project.paymentservice.provider.ProviderCallbackResult;
 import com.project.paymentservice.provider.ProviderCrypto;
+import com.project.paymentservice.provider.ProviderHttpClientFactory;
+import com.project.paymentservice.provider.ProviderRefundResult;
 import com.project.paymentservice.provider.ProviderSessionUncertainException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
@@ -42,9 +45,8 @@ public class MomoPaymentProvider implements PaymentProvider {
         require(properties.getSecretKey(), "payment.providers.momo.secret-key");
         require(properties.getRedirectUrl(), "payment.providers.momo.redirect-url");
         require(properties.getIpnUrl(), "payment.providers.momo.ipn-url");
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                .build();
+        this.httpClient = ProviderHttpClientFactory.create(
+                Duration.ofMillis(properties.getConnectTimeoutMillis()));
     }
 
     @Override
@@ -172,12 +174,27 @@ public class MomoPaymentProvider implements PaymentProvider {
                     || "7002".equals(resultCode)) {
                 return Optional.empty();
             }
-            ProviderCallbackResult result = verify(toStrings(parsed), "QUERY");
-            if (!result.isSignatureValid()
-                    || !orderId.equals(result.getProviderOrderId())) {
+            Map<String, String> values = toStrings(parsed);
+            if (!properties.getPartnerCode().equals(value(values, "partnerCode"))
+                    || !orderId.equals(value(values, "orderId"))
+                    || !requestId.equals(value(values, "requestId"))) {
                 return Optional.empty();
             }
-            return Optional.of(result);
+            /*
+             * MoMo's Query API signs the merchant request but its documented
+             * response does not contain a signature. Trust the HTTPS
+             * server-to-server response only after its echoed merchant,
+             * payment and request identifiers have all matched. Some
+             * environments may include a signature; reject it when present
+             * but invalid instead of silently downgrading verification.
+             */
+            if (!value(values, "signature").isBlank()) {
+                ProviderCallbackResult signed = verify(values, "QUERY");
+                if (!signed.isSignatureValid()) {
+                    return Optional.empty();
+                }
+            }
+            return Optional.of(toTrustedQueryResult(values));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return Optional.empty();
@@ -207,6 +224,60 @@ public class MomoPaymentProvider implements PaymentProvider {
     @Override
     public ProviderCallbackResult verifyReturn(Map<String, String> parameters) {
         return verify(parameters, "RETURN");
+    }
+
+    @Override
+    public ProviderRefundResult refund(Payment payment, PaymentRefund refund) {
+        String orderId = refund.getRefundCode();
+        String requestId = refund.getPublicId();
+        long amount = refund.getRequestedAmount().longValueExact();
+        long transId = originalTransactionId(payment);
+        String description = "Hoan tien " + payment.getPaymentTransactionCode();
+        String source = "accessKey=" + properties.getAccessKey()
+                + "&amount=" + amount
+                + "&description=" + description
+                + "&orderId=" + orderId
+                + "&partnerCode=" + properties.getPartnerCode()
+                + "&requestId=" + requestId
+                + "&transId=" + transId;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("partnerCode", properties.getPartnerCode());
+        payload.put("orderId", orderId);
+        payload.put("requestId", requestId);
+        payload.put("amount", amount);
+        payload.put("transId", transId);
+        payload.put("lang", "vi");
+        payload.put("description", description);
+        payload.put("signature", ProviderCrypto.hmacHex(
+                "HmacSHA256", properties.getSecretKey(), source));
+        return sendRefund(
+                properties.getRefundUrl(), payload, orderId, requestId, amount);
+    }
+
+    @Override
+    public Optional<ProviderRefundResult> queryRefund(Payment payment, PaymentRefund refund) {
+        String orderId = refund.getProviderOrderId() == null
+                ? refund.getRefundCode() : refund.getProviderOrderId();
+        String requestId = refund.getProviderRequestId() == null
+                ? refund.getPublicId() : refund.getProviderRequestId();
+        String source = "accessKey=" + properties.getAccessKey()
+                + "&orderId=" + orderId
+                + "&partnerCode=" + properties.getPartnerCode()
+                + "&requestId=" + requestId;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("partnerCode", properties.getPartnerCode());
+        payload.put("orderId", orderId);
+        payload.put("requestId", requestId);
+        payload.put("lang", "vi");
+        payload.put("signature", ProviderCrypto.hmacHex(
+                "HmacSHA256", properties.getSecretKey(), source));
+        try {
+            return Optional.of(sendRefund(
+                    properties.getRefundQueryUrl(), payload, orderId, requestId,
+                    refund.getRequestedAmount().longValueExact()));
+        } catch (RuntimeException exception) {
+            return Optional.empty();
+        }
     }
 
     private ProviderCallbackResult verify(Map<String, String> values, String eventType) {
@@ -243,6 +314,108 @@ public class MomoPaymentProvider implements PaymentProvider {
         result.setResult("0".equals(resultCode) ? "SUCCESS"
                 : ("1006".equals(resultCode) ? "CANCELLED" : "FAILED"));
         result.setDeduplicationKey(eventType + ":" + value(values, "orderId")
+                + ":" + value(values, "transId") + ":" + resultCode);
+        Map<String, String> sanitized = new LinkedHashMap<>(values);
+        sanitized.remove("signature");
+        try {
+            result.setSanitizedPayload(objectMapper.writeValueAsString(sanitized));
+        } catch (Exception ignored) {
+            result.setSanitizedPayload("{}");
+        }
+        return result;
+    }
+
+    private ProviderRefundResult sendRefund(
+            String url,
+            Map<String, Object> payload,
+            String orderId,
+            String requestId,
+            long expectedAmount) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofMillis(Math.max(30_000, properties.getReadTimeoutMillis())))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            objectMapper.writeValueAsString(payload)))
+                    .build();
+            HttpResponse<String> response = httpClient.send(
+                    request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("MoMo refund HTTP " + response.statusCode());
+            }
+            JsonNode body = objectMapper.readTree(response.body());
+            String responsePartnerCode = body.path("partnerCode").asText("");
+            String responseOrderId = body.path("orderId").asText("");
+            String responseRequestId = body.path("requestId").asText("");
+            if ((!responsePartnerCode.isBlank()
+                    && !properties.getPartnerCode().equals(responsePartnerCode))
+                    || !orderId.equals(responseOrderId)
+                    || !requestId.equals(responseRequestId)
+                    || (body.hasNonNull("amount")
+                        && body.path("amount").asLong(Long.MIN_VALUE) != expectedAmount)) {
+                throw new IllegalStateException(
+                        "MoMo refund response does not match the requested transaction");
+            }
+            int resultCode = body.path("resultCode").asInt(-1);
+            ProviderRefundResult result = new ProviderRefundResult();
+            result.setProviderOrderId(responseOrderId);
+            result.setProviderRequestId(responseRequestId);
+            result.setProviderRefundId(body.path("transId").asText(null));
+            result.setResponseCode(String.valueOf(resultCode));
+            result.setMessageSanitized(body.path("message").asText(""));
+            result.setSummarySanitized(objectMapper.writeValueAsString(Map.of(
+                    "provider", "MOMO",
+                    "resultCode", resultCode,
+                    "orderId", result.getProviderOrderId(),
+                    "requestId", result.getProviderRequestId())));
+            if (resultCode == 0) {
+                result.setState(ProviderRefundResult.State.SUCCESS);
+            } else if (resultCode == 1000 || resultCode == 7000 || resultCode == 7002) {
+                result.setState(ProviderRefundResult.State.PROCESSING);
+            } else {
+                result.setState(ProviderRefundResult.State.FAILED);
+                result.setFailureCode("MOMO_REFUND_" + resultCode);
+            }
+            return result;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("MoMo refund interrupted", exception);
+        } catch (Exception exception) {
+            throw new IllegalStateException("MoMo refund result is uncertain", exception);
+        }
+    }
+
+    private long originalTransactionId(Payment payment) {
+        if (payment.getExternalTransactionId() == null
+                || payment.getExternalTransactionId().isBlank()) {
+            throw new IllegalStateException("MoMo transaction ID is missing");
+        }
+        try {
+            return Long.parseLong(payment.getExternalTransactionId());
+        } catch (NumberFormatException exception) {
+            throw new IllegalStateException("MoMo transaction ID is invalid", exception);
+        }
+    }
+
+    private ProviderCallbackResult toTrustedQueryResult(Map<String, String> values) {
+        ProviderCallbackResult result = new ProviderCallbackResult();
+        result.setSignatureValid(true);
+        result.setProviderOrderId(value(values, "orderId"));
+        result.setExternalTransactionId(value(values, "transId"));
+        String resultCode = value(values, "resultCode");
+        result.setResponseCode(resultCode);
+        try {
+            result.setAmount(new java.math.BigDecimal(value(values, "amount")));
+        } catch (NumberFormatException ignored) {
+            result.setAmount(java.math.BigDecimal.ZERO);
+        }
+        result.setCurrency("VND");
+        result.setEventType("QUERY");
+        result.setOccurredAt(Instant.now());
+        result.setResult("0".equals(resultCode) ? "SUCCESS"
+                : ("1006".equals(resultCode) ? "CANCELLED" : "FAILED"));
+        result.setDeduplicationKey("QUERY:" + value(values, "orderId")
                 + ":" + value(values, "transId") + ":" + resultCode);
         Map<String, String> sanitized = new LinkedHashMap<>(values);
         sanitized.remove("signature");

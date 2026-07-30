@@ -39,12 +39,17 @@ class AccountServiceImplTest {
     @Mock
     private AuthOutboxService authOutboxService;
 
+    @Mock
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    @Mock
+    private com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher;
+
     private AccountServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AccountServiceImpl(accountRepository, roleRepository, auditLogService,
-                request, credentialRevocationService, authOutboxService);
+                request, credentialRevocationService, authOutboxService, passwordEncoder, eventPublisher);
     }
 
     @Test

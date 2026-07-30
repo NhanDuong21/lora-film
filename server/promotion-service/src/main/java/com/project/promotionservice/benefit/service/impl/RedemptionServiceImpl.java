@@ -3,8 +3,8 @@ package com.project.promotionservice.benefit.service.impl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.project.promotionservice.benefit.dto.request.RedemptionRequests.BenefitRedeemRequest;
 import com.project.promotionservice.benefit.dto.request.RedemptionRequests.BenefitValidationRequest;
+import com.project.promotionservice.benefit.dto.request.RedemptionRequests.ReservedRedemptionRequest;
 import com.project.promotionservice.benefit.dto.response.BenefitResponses.RedemptionResponse;
 import com.project.promotionservice.benefit.dto.response.BenefitResponses.ValidationResponse;
 import com.project.promotionservice.benefit.entity.Coupon;
@@ -26,13 +26,17 @@ import com.project.promotionservice.benefit.repository.CouponRepository;
 import com.project.promotionservice.benefit.repository.VoucherRedemptionRepository;
 import com.project.promotionservice.benefit.repository.VoucherRepository;
 import com.project.promotionservice.benefit.service.BenefitEventService;
+import com.project.promotionservice.benefit.service.BenefitConditionEvaluator;
 import com.project.promotionservice.benefit.service.RedemptionService;
+import com.project.promotionservice.benefit.service.VerifiedPhoneNormalizer;
 import com.project.promotionservice.benefit.specification.BenefitSpecifications;
 import com.project.promotionservice.common.audit.Auditable;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
+import com.project.promotionservice.common.time.DatabaseTimeProvider;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.LegalStatus;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Sort;
@@ -64,15 +68,21 @@ public class RedemptionServiceImpl implements RedemptionService {
     private final BenefitMapper mapper;
     private final BenefitEventService eventService;
     private final ObjectMapper objectMapper;
+    private final BenefitConditionEvaluator conditionEvaluator;
+    private final VerifiedPhoneNormalizer phoneNormalizer;
+    private final DatabaseTimeProvider databaseTimeProvider;
 
     public RedemptionServiceImpl(CouponRepository couponRepository,
                                  VoucherRepository voucherRepository,
                                  CouponRedemptionRepository couponRedemptionRepository,
                                  VoucherRedemptionRepository voucherRedemptionRepository,
                                  BenefitCampaignRepository campaignRepository,
-                                 BenefitMapper mapper,
-                                 BenefitEventService eventService,
-                                 ObjectMapper objectMapper) {
+                                  BenefitMapper mapper,
+                                  BenefitEventService eventService,
+                                  ObjectMapper objectMapper,
+                                  BenefitConditionEvaluator conditionEvaluator,
+                                  VerifiedPhoneNormalizer phoneNormalizer,
+                                  DatabaseTimeProvider databaseTimeProvider) {
         this.couponRepository = couponRepository;
         this.voucherRepository = voucherRepository;
         this.couponRedemptionRepository = couponRedemptionRepository;
@@ -81,11 +91,15 @@ public class RedemptionServiceImpl implements RedemptionService {
         this.mapper = mapper;
         this.eventService = eventService;
         this.objectMapper = objectMapper;
+        this.conditionEvaluator = conditionEvaluator;
+        this.phoneNormalizer = phoneNormalizer;
+        this.databaseTimeProvider = databaseTimeProvider;
     }
 
     @Override
     @Transactional(readOnly = true)
     public ValidationResponse validateCoupon(BenefitValidationRequest request) {
+        request.setCustomerPhone(phoneNormalizer.normalizeNullable(request.getCustomerPhone()));
         Coupon coupon = couponRepository.findByCodeIgnoreCaseAndDeletedAtIsNull(request.getCode())
                 .orElseThrow(() -> notFound(BenefitErrorCode.COUPON_NOT_FOUND, "Coupon not found"));
         return validateCouponEntity(coupon, request);
@@ -94,6 +108,7 @@ public class RedemptionServiceImpl implements RedemptionService {
     @Override
     @Transactional(readOnly = true)
     public ValidationResponse validateVoucher(BenefitValidationRequest request) {
+        request.setCustomerPhone(phoneNormalizer.normalizeNullable(request.getCustomerPhone()));
         Voucher voucher = voucherRepository.findByCodeIgnoreCaseAndDeletedAtIsNull(request.getCode())
                 .orElseThrow(() -> notFound(BenefitErrorCode.VOUCHER_NOT_FOUND, "Voucher not found"));
         return validateVoucherEntity(voucher, request);
@@ -106,13 +121,14 @@ public class RedemptionServiceImpl implements RedemptionService {
             @CacheEvict(cacheNames = "promotions", allEntries = true),
             @CacheEvict(cacheNames = "vouchers", allEntries = true)
     })
-    public RedemptionResponse confirmReservedCoupon(BenefitRedeemRequest request, String actor) {
+    public RedemptionResponse confirmReservedCoupon(ReservedRedemptionRequest request, String actor) {
         requireReservationReference(request);
+        requireValidReservedAmounts(request);
         return confirmCouponRedemption(request, actor);
     }
 
     private RedemptionResponse confirmCouponRedemption(
-            BenefitRedeemRequest request, String actor) {
+            ReservedRedemptionRequest request, String actor) {
         Coupon coupon = couponRepository.findByCodeForUpdate(request.getCode())
                 .orElseThrow(() -> notFound(BenefitErrorCode.COUPON_NOT_FOUND, "Coupon not found"));
 
@@ -130,9 +146,8 @@ public class RedemptionServiceImpl implements RedemptionService {
             return mapper.toRedemptionResponse(existing.get());
         }
 
-        PromotionCampaign campaign = requireActiveCampaignForUpdate(coupon.getCampaignPublicId());
-        ValidationResponse validation = validateCouponEntity(coupon, request);
-        consumeCampaignCapacity(campaign, validation.getDiscountAmount());
+        PromotionCampaign campaign = requireCampaignForUpdate(coupon.getCampaignPublicId());
+        consumeCampaignCapacity(campaign, request.getDiscountAmount());
 
         CouponRedemption redemption = new CouponRedemption();
         redemption.setCouponPublicId(coupon.getPublicId());
@@ -145,10 +160,10 @@ public class RedemptionServiceImpl implements RedemptionService {
         redemption.setCustomerPhone(request.getCustomerPhone());
         redemption.setRedeemedCode(coupon.getCode());
         redemption.setStatus(RedemptionStatus.CONFIRMED);
-        redemption.setDiscountAmount(validation.getDiscountAmount());
-        redemption.setOriginalAmount(validation.getOriginalAmount());
-        redemption.setFinalAmount(validation.getFinalAmount());
-        redemption.setConfirmedAt(Instant.now());
+        redemption.setDiscountAmount(money(request.getDiscountAmount()));
+        redemption.setOriginalAmount(money(request.getOriginalAmount()));
+        redemption.setFinalAmount(money(request.getFinalAmount()));
+        redemption.setConfirmedAt(databaseTimeProvider.now());
         redemption.setMetadataJson(mapper.toNullableJson(request.getContextJson()));
         redemption.setCreatedBy(actor);
         redemption.setUpdatedBy(actor);
@@ -176,13 +191,14 @@ public class RedemptionServiceImpl implements RedemptionService {
             @CacheEvict(cacheNames = "promotions", allEntries = true),
             @CacheEvict(cacheNames = "vouchers", allEntries = true)
     })
-    public RedemptionResponse confirmReservedVoucher(BenefitRedeemRequest request, String actor) {
+    public RedemptionResponse confirmReservedVoucher(ReservedRedemptionRequest request, String actor) {
         requireReservationReference(request);
+        requireValidReservedAmounts(request);
         return confirmVoucherRedemption(request, actor);
     }
 
     private RedemptionResponse confirmVoucherRedemption(
-            BenefitRedeemRequest request, String actor) {
+            ReservedRedemptionRequest request, String actor) {
         Voucher voucher = voucherRepository.findByCodeForUpdate(request.getCode())
                 .orElseThrow(() -> notFound(BenefitErrorCode.VOUCHER_NOT_FOUND, "Voucher not found"));
 
@@ -216,11 +232,10 @@ public class RedemptionServiceImpl implements RedemptionService {
 
         PromotionCampaign campaign = null;
         if (voucher.getCampaignPublicId() != null) {
-            campaign = requireActiveCampaignForUpdate(voucher.getCampaignPublicId());
+            campaign = requireCampaignForUpdate(voucher.getCampaignPublicId());
         }
-        ValidationResponse validation = validateVoucherEntity(voucher, request);
         if (campaign != null) {
-            consumeCampaignCapacity(campaign, validation.getDiscountAmount());
+            consumeCampaignCapacity(campaign, request.getDiscountAmount());
         }
 
         VoucherRedemption redemption = new VoucherRedemption();
@@ -233,10 +248,10 @@ public class RedemptionServiceImpl implements RedemptionService {
         redemption.setOwnerPublicId(voucher.getOwnerPublicId());
         redemption.setRedeemedBy(request.getUserPublicId());
         redemption.setStatus(RedemptionStatus.CONFIRMED);
-        redemption.setOriginalAmount(validation.getOriginalAmount());
-        redemption.setDiscountAmount(validation.getDiscountAmount());
-        redemption.setFinalAmount(validation.getFinalAmount());
-        redemption.setConfirmedAt(Instant.now());
+        redemption.setOriginalAmount(money(request.getOriginalAmount()));
+        redemption.setDiscountAmount(money(request.getDiscountAmount()));
+        redemption.setFinalAmount(money(request.getFinalAmount()));
+        redemption.setConfirmedAt(databaseTimeProvider.now());
         redemption.setMetadataJson(mapper.toNullableJson(request.getContextJson()));
         redemption.setCreatedBy(actor);
         redemption.setUpdatedBy(actor);
@@ -292,7 +307,7 @@ public class RedemptionServiceImpl implements RedemptionService {
     }
 
     private ValidationResponse validateCouponEntity(Coupon coupon, BenefitValidationRequest request) {
-        Instant now = Instant.now();
+        Instant now = databaseTimeProvider.now();
         if (coupon.getStatus() != CouponStatus.ACTIVE) {
             throw badRequest(BenefitErrorCode.COUPON_INACTIVE, "Coupon is not active");
         }
@@ -323,9 +338,10 @@ public class RedemptionServiceImpl implements RedemptionService {
                     "Coupon usage limit for this verified phone has been reached");
         }
         JsonNode conditions = readJson(coupon.getConditionsJson());
-        validateConditions(conditions, request);
+        conditionEvaluator.evaluate(conditions, request);
         BigDecimal discount = calculateDiscount(
-                readJson(coupon.getActionsJson()), null, request.getOriginalAmount());
+                readJson(coupon.getActionsJson()), null,
+                request.getOriginalAmount(), request.getContextJson());
         requireCampaignCapacity(campaign, discount);
         return validResponse(
                 RedemptionType.COUPON, coupon.getPublicId(), coupon.getCode(),
@@ -333,7 +349,7 @@ public class RedemptionServiceImpl implements RedemptionService {
     }
 
     private ValidationResponse validateVoucherEntity(Voucher voucher, BenefitValidationRequest request) {
-        Instant now = Instant.now();
+        Instant now = databaseTimeProvider.now();
         if (voucher.getStatus() == VoucherStatus.USED) {
             throw badRequest(BenefitErrorCode.VOUCHER_ALREADY_USED, "Voucher has already been used");
         }
@@ -363,10 +379,11 @@ public class RedemptionServiceImpl implements RedemptionService {
             campaign = requireActiveCampaign(voucher.getCampaignPublicId());
             requireCampaignUserCapacity(campaign, request.getUserPublicId());
         }
-        validateConditions(readJson(voucher.getConditionsJson()), request);
+        conditionEvaluator.evaluate(readJson(voucher.getConditionsJson()), request);
         validateVoucherPolicy(voucher, request);
         BigDecimal discount = calculateDiscount(
-                readJson(voucher.getActionsJson()), voucher, request.getOriginalAmount());
+                readJson(voucher.getActionsJson()), voucher,
+                request.getOriginalAmount(), request.getContextJson());
         if (campaign != null) {
             requireCampaignCapacity(campaign, discount);
         }
@@ -405,46 +422,11 @@ public class RedemptionServiceImpl implements RedemptionService {
         }
     }
 
-    private void validateConditions(JsonNode conditions, BenefitValidationRequest request) {
-        if (conditions == null || !conditions.isObject()) return;
-        BigDecimal minimum = decimal(conditions, "minimumOrderAmount", "minOrderAmount");
-        if (minimum != null && request.getOriginalAmount().compareTo(minimum) < 0) {
-            throw badRequest(BenefitErrorCode.BENEFIT_CONDITION_NOT_MET,
-                    "Minimum order amount is not met");
-        }
-        JsonNode context = request.getContextJson();
-        matchAllowed(conditions, context, "movieIds", "movieId");
-        matchAllowed(conditions, context, "cinemaIds", "cinemaId");
-        matchAllowed(conditions, context, "paymentMethods", "paymentMethod");
-        matchAllowed(conditions, context, "channels", "channel");
-        matchAllowed(conditions, context, "formats", "format");
-        matchAllowed(conditions, context, "orderTypes", "orderType");
-        JsonNode allowedUsers = conditions.get("allowedUserIds");
-        if (allowedUsers != null && allowedUsers.isArray() && !arrayContains(allowedUsers, request.getUserPublicId())) {
-            throw badRequest(BenefitErrorCode.BENEFIT_CONDITION_NOT_MET,
-                    "Customer is not eligible for this benefit");
-        }
-    }
-
-    private void matchAllowed(JsonNode conditions, JsonNode context, String conditionField, String contextField) {
-        JsonNode allowed = conditions.get(conditionField);
-        if (allowed == null || !allowed.isArray() || allowed.isEmpty()) return;
-        String actual = context == null || context.get(contextField) == null
-                ? null : context.get(contextField).asText();
-        if (actual == null || !arrayContains(allowed, actual)) {
-            throw badRequest(BenefitErrorCode.BENEFIT_CONDITION_NOT_MET,
-                    "Condition not met: " + contextField);
-        }
-    }
-
-    private boolean arrayContains(JsonNode values, String expected) {
-        for (JsonNode value : values) {
-            if (value.asText().equalsIgnoreCase(expected)) return true;
-        }
-        return false;
-    }
-
-    private BigDecimal calculateDiscount(JsonNode actions, Voucher voucher, BigDecimal originalAmount) {
+    private BigDecimal calculateDiscount(
+            JsonNode actions,
+            Voucher voucher,
+            BigDecimal originalAmount,
+            JsonNode context) {
         JsonNode action = actions;
         if (actions != null && actions.isArray() && !actions.isEmpty()) {
             action = actions.get(0);
@@ -463,7 +445,7 @@ public class RedemptionServiceImpl implements RedemptionService {
         BigDecimal value = decimal(action, "discountValue", "value", "amount", "percentage");
         BigDecimal discount;
         String normalizedType = type == null ? "" : type.toUpperCase(Locale.ROOT);
-        if (normalizedType.contains("PERCENT")) {
+        if (normalizedType.equals("PERCENTAGE") || normalizedType.equals("PERCENT")) {
             if (value == null) {
                 throw badRequest(BenefitErrorCode.BENEFIT_CONDITION_NOT_MET,
                         "Percentage value is missing");
@@ -476,11 +458,15 @@ public class RedemptionServiceImpl implements RedemptionService {
             discount = originalAmount.multiply(value).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             BigDecimal maximum = decimal(action, "maxDiscountAmount", "maximumDiscountAmount", "maxAmount");
             if (maximum != null) discount = discount.min(maximum);
-        } else if (normalizedType.equals(VoucherType.FREE_TICKET.name())
-                || normalizedType.equals("FREE")
+        } else if (normalizedType.equals(VoucherType.FREE_TICKET.name())) {
+            discount = requiredEligibleAmount(context, "ticketAmount", originalAmount);
+        } else if (normalizedType.equals(VoucherType.FREE_COMBO.name())) {
+            discount = requiredEligibleAmount(context, "comboAmount", originalAmount);
+        } else if (normalizedType.equals("FREE")
                 || normalizedType.equals("FULL_DISCOUNT")) {
             discount = originalAmount;
-        } else if (normalizedType.contains("FIXED") || normalizedType.contains("AMOUNT")
+        } else if (normalizedType.equals("FIXED_AMOUNT")
+                || normalizedType.equals("AMOUNT")
                 || normalizedType.equals("CASHBACK")) {
             if (value == null && voucher != null) {
                 value = voucher.getFaceValue();
@@ -501,6 +487,31 @@ public class RedemptionServiceImpl implements RedemptionService {
                     "Discount amount cannot be negative");
         }
         return money(discount.min(originalAmount));
+    }
+
+    private BigDecimal requiredEligibleAmount(
+            JsonNode context, String field, BigDecimal originalAmount) {
+        JsonNode value = context == null ? null : context.get(field);
+        BigDecimal eligibleAmount;
+        try {
+            eligibleAmount = value == null || value.isNull()
+                    ? null
+                    : (value.isNumber()
+                    ? value.decimalValue()
+                    : new BigDecimal(value.asText()));
+        } catch (NumberFormatException exception) {
+            throw badRequest(
+                    BenefitErrorCode.BENEFIT_CONDITION_NOT_MET,
+                    field + " must be a valid monetary amount");
+        }
+        if (eligibleAmount == null
+                || eligibleAmount.signum() <= 0
+                || eligibleAmount.compareTo(originalAmount) > 0) {
+            throw badRequest(
+                    BenefitErrorCode.BENEFIT_CONDITION_NOT_MET,
+                    field + " must be greater than zero and not exceed originalAmount");
+        }
+        return money(eligibleAmount);
     }
 
     private ValidationResponse validResponse(
@@ -527,18 +538,19 @@ public class RedemptionServiceImpl implements RedemptionService {
         return campaign;
     }
 
-    private PromotionCampaign requireActiveCampaignForUpdate(String publicId) {
-        PromotionCampaign campaign = campaignRepository.findByPublicIdForUpdate(publicId)
+    private PromotionCampaign requireCampaignForUpdate(String publicId) {
+        return campaignRepository.findByPublicIdForUpdate(publicId)
                 .orElseThrow(() -> notFound(BenefitErrorCode.CAMPAIGN_NOT_ACTIVE,
                         "Promotion campaign not found"));
-        requireCampaignCurrentlyActive(campaign);
-        return campaign;
     }
 
     private void requireCampaignCurrentlyActive(PromotionCampaign campaign) {
-        Instant now = Instant.now();
+        Instant now = databaseTimeProvider.now();
         if (campaign.getStatus() != CampaignStatus.ACTIVE
+                || campaign.getLegalStatus() != LegalStatus.PASSED
                 || Boolean.TRUE.equals(campaign.getKillSwitch())
+                || campaign.getBudgetAmount() == null
+                || campaign.getBudgetAmount().signum() <= 0
                 || now.isBefore(campaign.getStartAt())
                 || !now.isBefore(campaign.getEndAt())) {
             throw badRequest(BenefitErrorCode.CAMPAIGN_NOT_ACTIVE,
@@ -586,6 +598,13 @@ public class RedemptionServiceImpl implements RedemptionService {
         if (campaign.getBudgetAmount() != null && campaign.getBudgetAmount().signum() > 0) {
             campaign.setBudgetRemaining(campaign.getBudgetRemaining().subtract(discount));
         }
+        if (Boolean.TRUE.equals(campaign.getAutoPauseWhenBudgetExceeded())
+                && campaign.getBudgetAmount() != null
+                && campaign.getBudgetAmount().signum() > 0
+                && campaign.getBudgetUsed().compareTo(
+                        campaign.getBudgetAmount().multiply(new BigDecimal("0.98"))) >= 0) {
+            campaign.setStatus(CampaignStatus.PAUSED);
+        }
     }
 
     private void requireCampaignRedemptionCapacity(PromotionCampaign campaign) {
@@ -596,10 +615,24 @@ public class RedemptionServiceImpl implements RedemptionService {
         }
     }
 
-    private void requireReservationReference(BenefitRedeemRequest request) {
+    private void requireReservationReference(ReservedRedemptionRequest request) {
         if (request.getReservationPublicId() == null || request.getReservationPublicId().isBlank()) {
             throw badRequest(BenefitErrorCode.BENEFIT_CONDITION_NOT_MET,
                     "reservationPublicId is required when confirming a reservation");
+        }
+    }
+
+    private void requireValidReservedAmounts(ReservedRedemptionRequest request) {
+        BigDecimal original = money(request.getOriginalAmount());
+        BigDecimal discount = money(request.getDiscountAmount());
+        BigDecimal finalAmount = money(request.getFinalAmount());
+        if (original.signum() < 0
+                || discount.signum() < 0
+                || discount.compareTo(original) > 0
+                || finalAmount.compareTo(original.subtract(discount)) != 0) {
+            throw badRequest(
+                    BenefitErrorCode.BENEFIT_CONDITION_NOT_MET,
+                    "Reserved redemption amount snapshot is inconsistent");
         }
     }
 

@@ -26,6 +26,7 @@ import com.project.promotionservice.common.exception.ErrorCode;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
+import com.project.promotionservice.partner.service.PartnerService;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.springframework.cache.annotation.CacheEvict;
@@ -64,6 +65,7 @@ public class CouponServiceImpl implements CouponService {
     private final ObjectMapper objectMapper;
     private final Validator validator;
     private final BenefitPolicyValidator policyValidator;
+    private final PartnerService partnerService;
 
     public CouponServiceImpl(CouponRepository couponRepository,
                              PromotionCampaignRepository campaignRepository,
@@ -71,7 +73,8 @@ public class CouponServiceImpl implements CouponService {
                              BenefitEventService eventService,
                              ObjectMapper objectMapper,
                              Validator validator,
-                             BenefitPolicyValidator policyValidator) {
+                             BenefitPolicyValidator policyValidator,
+                             PartnerService partnerService) {
         this.couponRepository = couponRepository;
         this.campaignRepository = campaignRepository;
         this.mapper = mapper;
@@ -79,6 +82,7 @@ public class CouponServiceImpl implements CouponService {
         this.objectMapper = objectMapper;
         this.validator = validator;
         this.policyValidator = policyValidator;
+        this.partnerService = partnerService;
     }
 
     @Override
@@ -87,10 +91,12 @@ public class CouponServiceImpl implements CouponService {
     @CacheEvict(cacheNames = "promotions", allEntries = true)
     public CouponResponse create(CouponCreateRequest request, String actor) {
         validatePolicy(request);
-        requireCampaign(request.getCampaignPublicId());
+        PromotionCampaign campaign = requireCampaign(request.getCampaignPublicId());
         String code = mapper.normalizeCode(request.getCode());
         requireUniqueCode(code, null);
-        Coupon saved = couponRepository.save(mapper.toCoupon(request, actor));
+        Coupon coupon = mapper.toCoupon(request, actor);
+        coupon.setPartnerPublicId(campaign.getPartnerPublicId());
+        Coupon saved = couponRepository.save(coupon);
         CouponResponse response = mapper.toCouponResponse(saved);
         eventService.record("COUPON", saved.getPublicId(), "COUPON_CREATED", response, actor);
         return response;
@@ -105,7 +111,7 @@ public class CouponServiceImpl implements CouponService {
                 request.getCouponType(), request.getDistributionType(), request.getReusable(),
                 request.getMaxRedemptions(), request.getMaxRedemptionsPerUser(),
                 request.getConditionsJson(), request.getActionsJson());
-        requireCampaign(request.getCampaignPublicId());
+        PromotionCampaign campaign = requireCampaign(request.getCampaignPublicId());
         String prefix = sanitizePrefix(request.getPrefix());
         List<Coupon> coupons = new ArrayList<>(request.getQuantity());
         Set<String> generatedCodes = new HashSet<>();
@@ -113,7 +119,9 @@ public class CouponServiceImpl implements CouponService {
             String code = prefix + "-" + UUID.randomUUID().toString().replace("-", "")
                     .substring(0, 12).toUpperCase(Locale.ROOT);
             if (generatedCodes.add(code) && !couponRepository.existsByCodeIgnoreCase(code)) {
-                coupons.add(mapper.toGeneratedCoupon(request, code, actor));
+                Coupon coupon = mapper.toGeneratedCoupon(request, code, actor);
+                coupon.setPartnerPublicId(campaign.getPartnerPublicId());
+                coupons.add(coupon);
             }
         }
         List<Coupon> saved = couponRepository.saveAll(coupons);
@@ -157,12 +165,14 @@ public class CouponServiceImpl implements CouponService {
                 try {
                     List<String> row = parseCsvLine(line);
                     CouponCreateRequest request = importRequest(headers, row);
-                    requireCampaign(request.getCampaignPublicId());
+                    PromotionCampaign campaign = requireCampaign(request.getCampaignPublicId());
                     String code = mapper.normalizeCode(request.getCode());
                     if (!fileCodes.add(code) || couponRepository.existsByCodeIgnoreCase(code)) {
                         throw badRequest(BenefitErrorCode.COUPON_DUPLICATE, "Coupon code already exists: " + code);
                     }
-                    validCoupons.add(mapper.toCoupon(request, actor));
+                    Coupon coupon = mapper.toCoupon(request, actor);
+                    coupon.setPartnerPublicId(campaign.getPartnerPublicId());
+                    validCoupons.add(coupon);
                 } catch (RuntimeException exception) {
                     result.getErrors().add("Row " + rowNumber + ": " + exception.getMessage());
                 }
@@ -308,6 +318,9 @@ public class CouponServiceImpl implements CouponService {
                 .filter(value -> value.getDeletedAt() == null)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.NOT_FOUND, "Promotion campaign not found", HttpStatus.NOT_FOUND));
+        if (campaign.getPartnerPublicId() != null && partnerService != null) {
+            partnerService.requireActive(campaign.getPartnerPublicId());
+        }
         return campaign;
     }
 

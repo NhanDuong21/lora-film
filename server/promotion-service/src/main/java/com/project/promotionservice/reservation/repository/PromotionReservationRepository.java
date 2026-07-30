@@ -5,6 +5,7 @@ import com.project.promotionservice.reservation.enums.ReservationStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,7 +16,9 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PromotionReservationRepository extends JpaRepository<PromotionReservation, Long> {
+public interface PromotionReservationRepository extends
+        JpaRepository<PromotionReservation, Long>,
+        JpaSpecificationExecutor<PromotionReservation> {
 
     Optional<PromotionReservation> findByPublicIdAndDeletedAtIsNull(String publicId);
 
@@ -31,6 +34,12 @@ public interface PromotionReservationRepository extends JpaRepository<PromotionR
     long countByCouponPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
             String couponPublicId, ReservationStatus status, Instant now);
 
+    long countByCouponPublicIdAndUserPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
+            String couponPublicId, String userPublicId, ReservationStatus status, Instant now);
+
+    long countByCouponPublicIdAndCustomerPhoneAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
+            String couponPublicId, String customerPhone, ReservationStatus status, Instant now);
+
     long countByVoucherPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
             String voucherPublicId, ReservationStatus status, Instant now);
 
@@ -40,6 +49,25 @@ public interface PromotionReservationRepository extends JpaRepository<PromotionR
     long countByCampaignPublicIdAndUserPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
             String campaignPublicId, String userPublicId, ReservationStatus status, Instant now);
 
+    long countByCampaignPublicIdAndStatusAndDeletedAtIsNull(
+            String campaignPublicId, ReservationStatus status);
+
     List<PromotionReservation> findByStatusAndReservationExpiredAtLessThanEqualAndDeletedAtIsNull(
             ReservationStatus status, Instant now, Pageable pageable);
+
+    @Query("""
+            select reservation.publicId from PromotionReservation reservation
+            where reservation.status = :status
+              and reservation.reservationExpiredAt <= :now
+              and reservation.deletedAt is null
+              and (
+                    reservation.expirationNextAttemptAt is null
+                    or reservation.expirationNextAttemptAt <= :now
+              )
+            order by reservation.reservationExpiredAt asc
+            """)
+    List<String> findDueCandidateIds(
+            @Param("status") ReservationStatus status,
+            @Param("now") Instant now,
+            Pageable pageable);
 }

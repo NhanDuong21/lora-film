@@ -3,6 +3,7 @@ package com.project.promotionservice.promotion.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEventRepository;
+import com.project.promotionservice.integration.outbox.PromotionOutboxEnvelopeFactory;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
@@ -40,6 +41,8 @@ class ApprovalServiceImplTest {
     private ApprovalMapper approvalMapper;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private PromotionOutboxEnvelopeFactory envelopeFactory;
 
     @InjectMocks
     private ApprovalServiceImpl approvalService;

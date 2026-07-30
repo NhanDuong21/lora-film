@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,11 +54,12 @@ public class AccountVerifiedConsumer {
 
     @KafkaListener(topics = "${app.kafka.topic.account-verified}", groupId = "user-service-account-verified-consumer")
     @Transactional
-    public void consume(String message) {
+    public void consume(String message, Acknowledgment acknowledgment) {
         try {
             AccountVerifiedEvent event = objectMapper.readValue(message, AccountVerifiedEvent.class);
             if (!"ACCOUNT_VERIFIED".equals(event.getEventType())) {
                 log.warn("Ignored event type: {}", event.getEventType());
+                acknowledgment.acknowledge();
                 return;
             }
 
@@ -75,36 +77,56 @@ public class AccountVerifiedConsumer {
             // Duplicate event check (Idempotency)
             User existingUser = userRepository.findById(accountId).orElse(null);
             if (existingUser != null) {
+                boolean profileChanged = false;
                 if ((existingUser.getEmail() == null || existingUser.getEmail().isBlank())
                         && payload.getEmail() != null && !payload.getEmail().isBlank()) {
                     existingUser.setEmail(payload.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
+                    profileChanged = true;
+                }
+                if ((existingUser.getFullName() == null || existingUser.getFullName().isBlank())
+                        && payload.getFullName() != null && !payload.getFullName().isBlank()) {
+                    existingUser.setFullName(payload.getFullName().trim());
+                    profileChanged = true;
+                }
+                if ((existingUser.getAvatarUrl() == null || existingUser.getAvatarUrl().isBlank())
+                        && payload.getAvatarUrl() != null && !payload.getAvatarUrl().isBlank()) {
+                    existingUser.setAvatarUrl(payload.getAvatarUrl().trim());
+                    profileChanged = true;
+                }
+                if (profileChanged) {
                     userRepository.save(existingUser);
-                    log.info("Backfilled email snapshot for existing accountId: {}", accountId);
+                    log.info("Backfilled OAuth profile fields for existing accountId: {}", accountId);
                 }
                 ensureCustomerProfile(accountId);
                 recordProfileCreated(accountId, payload.getEmail(), requestId, "SUCCESS");
                 releaseReservationAfterCommit(phoneNumber, cccd, requestId);
                 log.info("Idempotently handled existing user profile for accountId={}", accountId);
+                acknowledgment.acknowledge();
                 return;
             }
 
             if (phoneNumber != null && userRepository.existsByPhoneNumber(phoneNumber)) {
                 recordProfileCreated(accountId, payload.getEmail(), requestId, "FAILED");
                 releaseReservationAfterCommit(phoneNumber, cccd, requestId);
+                acknowledgment.acknowledge();
                 return;
             }
 
             if (cccd != null && userRepository.existsByCccd(cccd)) {
                 recordProfileCreated(accountId, payload.getEmail(), requestId, "FAILED");
                 releaseReservationAfterCommit(phoneNumber, cccd, requestId);
+                acknowledgment.acknowledge();
                 return;
             }
 
             User user = new User();
             user.setAccountId(accountId);
-            user.setFullName(event.getData().getFullName());
+            user.setFullName(resolveFullName(payload));
             if (event.getData().getEmail() != null) {
                 user.setEmail(event.getData().getEmail().trim().toLowerCase(java.util.Locale.ROOT));
+            }
+            if (payload.getAvatarUrl() != null && !payload.getAvatarUrl().isBlank()) {
+                user.setAvatarUrl(payload.getAvatarUrl().trim());
             }
             user.setPhoneNumber(phoneNumber);
             user.setCccd(cccd);
@@ -143,6 +165,7 @@ public class AccountVerifiedConsumer {
             releaseReservationAfterCommit(phoneNumber, cccd, requestId);
 
             log.info("Successfully created user profile for accountId: {}. Masked CCCD: {}", accountId, event.getData().getCccdMasked());
+            acknowledgment.acknowledge();
             
         } catch (Exception e) {
             log.error("Error processing ACCOUNT_VERIFIED event", e);
@@ -159,6 +182,17 @@ public class AccountVerifiedConsumer {
         customer.setCustomerCode("CUS" + String.format("%010d", accountId));
         customer.setJoinedAt(LocalDate.now());
         customerProfileRepository.save(customer);
+    }
+
+    private String resolveFullName(AccountVerifiedPayload payload) {
+        if (payload.getFullName() != null && !payload.getFullName().isBlank()) {
+            return payload.getFullName().trim();
+        }
+        String email = payload.getEmail();
+        if (email != null && email.contains("@")) {
+            return email.substring(0, email.indexOf('@'));
+        }
+        return "User";
     }
 
     private void recordProfileCreated(Long accountId, String email, String requestId, String status) {

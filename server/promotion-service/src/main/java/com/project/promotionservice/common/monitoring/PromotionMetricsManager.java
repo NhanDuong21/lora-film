@@ -10,11 +10,13 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class PromotionMetricsManager {
 
+    private final MeterRegistry meterRegistry;
     private final Counter apiRequestCounter;
     private final Counter apiErrorCounter;
     private final Timer apiLatencyTimer;
 
     public PromotionMetricsManager(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
         this.apiRequestCounter = Counter.builder("promotion_api_request_total")
                 .description("Total number of API requests to Promotion Service")
                 .register(meterRegistry);
@@ -36,5 +38,21 @@ public class PromotionMetricsManager {
 
     public void recordApiLatency(long durationMs) {
         apiLatencyTimer.record(durationMs, TimeUnit.MILLISECONDS);
+    }
+
+    public void incrementOutboxDelivery(String outcome) {
+        Counter.builder("promotion_outbox_delivery_total")
+                .description("Promotion outbox delivery attempts")
+                .tag("outcome", outcome)
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void incrementReservationExpiration(String outcome) {
+        Counter.builder("promotion_reservation_expiration_total")
+                .description("Promotion reservation expiration attempts")
+                .tag("outcome", outcome)
+                .register(meterRegistry)
+                .increment();
     }
 }

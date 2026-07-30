@@ -23,6 +23,9 @@ Không đưa credential sandbox, JWT secret hoặc internal token thật vào Gi
 - `VNPAY_ENABLED`, `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_RETURN_URL`
 - `MOMO_ENABLED`, `MOMO_PARTNER_CODE`, `MOMO_ACCESS_KEY`, `MOMO_SECRET_KEY`,
   `MOMO_REDIRECT_URL`, `MOMO_IPN_URL`
+- `VNPAY_REFUND_URL`, `MOMO_REFUND_URL`, `MOMO_REFUND_QUERY_URL`
+- `PAYMENT_REFUND_BATCH_SIZE`, `PAYMENT_REFUND_LEASE_SECONDS`,
+  `PAYMENT_REFUND_MAX_ATTEMPTS`, `PAYMENT_REFUND_FIXED_DELAY_MILLIS`
 - `PAYMENT_MOCK_ENABLED` chỉ dùng local/test.
 
 Callback sandbox phải là URL HTTPS công khai trỏ đúng:
@@ -65,7 +68,36 @@ Callback sandbox phải là URL HTTPS công khai trỏ đúng:
 - ADMIN assign và resolve reconciliation với mã xử lý + ghi chú bắt buộc.
 - Restart Payment giữa provider request/callback không được tạo attempt trùng.
 
-## 6. Giới hạn Release 1
+## 6. Kịch bản hoàn tiền
 
-Provider refund chưa triển khai. Trạng thái hoàn tiền chỉ được xử lý ở release
-sau khi có hợp đồng settlement và API provider tương ứng.
+Trước khi test trên database đã có dữ liệu, chạy thủ công:
+
+1. `docs/database/mysql/migrations/20260729_add_payment_refund_lifecycle.sql`
+   trên Payment DB.
+2. `docs/database/mysql/migrations/20260729_add_showtime_refund_outbox.sql`
+   trên Movie DB.
+
+Các case cần kiểm tra:
+
+1. SUCCESS sau deadline tự tạo hoàn toàn bộ; cùng callback không tạo refund thứ
+   hai.
+2. Booking từ chối SUCCESS tự tạo hoàn toàn bộ và hồ sơ đối soát.
+3. Hai capture SUCCESS cho cùng Booking: giao dịch thứ hai được hoàn tự động.
+4. Hủy một Showtime: Movie outbox gọi Payment và tạo refund cho mọi Payment
+   SUCCESS của Showtime; restart/retry không tạo trùng.
+5. Admin hoàn bắp nước không vượt `foodAmount`; Booking vẫn CONFIRMED và ghế vẫn
+   BOOKED.
+6. Admin hoàn chênh lệch giá/điều chỉnh nghiệp vụ; tổng refund không vượt số đã
+   thu.
+7. Sau các khoản partial, “hoàn toàn bộ” chỉ hoàn phần còn lại.
+8. Thử hoàn riêng một vé phải nhận `TICKET_REFUND_NOT_SUPPORTED`.
+9. CASH refund ở `REQUIRES_ACTION` cho tới khi Admin nhập mã biên nhận và ghi chú.
+10. Booking chỉ chuyển REFUNDED khi tổng refund thành công bằng đúng giá trị đơn.
+
+## 7. Giới hạn hiện tại
+
+- Chưa hỗ trợ hủy/hoàn riêng từng `BookingTicket`, tính lại giá vé hoặc quyết
+  định mở bán lại ghế.
+- Chưa tự động hóa nghiệp vụ refund phát sinh từ hủy từng vé.
+- Provider sandbox có thể yêu cầu quyền refund trên merchant; kết quả không chắc
+  chắn được query/retry và chuyển `REQUIRES_ACTION`, không tự kết luận thành công.

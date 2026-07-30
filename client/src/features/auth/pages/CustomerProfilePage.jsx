@@ -21,6 +21,8 @@ const normalizeDateForInput = (value) => {
 const hasImageSource = value => typeof value === 'string' && value.trim().length > 0;
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const resolveMediaUrl = value => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;
+const customerProfileTabs = new Set(['info', 'history', 'notifications', 'gifts', 'policy', 'loyalty']);
+const resolveCustomerProfileTab = (tab, fallback) => customerProfileTabs.has(tab) ? tab : fallback;
 
 export default function CustomerProfileView({ onBackHome, initialTab = 'info' }) {
   const navigate = useNavigate();
@@ -55,21 +57,16 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
   };
 
 
-  // Local state for tabs: 'info', 'history', 'notifications', 'gifts', 'policy'
+  // Unknown query values must never leave the customer profile content blank.
   const [activeTab, setActiveTab] = useState(() => {
     const searchParams = new URLSearchParams(location.search || (location.hash && location.hash.includes('?') ? location.hash.substring(location.hash.indexOf('?')) : ''));
-    const tabParam = searchParams.get('tab');
-    if (tabParam) return tabParam;
-    return initialTab;
+    return resolveCustomerProfileTab(searchParams.get('tab'), initialTab);
   });
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search || (location.hash && location.hash.includes('?') ? location.hash.substring(location.hash.indexOf('?')) : ''));
-    const tabParam = searchParams.get('tab');
-    if (tabParam) {
-      setActiveTab(tabParam);
-    }
-  }, [location]);
+    setActiveTab(resolveCustomerProfileTab(searchParams.get('tab'), initialTab));
+  }, [initialTab, location]);
 
   // Load user data fields (Name, Birthday, Gender are strictly read-only disabled)
   const fullName = profile?.fullName ?? '';

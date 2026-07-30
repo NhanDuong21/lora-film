@@ -10,6 +10,8 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+
 @Schema(description = "Request body to update an existing campaign")
 public class CampaignUpdateRequest {
 
@@ -19,20 +21,30 @@ public class CampaignUpdateRequest {
 
     private String description;
 
+    @NotNull(message = "priority is required")
     @Min(value = 0, message = "priority must be >= 0")
     private Integer priority;
 
+    @NotNull(message = "stackable is required")
     private Boolean stackable;
 
+    @NotNull(message = "exclusiveCampaign is required")
     private Boolean exclusiveCampaign;
 
+    @NotNull(message = "autoActivate is required")
     private Boolean autoActivate;
 
+    @NotNull(message = "autoComplete is required")
     private Boolean autoComplete;
 
+    @NotNull(message = "autoPauseWhenBudgetExceeded is required")
     private Boolean autoPauseWhenBudgetExceeded;
 
+    @jakarta.validation.constraints.Pattern(regexp = UUID_PATTERN, message = "partnerPublicId must be a valid UUID")
+    private String partnerPublicId;
+
     @NotBlank(message = "timezone is required")
+    @Size(max = 60, message = "timezone must be <= 60 characters")
     private String timezone;
 
     @NotNull(message = "startAt is required")
@@ -48,6 +60,7 @@ public class CampaignUpdateRequest {
     @Min(value = 1, message = "maxRedemptions must be >= 1")
     private Integer maxRedemptions;
 
+    @NotNull(message = "maxRedemptionsPerUser is required")
     @Min(value = 1, message = "maxRedemptionsPerUser must be >= 1")
     private Integer maxRedemptionsPerUser;
 
@@ -121,6 +134,14 @@ public class CampaignUpdateRequest {
 
     public void setAutoPauseWhenBudgetExceeded(Boolean autoPauseWhenBudgetExceeded) {
         this.autoPauseWhenBudgetExceeded = autoPauseWhenBudgetExceeded;
+    }
+
+    public String getPartnerPublicId() {
+        return partnerPublicId;
+    }
+
+    public void setPartnerPublicId(String partnerPublicId) {
+        this.partnerPublicId = partnerPublicId;
     }
 
     public String getTimezone() {

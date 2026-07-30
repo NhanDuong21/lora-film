@@ -660,7 +660,7 @@ public class AuthServiceImpl implements AuthService {
 
 	@Override
 	@Transactional
-	public void changeEmail(com.project.authservice.dto.request.ChangeEmailRequest request, String currentEmail) {
+	public void requestChangeEmail(com.project.authservice.dto.request.ChangeEmailRequest request, String currentEmail) {
 		String normalizedCurrentEmail = normalizeEmail(currentEmail);
 		String newEmail = normalizeEmail(request.getNewEmail());
 		Account account = accountRepository.findByEmail(normalizedCurrentEmail)
@@ -675,12 +675,99 @@ public class AuthServiceImpl implements AuthService {
 			throw new EmailAlreadyExistsException();
 		}
 
-		account.setEmail(newEmail);
-		accountRepository.save(account);
-		credentialRevocationService.revokeAll(account.getId());
-		authOutboxService.record("ACCOUNT_EMAIL_CHANGED", account.getId(),
-				java.util.Map.of("accountId", account.getId(), "email", newEmail));
-		auditLogService.log(account.getId(), "EMAIL_CHANGED", servletRequest);
+		String key = "change_email:otp:" + normalizedCurrentEmail;
+		String existingJson = redisTemplate.opsForValue().get(key);
+		if (existingJson != null) {
+			try {
+				com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(existingJson);
+				long lastSentAt = rootNode.path("lastSentAt").asLong(0);
+				if (lastSentAt > 0) {
+					long elapsedSeconds = (System.currentTimeMillis() - lastSentAt) / 1000;
+					if (elapsedSeconds < 60) {
+						throw new com.project.authservice.exception.OtpRateLimitException(60 - elapsedSeconds);
+					}
+				}
+			} catch (Exception e) {
+				log.warn("Failed to parse existing change email OTP data", e);
+			}
+		}
+
+		String otp = String.format("%06d", secureRandom.nextInt(1_000_000));
+		String otpHash = passwordEncoder.encode(otp);
+
+		try {
+			String json = objectMapper.writeValueAsString(java.util.Map.of(
+					"otpHash", otpHash,
+					"newEmail", newEmail,
+					"failedAttempts", 0,
+					"lastSentAt", System.currentTimeMillis()
+			));
+			redisTemplate.opsForValue().set(key, json, Duration.ofMinutes(5));
+		} catch (Exception e) {
+			throw new RuntimeException("Internal error saving OTP");
+		}
+
+		verificationService.sendChangeEmailOtp(account.getId(), normalizedCurrentEmail, otp);
+		log.info("Requested change email for accountId={}, OTP sent to {}", account.getId(), maskEmail(normalizedCurrentEmail));
+	}
+
+	@Override
+	@Transactional
+	public void verifyChangeEmail(com.project.authservice.dto.request.VerifyChangeEmailRequest request, String currentEmail) {
+		String normalizedCurrentEmail = normalizeEmail(currentEmail);
+		Account account = accountRepository.findByEmail(normalizedCurrentEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+
+		String key = "change_email:otp:" + normalizedCurrentEmail;
+		String json = redisTemplate.opsForValue().get(key);
+		if (json == null) {
+			throw new com.project.authservice.exception.InvalidOtpException();
+		}
+
+		try {
+			com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(json);
+			String otpHash = rootNode.path("otpHash").asText();
+			String newEmail = rootNode.path("newEmail").asText();
+			int attempts = rootNode.path("failedAttempts").asInt(0);
+			long lastSentAt = rootNode.path("lastSentAt").asLong(0);
+
+			if (!passwordEncoder.matches(request.getOtp(), otpHash)) {
+				attempts++;
+				if (attempts >= 5) {
+					redisTemplate.delete(key);
+					throw new com.project.authservice.exception.InvalidOtpException();
+				} else {
+					String updatedJson = objectMapper.writeValueAsString(java.util.Map.of(
+							"otpHash", otpHash,
+							"newEmail", newEmail,
+							"failedAttempts", attempts,
+							"lastSentAt", lastSentAt
+					));
+					Long expire = redisTemplate.getExpire(key);
+					if (expire != null && expire > 0) {
+						redisTemplate.opsForValue().set(key, updatedJson, Duration.ofSeconds(expire));
+					}
+					throw new com.project.authservice.exception.InvalidOtpException();
+				}
+			}
+
+			if (accountRepository.existsByEmail(newEmail)) {
+				throw new EmailAlreadyExistsException();
+			}
+
+			account.setEmail(newEmail);
+			accountRepository.save(account);
+			redisTemplate.delete(key);
+
+			credentialRevocationService.revokeAll(account.getId());
+			authOutboxService.record("ACCOUNT_EMAIL_CHANGED", account.getId(),
+					java.util.Map.of("accountId", account.getId(), "email", newEmail));
+			auditLogService.log(account.getId(), "EMAIL_CHANGED", servletRequest);
+			log.info("Email changed successfully for accountId={} to newEmail={}", account.getId(), maskEmail(newEmail));
+
+		} catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+			throw new RuntimeException("Internal error verifying OTP");
+		}
 	}
 
 	private JwtResponse issueTokens(Account account, HttpServletRequest request, int refreshDays) {

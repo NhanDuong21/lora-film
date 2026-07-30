@@ -14,10 +14,15 @@ import com.project.promotionservice.configuration.security.principal.UserPrincip
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,9 +35,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Set;
 
+import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+import static com.project.promotionservice.common.constant.ValidationConstants.USER_REFERENCE_PATTERN;
+
 @RestController
+@Validated
 @RequestMapping("/api/admin/vouchers")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'CSKH_AGENT')")
 @Tag(name = "Admin Vouchers", description = "Voucher issuance and lifecycle")
 public class AdminVoucherController {
 
@@ -69,7 +78,9 @@ public class AdminVoucherController {
     @PutMapping("/{id}")
     @Operation(summary = "Update voucher")
     public ResponseEntity<ApiResponse<VoucherResponse>> update(
-            @PathVariable("id") String publicId,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
             @Valid @RequestBody VoucherUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -80,8 +91,10 @@ public class AdminVoucherController {
     @PostMapping("/{id}/revoke")
     @Operation(summary = "Revoke voucher")
     public ResponseEntity<ApiResponse<VoucherResponse>> revoke(
-            @PathVariable("id") String publicId,
-            @RequestParam(defaultValue = "Revoked by administrator") String reason,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
+            @RequestParam(defaultValue = "Revoked by administrator") @Size(max = 255) String reason,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Voucher revoked successfully",
@@ -91,7 +104,9 @@ public class AdminVoucherController {
     @PostMapping("/{id}/extend")
     @Operation(summary = "Extend voucher validity")
     public ResponseEntity<ApiResponse<VoucherResponse>> extend(
-            @PathVariable("id") String publicId,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
             @Valid @RequestBody VoucherExtendRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -102,14 +117,19 @@ public class AdminVoucherController {
     @GetMapping
     @Operation(summary = "Search vouchers")
     public ResponseEntity<ApiResponse<PagedResponse<VoucherResponse>>> search(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String ownerPublicId,
-            @RequestParam(required = false) String campaignPublicId,
+            @RequestParam(required = false) @Size(max = 100) String keyword,
+            @RequestParam(required = false)
+            @Pattern(regexp = USER_REFERENCE_PATTERN,
+                    message = "ownerPublicId must be a positive account ID or a valid UUID")
+            String ownerPublicId,
+            @RequestParam(required = false)
+            @Pattern(regexp = UUID_PATTERN, message = "campaignPublicId must be a valid UUID")
+            String campaignPublicId,
             @RequestParam(required = false) VoucherStatus status,
             @RequestParam(required = false) VoucherSource source,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt,desc") String sort) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "createdAt,desc") @Size(max = 60) String sort) {
         PagedResponse<VoucherResponse> data = voucherService.search(
                 keyword, ownerPublicId, campaignPublicId, status, source,
                 BenefitControllerSupport.pageable(page, size, sort, SORT_FIELDS));
@@ -118,7 +138,10 @@ public class AdminVoucherController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get voucher detail")
-    public ResponseEntity<ApiResponse<VoucherResponse>> get(@PathVariable("id") String publicId) {
+    public ResponseEntity<ApiResponse<VoucherResponse>> get(
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId) {
         return ResponseEntity.ok(ApiResponse.success(voucherService.get(publicId)));
     }
 }

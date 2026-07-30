@@ -19,6 +19,9 @@ public class Coupon extends BaseAuditableEntity {
     @Column(name = "campaign_public_id", length = 36, nullable = false)
     private String campaignPublicId;
 
+    @Column(name = "partner_public_id", length = 36)
+    private String partnerPublicId;
+
     @Column(name = "code", length = 100, nullable = false, unique = true)
     private String code;
 
@@ -88,6 +91,14 @@ public class Coupon extends BaseAuditableEntity {
 
     public void setCampaignPublicId(String campaignPublicId) {
         this.campaignPublicId = campaignPublicId;
+    }
+
+    public String getPartnerPublicId() {
+        return partnerPublicId;
+    }
+
+    public void setPartnerPublicId(String partnerPublicId) {
+        this.partnerPublicId = partnerPublicId;
     }
 
     public String getCode() {

@@ -6,6 +6,7 @@ public class AccountVerifiedPayload {
     private String email;
     private String role;
     private String fullName;
+    private String avatarUrl;
     private String phoneNumber;
     private String cccd;
     private String cccdMasked;
@@ -53,6 +54,14 @@ public class AccountVerifiedPayload {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public String getPhoneNumber() {

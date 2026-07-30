@@ -30,10 +30,12 @@ const routeNameMap = {
   'showtime-schedules': 'Lịch tạo tự động',
   'create': 'Thêm mới',
   'bookings': 'Đơn hàng',
+  'payments': 'Giao dịch & đối soát',
   'finance': 'Tài chính',
   'analytics': 'Báo cáo doanh thu',
   'concessions': 'Bắp nước',
   'concession-sales': 'Doanh thu bắp nước',
+  'me': 'Tài khoản của tôi',
 };
 
 export default function Breadcrumbs() {

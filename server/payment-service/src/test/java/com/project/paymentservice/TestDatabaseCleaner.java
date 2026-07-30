@@ -10,6 +10,7 @@ import java.util.List;
 @Component
 class TestDatabaseCleaner {
     private static final List<String> TABLES = List.of(
+            "payment_refunds",
             "payment_outbox_events",
             "payment_reconciliation_cases",
             "payment_webhook_events",

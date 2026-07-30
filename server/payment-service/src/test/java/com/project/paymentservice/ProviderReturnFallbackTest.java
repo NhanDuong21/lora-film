@@ -28,8 +28,10 @@ import static org.mockito.Mockito.when;
 class ProviderReturnFallbackTest {
 
     @Test
-    void verifiedLocalReturnUsesCanonicalProviderResultLifecycle() {
+    void verifiedReturnImmediatelyUsesAuthoritativeStatusQuery() {
         Fixture fixture = fixture(true);
+        when(fixture.provider.queryStatus(fixture.payment))
+                .thenReturn(Optional.of(fixture.result));
 
         ProviderCallbackService.ReturnOutcome outcome = fixture.service.verifyReturn(
                 ProviderCode.VNPAY, Map.of("vnp_TxnRef", "PAY001"));
@@ -42,8 +44,10 @@ class ProviderReturnFallbackTest {
     }
 
     @Test
-    void productionReturnOnlySchedulesAuthoritativeStatusQuery() {
-        Fixture fixture = fixture(false);
+    void verifiedReturnSchedulesRateLimitedRetryWhenProviderIsNotTerminal() {
+        Fixture fixture = fixture(true);
+        when(fixture.provider.queryStatus(fixture.payment)).thenReturn(Optional.empty());
+        when(fixture.provider.recoveryRetryDelaySeconds()).thenReturn(305);
 
         fixture.service.verifyReturn(
                 ProviderCode.VNPAY, Map.of("vnp_TxnRef", "PAY001"));
@@ -54,7 +58,21 @@ class ProviderReturnFallbackTest {
                 any(), any(), any());
     }
 
-    private Fixture fixture(boolean fallbackEnabled) {
+    @Test
+    void invalidReturnDoesNotScheduleStatusQueryOrMutatePayment() {
+        Fixture fixture = fixture(false);
+
+        ProviderCallbackService.ReturnOutcome outcome = fixture.service.verifyReturn(
+                ProviderCode.VNPAY, Map.of("vnp_TxnRef", "PAY001"));
+
+        assertEquals(false, outcome.signatureValid());
+        verify(fixture.transactionService, never())
+                .scheduleProviderStatusCheck(any(), any());
+        verify(fixture.transactionService, never()).applyProviderResult(
+                any(), any(), any());
+    }
+
+    private Fixture fixture(boolean signatureValid) {
         PaymentProviderRegistry registry = mock(PaymentProviderRegistry.class);
         PaymentProvider provider = mock(PaymentProvider.class);
         PaymentWebhookEventRepository webhookRepository =
@@ -64,7 +82,7 @@ class ProviderReturnFallbackTest {
                 mock(PaymentTransactionService.class);
 
         ProviderCallbackResult result = new ProviderCallbackResult();
-        result.setSignatureValid(true);
+        result.setSignatureValid(signatureValid);
         result.setProviderOrderId("PAY001");
         result.setExternalTransactionId("123456");
         result.setAmount(new BigDecimal("355000"));
@@ -79,9 +97,10 @@ class ProviderReturnFallbackTest {
 
         when(registry.getProvider(ProviderCode.VNPAY)).thenReturn(provider);
         when(provider.verifyReturn(any())).thenReturn(result);
-        when(provider.verifiedReturnFallbackEnabled()).thenReturn(fallbackEnabled);
-        when(paymentRepository.findByProviderCodeAndProviderOrderId(
-                ProviderCode.VNPAY, "PAY001")).thenReturn(Optional.of(payment));
+        if (signatureValid) {
+            when(paymentRepository.findByProviderCodeAndProviderOrderId(
+                    ProviderCode.VNPAY, "PAY001")).thenReturn(Optional.of(payment));
+        }
 
         ProviderCallbackService service = new ProviderCallbackService(
                 registry,
@@ -89,12 +108,14 @@ class ProviderReturnFallbackTest {
                 paymentRepository,
                 transactionService,
                 new ObjectMapper());
-        return new Fixture(service, transactionService, result);
+        return new Fixture(service, transactionService, provider, payment, result);
     }
 
     private record Fixture(
             ProviderCallbackService service,
             PaymentTransactionService transactionService,
+            PaymentProvider provider,
+            Payment payment,
             ProviderCallbackResult result) {
     }
 }

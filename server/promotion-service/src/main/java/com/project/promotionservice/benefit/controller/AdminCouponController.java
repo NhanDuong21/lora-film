@@ -13,12 +13,17 @@ import com.project.promotionservice.configuration.security.principal.UserPrincip
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,9 +40,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
+import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
+
 @RestController
+@Validated
 @RequestMapping("/api/admin/coupons")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF')")
 @Tag(name = "Admin Coupons", description = "Coupon creation, generation, import, export and lifecycle")
 public class AdminCouponController {
 
@@ -85,8 +93,10 @@ public class AdminCouponController {
     @GetMapping(value = "/export", produces = "text/csv")
     @Operation(summary = "Export coupons as CSV")
     public ResponseEntity<byte[]> exportCoupons(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String campaignPublicId,
+            @RequestParam(required = false) @Size(max = 100) String keyword,
+            @RequestParam(required = false)
+            @Pattern(regexp = UUID_PATTERN, message = "campaignPublicId must be a valid UUID")
+            String campaignPublicId,
             @RequestParam(required = false) CouponStatus status) {
         byte[] data = couponService.exportCsv(keyword, campaignPublicId, status);
         return ResponseEntity.ok()
@@ -98,7 +108,9 @@ public class AdminCouponController {
     @PutMapping("/{id}")
     @Operation(summary = "Update coupon")
     public ResponseEntity<ApiResponse<CouponResponse>> update(
-            @PathVariable("id") String publicId,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
             @Valid @RequestBody CouponUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -109,7 +121,9 @@ public class AdminCouponController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Disable coupon")
     public ResponseEntity<ApiResponse<Void>> disable(
-            @PathVariable("id") String publicId,
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
             @AuthenticationPrincipal UserPrincipal principal) {
         couponService.disable(publicId, BenefitControllerSupport.actor(principal));
         return ResponseEntity.ok(ApiResponse.success("Coupon disabled successfully", null));
@@ -118,13 +132,15 @@ public class AdminCouponController {
     @GetMapping
     @Operation(summary = "Search coupons")
     public ResponseEntity<ApiResponse<PagedResponse<CouponResponse>>> search(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String campaignPublicId,
+            @RequestParam(required = false) @Size(max = 100) String keyword,
+            @RequestParam(required = false)
+            @Pattern(regexp = UUID_PATTERN, message = "campaignPublicId must be a valid UUID")
+            String campaignPublicId,
             @RequestParam(required = false) CouponStatus status,
             @RequestParam(required = false) Instant validAt,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt,desc") String sort) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "createdAt,desc") @Size(max = 60) String sort) {
         PagedResponse<CouponResponse> data = couponService.search(
                 keyword, campaignPublicId, status, validAt,
                 BenefitControllerSupport.pageable(page, size, sort, SORT_FIELDS));
@@ -133,7 +149,10 @@ public class AdminCouponController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get coupon detail")
-    public ResponseEntity<ApiResponse<CouponResponse>> get(@PathVariable("id") String publicId) {
+    public ResponseEntity<ApiResponse<CouponResponse>> get(
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId) {
         return ResponseEntity.ok(ApiResponse.success(couponService.get(publicId)));
     }
 }
