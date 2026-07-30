@@ -15,6 +15,7 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.pricing.util.SeatPriceAllocation;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.seat.domain.entity.Seat;
@@ -125,11 +126,14 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
             seatDto.setSeatPublicId(seat.getPublicId());
             seatDto.setSeatCode(seat.getSeatCode());
             seatDto.setSeatType(seat.getSeatType().getCode().name());
-            seatDto.setPrice(showtimePrice.getPrice());
+            seatDto.setPairGroup(seat.getPairGroup());
+            BigDecimal allocatedPrice = SeatPriceAllocation.perPhysicalSeat(
+                    seat.getSeatType().getCode(), showtimePrice.getPrice());
+            seatDto.setPrice(allocatedPrice);
             seatDto.setCurrency(showtimePrice.getCurrency());
             seatDtos.add(seatDto);
 
-            totalAmount = totalAmount.add(showtimePrice.getPrice());
+            totalAmount = totalAmount.add(allocatedPrice);
             currency = showtimePrice.getCurrency();
         }
 

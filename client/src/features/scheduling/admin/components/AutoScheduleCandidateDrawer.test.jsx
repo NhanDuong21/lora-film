@@ -66,7 +66,7 @@ describe('AutoScheduleCandidateDrawer', () => {
     renderDrawer({ onClose });
 
     const dialog = screen.getByRole('dialog', { name: 'Phim thử nghiệm' });
-    const closeButton = screen.getByRole('button', { name: 'Đóng chi tiết ứng viên' });
+    const closeButton = screen.getByRole('button', { name: 'Đóng chi tiết suất đề xuất' });
     await waitFor(() => expect(closeButton).toHaveFocus());
     expect(dialog).toHaveAttribute('aria-modal', 'true');
 
@@ -84,7 +84,7 @@ describe('AutoScheduleCandidateDrawer', () => {
     document.body.appendChild(opener);
     opener.focus();
     const view = renderDrawer({ returnFocusElement: opener });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Đóng chi tiết ứng viên' })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Đóng chi tiết suất đề xuất' })).toHaveFocus());
 
     view.unmount();
     expect(opener).toHaveFocus();
@@ -98,7 +98,7 @@ describe('AutoScheduleCandidateDrawer', () => {
 
     fireEvent.mouseDown(screen.getByRole('dialog'));
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Chọn ứng viên' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn suất đề xuất' }));
     expect(onToggleSelection).toHaveBeenCalledWith('item-1', false);
   });
 
@@ -110,7 +110,7 @@ describe('AutoScheduleCandidateDrawer', () => {
     renderDrawer({ candidate, capabilities: { isEditable: false, canSelect: false } });
 
     expect(screen.getByRole('link', { name: /showtime-77/i })).toHaveAttribute('href', '/admin/showtimes/showtime-77');
-    expect(screen.queryByRole('button', { name: /Chọn ứng viên/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Chọn suất đề xuất/i })).not.toBeInTheDocument();
     expect(screen.getByText('scoreBreakdown')).toBeInTheDocument();
   });
 
@@ -125,7 +125,7 @@ describe('AutoScheduleCandidateDrawer', () => {
       onToggleSelection,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Xem trên timeline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trên sơ đồ phòng chiếu' }));
     expect(onShowDiagnostic).toHaveBeenCalledTimes(1);
     expect(onToggleSelection).not.toHaveBeenCalled();
 
@@ -145,7 +145,7 @@ describe('AutoScheduleCandidateDrawer', () => {
         />
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Bỏ phủ chẩn đoán' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ đánh dấu trên sơ đồ' }));
     expect(onClearDiagnostic).toHaveBeenCalledTimes(1);
   });
 });

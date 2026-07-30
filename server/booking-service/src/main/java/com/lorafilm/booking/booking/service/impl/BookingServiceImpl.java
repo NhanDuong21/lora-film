@@ -16,6 +16,7 @@ import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
+import com.lorafilm.booking.booking.policy.SingleSeatGapPolicy;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingSpecification;
@@ -46,6 +47,7 @@ import com.lorafilm.booking.booking.service.BookingTicketService;
 import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import com.lorafilm.booking.realtime.SeatAvailabilityEventService;
+import com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -63,8 +65,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -220,6 +224,7 @@ public class BookingServiceImpl implements BookingService {
         List<Long> seatIds = reservations.stream().map(SeatReservation::getSeatId).toList();
         ShowtimeBookingContext context = showtimeClient.getBookingContext(showtimeId, seatIds);
         validateShowtimeContext(context, showtimeId, validatedRequest.showtimePublicId(), seatIds);
+        validateSingleSeatGap(showtimeId, seatIds);
 
         Instant now = Instant.now();
         enforceSingleActiveBooking(currentUserId, context.showtimeId(), now);
@@ -308,6 +313,7 @@ public class BookingServiceImpl implements BookingService {
             throw new IntegrationException("Movie Service returned mismatched public seat information");
         }
         validateShowtimeContext(context, context.showtimeId(), request.showtimePublicId(), seatIds);
+        validateSingleSeatGap(context.showtimeId(), seatIds);
         if (seatIds.size() > bookingPolicyProperties.getMaxSeatsPerBooking()) {
             throw new BusinessException("BOOKING_TOO_MANY_SEATS",
                     "A booking cannot contain more than " + bookingPolicyProperties.getMaxSeatsPerBooking() + " seats",
@@ -931,7 +937,76 @@ public class BookingServiceImpl implements BookingService {
                 || !returnedSeatIds.containsAll(requestedSeatIds)) {
             throw new IntegrationException("Movie Service returned mismatched seat information");
         }
+        validateCoupleSeatPairs(context.seats());
         validatePricing(context);
+    }
+
+    private void validateCoupleSeatPairs(List<ShowtimeBookingContext.SeatContext> seats) {
+        Map<String, List<ShowtimeBookingContext.SeatContext>> coupleGroups = new HashMap<>();
+        for (ShowtimeBookingContext.SeatContext seat : seats) {
+            boolean couple = "COUPLE".equalsIgnoreCase(seat.seatType());
+            String pairGroup = seat.pairGroup() == null ? null : seat.pairGroup().trim();
+            if (couple && (pairGroup == null || pairGroup.isEmpty())) {
+                throw new IntegrationException(
+                        "Movie Service returned a couple seat without pairGroup");
+            }
+            if (!couple && pairGroup != null && !pairGroup.isEmpty()) {
+                throw new IntegrationException(
+                        "Movie Service returned pairGroup for a non-couple seat");
+            }
+            if (couple) {
+                coupleGroups.computeIfAbsent(pairGroup, ignored -> new ArrayList<>()).add(seat);
+            }
+        }
+
+        for (Map.Entry<String, List<ShowtimeBookingContext.SeatContext>> entry
+                : coupleGroups.entrySet()) {
+            int memberCount = entry.getValue().size();
+            if (memberCount == 1) {
+                throw new BusinessException(
+                        "SEAT_COUPLE_PAIR_REQUIRED",
+                        "Couple seats must be booked together",
+                        HttpStatus.BAD_REQUEST);
+            }
+            if (memberCount != 2) {
+                throw new IntegrationException(
+                        "Movie Service returned an invalid couple pairGroup");
+            }
+        }
+    }
+
+    private void validateSingleSeatGap(Long showtimeId, List<Long> selectedSeatIds) {
+        ShowtimeSeatLayoutResponse layout = showtimeClient.getSeatLayout(showtimeId);
+        if (layout == null || layout.getSeats() == null
+                || !Objects.equals(layout.getShowtimeId(), showtimeId)) {
+            throw new IntegrationException("Movie Service returned an invalid seat layout");
+        }
+
+        Set<Long> selected = new HashSet<>(selectedSeatIds);
+        Set<Long> layoutSeatIds = layout.getSeats().stream()
+                .map(ShowtimeSeatLayoutResponse.SeatDetailDto::getSeatId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!layoutSeatIds.containsAll(selected)) {
+            throw new IntegrationException("Movie Service seat layout omitted selected seats");
+        }
+
+        Instant now = Instant.now();
+        Set<Long> occupied = reservationRepository
+                .findAllActiveReservationsByShowtimeId(showtimeId, now)
+                .stream()
+                .map(SeatReservation::getSeatId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        occupied.addAll(reservationRepository.findSoldSeatIdsFromBookingsByShowtimeId(showtimeId));
+        occupied.removeAll(selected);
+
+        if (SingleSeatGapPolicy.leavesSingleSeatGap(layout.getSeats(), selected, occupied)) {
+            throw new BusinessException(
+                    "SEAT_SINGLE_GAP_NOT_ALLOWED",
+                    "Seat selection must not leave an isolated single seat",
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 
     private void validatePricing(ShowtimeBookingContext context) {

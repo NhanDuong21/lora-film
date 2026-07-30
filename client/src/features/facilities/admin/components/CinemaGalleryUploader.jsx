@@ -16,8 +16,7 @@ export default function CinemaGalleryUploader({
   const handleFiles = (newFiles) => {
     const validImageFiles = Array.from(newFiles).filter(file => file.type.startsWith('image/'));
     if (validImageFiles.length !== newFiles.length) {
-      if (triggerToast) triggerToast('Một số file không phải là hình ảnh và đã bị bỏ qua.', 'warning');
-      else alert('Một số file không phải là hình ảnh và đã bị bỏ qua.');
+      triggerToast?.('Một số file không phải là hình ảnh và đã bị bỏ qua.', 'warning');
     }
 
     // Filter duplicates by name and size (rudimentary check)

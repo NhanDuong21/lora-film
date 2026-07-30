@@ -86,10 +86,13 @@ public class ShowtimeSeatLayoutResponse {
     public static class SeatDetailDto {
         @JsonProperty("id")
         private Long seatId;
+        @JsonProperty("publicId")
         private String seatPublicId;
         private String seatCode; // E.g., "A1", "B5"
         private String seatType; // E.g., "STANDARD", "VIP", "COUPLE"
+        private String pairGroup;
         private Long pairedSeatId; // For couple seats
+        private String status;
         @JsonProperty("blockedForShowtime")
         private boolean isBlocked; // Blocked for showtime or inactive
         @JsonProperty("positionRow")
@@ -142,12 +145,28 @@ public class ShowtimeSeatLayoutResponse {
             this.seatType = seatType;
         }
 
+        public String getPairGroup() {
+            return pairGroup;
+        }
+
+        public void setPairGroup(String pairGroup) {
+            this.pairGroup = pairGroup;
+        }
+
         public Long getPairedSeatId() {
             return pairedSeatId;
         }
 
         public void setPairedSeatId(Long pairedSeatId) {
             this.pairedSeatId = pairedSeatId;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
         }
 
         public boolean isBlocked() {

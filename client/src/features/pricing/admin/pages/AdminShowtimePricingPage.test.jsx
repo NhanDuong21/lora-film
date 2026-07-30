@@ -54,9 +54,9 @@ describe('AdminShowtimePricingPage', () => {
   it('shows incomplete SeatTypes and resolves with the Showtime version', async () => {
     renderPage();
 
-    expect(await screen.findByText('Snapshot chưa đầy đủ')).toBeInTheDocument();
+    expect(await screen.findByText('Chưa thể mở bán vì thiếu giá')).toBeInTheDocument();
     expect(screen.getByText('Ghế VIP (VIP)')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Phân giải lại' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra lại giá' }));
 
     await waitFor(() => expect(adminShowtimeService.resolvePricing)
       .toHaveBeenCalledWith('showtime-1', 2));

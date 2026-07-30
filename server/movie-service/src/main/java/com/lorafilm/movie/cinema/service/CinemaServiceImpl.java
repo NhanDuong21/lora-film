@@ -328,7 +328,9 @@ public class CinemaServiceImpl implements CinemaService {
             dto.setMediaType(m.getMediaType().name());
             dto.setUrl(m.getUrl());
             dto.setTitle(m.getTitle());
+            dto.setDisplayOrder(m.getDisplayOrder());
             dto.setIsPrimary(m.getIsPrimary());
+            dto.setStatus(m.getStatus() != null ? m.getStatus().name() : null);
             return dto;
         }).collect(Collectors.toList()));
 

@@ -161,10 +161,46 @@ class ShowtimeBookingContextServiceImplTest {
         assertEquals(1L, response.getAuditoriumId());
         assertEquals("https://cdn.lorafilm.test/movie-1.jpg", response.getMovie().getPosterUrl());
         assertEquals(2, response.getSelectedSeats().size());
+        assertEquals(null, response.getSelectedSeats().get(0).getPairGroup());
         assertNotNull(response.getPricing());
         assertEquals(new BigDecimal("200000"), response.getPricing().getTotalAmount());
         assertEquals("VND", response.getPricing().getCurrency());
         assertNotNull(response.getBookingExpiredAt());
+    }
+
+    @Test
+    void getBookingContext_coupleSeats_exposesPairGroup() {
+        SeatType coupleType = new SeatType();
+        coupleType.setId(3L);
+        coupleType.setCode(SeatTypeCode.COUPLE);
+        seat1.setSeatType(coupleType);
+        seat2.setSeatType(coupleType);
+        seat1.setPairGroup("I-01");
+        seat2.setPairGroup("I-01");
+        seat1.setPublicId("seat-i1");
+        seat2.setPublicId("seat-i2");
+
+        BookingContextRequest request = new BookingContextRequest();
+        request.setSeatIds(Arrays.asList(101L, 102L));
+        when(showtimeRepository.findByIdAndDeletedAtIsNull(10L)).thenReturn(Optional.of(showtime));
+        when(seatRepository.findByIdInAndDeletedAtIsNull(request.getSeatIds()))
+                .thenReturn(Arrays.asList(seat1, seat2));
+
+        ShowtimePrice price = new ShowtimePrice();
+        price.setSeatType(coupleType);
+        price.setPrice(new BigDecimal("156000"));
+        price.setCurrency("VND");
+        when(showtimePriceRepository.findByShowtimeId(10L))
+                .thenReturn(Collections.singletonList(price));
+
+        BookingContextResponse response = showtimeService.getBookingContext(10L, request);
+
+        assertEquals(2, response.getSelectedSeats().size());
+        assertTrue(response.getSelectedSeats().stream()
+                .allMatch(seat -> "I-01".equals(seat.getPairGroup())));
+        assertTrue(response.getSelectedSeats().stream()
+                .allMatch(seat -> new BigDecimal("78000").equals(seat.getPrice())));
+        assertEquals(new BigDecimal("156000"), response.getPricing().getTotalAmount());
     }
 
     @Test

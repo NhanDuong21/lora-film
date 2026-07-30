@@ -288,7 +288,7 @@ describe('useAutoSchedulePreview selection compatibility', () => {
 
     expect(adminAutoScheduleService.updateSelections).not.toHaveBeenCalled();
     expect(triggerToast).toHaveBeenCalledWith(
-      'Suất chiếu xung đột khoảng chiếm phòng với một suất đã chọn.',
+      'Suất đề xuất bị trùng thời gian sử dụng phòng với một suất đã chọn.',
       'error',
     );
   });

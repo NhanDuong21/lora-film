@@ -20,7 +20,10 @@ import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.pricing.util.SeatPriceAllocation;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import com.lorafilm.movie.seat.service.SeatService;
@@ -54,17 +57,20 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
     private final ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository;
     private final SeatService seatService;
     private final ShowtimeMapper showtimeMapper;
+    private final MovieMediaRepository movieMediaRepository;
 
     public ShowtimeQueryServiceImpl(ShowtimeRepository showtimeRepository,
                                ShowtimePriceRepository showtimePriceRepository,
                                ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository,
                                SeatService seatService,
-                               ShowtimeMapper showtimeMapper) {
+                               ShowtimeMapper showtimeMapper,
+                               MovieMediaRepository movieMediaRepository) {
         this.showtimeRepository = showtimeRepository;
         this.showtimePriceRepository = showtimePriceRepository;
         this.showtimeBlockedSeatRepository = showtimeBlockedSeatRepository;
         this.seatService = seatService;
         this.showtimeMapper = showtimeMapper;
+        this.movieMediaRepository = movieMediaRepository;
     }
 
     @Override
@@ -103,8 +109,30 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
         Pageable pageable = PageRequest.of(page, size, Sort.by("startTime").ascending());
         Page<Showtime> showtimePage = showtimeRepository.findAll(spec, pageable);
 
-        List<ShowtimeDto> showtimeDtos = showtimePage.getContent().stream()
-                .map(showtimeMapper::toDto)
+        List<Showtime> showtimes = showtimePage.getContent();
+        List<Long> movieIds = showtimes.stream()
+                .map(showtime -> showtime.getMovie().getId())
+                .distinct()
+                .toList();
+        Map<Long, String> primaryPosters = movieIds.isEmpty()
+                ? Map.of()
+                : movieMediaRepository
+                        .findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                                movieIds, MovieMediaType.POSTER, ActiveStatus.ACTIVE)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                media -> media.getMovie().getId(),
+                                media -> media.getUrl(),
+                                (first, ignored) -> first));
+
+        List<ShowtimeDto> showtimeDtos = showtimes.stream()
+                .map(showtime -> {
+                    ShowtimeDto dto = showtimeMapper.toDto(showtime);
+                    if (dto != null && dto.getMovie() != null) {
+                        dto.getMovie().setPosterUrl(primaryPosters.get(showtime.getMovie().getId()));
+                    }
+                    return dto;
+                })
                 .collect(Collectors.toList());
 
         return new PageResponse<>(
@@ -147,6 +175,12 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
         Map<Long, ShowtimeBlockedSeat> blockedSeatMap = blockedSeats.stream()
                 .collect(Collectors.toMap(b -> b.getSeat().getId(), b -> b));
 
+        Map<String, List<Seat>> coupleSeatGroups = seats.stream()
+                .filter(seat -> seat.getSeatType().getCode()
+                        == com.lorafilm.movie.seat.domain.enums.SeatTypeCode.COUPLE)
+                .filter(seat -> seat.getPairGroup() != null && !seat.getPairGroup().isBlank())
+                .collect(Collectors.groupingBy(seat -> seat.getPairGroup().trim()));
+
         List<SeatLayoutDto.SeatPriceDto> seatPriceDtos = seats.stream().map(seat -> {
             ShowtimePrice showtimePrice = priceMap.get(seat.getSeatType().getId());
             if (showtimePrice == null || showtimePrice.getPrice() == null
@@ -154,7 +188,8 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
                 throw new BusinessException(ErrorCode.PRICING_INCOMPLETE,
                         "Missing or invalid price for SeatType " + seat.getSeatType().getPublicId());
             }
-            BigDecimal price = showtimePrice.getPrice();
+            BigDecimal price = SeatPriceAllocation.perPhysicalSeat(
+                    seat.getSeatType().getCode(), showtimePrice.getPrice());
             String currency = showtimePrice.getCurrency();
             boolean isBlocked = blockedSeatMap.containsKey(seat.getId());
 
@@ -167,6 +202,16 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
             dto.setPositionRow(seat.getPositionRow());
             dto.setPositionColumn(seat.getPositionColumn());
             dto.setSeatType(seat.getSeatType().getCode().name());
+            dto.setPairGroup(seat.getPairGroup());
+            List<Seat> pairMembers = seat.getPairGroup() == null
+                    ? List.of()
+                    : coupleSeatGroups.getOrDefault(seat.getPairGroup().trim(), List.of());
+            if (pairMembers.size() == 2) {
+                pairMembers.stream()
+                        .filter(member -> !member.getId().equals(seat.getId()))
+                        .findFirst()
+                        .ifPresent(member -> dto.setPairedSeatId(member.getId()));
+            }
             dto.setPrice(price);
             dto.setCurrency(currency);
             dto.setStatus(seat.getStatus().name());

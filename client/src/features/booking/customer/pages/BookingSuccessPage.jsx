@@ -91,10 +91,10 @@ export default function BookingSuccessPage() {
   const showtimeDate = snapshot?.showtimeStart ? new Date(snapshot.showtimeStart) : null;
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-32 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium print:bg-white print:text-black print:pt-4">
+    <div className="min-h-screen bg-zinc-950 px-4 pb-16 pt-6 font-sans font-medium text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 md:px-12 print:bg-white print:pt-4 print:text-black">
 
       <div className="max-w-4xl mx-auto w-full space-y-8">
-        <BookingStepper currentStep={5} />
+        <BookingStepper currentStep={4} />
 
         {/* Success Announcement Header */}
         <div className="text-center space-y-3 print:hidden">

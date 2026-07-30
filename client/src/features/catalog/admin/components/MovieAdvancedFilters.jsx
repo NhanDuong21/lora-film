@@ -108,7 +108,11 @@ export default function MovieAdvancedFilters({ query, genres, isOpen, onApply, o
             <FilterField label="Thể loại">
               <select className={inputClass} value={draft.genrePublicId} onChange={event => updateDraft('genrePublicId', event.target.value)}>
                 <option value="">Tất cả thể loại</option>
-                {genres.map(genre => <option key={genre.publicId} value={genre.publicId}>{genre.name}</option>)}
+                {genres.map(genre => (
+                  <option key={genre.publicId} value={genre.publicId}>
+                    {genre.name}{genre.status === 'INACTIVE' ? ' (Ngừng sử dụng)' : ''}
+                  </option>
+                ))}
               </select>
             </FilterField>
             <FilterField label="Quốc gia">

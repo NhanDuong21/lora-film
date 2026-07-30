@@ -8,11 +8,11 @@ import {
 describe('pricing presentation', () => {
   it('localizes known pricing reasons and reserves unknown for a true fallback', () => {
     expect(getPricingReasonPresentation('PRICING_INCOMPLETE').label)
-      .toBe('Thiếu chính sách hoặc quy tắc giá hiệu lực');
+      .toBe('Chưa đủ giá cho tất cả loại ghế');
     expect(getPricingReasonPresentation('PRICING_AMBIGUOUS').label)
-      .toBe('Có nhiều quy tắc giá cùng mức ưu tiên');
+      .toBe('Có nhiều mức giá phù hợp cùng lúc');
     expect(getPricingReasonPresentation('NOT_A_REAL_CODE').label)
-      .toBe('Không xác định — xem chi tiết kỹ thuật');
+      .toBe('Không xác định được nguyên nhân');
   });
 
   it('presents structured overlap facts without using UUIDs as the primary message', () => {
@@ -31,7 +31,7 @@ describe('pricing presentation', () => {
     });
 
     expect(presentation.title).toBe('Ghế VIP (VIP) · Phòng chiếu cụ thể: Phòng 3');
-    expect(presentation.facts).toBe('Cuối tuần · 18:00–23:00 · 2 quy tắc xung đột');
+    expect(presentation.facts).toBe('Cuối tuần · 18:00–23:00 · 2 mức giá bị trùng');
     expect(presentation.title).not.toContain('rule-uuid');
     expect(presentation.technical.ruleIds).toEqual(['rule-uuid-1', 'rule-uuid-2']);
   });

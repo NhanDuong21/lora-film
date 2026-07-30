@@ -36,6 +36,16 @@ const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2
 const MOMO_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/a/a0/MoMo_Logo_App.svg';
 const MOMO_LOGO_FALLBACK_URL = 'https://res.cloudinary.com/dqc4hufot/image/upload/f_auto,q_auto,w_96/logo_jg9h5v.png';
 const CONCESSION_PAGE_SIZE = 12;
+const CHECKOUT_PHASE = Object.freeze({
+  ADD_ONS: 'ADD_ONS',
+  PAYMENT: 'PAYMENT'
+});
+const CATEGORY_LABELS = {
+  ALL: 'Tất cả',
+  FOOD: 'Đồ ăn',
+  DRINK: 'Nước uống',
+  COMBO: 'Combo'
+};
 
 const formatCurrency = value => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
 
@@ -115,7 +125,7 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
       <div className="flex flex-grow flex-col justify-between space-y-3 py-0.5">
         <div className="space-y-1">
           <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-zinc-400">
-            {item.type || 'Combo'}
+            {CATEGORY_LABELS[String(item.type || '').toUpperCase()] || item.type || 'Combo'}
           </span>
           <h4 className="line-clamp-1 text-xs font-black leading-snug text-white">{item.name}</h4>
           <p className="line-clamp-2 text-[9px] leading-normal text-zinc-500">{item.description}</p>
@@ -219,8 +229,7 @@ export default function BookingCheckoutPage() {
   }, [location.search]);
   const bookingDraft = location.state || {};
 
-  // Step state within checkout: 3 (Food Selection) or 4 (Payment/Summary)
-  const [step, setStep] = useState(3);
+  const [phase, setPhase] = useState(CHECKOUT_PHASE.ADD_ONS);
 
   // States
   const [booking, setBooking] = useState(null);
@@ -240,7 +249,8 @@ export default function BookingCheckoutPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [catalogPage, setCatalogPage] = useState(1);
-  
+  const [catalogExpanded, setCatalogExpanded] = useState(false);
+
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
@@ -287,6 +297,7 @@ export default function BookingCheckoutPage() {
         // the customer from completing the current Booking.
         setUserScore(null);
       }
+
     } catch (err) {
       setError(getBookingErrorMessage(
         err,
@@ -410,10 +421,13 @@ export default function BookingCheckoutPage() {
     Math.ceil(filteredConcessions.length / CONCESSION_PAGE_SIZE)
   );
   const currentCatalogPage = Math.min(catalogPage, catalogTotalPages);
-  const visibleConcessions = useMemo(() => {
+  const pagedConcessions = useMemo(() => {
     const start = (currentCatalogPage - 1) * CONCESSION_PAGE_SIZE;
     return filteredConcessions.slice(start, start + CONCESSION_PAGE_SIZE);
   }, [currentCatalogPage, filteredConcessions]);
+  const visibleConcessions = catalogExpanded
+    ? pagedConcessions
+    : filteredConcessions.slice(0, 4);
 
   const foodOrderItems = booking?.foodOrder?.items;
   const cartItemsByProductId = useMemo(() => {
@@ -674,9 +688,10 @@ export default function BookingCheckoutPage() {
     0,
     Number(userScore?.currentPoints || 0) - Number(userScore?.heldPoints || 0)
   );
+  const isPaymentPhase = phase === CHECKOUT_PHASE.PAYMENT;
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-12 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
+    <div className="min-h-screen bg-zinc-950 px-4 pb-12 pt-6 font-sans font-medium text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 md:px-8">
       {notice && (
         <BookingNoticeModal
           title={notice.title}
@@ -705,9 +720,9 @@ export default function BookingCheckoutPage() {
 
       <div className="max-w-7xl mx-auto w-full">
         {/* Booking Stepper */}
-        <BookingStepper currentStep={step} />
+        <BookingStepper currentStep={3} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
           {/* Left panel: F&B selection OR payment selection */}
           <div className="lg:col-span-2 space-y-8">
             {/* Countdown notice on mobile */}
@@ -766,50 +781,73 @@ export default function BookingCheckoutPage() {
                   </button>
                 </div>
               </div>
-            ) : step === 3 ? (
+            ) : !isPaymentPhase ? (
               /* Step 3: Choose Food & Beverage */
-              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
+              <div className="space-y-5 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 p-5 md:p-6">
+                <div className="flex flex-col justify-between gap-4 border-b border-zinc-800 pb-5 sm:flex-row sm:items-center">
                   <div>
-                    <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Bắp Nước đi kèm</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Nâng cấp trải nghiệm điện ảnh của bạn</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-black text-white">Thêm bắp nước?</h2>
+                      <span className="rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-zinc-400">
+                        Không bắt buộc
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-500">Chọn nhanh món yêu thích hoặc bỏ qua để thanh toán vé.</p>
                   </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCatalogExpanded(value => !value)}
+                      className="rounded-xl border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                    >
+                      {catalogExpanded ? 'Thu gọn' : 'Xem tất cả'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
+                      className="rounded-xl bg-zinc-800 px-3 py-2 text-xs font-black text-white transition-colors hover:bg-zinc-700"
+                    >
+                      Bỏ qua
+                    </button>
+                  </div>
+                </div>
 
-                  {/* Categories filtering tab bar */}
-                  <div className="flex gap-2 overflow-x-auto py-1 scrollbar-none">
-                    {categories.map(cat => (
-                      <button
-                        key={cat}
-                        onClick={() => {
-                          setSelectedCategory(cat);
+                {catalogExpanded && (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex gap-2 overflow-x-auto py-1 scrollbar-none">
+                      {categories.map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => {
+                            setSelectedCategory(cat);
+                            setCatalogPage(1);
+                          }}
+                          className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition-all ${
+                            selectedCategory === cat
+                              ? 'bg-brand-orange text-white'
+                              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {CATEGORY_LABELS[cat] || cat}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative w-full sm:max-w-xs">
+                      <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                      <input
+                        type="search"
+                        aria-label="Tìm bắp nước"
+                        placeholder="Tìm món..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
                           setCatalogPage(1);
                         }}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                          selectedCategory === cat
-                            ? 'bg-brand-orange text-white'
-                            : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {cat === 'ALL' ? 'TẤT CẢ' : cat}
-                      </button>
-                    ))}
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-2.5 pl-11 pr-4 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-brand-orange focus:outline-none"
+                      />
+                    </div>
                   </div>
-                </div>
-
-                {/* Search bar */}
-                <div className="relative max-w-sm">
-                  <Search className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Tìm bắp nước nhanh..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCatalogPage(1);
-                    }}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-brand-orange placeholder:text-zinc-600 transition-colors"
-                  />
-                </div>
+                )}
 
                 {/* Grid of concession items */}
                 {filteredConcessions.length > 0 ? (
@@ -835,7 +873,7 @@ export default function BookingCheckoutPage() {
                     <span className="text-xs text-zinc-500 italic block">Không tìm thấy bắp nước phù hợp...</span>
                   </div>
                 )}
-                {catalogTotalPages > 1 && (
+                {catalogExpanded && catalogTotalPages > 1 && (
                   <nav
                     className="flex items-center justify-center gap-3 border-t border-zinc-800 pt-5"
                     aria-label="Phân trang bắp nước"
@@ -864,11 +902,11 @@ export default function BookingCheckoutPage() {
               </div>
             ) : (
               /* Step 4: Payment Service handoff */
-              <div className="space-y-8">
+              <div className="space-y-5">
                 {availableScorePoints > 0 && (
                   <div className="relative overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-md p-6 md:p-8 shadow-2xl shadow-black/10 transition-all hover:border-brand-orange/30">
                     <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-brand-orange/5 blur-[80px] pointer-events-none" />
-                    
+
                     <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                       <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-black/20 border border-brand-orange/20 text-brand-orange shadow-inner">
@@ -901,10 +939,10 @@ export default function BookingCheckoutPage() {
                   </div>
                 )}
 
-                <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
+                <div className="space-y-5 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 p-5 md:p-6">
                   <div>
-                    <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Phương Thức Thanh Toán</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Hệ thống sẽ xác thực lại số tiền và thời hạn của đơn</p>
+                    <h2 className="text-lg font-black text-white">Chọn phương thức thanh toán</h2>
+                    <p className="mt-1 text-xs text-zinc-500">Bạn sẽ được chuyển sang cổng thanh toán bảo mật.</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -957,32 +995,14 @@ export default function BookingCheckoutPage() {
                     </button>
                   </div>
                 </div>
-
-                <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
-                  <div>
-                    <h2 className="text-lg font-black text-white uppercase tracking-wider">Chuyển sang thanh toán</h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">
-                      Số tiền thanh toán được lấy trực tiếp từ đơn đã chốt, không thể thay đổi từ trình duyệt
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleStartPayment}
-                    disabled={paymentLoading || isExpired}
-                    className="w-full py-4 bg-brand-orange hover:bg-opacity-95 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-black uppercase text-xs tracking-wider rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>{paymentLoading ? 'Đang tạo giao dịch...' : `Thanh toán qua ${selectedPaymentMethod}`}</span>
-                  </button>
-                </div>
               </div>
             )}
           </div>
 
           {/* Right panel: Sticky order info sidebar / Food summary */}
-          <div className="lg:col-span-1 sticky top-24 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-6 shadow-2xl">
+          <aside className="sticky top-20 space-y-3 rounded-3xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl lg:col-span-1 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto">
             {/* Desktop Countdown Timer */}
-            <div className="hidden lg:flex items-center justify-between gap-4 py-3 px-4 bg-zinc-950/60 rounded-2xl border border-zinc-850 shadow-inner">
+            <div className="hidden items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-2.5 shadow-inner lg:flex">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-500" />
                 <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Thời gian còn lại</span>
@@ -995,51 +1015,38 @@ export default function BookingCheckoutPage() {
             </div>
 
             {/* Movie Poster & Meta details */}
-            <div className="flex gap-4 items-start pb-6 border-b border-zinc-800">
-              <div className="w-20 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 flex items-center justify-center">
+            <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
+              <div className="flex aspect-[2/3] w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
                 <img
                   src={displayMoviePosterUrl}
                   alt={`Áp phích phim ${movieTitle}`}
-                  width="80"
-                  height="120"
+                  width="56"
+                  height="84"
                   decoding="async"
                   fetchPriority="high"
                   className="w-full h-full object-cover"
                   onError={(event) => {
+                    if (event.currentTarget.src.startsWith('data:')) return;
                     event.currentTarget.onerror = null;
                     event.currentTarget.src = FALLBACK_POSTER;
                   }}
                 />
               </div>
-              <div className="space-y-2 flex-grow min-w-0">
+              <div className="min-w-0 flex-grow space-y-1">
                 <span className="text-[9px] font-black uppercase tracking-widest text-brand-orange">Thông tin suất chiếu</span>
-                <h3 className="text-base font-black text-white leading-snug">{movieTitle}</h3>
-                {snapshot?.originalTitle && (
-                  <p className="text-[10px] text-zinc-500 line-clamp-1">{snapshot.originalTitle}</p>
-                )}
-                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 font-semibold">
-                  {(snapshot?.duration || movie?.durationMinutes) && (
-                    <span>{snapshot?.duration || movie?.durationMinutes} phút</span>
-                  )}
-                  {(snapshot?.duration || movie?.durationMinutes) && (snapshot?.ageRating || movie?.ageRating) && <span>•</span>}
-                  {(snapshot?.ageRating || movie?.ageRating) && (
-                    <span className="text-brand-yellow font-black border border-brand-yellow/30 px-1.5 py-0.5 rounded text-[8px]">
-                      {snapshot?.ageRating || movie?.ageRating}
-                    </span>
-                  )}
-                </div>
+                <h3 className="line-clamp-2 text-sm font-black leading-snug text-white">{movieTitle}</h3>
               </div>
             </div>
 
             {/* Booking Details */}
-            <div className="space-y-3 py-2 text-xs border-b border-zinc-800">
+            <div className="space-y-2 border-b border-zinc-800 py-2 text-[11px]">
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Cụm rạp</span>
                 <span className="text-white font-bold text-right">{snapshot?.cinemaName || cinema?.name || 'Chưa có thông tin rạp'}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500 font-medium">Phòng chiếu</span>
-                <span className="text-zinc-200 font-bold text-right">{snapshot?.auditoriumName || auditorium?.name || 'Chưa có thông tin phòng'}</span>
+              <div className="flex justify-between gap-3">
+                <span className="shrink-0 font-medium text-zinc-500">Phòng chiếu</span>
+                <span className="text-right font-bold text-zinc-200">{snapshot?.auditoriumName || auditorium?.name || 'Chưa có thông tin phòng'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Suất chiếu</span>
@@ -1049,17 +1056,13 @@ export default function BookingCheckoutPage() {
                     : 'Chưa có thông tin'}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500 font-medium">Số lượng ghế</span>
-                <span className="text-brand-orange font-black text-right">{visibleSeats.length} ghế</span>
-              </div>
             </div>
 
             {/* Selected Seats */}
-            <div className="py-2 border-b border-zinc-800 space-y-2">
+            <div className="space-y-2 border-b border-zinc-800 py-2">
               <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Các vị trí ghế</span>
               {visibleSeats.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {visibleSeats.map((seat, index) => (
                     <span
                       key={seat.seatPublicId || seat.id || seat.publicId || index}
@@ -1076,10 +1079,10 @@ export default function BookingCheckoutPage() {
             </div>
 
             {/* Food items breakdown */}
-            <div className="py-2 border-b border-zinc-800 space-y-3">
+            <div className="space-y-2 border-b border-zinc-800 py-2">
               <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Bắp nước đã chọn</span>
               {selectedFoodItems.length > 0 ? (
-                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                <div className="max-h-24 space-y-1.5 overflow-y-auto pr-1">
                   {selectedFoodItems.map((item, index) => (
                     <div
                       key={item.id || item.productId || `${foodItemName(item)}-${index}`}
@@ -1097,7 +1100,7 @@ export default function BookingCheckoutPage() {
             </div>
 
             {/* Pricing breakdown */}
-            <div className="space-y-4 text-xs py-4 border-b border-zinc-800">
+            <div className="space-y-2.5 border-b border-zinc-800 py-2 text-xs">
               <div className="flex justify-between items-center text-zinc-300">
                 <span className="font-bold">Tiền vé ({visibleSeats.length} ghế):</span>
                 <span className="font-black text-sm">{formatCurrency(booking.ticketAmount)}</span>
@@ -1112,59 +1115,74 @@ export default function BookingCheckoutPage() {
                   <span>-{formatCurrency(booking.promotionDiscount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-zinc-500 text-[10px] pt-1">
+              <div className="flex justify-between pt-1 text-[10px] text-zinc-500">
                 <span>Thuế GTGT (VAT) đã bao gồm:</span>
                 <span>10%</span>
               </div>
             </div>
 
             {/* Grand Total box */}
-            <div className="flex justify-between items-center py-5 px-5 bg-zinc-950/80 rounded-2xl border border-brand-orange/30 shadow-[0_0_15px_rgba(255,122,0,0.1)]">
+            <div className="flex items-center justify-between rounded-2xl border border-brand-orange/30 bg-zinc-950/80 px-4 py-3 shadow-[0_0_15px_rgba(255,122,0,0.1)]">
               <div>
                 <span className="text-[10px] text-zinc-400 font-black uppercase tracking-wider block mb-0.5">Tổng số tiền</span>
                 <span className="text-[9px] text-brand-orange/80 font-bold uppercase">Đã bao gồm VAT</span>
               </div>
-              <span className="text-2xl md:text-3xl font-black text-brand-orange tracking-tight">
+              <span className="text-2xl font-black tracking-tight text-brand-orange">
                 {formatCurrency(booking.finalAmount)}
               </span>
             </div>
 
-            {/* Terms and Conditions for step 4 */}
-            {step === 4 && (
-              <label className="flex items-start gap-3 select-none cursor-pointer py-1">
+            {isPaymentPhase && (
+              <label className="flex cursor-pointer select-none items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
                 <input
                   type="checkbox"
                   checked={termsAgreed}
                   onChange={(e) => setTermsAgreed(e.target.checked)}
-                  className="mt-1 accent-brand-orange w-4 h-4 shrink-0 rounded border-zinc-800 bg-zinc-950 focus:ring-0"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-brand-orange"
                 />
-                <span className="text-[10px] text-zinc-500 font-bold leading-normal uppercase">
-                  Tôi đồng ý với Điều khoản và Quy định của LoraFilm về giao dịch mua vé trực tuyến.
+                <span className="text-[11px] font-medium leading-4 text-zinc-400">
+                  Tôi đồng ý với <span className="font-bold text-zinc-200">Điều khoản và Quy định</span> giao dịch mua vé trực tuyến.
                 </span>
               </label>
             )}
 
-            {/* Action buttons */}
-            <div className="space-y-3 pt-2">
-              {step === 3 ? (
+            <div className="sticky bottom-0 -mx-1 space-y-2 border-t border-zinc-800 bg-zinc-900/95 px-1 pt-3 backdrop-blur">
+              {!isPaymentPhase ? (
                 <button
                   disabled={isExpired}
-                  onClick={() => setStep(4)}
-                  className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-wider shadow-lg transition-all duration-300 transform ${
+                  onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
+                  className={`w-full rounded-2xl py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition-all ${
                     !isExpired
-                      ? 'bg-brand-orange hover:bg-opacity-95 hover:scale-[1.02] text-white shadow-brand-orange/25 cursor-pointer'
-                      : 'bg-zinc-850 text-zinc-500 border border-zinc-800 cursor-not-allowed'
+                      ? 'cursor-pointer bg-brand-orange text-white shadow-brand-orange/25 hover:bg-orange-600'
+                      : 'cursor-not-allowed border border-zinc-800 bg-zinc-850 text-zinc-500'
                   }`}
                 >
-                  Xác Nhận & Tiếp Tục
+                  Tiếp tục thanh toán · {formatCurrency(booking.finalAmount)}
                 </button>
               ) : (
-                <button
-                  onClick={() => setStep(3)}
-                  className="w-full py-3.5 bg-transparent border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800/40 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-colors cursor-pointer text-center block"
-                >
-                  Quay lại chọn bắp nước
-                </button>
+                <>
+                  <button
+                    onClick={handleStartPayment}
+                    disabled={!termsAgreed || paymentLoading || isExpired}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-orange py-3.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-brand-orange/20 transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    <span>
+                      {paymentLoading
+                        ? 'Đang tạo giao dịch...'
+                        : `Thanh toán qua ${selectedPaymentMethod} · ${formatCurrency(booking.finalAmount)}`}
+                    </span>
+                  </button>
+                  {!termsAgreed && (
+                    <p className="text-center text-[10px] text-zinc-500">Đồng ý điều khoản để tiếp tục thanh toán.</p>
+                  )}
+                  <button
+                    onClick={() => setPhase(CHECKOUT_PHASE.ADD_ONS)}
+                    className="w-full rounded-xl py-2 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 transition-colors hover:text-white"
+                  >
+                    Quay lại bắp nước
+                  </button>
+                </>
               )}
 
               <button
@@ -1173,18 +1191,17 @@ export default function BookingCheckoutPage() {
                   setCancelError('');
                   setCancelModalOpen(true);
                 }}
-                className="w-full py-2.5 text-center text-zinc-600 hover:text-red-400 font-semibold text-[10px] uppercase tracking-wider transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 block"
+                className="block w-full cursor-pointer py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-zinc-600 transition-colors hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Hủy giao dịch
               </button>
             </div>
 
-            {/* Safety policy */}
-            <div className="flex items-center gap-2 text-[9px] text-zinc-650 font-bold uppercase justify-center mt-4 border-t border-zinc-800/60 pt-4">
-              <ShieldCheck className="w-4 h-4 text-zinc-600" />
+            <div className="flex items-center justify-center gap-2 text-[9px] font-bold uppercase text-zinc-650">
+              <ShieldCheck className="h-4 w-4 text-zinc-600" />
               <span>Thanh toán an toàn bảo mật</span>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>
