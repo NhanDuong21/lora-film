@@ -8,5 +8,5 @@ public interface VerificationService {
     SendOtpResponse sendOtp(SendOtpRequest request);
     void verify(VerifyRequest request);
     void sendForgotPasswordEmail(Long accountId, String email, String otp);
-    void sendChangeEmailOtp(Long accountId, String currentEmail, String otp);
+    void sendChangeEmailOtp(Long accountId, String currentEmail, String newEmail, String otp);
 }

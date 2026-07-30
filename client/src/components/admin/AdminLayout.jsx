@@ -45,6 +45,9 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/permissions')) return 'permissions';
     if (path.endsWith('/user-audits')) return 'user-audits';
     if (path.endsWith('/audits')) return 'audits';
+    if (path === '/admin/notifications') return 'notification-dashboard';
+    if (path.includes('/notification-templates')) return 'notification-templates';
+    if (path.includes('/notification-operations')) return 'notification-operations';
     if (path.endsWith('/departments')) return 'departments';
     if (path.endsWith('/positions')) return 'positions';
     return 'dashboard';

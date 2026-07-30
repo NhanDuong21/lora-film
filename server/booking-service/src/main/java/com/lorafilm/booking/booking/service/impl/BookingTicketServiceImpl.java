@@ -15,11 +15,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import com.lorafilm.booking.booking.entity.BookingSnapshot;
 import com.lorafilm.booking.booking.repository.BookingSnapshotRepository;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
@@ -34,6 +38,8 @@ public class BookingTicketServiceImpl implements BookingTicketService {
     private final BookingTicketMapper bookingTicketMapper;
     private final BookingSnapshotRepository bookingSnapshotRepository;
     private final ObjectMapper objectMapper;
+    private com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
+    private String ticketAccessBaseUrl = "http://localhost:5173/tickets";
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BookingTicketServiceImpl.class);
 
     public BookingTicketServiceImpl(BookingTicketRepository bookingTicketRepository,
@@ -46,6 +52,16 @@ public class BookingTicketServiceImpl implements BookingTicketService {
         this.bookingTicketMapper = bookingTicketMapper;
         this.bookingSnapshotRepository = bookingSnapshotRepository;
         this.objectMapper = objectMapper;
+    }
+
+    @Autowired(required = false)
+    public void setOutboxService(com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService) {
+        this.outboxService = outboxService;
+    }
+
+    @Value("${booking.ticket-access-base-url:http://localhost:5173/tickets}")
+    public void setTicketAccessBaseUrl(String ticketAccessBaseUrl) {
+        this.ticketAccessBaseUrl = ticketAccessBaseUrl;
     }
 
     @Override
@@ -71,6 +87,12 @@ public class BookingTicketServiceImpl implements BookingTicketService {
             ticket.setTicketCode(code);
             if (ticket.getPublicId() == null) {
                 ticket.setPublicId(UUID.randomUUID().toString());
+            }
+            if (ticket.getQrCode() == null) {
+                ticket.setQrCode(UUID.randomUUID().toString());
+            }
+            if (ticket.getBarcode() == null) {
+                ticket.setBarcode("LF-" + UUID.randomUUID().toString().replace("-", "").toUpperCase());
             }
             return ticket;
         }).collect(Collectors.toList());
@@ -148,6 +170,8 @@ public class BookingTicketServiceImpl implements BookingTicketService {
             log.info("Tickets already generated for booking ID: {}. Skipping.", bookingId);
             return;
         }
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
         Optional<BookingSnapshot> snapshotOpt = bookingSnapshotRepository.findByBookingId(bookingId);
         if (snapshotOpt.isEmpty()) {
@@ -182,7 +206,70 @@ public class BookingTicketServiceImpl implements BookingTicketService {
             return req;
         }).toList();
 
-        createTickets(bookingId, ticketRequests);
+        List<BookingTicketDto> issuedTickets = createTickets(bookingId, ticketRequests);
+        publishTicketIssued(booking, snapshot, issuedTickets);
         log.info("Successfully generated {} tickets for booking ID: {}", ticketRequests.size(), bookingId);
+    }
+
+    private void publishTicketIssued(
+            Booking booking,
+            BookingSnapshot snapshot,
+            List<BookingTicketDto> tickets) {
+        if (outboxService == null || tickets.isEmpty()) {
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        put(payload, "userPublicId", String.valueOf(booking.getUserId()));
+        put(payload, "customerName", "Customer");
+        put(payload, "bookingPublicId", booking.getPublicId());
+        put(payload, "bookingCode", booking.getBookingCode());
+        put(payload, "paymentCode", booking.getPaymentReference());
+        put(payload, "movieTitle", snapshot.getMovieTitle());
+        put(payload, "moviePosterUrl", snapshot.getMoviePoster());
+        put(payload, "movieAgeRating", snapshot.getAgeRating());
+        put(payload, "cinemaName", snapshot.getCinemaName());
+        put(payload, "auditoriumName", snapshot.getAuditoriumName());
+        put(payload, "showtime", snapshot.getShowtimeStart());
+        put(payload, "seatNames", tickets.stream().map(BookingTicketDto::getSeatLabel).toList());
+        put(payload, "ticketCodes", tickets.stream().map(BookingTicketDto::getTicketCode).toList());
+        put(payload, "ticketTypes", tickets.stream().map(BookingTicketDto::getSeatType).toList());
+        put(payload, "ticketPublicIds", tickets.stream().map(BookingTicketDto::getPublicId).toList());
+        put(payload, "foodItems", foodItems(booking));
+        put(payload, "promotionCode", snapshot.getPromotionCode());
+        put(payload, "promotionName", snapshot.getPromotionName());
+        put(payload, "subtotal", booking.getTicketAmount().add(booking.getFoodAmount())
+                .add(booking.getServiceFee()).add(booking.getTaxAmount()));
+        put(payload, "discount", booking.getPromotionDiscount().add(booking.getVoucherDiscount()));
+        put(payload, "totalPaid", booking.getFinalAmount());
+        put(payload, "totalAmount", booking.getFinalAmount());
+        put(payload, "currency", booking.getCurrency());
+        put(payload, "paymentMethod", booking.getPaymentMethodSnapshot());
+        put(payload, "paymentTime", booking.getConfirmedAt());
+        put(payload, "deepLink", "/bookings/" + booking.getPublicId());
+        BookingTicketDto first = tickets.getFirst();
+        put(payload, "ticketAccessUrl", ticketAccessBaseUrl + "/" + first.getPublicId()
+                + "?access=" + first.getQrCode());
+        put(payload, "locale", "vi-VN");
+        outboxService.createOutboxEvent("Booking", booking.getId(), "TICKET_ISSUED", payload);
+    }
+
+    private List<Map<String, Object>> foodItems(Booking booking) {
+        if (booking.getFoodOrder() == null) {
+            return List.of();
+        }
+        return booking.getFoodOrder().getItems().stream().map(item -> {
+            Map<String, Object> food = new LinkedHashMap<>();
+            put(food, "name", item.getProductName());
+            put(food, "quantity", item.getQuantity());
+            put(food, "unitPrice", item.getUnitPrice());
+            put(food, "total", item.getFinalAmount());
+            return food;
+        }).toList();
+    }
+
+    private void put(Map<String, Object> payload, String key, Object value) {
+        if (value != null) {
+            payload.put(key, value);
+        }
     }
 }
