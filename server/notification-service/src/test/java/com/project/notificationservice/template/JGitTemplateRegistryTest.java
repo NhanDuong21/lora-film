@@ -225,6 +225,52 @@ class JGitTemplateRegistryTest {
     }
 
     @Test
+    void pushesDraftCreateAndUpdateThenRemovesRemoteBranchAfterPublish() throws Exception {
+        registry.close();
+        registry = null;
+
+        Path source = temporaryDirectory.resolve("registry");
+        Path remote = temporaryDirectory.resolve("draft-remote.git");
+        try (Git bare = Git.init().setBare(true).setDirectory(remote.toFile()).call();
+             Git publisher = Git.open(source.toFile())) {
+            publisher.remoteAdd()
+                    .setName("origin")
+                    .setUri(new URIish(remote.toUri().toString()))
+                    .call();
+            publisher.push()
+                    .setRemote("origin")
+                    .setRefSpecs(new RefSpec("refs/heads/main:refs/heads/main"))
+                    .call();
+        }
+
+        Path workingDirectory = temporaryDirectory.resolve("draft-registry");
+        registry = createRegistry(workingDirectory, remote.toUri().toString(), true);
+        registry.initialize();
+
+        TemplateDraft created = registry.createDraft(
+                new CreateTemplateDraftCommand("REMOTE_DRAFT", "admin", content("one")));
+        assertThat(remoteHead(remote, created.branch())).isEqualTo(created.commitSha());
+
+        TemplateDraft updated = registry.updateDraft(
+                "REMOTE_DRAFT",
+                created.draftId(),
+                created.commitSha(),
+                new TemplateRegistry.UpdateTemplateDraftCommand("Update remote draft", content("two")));
+        assertThat(remoteHead(remote, updated.branch())).isEqualTo(updated.commitSha());
+
+        TemplateRegistry.TemplatePublicationResult published = registry.publishDraft(
+                "REMOTE_DRAFT", updated.draftId(), updated.commitSha(), "admin");
+        assertThat(remoteHead(remote, "main")).isEqualTo(published.commitSha());
+        assertThat(remoteHead(remote, updated.branch())).isNull();
+
+        TemplateDraft discarded = registry.createDraft(
+                new CreateTemplateDraftCommand("DISCARDED_DRAFT", "admin", content("discard")));
+        assertThat(remoteHead(remote, discarded.branch())).isEqualTo(discarded.commitSha());
+        registry.deleteDraft("DISCARDED_DRAFT", discarded.draftId(), "admin");
+        assertThat(remoteHead(remote, discarded.branch())).isNull();
+    }
+
+    @Test
     void readsGitMailRepositoryLayoutByFileName() {
         TemplateRegistry.TemplateDocument document = registry.getPublishedTemplate(
                 "BOOKING_CONFIRMED", Channel.EMAIL, "vi-VN");
@@ -351,6 +397,13 @@ class JGitTemplateRegistryTest {
                 20_000,
                 5,
                 autoRefreshEnabled);
+    }
+
+    private String remoteHead(Path remote, String branch) throws Exception {
+        try (Git git = Git.open(remote.toFile())) {
+            var ref = git.getRepository().exactRef("refs/heads/" + branch);
+            return ref == null ? null : ref.getObjectId().getName();
+        }
     }
 
     private String legacyBookingTemplate(String marker) {

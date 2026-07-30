@@ -21,6 +21,9 @@ import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.transport.CredentialsProvider;
+import org.eclipse.jgit.transport.PushResult;
+import org.eclipse.jgit.transport.RefSpec;
+import org.eclipse.jgit.transport.RemoteRefUpdate;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -203,6 +206,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             active.checkout().setCreateBranch(true).setName(branch).call();
             writeContent(command.templateKey(), command.content(), TemplateStatus.DRAFT, baseSha);
             RevCommit commit = commit("Create draft " + command.templateKey());
+            pushBranch(branch);
             TemplateDocument document = readDocument(command.templateKey(), command.content().channel(),
                     command.content().locale(), commit.getName(), null);
             return new TemplateDraft(command.templateKey(), draftId, branch, baseSha, commit.getName(), document);
@@ -231,6 +235,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             writeContent(templateKey, command.content(), TemplateStatus.DRAFT, previous.baseCommitSha());
             RevCommit commit = commit(command.changeSummary() == null || command.changeSummary().isBlank()
                     ? "Update draft " + templateKey : command.changeSummary());
+            pushBranch(branch);
             TemplateDocument document = readDocument(templateKey, command.content().channel(),
                     command.content().locale(), commit.getName(), null);
             return new TemplateDraft(templateKey, draftId, branch, previous.baseCommitSha(), commit.getName(), document);
@@ -462,6 +467,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             push();
             invalidate(templateKey, draft.channel(), draft.locale());
             audit(actorPublicId, "PUBLISH", templateKey, commitSha, version);
+            deleteRemoteBranch(branch);
             deleteBranch(branch);
             return new TemplatePublicationResult(templateKey, draft.channel(), draft.locale(),
                     commitSha, version, tag, false);
@@ -517,6 +523,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         try {
             String branch = findDraftBranch(templateKey, draftId);
             checkoutPublished();
+            deleteRemoteBranch(branch);
             deleteBranch(branch);
             audit(actorPublicId, "DELETE_DRAFT", templateKey, null, null);
         } catch (Exception exception) {
@@ -954,7 +961,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private void deleteBranch(String branch) throws Exception {
-        requireGit().branchDelete().setBranchNames(branch).setForce(false).call();
+        requireGit().branchDelete().setBranchNames(branch).setForce(true).call();
     }
 
     private String head(Git active) throws IOException {
@@ -1118,10 +1125,74 @@ public class JGitTemplateRegistry implements TemplateRegistry {
 
     private void push() throws Exception {
         if (remoteUri == null || remoteUri.isBlank()) return;
-        requireGit().push().setPushAll().setCredentialsProvider(credentials())
-                .setTimeout(fetchTimeoutSeconds).call();
-        requireGit().push().setPushTags().setCredentialsProvider(credentials())
-                .setTimeout(fetchTimeoutSeconds).call();
+        pushRef(Constants.R_HEADS + publishedBranch, Constants.R_HEADS + publishedBranch,
+                "published branch " + publishedBranch);
+        assertPushSucceeded(
+                requireGit().push()
+                        .setRemote("origin")
+                        .setPushTags()
+                        .setCredentialsProvider(credentials())
+                        .setTimeout(fetchTimeoutSeconds)
+                        .call(),
+                "template version tags",
+                true);
+    }
+
+    private void pushBranch(String branch) throws Exception {
+        String safeBranch = requireGitName(branch, "branch");
+        pushRef(Constants.R_HEADS + safeBranch, Constants.R_HEADS + safeBranch,
+                "draft branch " + safeBranch);
+    }
+
+    private void deleteRemoteBranch(String branch) throws Exception {
+        if (remoteUri == null || remoteUri.isBlank()) return;
+        String safeBranch = requireGitName(branch, "branch");
+        String remoteRef = Constants.R_HEADS + safeBranch;
+        assertPushSucceeded(
+                requireGit().push()
+                        .setRemote("origin")
+                        .setRefSpecs(new RefSpec(":" + remoteRef))
+                        .setCredentialsProvider(credentials())
+                        .setTimeout(fetchTimeoutSeconds)
+                        .call(),
+                "delete remote draft branch " + safeBranch);
+    }
+
+    private void pushRef(String localRef, String remoteRef, String description) throws Exception {
+        if (remoteUri == null || remoteUri.isBlank()) return;
+        assertPushSucceeded(
+                requireGit().push()
+                        .setRemote("origin")
+                        .setRefSpecs(new RefSpec(localRef + ":" + remoteRef))
+                        .setCredentialsProvider(credentials())
+                        .setTimeout(fetchTimeoutSeconds)
+                        .call(),
+                description);
+    }
+
+    private void assertPushSucceeded(Iterable<PushResult> results, String description) throws IOException {
+        assertPushSucceeded(results, description, false);
+    }
+
+    private void assertPushSucceeded(
+            Iterable<PushResult> results, String description, boolean allowNoUpdates) throws IOException {
+        boolean updateReported = false;
+        for (PushResult result : results) {
+            for (RemoteRefUpdate update : result.getRemoteUpdates()) {
+                updateReported = true;
+                RemoteRefUpdate.Status status = update.getStatus();
+                if (status != RemoteRefUpdate.Status.OK
+                        && status != RemoteRefUpdate.Status.UP_TO_DATE) {
+                    String message = update.getMessage();
+                    throw new IOException("Git push failed for " + description + " ("
+                            + update.getRemoteName() + "): " + status
+                            + (message == null || message.isBlank() ? "" : " - " + message));
+                }
+            }
+        }
+        if (!updateReported && !allowNoUpdates) {
+            throw new IOException("Git push returned no result for " + description);
+        }
     }
 
     private CredentialsProvider credentials() {
