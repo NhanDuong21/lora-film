@@ -6,6 +6,7 @@ import com.project.userservice.config.CloudinaryProperties;
 import com.project.userservice.exception.BusinessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 @Service
+@ConditionalOnProperty(prefix = "app.storage", name = "provider", havingValue = "cloudinary")
 public class CloudinaryStorageService implements FileStorageService {
     private static final Logger LOGGER = LoggerFactory.getLogger(CloudinaryStorageService.class);
     private static final long AVATAR_MAX_BYTES = 5L * 1024 * 1024;
