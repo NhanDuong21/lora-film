@@ -134,7 +134,7 @@ export default function AdminMoviePage() {
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-zinc-950 transition hover:bg-orange-400"
           >
             <Plus className="h-4 w-4" />
-            Thêm phim thủ công
+            Tạo hồ sơ phim
           </button>
         </header>
 

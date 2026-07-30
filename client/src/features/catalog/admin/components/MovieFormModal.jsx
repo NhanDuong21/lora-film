@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Check, Film, Info, Loader2, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Film,
+  Image,
+  Loader2,
+  MonitorPlay,
+  Tags,
+  X,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import { Field, Input, Select, Textarea } from '@/components/common/ui/uiKit';
@@ -21,6 +30,10 @@ const emptyForm = () => ({
   synopsis: '',
 });
 
+const OPTIONAL_FIELDS = ['originalTitle', 'country', 'endDate', 'synopsis'];
+
+const hasOptionalMovieInformation = movie => OPTIONAL_FIELDS.some(field => Boolean(movie?.[field]));
+
 export default function MovieFormModal({
   selectedMovie,
   triggerToast,
@@ -33,12 +46,14 @@ export default function MovieFormModal({
   const [isSaving, setIsSaving] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [formBasic, setFormBasic] = useState(emptyForm());
+  const [showOptional, setShowOptional] = useState(() => hasOptionalMovieInformation(selectedMovie));
 
   useEffect(() => {
     if (!selectedMovie) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormBasic(emptyForm());
       setFormErrors({});
+      setShowOptional(false);
       return;
     }
 
@@ -52,6 +67,7 @@ export default function MovieFormModal({
       country: selectedMovie.country || '',
       synopsis: selectedMovie.synopsis || '',
     });
+    setShowOptional(hasOptionalMovieInformation(selectedMovie));
   }, [selectedMovie]);
 
   const validateForm = () => {
@@ -75,6 +91,9 @@ export default function MovieFormModal({
       errors.endDate = 'Ngày ngừng chiếu phải sau ngày khởi chiếu.';
     }
 
+    if (OPTIONAL_FIELDS.some(field => errors[field])) {
+      setShowOptional(true);
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -121,6 +140,9 @@ export default function MovieFormModal({
           const field = item.field === 'releaseDate' ? 'showingStartDate' : item.field;
           errors[field] = item.message;
         });
+        if (OPTIONAL_FIELDS.some(field => errors[field])) {
+          setShowOptional(true);
+        }
         setFormErrors(errors);
         triggerToast?.('Một số thông tin chưa hợp lệ. Vui lòng kiểm tra các mục được đánh dấu.', 'error');
       } else {
@@ -137,7 +159,9 @@ export default function MovieFormModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="movie-form-title"
-        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl"
+        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl ${
+          isEdit ? 'max-w-3xl' : 'max-w-5xl'
+        }`}
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4 md:px-7">
           <div className="flex items-start gap-3">
@@ -145,13 +169,18 @@ export default function MovieFormModal({
               <Film className="h-5 w-5" />
             </span>
             <div>
+              {!isEdit && (
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-orange-400">
+                  Bước 1 · Thông tin cơ bản
+                </p>
+              )}
               <h1 id="movie-form-title" className="text-lg font-black text-white md:text-xl">
-                {isEdit ? 'Sửa thông tin phim' : 'Thêm phim thủ công'}
+                {isEdit ? 'Sửa thông tin cơ bản' : 'Tạo hồ sơ phim'}
               </h1>
               <p className="mt-1 text-xs leading-5 text-zinc-500">
                 {isEdit
-                  ? 'Cập nhật các thông tin cơ bản. Trạng thái phát hành được quản lý trong hồ sơ phim.'
-                  : 'Dùng khi phim chưa có trong nguồn nhập tự động. Phim mới sẽ ở trạng thái cần hoàn thiện.'}
+                  ? 'Cập nhật thông tin nhận diện và phát hành cơ bản của phim.'
+                  : 'Nhập những thông tin cần thiết trước. Bạn sẽ hoàn thiện nội dung ở bước tiếp theo.'}
               </p>
             </div>
           </div>
@@ -167,110 +196,201 @@ export default function MovieFormModal({
 
         <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-7">
-            {!isEdit && (
-              <div className="mb-5 flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-xs leading-5 text-sky-200">
-                <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
-                <span>
-                  Sau khi tạo, hệ thống sẽ mở hồ sơ phim để bạn thêm bản chiếu, poster, thể loại và các nội dung liên quan.
-                </span>
-              </div>
-            )}
+            <div className={`grid gap-5 ${isEdit ? '' : 'lg:grid-cols-[minmax(0,1fr)_16rem]'}`}>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4 md:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-bold text-white">Thông tin bắt buộc</h2>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Cần điền đủ 4 mục để hồ sơ phim hợp lệ.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-orange-500/20 bg-orange-500/10 px-2.5 py-1 text-[10px] font-bold text-orange-300">
+                      4 mục
+                    </span>
+                  </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4 md:p-6">
-              <h2 className="text-sm font-bold text-white">Thông tin cơ bản</h2>
-              <p className="mt-1 text-xs text-zinc-500">
-                Các mục có dấu <span className="text-orange-400">*</span> là bắt buộc.
-              </p>
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <Field label="Tên phim" required error={formErrors.title}>
+                      <Input
+                        autoFocus
+                        aria-label="Tên phim"
+                        value={formBasic.title}
+                        onChange={event => setFormBasic(current => ({ ...current, title: event.target.value }))}
+                        placeholder="Tên hiển thị với khách hàng"
+                      />
+                    </Field>
+                    <Field label="Thời lượng (phút)" required error={formErrors.durationMinutes}>
+                      <Input
+                        type="number"
+                        min="1"
+                        aria-label="Thời lượng (phút)"
+                        value={formBasic.durationMinutes}
+                        onChange={event => setFormBasic(current => ({ ...current, durationMinutes: event.target.value }))}
+                        placeholder="Ví dụ: 120"
+                      />
+                    </Field>
+                    <Field label="Phân loại độ tuổi" required error={formErrors.ageRating}>
+                      <Select
+                        aria-label="Phân loại độ tuổi"
+                        value={formBasic.ageRating}
+                        onChange={event => setFormBasic(current => ({ ...current, ageRating: event.target.value }))}
+                      >
+                        {AGE_RATINGS.map(rating => (
+                          <option key={rating} value={rating}>{AGE_RATING_LABELS[rating]}</option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Ngày khởi chiếu" required error={formErrors.showingStartDate}>
+                      <Input
+                        type="date"
+                        aria-label="Ngày khởi chiếu"
+                        value={formBasic.showingStartDate}
+                        onChange={event => setFormBasic(current => ({ ...current, showingStartDate: event.target.value }))}
+                      />
+                    </Field>
+                  </div>
+                </div>
 
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <Field label="Tên phim" required error={formErrors.title}>
-                  <Input
-                    autoFocus
-                    value={formBasic.title}
-                    onChange={event => setFormBasic(current => ({ ...current, title: event.target.value }))}
-                    placeholder="Tên hiển thị với khách hàng"
-                  />
-                </Field>
-                <Field label="Tên gốc">
-                  <Input
-                    value={formBasic.originalTitle}
-                    onChange={event => setFormBasic(current => ({ ...current, originalTitle: event.target.value }))}
-                    placeholder="Tên phim ở ngôn ngữ gốc"
-                  />
-                </Field>
-                <Field label="Thời lượng (phút)" required error={formErrors.durationMinutes}>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={formBasic.durationMinutes}
-                    onChange={event => setFormBasic(current => ({ ...current, durationMinutes: event.target.value }))}
-                    placeholder="Ví dụ: 120"
-                  />
-                </Field>
-                <Field label="Quốc gia sản xuất">
-                  <Input
-                    value={formBasic.country}
-                    onChange={event => setFormBasic(current => ({ ...current, country: event.target.value }))}
-                    placeholder="Ví dụ: Việt Nam, Hoa Kỳ"
-                  />
-                </Field>
-                <Field label="Phân loại độ tuổi" required error={formErrors.ageRating}>
-                  <Select
-                    value={formBasic.ageRating}
-                    onChange={event => setFormBasic(current => ({ ...current, ageRating: event.target.value }))}
+                <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/20">
+                  <button
+                    type="button"
+                    aria-expanded={showOptional}
+                    aria-controls="movie-optional-fields"
+                    onClick={() => setShowOptional(current => !current)}
+                    className="flex w-full items-center justify-between gap-4 p-4 text-left transition hover:bg-zinc-900/60 md:px-6"
                   >
-                    {AGE_RATINGS.map(rating => (
-                      <option key={rating} value={rating}>{AGE_RATING_LABELS[rating]}</option>
-                    ))}
-                  </Select>
-                </Field>
-                <div className="hidden md:block" aria-hidden="true" />
-                <Field label="Ngày khởi chiếu" required error={formErrors.showingStartDate}>
-                  <Input
-                    type="date"
-                    value={formBasic.showingStartDate}
-                    onChange={event => setFormBasic(current => ({ ...current, showingStartDate: event.target.value }))}
-                  />
-                </Field>
-                <Field label="Ngày ngừng chiếu" error={formErrors.endDate}>
-                  <Input
-                    type="date"
-                    value={formBasic.endDate}
-                    onChange={event => setFormBasic(current => ({ ...current, endDate: event.target.value }))}
-                  />
-                </Field>
+                    <span>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-bold text-zinc-200">Thông tin bổ sung</span>
+                        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">
+                          Không bắt buộc
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                        Tên gốc, quốc gia, ngày ngừng chiếu và tóm tắt nội dung
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`h-5 w-5 shrink-0 text-zinc-500 transition-transform ${
+                        showOptional ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {showOptional && (
+                    <div id="movie-optional-fields" className="border-t border-zinc-800 p-4 md:p-6">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field label="Tên gốc">
+                          <Input
+                            aria-label="Tên gốc"
+                            value={formBasic.originalTitle}
+                            onChange={event => setFormBasic(current => ({ ...current, originalTitle: event.target.value }))}
+                            placeholder="Tên phim ở ngôn ngữ gốc"
+                          />
+                        </Field>
+                        <Field label="Quốc gia sản xuất">
+                          <Input
+                            aria-label="Quốc gia sản xuất"
+                            value={formBasic.country}
+                            onChange={event => setFormBasic(current => ({ ...current, country: event.target.value }))}
+                            placeholder="Ví dụ: Việt Nam, Hoa Kỳ"
+                          />
+                        </Field>
+                        <Field label="Ngày ngừng chiếu" error={formErrors.endDate}>
+                          <Input
+                            type="date"
+                            aria-label="Ngày ngừng chiếu"
+                            value={formBasic.endDate}
+                            onChange={event => setFormBasic(current => ({ ...current, endDate: event.target.value }))}
+                          />
+                        </Field>
+                        <div className="hidden md:block" aria-hidden="true" />
+                        <div className="md:col-span-2">
+                          <Field label="Tóm tắt nội dung">
+                            <Textarea
+                              rows={4}
+                              aria-label="Tóm tắt nội dung"
+                              value={formBasic.synopsis}
+                              onChange={event => setFormBasic(current => ({ ...current, synopsis: event.target.value }))}
+                              placeholder="Mô tả ngắn gọn nội dung phim để khách hàng dễ lựa chọn"
+                            />
+                          </Field>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="mt-4">
-                <Field label="Tóm tắt nội dung">
-                  <Textarea
-                    rows={5}
-                    value={formBasic.synopsis}
-                    onChange={event => setFormBasic(current => ({ ...current, synopsis: event.target.value }))}
-                    placeholder="Mô tả ngắn gọn nội dung phim để khách hàng dễ lựa chọn"
-                  />
-                </Field>
-              </div>
+              {!isEdit && (
+                <aside className="h-fit rounded-2xl border border-sky-500/20 bg-sky-500/[0.04] p-5 lg:sticky lg:top-0">
+                  <p className="text-sm font-bold text-sky-100">Sau khi tạo hồ sơ</p>
+                  <p className="mt-2 text-xs leading-5 text-zinc-400">
+                    Hệ thống sẽ mở trang chi tiết để bạn hoàn thiện dần các nội dung sau.
+                  </p>
+                  <ol className="mt-5 space-y-4">
+                    <li className="flex gap-3">
+                      <span className="rounded-lg bg-sky-500/10 p-2 text-sky-300">
+                        <Image className="h-4 w-4" />
+                      </span>
+                      <span>
+                        <span className="block text-xs font-bold text-zinc-200">Poster và hình ảnh</span>
+                        <span className="mt-0.5 block text-[11px] leading-4 text-zinc-500">Chọn ảnh hiển thị chính</span>
+                      </span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="rounded-lg bg-sky-500/10 p-2 text-sky-300">
+                        <Tags className="h-4 w-4" />
+                      </span>
+                      <span>
+                        <span className="block text-xs font-bold text-zinc-200">Thể loại phim</span>
+                        <span className="mt-0.5 block text-[11px] leading-4 text-zinc-500">Giúp khách hàng dễ tìm phim</span>
+                      </span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="rounded-lg bg-sky-500/10 p-2 text-sky-300">
+                        <MonitorPlay className="h-4 w-4" />
+                      </span>
+                      <span>
+                        <span className="block text-xs font-bold text-zinc-200">Bản chiếu</span>
+                        <span className="mt-0.5 block text-[11px] leading-4 text-zinc-500">Ví dụ: 2D phụ đề, lồng tiếng</span>
+                      </span>
+                    </li>
+                  </ol>
+                  <p className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3 text-[11px] leading-5 text-zinc-500">
+                    Bạn không cần nhập tất cả trong một lần. Phim mới được lưu ở trạng thái cần hoàn thiện.
+                  </p>
+                </aside>
+              )}
             </div>
           </div>
 
-          <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-zinc-800 bg-zinc-950 px-5 py-4 sm:flex-row sm:justify-end md:px-7">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSaving}
-              className="h-11 rounded-xl border border-zinc-700 px-5 text-sm font-bold text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 text-sm font-black text-zinc-950 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              {isSaving ? 'Đang lưu…' : isEdit ? 'Lưu thay đổi' : 'Tạo phim'}
-            </button>
+          <footer className="flex shrink-0 flex-col gap-3 border-t border-zinc-800 bg-zinc-950 px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-7">
+            {!isEdit && (
+              <p className="hidden text-xs text-zinc-600 sm:block">
+                Bước tiếp theo: hoàn thiện hồ sơ phim
+              </p>
+            )}
+            <div className={`flex flex-col-reverse gap-2 sm:flex-row ${isEdit ? 'sm:ml-auto' : ''}`}>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSaving}
+                className="h-11 rounded-xl border border-zinc-700 px-5 text-sm font-bold text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 text-sm font-black text-zinc-950 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {isSaving ? 'Đang lưu…' : isEdit ? 'Lưu thay đổi' : 'Tạo và tiếp tục'}
+              </button>
+            </div>
           </footer>
         </form>
       </section>
