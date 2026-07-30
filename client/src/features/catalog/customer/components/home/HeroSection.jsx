@@ -29,30 +29,75 @@ const SelectField = ({ label, value, onChange, disabled, children }) => (
 
 export default function Hero() {
   const navigate = useNavigate();
-  const { movies, loading } = useMoviesQuery({ status: 'NOW_SHOWING', sort: 'createdAt,desc', size: 8 });
+  const nowShowingQuery = useMoviesQuery({
+    status: 'NOW_SHOWING',
+    sort: 'releaseDate,asc',
+    size: 100
+  });
+  const upcomingQuery = useMoviesQuery({
+    status: 'UPCOMING',
+    sort: 'releaseDate,asc',
+    size: 100
+  });
   const [movieSlug, setMovieSlug] = useState('');
   const [cinemaId, setCinemaId] = useState('');
   const [serviceDate, setServiceDate] = useState('');
   const [showtimeId, setShowtimeId] = useState('');
   const [options, setOptions] = useState([]);
+  const [optionLoading, setOptionLoading] = useState(false);
   const [optionError, setOptionError] = useState('');
 
+  const nowShowingMovies = nowShowingQuery.movies;
+  const upcomingMovies = useMemo(() => {
+    const nowShowingIds = new Set(nowShowingMovies.map(movie => movie.publicId || movie.slug));
+    return upcomingQuery.movies.filter(movie => !nowShowingIds.has(movie.publicId || movie.slug));
+  }, [nowShowingMovies, upcomingQuery.movies]);
+  const movies = useMemo(
+    () => [...nowShowingMovies, ...upcomingMovies],
+    [nowShowingMovies, upcomingMovies]
+  );
+  const selectedMovie = useMemo(
+    () => movies.find(movie => movie.slug === movieSlug),
+    [movieSlug, movies]
+  );
+  const movieListLoading = nowShowingQuery.loading || upcomingQuery.loading;
+  const movieListError = nowShowingQuery.error || upcomingQuery.error;
+
   useEffect(() => {
-    if (!movieSlug) {
+    if (!movieSlug || !selectedMovie) {
       return undefined;
     }
     const controller = new AbortController();
-    const from = vietnamDateKey();
-    getBookingOptions(movieSlug, { from, to: addCalendarDays(from, 4), signal: controller.signal })
-      .then(setOptions)
-      .catch(error => {
+    const today = vietnamDateKey();
+    const from = selectedMovie.releaseDate && selectedMovie.releaseDate > today
+      ? selectedMovie.releaseDate
+      : today;
+
+    const loadOptions = async () => {
+      await Promise.resolve();
+      if (controller.signal.aborted) return;
+      setOptionLoading(true);
+      setOptionError('');
+      try {
+        setOptions(await getBookingOptions(movieSlug, {
+          from,
+          to: addCalendarDays(from, 13),
+          signal: controller.signal
+        }));
+      } catch (error) {
         if (error?.name !== 'CanceledError') {
           setOptions([]);
           setOptionError('Không thể tải lịch chiếu.');
         }
-      });
+      } finally {
+        if (!controller.signal.aborted) {
+          setOptionLoading(false);
+        }
+      }
+    };
+    loadOptions();
     return () => controller.abort();
-  }, [movieSlug]);
+  }, [movieSlug, selectedMovie]);
 
   const cinemas = useMemo(() => [...new Map(options.map(option => [
     option.cinemaPublicId,
@@ -68,6 +113,7 @@ export default function Hero() {
   const changeMovie = event => {
     setMovieSlug(event.target.value);
     setOptions([]);
+    setOptionLoading(false);
     setCinemaId('');
     setServiceDate('');
     setShowtimeId('');
@@ -97,12 +143,33 @@ export default function Hero() {
         <p className="mt-4 max-w-xl text-zinc-300">Chọn đúng phim, rạp, ngày phục vụ và suất chiếu đang mở bán.</p>
 
         <div className="mt-10 flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-2xl backdrop-blur md:flex-row md:items-center">
-          <SelectField label="Phim" value={movieSlug} onChange={changeMovie} disabled={loading}>
-            <option className="bg-zinc-950 text-zinc-100" value="">Chọn phim…</option>
-            {movies.map(movie => <option className="bg-zinc-950 text-zinc-100" key={movie.publicId} value={movie.slug}>{movie.title}</option>)}
+          <SelectField label="Phim" value={movieSlug} onChange={changeMovie} disabled={movieListLoading}>
+            <option className="bg-zinc-950 text-zinc-100" value="">
+              {movieListLoading ? 'Đang tải phim…' : 'Chọn phim…'}
+            </option>
+            {nowShowingMovies.length > 0 && (
+              <optgroup className="bg-zinc-950 text-brand-orange" label="Phim đang chiếu">
+                {nowShowingMovies.map(movie => (
+                  <option className="bg-zinc-950 text-zinc-100" key={movie.publicId || movie.slug} value={movie.slug}>
+                    {movie.title}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {upcomingMovies.length > 0 && (
+              <optgroup className="bg-zinc-950 text-amber-400" label="Phim sắp chiếu">
+                {upcomingMovies.map(movie => (
+                  <option className="bg-zinc-950 text-zinc-100" key={movie.publicId || movie.slug} value={movie.slug}>
+                    {movie.title}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </SelectField>
-          <SelectField label="Rạp" value={cinemaId} onChange={changeCinema} disabled={!movieSlug}>
-            <option className="bg-zinc-950 text-zinc-100" value="">Chọn rạp…</option>
+          <SelectField label="Rạp" value={cinemaId} onChange={changeCinema} disabled={!movieSlug || optionLoading}>
+            <option className="bg-zinc-950 text-zinc-100" value="">
+              {optionLoading ? 'Đang tải rạp…' : options.length === 0 && movieSlug ? 'Chưa có rạp mở bán' : 'Chọn rạp…'}
+            </option>
             {cinemas.map(cinema => <option className="bg-zinc-950 text-zinc-100" key={cinema.id} value={cinema.id}>{cinema.name}</option>)}
           </SelectField>
           <SelectField label="Ngày phục vụ" value={serviceDate} onChange={changeDate} disabled={!cinemaId}>
@@ -126,6 +193,7 @@ export default function Hero() {
             Mua vé nhanh
           </button>
         </div>
+        {movieListError && <p className="mt-3 text-sm text-red-300">{movieListError}</p>}
         {optionError && <p className="mt-3 text-sm text-red-300">{optionError}</p>}
       </div>
     </section>
