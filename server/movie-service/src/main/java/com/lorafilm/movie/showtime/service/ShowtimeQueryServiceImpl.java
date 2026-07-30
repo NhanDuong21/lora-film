@@ -23,6 +23,7 @@ import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.pricing.util.SeatPriceAllocation;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import com.lorafilm.movie.seat.service.SeatService;
@@ -174,6 +175,12 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
         Map<Long, ShowtimeBlockedSeat> blockedSeatMap = blockedSeats.stream()
                 .collect(Collectors.toMap(b -> b.getSeat().getId(), b -> b));
 
+        Map<String, List<Seat>> coupleSeatGroups = seats.stream()
+                .filter(seat -> seat.getSeatType().getCode()
+                        == com.lorafilm.movie.seat.domain.enums.SeatTypeCode.COUPLE)
+                .filter(seat -> seat.getPairGroup() != null && !seat.getPairGroup().isBlank())
+                .collect(Collectors.groupingBy(seat -> seat.getPairGroup().trim()));
+
         List<SeatLayoutDto.SeatPriceDto> seatPriceDtos = seats.stream().map(seat -> {
             ShowtimePrice showtimePrice = priceMap.get(seat.getSeatType().getId());
             if (showtimePrice == null || showtimePrice.getPrice() == null
@@ -181,7 +188,8 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
                 throw new BusinessException(ErrorCode.PRICING_INCOMPLETE,
                         "Missing or invalid price for SeatType " + seat.getSeatType().getPublicId());
             }
-            BigDecimal price = showtimePrice.getPrice();
+            BigDecimal price = SeatPriceAllocation.perPhysicalSeat(
+                    seat.getSeatType().getCode(), showtimePrice.getPrice());
             String currency = showtimePrice.getCurrency();
             boolean isBlocked = blockedSeatMap.containsKey(seat.getId());
 
@@ -194,6 +202,16 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
             dto.setPositionRow(seat.getPositionRow());
             dto.setPositionColumn(seat.getPositionColumn());
             dto.setSeatType(seat.getSeatType().getCode().name());
+            dto.setPairGroup(seat.getPairGroup());
+            List<Seat> pairMembers = seat.getPairGroup() == null
+                    ? List.of()
+                    : coupleSeatGroups.getOrDefault(seat.getPairGroup().trim(), List.of());
+            if (pairMembers.size() == 2) {
+                pairMembers.stream()
+                        .filter(member -> !member.getId().equals(seat.getId()))
+                        .findFirst()
+                        .ifPresent(member -> dto.setPairedSeatId(member.getId()));
+            }
             dto.setPrice(price);
             dto.setCurrency(currency);
             dto.setStatus(seat.getStatus().name());

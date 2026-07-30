@@ -152,11 +152,13 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         public String seatPublicId;
         public String seatCode;
         public String seatType;
+        public String pairGroup;
         public BigDecimal price;
         public String currency;
 
         private ShowtimeBookingContext.SeatContext toDomain() {
-            return new ShowtimeBookingContext.SeatContext(seatId, seatPublicId, seatCode, seatType, price, currency);
+            return new ShowtimeBookingContext.SeatContext(
+                    seatId, seatPublicId, seatCode, seatType, price, currency, pairGroup);
         }
     }
 

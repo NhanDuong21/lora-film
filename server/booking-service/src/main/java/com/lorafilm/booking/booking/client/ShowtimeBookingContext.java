@@ -55,13 +55,18 @@ public record ShowtimeBookingContext(
     }
 
     public record SeatContext(Long seatId, String seatPublicId, String seatLabel, String seatType,
-                               BigDecimal price, String currency) {
+                               BigDecimal price, String currency, String pairGroup) {
+        public SeatContext(Long seatId, String seatPublicId, String seatLabel, String seatType,
+                           BigDecimal price, String currency) {
+            this(seatId, seatPublicId, seatLabel, seatType, price, currency, null);
+        }
+
         public SeatContext(Long seatId, String seatLabel, String seatType, BigDecimal price, String currency) {
-            this(seatId, null, seatLabel, seatType, price, currency);
+            this(seatId, null, seatLabel, seatType, price, currency, null);
         }
 
         public SeatContext(Long seatId, String seatLabel, String seatType, BigDecimal price) {
-            this(seatId, null, seatLabel, seatType, price, null);
+            this(seatId, null, seatLabel, seatType, price, null, null);
         }
     }
 }

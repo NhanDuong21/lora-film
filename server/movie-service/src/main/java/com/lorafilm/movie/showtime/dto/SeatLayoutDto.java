@@ -45,6 +45,8 @@ public class SeatLayoutDto {
         private Integer positionRow;
         private Integer positionColumn;
         private String seatType;
+        private String pairGroup;
+        private Long pairedSeatId;
         private BigDecimal price;
         private String currency;
         private String status;
@@ -68,6 +70,10 @@ public class SeatLayoutDto {
         public void setPositionColumn(Integer positionColumn) { this.positionColumn = positionColumn; }
         public String getSeatType() { return seatType; }
         public void setSeatType(String seatType) { this.seatType = seatType; }
+        public String getPairGroup() { return pairGroup; }
+        public void setPairGroup(String pairGroup) { this.pairGroup = pairGroup; }
+        public Long getPairedSeatId() { return pairedSeatId; }
+        public void setPairedSeatId(Long pairedSeatId) { this.pairedSeatId = pairedSeatId; }
         public BigDecimal getPrice() { return price; }
         public void setPrice(BigDecimal price) { this.price = price; }
         public String getCurrency() { return currency; }

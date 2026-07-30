@@ -24,6 +24,10 @@ import {
   getOrCreateBookingCreationKey
 } from '../utils/bookingCreationIdempotency';
 import {
+  buildSeatUnits,
+  removeUnavailableSeatUnits
+} from '../utils/seatUnits';
+import {
   cancelBooking,
   createBooking,
   getActiveBookingForShowtime,
@@ -205,7 +209,7 @@ export default function SeatSelectionPage() {
         )
       }
       : previous);
-    setSelectedSeats(previous => previous.filter(seat => !occupiedIds.has(seat.publicId)));
+    setSelectedSeats(previous => removeUnavailableSeatUnits(previous, occupiedIds));
   }, [showtimePublicId]);
 
   useEffect(() => {
@@ -224,7 +228,7 @@ export default function SeatSelectionPage() {
         ? { ...previous, seats: applySeatAvailabilityUpdates(previous.seats, updates) }
         : previous);
       setSelectedSeats(previous => {
-        const next = previous.filter(seat => !unavailableIds.has(seat.publicId));
+        const next = removeUnavailableSeatUnits(previous, unavailableIds);
         if (next.length !== previous.length) {
           showNotice(
             'Một hoặc nhiều ghế vừa được khách khác giữ. Sơ đồ ghế đã được cập nhật, vui lòng chọn ghế khác.',
@@ -261,7 +265,7 @@ export default function SeatSelectionPage() {
     };
   }, [refreshAvailability, showtimePublicId, showNotice]);
 
-  const rows = useMemo(() => {
+  const seatRows = useMemo(() => {
     const grouped = new Map();
     for (const seat of layout?.seats || []) {
       const key = seat.rowLabel || `Hàng ${seat.positionRow ?? '?'}`;
@@ -276,21 +280,40 @@ export default function SeatSelectionPage() {
       ]);
   }, [layout]);
 
-  // Handle one sellable seat per click. Couple seats are represented by one
-  // seat item in the customer booking flow; their neighbour is independent.
-  const handleSeatClick = (seat) => {
-    if (!seat.sellable || seat.blockedForShowtime || seat.operationalStatus !== 'ACTIVE') return;
+  const rows = useMemo(
+    () => seatRows.map(([label, seats]) => [label, buildSeatUnits(seats)]),
+    [seatRows]
+  );
 
-    const isSelected = selectedSeats.some(s => s.publicId === seat.publicId);
+  const selectedSeatUnits = useMemo(
+    () => buildSeatUnits(selectedSeats),
+    [selectedSeats]
+  );
 
-    // Find if this is a couple seat / has a pair group
+  // A couple seat is one visual control backed by two authoritative seat IDs.
+  const handleSeatClick = (seatUnit) => {
+    if (
+      !seatUnit.sellable
+      || seatUnit.blockedForShowtime
+      || seatUnit.operationalStatus !== 'ACTIVE'
+      || !seatUnit.pairValid
+    ) return;
+
+    const unitSeatIds = new Set(seatUnit.seats.map(seat => seat.publicId));
+    const isSelected = seatUnit.seats.every(seat =>
+      selectedSeats.some(selected => selected.publicId === seat.publicId)
+    );
+
     if (isSelected) {
-      // Deselect
-      setSelectedSeats(prev => prev.filter(s => s.publicId !== seat.publicId));
+      setSelectedSeats(previous =>
+        previous.filter(seat => !unitSeatIds.has(seat.publicId))
+      );
     } else {
-      // Select
+      const seatsToAdd = seatUnit.seats.filter(seat =>
+        !selectedSeats.some(selected => selected.publicId === seat.publicId)
+      );
       const maxSeats = Number(layout?.maxSeatsPerBooking || 8);
-      if (selectedSeats.length + 1 > maxSeats) {
+      if (selectedSeats.length + seatsToAdd.length > maxSeats) {
         showNotice(
           `Bạn chỉ được chọn tối đa ${maxSeats} ghế cho mỗi giao dịch.`,
           { title: 'Đã đạt giới hạn số ghế' }
@@ -298,13 +321,13 @@ export default function SeatSelectionPage() {
         return;
       }
 
-      setSelectedSeats(prev => [...prev, seat]);
+      setSelectedSeats(previous => [...previous, ...seatsToAdd]);
     }
   };
 
   // Check for single seat gaps in rows
   const checkSingleSeatGap = () => {
-    for (const [, rowSeats] of rows) {
+    for (const [, rowSeats] of seatRows) {
       const seatsWithSelection = rowSeats.map(seat => {
         let seatStatus = 'AVAILABLE';
         if (seat.blockedForShowtime) {
@@ -486,7 +509,7 @@ export default function SeatSelectionPage() {
   }
 
   const backPath = layout.movie?.slug ? `/movies/${layout.movie.slug}` : '/movies';
-  const legend = sortSeatLegend(layout.seats);
+  const legend = sortSeatLegend(rows.flatMap(([, seatUnits]) => seatUnits));
   const totalAmount = selectedSeats.reduce((sum, seat) => sum + (Number(seat.price) || 0), 0);
 
   return (
@@ -607,8 +630,13 @@ export default function SeatSelectionPage() {
             </div>
 
             <div className="mx-auto max-w-5xl space-y-4">
-              {rows.map(([label, seats]) => {
-                const columnCount = Math.max(16, ...seats.map(seat => (seat.positionColumn ?? 0) + 1));
+              {rows.map(([label, seatUnits]) => {
+                const columnCount = Math.max(
+                  16,
+                  ...seatUnits.map(unit => (
+                    (unit.positionColumn ?? 0) + (unit.columnSpan ?? 1)
+                  ))
+                );
                 return (
                   <div key={label} className="flex items-center gap-3">
                     <span className="sticky left-0 z-10 w-8 rounded bg-zinc-900 py-1 text-center text-xs font-black text-zinc-500">{label}</span>
@@ -618,23 +646,29 @@ export default function SeatSelectionPage() {
                         gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`
                       }}
                     >
-                      {seats.map(seat => {
-                        const presentation = seatPresentation(seat);
-                        const isSelected = selectedSeats.some(s => s.publicId === seat.publicId);
-                        const column = (seat.positionColumn ?? 0) + 1;
-                        const accessibleLabel = `Ghế ${seat.seatCode}, ${presentation.label}, ${money(seat.price)}, ${presentation.reason}`;
+                      {seatUnits.map(seatUnit => {
+                        const presentation = seatPresentation(seatUnit);
+                        const isSelected = seatUnit.seats.every(seat =>
+                          selectedSeats.some(selected => selected.publicId === seat.publicId)
+                        );
+                        const column = (seatUnit.positionColumn ?? 0) + 1;
+                        const reason = seatUnit.pairValid
+                          ? presentation.reason
+                          : 'cấu hình ghế đôi không hợp lệ';
+                        const accessibleLabel = `${seatUnit.isCouple ? 'Ghế đôi' : 'Ghế'} ${seatUnit.seatCode}, ${presentation.label}, ${money(seatUnit.price)}, ${reason}`;
 
                         return (
                           <button
-                            key={seat.publicId}
+                            key={seatUnit.key}
                             type="button"
-                            onClick={() => handleSeatClick(seat)}
-                            disabled={!seat.sellable || seat.blockedForShowtime}
+                            onClick={() => handleSeatClick(seatUnit)}
+                            disabled={!seatUnit.sellable || seatUnit.blockedForShowtime}
                             aria-pressed={isSelected}
                             aria-label={accessibleLabel}
                             title={accessibleLabel}
                             style={{
-                              gridColumnStart: column
+                              gridColumnStart: column,
+                              gridColumnEnd: `span ${seatUnit.columnSpan || 1}`
                             }}
                             className={`relative h-10 min-w-0 border px-1 text-[10px] font-black shadow-inner transition-all ${
                               presentation.wide ? 'rounded-xl border-2' : 'rounded-t-lg rounded-b-xl'
@@ -643,13 +677,16 @@ export default function SeatSelectionPage() {
                                 ? 'border-brand-orange bg-white text-zinc-950 ring-2 ring-brand-orange/80 shadow-[0_0_14px_rgba(255,122,0,0.45)] scale-105'
                                 : presentation.className
                             } ${
-                              seat.sellable && !seat.blockedForShowtime
+                              seatUnit.sellable && !seatUnit.blockedForShowtime
                                 ? 'cursor-pointer hover:scale-105'
                                 : 'cursor-not-allowed opacity-40'
                             }`}
                           >
-                            <span aria-hidden="true">{seat.seatCode}</span>
-                            {(seat.blockedForShowtime || seat.operationalStatus !== 'ACTIVE' || !seat.priced) && (
+                            <span aria-hidden="true">{seatUnit.seatCode}</span>
+                            {(seatUnit.blockedForShowtime
+                              || seatUnit.operationalStatus !== 'ACTIVE'
+                              || !seatUnit.priced
+                              || !seatUnit.pairValid) && (
                               <span className="absolute -right-1 -top-1 rounded-full bg-zinc-950 p-0.5 text-red-300" aria-hidden="true">
                                 <ShieldAlert size={10} />
                               </span>
@@ -676,9 +713,9 @@ export default function SeatSelectionPage() {
           <div className="min-w-0 flex-1">
             <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Ghế đã chọn</span>
             <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-x-auto">
-              {selectedSeats.length > 0 ? selectedSeats.map(seat => (
-                <span key={seat.publicId} className="shrink-0 rounded-lg bg-brand-orange/15 px-2.5 py-1 text-xs font-black text-brand-orange">
-                  {seat.seatCode}
+              {selectedSeatUnits.length > 0 ? selectedSeatUnits.map(seatUnit => (
+                <span key={seatUnit.key} className="shrink-0 rounded-lg bg-brand-orange/15 px-2.5 py-1 text-xs font-black text-brand-orange">
+                  {seatUnit.seatCode}
                 </span>
               )) : (
                 <span className="truncate text-xs text-zinc-500">Chọn ghế trên sơ đồ để tiếp tục</span>

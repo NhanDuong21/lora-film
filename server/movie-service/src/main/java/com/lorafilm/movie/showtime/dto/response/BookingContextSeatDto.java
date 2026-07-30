@@ -7,6 +7,7 @@ public class BookingContextSeatDto {
     private String seatPublicId;
     private String seatCode;
     private String seatType;
+    private String pairGroup;
     private BigDecimal price;
     private String currency;
 
@@ -42,6 +43,14 @@ public class BookingContextSeatDto {
 
     public void setSeatType(String seatType) {
         this.seatType = seatType;
+    }
+
+    public String getPairGroup() {
+        return pairGroup;
+    }
+
+    public void setPairGroup(String pairGroup) {
+        this.pairGroup = pairGroup;
     }
 
     public BigDecimal getPrice() {

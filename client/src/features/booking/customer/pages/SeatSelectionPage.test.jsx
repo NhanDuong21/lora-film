@@ -129,6 +129,73 @@ describe('SeatSelectionPage customer errors', () => {
     await waitFor(() => expect(getSeatAvailability).toHaveBeenCalledTimes(2));
   });
 
+  it('renders a couple as one unit and submits both physical seat ids', async () => {
+    getSeatLayout.mockResolvedValue({
+      showtimeId: 9,
+      showtimePublicId: 'showtime-public-9',
+      serviceDate: '2099-07-27',
+      localStartTime: '19:30:00',
+      movie: { title: 'Couple movie', slug: 'couple-movie' },
+      movieVersion: { versionName: '2D' },
+      cinema: { name: 'LoraFilm' },
+      auditorium: { name: 'Room 1' },
+      seats: [
+        {
+          id: 91,
+          publicId: 'seat-public-i1',
+          seatCode: 'I1',
+          rowLabel: 'I',
+          positionRow: 9,
+          positionColumn: 1,
+          seatType: 'COUPLE',
+          seatTypeName: 'Ghế đôi',
+          pairGroup: 'I-01',
+          price: 78000,
+          sellable: true,
+          priced: true,
+          blockedForShowtime: false,
+          operationalStatus: 'ACTIVE'
+        },
+        {
+          id: 92,
+          publicId: 'seat-public-i2',
+          seatCode: 'I2',
+          rowLabel: 'I',
+          positionRow: 9,
+          positionColumn: 2,
+          seatType: 'COUPLE',
+          seatTypeName: 'Ghế đôi',
+          pairGroup: 'I-01',
+          price: 78000,
+          sellable: true,
+          priced: true,
+          blockedForShowtime: false,
+          operationalStatus: 'ACTIVE'
+        }
+      ]
+    });
+    createBooking.mockResolvedValue({ publicId: 'booking-couple-1' });
+
+    render(
+      <MemoryRouter initialEntries={['/booking/seats?showtimeId=showtime-public-9']}>
+        <SeatSelectionPage />
+      </MemoryRouter>
+    );
+
+    const coupleButton = await screen.findByRole('button', { name: /Ghế đôi I1–I2/i });
+    expect(screen.getAllByRole('button', { name: /Ghế đôi I1–I2/i })).toHaveLength(1);
+
+    fireEvent.click(coupleButton);
+    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+
+    await waitFor(() => {
+      expect(createBooking).toHaveBeenCalledWith(expect.objectContaining({
+        showtimePublicId: 'showtime-public-9',
+        seatPublicIds: ['seat-public-i1', 'seat-public-i2']
+      }));
+    });
+  });
+
   it('prevents a second order and offers resume or cancel for the active showtime', async () => {
     getActiveBookingForShowtime.mockResolvedValue({
       publicId: 'booking-active-1',

@@ -63,8 +63,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -931,7 +933,42 @@ public class BookingServiceImpl implements BookingService {
                 || !returnedSeatIds.containsAll(requestedSeatIds)) {
             throw new IntegrationException("Movie Service returned mismatched seat information");
         }
+        validateCoupleSeatPairs(context.seats());
         validatePricing(context);
+    }
+
+    private void validateCoupleSeatPairs(List<ShowtimeBookingContext.SeatContext> seats) {
+        Map<String, List<ShowtimeBookingContext.SeatContext>> coupleGroups = new HashMap<>();
+        for (ShowtimeBookingContext.SeatContext seat : seats) {
+            boolean couple = "COUPLE".equalsIgnoreCase(seat.seatType());
+            String pairGroup = seat.pairGroup() == null ? null : seat.pairGroup().trim();
+            if (couple && (pairGroup == null || pairGroup.isEmpty())) {
+                throw new IntegrationException(
+                        "Movie Service returned a couple seat without pairGroup");
+            }
+            if (!couple && pairGroup != null && !pairGroup.isEmpty()) {
+                throw new IntegrationException(
+                        "Movie Service returned pairGroup for a non-couple seat");
+            }
+            if (couple) {
+                coupleGroups.computeIfAbsent(pairGroup, ignored -> new ArrayList<>()).add(seat);
+            }
+        }
+
+        for (Map.Entry<String, List<ShowtimeBookingContext.SeatContext>> entry
+                : coupleGroups.entrySet()) {
+            int memberCount = entry.getValue().size();
+            if (memberCount == 1) {
+                throw new BusinessException(
+                        "SEAT_COUPLE_PAIR_REQUIRED",
+                        "Couple seats must be booked together",
+                        HttpStatus.BAD_REQUEST);
+            }
+            if (memberCount != 2) {
+                throw new IntegrationException(
+                        "Movie Service returned an invalid couple pairGroup");
+            }
+        }
     }
 
     private void validatePricing(ShowtimeBookingContext context) {

@@ -51,6 +51,7 @@ class BookingServiceTest {
         private static final String RESERVATION_PUBLIC_ID_1 = "8712253d-dc49-4f85-a6db-f99908dd61d7";
         private static final String RESERVATION_PUBLIC_ID_2 = "6f5867c6-9596-4011-844e-183f23e65bb6";
         private static final String SHOWTIME_PUBLIC_ID = "550e8400-e29b-41d4-a716-446655440001";
+        private static final String COUPLE_SEAT_PUBLIC_ID = "550e8400-e29b-41d4-a716-446655440091";
 
     @Mock
     private BookingRepository bookingRepository;
@@ -198,6 +199,27 @@ class BookingServiceTest {
         assertThrows(com.lorafilm.booking.common.exception.IntegrationException.class,
                 () -> bookingService.createBooking(request));
 
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(priceSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectSingleCoupleSeatBeforePersistingBooking() {
+        Instant now = Instant.now();
+        CreateBookingRequest request = new CreateBookingRequest(
+                SHOWTIME_PUBLIC_ID, List.of(COUPLE_SEAT_PUBLIC_ID), true);
+
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(showtimeClient.getBookingContextByPublicId(
+                SHOWTIME_PUBLIC_ID, List.of(COUPLE_SEAT_PUBLIC_ID)))
+                .thenReturn(singleCoupleSeatShowtimeContext(now));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> bookingService.createBooking(request));
+
+        assertEquals("SEAT_COUPLE_PAIR_REQUIRED", exception.getErrorCode());
+        verify(showtimeClient).getBookingContextByPublicId(
+                SHOWTIME_PUBLIC_ID, List.of(COUPLE_SEAT_PUBLIC_ID));
         verify(bookingRepository, never()).saveAndFlush(any());
         verify(priceSnapshotRepository, never()).save(any());
     }
@@ -489,6 +511,37 @@ class BookingServiceTest {
                 fullContext.cinemaName(),
                 fullContext.auditoriumName(),
                 List.of(fullContext.seats().getFirst()));
+    }
+
+    private ShowtimeBookingContext singleCoupleSeatShowtimeContext(Instant now) {
+        ShowtimeBookingContext fullContext = showtimeContext(now);
+        return new ShowtimeBookingContext(
+                fullContext.showtimeId(),
+                fullContext.showtimePublicId(),
+                fullContext.movieId(),
+                fullContext.cinemaId(),
+                fullContext.auditoriumId(),
+                fullContext.status(),
+                fullContext.startsAt(),
+                fullContext.endsAt(),
+                fullContext.paymentExpiresAt(),
+                new BigDecimal("78000"),
+                fullContext.serviceFee(),
+                fullContext.discountAmount(),
+                new BigDecimal("78000"),
+                fullContext.currency(),
+                fullContext.movieTitle(),
+                fullContext.moviePosterUrl(),
+                fullContext.cinemaName(),
+                fullContext.auditoriumName(),
+                List.of(new ShowtimeBookingContext.SeatContext(
+                        101L,
+                        COUPLE_SEAT_PUBLIC_ID,
+                        "I1",
+                        "COUPLE",
+                        new BigDecimal("78000"),
+                        "VND",
+                        "I-01")));
     }
 
         private Booking existingBooking(Instant expiresAt) {
