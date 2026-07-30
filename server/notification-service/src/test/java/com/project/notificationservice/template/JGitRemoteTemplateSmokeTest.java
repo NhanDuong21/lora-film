@@ -44,12 +44,11 @@ class JGitRemoteTemplateSmokeTest {
                 "main",
                 "",
                 "",
-                "",
-                "",
                 "Test",
                 "test@example.com",
                 200_000,
-                15);
+                15,
+                false);
         try {
             registry.initialize();
 
