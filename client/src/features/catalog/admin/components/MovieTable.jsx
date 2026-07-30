@@ -206,7 +206,7 @@ function MovieTable({
                       <div className="min-w-0 py-1">
                         <button
                           type="button"
-                          onClick={() => onOpenDetail(movie.publicId)}
+                          onClick={() => onOpenDetail(movie)}
                           className="line-clamp-2 text-left text-base font-extrabold text-white transition hover:text-orange-400"
                         >
                           {movie.title || 'Phim chưa đặt tên'}
@@ -276,14 +276,14 @@ function MovieTable({
                     <div className="flex flex-col items-stretch gap-2">
                       <button
                         type="button"
-                        onClick={() => onOpenDetail(movie.publicId)}
+                        onClick={() => onOpenDetail(movie)}
                         className="rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-extrabold text-black transition hover:bg-orange-400"
                       >
                         Xem và xử lý
                       </button>
                       <button
                         type="button"
-                        onClick={() => onOpenEdit(movie.publicId)}
+                        onClick={() => onOpenEdit(movie)}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-bold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
                       >
                         <Pencil size={14} />
@@ -292,7 +292,7 @@ function MovieTable({
                       {canDelete && (
                         <button
                           type="button"
-                          onClick={() => onDelete(movie)}
+                          onClick={() => onDelete(movie.publicId, movie.title)}
                           className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/10"
                         >
                           <Trash2 size={13} />

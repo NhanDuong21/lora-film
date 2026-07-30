@@ -35,12 +35,20 @@ export default function AdminMoviePage() {
   };
 
   const handleOpenEdit = movie => {
+    if (!movie?.publicId) {
+      triggerToast?.('Không xác định được mã phim để chỉnh sửa.', 'error');
+      return;
+    }
     setSelectedMovie(movie);
     setIsFormOpen(true);
   };
 
   const handleOpenDetail = movie => {
-    navigate(`/admin/movies/${movie.publicId}${location.search}`);
+    if (!movie?.publicId) {
+      triggerToast?.('Không xác định được mã phim để xem và xử lý.', 'error');
+      return;
+    }
+    navigate(`/admin/movies/${encodeURIComponent(movie.publicId)}${location.search}`);
   };
 
   const applyAdvancedFilters = draft => {
