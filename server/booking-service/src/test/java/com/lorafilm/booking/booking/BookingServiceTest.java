@@ -9,11 +9,13 @@ import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
+import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.entity.BookingSnapshot;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
@@ -319,6 +321,48 @@ class BookingServiceTest {
                 eq(SHOWTIME_PUBLIC_ID),
                 eq(BookingStatus.PENDING_PAYMENT),
                 any(Instant.class));
+    }
+
+    @Test
+    void shouldReturnAnnualSpendingFromSuccessfulPaidBookings() {
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(bookingRepository.sumPaidSpendingByUserAndPeriod(
+                eq(15L),
+                eq(List.of(BookingStatus.CONFIRMED, BookingStatus.COMPLETED)),
+                eq(PaymentStatus.SUCCESS),
+                any(Instant.class),
+                any(Instant.class)))
+                .thenReturn(new BigDecimal("176000.00"));
+
+        BookingSpendingSummaryResponse response =
+                bookingService.getMySpendingSummary(2026);
+
+        assertEquals(2026, response.year());
+        assertEquals(new BigDecimal("176000.00"), response.totalSpending());
+        assertEquals("VND", response.currency());
+        assertEquals(
+                Instant.parse("2025-12-31T17:00:00Z"),
+                response.periodStart());
+        assertEquals(
+                Instant.parse("2026-12-31T17:00:00Z"),
+                response.periodEnd());
+    }
+
+    @Test
+    void shouldReturnZeroWhenCustomerHasNoPaidSpending() {
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(bookingRepository.sumPaidSpendingByUserAndPeriod(
+                eq(15L),
+                any(),
+                eq(PaymentStatus.SUCCESS),
+                any(Instant.class),
+                any(Instant.class)))
+                .thenReturn(null);
+
+        BookingSpendingSummaryResponse response =
+                bookingService.getMySpendingSummary(2026);
+
+        assertEquals(new BigDecimal("0.00"), response.totalSpending());
     }
 
     @Test

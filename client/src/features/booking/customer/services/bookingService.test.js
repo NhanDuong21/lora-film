@@ -6,6 +6,7 @@ import {
   finalizeCheckout,
   getActiveBookingForShowtime,
   getBookingHistory,
+  getBookingSpendingSummary,
   getOrCreateScoreRedemptionKey
 } from './bookingService';
 
@@ -116,6 +117,25 @@ describe('bookingService customer history normalization', () => {
     expect(result.publicId).toBe('booking-active-1');
     expect(apiClient.get).toHaveBeenCalledWith('/api/bookings/active', {
       params: { showtimePublicId: 'showtime-public-1' }
+    });
+  });
+
+  it('reads the server-authoritative annual spending summary', async () => {
+    apiClient.get.mockResolvedValue({
+      data: {
+        data: {
+          year: 2026,
+          totalSpending: 176000,
+          currency: 'VND'
+        }
+      }
+    });
+
+    const result = await getBookingSpendingSummary(2026);
+
+    expect(result.totalSpending).toBe(176000);
+    expect(apiClient.get).toHaveBeenCalledWith('/api/bookings/spending-summary', {
+      params: { year: 2026 }
     });
   });
 

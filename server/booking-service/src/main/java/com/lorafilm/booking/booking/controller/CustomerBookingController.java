@@ -5,6 +5,7 @@ import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
+import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.service.BookingService;
@@ -113,6 +114,17 @@ public class CustomerBookingController {
                 bookings.getTotalPages(),
                 bookings.isLast());
         return ResponseEntity.ok(ApiResponse.success("Bookings retrieved successfully", response));
+    }
+
+    @GetMapping("/spending-summary")
+    @Operation(
+            summary = "Get my annual paid spending",
+            description = "Sums successful CONFIRMED or COMPLETED bookings in the requested calendar year")
+    public ResponseEntity<ApiResponse<BookingSpendingSummaryResponse>> getMySpendingSummary(
+            @RequestParam @Min(2000) @Max(2100) int year) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Spending summary retrieved successfully",
+                bookingService.getMySpendingSummary(year)));
     }
 
     @GetMapping("/active")

@@ -162,6 +162,17 @@ export const getBookingHistory = async ({ page = 0, size = 10, status, fromDate,
 };
 
 /**
+ * Get the authenticated customer's successful paid spending for one calendar year.
+ * Booking Service owns this aggregation so pagination cannot make the total incomplete.
+ */
+export const getBookingSpendingSummary = async (year = new Date().getFullYear()) => {
+  const response = await apiClient.get("/api/bookings/spending-summary", {
+    params: { year }
+  });
+  return response.data.data;
+};
+
+/**
  * Cancel a pending payment booking
  * @param {string} bookingId - Booking UUID
  * @param {string} [reason] - Reason for cancellation

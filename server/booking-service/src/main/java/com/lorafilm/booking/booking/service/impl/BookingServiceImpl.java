@@ -13,10 +13,12 @@ import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingFoodResponse;
 import com.lorafilm.booking.booking.dto.response.BookingPresentationResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
+import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
@@ -63,7 +65,10 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.Duration;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -641,6 +646,34 @@ public class BookingServiceImpl implements BookingService {
         validateDateRange(fromDate, toDate);
         return bookingRepository.findAll(buildSpecification(userId, status, fromDate, toDate), pageable)
                 .map(this::toCustomerSummaryResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingSpendingSummaryResponse getMySpendingSummary(int year) {
+        Long currentUserId = requireAuthenticatedUser();
+        ZoneId businessZone = ZoneId.of("Asia/Ho_Chi_Minh");
+        Instant periodStart = LocalDate.of(year, 1, 1)
+                .atStartOfDay(businessZone)
+                .toInstant();
+        Instant periodEnd = LocalDate.of(year + 1, 1, 1)
+                .atStartOfDay(businessZone)
+                .toInstant();
+        BigDecimal totalSpending = bookingRepository.sumPaidSpendingByUserAndPeriod(
+                currentUserId,
+                List.of(BookingStatus.CONFIRMED, BookingStatus.COMPLETED),
+                PaymentStatus.SUCCESS,
+                periodStart,
+                periodEnd);
+
+        return new BookingSpendingSummaryResponse(
+                year,
+                totalSpending == null
+                        ? BigDecimal.ZERO.setScale(2)
+                        : totalSpending.setScale(2, RoundingMode.HALF_UP),
+                "VND",
+                periodStart,
+                periodEnd);
     }
 
     private BookingSummaryResponse toCustomerSummaryResponse(Booking booking) {
