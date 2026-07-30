@@ -39,6 +39,7 @@ const BOOKING_ERROR_MESSAGES = {
   BOOKING_IDEMPOTENCY_PAYLOAD_CONFLICT: 'Phiên đặt vé cũ không còn phù hợp với ghế bạn vừa chọn. Vui lòng bấm tiếp tục lại.',
   SHOWTIME_002: 'Không thể giữ ghế cho suất chiếu đã bắt đầu.',
   SEAT_COUPLE_PAIR_REQUIRED: 'Vui lòng chọn đủ hai ghế đôi.',
+  SEAT_SINGLE_GAP_NOT_ALLOWED: 'Không được để lại một ghế trống đơn lẻ. Vui lòng chọn lại ghế.',
   SHOWTIME_VALIDATION_UNAVAILABLE: 'Không thể xác thực suất chiếu lúc này. Vui lòng thử lại.',
   INTERNAL_SERVER_ERROR: 'Hệ thống đang bận. Vui lòng thử lại sau.'
 };
@@ -54,6 +55,7 @@ export const getBookingErrorMessage = (
 
 export const seatConflictErrorCodes = new Set([
   'BOOKING_SEAT_CONFLICT',
+  'SEAT_SINGLE_GAP_NOT_ALLOWED',
   'SEAT_003',
   'SEAT_004',
   'SEAT_009'

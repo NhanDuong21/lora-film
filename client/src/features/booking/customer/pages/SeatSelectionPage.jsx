@@ -27,6 +27,7 @@ import {
   buildSeatUnits,
   removeUnavailableSeatUnits
 } from '../utils/seatUnits';
+import { hasSingleSeatGap } from '../utils/seatGapPolicy';
 import {
   cancelBooking,
   createBooking,
@@ -325,39 +326,6 @@ export default function SeatSelectionPage() {
     }
   };
 
-  // Check for single seat gaps in rows
-  const checkSingleSeatGap = () => {
-    for (const [, rowSeats] of seatRows) {
-      const seatsWithSelection = rowSeats.map(seat => {
-        let seatStatus = 'AVAILABLE';
-        if (seat.blockedForShowtime) {
-          seatStatus = 'BOOKED';
-        } else if (seat.operationalStatus !== 'ACTIVE') {
-          seatStatus = 'MAINTENANCE';
-        } else if (selectedSeats.some(s => s.publicId === seat.publicId)) {
-          seatStatus = 'SELECTED';
-        }
-        return { ...seat, seatStatus };
-      });
-
-      for (let i = 0; i < seatsWithSelection.length; i++) {
-        if (seatsWithSelection[i].seatStatus === 'AVAILABLE') {
-          const leftIsBlocked = i === 0 || ['SELECTED', 'BOOKED', 'MAINTENANCE'].includes(seatsWithSelection[i - 1].seatStatus);
-          const rightIsBlocked = i === seatsWithSelection.length - 1 || ['SELECTED', 'BOOKED', 'MAINTENANCE'].includes(seatsWithSelection[i + 1].seatStatus);
-          
-          if (leftIsBlocked && rightIsBlocked) {
-            const leftIsSelected = i > 0 && seatsWithSelection[i - 1].seatStatus === 'SELECTED';
-            const rightIsSelected = i < seatsWithSelection.length - 1 && seatsWithSelection[i + 1].seatStatus === 'SELECTED';
-            if (leftIsSelected || rightIsSelected) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-    return false;
-  };
-
   // Handle proceed to food selection & checkout
   const handleContinue = async () => {
     if (selectedSeats.length === 0) return;
@@ -366,7 +334,10 @@ export default function SeatSelectionPage() {
       setActiveConflictOpen(true);
       return;
     }
-    if (checkSingleSeatGap()) {
+    if (hasSingleSeatGap(
+      layout?.seats,
+      new Set(selectedSeats.map(seat => String(seat.publicId)))
+    )) {
       setShowGapModal(true);
       return;
     }
@@ -772,18 +743,26 @@ export default function SeatSelectionPage() {
         />
       )}
 
-      {/* Single Seat Gap Warning Modal */}
+      {/* Single Seat Gap Blocking Modal */}
       {showGapModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="single-seat-gap-title"
+            className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl"
+          >
             <div className="flex items-start gap-4">
               <div className="rounded-2xl bg-amber-500/10 p-3 text-amber-500 shrink-0">
                 <AlertTriangle size={24} />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-black text-white">Để trống ghế đơn lẻ</h3>
+                <h3 id="single-seat-gap-title" className="text-lg font-black text-white">
+                  Không thể để trống ghế đơn lẻ
+                </h3>
                 <p className="text-sm text-zinc-400 leading-relaxed">
-                  Lựa chọn ghế của bạn đang để lại một vị trí ghế đơn lẻ ở hàng ghế. Rạp chiếu phim không khuyến khích việc này do khó bán được các ghế đơn lẻ này.
+                  Lựa chọn hiện tại đang để lại một ghế trống đơn lẻ trong hàng.
+                  Vui lòng chọn lại ghế để không tạo khoảng trống một ghế.
                 </p>
               </div>
             </div>
@@ -793,12 +772,6 @@ export default function SeatSelectionPage() {
                 className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-white rounded-lg transition-colors border border-zinc-800 hover:bg-zinc-800"
               >
                 Chọn lại ghế
-              </button>
-              <button
-                onClick={proceedWithHold}
-                className="px-5 py-2 text-xs font-black uppercase bg-brand-orange hover:bg-orange-600 text-white rounded-lg transition-all shadow-lg shadow-brand-orange/20"
-              >
-                Vẫn tiếp tục
               </button>
             </div>
           </div>

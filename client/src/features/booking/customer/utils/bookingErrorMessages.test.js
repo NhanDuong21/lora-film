@@ -30,6 +30,13 @@ describe('booking error messages', () => {
     expect(message).not.toContain('idempotency');
   });
 
+  it('translates the server-side single-seat-gap rejection', () => {
+    expect(getBookingErrorMessage({
+      errorCode: 'SEAT_SINGLE_GAP_NOT_ALLOWED',
+      message: 'Seat selection must not leave an isolated single seat'
+    })).toBe('Không được để lại một ghế trống đơn lẻ. Vui lòng chọn lại ghế.');
+  });
+
   it('uses the Vietnamese fallback for an unknown raw English error', () => {
     expect(getBookingErrorMessage(
       { message: 'Unexpected database constraint violation' },
