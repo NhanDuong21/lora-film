@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -61,7 +63,7 @@ public class AuditLog {
     @Column(name = "created_by", length = 36)
     private String createdBy;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     @Column(name = "updated_by", length = 36)
@@ -75,7 +77,28 @@ public class AuditLog {
 
     public AuditLog() {
         this.publicId = UUID.randomUUID().toString();
-        this.createdAt = Instant.now();
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        Instant now = Instant.now();
+        if (this.publicId == null || this.publicId.isBlank()) {
+            this.publicId = UUID.randomUUID().toString();
+        }
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = this.createdAt;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
     }
 
     public Long getId() {
