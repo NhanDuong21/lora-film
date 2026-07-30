@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import CustomerBookingHistory from '@/features/booking/customer/components/CustomerBookingHistory';
+import CustomerNotificationCenter from '@/features/notifications/customer/components/CustomerNotificationCenter';
 import useCustomerScore from '@/features/score/customer/hooks/useCustomerScore';
 import LoyaltyCenterPage from '@/features/score/customer/pages/LoyaltyCenterPage';
 import { updateUserProfile, uploadAvatar } from '@/features/auth/services/userService';
@@ -730,16 +731,7 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
               {/* TAB 3: Notifications */}
               {activeTab === 'notifications' && (
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider mb-1">HỘP THƯ THÔNG BÁO</h3>
-                    <p className="text-zinc-500 text-[10px]">Cập nhật tin tức khuyến mãi và thay đổi suất chiếu</p>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <p className="text-xs text-zinc-500 font-bold">Hiện tại chưa có dữ liệu.</p>
-                  </div>
-                </div>
+                <CustomerNotificationCenter />
               )}
 
               {/* TAB 4: Rewards / Gifts */}

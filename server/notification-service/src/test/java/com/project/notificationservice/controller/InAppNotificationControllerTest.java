@@ -14,10 +14,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,12 +57,14 @@ class InAppNotificationControllerTest {
         request.setPriority(Priority.HIGH);
         request.setPayloadJson("""
                 {
-                  "bookingPublicId":"booking-123",
+                  "bookingPublicId":"11111111-1111-4111-8111-111111111111",
                   "bookingCode":"BK-001",
                   "movieTitle":"Mưa đỏ",
                   "seatNames":["A1","A2"],
                   "totalPaid":190000,
                   "email":"hidden@example.com",
+                  "otp":"123456",
+                  "ticketAccessUrl":"https://example.test/ticket?access=secret",
                   "_deliveryDatabaseId":99
                 }
                 """);
@@ -80,11 +80,45 @@ class InAppNotificationControllerTest {
 
         assertThat(view.notificationType()).isEqualTo("TICKET_PURCHASED");
         assertThat(view.priority()).isEqualTo("HIGH");
-        assertThat(view.actionUrl()).isEqualTo("/bookings/booking-123");
+        assertThat(view.actionUrl())
+                .isEqualTo("/bookings/11111111-1111-4111-8111-111111111111");
         assertThat(view.data()).containsEntry("bookingCode", "BK-001")
                 .containsEntry("movieTitle", "Mưa đỏ")
-                .containsEntry("totalPaid", new BigDecimal("190000"));
-        assertThat(view.data()).doesNotContainKeys("email", "_deliveryDatabaseId");
+                .containsEntry("totalPaid", 190000);
+        assertThat(view.data()).doesNotContainKeys(
+                "email", "otp", "ticketAccessUrl", "_deliveryDatabaseId");
+    }
+
+    @Test
+    void futureNotificationTypesExposeOnlyExplicitPublicData() {
+        InAppNotification item = notification();
+        NotificationDelivery delivery = new NotificationDelivery();
+        ReflectionTestUtils.setField(delivery, "id", 10L);
+        delivery.setNotificationRequestId(20L);
+        NotificationRequest request = new NotificationRequest();
+        ReflectionTestUtils.setField(request, "id", 20L);
+        request.setEventType("SCORE_EARNED");
+        request.setPriority(Priority.NORMAL);
+        request.setPayloadJson("""
+                {
+                  "internalLedgerId":"ledger-secret",
+                  "publicData":{"points":20,"reason":"Mua vé"}
+                }
+                """);
+        when(inAppRepository
+                .findByUserPublicIdAndExpiresAtAfterOrUserPublicIdAndExpiresAtIsNullOrderByCreatedAtDesc(
+                        anyString(), any(), anyString(), any()))
+                .thenReturn(new PageImpl<>(List.of(item)));
+        when(deliveryRepository.findById(10L)).thenReturn(Optional.of(delivery));
+        when(requestRepository.findById(20L)).thenReturn(Optional.of(request));
+
+        var view = controller.list(authentication, 0, 20)
+                .data().getContent().getFirst();
+
+        assertThat(view.notificationType()).isEqualTo("SCORE_EARNED");
+        assertThat(view.data()).containsEntry("points", 20)
+                .containsEntry("reason", "Mua vé")
+                .doesNotContainKey("internalLedgerId");
     }
 
     @Test

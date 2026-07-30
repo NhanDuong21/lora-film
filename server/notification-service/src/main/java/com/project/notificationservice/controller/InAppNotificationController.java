@@ -24,12 +24,23 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
 public class InAppNotificationController {
+
+    private static final Set<String> TICKET_DATA_FIELDS = Set.of(
+            "bookingPublicId", "bookingCode", "paymentCode",
+            "movieTitle", "moviePosterUrl", "movieAgeRating",
+            "cinemaName", "auditoriumName", "showtime",
+            "seatNames", "ticketCodes", "ticketTypes", "ticketPublicIds",
+            "foodItems", "promotionCode", "promotionName",
+            "subtotal", "discount", "totalPaid", "totalAmount", "currency",
+            "paymentMethod", "paymentTime");
 
     private final InAppNotificationRepository repository;
     private final NotificationDeliveryRepository deliveryRepository;
@@ -92,8 +103,7 @@ public class InAppNotificationController {
                 .map(NotificationDelivery::getNotificationRequestId)
                 .flatMap(requestRepository::findById)
                 .orElse(null);
-        Map<String, Object> data = request == null
-                ? Map.of() : publicData(request.getPayloadJson());
+        Map<String, Object> data = request == null ? Map.of() : publicData(request);
         return new InAppView(item.getPublicId(), item.getTitle(), item.getBody(),
                 request == null ? "GENERIC" : request.getEventType(),
                 item.getCategory(),
@@ -102,18 +112,26 @@ public class InAppNotificationController {
                 item.getCreatedAt());
     }
 
-    private Map<String, Object> publicData(String payloadJson) {
+    private Map<String, Object> publicData(NotificationRequest request) {
         try {
             Map<String, Object> payload = objectMapper.readValue(
-                    payloadJson, new TypeReference<>() {
+                    request.getPayloadJson(), new TypeReference<>() {
                     });
-            Map<String, Object> result = new LinkedHashMap<>(payload);
-            result.keySet().removeIf(key -> key.startsWith("_")
-                    || key.equals("email")
-                    || key.equals("phone")
-                    || key.equals("webPushSubscription")
-                    || key.equals("userPublicId"));
-            return Map.copyOf(result);
+            Map<String, Object> result = new LinkedHashMap<>();
+            if ("TICKET_PURCHASED".equals(request.getEventType())
+                    || "TICKET_ISSUED".equals(request.getEventType())
+                    || "BOOKING_CONFIRMED".equals(request.getEventType())) {
+                TICKET_DATA_FIELDS.forEach(key -> {
+                    if (payload.containsKey(key)) result.put(key, payload.get(key));
+                });
+            } else if (payload.get("publicData") instanceof Map<?, ?> publicValues) {
+                publicValues.forEach((key, value) -> {
+                    if (key instanceof String field && !field.startsWith("_")) {
+                        result.put(field, value);
+                    }
+                });
+            }
+            return Collections.unmodifiableMap(result);
         } catch (Exception ignored) {
             return Map.of();
         }
@@ -121,8 +139,11 @@ public class InAppNotificationController {
 
     private String actionUrl(InAppNotification item, Map<String, Object> data) {
         Object bookingPublicId = data.get("bookingPublicId");
-        if (bookingPublicId != null && !String.valueOf(bookingPublicId).isBlank()) {
-            return "/bookings/" + bookingPublicId;
+        String bookingId = bookingPublicId == null ? "" : String.valueOf(bookingPublicId);
+        if (bookingId.matches(
+                "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-"
+                        + "[a-fA-F0-9]{4}-[a-fA-F0-9]{12}")) {
+            return "/bookings/" + bookingId;
         }
         return item.getDeepLink();
     }

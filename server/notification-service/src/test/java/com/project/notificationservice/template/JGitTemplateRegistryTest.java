@@ -11,6 +11,10 @@ import com.project.notificationservice.template.TemplateRegistry.TemplateContent
 import com.project.notificationservice.template.TemplateRegistry.TemplateDraft;
 import com.project.notificationservice.template.TemplateRegistry.VariableDefinition;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.storage.file.WindowCacheConfig;
+import org.eclipse.jgit.transport.RefSpec;
+import org.eclipse.jgit.transport.URIish;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -34,13 +38,35 @@ class JGitTemplateRegistryTest {
 
     private JGitTemplateRegistry registry;
 
+    @AfterEach
+    void tearDown() {
+        if (registry != null) registry.close();
+        // JGit caches pack windows globally; reinstalling releases Windows file handles
+        // before JUnit removes the temporary repositories.
+        new WindowCacheConfig().install();
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         Path repository = temporaryDirectory.resolve("registry");
         Files.createDirectories(repository);
         try (Git git = Git.init().setInitialBranch("main").setDirectory(repository.toFile()).call()) {
             Files.writeString(repository.resolve("README.md"), "external template registry");
-            git.add().addFilepattern("README.md").call();
+            Path legacy = repository.resolve("email/vi/booking/booking_confirmed.html");
+            Files.createDirectories(legacy.getParent());
+            Files.writeString(legacy, """
+                    <!doctype html>
+                    <html><head><title>Booking Confirmed - LoraFilm</title></head>
+                    <body><h1>Xin chào {{user_name}}</h1><p>Mã vé {{booking_code}}</p></body></html>
+                    """);
+            Path englishOnly = repository.resolve("email/en/payment/payment_failed.html");
+            Files.createDirectories(englishOnly.getParent());
+            Files.writeString(englishOnly, """
+                    <!doctype html>
+                    <html><head><title>Payment Failed - LoraFilm</title></head>
+                    <body><h1>Hello {{user_name}}</h1><p>Payment {{transaction_id}} failed.</p></body></html>
+                    """);
+            git.add().addFilepattern(".").call();
             git.commit().setMessage("Initialize registry")
                     .setAuthor("Test", "test@example.com").call();
         }
@@ -63,19 +89,180 @@ class JGitTemplateRegistryTest {
                 "Test",
                 "test@example.com",
                 20_000,
-                5);
+                5,
+                true);
         registry.initialize();
     }
 
     @Test
+    void automaticallyFastForwardsPublishedBranchWhenRemoteChanges() throws Exception {
+        registry.close();
+        registry = null;
+
+        Path remote = temporaryDirectory.resolve("remote.git");
+        try (Git ignored = Git.init()
+                .setBare(true)
+                .setInitialBranch("main")
+                .setDirectory(remote.toFile())
+                .call()) {
+            // Bare remote used by the publisher and registry clone below.
+        }
+
+        Path publisherDirectory = temporaryDirectory.resolve("publisher");
+        Path registryDirectory = temporaryDirectory.resolve("remote-registry");
+        try (Git publisher = Git.init()
+                .setInitialBranch("main")
+                .setDirectory(publisherDirectory.toFile())
+                .call()) {
+            Path template = publisherDirectory.resolve(
+                    "email/vi/booking/booking_confirmed.html");
+            Files.createDirectories(template.getParent());
+            Files.writeString(template, legacyBookingTemplate("Phiên bản một"));
+            publisher.add().addFilepattern(".").call();
+            publisher.commit().setMessage("Initial template")
+                    .setAuthor("Test", "test@example.com").call();
+            publisher.remoteAdd()
+                    .setName("origin")
+                    .setUri(new URIish(remote.toUri().toString()))
+                    .call();
+            publisher.push()
+                    .setRemote("origin")
+                    .setRefSpecs(new RefSpec("refs/heads/main:refs/heads/main"))
+                    .call();
+
+            registry = createRegistry(
+                    registryDirectory, remote.toUri().toString(), true);
+            registry.initialize();
+            String initialCommit = registry.getPublishedTemplate(
+                    "BOOKING_CONFIRMED", Channel.EMAIL, "vi-VN").commitSha();
+
+            Files.writeString(template, legacyBookingTemplate("Phiên bản hai"));
+            publisher.add().addFilepattern(".").call();
+            publisher.commit().setMessage("Update template")
+                    .setAuthor("Test", "test@example.com").call();
+            publisher.push()
+                    .setRemote("origin")
+                    .setRefSpecs(new RefSpec("refs/heads/main:refs/heads/main"))
+                    .call();
+
+            registry.refreshFromRemote();
+
+            TemplateRegistry.TemplateDocument refreshed = registry.getPublishedTemplate(
+                    "BOOKING_CONFIRMED", Channel.EMAIL, "vi-VN");
+            assertThat(refreshed.commitSha()).isNotEqualTo(initialCommit);
+            assertThat(refreshed.htmlContent()).contains("Phiên bản hai");
+        }
+    }
+
+    @Test
+    void automaticRefreshDoesNotOverwriteLocalChanges() throws Exception {
+        registry.close();
+        registry = null;
+
+        Path remote = temporaryDirectory.resolve("dirty-remote.git");
+        try (Git ignored = Git.init()
+                .setBare(true)
+                .setInitialBranch("main")
+                .setDirectory(remote.toFile())
+                .call()) {
+            // Bare remote used by the publisher and registry clone below.
+        }
+
+        Path publisherDirectory = temporaryDirectory.resolve("dirty-publisher");
+        Path registryDirectory = temporaryDirectory.resolve("dirty-registry");
+        try (Git publisher = Git.init()
+                .setInitialBranch("main")
+                .setDirectory(publisherDirectory.toFile())
+                .call()) {
+            Path publisherTemplate = publisherDirectory.resolve(
+                    "email/vi/booking/booking_confirmed.html");
+            Files.createDirectories(publisherTemplate.getParent());
+            Files.writeString(publisherTemplate, legacyBookingTemplate("Bản gốc"));
+            publisher.add().addFilepattern(".").call();
+            publisher.commit().setMessage("Initial template")
+                    .setAuthor("Test", "test@example.com").call();
+            publisher.remoteAdd()
+                    .setName("origin")
+                    .setUri(new URIish(remote.toUri().toString()))
+                    .call();
+            publisher.push()
+                    .setRemote("origin")
+                    .setRefSpecs(new RefSpec("refs/heads/main:refs/heads/main"))
+                    .call();
+
+            registry = createRegistry(
+                    registryDirectory, remote.toUri().toString(), true);
+            registry.initialize();
+
+            Path localTemplate = registryDirectory.resolve(
+                    "email/vi/booking/booking_confirmed.html");
+            Files.writeString(localTemplate, legacyBookingTemplate("Thay đổi local"));
+            Files.writeString(publisherTemplate, legacyBookingTemplate("Thay đổi remote"));
+            publisher.add().addFilepattern(".").call();
+            publisher.commit().setMessage("Remote update")
+                    .setAuthor("Test", "test@example.com").call();
+            publisher.push()
+                    .setRemote("origin")
+                    .setRefSpecs(new RefSpec("refs/heads/main:refs/heads/main"))
+                    .call();
+
+            registry.refreshFromRemote();
+
+            assertThat(Files.readString(localTemplate)).contains("Thay đổi local");
+            assertThat(registry.health().message()).contains("local changes");
+        }
+    }
+
+    @Test
     void draftCannotBeUsedForPublishedDelivery() {
-        registry.createDraft(new CreateTemplateDraftCommand("TICKET_PURCHASED", "admin", content("one")));
+        registry.createDraft(new CreateTemplateDraftCommand("NEW_TEMPLATE", "admin", content("one")));
 
         assertThatThrownBy(() -> registry.getPublishedTemplate(
-                "TICKET_PURCHASED", Channel.EMAIL, "vi-VN"))
+                "NEW_TEMPLATE", Channel.EMAIL, "vi-VN"))
                 .isInstanceOf(NotificationException.class)
                 .extracting(exception -> ((NotificationException) exception).getErrorCode())
                 .isEqualTo("TEMPLATE_NOT_FOUND");
+    }
+
+    @Test
+    void readsGitMailRepositoryLayoutByFileName() {
+        TemplateRegistry.TemplateDocument document = registry.getPublishedTemplate(
+                "BOOKING_CONFIRMED", Channel.EMAIL, "vi-VN");
+
+        assertThat(document.status())
+                .isEqualTo(com.project.notificationservice.domain.NotificationTypes.TemplateStatus.PUBLISHED);
+        assertThat(document.subject()).isEqualTo("Booking Confirmed - LoraFilm");
+        assertThat(document.htmlContent()).contains("{{user_name}}", "{{booking_code}}");
+        assertThat(document.variablesSchema()).containsKeys("user_name", "booking_code");
+        assertThat(document.commitSha()).matches("[a-f0-9]{40}");
+    }
+
+    @Test
+    void derivesCompactInAppContentFromTheSameGitHtml() {
+        TemplateRegistry.TemplateDocument document = registry.getPublishedTemplate(
+                "BOOKING_CONFIRMED", Channel.IN_APP, "vi-VN");
+
+        assertThat(document.subject()).isEqualTo("Booking Confirmed - LoraFilm");
+        assertThat(document.textContent()).contains(
+                "Xin chào {{user_name}}", "Mã vé {{booking_code}}");
+        assertThat(document.commitSha()).matches("[a-f0-9]{40}");
+    }
+
+    @Test
+    void fallsBackToTheLocaleThatExistsInTheGitRepository() {
+        TemplateRegistry.TemplateDocument document = registry.getPublishedTemplate(
+                "PAYMENT_FAILED", Channel.IN_APP, "vi-VN");
+
+        assertThat(document.locale()).isEqualTo("vi-VN");
+        assertThat(document.subject()).isEqualTo("Payment Failed - LoraFilm");
+        assertThat(document.textContent()).contains("{{transaction_id}}");
+    }
+
+    @Test
+    void listsLegacyTemplatesAlongsideNativeTemplates() {
+        assertThat(registry.findTemplates(null))
+                .extracting(TemplateRegistry.TemplateSummary::templateKey)
+                .contains("BOOKING_CONFIRMED");
     }
 
     @Test
@@ -139,5 +326,39 @@ class JGitTemplateRegistryTest {
                 "{{customerName}}",
                 "<p>{{customerName}}</p>",
                 "{{customerName}}");
+    }
+
+    private JGitTemplateRegistry createRegistry(
+            Path workingDirectory, String remoteUri, boolean autoRefreshEnabled) {
+        NotificationAuditLogRepository auditRepository = mock(NotificationAuditLogRepository.class);
+        when(auditRepository.save(any(NotificationAuditLog.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<StringRedisTemplate> redisProvider = mock(ObjectProvider.class);
+        when(redisProvider.getIfAvailable()).thenReturn(null);
+        return new JGitTemplateRegistry(
+                new ObjectMapper().findAndRegisterModules(),
+                new SafeTemplateRenderer(20_000, 200, 480),
+                auditRepository,
+                redisProvider,
+                workingDirectory.toString(),
+                remoteUri,
+                "main",
+                "",
+                "",
+                "Test",
+                "test@example.com",
+                20_000,
+                5,
+                autoRefreshEnabled);
+    }
+
+    private String legacyBookingTemplate(String marker) {
+        return """
+                <!doctype html>
+                <html><head><title>Booking Confirmed - LoraFilm</title></head>
+                <body><h1>Xin chào {{user_name}}</h1>
+                <p>Mã vé {{booking_code}} - %s</p></body></html>
+                """.formatted(marker);
     }
 }

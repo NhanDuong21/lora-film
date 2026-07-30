@@ -6,7 +6,7 @@ Template routes under `/api/v1/admin/notification-templates` support list/filter
 
 Operations routes under `/api/v1/admin/notifications` provide dashboard metrics, paged logs, request detail, delivery retry, and dead-letter views.
 
-Customer routes under `/api/v1/notifications` provide a paged inbox, unread count, mark-one-read, and mark-all-read. Ownership comes from the JWT principal, never a request query parameter.
+Customer routes under `/api/v1/notifications` provide a paged inbox, unread count, mark-one-read, and mark-all-read. Each inbox item includes `notificationType`, `category`, `priority`, a same-application `actionUrl`, and a recipient-safe structured `data` object so ticket notifications and future notification types can have richer UI presentations. Ticket data uses an explicit server allowlist; other event types expose only values placed under payload `publicData`. Ownership comes from the JWT `userId`, never a request query parameter.
 
 Internal routes under `/api/v1/internal/notifications` provide single/batch accept, status and delivery lookup, and cancellation. They require `X-Internal-Token` and are not exposed by the gateway.
 

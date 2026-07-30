@@ -3,6 +3,7 @@ package com.project.notificationservice.provider;
 import com.project.notificationservice.domain.NotificationTypes.Channel;
 import com.project.notificationservice.domain.NotificationTypes.FailureCategory;
 
+import java.time.Instant;
 import java.util.Map;
 
 public interface NotificationChannelSender {
@@ -21,6 +22,7 @@ public interface NotificationChannelSender {
             String textContent,
             String deepLink,
             String category,
+            Instant expiresAt,
             Map<String, Object> payload) {
     }
 

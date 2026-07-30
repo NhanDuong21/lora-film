@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { 
-  ChevronDown, Menu, X, Bell, Star, Search, User, LogOut, KeyRound, Mail
+  ChevronDown, Menu, X, Star, Search, User, LogOut, KeyRound, Mail
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import CustomerNotificationBell from '@/features/notifications/customer/components/CustomerNotificationBell';
 
 export default function Header() {
   const { user, userRole, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const isCustomer = (userRole || '').replace(/^ROLE_/, '') === 'CUSTOMER';
   
   // Mobile drawer state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -242,15 +244,7 @@ export default function Header() {
         {isAuthenticated ? (
           <div className="flex items-center gap-3 relative">
             
-            {userRole === 'CUSTOMER' && (
-              <button 
-                onClick={() => handleInfoOptionClick('Thông báo thành viên')}
-                className="relative p-2 rounded-xl bg-zinc-900 border border-zinc-800/80 hover:bg-zinc-800 text-zinc-450 hover:text-white transition-all focus:outline-none"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-brand-orange rounded-full"></span>
-              </button>
-            )}
+            {isCustomer && <CustomerNotificationBell />}
 
             <div className="relative">
               <button

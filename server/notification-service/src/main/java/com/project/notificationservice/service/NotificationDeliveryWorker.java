@@ -24,6 +24,7 @@ import com.project.notificationservice.repository.NotificationRecipientRepositor
 import com.project.notificationservice.repository.NotificationRequestRepository;
 import com.project.notificationservice.template.SafeTemplateRenderer;
 import com.project.notificationservice.template.TemplateRegistry;
+import com.project.notificationservice.template.TemplatePayloadAdapter;
 import com.project.notificationservice.template.TemplateRegistry.RenderedTemplate;
 import com.project.notificationservice.template.TemplateRegistry.TemplateDocument;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -58,6 +59,7 @@ public class NotificationDeliveryWorker {
     private final NotificationOutboxRepository outboxRepository;
     private final TemplateRegistry templateRegistry;
     private final SafeTemplateRenderer renderer;
+    private final TemplatePayloadAdapter payloadAdapter;
     private final NotificationSenderResolver senderResolver;
     private final RecipientCryptoService cryptoService;
     private final ObjectMapper objectMapper;
@@ -74,6 +76,7 @@ public class NotificationDeliveryWorker {
             NotificationOutboxRepository outboxRepository,
             TemplateRegistry templateRegistry,
             SafeTemplateRenderer renderer,
+            TemplatePayloadAdapter payloadAdapter,
             NotificationSenderResolver senderResolver,
             RecipientCryptoService cryptoService,
             ObjectMapper objectMapper,
@@ -88,6 +91,7 @@ public class NotificationDeliveryWorker {
         this.outboxRepository = outboxRepository;
         this.templateRegistry = templateRegistry;
         this.renderer = renderer;
+        this.payloadAdapter = payloadAdapter;
         this.senderResolver = senderResolver;
         this.cryptoService = cryptoService;
         this.objectMapper = objectMapper;
@@ -133,7 +137,8 @@ public class NotificationDeliveryWorker {
                     request.getTemplateKey(), delivery.getChannel(), request.getLocale());
             request.setTemplateCommitSha(template.commitSha());
             request.setTemplateVersion(template.version());
-            RenderedTemplate rendered = renderer.render(template, payload);
+            RenderedTemplate rendered = renderer.render(
+                    template, payloadAdapter.adapt(payload, template));
             Map<String, Object> providerPayload = new HashMap<>(payload);
             providerPayload.put("_deliveryDatabaseId", delivery.getId());
             NotificationChannelSender sender = senderResolver.resolve(delivery.getChannel());
@@ -147,6 +152,7 @@ public class NotificationDeliveryWorker {
                     rendered.textContent(),
                     deepLink(payload),
                     request.getCategory().name(),
+                    request.getExpiresAt(),
                     Map.copyOf(providerPayload)));
         } catch (NotificationException exception) {
             FailureCategory category = exception.getStatus().is5xxServerError()

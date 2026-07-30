@@ -25,19 +25,23 @@ class NotificationEventConsumerTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private NotificationEventInboxRepository inboxRepository;
     private NotificationApplicationService applicationService;
+    private UserRecipientClient userRecipientClient;
     private NotificationEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
         inboxRepository = mock(NotificationEventInboxRepository.class);
         applicationService = mock(NotificationApplicationService.class);
-        consumer = new NotificationEventConsumer(objectMapper, inboxRepository, applicationService);
+        userRecipientClient = mock(UserRecipientClient.class);
+        consumer = new NotificationEventConsumer(
+                objectMapper, inboxRepository, applicationService, userRecipientClient);
         when(inboxRepository.findBySourceServiceAndSourceEventId(anyString(), anyString()))
                 .thenReturn(Optional.empty());
+        when(userRecipientClient.findByUserPublicId(anyString())).thenReturn(Optional.empty());
     }
 
     @Test
-    void ticketIssuedCreatesPurchasedTicketNotification() throws Exception {
+    void ticketIssuedUsesBookingConfirmedTemplateFromGitCatalog() throws Exception {
         DomainEventEnvelope event = new DomainEventEnvelope(
                 "1c99e5b9-cf0a-4b88-89d6-54ed6b36f10a",
                 "ticket.issued",
@@ -56,8 +60,8 @@ class NotificationEventConsumerTest {
         ArgumentCaptor<NotificationCommands.CreateNotificationCommand> captor =
                 ArgumentCaptor.forClass(NotificationCommands.CreateNotificationCommand.class);
         verify(applicationService).accept(captor.capture());
-        assertThat(captor.getValue().templateKey()).isEqualTo("TICKET_PURCHASED");
-        assertThat(captor.getValue().eventType()).isEqualTo("TICKET_PURCHASED");
+        assertThat(captor.getValue().templateKey()).isEqualTo("BOOKING_CONFIRMED");
+        assertThat(captor.getValue().eventType()).isEqualTo("TICKET_ISSUED");
         assertThat(captor.getValue().channels()).containsExactlyInAnyOrder(
                 com.project.notificationservice.domain.NotificationTypes.Channel.EMAIL,
                 com.project.notificationservice.domain.NotificationTypes.Channel.IN_APP);
@@ -81,6 +85,35 @@ class NotificationEventConsumerTest {
         consumer.consumePaymentEvent(objectMapper.writeValueAsString(event));
 
         verify(applicationService, never()).accept(any());
+    }
+
+    @Test
+    void ticketIssuedResolvesEmailFromUserServiceWhenEventOnlyContainsUserId() throws Exception {
+        when(userRecipientClient.findByUserPublicId("42"))
+                .thenReturn(Optional.of(new UserRecipientClient.ResolvedRecipient(
+                        "customer@example.com", "Nguyen Van A")));
+        DomainEventEnvelope event = new DomainEventEnvelope(
+                "ticket-with-user-id",
+                "ticket.issued",
+                1,
+                Instant.now(),
+                "booking-service",
+                null,
+                null,
+                "booking-public-id",
+                "42",
+                "vi-VN",
+                Map.of("bookingCode", "BK-42", "customerName", "Customer"));
+
+        consumer.consumeBookingEvent(objectMapper.writeValueAsString(event));
+
+        ArgumentCaptor<NotificationCommands.CreateNotificationCommand> captor =
+                ArgumentCaptor.forClass(NotificationCommands.CreateNotificationCommand.class);
+        verify(applicationService).accept(captor.capture());
+        assertThat(captor.getValue().recipient().email()).isEqualTo("customer@example.com");
+        assertThat(captor.getValue().channels()).contains(
+                com.project.notificationservice.domain.NotificationTypes.Channel.EMAIL);
+        assertThat(captor.getValue().payload().get("customerName")).isEqualTo("Nguyen Van A");
     }
 
     @Test

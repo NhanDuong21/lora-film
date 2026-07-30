@@ -31,14 +31,17 @@ public class NotificationEventConsumer {
     private final ObjectMapper objectMapper;
     private final NotificationEventInboxRepository inboxRepository;
     private final NotificationApplicationService notificationService;
+    private final UserRecipientClient userRecipientClient;
 
     public NotificationEventConsumer(
             ObjectMapper objectMapper,
             NotificationEventInboxRepository inboxRepository,
-            NotificationApplicationService notificationService) {
+            NotificationApplicationService notificationService,
+            UserRecipientClient userRecipientClient) {
         this.objectMapper = objectMapper;
         this.inboxRepository = inboxRepository;
         this.notificationService = notificationService;
+        this.userRecipientClient = userRecipientClient;
     }
 
     @KafkaListener(topics = "${notification.kafka.booking-topic}")
@@ -58,6 +61,17 @@ public class NotificationEventConsumer {
         String push = text(payload, "webPushSubscription");
         String userPublicId = event.userPublicId() == null
                 ? text(payload, "userPublicId") : event.userPublicId();
+        if (email == null && userPublicId != null) {
+            UserRecipientClient.ResolvedRecipient resolved = userRecipientClient
+                    .findByUserPublicId(userPublicId)
+                    .orElse(null);
+            if (resolved != null) {
+                email = resolved.email();
+                if (resolved.fullName() != null) {
+                    payload.put("customerName", resolved.fullName());
+                }
+            }
+        }
         Set<Channel> channels = new LinkedHashSet<>();
         if (email != null) channels.add(Channel.EMAIL);
         if (userPublicId != null) channels.add(Channel.IN_APP);
@@ -75,10 +89,10 @@ public class NotificationEventConsumer {
                 "ticket-issued-" + event.eventId(),
                 event.source() == null ? "booking-service" : event.source(),
                 event.eventId(),
-                "TICKET_PURCHASED",
+                "TICKET_ISSUED",
                 event.correlationId(),
                 event.causationId(),
-                "TICKET_PURCHASED",
+                "BOOKING_CONFIRMED",
                 event.locale() == null ? "vi-VN" : event.locale(),
                 Category.TRANSACTIONAL,
                 Priority.HIGH,

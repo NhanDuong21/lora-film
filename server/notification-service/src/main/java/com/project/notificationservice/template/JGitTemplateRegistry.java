@@ -9,21 +9,28 @@ import com.project.notificationservice.entity.NotificationAuditLog;
 import com.project.notificationservice.exception.NotificationException;
 import com.project.notificationservice.repository.NotificationAuditLogRepository;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.eclipse.jgit.api.CreateBranchCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeCommand;
 import org.eclipse.jgit.api.MergeResult;
+import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.HtmlUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -34,20 +41,36 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 @Component
 public class JGitTemplateRegistry implements TemplateRegistry {
 
+    private static final Logger log = LoggerFactory.getLogger(JGitTemplateRegistry.class);
     private static final String MANIFEST = "manifest.json";
     private static final String SUBJECT = "subject.hbs";
     private static final String HTML = "content.html.hbs";
     private static final String TEXT = "content.txt.hbs";
+    private static final Pattern LEGACY_EXPRESSION =
+            Pattern.compile("\\{\\{\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*}}");
+    private static final Pattern HTML_TITLE =
+            Pattern.compile("(?is)<title[^>]*>(.*?)</title>");
+    private static final Pattern FIRST_HEADING =
+            Pattern.compile("(?is)<h1[^>]*>(.*?)</h1>");
+    private static final Pattern FIRST_PARAGRAPH =
+            Pattern.compile("(?is)<p[^>]*>(.*?)</p>");
+    private static final Map<String, String> LEGACY_TEMPLATE_ALIASES = Map.of(
+            "TICKET_PURCHASED", "booking/booking_confirmed.html");
 
     private final ObjectMapper objectMapper;
     private final SafeTemplateRenderer renderer;
@@ -62,10 +85,12 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     private final String authorEmail;
     private final int maxTemplateBytes;
     private final int fetchTimeoutSeconds;
+    private final boolean autoRefreshEnabled;
     private final ReentrantLock lock = new ReentrantLock(true);
 
     private volatile Git git;
     private volatile String initializationError;
+    private volatile String lastRefreshError;
 
     public JGitTemplateRegistry(
             ObjectMapper objectMapper,
@@ -80,7 +105,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             @Value("${notification.git.author-name:LoraFilm Notification Service}") String authorName,
             @Value("${notification.git.author-email:notifications@lorafilm.local}") String authorEmail,
             @Value("${notification.git.max-template-bytes:200000}") int maxTemplateBytes,
-            @Value("${notification.git.fetch-timeout-seconds:15}") int fetchTimeoutSeconds) {
+            @Value("${notification.git.fetch-timeout-seconds:15}") int fetchTimeoutSeconds,
+            @Value("${notification.git.auto-refresh-enabled:true}") boolean autoRefreshEnabled) {
         this.objectMapper = objectMapper;
         this.renderer = renderer;
         this.auditRepository = auditRepository;
@@ -94,6 +120,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         this.authorEmail = authorEmail;
         this.maxTemplateBytes = maxTemplateBytes;
         this.fetchTimeoutSeconds = fetchTimeoutSeconds;
+        this.autoRefreshEnabled = autoRefreshEnabled;
     }
 
     @PostConstruct
@@ -123,6 +150,39 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         } catch (Exception exception) {
             initializationError = safeMessage(exception);
             closeGit();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @PreDestroy
+    public void close() {
+        lock.lock();
+        try {
+            closeGit();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Scheduled(
+            fixedDelayString = "${notification.git.refresh-interval-ms:30000}",
+            initialDelayString = "${notification.git.refresh-initial-delay-ms:5000}")
+    public void refreshFromRemote() {
+        if (!autoRefreshEnabled || remoteUri == null || remoteUri.isBlank() || !lock.tryLock()) {
+            return;
+        }
+        try {
+            String updatedCommit = fastForwardPublishedBranch();
+            lastRefreshError = null;
+            if (updatedCommit != null) {
+                log.info("Template registry fast-forwarded {}/{} to commit {}",
+                        remoteUri, publishedBranch, updatedCommit);
+            }
+        } catch (Exception exception) {
+            lastRefreshError = safeMessage(exception);
+            log.warn("Unable to refresh template registry from {}/{}: {}",
+                    remoteUri, publishedBranch, lastRefreshError);
         } finally {
             lock.unlock();
         }
@@ -208,8 +268,15 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         try {
             fetch();
             checkoutPublished();
-            TemplateDocument document = readDocument(templateKey, channel, locale, head(requireGit()),
-                    findVersionForCommit(templateKey, channel, locale, head(requireGit())));
+            String currentHead = head(requireGit());
+            TemplateDocument document;
+            try {
+                document = readDocument(templateKey, channel, locale, currentHead,
+                        findVersionForCommit(templateKey, channel, locale, currentHead));
+            } catch (NotificationException exception) {
+                if (!"TEMPLATE_NOT_FOUND".equals(exception.getErrorCode())) throw exception;
+                document = readLegacyDocument(templateKey, channel, locale, currentHead);
+            }
             if (document.status() != TemplateStatus.PUBLISHED) {
                 throw new NotificationException("TEMPLATE_NOT_PUBLISHED",
                         "Only published templates may be used for delivery", HttpStatus.NOT_FOUND);
@@ -258,15 +325,25 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             checkoutPublished();
             String currentHead = head(requireGit());
             List<TemplateSummary> summaries = new ArrayList<>();
+            Set<String> nativeTemplates = new HashSet<>();
             for (Path manifestPath : manifestPaths()) {
                 Manifest manifest = readManifest(manifestPath.getParent());
                 TemplateDocument document = readDocument(manifest.templateKey(), manifest.channel(),
                         manifest.locale(), currentHead,
                         findVersionForCommit(manifest.templateKey(), manifest.channel(), manifest.locale(), currentHead));
+                nativeTemplates.add(templateIdentity(
+                        document.templateKey(), document.channel(), document.locale()));
                 if (matches(document, criteria)) {
-                    summaries.add(new TemplateSummary(document.templateKey(), document.displayName(),
-                            document.category(), document.channel(), document.locale(), document.status(),
-                            document.version(), document.commitSha(), document.committedAt()));
+                    summaries.add(summary(document));
+                }
+            }
+            for (Path legacyPath : legacyTemplatePaths()) {
+                TemplateDocument document = readLegacyEmailDocument(
+                        legacyTemplateKey(legacyPath), legacyLocale(legacyPath), currentHead, legacyPath);
+                if (!nativeTemplates.contains(templateIdentity(
+                        document.templateKey(), document.channel(), document.locale()))
+                        && matches(document, criteria)) {
+                    summaries.add(summary(document));
                 }
             }
             summaries.sort(Comparator.comparing(TemplateSummary::templateKey)
@@ -466,7 +543,10 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             if (git == null) {
                 return new RegistryHealth(false, "JGit", publishedBranch, null, initializationError);
             }
-            return new RegistryHealth(true, "JGit", publishedBranch, head(git), "Template registry is available");
+            String message = lastRefreshError == null
+                    ? "Template registry is available"
+                    : "Template registry is available; last automatic refresh failed: " + lastRefreshError;
+            return new RegistryHealth(true, "JGit", publishedBranch, head(git), message);
         } catch (Exception exception) {
             return new RegistryHealth(false, "JGit", publishedBranch, null, safeMessage(exception));
         } finally {
@@ -547,6 +627,220 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                 manifest.variablesSchema(), manifest.sampleData(),
                 read(directory.resolve(SUBJECT)), read(directory.resolve(HTML)), read(directory.resolve(TEXT)),
                 commitSha, version, commit.getCommitterIdent().getWhenAsInstant());
+    }
+
+    private TemplateDocument readLegacyDocument(
+            String templateKey, Channel channel, String locale, String commitSha) throws Exception {
+        Path path = findLegacyEmailPath(templateKey, locale);
+        if (channel == Channel.EMAIL) {
+            return readLegacyEmailDocument(templateKey, locale, commitSha, path);
+        }
+        if (channel == Channel.IN_APP || channel == Channel.WEB_PUSH) {
+            return readLegacyCompactDocument(templateKey, channel, locale, commitSha, path);
+        }
+        throw new NotificationException("TEMPLATE_NOT_FOUND",
+                "Template " + templateKey + "/" + channel + "/" + locale + " was not found",
+                HttpStatus.NOT_FOUND);
+    }
+
+    private TemplateDocument readLegacyEmailDocument(
+            String templateKey, String locale, String commitSha, Path path) throws Exception {
+        String html = read(path);
+        String subject = legacySubject(html, displayName(templateKey));
+        RevCommit commit = parseCommit(ObjectId.fromString(commitSha));
+        return new TemplateDocument(
+                templateKey,
+                displayName(templateKey),
+                "Git email template: " + workingDirectory.relativize(path).toString().replace('\\', '/'),
+                legacyCategory(path),
+                Channel.EMAIL,
+                locale,
+                TemplateStatus.PUBLISHED,
+                legacyVariables(html),
+                Map.of(),
+                subject,
+                html,
+                legacyPlainText(html),
+                commitSha,
+                null,
+                commit.getCommitterIdent().getWhenAsInstant());
+    }
+
+    private TemplateDocument readLegacyCompactDocument(
+            String templateKey,
+            Channel channel,
+            String locale,
+            String commitSha,
+            Path path) throws Exception {
+        String html = read(path);
+        String subject = legacySubject(html, displayName(templateKey));
+        String text = legacySummaryText(html, subject);
+        RevCommit commit = parseCommit(ObjectId.fromString(commitSha));
+        return new TemplateDocument(
+                templateKey,
+                displayName(templateKey),
+                "Compact channel content derived from Git email template: "
+                        + workingDirectory.relativize(path).toString().replace('\\', '/'),
+                legacyCategory(path),
+                channel,
+                locale,
+                TemplateStatus.PUBLISHED,
+                legacyVariables(html),
+                Map.of(),
+                subject,
+                "<p>" + text + "</p>",
+                text,
+                commitSha,
+                null,
+                commit.getCommitterIdent().getWhenAsInstant());
+    }
+
+    private Path findLegacyEmailPath(String templateKey, String locale) throws IOException {
+        if (locale == null || !locale.matches("[a-z]{2}-[A-Z]{2}")) {
+            throw new NotificationException("INVALID_TEMPLATE_LOCALE",
+                    "Locale must use language-REGION format", HttpStatus.BAD_REQUEST);
+        }
+        List<String> languages = new ArrayList<>();
+        languages.add(locale.substring(0, 2).toLowerCase(Locale.ROOT));
+        for (String fallback : List.of("vi", "en")) {
+            if (!languages.contains(fallback)) languages.add(fallback);
+        }
+        for (String language : languages) {
+            Path localeDirectory = safePath(workingDirectory.resolve("email").resolve(language));
+            Path match = findLegacyEmailPath(templateKey, localeDirectory);
+            if (match != null) return match;
+        }
+        throw new NotificationException("TEMPLATE_NOT_FOUND",
+                "Git email template " + templateKey + "/" + locale + " was not found",
+                HttpStatus.NOT_FOUND);
+    }
+
+    private Path findLegacyEmailPath(String templateKey, Path localeDirectory) throws IOException {
+        if (!Files.isDirectory(localeDirectory, LinkOption.NOFOLLOW_LINKS)) return null;
+        String alias = LEGACY_TEMPLATE_ALIASES.get(templateKey);
+        if (alias != null) {
+            Path aliased = safePath(localeDirectory.resolve(alias));
+            if (Files.isRegularFile(aliased, LinkOption.NOFOLLOW_LINKS)) return aliased;
+        }
+        String fileName = templateKey.toLowerCase(Locale.ROOT) + ".html";
+        try (Stream<Path> paths = Files.walk(localeDirectory)) {
+            return paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .filter(path -> fileName.equals(path.getFileName().toString()))
+                    .findFirst()
+                    .orElse(null);
+        }
+    }
+
+    private List<Path> legacyTemplatePaths() throws IOException {
+        Path emailDirectory = safePath(workingDirectory.resolve("email"));
+        if (!Files.isDirectory(emailDirectory, LinkOption.NOFOLLOW_LINKS)) return List.of();
+        try (Stream<Path> paths = Files.walk(emailDirectory)) {
+            return paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .filter(path -> path.getFileName().toString().endsWith(".html"))
+                    .toList();
+        }
+    }
+
+    private String legacyTemplateKey(Path path) {
+        String fileName = path.getFileName().toString();
+        return fileName.substring(0, fileName.length() - ".html".length())
+                .toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z0-9]+", "_");
+    }
+
+    private String legacyLocale(Path path) {
+        Path relative = workingDirectory.relativize(path);
+        if (relative.getNameCount() < 3 || !"email".equals(relative.getName(0).toString())) {
+            throw new NotificationException("GIT_PATH_REJECTED",
+                    "Legacy template path is invalid", HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+        return switch (relative.getName(1).toString().toLowerCase(Locale.ROOT)) {
+            case "vi" -> "vi-VN";
+            case "en" -> "en-US";
+            default -> throw new NotificationException("INVALID_TEMPLATE_LOCALE",
+                    "Unsupported legacy template locale", HttpStatus.UNPROCESSABLE_ENTITY);
+        };
+    }
+
+    private Category legacyCategory(Path path) {
+        Path relative = workingDirectory.relativize(path);
+        String domain = relative.getNameCount() >= 4
+                ? relative.getName(relative.getNameCount() - 2).toString().toLowerCase(Locale.ROOT)
+                : "";
+        return switch (domain) {
+            case "auth" -> Category.SECURITY;
+            case "promotion", "membership" -> Category.MARKETING;
+            case "system" -> Category.OPERATIONAL;
+            default -> Category.TRANSACTIONAL;
+        };
+    }
+
+    private Map<String, VariableDefinition> legacyVariables(String html) {
+        Map<String, VariableDefinition> variables = new LinkedHashMap<>();
+        Matcher matcher = LEGACY_EXPRESSION.matcher(html);
+        while (matcher.find()) {
+            variables.putIfAbsent(matcher.group(1), new VariableDefinition("string", false));
+        }
+        return Map.copyOf(variables);
+    }
+
+    private String legacySubject(String html, String fallback) {
+        Matcher matcher = HTML_TITLE.matcher(html);
+        if (!matcher.find()) return fallback;
+        String subject = HtmlUtils.htmlUnescape(matcher.group(1).replaceAll("\\s+", " ").trim());
+        return subject.isBlank() ? fallback : subject;
+    }
+
+    private String legacySummaryText(String html, String fallback) {
+        List<String> parts = new ArrayList<>();
+        Matcher heading = FIRST_HEADING.matcher(html);
+        if (heading.find()) {
+            String text = legacyTextFragment(heading.group(1));
+            if (!text.isBlank()) parts.add(text);
+        }
+        Matcher paragraph = FIRST_PARAGRAPH.matcher(html);
+        if (paragraph.find()) {
+            String text = legacyTextFragment(paragraph.group(1));
+            if (!text.isBlank() && !parts.contains(text)) parts.add(text);
+        }
+        return parts.isEmpty() ? fallback : String.join("\n\n", parts);
+    }
+
+    private String legacyTextFragment(String html) {
+        return HtmlUtils.htmlUnescape(html.replaceAll("(?s)<[^>]+>", " "))
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private String legacyPlainText(String html) {
+        String text = html
+                .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
+                .replaceAll("(?is)<script[^>]*>.*?</script>", " ")
+                .replaceAll("(?is)<!--.*?-->", " ")
+                .replaceAll("(?i)<br\\s*/?>|</p>|</div>|</tr>|</h[1-6]>", "\n")
+                .replaceAll("(?s)<[^>]+>", " ");
+        return HtmlUtils.htmlUnescape(text)
+                .replace("\r", "")
+                .replaceAll("[\\t ]+", " ")
+                .replaceAll(" *\\n *", "\n")
+                .replaceAll("\\n{3,}", "\n\n")
+                .trim();
+    }
+
+    private String displayName(String templateKey) {
+        String lower = templateKey.toLowerCase(Locale.ROOT).replace('_', ' ');
+        if (lower.isBlank()) return templateKey;
+        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+    }
+
+    private String templateIdentity(String templateKey, Channel channel, String locale) {
+        return templateKey + "|" + channel + "|" + locale;
+    }
+
+    private TemplateSummary summary(TemplateDocument document) {
+        return new TemplateSummary(document.templateKey(), document.displayName(),
+                document.category(), document.channel(), document.locale(), document.status(),
+                document.version(), document.commitSha(), document.committedAt());
     }
 
     private Path findTemplateDirectory(String templateKey, Channel channel, String locale) throws IOException {
@@ -768,6 +1062,58 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         if (git != null && remoteUri != null && !remoteUri.isBlank()) {
             git.fetch().setCredentialsProvider(credentials()).setTimeout(fetchTimeoutSeconds).call();
         }
+    }
+
+    private String fastForwardPublishedBranch() throws Exception {
+        Git active = requireGit();
+        if (!active.status().call().isClean()) {
+            throw new IllegalStateException(
+                    "Template registry has local changes; automatic refresh was skipped");
+        }
+
+        fetch();
+        ObjectId remoteHead = active.getRepository().resolve(
+                Constants.R_REMOTES + "origin/" + publishedBranch);
+        ObjectId localHead = active.getRepository().resolve(
+                Constants.R_HEADS + publishedBranch);
+        if (remoteHead == null) {
+            throw new IllegalStateException(
+                    "Remote branch origin/" + publishedBranch + " was not found");
+        }
+        if (localHead == null) {
+            throw new IllegalStateException(
+                    "Local published branch " + publishedBranch + " was not found");
+        }
+        if (localHead.equals(remoteHead)) {
+            return null;
+        }
+
+        try (RevWalk walk = new RevWalk(active.getRepository())) {
+            RevCommit localCommit = walk.parseCommit(localHead);
+            RevCommit remoteCommit = walk.parseCommit(remoteHead);
+            if (!walk.isMergedInto(localCommit, remoteCommit)) {
+                if (walk.isMergedInto(remoteCommit, localCommit)) {
+                    log.debug("Local template branch {} is ahead of origin/{}; refresh skipped",
+                            publishedBranch, publishedBranch);
+                    return null;
+                }
+                throw new IllegalStateException(
+                        "Local and remote template branches have diverged; automatic refresh was skipped");
+            }
+        }
+
+        checkoutPublished();
+        MergeResult result = active.merge()
+                .include(remoteHead)
+                .setFastForward(MergeCommand.FastForwardMode.FF_ONLY)
+                .call();
+        if (!result.getMergeStatus().isSuccessful()
+                || !remoteHead.equals(active.getRepository().resolve(
+                        Constants.R_HEADS + publishedBranch))) {
+            throw new IllegalStateException(
+                    "Unable to fast-forward template branch: " + result.getMergeStatus());
+        }
+        return remoteHead.getName();
     }
 
     private void push() throws Exception {

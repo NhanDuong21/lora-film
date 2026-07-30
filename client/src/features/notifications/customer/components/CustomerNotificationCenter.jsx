@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bell,
@@ -48,6 +49,7 @@ const asList = value => Array.isArray(value)
 const isTicketNotification = item => (
   item?.notificationType === 'TICKET_PURCHASED'
   || item?.notificationType === 'TICKET_ISSUED'
+  || item?.notificationType === 'BOOKING_CONFIRMED'
 );
 
 function TicketDetails({ data }) {
@@ -231,7 +233,7 @@ export default function CustomerNotificationCenter() {
         // Opening the related booking is still useful if marking read fails.
       }
     }
-    if (item.actionUrl?.startsWith('/')) {
+    if (item.actionUrl?.startsWith('/') && !item.actionUrl.startsWith('//')) {
       navigate(item.actionUrl);
     }
   };

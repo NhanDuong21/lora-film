@@ -34,6 +34,7 @@ public class InAppNotificationSender implements NotificationChannelSender {
         item.setBody(notification.textContent());
         item.setCategory(notification.category());
         item.setDeepLink(notification.deepLink());
+        item.setExpiresAt(notification.expiresAt());
         InAppNotification saved = repository.save(item);
         return DeliveryResult.success("in-app", saved.getPublicId());
     }
