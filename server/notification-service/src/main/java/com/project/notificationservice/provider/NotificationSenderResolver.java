@@ -1,38 +1,35 @@
 package com.project.notificationservice.provider;
 
-import com.project.notificationservice.enums.NotificationChannel;
-import com.project.notificationservice.provider.config.NotificationProviderProperties;
-import com.project.notificationservice.provider.email.GmailEmailSender;
-import com.project.notificationservice.provider.email.MockEmailSender;
-import com.project.notificationservice.provider.inapp.InAppNotificationSender;
+import com.project.notificationservice.domain.NotificationTypes.Channel;
+import com.project.notificationservice.exception.NotificationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 
 @Component
 public class NotificationSenderResolver {
 
-    private final MockEmailSender mockEmailSender;
-    private final GmailEmailSender gmailEmailSender;
-    private final InAppNotificationSender inAppNotificationSender;
-    private final NotificationProviderProperties properties;
+    private final Map<Channel, NotificationChannelSender> senders;
 
-    public NotificationSenderResolver(MockEmailSender mockEmailSender,
-                                      GmailEmailSender gmailEmailSender,
-                                      InAppNotificationSender inAppNotificationSender,
-                                      NotificationProviderProperties properties) {
-        this.mockEmailSender = mockEmailSender;
-        this.gmailEmailSender = gmailEmailSender;
-        this.inAppNotificationSender = inAppNotificationSender;
-        this.properties = properties;
+    public NotificationSenderResolver(List<NotificationChannelSender> values) {
+        EnumMap<Channel, NotificationChannelSender> mapped = new EnumMap<>(Channel.class);
+        for (NotificationChannelSender sender : values) {
+            if (mapped.put(sender.supportedChannel(), sender) != null) {
+                throw new IllegalStateException("Duplicate sender for " + sender.supportedChannel());
+            }
+        }
+        this.senders = Map.copyOf(mapped);
     }
 
-    public NotificationSender resolve(NotificationChannel channel) {
-        if (channel == null) {
-            return null;
+    public NotificationChannelSender resolve(Channel channel) {
+        NotificationChannelSender sender = senders.get(channel);
+        if (sender == null) {
+            throw new NotificationException("CHANNEL_NOT_CONFIGURED",
+                    "No sender is configured for " + channel, HttpStatus.SERVICE_UNAVAILABLE);
         }
-        return switch (channel) {
-            case EMAIL -> "gmail".equalsIgnoreCase(properties.getEmail().getProvider()) ? gmailEmailSender : mockEmailSender;
-            case IN_APP -> inAppNotificationSender;
-            default -> null;
-        };
+        return sender;
     }
 }
