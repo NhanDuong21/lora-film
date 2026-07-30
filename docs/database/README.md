@@ -11,7 +11,9 @@ Thư mục này lưu trữ toàn bộ các tệp tin cấu trúc mã nguồn SQL
     * payment-service-schema.sql: Schema lưu vết giao dịch tài chính, lịch sử đối soát dòng tiền.
     * promotion-service-schema.sql: Schema phân hệ chiến dịch và lịch sử sử dụng mã giảm giá.
     * score-service-schema.sql: Schema tích điểm thưởng và phân hạng thành viên khách hàng.
-    * notification-service-schema.sql: Schema lưu cấu hình mẫu tin và nhật ký trạng thái gửi tin.
+    * Notification service dùng một file duy nhất tại
+      `server/notification-service/deployment/database/notification-schema.sql`;
+      database chỉ lưu dữ liệu vận hành, không lưu nội dung template.
     * analytics-service-schema.sql: Kho lưu trữ đệm số liệu tổng hợp doanh thu phục vụ báo cáo Dashboard.
 
 ## Nguyên Tắc Thiết Kế Sống Còn (Crucial Principles)
