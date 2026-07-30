@@ -96,12 +96,17 @@ public class JwtFilter extends OncePerRequestFilter {
                         principal, null, authorities);
  
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                org.slf4j.MDC.put("userId", principal);
             }
         } catch (Exception ex) {
             // Do nothing, just proceed without authentication
         }
  
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            org.slf4j.MDC.remove("userId");
+        }
     }
  
     private String getJwtFromRequest(HttpServletRequest request) {

@@ -41,11 +41,24 @@ public class ScoreControllerIntegrationTest {
  
     @Autowired
     private UserScoreRepository userScoreRepository;
+
+    @Autowired
+    private com.project.scoreservice.repository.ScoreHistoryRepository scoreHistoryRepository;
+
+    @Autowired
+    private com.project.scoreservice.repository.PointExpirationBucketRepository pointExpirationBucketRepository;
+
+    @Autowired
+    private com.project.scoreservice.repository.MembershipTierHistoryRepository membershipTierHistoryRepository;
  
     @BeforeEach
     void setUp() {
         // Clean up user scores to avoid side-effects
+        pointExpirationBucketRepository.deleteAll();
+        membershipTierHistoryRepository.deleteAll();
+        scoreHistoryRepository.deleteAll();
         userScoreRepository.deleteAll();
+
  
         // Retrieve default SILVER tier seeded by the PostConstruct block in MembershipTierServiceImpl
         MembershipTier silverTier = membershipTierRepository.findByTierName("SILVER")

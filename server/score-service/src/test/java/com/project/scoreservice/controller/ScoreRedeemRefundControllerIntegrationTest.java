@@ -39,10 +39,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Disabled("Out of scope for Phase 2")
 public class ScoreRedeemRefundControllerIntegrationTest {
-/*
     @Autowired
+
     private MockMvc mockMvc;
 
     @Autowired
@@ -57,6 +56,12 @@ public class ScoreRedeemRefundControllerIntegrationTest {
     @Autowired
     private ScoreHistoryRepository scoreHistoryRepository;
 
+    @Autowired
+    private com.project.scoreservice.repository.PointExpirationBucketRepository pointExpirationBucketRepository;
+
+    @Autowired
+    private com.project.scoreservice.repository.MembershipTierHistoryRepository membershipTierHistoryRepository;
+
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
     private static final String VALID_INTERNAL_TOKEN = "secret-internal-token";
 
@@ -64,8 +69,11 @@ public class ScoreRedeemRefundControllerIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        pointExpirationBucketRepository.deleteAll();
+        membershipTierHistoryRepository.deleteAll();
         scoreHistoryRepository.deleteAll();
         userScoreRepository.deleteAll();
+
         silverTier = membershipTierRepository.findAll().stream()
                 .filter(t -> t.getTierName().equals("SILVER"))
                 .findFirst()
@@ -589,5 +597,5 @@ public class ScoreRedeemRefundControllerIntegrationTest {
         UserScore updated = userScoreRepository.findByUserId(userId).orElseThrow();
         assertEquals(100, updated.getCurrentPoints());
     }
-*/
 }
+

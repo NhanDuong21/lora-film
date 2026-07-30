@@ -20,9 +20,15 @@ import java.time.LocalDateTime;
 public class AdminScoreController {
 
     private final AdminScoreQueryService adminScoreQueryService;
+    private final com.project.scoreservice.service.ScoreService scoreService;
+    private final com.project.scoreservice.service.AdminScoreOperationService adminScoreOperationService;
 
-    public AdminScoreController(AdminScoreQueryService adminScoreQueryService) {
+    public AdminScoreController(AdminScoreQueryService adminScoreQueryService,
+                                com.project.scoreservice.service.ScoreService scoreService,
+                                com.project.scoreservice.service.AdminScoreOperationService adminScoreOperationService) {
         this.adminScoreQueryService = adminScoreQueryService;
+        this.scoreService = scoreService;
+        this.adminScoreOperationService = adminScoreOperationService;
     }
 
     @GetMapping("/{userId}")
@@ -51,4 +57,52 @@ public class AdminScoreController {
         PageResponse<AdminScoreHistoryItemResponse> response = new PageResponse<>(springPage);
         return ResponseEntity.ok(ApiResponse.success("Score history retrieved successfully", response));
     }
+
+    @GetMapping("/{userId}/expiring")
+    @Operation(summary = "Get user expiring points", description = "Retrieve expiring point buckets of a user for admin auditing.")
+    public ResponseEntity<ApiResponse<java.util.List<ExpiringPointResponse>>> getUserExpiringPoints(@PathVariable Long userId) {
+        java.util.List<ExpiringPointResponse> response = scoreService.getExpiringPoints(userId);
+        return ResponseEntity.ok(ApiResponse.success("Expiring points retrieved successfully", response));
+    }
+
+    @GetMapping("/{userId}/tier-history")
+    @Operation(summary = "Get user tier history", description = "Retrieve membership tier history of a user for admin auditing.")
+    public ResponseEntity<ApiResponse<java.util.List<TierHistoryItemResponse>>> getUserTierHistory(@PathVariable Long userId) {
+        java.util.List<TierHistoryItemResponse> response = scoreService.getTierHistory(userId);
+        return ResponseEntity.ok(ApiResponse.success("Tier history retrieved successfully", response));
+    }
+
+    @PostMapping("/{userId}/adjustments")
+    @Operation(summary = "Adjust user points", description = "Manually add or deduct points for a user.")
+    public ResponseEntity<ApiResponse<AdminAdjustmentResponse>> adjustUserScore(
+            @PathVariable Long userId,
+            @RequestBody ScoreAdjustmentRequest request,
+            @RequestHeader(value = "X-Operator-Id", required = false) String operatorId,
+            @RequestHeader(value = "X-Client-Ip", required = false, defaultValue = "127.0.0.1") String clientIp) {
+        AdminAdjustmentResponse response = adminScoreOperationService.adjustScore(userId, request, operatorId, clientIp);
+        return ResponseEntity.status(Boolean.TRUE.equals(response.getIdempotent()) ? 200 : 201)
+                .body(ApiResponse.success("Score adjusted successfully", response));
+    }
+
+    @PostMapping("/{userId}/adjustments/reverse")
+    @Operation(summary = "Reverse an adjustment", description = "Reverse a previous adjustment transaction.")
+    public ResponseEntity<ApiResponse<AdminAdjustmentResponse>> reverseUserAdjustment(
+            @PathVariable Long userId,
+            @RequestBody ReverseAdjustmentRequest request,
+            @RequestHeader(value = "X-Operator-Id", required = false) String operatorId,
+            @RequestHeader(value = "X-Client-Ip", required = false, defaultValue = "127.0.0.1") String clientIp) {
+        AdminAdjustmentResponse response = adminScoreOperationService.reverseAdjustment(userId, request, operatorId, clientIp);
+        return ResponseEntity.status(201).body(ApiResponse.success("Adjustment reversed successfully", response));
+    }
+
+    @PostMapping("/{userId}/recalculate-tier")
+    @Operation(summary = "Recalculate user tier", description = "Recalculate membership tier for a user.")
+    public ResponseEntity<ApiResponse<AdminAdjustmentResponse>> recalculateTier(
+            @PathVariable Long userId,
+            @RequestHeader(value = "X-Operator-Id", required = false) String operatorId,
+            @RequestHeader(value = "X-Client-Ip", required = false, defaultValue = "127.0.0.1") String clientIp) {
+        AdminAdjustmentResponse response = adminScoreOperationService.recalculateTier(userId, operatorId, clientIp);
+        return ResponseEntity.ok(ApiResponse.success("Tier recalculated successfully", response));
+    }
 }
+
