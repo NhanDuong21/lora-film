@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Bell,
   ChevronDown,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { getCinemas } from '@/features/catalog/customer/services/movieService';
 
 const dropdownPanelClass =
   'overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/95 p-2 shadow-[0_20px_55px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl';
@@ -22,12 +23,6 @@ const dropdownItemClass =
 
 const focusRingClass =
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950';
-
-const cinemaItems = [
-  { label: 'Lora Nguyễn Du', path: '/cinema/lora-nguyen-du' },
-  { label: 'Lora Thảo Điền', path: '/cinema/lora-thao-dien' },
-  { label: 'Lora Royal City', path: '/cinema/lora-royal-city' }
-];
 
 function NavDropdown({
   id,
@@ -90,10 +85,27 @@ export default function Header() {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [infoModalContent, setInfoModalContent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [cinemas, setCinemas] = useState([]);
+  const [cinemaMenuLoading, setCinemaMenuLoading] = useState(true);
+  const [cinemaMenuError, setCinemaMenuError] = useState('');
 
   const normalizedRole = (userRole || '').replace(/^ROLE_/, '');
   const isCustomer = normalizedRole === 'CUSTOMER';
   const brandPath = isAuthenticated && normalizedRole === 'ADMIN' ? '/admin' : '/';
+
+  const loadCinemaMenu = useCallback(async () => {
+    setCinemaMenuLoading(true);
+    setCinemaMenuError('');
+    try {
+      const cinemaPage = await getCinemas({ page: 0, size: 100 });
+      setCinemas(Array.isArray(cinemaPage?.data) ? cinemaPage.data : []);
+    } catch {
+      setCinemas([]);
+      setCinemaMenuError('Không thể tải danh sách rạp');
+    } finally {
+      setCinemaMenuLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const closeOpenMenus = event => {
@@ -120,6 +132,11 @@ export default function Header() {
       document.removeEventListener('keydown', closeOnEscape);
     };
   }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadCinemaMenu();
+  }, [loadCinemaMenu]);
 
   const closeNavigation = () => {
     setActiveDropdown(null);
@@ -282,17 +299,36 @@ export default function Header() {
               onClose={() => setActiveDropdown(null)}
               onToggle={toggleDropdown}
             >
-              {cinemaItems.map(item => (
+              {cinemaMenuLoading ? (
+                <div role="status" className="px-4 py-3 text-sm font-semibold text-zinc-500">
+                  Đang tải danh sách rạp...
+                </div>
+              ) : cinemaMenuError ? (
                 <button
-                  key={item.path}
                   type="button"
                   role="menuitem"
-                  onClick={() => navigateFromHeader(item.path)}
-                  className={dropdownItemClass}
+                  onClick={loadCinemaMenu}
+                  className={`${dropdownItemClass} text-amber-400`}
                 >
-                  {item.label}
+                  Tải lại danh sách rạp
                 </button>
-              ))}
+              ) : cinemas.length > 0 ? (
+                cinemas.map(cinema => (
+                  <button
+                    key={cinema.publicId}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => navigateFromHeader(`/cinema/${cinema.slug || cinema.publicId}`)}
+                    className={dropdownItemClass}
+                  >
+                    {cinema.name}
+                  </button>
+                ))
+              ) : (
+                <div className="px-4 py-3 text-sm font-semibold text-zinc-500">
+                  Chưa có rạp đang hoạt động
+                </div>
+              )}
             </NavDropdown>
 
             <button
@@ -570,16 +606,34 @@ export default function Header() {
                   >
                     Rạp/Giá Vé
                   </h2>
-                  {cinemaItems.map(item => (
+                  {cinemaMenuLoading ? (
+                    <p className="px-4 py-3 text-sm font-semibold text-zinc-500">
+                      Đang tải danh sách rạp...
+                    </p>
+                  ) : cinemaMenuError ? (
                     <button
-                      key={item.path}
                       type="button"
-                      onClick={() => navigateFromHeader(item.path)}
-                      className={dropdownItemClass}
+                      onClick={loadCinemaMenu}
+                      className={`${dropdownItemClass} text-amber-400`}
                     >
-                      {item.label}
+                      Tải lại danh sách rạp
                     </button>
-                  ))}
+                  ) : cinemas.length > 0 ? (
+                    cinemas.map(cinema => (
+                      <button
+                        key={cinema.publicId}
+                        type="button"
+                        onClick={() => navigateFromHeader(`/cinema/${cinema.slug || cinema.publicId}`)}
+                        className={dropdownItemClass}
+                      >
+                        {cinema.name}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-4 py-3 text-sm font-semibold text-zinc-500">
+                      Chưa có rạp đang hoạt động
+                    </p>
+                  )}
                 </section>
 
                 <section aria-labelledby="mobile-more-heading">

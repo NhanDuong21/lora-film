@@ -1,76 +1,38 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-// eslint-disable-next-line no-unused-vars
-import { MapPin, Phone, Clock, Star, Film, ChevronLeft, ChevronRight, HelpCircle, AlertTriangle } from 'lucide-react';
-import { getCinemaBySlug, getShowtimes, getMovies } from '@/features/catalog/customer/services/movieService';
+import { MapPin, Phone, Clock, Film, ChevronLeft, ChevronRight, HelpCircle, AlertTriangle, ExternalLink } from 'lucide-react';
+import {
+  getCinemaBySlug,
+  getMovies,
+  getSeatLayout,
+  getShowtimes
+} from '@/features/catalog/customer/services/movieService';
 import { seatSelectionPath } from '@/features/catalog/customer/utils/customerMovieFlow';
 import { getCustomerErrorMessage } from '@/utils/customerErrorMessages';
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
-
-const CINEMA_STATIC_DETAILS = {
-  'lora-nguyen-du': {
-    hotline: "1900 6017",
-    hours: "08:00 - 23:59",
-    mapUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.4851772635955!2d106.69342777573617!3d10.774105359235887!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3919485177263595%3A0x1c8b368beeeae3df!2zMTE2IE5ndXnhu4VuIER1LCBC4bq_biBUaMOgbmgsIFF14bqtbiAxLCBUaMOgbmggcGjhu5EgSOG7kyBDaMOtIE1pbmgsIFZpZXRuYW0!5e0!3m2!1svi!2s!4v1717000000000!5m2!1svi!2s",
-    banners: [
-      "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1513106580091-1d82408b8cd6?w=1200&auto=format&fit=crop&q=80"
-    ]
-  },
-  'lora-thao-dien': {
-    hotline: "1900 6018",
-    hours: "08:30 - 23:59",
-    mapUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.203799650058!2d106.75019057573653!3d10.795764058836566!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752613d5089c25%3A0xfcf2d3fb89faef!2zVmluY29tIE1lZ2EgTWFsbCBUaOG6o28gxJBp4buBbg!5e0!3m2!1svi!2s!4v1717000000001!5m2!1svi!2s",
-    banners: [
-      "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1585647347384-2593bc35786b?w=1200&auto=format&fit=crop&q=80"
-    ]
-  },
-  'lora-royal-city': {
-    hotline: "1900 6019",
-    hours: "09:00 - 23:59",
-    mapUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.8967431526435!2d105.81299907602517!3d21.000780280642954!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135ac9ad89b6b7d%3A0xbcfad5ffb0f49b14!2zVmluY29tIE1lZ2EgTWFsbCBUaOG6o28gxJBp4buBbg!5e0!3m2!1svi!2s!4v1717000000002!5m2!1svi!2s",
-    banners: [
-      "https://images.unsplash.com/photo-1513106580091-1d82408b8cd6?w=1200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1485846234645-a62644f84728?w=1200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1200&auto=format&fit=crop&q=80"
-    ]
-  }
-};
-
-const TICKET_PRICES = [
-  { type: "Ghế Thường (2D Digital)", price: "80,000đ" },
-  { type: "Ghế VIP", price: "110,000đ" },
-  { type: "Ghế Đôi (Couple Sweetheart)", price: "220,000đ" }
-];
-
-const ADDONS = [
-  { name: "Phụ thu suất chiếu Cuối Tuần (Thứ 6 - Chủ Nhật)", price: "+10,000đ / vé" },
-  { name: "Phụ thu công nghệ chiếu Đặc Biệt / IMAX 3D", price: "+30,000đ / vé" }
-];
+import {
+  buildCinemaMap,
+  DAY_LABELS,
+  formatOperatingHour,
+  formatTicketPrice,
+  getCinemaImages,
+  getCurrentOperatingHour,
+  summarizeTicketPrices
+} from '@/features/facilities/customer/utils/cinemaPresentation';
 
 export default function CinemaDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Resolve old numeric indices to new slugs
-  const resolvedSlug = useMemo(() => {
-    if (id === '1') return 'lora-nguyen-du';
-    if (id === '2') return 'lora-thao-dien';
-    if (id === '3') return 'lora-royal-city';
-    return id;
-  }, [id]);
-
-  const staticDetails = useMemo(() => {
-    return CINEMA_STATIC_DETAILS[resolvedSlug] || CINEMA_STATIC_DETAILS['lora-nguyen-du'];
-  }, [resolvedSlug]);
-
   const [cinema, setCinema] = useState(null);
   const [moviesMap, setMoviesMap] = useState({});
   const [showtimes, setShowtimes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showtimesLoading, setShowtimesLoading] = useState(false);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [ticketPrices, setTicketPrices] = useState([]);
+  const [priceError, setPriceError] = useState('');
+  const [pricedShowtimeCount, setPricedShowtimeCount] = useState(0);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   
@@ -97,22 +59,31 @@ export default function CinemaDetailPage() {
   }, []);
 
   const activeDate = days[activeDateIndex];
+  const cinemaImages = useMemo(() => getCinemaImages(cinema), [cinema]);
+  const currentOperatingHour = useMemo(() => getCurrentOperatingHour(cinema), [cinema]);
+  const cinemaMap = useMemo(() => buildCinemaMap(cinema), [cinema]);
+  const operatingHours = useMemo(
+    () => [...(cinema?.operatingHours || [])].sort(
+      (left, right) => Number(left.dayOfWeek) - Number(right.dayOfWeek)
+    ),
+    [cinema]
+  );
 
   // Carousel timer effect
   useEffect(() => {
-    if (!staticDetails || !staticDetails.banners) return;
+    if (cinemaImages.length <= 1) return undefined;
     const timer = setInterval(() => {
-      setActiveSlide(prev => (prev + 1) % staticDetails.banners.length);
+      setActiveSlide(prev => (prev + 1) % cinemaImages.length);
     }, 4000);
     return () => clearInterval(timer);
-  }, [staticDetails]);
+  }, [cinemaImages]);
 
   const handlePrevSlide = () => {
-    setActiveSlide(prev => (prev - 1 + staticDetails.banners.length) % staticDetails.banners.length);
+    setActiveSlide(prev => (prev - 1 + cinemaImages.length) % cinemaImages.length);
   };
 
   const handleNextSlide = () => {
-    setActiveSlide(prev => (prev + 1) % staticDetails.banners.length);
+    setActiveSlide(prev => (prev + 1) % cinemaImages.length);
   };
 
   // Fetch all movies metadata mapping
@@ -135,21 +106,16 @@ export default function CinemaDetailPage() {
     }
   }, []);
 
-  // Fetch cinema detail & showtimes
-  const loadCinemaAndShowtimes = useCallback(async () => {
-    if (!resolvedSlug) return;
+  const loadCinema = useCallback(async () => {
+    if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      const details = await getCinemaBySlug(resolvedSlug);
+      const details = await getCinemaBySlug(id);
       setCinema(details);
-      
-      const showtimeData = await getShowtimes({
-        cinemaSlug: resolvedSlug,
-        date: activeDate.dateQuery
-      });
-      setShowtimes(showtimeData.data || showtimeData.content || []);
+      setActiveSlide(0);
     } catch (err) {
+      setCinema(null);
       setError(getCustomerErrorMessage(
         err,
         'Không thể tải thông tin cụm rạp. Vui lòng thử lại.'
@@ -157,7 +123,62 @@ export default function CinemaDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [resolvedSlug, activeDate]);
+  }, [id]);
+
+  const loadShowtimesAndPrices = useCallback(async () => {
+    if (!cinema?.slug || !activeDate?.dateQuery) return;
+
+    setShowtimesLoading(true);
+    setPriceLoading(true);
+    setPriceError('');
+    setTicketPrices([]);
+    setPricedShowtimeCount(0);
+
+    try {
+      const showtimeData = await getShowtimes({
+        cinemaSlug: cinema.slug,
+        date: activeDate.dateQuery,
+        page: 0,
+        size: 100
+      });
+      const showtimeList = showtimeData?.data || showtimeData?.content || [];
+      setShowtimes(showtimeList);
+      setShowtimesLoading(false);
+
+      if (showtimeList.length === 0) {
+        setPriceError('Chưa có suất chiếu mở bán để hiển thị giá cho ngày này.');
+        return;
+      }
+
+      const pricedShowtimes = showtimeList
+        .filter(showtime => showtime?.showtimePublicId)
+        .slice(0, 20);
+      const layoutResults = await Promise.allSettled(
+        pricedShowtimes.map(showtime => getSeatLayout(showtime.showtimePublicId))
+      );
+      const layouts = layoutResults
+        .filter(result => result.status === 'fulfilled' && result.value)
+        .map(result => result.value);
+      const priceSummary = summarizeTicketPrices(layouts);
+
+      setTicketPrices(priceSummary);
+      setPricedShowtimeCount(layouts.length);
+      if (priceSummary.length === 0) {
+        setPriceError('Các suất chiếu ngày này chưa có dữ liệu giá vé khả dụng.');
+      }
+    } catch (err) {
+      setShowtimes([]);
+      setPriceError('Không thể tải giá vé ở thời điểm hiện tại.');
+      setNotice({
+        title: 'Không thể tải lịch chiếu',
+        message: getCustomerErrorMessage(err, 'Lịch chiếu hiện chưa khả dụng. Vui lòng thử lại sau.'),
+        variant: 'warning'
+      });
+    } finally {
+      setShowtimesLoading(false);
+      setPriceLoading(false);
+    }
+  }, [activeDate, cinema]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -166,8 +187,13 @@ export default function CinemaDetailPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadCinemaAndShowtimes();
-  }, [loadCinemaAndShowtimes]);
+    loadCinema();
+  }, [loadCinema]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadShowtimesAndPrices();
+  }, [loadShowtimesAndPrices]);
 
   // Group showtimes by movie, then sort times chronologically
   const showtimesByMovie = useMemo(() => {
@@ -250,52 +276,79 @@ export default function CinemaDetailPage() {
       {/* ❖ TOP BANNER: Carousel */}
       <div className="w-full h-[400px] md:h-[500px] relative overflow-hidden group">
         
-        {/* Images slide */}
-        <div 
-          className="w-full h-full flex transition-transform duration-700 ease-in-out" 
-          style={{ transform: `translateX(-${activeSlide * 100}%)` }}
-        >
-          {staticDetails.banners.map((url, idx) => (
-            <div key={idx} className="w-full h-full shrink-0 relative">
-              <img src={url} alt={`Slide ${idx + 1}`} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
+        {cinemaImages.length > 0 ? (
+          <div
+            className="flex h-full w-full transition-transform duration-700 ease-in-out"
+            style={{ transform: `translateX(-${activeSlide * 100}%)` }}
+          >
+            {cinemaImages.map((media, idx) => (
+              <div key={media.publicId || media.url} className="relative h-full w-full shrink-0">
+                <img
+                  src={media.url}
+                  alt={media.title || `${cinema.name} - hình ${idx + 1}`}
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-900 via-zinc-950 to-black">
+            <div className="flex flex-col items-center gap-3 text-zinc-600">
+              <Film className="h-14 w-14" />
+              <span className="text-sm font-bold">Rạp chưa cập nhật hình ảnh</span>
             </div>
-          ))}
-        </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent" />
+          </div>
+        )}
 
-        {/* Carousel buttons */}
-        <button
-          onClick={handlePrevSlide}
-          className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-brand-orange border border-zinc-800 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all focus:outline-none cursor-pointer"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <button
-          onClick={handleNextSlide}
-          className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-brand-orange border border-zinc-800 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all focus:outline-none cursor-pointer"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
-
-        {/* Indicators */}
-        <div className="absolute bottom-32 left-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
-          {staticDetails.banners.map((_, idx) => (
+        {cinemaImages.length > 1 && (
+          <>
             <button
-              key={idx}
-              onClick={() => setActiveSlide(idx)}
-              className={`h-1.5 rounded-full transition-all duration-350 ${
-                activeSlide === idx ? 'w-6 bg-brand-orange' : 'w-1.5 bg-white/40'
-              }`}
-            />
-          ))}
-        </div>
+              type="button"
+              aria-label="Ảnh rạp trước"
+              onClick={handlePrevSlide}
+              className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-zinc-800 bg-black/60 p-3 text-white opacity-0 transition-all hover:bg-brand-orange focus:outline-none group-hover:opacity-100"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Ảnh rạp tiếp theo"
+              onClick={handleNextSlide}
+              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-zinc-800 bg-black/60 p-3 text-white opacity-0 transition-all hover:bg-brand-orange focus:outline-none group-hover:opacity-100"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+            <div className="absolute bottom-32 left-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2">
+              {cinemaImages.map((media, idx) => (
+                <button
+                  key={media.publicId || media.url}
+                  type="button"
+                  aria-label={`Xem hình rạp ${idx + 1}`}
+                  onClick={() => setActiveSlide(idx)}
+                  className={`h-1.5 rounded-full transition-all ${
+                    activeSlide === idx ? 'w-6 bg-brand-orange' : 'w-1.5 bg-white/40'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Info detail banner overlay */}
         <div className="absolute bottom-6 left-0 w-full z-15 px-6 md:px-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="text-3xl md:text-5xl font-black uppercase tracking-wider text-white drop-shadow-lg">
-              {cinema.name}
-            </h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl md:text-5xl font-black uppercase tracking-wider text-white drop-shadow-lg">
+                {cinema.name}
+              </h1>
+              {cinema.status === 'TEMPORARILY_CLOSED' && (
+                <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-300">
+                  Tạm ngưng hoạt động
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 text-zinc-300 text-xs md:text-sm drop-shadow-md">
               <MapPin className="w-4 h-4 text-brand-orange shrink-0" />
               <span>{cinema.address}</span>
@@ -304,12 +357,12 @@ export default function CinemaDetailPage() {
           <div className="flex items-center gap-6 text-xs md:text-sm text-zinc-300 bg-zinc-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-zinc-800 self-start md:self-auto">
             <div className="flex items-center gap-2">
               <Phone className="w-4 h-4 text-brand-orange" />
-              <span>Hotline: <strong>{staticDetails.hotline}</strong></span>
+              <span>Hotline: <strong>{cinema.hotline || 'Chưa cập nhật'}</strong></span>
             </div>
             <div className="h-4 w-[1px] bg-zinc-800" />
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-brand-orange" />
-              <span>{staticDetails.hours}</span>
+              <span>{formatOperatingHour(currentOperatingHour)}</span>
             </div>
           </div>
         </div>
@@ -348,39 +401,51 @@ export default function CinemaDetailPage() {
           </div>
 
           {/* Showtimes lists or empty state */}
-          {showtimesByMovie.length > 0 ? (
+          {showtimesLoading ? (
+            <div className="flex items-center justify-center gap-3 py-16 text-sm font-semibold text-zinc-500">
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-orange border-t-transparent" />
+              Đang tải lịch chiếu...
+            </div>
+          ) : showtimesByMovie.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
               {showtimesByMovie.map(({ movie, formats }) => {
                 const info = moviesMap[movie.publicId] || {
                   title: movie.title,
-                  primaryPoster: 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=600&auto=format&fit=crop&q=80',
                   ageRating: 'P',
                   genres: ['Phim']
                 };
+                const posterUrl = info.posterUrl || info.primaryPoster || movie.posterUrl;
+                const moviePath = `/movies/${movie.slug || movie.publicId}`;
+                const genreText = (info.genres || [])
+                  .map(genre => typeof genre === 'string' ? genre : genre?.name)
+                  .filter(Boolean)
+                  .join(', ');
 
                 return (
                   <div key={movie.publicId} className="bg-zinc-900 border border-zinc-850 hover:border-zinc-800 rounded-3xl p-5 shadow-2xl flex gap-5 group">
                     {/* Poster Slot */}
                     <div 
-                      onClick={() => navigate(`/movie/${movie.slug}`)}
+                      onClick={() => navigate(moviePath)}
                       className="w-24 md:w-28 aspect-[2/3] rounded-2xl overflow-hidden shrink-0 border border-zinc-800 cursor-pointer bg-zinc-950"
                     >
-                      <img 
-                        src={info.primaryPoster} 
-                        alt={movie.title} 
-                        className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=600&auto=format&fit=crop&q=80";
-                        }}
-                      />
+                      {posterUrl ? (
+                        <img
+                          src={posterUrl}
+                          alt={movie.title}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-zinc-700">
+                          <Film className="h-8 w-8" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Showtime Details */}
                     <div className="flex-grow space-y-3.5 overflow-hidden">
                       <div className="space-y-1">
                         <h3 
-                          onClick={() => navigate(`/movie/${movie.slug}`)}
+                          onClick={() => navigate(moviePath)}
                           className="text-xs font-black text-white hover:text-brand-orange transition-colors uppercase tracking-wider cursor-pointer line-clamp-1"
                         >
                           {movie.title}
@@ -390,7 +455,7 @@ export default function CinemaDetailPage() {
                             {info.ageRating || 'P'}
                           </span>
                           <span className="text-[9px] font-semibold text-zinc-500">
-                            {info.genres?.join(', ')}
+                            {genreText || 'Đang cập nhật thể loại'}
                           </span>
                         </div>
                       </div>
@@ -441,41 +506,60 @@ export default function CinemaDetailPage() {
           <div className="space-y-5">
             <div className="flex items-center gap-2 border-b border-zinc-900 pb-3">
               <Film className="w-5 h-5 text-brand-orange" />
-              <h2 className="text-base md:text-lg font-black uppercase tracking-wider text-white">Bảng Giá Vé Rạp</h2>
+              <div>
+                <h2 className="text-base md:text-lg font-black uppercase tracking-wider text-white">Bảng Giá Vé Rạp</h2>
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  Giá thực tế của các suất chiếu ngày {activeDate.date}
+                </p>
+              </div>
             </div>
 
-            <div className="bg-zinc-900 border border-zinc-850 rounded-2xl overflow-hidden shadow-xl">
-              <table className="w-full border-collapse text-xs font-semibold">
-                <thead>
-                  <tr className="bg-zinc-950 text-zinc-400 border-b border-zinc-850">
-                    <th className="text-left py-3.5 px-4 font-black uppercase tracking-wider">Loại Ghế</th>
-                    <th className="text-right py-3.5 px-4 font-black uppercase tracking-wider">Giá Vé</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-850 text-zinc-200">
-                  {TICKET_PRICES.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-zinc-950/20 transition-colors">
-                      <td className="py-3.5 px-4 font-bold text-zinc-300">{item.type}</td>
-                      <td className="text-right py-3.5 px-4 font-black text-amber-500">{item.price}</td>
+            {priceLoading ? (
+              <div className="flex min-h-44 items-center justify-center gap-3 rounded-2xl border border-zinc-850 bg-zinc-900 text-sm font-semibold text-zinc-500">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-orange border-t-transparent" />
+                Đang tổng hợp giá vé...
+              </div>
+            ) : ticketPrices.length > 0 ? (
+              <div className="overflow-hidden rounded-2xl border border-zinc-850 bg-zinc-900 shadow-xl">
+                <table className="w-full border-collapse text-xs font-semibold">
+                  <thead>
+                    <tr className="border-b border-zinc-850 bg-zinc-950 text-zinc-400">
+                      <th className="px-4 py-3.5 text-left font-black uppercase tracking-wider">Loại Ghế</th>
+                      <th className="px-4 py-3.5 text-right font-black uppercase tracking-wider">Giá Vé</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-850 text-zinc-200">
+                    {ticketPrices.map(item => (
+                      <tr key={`${item.code}-${item.currency}`} className="transition-colors hover:bg-zinc-950/20">
+                        <td className="px-4 py-3.5 font-bold text-zinc-300">
+                          {item.name}
+                          <span className="ml-2 text-[9px] font-bold uppercase text-zinc-600">{item.code}</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-black text-amber-500">
+                          {formatTicketPrice(item)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex min-h-44 flex-col items-center justify-center gap-2 rounded-2xl border border-zinc-850 bg-zinc-900/60 px-6 text-center">
+                <Film className="h-7 w-7 text-zinc-700" />
+                <p className="text-sm font-bold text-zinc-400">{priceError}</p>
+              </div>
+            )}
 
-            <div className="bg-zinc-900/40 border border-zinc-850 p-4.5 rounded-2xl space-y-2.5">
+            <div className="space-y-2.5 rounded-2xl border border-zinc-850 bg-zinc-900/40 p-4">
               <div className="flex items-center gap-1.5 text-zinc-400 text-[10px] font-black uppercase tracking-wider">
                 <HelpCircle className="w-3.5 h-3.5 text-brand-orange" />
-                <span>Quy định phụ thu & chính sách</span>
+                <span>Nguồn dữ liệu giá vé</span>
               </div>
-              <ul className="space-y-2 text-xs text-zinc-400">
-                {ADDONS.map((addon, aIdx) => (
-                  <li key={aIdx} className="flex justify-between">
-                    <span>{addon.name}</span>
-                    <strong className="text-zinc-300 font-bold">{addon.price}</strong>
-                  </li>
-                ))}
-              </ul>
+              <p className="text-xs leading-relaxed text-zinc-400">
+                Giá được lấy trực tiếp từ {pricedShowtimeCount} suất chiếu đang mở bán của rạp.
+                Nếu một loại ghế có nhiều mức giá, hệ thống hiển thị khoảng thấp nhất – cao nhất.
+                Giá cuối cùng được xác nhận khi bạn chọn suất chiếu và ghế.
+              </p>
             </div>
           </div>
 
@@ -487,22 +571,72 @@ export default function CinemaDetailPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="text-xs text-zinc-400 space-y-1 bg-zinc-900/30 border border-zinc-850 p-4 rounded-xl">
-                <p>Địa chỉ: <strong className="text-zinc-200 font-bold">{cinema.address}</strong></p>
-                <p>Hotline hỗ trợ: <strong className="text-zinc-200 font-bold">{staticDetails.hotline}</strong></p>
-                <p>Khung giờ hoạt động: <strong className="text-zinc-200 font-bold">{staticDetails.hours}</strong></p>
+              <div className="space-y-3 rounded-xl border border-zinc-850 bg-zinc-900/30 p-4 text-xs text-zinc-400">
+                {cinema.description && (
+                  <p className="border-b border-zinc-800 pb-3 leading-relaxed text-zinc-300">
+                    {cinema.description}
+                  </p>
+                )}
+                <p>Địa chỉ: <strong className="font-bold text-zinc-200">{cinema.address}</strong></p>
+                <p>Khu vực: <strong className="font-bold text-zinc-200">{[cinema.district, cinema.city].filter(Boolean).join(', ')}</strong></p>
+                <p>Hotline hỗ trợ: <strong className="font-bold text-zinc-200">{cinema.hotline || 'Chưa cập nhật'}</strong></p>
+                <p>Hôm nay: <strong className="font-bold text-zinc-200">{formatOperatingHour(currentOperatingHour)}</strong></p>
               </div>
 
-              <div className="w-full h-64 rounded-2xl overflow-hidden shadow-2xl bg-zinc-900 border border-zinc-800">
-                <iframe
-                  title={`Bản đồ ${cinema.name}`}
-                  src={staticDetails.mapUrl}
-                  className="w-full h-full border-0"
-                  allowFullScreen=""
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              </div>
+              {operatingHours.length > 0 && (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-zinc-850 bg-zinc-900/30 p-4 text-xs">
+                  {operatingHours.map(hour => (
+                    <div key={hour.dayOfWeek} className="flex items-center justify-between gap-3 border-b border-zinc-800/60 py-1.5">
+                      <span className="text-zinc-500">{DAY_LABELS[hour.dayOfWeek] || `Ngày ${hour.dayOfWeek}`}</span>
+                      <strong className={hour.isClosed ? 'text-red-400' : 'text-zinc-200'}>
+                        {formatOperatingHour(hour)}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {Array.isArray(cinema.activeAuditoriums) && cinema.activeAuditoriums.length > 0 && (
+                <div className="rounded-xl border border-zinc-850 bg-zinc-900/30 p-4">
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                    Phòng chiếu đang hoạt động
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {cinema.activeAuditoriums.map(auditorium => (
+                      <span key={auditorium.publicId} className="rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-[10px] font-bold text-zinc-300">
+                        {auditorium.name} · {auditorium.screenType}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {cinemaMap ? (
+                <>
+                  <div className="h-64 w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl">
+                    <iframe
+                      title={`Bản đồ ${cinema.name}`}
+                      src={cinemaMap.embedUrl}
+                      className="h-full w-full border-0"
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  </div>
+                  <a
+                    href={cinemaMap.externalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-orange hover:text-orange-400"
+                  >
+                    Mở bản đồ lớn
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </>
+              ) : (
+                <div className="flex h-40 items-center justify-center rounded-2xl border border-zinc-850 bg-zinc-900/50 text-sm font-semibold text-zinc-600">
+                  Rạp chưa cập nhật tọa độ bản đồ
+                </div>
+              )}
             </div>
           </div>
 
