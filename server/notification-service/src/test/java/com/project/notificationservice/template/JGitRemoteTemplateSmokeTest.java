@@ -44,6 +44,8 @@ class JGitRemoteTemplateSmokeTest {
                 "main",
                 "",
                 "",
+                "",
+                "",
                 "Test",
                 "test@example.com",
                 200_000,

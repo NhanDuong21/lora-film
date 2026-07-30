@@ -31,7 +31,12 @@ public class RouteValidator {
             "/api/customer/showtimes",
             "/api/customer/concessions",
             "/api/cinemas",
-            "/api/showtimes"
+            "/api/showtimes",
+            "/api/membership-tiers"
+    );
+    private static final Set<String> PUBLIC_PREFIXES = Set.of(
+            "/api/payments/callback",
+            "/api/payments/return"
     );
 
     public final Predicate<ServerHttpRequest> isSecured =
@@ -45,6 +50,7 @@ public class RouteValidator {
                         // rejects Socket.IO upgrades with HTTP 401.
                         && !path.startsWith("/socket.io/")
                         && !(request.getMethod() == HttpMethod.GET && isPublicGetPath(path))
+                        && !isPublicPath(path)
                         && !REGISTRATION_STATUS.matcher(path).matches()
                         && !path.startsWith("/oauth2/")
                         && !path.startsWith("/login/oauth2/")
@@ -56,6 +62,11 @@ public class RouteValidator {
 
     private static boolean isPublicGetPath(String path) {
         return PUBLIC_GET_PREFIXES.stream()
+                .anyMatch(prefix -> path.equals(prefix) || path.startsWith(prefix + "/"));
+    }
+
+    private static boolean isPublicPath(String path) {
+        return PUBLIC_PREFIXES.stream()
                 .anyMatch(prefix -> path.equals(prefix) || path.startsWith(prefix + "/"));
     }
 }
