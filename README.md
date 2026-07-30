@@ -101,6 +101,10 @@ A base local environment is available at the repository root with:
 - Zookeeper
 - Kafka
 
+Notification service itself is deliberately not packaged or run by Docker. Start it as
+a local Java process after applying the single explicit notification schema documented in
+[`server/notification-service/README.md`](server/notification-service/README.md).
+
 ### Prerequisites
 
 - Docker Desktop or Docker Engine installed
