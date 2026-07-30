@@ -23,6 +23,7 @@ import { ErrorState, LoadingState } from '@/components/common/ui/uiKit';
 import {
   acknowledgeAnalyticsAlert,
   getAnalyticsDashboard,
+  getCinemaKpis,
   updateAnalyticsRecommendation
 } from '../services/analyticsAdminService';
 
@@ -327,6 +328,8 @@ function EmptyState({ children }) {
 export default function AdminAnalyticsPage() {
   const [days, setDays] = useState(30);
   const [view, setView] = useState('happened');
+  const [selectedCinemaKey, setSelectedCinemaKey] = useState('');
+  const [cinemaOptions, setCinemaOptions] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -339,7 +342,16 @@ export default function AdminAnalyticsPage() {
     else setLoading(true);
     setError('');
     try {
-      setDashboard(await getAnalyticsDashboard(dateRangeFor(days)));
+      const period = dateRangeFor(days);
+      const [dashboardData, cinemas] = await Promise.all([
+        getAnalyticsDashboard({
+          ...period,
+          ...(selectedCinemaKey ? { cinemaKey: selectedCinemaKey } : {})
+        }),
+        getCinemaKpis({ ...period, limit: 100 })
+      ]);
+      setDashboard(dashboardData);
+      setCinemaOptions(cinemas);
     } catch (requestError) {
       setDashboard(null);
       setError(requestError?.message || 'Không thể tải dữ liệu Analytics.');
@@ -347,7 +359,7 @@ export default function AdminAnalyticsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [days]);
+  }, [days, selectedCinemaKey]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -395,6 +407,10 @@ export default function AdminAnalyticsPage() {
 
   const summary = dashboard?.summary || {};
   const quality = dashboard?.dataQuality || {};
+  const isCinemaScope = dashboard?.scope?.type === 'CINEMA';
+  const scopeName = isCinemaScope
+    ? (dashboard?.scope?.cinemaName || dashboard?.scope?.cinemaKey)
+    : 'Toàn hệ thống';
   const revenueForecasts = dashboard?.forecasts?.filter(item => item.forecastType === 'REVENUE') || [];
 
   return (
@@ -410,6 +426,23 @@ export default function AdminAnalyticsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <label className="relative">
+            <span className="sr-only">Chọn rạp phân tích</span>
+            <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <select
+              aria-label="Chọn rạp phân tích"
+              value={selectedCinemaKey}
+              onChange={event => setSelectedCinemaKey(event.target.value)}
+              className="min-w-52 appearance-none rounded-xl border border-zinc-800 bg-zinc-900 py-2.5 pl-10 pr-8 text-xs font-medium text-zinc-200 outline-none transition focus:border-orange-500/50"
+            >
+              <option value="">Toàn hệ thống</option>
+              {cinemaOptions.map(cinema => (
+                <option key={cinema.cinemaKey} value={cinema.cinemaKey}>
+                  {cinema.cinemaName || cinema.cinemaKey}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="flex rounded-xl border border-zinc-800 bg-zinc-900 p-1">
             {DATE_RANGE_OPTIONS.map(option => (
               <button
@@ -438,6 +471,18 @@ export default function AdminAnalyticsPage() {
           </button>
         </div>
       </header>
+
+      <section className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400">
+          <Building2 className="h-4 w-4" />
+        </span>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+            Phạm vi đang xem
+          </p>
+          <p className="mt-0.5 text-sm font-medium text-zinc-200">{scopeName}</p>
+        </div>
+      </section>
 
       <section className="flex flex-col justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
@@ -493,10 +538,16 @@ export default function AdminAnalyticsPage() {
           <SectionTitle
             icon={BarChart3}
             eyebrow="Đã xảy ra gì?"
-            title="Bức tranh kinh doanh"
+            title={isCinemaScope ? `Hiệu suất riêng · ${scopeName}` : 'Bức tranh kinh doanh'}
             description={`${dashboard?.period?.startDate} → ${dashboard?.period?.endDate}`}
           />
-          <HealthScore health={dashboard?.healthScore} quality={quality} />
+          {!isCinemaScope && <HealthScore health={dashboard?.healthScore} quality={quality} />}
+          {isCinemaScope && (
+            <section className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5 text-sm leading-6 text-zinc-400">
+              Các KPI bên dưới chỉ lấy giao dịch của <strong className="font-semibold text-zinc-200">{scopeName}</strong>.
+              Dự báo và điểm sức khỏe toàn chuỗi không được trộn vào số liệu của rạp này.
+            </section>
+          )}
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               icon={CircleDollarSign}
@@ -537,9 +588,9 @@ export default function AdminAnalyticsPage() {
             />
             <RevenueChart values={dashboard?.daily} />
           </section>
-          <section className="grid gap-6 xl:grid-cols-2">
+          <section className={`grid gap-6 ${isCinemaScope ? '' : 'xl:grid-cols-2'}`}>
             <RankingTable rows={dashboard?.topMovies} kind="movie" />
-            <RankingTable rows={dashboard?.topCinemas} kind="cinema" />
+            {!isCinemaScope && <RankingTable rows={dashboard?.topCinemas} kind="cinema" />}
           </section>
         </div>
       )}

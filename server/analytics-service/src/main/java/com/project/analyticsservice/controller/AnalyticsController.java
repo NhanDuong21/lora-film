@@ -38,19 +38,11 @@ public class AnalyticsController {
     @Operation(summary = "Get the complete analytics dashboard")
     public ApiResponse<AnalyticsResponses.Dashboard> dashboard(
             @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String cinemaKey) {
         return ApiResponse.success(
                 "Analytics dashboard retrieved successfully",
-                queryService.dashboard(startDate, endDate));
-    }
-
-    @GetMapping("/daily")
-    public ApiResponse<List<AnalyticsResponses.DailyKpi>> daily(
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
-        return ApiResponse.success(
-                "Daily KPIs retrieved successfully",
-                queryService.daily(startDate, endDate));
+                queryService.dashboard(startDate, endDate, cinemaKey));
     }
 
     @GetMapping("/cinemas")
@@ -61,98 +53,6 @@ public class AnalyticsController {
         return ApiResponse.success(
                 "Cinema KPIs retrieved successfully",
                 queryService.cinemas(startDate, endDate, limit));
-    }
-
-    @GetMapping("/movie-performance")
-    public ApiResponse<List<AnalyticsResponses.MovieKpi>> movies(
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate,
-            @RequestParam(required = false) Integer limit) {
-        return ApiResponse.success(
-                "Movie KPIs retrieved successfully",
-                queryService.movies(startDate, endDate, limit));
-    }
-
-    @GetMapping("/promotions")
-    public ApiResponse<List<AnalyticsResponses.PromotionKpi>> promotions(
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate,
-            @RequestParam(required = false) Integer limit) {
-        return ApiResponse.success(
-                "Promotion KPIs retrieved successfully",
-                queryService.promotions(startDate, endDate, limit));
-    }
-
-    @GetMapping("/customer-segments")
-    public ApiResponse<List<AnalyticsResponses.CustomerSegment>> customerSegments(
-            @RequestParam(required = false) String date) {
-        return ApiResponse.success(
-                "Customer segment KPIs retrieved successfully",
-                queryService.customerSegments(date));
-    }
-
-    @GetMapping("/forecasts")
-    public ApiResponse<List<AnalyticsResponses.Forecast>> forecasts(
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
-        return ApiResponse.success(
-                "Forecasts retrieved successfully",
-                queryService.forecasts(startDate, endDate));
-    }
-
-    @GetMapping("/insights")
-    public ApiResponse<List<AnalyticsResponses.Insight>> insights(
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
-        return ApiResponse.success(
-                "Insights retrieved successfully",
-                queryService.insights(startDate, endDate));
-    }
-
-    @GetMapping("/recommendations")
-    public ApiResponse<List<AnalyticsResponses.Recommendation>> recommendations() {
-        return ApiResponse.success(
-                "Recommendations retrieved successfully",
-                queryService.recommendations());
-    }
-
-    @GetMapping("/alerts")
-    public ApiResponse<List<AnalyticsResponses.Alert>> alerts() {
-        return ApiResponse.success(
-                "Alerts retrieved successfully",
-                queryService.alerts());
-    }
-
-    @GetMapping("/data-quality")
-    public ApiResponse<AnalyticsResponses.DataQuality> dataQuality() {
-        return ApiResponse.success(
-                "Analytics data quality retrieved successfully",
-                queryService.dataQuality());
-    }
-
-    @GetMapping("/health-score")
-    public ApiResponse<AnalyticsResponses.HealthScore> healthScore(
-            @RequestParam(required = false) String date) {
-        return ApiResponse.success(
-                "Analytics health score retrieved successfully",
-                queryService.healthScore(date));
-    }
-
-    @GetMapping("/anomalies")
-    public ApiResponse<List<AnalyticsResponses.Anomaly>> anomalies(
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
-        return ApiResponse.success(
-                "Analytics anomalies retrieved successfully",
-                queryService.anomalies(startDate, endDate));
-    }
-
-    @GetMapping("/forecast-quality")
-    public ApiResponse<List<AnalyticsResponses.ForecastQuality>> forecastQuality(
-            @RequestParam(required = false) String date) {
-        return ApiResponse.success(
-                "Forecast quality retrieved successfully",
-                queryService.forecastQuality(date));
     }
 
     @PatchMapping("/alerts/{id}/acknowledge")

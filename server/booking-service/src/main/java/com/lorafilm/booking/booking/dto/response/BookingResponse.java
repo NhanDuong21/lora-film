@@ -14,6 +14,8 @@ public record BookingResponse(
         String showtimePublicId,
         BookingStatus status,
         BigDecimal totalAmount,
+        Integer scorePointsUsed,
+        BigDecimal scoreDiscount,
         String currency,
         Instant expiredAt,
         Instant amountLockedAt,

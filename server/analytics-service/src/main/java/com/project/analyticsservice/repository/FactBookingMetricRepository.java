@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface FactBookingMetricRepository extends JpaRepository<FactBookingMetric, Long> {
     List<FactBookingMetric> findAllByBusinessDate(LocalDate businessDate);
     List<FactBookingMetric> findAllByBusinessDateBetween(LocalDate startDate, LocalDate endDate);
+    List<FactBookingMetric> findAllByCinemaPublicIdAndBusinessDateBetween(
+            String cinemaPublicId, LocalDate startDate, LocalDate endDate);
     List<FactBookingMetric> findAllByBusinessDateLessThanEqual(LocalDate endDate);
     Optional<FactBookingMetric> findFirstByBookingPublicIdOrderByOccurredAtDesc(String bookingPublicId);
 }

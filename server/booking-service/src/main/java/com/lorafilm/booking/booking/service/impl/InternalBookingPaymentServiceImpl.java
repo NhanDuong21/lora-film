@@ -3,6 +3,7 @@ package com.lorafilm.booking.booking.service.impl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
+import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
 import com.lorafilm.booking.booking.dto.request.InternalPaymentResultRequest;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
@@ -65,6 +66,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     private final BookingReconciliationTaskRepository reconciliationTaskRepository;
     private final BookingRefundRepository refundRepository;
     private final BookingLifecycleService lifecycleService;
+    private ScoreRedemptionClient scoreRedemptionClient;
 
     @Autowired
     public InternalBookingPaymentServiceImpl(
@@ -125,6 +127,11 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                 reservationRepository, reconciliationTaskRepository, null, null);
     }
 
+    @Autowired(required = false)
+    public void setScoreRedemptionClient(ScoreRedemptionClient service) {
+        this.scoreRedemptionClient = service;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public InternalPaymentContextResponse getPaymentContext(Long bookingId) {
@@ -150,6 +157,24 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                 .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()))
                 .orElseThrow(() -> new BookingNotFoundException(bookingCode));
         return buildPaymentContext(booking);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InternalPaymentContextResponse getScoreRedemptionContext(Long bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()))
+                .orElseThrow(() -> new BookingNotFoundException(String.valueOf(bookingId)));
+        return buildScoreRedemptionContext(booking);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InternalPaymentContextResponse getScoreRedemptionContext(String bookingPublicId) {
+        Booking booking = bookingRepository.findByPublicId(bookingPublicId)
+                .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()))
+                .orElseThrow(() -> new BookingNotFoundException(bookingPublicId));
+        return buildScoreRedemptionContext(booking);
     }
 
     private InternalPaymentContextResponse buildPaymentContext(Booking booking) {
@@ -217,7 +242,58 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                         booking.getTicketAmount(),
                         booking.getFoodAmount(),
                         defaultAmount(booking.getPromotionDiscount())
-                                .add(defaultAmount(booking.getVoucherDiscount())),
+                                .add(defaultAmount(booking.getVoucherDiscount()))
+                                .add(defaultAmount(booking.getScoreDiscount())),
+                        booking.getFinalAmount(),
+                        normalizeCurrency(booking.getCurrency())));
+    }
+
+    private InternalPaymentContextResponse buildScoreRedemptionContext(Booking booking) {
+        Instant now = Instant.now();
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT
+                || booking.getExpiresAt() == null
+                || !booking.getExpiresAt().isAfter(now)) {
+            throw new BusinessException(
+                    "BOOKING_NOT_REDEEMABLE",
+                    "Booking is not open for score redemption",
+                    HttpStatus.CONFLICT);
+        }
+        if (booking.getAmountLockedAt() != null || booking.getFinalAmount() == null
+                || booking.getFinalAmount().signum() <= 0) {
+            throw new BusinessException(
+                    "BOOKING_SCORE_AMOUNT_LOCKED",
+                    "Score redemption must be selected before the checkout amount is locked",
+                    HttpStatus.CONFLICT);
+        }
+        if (!hasLiveHeldReservations(booking.getId(), now)) {
+            throw new BusinessException(
+                    "BOOKING_SEATS_NOT_HELD",
+                    "Booking seats are no longer held",
+                    HttpStatus.CONFLICT);
+        }
+        BookingPriceSnapshotPayload snapshot = readSnapshot(booking.getId());
+        return new InternalPaymentContextResponse(
+                booking.getId(),
+                booking.getPublicId(),
+                booking.getUserId(),
+                booking.getBookingStatus().name(),
+                true,
+                booking.getFinalAmount(),
+                normalizeCurrency(booking.getCurrency()),
+                booking.getAmountLockedAt(),
+                booking.getExpiresAt(),
+                new InternalPaymentContextResponse.AnalyticsSnapshot(
+                        snapshot.movieId(),
+                        snapshot.moviePublicId(),
+                        snapshot.movieTitle(),
+                        booking.getShowtimePublicId(),
+                        snapshot.cinemaPublicId(),
+                        snapshot.seats().size(),
+                        booking.getTicketAmount(),
+                        booking.getFoodAmount(),
+                        defaultAmount(booking.getPromotionDiscount())
+                                .add(defaultAmount(booking.getVoucherDiscount()))
+                                .add(defaultAmount(booking.getScoreDiscount())),
                         booking.getFinalAmount(),
                         normalizeCurrency(booking.getCurrency())));
     }
@@ -383,6 +459,15 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
             metricsManager.incrementBookingConfirmed();
             metricsManager.incrementPaymentSuccess();
         }
+        if (booking.getScorePointsUsed() != null
+                && booking.getScorePointsUsed() > 0
+                && scoreRedemptionClient != null) {
+            scoreRedemptionClient.commit(
+                    booking.getId(),
+                    booking.getScoreHoldCode(),
+                    request.eventId(),
+                    stableScoreKey("commit", request.eventId()));
+        }
     }
 
     private void applyUnsuccessfulAttempt(Booking booking, String result) {
@@ -421,6 +506,17 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                         "PAYMENT_SERVICE");
             } else {
                 booking.changeStatus(BookingStatus.REFUNDED, receiptAt);
+            }
+            if (booking.getScorePointsUsed() != null
+                    && booking.getScorePointsUsed() > 0
+                    && scoreRedemptionClient != null) {
+                scoreRedemptionClient.refund(
+                        booking.getUserId(),
+                        booking.getId(),
+                        booking.getScorePointsUsed(),
+                        "Full Booking refund",
+                        request.eventId(),
+                        stableScoreKey("refund", request.eventId()));
             }
         }
     }
@@ -859,5 +955,10 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     private String blankToNull(String value) {
         String normalized = normalize(value);
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String stableScoreKey(String purpose, String source) {
+        return purpose + "-" + UUID.nameUUIDFromBytes(
+                (purpose + ":" + source).getBytes(StandardCharsets.UTF_8));
     }
 }

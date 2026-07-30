@@ -3,8 +3,10 @@ package com.lorafilm.booking.booking;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
+import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
+import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.entity.Booking;
@@ -82,6 +84,8 @@ class BookingServiceTest {
     private com.lorafilm.booking.booking.service.BookingTicketService bookingTicketService;
     @Mock
     private com.lorafilm.booking.booking.service.BookingSnapshotService bookingSnapshotService;
+    @Mock
+    private ScoreRedemptionClient scoreRedemptionClient;
 
         @Spy
         private BookingMapper bookingMapper = new BookingMapper();
@@ -110,6 +114,7 @@ class BookingServiceTest {
                 bookingMetricsManager,
                 bookingTicketService,
                 bookingSnapshotService);
+        bookingService.setScoreRedemptionClient(scoreRedemptionClient);
     }
 
         @Test
@@ -427,6 +432,47 @@ class BookingServiceTest {
                 assertEquals(BookingStatus.CANCELLED, response.status());
                 assertEquals("USER_CANCEL", booking.getCancelReasonCode());
                 assertEquals("Changed plans", booking.getCancelReasonDetail());
+        }
+
+        @Test
+        void shouldHoldScoreAndLockTheDiscountedCheckoutAmount() {
+                Booking booking = existingBooking(Instant.now().plusSeconds(900));
+                booking.setId(100L);
+                when(securityContextService.getCurrentUserId()).thenReturn(15L);
+                when(bookingRepository.findByPublicIdWithLock(booking.getPublicId()))
+                                .thenReturn(Optional.of(booking));
+                when(scoreRedemptionClient.hold(
+                                eq(15L),
+                                eq(100L),
+                                eq(50),
+                                any(Integer.class),
+                                eq(new BigDecimal("240000.00")),
+                                any(String.class),
+                                eq("score-idem-1")))
+                                .thenReturn(new ScoreRedemptionClient.ScoreHoldResult(
+                                                "HOLD-1",
+                                                50,
+                                                "ACTIVE",
+                                                new BigDecimal("50000.00"),
+                                                new BigDecimal("1000"),
+                                                false));
+                when(bookingRepository.saveAndFlush(booking)).thenReturn(booking);
+
+                BookingResponse response = bookingService.finalizeCheckout(
+                                booking.getPublicId(),
+                                new FinalizeCheckoutRequest(50, "score-idem-1"));
+
+                assertEquals(50, response.scorePointsUsed());
+                assertEquals(new BigDecimal("50000.00"), response.scoreDiscount());
+                assertEquals(new BigDecimal("190000.00"), response.totalAmount());
+                verify(scoreRedemptionClient).hold(
+                                eq(15L),
+                                eq(100L),
+                                eq(50),
+                                any(Integer.class),
+                                eq(new BigDecimal("240000.00")),
+                                any(String.class),
+                                eq("score-idem-1"));
         }
 
         private SeatReservation reservation(

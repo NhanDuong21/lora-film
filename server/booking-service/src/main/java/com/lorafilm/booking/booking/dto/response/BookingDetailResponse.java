@@ -24,6 +24,8 @@ public record BookingDetailResponse(
         BigDecimal taxAmount,
         BigDecimal promotionDiscount,
         BigDecimal voucherDiscount,
+        Integer scorePointsUsed,
+        BigDecimal scoreDiscount,
         BigDecimal totalAmount,
         String currency,
         BookingStatus status,

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
@@ -42,6 +43,7 @@ public class AnalyticsQueryDomainService {
     private final ForecastModelMetricRepository forecastMetricRepository;
     private final AnalyticsDataQualityDailyRepository qualityDailyRepository;
     private final MetricMathService math;
+    private final FactAnalysisService factAnalysisService;
     private final String timezone;
 
     public AnalyticsQueryDomainService(
@@ -65,6 +67,7 @@ public class AnalyticsQueryDomainService {
             ForecastModelMetricRepository forecastMetricRepository,
             AnalyticsDataQualityDailyRepository qualityDailyRepository,
             MetricMathService math,
+            FactAnalysisService factAnalysisService,
             @Value("${analytics.zone-id:Asia/Ho_Chi_Minh}") String timezone) {
         this.dailyRepository = dailyRepository;
         this.cinemaRepository = cinemaRepository;
@@ -86,15 +89,20 @@ public class AnalyticsQueryDomainService {
         this.forecastMetricRepository = forecastMetricRepository;
         this.qualityDailyRepository = qualityDailyRepository;
         this.math = math;
+        this.factAnalysisService = factAnalysisService;
         this.timezone = timezone;
     }
 
-    public AnalyticsResponses.Dashboard dashboard(String start, String end) {
+    public AnalyticsResponses.Dashboard dashboard(String start, String end, String cinemaKey) {
         DateRange range = resolveRange(start, end, 30);
+        if (StringUtils.hasText(cinemaKey)) {
+            return cinemaDashboard(range, normalizeCinemaKey(cinemaKey));
+        }
         List<AnalyticsResponses.Insight> insights = insights(range.start(), range.end());
         Set<Long> insightIds = insights.stream().map(AnalyticsResponses.Insight::id).collect(Collectors.toSet());
         return new AnalyticsResponses.Dashboard(
                 period(range),
+                new AnalyticsResponses.Scope("SYSTEM", null, "Toàn hệ thống"),
                 summary(range),
                 daily(range.start(), range.end()),
                 cinemas(range.start().toString(), range.end().toString(), 8),
@@ -106,6 +114,50 @@ public class AnalyticsQueryDomainService {
                 anomalies(range.start(), range.end()),
                 forecastQuality(range.end()),
                 insights,
+                recommendations(insightIds),
+                alerts(insightIds),
+                dataQuality());
+    }
+
+    private AnalyticsResponses.Dashboard cinemaDashboard(DateRange range, String cinemaKey) {
+        List<CinemaPerformanceDaily> values =
+                cinemaRepository.findAllByCinemaKeyAndStatDateBetweenOrderByStatDateAsc(
+                        cinemaKey, range.start(), range.end());
+        CinemaPerformanceDaily reference = values.stream().findFirst()
+                .or(() -> cinemaRepository.findFirstByCinemaKeyOrderByStatDateDesc(cinemaKey))
+                .orElseThrow(() -> new BusinessException(
+                        "Cinema has no analytics data",
+                        "ANALYTICS_CINEMA_NOT_FOUND",
+                        HttpStatus.NOT_FOUND));
+        String cinemaName = StringUtils.hasText(reference.getCinemaName())
+                ? reference.getCinemaName()
+                : cinemaKey;
+        List<AnalyticsResponses.Insight> scopedInsights = insights(range.start(), range.end())
+                .stream()
+                .filter(insight -> insight.rootCauses().stream().anyMatch(cause ->
+                        "CINEMA".equalsIgnoreCase(cause.dimensionType())
+                                && cinemaKey.equals(cause.dimensionKey())))
+                .toList();
+        Set<Long> insightIds = scopedInsights.stream()
+                .map(AnalyticsResponses.Insight::id)
+                .collect(Collectors.toSet());
+        AnalyticsResponses.CinemaKpi selectedCinema = values.isEmpty()
+                ? emptyCinemaKpi(cinemaKey, cinemaName)
+                : cinemaResponse(values);
+        return new AnalyticsResponses.Dashboard(
+                period(range),
+                new AnalyticsResponses.Scope("CINEMA", cinemaKey, cinemaName),
+                cinemaSummary(values),
+                cinemaDaily(values),
+                List.of(selectedCinema),
+                cinemaMovies(range, cinemaKey, 10),
+                cinemaPromotions(range, cinemaKey, 8),
+                List.of(),
+                List.of(),
+                null,
+                List.of(),
+                List.of(),
+                scopedInsights,
                 recommendations(insightIds),
                 alerts(insightIds),
                 dataQuality());
@@ -209,8 +261,8 @@ public class AnalyticsQueryDomainService {
         long cancelled = values.stream().mapToLong(DailyBusinessKpi::getCancelledBookingCount).sum();
         long tickets = values.stream().mapToLong(DailyBusinessKpi::getTicketCount).sum();
         long promotedBookings = values.stream()
-                .mapToLong(kpi -> kpi.getPromotionUsageRate()
-                        .multiply(BigDecimal.valueOf(kpi.getBookingCount())).longValue()).sum();
+                .mapToLong(kpi -> estimatedCount(kpi.getPromotionUsageRate(), kpi.getBookingCount()))
+                .sum();
         BigDecimal occupancy = values.isEmpty() ? BigDecimal.ZERO
                 : math.ratio(sum(values, DailyBusinessKpi::getOccupancyRate), values.size());
         return new AnalyticsResponses.Summary(
@@ -223,9 +275,59 @@ public class AnalyticsQueryDomainService {
                 "VND");
     }
 
+    private AnalyticsResponses.Summary cinemaSummary(List<CinemaPerformanceDaily> values) {
+        BigDecimal gross = sum(values, CinemaPerformanceDaily::getGrossRevenue);
+        BigDecimal discount = sum(values, CinemaPerformanceDaily::getDiscountAmount);
+        BigDecimal refund = sum(values, CinemaPerformanceDaily::getRefundAmount);
+        BigDecimal net = sum(values, CinemaPerformanceDaily::getNetRevenue);
+        long bookings = values.stream().mapToLong(CinemaPerformanceDaily::getBookingCount).sum();
+        long refundBookings = values.stream().mapToLong(value ->
+                estimatedCount(value.getRefundRate(), value.getBookingCount())).sum();
+        long tickets = values.stream().mapToLong(CinemaPerformanceDaily::getTicketCount).sum();
+        BigDecimal occupancy = values.isEmpty()
+                ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
+                : math.ratio(sum(values, CinemaPerformanceDaily::getOccupancyRate), values.size());
+        return new AnalyticsResponses.Summary(
+                math.money(gross),
+                math.money(discount),
+                math.money(refund),
+                math.money(net),
+                bookings,
+                refundBookings,
+                0,
+                tickets,
+                math.money(math.ratio(net, bookings)),
+                math.ratio(refundBookings, bookings),
+                occupancy,
+                BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP),
+                "VND");
+    }
+
     private List<AnalyticsResponses.DailyKpi> daily(LocalDate start, LocalDate end) {
         return dailyRepository.findAllByStatDateBetweenOrderByStatDateAsc(start, end)
                 .stream().map(this::dailyResponse).toList();
+    }
+
+    private List<AnalyticsResponses.DailyKpi> cinemaDaily(
+            List<CinemaPerformanceDaily> values) {
+        return values.stream().map(value -> new AnalyticsResponses.DailyKpi(
+                value.getStatDate(),
+                value.getGrossRevenue(),
+                value.getDiscountAmount(),
+                value.getRefundAmount(),
+                value.getNetRevenue(),
+                value.getBookingCount(),
+                estimatedCount(value.getRefundRate(), value.getBookingCount()),
+                0,
+                value.getTicketCount(),
+                0,
+                0,
+                value.getAverageBookingValue(),
+                value.getRefundRate(),
+                value.getOccupancyRate(),
+                BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP),
+                BigDecimal.ONE.setScale(6, RoundingMode.HALF_UP),
+                value.getUpdatedAt())).toList();
     }
 
     private AnalyticsResponses.DailyKpi dailyResponse(DailyBusinessKpi value) {
@@ -244,8 +346,7 @@ public class AnalyticsQueryDomainService {
         BigDecimal net = sum(values, CinemaPerformanceDaily::getNetRevenue);
         long bookings = values.stream().mapToLong(CinemaPerformanceDaily::getBookingCount).sum();
         long refundBookings = values.stream()
-                .mapToLong(kpi -> kpi.getRefundRate()
-                        .multiply(BigDecimal.valueOf(kpi.getBookingCount())).longValue()).sum();
+                .mapToLong(kpi -> estimatedCount(kpi.getRefundRate(), kpi.getBookingCount())).sum();
         return new AnalyticsResponses.CinemaKpi(
                 first.getCinemaKey(), first.getCinemaName(),
                 sum(values, CinemaPerformanceDaily::getGrossRevenue),
@@ -258,12 +359,107 @@ public class AnalyticsQueryDomainService {
                 math.ratio(sum(values, CinemaPerformanceDaily::getOccupancyRate), values.size()));
     }
 
+    private AnalyticsResponses.CinemaKpi emptyCinemaKpi(String cinemaKey, String cinemaName) {
+        BigDecimal moneyZero = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal ratioZero = BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+        return new AnalyticsResponses.CinemaKpi(
+                cinemaKey, cinemaName, moneyZero, moneyZero, moneyZero, moneyZero,
+                0, 0, moneyZero, ratioZero, ratioZero);
+    }
+
+    private List<AnalyticsResponses.MovieKpi> cinemaMovies(
+            DateRange range, String cinemaKey, int limit) {
+        List<FactBookingMetric> facts =
+                bookingFactRepository.findAllByCinemaPublicIdAndBusinessDateBetween(
+                        cinemaKey, range.start(), range.end());
+        Map<String, BigDecimal> refundsByBooking = refundsByBooking(range);
+        return facts.stream()
+                .filter(value -> StringUtils.hasText(value.getMovieKey()))
+                .collect(Collectors.groupingBy(
+                        FactBookingMetric::getMovieKey,
+                        LinkedHashMap::new,
+                        Collectors.toList()))
+                .values().stream()
+                .map(values -> movieResponse(values, refundsByBooking))
+                .sorted(Comparator.comparing(AnalyticsResponses.MovieKpi::netRevenue).reversed())
+                .limit(limit)
+                .toList();
+    }
+
+    private AnalyticsResponses.MovieKpi movieResponse(
+            List<FactBookingMetric> values,
+            Map<String, BigDecimal> refundsByBooking) {
+        FactBookingMetric first = values.getFirst();
+        Set<String> bookingKeys = values.stream()
+                .map(FactBookingMetric::getBookingPublicId)
+                .collect(Collectors.toSet());
+        BigDecimal gross = sum(values, FactBookingMetric::getGrossAmount);
+        BigDecimal discount = sum(values, FactBookingMetric::getDiscountAmount);
+        BigDecimal refund = math.sum(bookingKeys.stream()
+                .map(key -> refundsByBooking.getOrDefault(key, BigDecimal.ZERO))
+                .toList());
+        long refundBookings = bookingKeys.stream()
+                .filter(key -> refundsByBooking.getOrDefault(key, BigDecimal.ZERO).signum() > 0)
+                .count();
+        long bookings = bookingKeys.size();
+        return new AnalyticsResponses.MovieKpi(
+                first.getMovieKey(),
+                first.getMovieId(),
+                first.getMovieTitle(),
+                math.money(gross),
+                math.money(discount),
+                math.money(refund),
+                math.money(gross.subtract(discount).subtract(refund)),
+                bookings,
+                values.stream().mapToLong(FactBookingMetric::getTicketCount).sum(),
+                math.ratio(refundBookings, bookings),
+                factAnalysisService.occupancyRate(values));
+    }
+
+    private List<AnalyticsResponses.PromotionKpi> cinemaPromotions(
+            DateRange range, String cinemaKey, int limit) {
+        return bookingFactRepository.findAllByCinemaPublicIdAndBusinessDateBetween(
+                        cinemaKey, range.start(), range.end()).stream()
+                .filter(value -> StringUtils.hasText(value.getPromotionPublicId()))
+                .collect(Collectors.groupingBy(
+                        FactBookingMetric::getPromotionPublicId,
+                        LinkedHashMap::new,
+                        Collectors.toList()))
+                .values().stream()
+                .map(values -> {
+                    FactBookingMetric first = values.getFirst();
+                    BigDecimal discount = sum(values, FactBookingMetric::getDiscountAmount);
+                    BigDecimal revenue = sum(values, FactBookingMetric::getNetRevenue);
+                    return new AnalyticsResponses.PromotionKpi(
+                            first.getPromotionPublicId(),
+                            StringUtils.hasText(first.getPromotionName())
+                                    ? first.getPromotionName()
+                                    : first.getPromotionPublicId(),
+                            values.stream().map(FactBookingMetric::getBookingPublicId).distinct().count(),
+                            math.money(discount),
+                            math.money(revenue),
+                            math.divide(revenue, discount, 6));
+                })
+                .sorted(Comparator.comparing(
+                        AnalyticsResponses.PromotionKpi::generatedRevenue).reversed())
+                .limit(limit)
+                .toList();
+    }
+
+    private Map<String, BigDecimal> refundsByBooking(DateRange range) {
+        return refundFactRepository.findAllByRefundDateBetween(range.start(), range.end())
+                .stream()
+                .collect(Collectors.toMap(
+                        FactPaymentRefund::getBookingPublicId,
+                        FactPaymentRefund::getRefundAmount,
+                        BigDecimal::add));
+    }
+
     private AnalyticsResponses.MovieKpi movieResponse(List<MoviePerformanceDaily> values) {
         MoviePerformanceDaily first = values.getFirst();
         long bookings = values.stream().mapToLong(MoviePerformanceDaily::getBookingCount).sum();
         long refundBookings = values.stream()
-                .mapToLong(kpi -> kpi.getRefundRate()
-                        .multiply(BigDecimal.valueOf(kpi.getBookingCount())).longValue()).sum();
+                .mapToLong(kpi -> estimatedCount(kpi.getRefundRate(), kpi.getBookingCount())).sum();
         return new AnalyticsResponses.MovieKpi(
                 first.getMovieKey(), first.getMovieId(), first.getMovieTitle(),
                 sum(values, MoviePerformanceDaily::getGrossRevenue),
@@ -432,6 +628,23 @@ public class AnalyticsQueryDomainService {
 
     private <T> BigDecimal sum(List<T> values, Function<T, BigDecimal> extractor) {
         return math.sum(values.stream().map(extractor).toList());
+    }
+
+    private long estimatedCount(BigDecimal rate, long total) {
+        return math.zero(rate)
+                .multiply(BigDecimal.valueOf(total))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+    }
+
+    private String normalizeCinemaKey(String value) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.isEmpty() || normalized.length() > 100) {
+            throw invalid(
+                    "cinemaKey must contain between 1 and 100 characters",
+                    "ANALYTICS_INVALID_CINEMA_KEY");
+        }
+        return normalized;
     }
 
     private int normalizeLimit(Integer value, int fallback, int max) {

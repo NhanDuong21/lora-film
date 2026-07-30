@@ -103,24 +103,17 @@ All APIs require Admin, Manager, Accountant, `PERM_VIEW_FINANCE`, or
 | Method | Path |
 |---|---|
 | GET | `/api/analytics/dashboard` |
-| GET | `/api/analytics/daily` |
 | GET | `/api/analytics/cinemas` |
-| GET | `/api/analytics/movie-performance` |
-| GET | `/api/analytics/promotions` |
-| GET | `/api/analytics/customer-segments` |
-| GET | `/api/analytics/forecasts` |
-| GET | `/api/analytics/insights` |
-| GET | `/api/analytics/recommendations` |
-| GET | `/api/analytics/alerts` |
-| GET | `/api/analytics/data-quality` |
-| GET | `/api/analytics/health-score` |
-| GET | `/api/analytics/anomalies` |
-| GET | `/api/analytics/forecast-quality` |
 | PATCH | `/api/analytics/alerts/{id}/acknowledge` |
 | PATCH | `/api/analytics/recommendations/{id}/status` |
 | POST | `/api/analytics/jobs/rebuild` (Admin/`ANALYTICS_REBUILD`) |
 | GET | `/api/analytics/jobs` (Admin/`ANALYTICS_REBUILD`) |
 | GET | `/api/analytics/movies/**` (legacy-compatible report contract) |
+
+`GET /api/analytics/dashboard` accepts the optional `cinemaKey` query parameter.
+Without it, the response has system-wide KPIs. With it, revenue, bookings,
+refunds, occupancy, movies, promotions, and cinema-linked insights are scoped to
+that cinema; system-wide forecasts and health scores are intentionally omitted.
 
 OpenAPI is available at `/swagger-ui.html`; health and Prometheus metrics are
 available at `/actuator/health` and `/actuator/prometheus`.

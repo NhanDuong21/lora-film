@@ -13,7 +13,8 @@ import {
   BOOKING_CHANGED_EVENT,
   getBookingDetails,
   cancelBooking,
-  finalizeCheckout
+  finalizeCheckout,
+  getOrCreateScoreRedemptionKey
 } from '../services/bookingService';
 import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
 import BookingStepper from '../components/BookingStepper';
@@ -245,6 +246,10 @@ export default function BookingCheckoutPage() {
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
   const [userScore, setUserScore] = useState(null);
+  const [scorePointsInput, setScorePointsInput] = useState('');
+  const [scorePreview, setScorePreview] = useState(null);
+  const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
+  const [scorePreviewError, setScorePreviewError] = useState('');
   const lastTerminalNoticeRef = useRef(null);
   const cartUpdatingRef = useRef(false);
   const expirationHandledRef = useRef(false);
@@ -275,6 +280,16 @@ export default function BookingCheckoutPage() {
         expiresAt: bookingData.expiresAt ?? bookingData.expiredAt ?? bookingData.paymentDeadline,
         snapshot: bookingData.snapshot ?? bookingData.presentation ?? bookingDraft.showtime ?? null
       }));
+      if (Number(bookingData.scorePointsUsed || 0) > 0) {
+        setScorePointsInput(String(bookingData.scorePointsUsed));
+        setScorePreview({
+          eligible: true,
+          requestedPoints: Number(bookingData.scorePointsUsed),
+          discountAmount: Number(bookingData.scoreDiscount || 0),
+          remainingAmount: Number(bookingData.totalAmount ?? bookingData.finalAmount ?? 0),
+          locked: Boolean(bookingData.amountLockedAt)
+        });
+      }
 
       const concessionsData = await getConcessions();
       setConcessions(concessionsData || []);
@@ -459,6 +474,8 @@ export default function BookingCheckoutPage() {
           foodOrder: freshBooking.foodOrder,
           finalAmount: freshBooking.totalAmount ?? freshBooking.finalAmount ?? prev.finalAmount
         }));
+        setScorePreview(null);
+        setScorePreviewError('');
         setCartUpdatingId(null);
         return;
       }
@@ -471,6 +488,8 @@ export default function BookingCheckoutPage() {
         foodOrder: updatedFoodOrder || freshBooking.foodOrder,
         finalAmount: freshBooking.totalAmount ?? freshBooking.finalAmount ?? prev.finalAmount
       }));
+      setScorePreview(null);
+      setScorePreviewError('');
     } catch (err) {
       setNotice({
         title: 'Không thể cập nhật bắp nước',
@@ -485,6 +504,44 @@ export default function BookingCheckoutPage() {
       setCartUpdatingId(null);
     }
   }, [bookingId, cartItemsByProductId]);
+
+  const handlePreviewScore = async () => {
+    const points = Number(scorePointsInput);
+    if (!Number.isInteger(points) || points <= 0) {
+      setScorePreview(null);
+      setScorePreviewError('Vui lòng nhập số điểm nguyên lớn hơn 0.');
+      return;
+    }
+    setScorePreviewLoading(true);
+    setScorePreviewError('');
+    try {
+      const response = await scoreCustomerService.redeemPreview({
+        bookingPublicId: bookingId,
+        points
+      });
+      const preview = response?.data ?? response;
+      if (!preview?.eligible) {
+        setScorePreview(null);
+        setScorePreviewError(preview?.message || 'Số điểm này chưa thể áp dụng cho đơn.');
+        return;
+      }
+      setScorePreview(preview);
+    } catch (err) {
+      setScorePreview(null);
+      setScorePreviewError(getBookingErrorMessage(
+        err,
+        'Không thể kiểm tra điểm lúc này. Vui lòng thử lại.'
+      ));
+    } finally {
+      setScorePreviewLoading(false);
+    }
+  };
+
+  const clearScoreSelection = () => {
+    setScorePreview(null);
+    setScorePointsInput('');
+    setScorePreviewError('');
+  };
 
   // Lock Booking-owned amount, then let Payment Service create the attempt.
   const handleStartPayment = async () => {
@@ -517,7 +574,13 @@ export default function BookingCheckoutPage() {
         return;
       }
 
-      const finalized = await finalizeCheckout(bookingId);
+      const selectedScorePoints = Number(scorePreview?.requestedPoints || 0);
+      const finalized = await finalizeCheckout(bookingId, {
+        scorePoints: selectedScorePoints,
+        scoreIdempotencyKey: selectedScorePoints > 0
+          ? getOrCreateScoreRedemptionKey(bookingId, selectedScorePoints)
+          : null
+      });
       setBooking(prev => ({ ...prev, ...finalized }));
       const idempotencyKey = getOrCreatePaymentAttemptKey(
         bookingId,
@@ -673,6 +736,17 @@ export default function BookingCheckoutPage() {
   const availableScorePoints = Math.max(
     0,
     Number(userScore?.currentPoints || 0) - Number(userScore?.heldPoints || 0)
+  );
+  const selectedScoreDiscount = Number(scorePreview?.discountAmount || 0);
+  const displayFinalAmount = scorePreview?.eligible
+    ? Number(scorePreview.remainingAmount)
+    : Number(booking.finalAmount || 0);
+  const maxScorePoints = Math.max(
+    0,
+    Math.min(
+      availableScorePoints,
+      Math.floor(Math.max(0, Number(booking.finalAmount || 0) - 1) / 1000)
+    )
   );
 
   return (
@@ -865,42 +939,6 @@ export default function BookingCheckoutPage() {
             ) : (
               /* Step 4: Payment Service handoff */
               <div className="space-y-8">
-                {availableScorePoints > 0 && (
-                  <div className="relative overflow-hidden rounded-[2rem] border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-md p-6 md:p-8 shadow-2xl shadow-black/10 transition-all hover:border-brand-orange/30">
-                    <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-brand-orange/5 blur-[80px] pointer-events-none" />
-                    
-                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-black/20 border border-brand-orange/20 text-brand-orange shadow-inner">
-                          <ShieldCheck className="h-6 w-6" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                              Loyalty Points
-                            </span>
-                            <span className="rounded-xl bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/20 shadow-inner">
-                              Đã đồng bộ
-                            </span>
-                          </div>
-                          <h3 className="text-lg font-black text-white flex items-baseline gap-1.5 tracking-tight">
-                            {availableScorePoints.toLocaleString('vi-VN')}
-                            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">điểm khả dụng</span>
-                          </h3>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 max-w-sm">
-                        <div className="rounded-2xl bg-black/20 p-5 border border-zinc-800/80 shadow-inner">
-                          <p className="text-[11px] font-medium leading-relaxed text-zinc-400 tracking-wide">
-                            Việc dùng điểm sẽ được mở khi tích hợp thanh toán hoàn tất. Số tiền của đơn hiện tại vẫn do <span className="text-brand-orange font-black uppercase tracking-widest">Booking Service</span> quản lý.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 md:p-8 space-y-6">
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">Chọn Phương Thức Thanh Toán</h2>
@@ -1118,6 +1156,96 @@ export default function BookingCheckoutPage() {
               </div>
             </div>
 
+            {/* Score redemption is available before Payment handoff on both checkout steps. */}
+            <div className="rounded-2xl border border-brand-orange/25 bg-brand-orange/[0.06] p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ShieldCheck className="h-4 w-4 shrink-0 text-brand-orange" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-200">
+                    Dùng điểm thành viên
+                  </span>
+                </div>
+                <span className="text-[10px] font-black text-brand-orange whitespace-nowrap">
+                  {availableScorePoints.toLocaleString('vi-VN')} điểm
+                </span>
+              </div>
+
+              {userScore ? (
+                <>
+                  <p className="text-[10px] leading-relaxed text-zinc-500">
+                    1 điểm = 1.000đ. Điểm được giữ khi chốt đơn và chỉ bị trừ sau khi thanh toán thành công.
+                  </p>
+                  {scorePreview?.eligible ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-[11px] font-bold text-emerald-400">
+                        <span>Đã chọn {Number(scorePreview.requestedPoints).toLocaleString('vi-VN')} điểm</span>
+                        <span>-{formatCurrency(selectedScoreDiscount)}</span>
+                      </div>
+                      {scorePreview.locked ? (
+                        <p className="text-center text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                          Điểm đã được khóa theo đơn
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={clearScoreSelection}
+                          className="w-full rounded-xl border border-zinc-700 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-500 hover:text-white"
+                        >
+                          Bỏ dùng điểm
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          max={maxScorePoints || undefined}
+                          step="1"
+                          value={scorePointsInput}
+                          onChange={(event) => {
+                            setScorePointsInput(event.target.value);
+                            setScorePreviewError('');
+                          }}
+                          placeholder={maxScorePoints > 0 ? `Tối đa ${maxScorePoints}` : 'Không đủ điểm'}
+                          disabled={maxScorePoints <= 0 || isExpired}
+                          aria-label="Số điểm muốn dùng"
+                          className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs font-bold text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-brand-orange disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={handlePreviewScore}
+                          disabled={scorePreviewLoading || maxScorePoints <= 0 || isExpired}
+                          className="shrink-0 rounded-xl bg-brand-orange px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {scorePreviewLoading ? 'Đang kiểm tra...' : 'Dùng điểm'}
+                        </button>
+                      </div>
+                      {maxScorePoints > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setScorePointsInput(String(maxScorePoints))}
+                          className="text-[9px] font-bold uppercase tracking-wider text-brand-orange hover:underline"
+                        >
+                          Chọn số điểm tối đa
+                        </button>
+                      )}
+                      {scorePreviewError && (
+                        <p role="alert" className="text-[10px] leading-relaxed text-red-400">
+                          {scorePreviewError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-[10px] leading-relaxed text-zinc-500">
+                  Điểm thành viên đang tạm thời không khả dụng. Bạn vẫn có thể thanh toán bình thường.
+                </p>
+              )}
+            </div>
+
             {/* Grand Total box */}
             <div className="flex justify-between items-center py-5 px-5 bg-zinc-950/80 rounded-2xl border border-brand-orange/30 shadow-[0_0_15px_rgba(255,122,0,0.1)]">
               <div>
@@ -1125,7 +1253,7 @@ export default function BookingCheckoutPage() {
                 <span className="text-[9px] text-brand-orange/80 font-bold uppercase">Đã bao gồm VAT</span>
               </div>
               <span className="text-2xl md:text-3xl font-black text-brand-orange tracking-tight">
-                {formatCurrency(booking.finalAmount)}
+                {formatCurrency(displayFinalAmount)}
               </span>
             </div>
 

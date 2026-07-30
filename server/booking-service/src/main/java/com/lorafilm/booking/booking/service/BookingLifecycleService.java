@@ -3,6 +3,7 @@ package com.lorafilm.booking.booking.service;
 import com.lorafilm.booking.audit.service.BookingAuditService;
 import com.lorafilm.booking.audit.service.BookingOperationLogService;
 import com.lorafilm.booking.booking.entity.Booking;
+import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.reservation.entity.SeatReservation;
@@ -13,12 +14,16 @@ import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
 import com.lorafilm.booking.realtime.SeatAvailabilityEventService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 /**
  * The single non-payment lifecycle coordinator.  Payment SUCCESS has an
@@ -27,6 +32,8 @@ import java.time.Instant;
  */
 @Service
 public class BookingLifecycleService {
+
+    private static final Logger log = LoggerFactory.getLogger(BookingLifecycleService.class);
 
     private final BookingRepository bookingRepository;
     private final BookingStatusTransitionService transitionService;
@@ -39,6 +46,7 @@ public class BookingLifecycleService {
     private final SeatReservationRepository reservationRepository;
     private final BookingMetricsManager metricsManager;
     private SeatAvailabilityEventService seatAvailabilityEventService;
+    private ScoreRedemptionClient scoreRedemptionClient;
 
     public BookingLifecycleService(
             BookingRepository bookingRepository,
@@ -66,6 +74,11 @@ public class BookingLifecycleService {
     @Autowired(required = false)
     public void setSeatAvailabilityEventService(SeatAvailabilityEventService service) {
         this.seatAvailabilityEventService = service;
+    }
+
+    @Autowired(required = false)
+    public void setScoreRedemptionClient(ScoreRedemptionClient service) {
+        this.scoreRedemptionClient = service;
     }
 
     @Transactional
@@ -188,6 +201,30 @@ public class BookingLifecycleService {
         outboxService.createOutboxEvent("BOOKING", saved.getId(),
                 "BOOKING_" + targetStatus.name(), saved);
 
+        if ((targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED)
+                && saved.getScorePointsUsed() != null
+                && saved.getScorePointsUsed() > 0
+                && scoreRedemptionClient != null) {
+            String settlementSource = targetStatus.name() + ":" + saved.getPublicId();
+            try {
+                scoreRedemptionClient.release(
+                        saved.getId(),
+                        saved.getScoreHoldCode(),
+                        reason,
+                        stableScoreKey("release-event", settlementSource),
+                        stableScoreKey("release", settlementSource));
+            } catch (RuntimeException exception) {
+                // Cancelling/expiring the Booking must still release the seats.
+                // The Score hold has its own TTL and will be reclaimed by
+                // Score Service even when this immediate best-effort call fails.
+                log.warn(
+                        "Could not immediately release Score hold for {} Booking {}",
+                        targetStatus,
+                        saved.getPublicId(),
+                        exception);
+            }
+        }
+
         if (targetStatus == BookingStatus.CANCELLED
                 || targetStatus == BookingStatus.EXPIRED) {
             ticketService.deleteTickets(saved.getId());
@@ -201,5 +238,10 @@ public class BookingLifecycleService {
             metricsManager.incrementBookingCancelled();
         }
         return saved;
+    }
+
+    private String stableScoreKey(String purpose, String source) {
+        return purpose + "-" + UUID.nameUUIDFromBytes(
+                (purpose + ":" + source).getBytes(StandardCharsets.UTF_8));
     }
 }

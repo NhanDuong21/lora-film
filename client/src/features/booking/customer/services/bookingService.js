@@ -70,8 +70,26 @@ export const createBooking = async ({ showtimePublicId, seatPublicIds, reservati
   return booking;
 };
 
-export const finalizeCheckout = async (bookingId) => {
-  const response = await apiClient.post(`/api/bookings/${bookingId}/finalize-checkout`);
+export const getOrCreateScoreRedemptionKey = (bookingId, points) => {
+  const storageKey = `booking:score-redemption:${bookingId}:${points}`;
+  const existing = sessionStorage.getItem(storageKey);
+  if (existing) return existing;
+  const created = uuidv4();
+  sessionStorage.setItem(storageKey, created);
+  return created;
+};
+
+export const finalizeCheckout = async (bookingId, {
+  scorePoints = 0,
+  scoreIdempotencyKey = null
+} = {}) => {
+  const response = await apiClient.post(
+    `/api/bookings/${bookingId}/finalize-checkout`,
+    {
+      scorePoints,
+      ...(scorePoints > 0 && scoreIdempotencyKey ? { scoreIdempotencyKey } : {})
+    }
+  );
   const booking = response.data.data;
   emitBookingChanged({ action: "FINALIZED", publicId: booking?.publicId || bookingId });
   return booking;

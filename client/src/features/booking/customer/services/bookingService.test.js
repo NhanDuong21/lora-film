@@ -3,8 +3,10 @@ import apiClient from '@/services/apiClient';
 import {
   cancelBooking,
   createBooking,
+  finalizeCheckout,
   getActiveBookingForShowtime,
-  getBookingHistory
+  getBookingHistory,
+  getOrCreateScoreRedemptionKey
 } from './bookingService';
 
 vi.mock('@/services/apiClient', () => ({
@@ -115,5 +117,31 @@ describe('bookingService customer history normalization', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/api/bookings/active', {
       params: { showtimePublicId: 'showtime-public-1' }
     });
+  });
+
+  it('sends the selected score points when finalizing checkout', async () => {
+    apiClient.post.mockResolvedValue({
+      data: { data: { publicId: 'booking-1', scorePointsUsed: 50 } }
+    });
+
+    await finalizeCheckout('booking-1', {
+      scorePoints: 50,
+      scoreIdempotencyKey: 'score-key-1'
+    });
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/bookings/booking-1/finalize-checkout',
+      {
+        scorePoints: 50,
+        scoreIdempotencyKey: 'score-key-1'
+      }
+    );
+  });
+
+  it('keeps one score idempotency key for the same Booking and points', () => {
+    const first = getOrCreateScoreRedemptionKey('booking-1', 50);
+    const second = getOrCreateScoreRedemptionKey('booking-1', 50);
+
+    expect(first).toBe(second);
   });
 });

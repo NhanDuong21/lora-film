@@ -113,6 +113,22 @@ public class InternalBookingController {
                 internalBookingPaymentService.getPaymentContext(publicId)));
     }
 
+    @GetMapping("/{bookingId:\\d+}/score-redemption-context")
+    @Operation(summary = "Get authoritative score-redemption context by numeric Booking ID")
+    public ResponseEntity<ApiResponse<InternalPaymentContextResponse>> getScoreRedemptionContext(
+            @PathVariable Long bookingId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.getScoreRedemptionContext(bookingId)));
+    }
+
+    @GetMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/score-redemption-context")
+    @Operation(summary = "Get authoritative score-redemption context by Booking public ID")
+    public ResponseEntity<ApiResponse<InternalPaymentContextResponse>> getScoreRedemptionContextByPublicId(
+            @PathVariable String publicId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.getScoreRedemptionContext(publicId)));
+    }
+
     @PostMapping("/{bookingId:\\d+}/payment-results")
     @Operation(summary = "Apply an idempotent Payment Service result")
     public ResponseEntity<ApiResponse<InternalPaymentResultResponse>> recordPaymentResult(

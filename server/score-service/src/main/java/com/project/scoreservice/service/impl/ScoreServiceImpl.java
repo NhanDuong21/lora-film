@@ -1,5 +1,7 @@
 package com.project.scoreservice.service.impl;
 
+import com.project.scoreservice.client.BookingContext;
+import com.project.scoreservice.client.BookingInternalClient;
 import com.project.scoreservice.dto.*;
 import com.project.scoreservice.entity.MembershipTier;
 import com.project.scoreservice.entity.MembershipTierHistory;
@@ -35,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Propagation;
@@ -60,6 +63,8 @@ public class ScoreServiceImpl implements ScoreService {
     private final MembershipTierHistoryRepository membershipTierHistoryRepository;
     private final OutboxService outboxService;
     private final ScoreMetricsService metricsService;
+    private final BookingInternalClient bookingInternalClient;
+    private final BigDecimal redemptionValuePerPoint;
     private final ScoreService self;
 
     public ScoreServiceImpl(UserScoreRepository userScoreRepository,
@@ -70,6 +75,8 @@ public class ScoreServiceImpl implements ScoreService {
                             MembershipTierHistoryRepository membershipTierHistoryRepository,
                             OutboxService outboxService,
                             ScoreMetricsService metricsService,
+                            BookingInternalClient bookingInternalClient,
+                            @Value("${score.redemption.value-per-point:1000}") BigDecimal redemptionValuePerPoint,
                             @Lazy ScoreService self) {
         this.userScoreRepository = userScoreRepository;
         this.membershipTierRepository = membershipTierRepository;
@@ -79,6 +86,11 @@ public class ScoreServiceImpl implements ScoreService {
         this.membershipTierHistoryRepository = membershipTierHistoryRepository;
         this.outboxService = outboxService;
         this.metricsService = metricsService;
+        this.bookingInternalClient = bookingInternalClient;
+        if (redemptionValuePerPoint == null || redemptionValuePerPoint.signum() <= 0) {
+            throw new IllegalArgumentException("score.redemption.value-per-point must be greater than zero");
+        }
+        this.redemptionValuePerPoint = redemptionValuePerPoint;
         this.self = self;
     }
 
@@ -88,12 +100,6 @@ public class ScoreServiceImpl implements ScoreService {
     public UserScoreResponse getUserScore(Long userId) {
         UserScore userScore = getOrInitializeUserScore(userId);
         return mapToUserScoreResponse(userScore);
-    }
-
-    @Override
-    @Transactional
-    public UserScoreResponse getUserTier(Long userId) {
-        return getUserScore(userId);
     }
 
     @Override
@@ -393,17 +399,94 @@ public class ScoreServiceImpl implements ScoreService {
         if (request.points() == null || request.points() <= 0) {
             throw new BusinessException("Points must be greater than zero", "SCORE_INVALID_POINT_AMOUNT", HttpStatus.BAD_REQUEST);
         }
+        String bookingReference = request.bookingReference();
+        if (bookingReference == null) {
+            throw new BusinessException(
+                    "Booking ID or public ID is required",
+                    "SCORE_BOOKING_REFERENCE_REQUIRED",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (request.bookingPublicId() != null && !request.bookingPublicId().isBlank()) {
+            try {
+                bookingReference = UUID.fromString(bookingReference).toString();
+            } catch (IllegalArgumentException exception) {
+                throw new BusinessException(
+                        "Booking public ID must be a valid UUID",
+                        "SCORE_BOOKING_REFERENCE_INVALID",
+                        HttpStatus.BAD_REQUEST);
+            }
+        } else if (request.bookingId() <= 0) {
+            throw new BusinessException(
+                    "Booking ID must be greater than zero",
+                    "SCORE_BOOKING_REFERENCE_INVALID",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        BookingContext booking = bookingInternalClient.getBookingContext(bookingReference);
+        validateRedeemBooking(userId, booking);
 
         UserScore userScore = userScoreRepository.findByUserId(userId)
                 .orElseGet(() -> getOrInitializeUserScore(userId));
 
         int availablePoints = userScore.getCurrentPoints() - userScore.getHeldPoints();
-        boolean eligible = availablePoints >= request.points();
-        BigDecimal valuePerPoint = new BigDecimal("1000");
-        BigDecimal discountAmount = new BigDecimal(request.points()).multiply(valuePerPoint);
-        String message = eligible ? "Eligible for redemption" : "Insufficient available points for redemption";
+        BigDecimal redeemableBookingAmount = booking.getAmount()
+                .subtract(BigDecimal.ONE)
+                .max(BigDecimal.ZERO);
+        int maxByBookingAmount = redeemableBookingAmount
+                .divide(redemptionValuePerPoint, 0, RoundingMode.DOWN)
+                .min(BigDecimal.valueOf(Integer.MAX_VALUE))
+                .intValue();
+        int maxRedeemablePoints = Math.max(0, Math.min(availablePoints, maxByBookingAmount));
+        BigDecimal discountAmount = discountForPoints(request.points());
+        boolean hasEnoughPoints = availablePoints >= request.points();
+        boolean withinBookingAmount = request.points() <= maxByBookingAmount;
+        boolean eligible = hasEnoughPoints && withinBookingAmount;
+        String message = !hasEnoughPoints
+                ? "Insufficient available points for redemption"
+                : !withinBookingAmount
+                    ? "Requested points exceed the payable Booking amount"
+                    : "Eligible for redemption";
 
-        return new RedeemPreviewResponse(eligible, request.points(), availablePoints, discountAmount, valuePerPoint, message);
+        return new RedeemPreviewResponse(
+                eligible,
+                request.points(),
+                availablePoints,
+                maxRedeemablePoints,
+                discountAmount,
+                booking.getAmount(),
+                booking.getAmount().subtract(discountAmount).max(BigDecimal.ZERO),
+                redemptionValuePerPoint,
+                message);
+    }
+
+    private void validateRedeemBooking(Long userId, BookingContext booking) {
+        if (booking == null) {
+            throw new BusinessException(
+                    "Booking Service returned an empty payment context",
+                    "SCORE_BOOKING_CONTEXT_UNAVAILABLE",
+                    HttpStatus.BAD_GATEWAY);
+        }
+        if (!userId.equals(booking.getUserId())) {
+            throw new BusinessException(
+                    "Booking does not belong to the authenticated customer",
+                    "SCORE_BOOKING_OWNER_MISMATCH",
+                    HttpStatus.FORBIDDEN);
+        }
+        if (!booking.isRedeemAllowed()
+                || !"PENDING_PAYMENT".equalsIgnoreCase(booking.getStatus())
+                || booking.getAmount() == null
+                || booking.getAmount().signum() <= 0) {
+            throw new BusinessException(
+                    "Booking is not eligible for point redemption",
+                    "SCORE_BOOKING_NOT_REDEEMABLE",
+                    HttpStatus.CONFLICT);
+        }
+        if (booking.getExpiresAt() == null || !booking.getExpiresAt().isAfter(java.time.Instant.now())) {
+            throw new BusinessException(
+                    "Booking payment deadline has expired",
+                    "SCORE_BOOKING_EXPIRED",
+                    HttpStatus.CONFLICT);
+        }
     }
 
     @Override
@@ -412,11 +495,28 @@ public class ScoreServiceImpl implements ScoreService {
         if (request.points() == null || request.points() <= 0) {
             throw new BusinessException("Points must be greater than zero", "SCORE_INVALID_POINT_AMOUNT", HttpStatus.BAD_REQUEST);
         }
+        BigDecimal discountAmount = discountForPoints(request.points());
+        if (request.bookingAmount() != null
+                && (request.bookingAmount().signum() <= 0
+                || discountAmount.compareTo(request.bookingAmount()) >= 0)) {
+            throw new BusinessException(
+                    "Point discount must be lower than the payable Booking amount",
+                    "SCORE_DISCOUNT_EXCEEDS_BOOKING_AMOUNT",
+                    HttpStatus.BAD_REQUEST);
+        }
 
         Optional<ScoreHold> existingOpt = scoreHoldRepository.findByIdempotencyKey(request.idempotencyKey());
         if (existingOpt.isPresent()) {
             ScoreHold hold = existingOpt.get();
             UserScore us = hold.getUserScore();
+            if (!us.getUserId().equals(request.userId())
+                    || !hold.getBookingId().equals(request.bookingId())
+                    || !hold.getPoints().equals(request.points())) {
+                throw new BusinessException(
+                        "Idempotency key was already used for another score hold",
+                        "SCORE_IDEMPOTENCY_CONFLICT",
+                        HttpStatus.CONFLICT);
+            }
             return new ScoreHoldResponse(
                     hold.getHoldCode(),
                     us.getUserId(),
@@ -425,7 +525,9 @@ public class ScoreServiceImpl implements ScoreService {
                     us.getCurrentPoints() - us.getHeldPoints(),
                     hold.getExpiredAt(),
                     hold.getStatus().name(),
-                    true
+                    true,
+                    discountForPoints(hold.getPoints()),
+                    redemptionValuePerPoint
             );
         }
 
@@ -492,10 +594,18 @@ public class ScoreServiceImpl implements ScoreService {
                 userScore.getCurrentPoints() - userScore.getHeldPoints(),
                 hold.getExpiredAt(),
                 hold.getStatus().name(),
-                false
+                false,
+                discountAmount,
+                redemptionValuePerPoint
         );
         outboxService.saveEvent("HOLD", hold.getHoldCode(), "POINT_HELD", response, org.slf4j.MDC.get("correlationId"));
         return response;
+    }
+
+    private BigDecimal discountForPoints(int points) {
+        return redemptionValuePerPoint
+                .multiply(BigDecimal.valueOf(points))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     @Override
@@ -733,7 +843,7 @@ public class ScoreServiceImpl implements ScoreService {
                     sh.getUserScore().getUserId(),
                     sh.getBookingId(),
                     pts,
-                    pts * 1000,
+                    discountForPoints(pts).intValueExact(),
                     sh.getBalanceAfter(),
                     sh.getAccumulatedAfter(),
                     true
@@ -784,7 +894,7 @@ public class ScoreServiceImpl implements ScoreService {
                 userScore.getUserId(),
                 request.bookingId(),
                 request.points(),
-                request.points() * 1000,
+                redemptionValuePerPoint.multiply(BigDecimal.valueOf(request.points())).intValueExact(),
                 userScore.getCurrentPoints(),
                 userScore.getAccumulatedPoints(),
                 false

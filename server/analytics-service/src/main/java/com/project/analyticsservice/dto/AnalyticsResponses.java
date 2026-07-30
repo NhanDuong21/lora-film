@@ -12,6 +12,9 @@ public final class AnalyticsResponses {
     public record Period(LocalDate startDate, LocalDate endDate, String timezone) {
     }
 
+    public record Scope(String type, String cinemaKey, String cinemaName) {
+    }
+
     public record Summary(
             BigDecimal grossRevenue,
             BigDecimal discountAmount,
@@ -261,6 +264,7 @@ public final class AnalyticsResponses {
 
     public record Dashboard(
             Period period,
+            Scope scope,
             Summary summary,
             List<DailyKpi> daily,
             List<CinemaKpi> topCinemas,

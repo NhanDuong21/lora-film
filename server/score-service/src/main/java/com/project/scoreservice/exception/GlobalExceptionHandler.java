@@ -34,8 +34,20 @@ public class GlobalExceptionHandler {
         List<ApiResponse.ValidationError> errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> new ApiResponse.ValidationError(error.getField(), error.getDefaultMessage()))
                 .collect(Collectors.toList());
- 
-        ApiResponse<Void> response = ApiResponse.validationError("Validation failed", errors);
+
+        boolean invalidRedeemPoints = ex.getBindingResult().getTarget() instanceof
+                com.project.scoreservice.dto.RedeemPreviewRequest
+                && ex.getBindingResult().getFieldErrors().stream()
+                    .map(FieldError::getField)
+                    .anyMatch("points"::equals);
+        ApiResponse<Void> response = invalidRedeemPoints
+                ? new ApiResponse<>(
+                        false,
+                        "Points must be greater than zero",
+                        "SCORE_INVALID_POINT_AMOUNT",
+                        null,
+                        errors)
+                : ApiResponse.validationError("Validation failed", errors);
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
  

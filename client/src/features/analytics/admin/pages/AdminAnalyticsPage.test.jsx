@@ -4,12 +4,14 @@ import AdminAnalyticsPage from './AdminAnalyticsPage';
 import {
   acknowledgeAnalyticsAlert,
   getAnalyticsDashboard,
+  getCinemaKpis,
   updateAnalyticsRecommendation
 } from '../services/analyticsAdminService';
 
 vi.mock('../services/analyticsAdminService', () => ({
   acknowledgeAnalyticsAlert: vi.fn(),
   getAnalyticsDashboard: vi.fn(),
+  getCinemaKpis: vi.fn(),
   updateAnalyticsRecommendation: vi.fn()
 }));
 
@@ -76,6 +78,9 @@ describe('AdminAnalyticsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getAnalyticsDashboard.mockResolvedValue(dashboard);
+    getCinemaKpis.mockResolvedValue([
+      { cinemaKey: 'cinema-1', cinemaName: 'LoraFilm Quận 1' }
+    ]);
     acknowledgeAnalyticsAlert.mockResolvedValue({ status: 'ACKNOWLEDGED' });
     updateAnalyticsRecommendation.mockResolvedValue({ status: 'ACCEPTED' });
   });
@@ -118,6 +123,22 @@ describe('AdminAnalyticsPage', () => {
         startDate: today,
         endDate: today
       });
+    });
+  });
+
+  it('loads a dashboard scoped to one selected cinema', async () => {
+    render(<AdminAnalyticsPage />);
+    await screen.findByText('Trung tâm điều hành kinh doanh');
+    getAnalyticsDashboard.mockClear();
+
+    fireEvent.change(screen.getByLabelText('Chọn rạp phân tích'), {
+      target: { value: 'cinema-1' }
+    });
+
+    await waitFor(() => {
+      expect(getAnalyticsDashboard).toHaveBeenCalledWith(
+        expect.objectContaining({ cinemaKey: 'cinema-1' })
+      );
     });
   });
 

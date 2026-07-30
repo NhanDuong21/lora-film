@@ -1,6 +1,7 @@
 package com.lorafilm.booking.booking.controller;
 
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
+import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
@@ -169,9 +170,11 @@ public class CustomerBookingController {
 
     @PostMapping("/{publicId}/finalize-checkout")
     @Operation(summary = "Lock the checkout amount", description = "Locks the server-owned amount before Payment handoff")
-    public ResponseEntity<ApiResponse<BookingResponse>> finalizeCheckout(@PathVariable String publicId) {
+    public ResponseEntity<ApiResponse<BookingResponse>> finalizeCheckout(
+            @PathVariable String publicId,
+            @Valid @RequestBody(required = false) FinalizeCheckoutRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Checkout finalized successfully", bookingService.finalizeCheckout(publicId)));
+                "Checkout finalized successfully", bookingService.finalizeCheckout(publicId, request)));
     }
 
     @PostMapping("/{publicId}/payment")

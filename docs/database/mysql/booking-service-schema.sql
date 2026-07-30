@@ -60,6 +60,12 @@ CREATE TABLE bookings (
     voucher_discount DECIMAL(12,2) NOT NULL DEFAULT 0
         COMMENT 'Số tiền giảm giá từ Voucher/Coupon',
 
+    score_points_used INT NOT NULL DEFAULT 0,
+
+    score_discount DECIMAL(12,2) NOT NULL DEFAULT 0,
+
+    score_hold_code VARCHAR(80) NULL,
+
     final_amount DECIMAL(12,2) NOT NULL
         COMMENT 'Số tiền thực tế khách phải trả = (Vé + Đồ ăn + Phí + Thuế) - Giảm giá',
 
