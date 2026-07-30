@@ -4,6 +4,7 @@ const CARDS = [
   {
     key: 'draft',
     label: 'Chờ duyệt',
+    description: 'Phim mới nhập đang chờ quyết định',
     icon: Clock3,
     active: query => query.status === 'DRAFT',
     changes: { status: 'DRAFT' },
@@ -11,7 +12,8 @@ const CARDS = [
   },
   {
     key: 'warning',
-    label: 'Cần kiểm tra',
+    label: 'Cần bổ sung',
+    description: 'Thiếu dữ liệu cần hoàn thiện',
     icon: AlertTriangle,
     active: query => query.healthStatus === 'WARNING',
     changes: { healthStatus: 'WARNING' },
@@ -19,7 +21,8 @@ const CARDS = [
   },
   {
     key: 'blocked',
-    label: 'Bị chặn',
+    label: 'Chưa thể phát hành',
+    description: 'Đang bị chặn khỏi lịch chiếu',
     icon: Ban,
     active: query => query.healthStatus === 'BLOCKED',
     changes: { healthStatus: 'BLOCKED' },
@@ -27,7 +30,8 @@ const CARDS = [
   },
   {
     key: 'nowShowing',
-    label: 'Đang chiếu',
+    label: 'Đang phục vụ',
+    description: 'Có suất chiếu đang mở bán',
     icon: Clapperboard,
     active: query => query.status === 'NOW_SHOWING',
     changes: { status: 'NOW_SHOWING' },
@@ -38,9 +42,9 @@ const CARDS = [
 export default function MovieSummaryCards({ summary, query, isLoading, isRefreshing, error, onRetry, onSelect }) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Đang tải thống kê phim">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Đang tải thống kê phim">
         {CARDS.map(card => (
-          <div key={card.key} className="h-24 rounded-2xl border border-zinc-800 bg-zinc-900/50 animate-pulse" />
+          <div key={card.key} className="h-32 rounded-2xl border border-zinc-800 bg-zinc-900/50 animate-pulse" />
         ))}
       </div>
     );
@@ -58,14 +62,22 @@ export default function MovieSummaryCards({ summary, query, isLoading, isRefresh
   }
 
   return (
-    <div className="space-y-2">
+    <section className="space-y-3" aria-labelledby="movie-work-queue-title">
+      <div>
+        <h2 id="movie-work-queue-title" className="text-sm font-black uppercase tracking-wider text-white">
+          Việc cần làm
+        </h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Chọn một nhóm để xem đúng các phim cần xử lý.
+        </p>
+      </div>
       {error && (
         <div className="flex items-center justify-between rounded-xl border border-red-900/40 bg-red-950/20 px-3 py-2 text-xs text-red-300">
           <span>Không thể làm mới thống kê: {error}</span>
           <button type="button" onClick={onRetry} className="font-bold underline">Thử lại</button>
         </div>
       )}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {CARDS.map(card => {
           const Icon = card.icon;
           const active = card.active(query);
@@ -75,7 +87,7 @@ export default function MovieSummaryCards({ summary, query, isLoading, isRefresh
               type="button"
               onClick={() => onSelect(card.changes)}
               aria-pressed={active}
-              className={`enterprise-card p-4 text-left transition-all relative overflow-hidden group ${
+              className={`enterprise-card min-h-32 p-5 text-left transition-all relative overflow-hidden group ${
                 active
                   ? `${card.accent} ring-1 ring-current`
                   : 'hover:border-zinc-700 hover:bg-zinc-800'
@@ -85,6 +97,7 @@ export default function MovieSummaryCards({ summary, query, isLoading, isRefresh
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-wider opacity-80">{card.label}</p>
                   <p className="mt-2 text-2xl font-black">{summary?.[card.key] ?? 0}</p>
+                  <p className="mt-2 text-xs leading-5 text-zinc-400">{card.description}</p>
                 </div>
                 <Icon className="h-5 w-5 opacity-80" />
               </div>
@@ -93,6 +106,6 @@ export default function MovieSummaryCards({ summary, query, isLoading, isRefresh
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

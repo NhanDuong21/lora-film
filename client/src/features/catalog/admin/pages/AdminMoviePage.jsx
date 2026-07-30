@@ -66,9 +66,9 @@ export default function AdminMoviePage() {
     if (count <= 0) return;
 
     const confirmed = await triggerConfirm?.({
-      title: `Duyệt ${count} phim từ TMDB?`,
-      message: 'Hệ thống sẽ kiểm tra lại dữ liệu từng phim và chỉ duyệt những phim đủ điều kiện.',
-      confirmLabel: 'Duyệt phim',
+      title: `Duyệt tối đa ${count} phim mới?`,
+      message: 'Hệ thống sẽ kiểm tra từng phim và chỉ đưa vào khai thác những phim đã đủ nội dung cần thiết.',
+      confirmLabel: 'Kiểm tra và duyệt',
     });
     if (!confirmed) return;
 
@@ -77,9 +77,9 @@ export default function AdminMoviePage() {
 
   const handleBulkArchive = async () => {
     const confirmed = await triggerConfirm?.({
-      title: 'Lưu trữ các phim cũ?',
-      message: 'Chỉ phim nhập từ TMDB, vẫn ở trạng thái nháp và đã qua ngày phát hành mới được chuyển sang không hoạt động.',
-      confirmLabel: 'Lưu trữ',
+      title: 'Lưu trữ các phim không còn phù hợp?',
+      message: 'Các phim mới nhập nhưng đã qua ngày phát hành và chưa được duyệt sẽ được chuyển sang khu vực tạm ngừng khai thác.',
+      confirmLabel: 'Lưu trữ phim',
     });
     if (!confirmed) return;
 
@@ -89,11 +89,11 @@ export default function AdminMoviePage() {
   return (
     <div className="flex h-full flex-col overflow-auto bg-zinc-950 text-white" data-testid="admin-movie-page">
       <div className="space-y-6 p-6 md:p-8">
-        <TmdbSyncStatusPanel />
-
         <div className="border-b border-zinc-800 pb-4">
-          <h1 className="text-xl font-black uppercase tracking-wider md:text-2xl">Quản lý phim</h1>
-          <p className="mt-2 text-sm text-zinc-400">Theo dõi vòng đời, chất lượng dữ liệu và khả năng vận hành của toàn bộ kho phim.</p>
+          <h1 className="text-xl font-black uppercase tracking-wider md:text-2xl">Trung tâm nội dung phim</h1>
+          <p className="mt-2 max-w-3xl text-sm text-zinc-400">
+            Duyệt phim mới, bổ sung nội dung còn thiếu và quản lý các phim đang phục vụ khách hàng.
+          </p>
         </div>
 
         <MovieSummaryCards
@@ -117,7 +117,7 @@ export default function AdminMoviePage() {
                 : 'border-transparent bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
             }`}
           >
-            <Cloud className="h-4 w-4" /> Hàng đợi duyệt TMDB
+            <Cloud className="h-4 w-4" /> Phim mới cần duyệt
           </button>
           {ADMIN_MOVIE_STATUS_TABS.map(tab => (
             <button
@@ -143,7 +143,7 @@ export default function AdminMoviePage() {
               type="search"
               value={adminMovies.searchInput}
               onChange={event => adminMovies.setSearchInput(event.target.value)}
-              placeholder="Tìm kiếm tên phim..."
+              placeholder="Tìm theo tên phim…"
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-2.5 pl-9 pr-4 text-xs text-zinc-100 outline-none transition-colors placeholder:text-zinc-500 focus-ring"
             />
           </div>
@@ -158,7 +158,7 @@ export default function AdminMoviePage() {
                   : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
               }`}
             >
-              <Filter className="h-4 w-4" /> Bộ lọc ({advancedFilterCount})
+              <Filter className="h-4 w-4" /> Lọc danh sách ({advancedFilterCount})
             </button>
             <select
               aria-label="Số phim mỗi trang"
@@ -169,7 +169,7 @@ export default function AdminMoviePage() {
               {[5, 10, 20, 50].map(size => <option key={size} value={size}>{size}/trang</option>)}
             </select>
             <button type="button" onClick={handleOpenAdd} className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-200 hover:bg-zinc-700 transition-colors">
-              <Plus className="h-4 w-4" /> Tạo phim thủ công
+              <Plus className="h-4 w-4" /> Thêm phim
             </button>
           </div>
         </div>
@@ -194,6 +194,17 @@ export default function AdminMoviePage() {
             onArchive={handleBulkArchive}
           />
         )}
+
+        <details className="enterprise-card group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-bold text-zinc-200">
+            <span>Tình trạng nhập dữ liệu tự động</span>
+            <span className="text-xs font-medium text-zinc-500 group-open:hidden">Mở thông tin kỹ thuật</span>
+            <span className="hidden text-xs font-medium text-zinc-500 group-open:inline">Thu gọn</span>
+          </summary>
+          <div className="mt-4 border-t border-zinc-800 pt-4">
+            <TmdbSyncStatusPanel />
+          </div>
+        </details>
 
         <MovieTable
           movies={adminMovies.movies}

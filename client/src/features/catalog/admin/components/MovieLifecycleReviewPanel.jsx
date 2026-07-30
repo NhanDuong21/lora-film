@@ -96,15 +96,15 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate 
               <ShieldCheck size={20} />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">Kiểm tra trước khi chuyển trạng thái</h3>
-              <p className="text-sm text-zinc-400">Điều kiện đưa vào khai thác và quản lý vòng đời phim</p>
+              <h3 className="text-lg font-semibold text-white">Việc cần hoàn thiện trước khi phát hành</h3>
+              <p className="text-sm text-zinc-400">Hoàn tất các mục dưới đây để phim có thể hiển thị và được xếp lịch.</p>
             </div>
           </div>
 
           {isDraft && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <div className="space-y-4">
-                <h4 className="text-sm font-medium text-zinc-300">Điều kiện bắt buộc (Máy chủ xác thực)</h4>
+                <h4 className="text-sm font-medium text-zinc-300">Nội dung bắt buộc</h4>
                 <div className="space-y-2">
                   {renderChecklistItem('Có thể loại', checklist.hasGenre)}
                   {renderChecklistItem('Có phiên bản đang hoạt động', checklist.hasActiveVersion)}
@@ -113,7 +113,7 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate 
               </div>
 
               <div className="space-y-4">
-                <h4 className="text-sm font-medium text-zinc-300">Thông tin nên kiểm tra (Cảnh báo)</h4>
+                <h4 className="text-sm font-medium text-zinc-300">Nội dung nên kiểm tra</h4>
                 <div className="space-y-2">
                   {readiness.healthStatus === 'UNKNOWN' ? (
                     <div className="flex items-center gap-3 p-3 bg-zinc-500/10 border border-zinc-500/20 rounded-xl text-zinc-400">
