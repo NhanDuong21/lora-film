@@ -20,6 +20,8 @@ import {
   summarizeTicketPrices
 } from '@/features/facilities/customer/utils/cinemaPresentation';
 
+const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='900'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop stop-color='%2327272a'/><stop offset='1' stop-color='%2309090b'/></linearGradient></defs><rect width='100%25' height='100%25' fill='url(%23g)'/><text x='50%25' y='48%25' text-anchor='middle' fill='%23ff7a00' font-family='sans-serif' font-size='52' font-weight='700'>LoraFilm</text><text x='50%25' y='54%25' text-anchor='middle' fill='%23a1a1aa' font-family='sans-serif' font-size='24'>Đang cập nhật poster</text></svg>";
+
 export default function CinemaDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -416,6 +418,15 @@ export default function CinemaDetailPage() {
                 };
                 const posterUrl = info.posterUrl || info.primaryPoster || movie.posterUrl;
                 const moviePath = `/movies/${movie.slug || movie.publicId}`;
+                const moviePreview = {
+                  ...info,
+                  ...movie,
+                  primaryPoster: posterUrl,
+                  posterUrl
+                };
+                const openMovieDetail = () => navigate(moviePath, {
+                  state: { moviePreview }
+                });
                 const genreText = (info.genres || [])
                   .map(genre => typeof genre === 'string' ? genre : genre?.name)
                   .filter(Boolean)
@@ -425,27 +436,25 @@ export default function CinemaDetailPage() {
                   <div key={movie.publicId} className="bg-zinc-900 border border-zinc-850 hover:border-zinc-800 rounded-3xl p-5 shadow-2xl flex gap-5 group">
                     {/* Poster Slot */}
                     <div 
-                      onClick={() => navigate(moviePath)}
+                      onClick={openMovieDetail}
                       className="w-24 md:w-28 aspect-[2/3] rounded-2xl overflow-hidden shrink-0 border border-zinc-800 cursor-pointer bg-zinc-950"
                     >
-                      {posterUrl ? (
-                        <img
-                          src={posterUrl}
-                          alt={movie.title}
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-zinc-700">
-                          <Film className="h-8 w-8" />
-                        </div>
-                      )}
+                      <img
+                        src={posterUrl || FALLBACK_POSTER}
+                        alt={movie.title}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                        onError={event => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = FALLBACK_POSTER;
+                        }}
+                      />
                     </div>
 
                     {/* Showtime Details */}
                     <div className="flex-grow space-y-3.5 overflow-hidden">
                       <div className="space-y-1">
                         <h3 
-                          onClick={() => navigate(moviePath)}
+                          onClick={openMovieDetail}
                           className="text-xs font-black text-white hover:text-brand-orange transition-colors uppercase tracking-wider cursor-pointer line-clamp-1"
                         >
                           {movie.title}

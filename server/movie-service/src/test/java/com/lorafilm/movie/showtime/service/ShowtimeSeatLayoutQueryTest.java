@@ -5,6 +5,7 @@ import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
@@ -50,6 +51,9 @@ public class ShowtimeSeatLayoutQueryTest {
 
     @Mock
     private ShowtimeMapper showtimeMapper;
+
+    @Mock
+    private MovieMediaRepository movieMediaRepository;
 
     @InjectMocks
     private ShowtimeQueryServiceImpl showtimeQueryService;

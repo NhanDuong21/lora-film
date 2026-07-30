@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle, Building2, CalendarDays, Clock3, Film, Globe2, MapPin, Play, RefreshCw, Users, X
 } from 'lucide-react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getBookingOptions, getMovieById } from '@/features/catalog/customer/services/movieService';
 import {
   addCalendarDays,
@@ -56,6 +56,7 @@ function CreditLine({ label, values }) {
 
 export default function MovieDetailPage() {
   const { movieId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const today = useMemo(() => vietnamDateKey(), []);
@@ -69,6 +70,7 @@ export default function MovieDetailPage() {
   const [showtimeError, setShowtimeError] = useState(null);
   const [trailer, setTrailer] = useState(null);
   const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
+  const moviePreview = location.state?.moviePreview;
   const availableDates = useMemo(
     () => [...new Set(
       options
@@ -85,13 +87,22 @@ export default function MovieDetailPage() {
     try {
       setMovie(await getMovieById(movieId));
     } catch (requestError) {
-      setError(requestError?.status === 404
-        ? 'Không tìm thấy thông tin phim.'
-        : 'Không thể tải thông tin phim.');
+      if (requestError?.status === 404 && moviePreview?.title) {
+        setMovie({
+          ...moviePreview,
+          primaryPoster: moviePreview.primaryPoster || moviePreview.posterUrl,
+          media: moviePreview.media || [],
+          versions: moviePreview.versions || []
+        });
+      } else {
+        setError(requestError?.status === 404
+          ? 'Không tìm thấy thông tin phim.'
+          : 'Không thể tải thông tin phim.');
+      }
     } finally {
       setLoading(false);
     }
-  }, [movieId]);
+  }, [movieId, moviePreview]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -216,7 +227,7 @@ export default function MovieDetailPage() {
             <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-zinc-300">
               {movie.ageRating && <strong className="rounded-md bg-brand-orange px-2.5 py-1 text-xs text-white">{movie.ageRating}</strong>}
               <span className="flex items-center gap-2"><Clock3 size={16} className="text-brand-orange" />{formatDuration(movie.durationMinutes)}</span>
-              <span className="flex items-center gap-2"><CalendarDays size={16} className="text-brand-orange" />{movie.releaseDate}</span>
+              <span className="flex items-center gap-2"><CalendarDays size={16} className="text-brand-orange" />{movie.releaseDate || 'Đang cập nhật'}</span>
             </div>
             <p className="mt-5 text-sm font-bold text-amber-400">{formatGenres(movie.genres)}</p>
             <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-300">{movie.synopsis || 'Nội dung phim đang được cập nhật.'}</p>

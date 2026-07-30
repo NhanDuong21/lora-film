@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import CinemaDetailPage from './CinemaDetailPage';
 import {
   getCinemaBySlug,
@@ -22,6 +22,15 @@ const operatingHours = Array.from({ length: 7 }, (_, index) => ({
   closeTime: '01:00',
   isClosed: false
 }));
+
+function MovieRouteProbe() {
+  const location = useLocation();
+  return (
+    <p>
+      {location.state?.moviePreview?.title} · {location.state?.moviePreview?.primaryPoster}
+    </p>
+  );
+}
 
 describe('CinemaDetailPage', () => {
   beforeEach(() => {
@@ -63,7 +72,8 @@ describe('CinemaDetailPage', () => {
         movie: {
           publicId: 'movie-1',
           slug: 'phim-1',
-          title: 'Phim kiểm thử'
+          title: 'Phim kiểm thử',
+          posterUrl: 'https://cdn.lorafilm.test/phim-1.jpg'
         },
         movieVersion: { versionName: '2D Vietsub' },
         startTime: '2026-07-30T13:00:00Z'
@@ -85,6 +95,7 @@ describe('CinemaDetailPage', () => {
       <MemoryRouter initialEntries={['/cinema/lorafilm-01']}>
         <Routes>
           <Route path="/cinema/:id" element={<CinemaDetailPage />} />
+          <Route path="/movies/:movieId" element={<MovieRouteProbe />} />
         </Routes>
       </MemoryRouter>
     );
@@ -107,5 +118,14 @@ describe('CinemaDetailPage', () => {
       size: 100
     }));
     expect(getSeatLayout).toHaveBeenCalledWith('showtime-1');
+    expect(screen.getByRole('img', { name: 'Phim kiểm thử' })).toHaveAttribute(
+      'src',
+      'https://cdn.lorafilm.test/phim-1.jpg'
+    );
+
+    fireEvent.click(screen.getByRole('heading', { name: 'Phim kiểm thử', level: 3 }));
+    expect(await screen.findByText(
+      'Phim kiểm thử · https://cdn.lorafilm.test/phim-1.jpg'
+    )).toBeInTheDocument();
   });
 });

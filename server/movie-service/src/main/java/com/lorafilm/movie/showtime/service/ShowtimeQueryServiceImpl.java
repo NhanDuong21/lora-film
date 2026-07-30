@@ -20,6 +20,8 @@ import com.lorafilm.movie.common.dto.PageResponse;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
@@ -54,17 +56,20 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
     private final ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository;
     private final SeatService seatService;
     private final ShowtimeMapper showtimeMapper;
+    private final MovieMediaRepository movieMediaRepository;
 
     public ShowtimeQueryServiceImpl(ShowtimeRepository showtimeRepository,
                                ShowtimePriceRepository showtimePriceRepository,
                                ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository,
                                SeatService seatService,
-                               ShowtimeMapper showtimeMapper) {
+                               ShowtimeMapper showtimeMapper,
+                               MovieMediaRepository movieMediaRepository) {
         this.showtimeRepository = showtimeRepository;
         this.showtimePriceRepository = showtimePriceRepository;
         this.showtimeBlockedSeatRepository = showtimeBlockedSeatRepository;
         this.seatService = seatService;
         this.showtimeMapper = showtimeMapper;
+        this.movieMediaRepository = movieMediaRepository;
     }
 
     @Override
@@ -103,8 +108,30 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
         Pageable pageable = PageRequest.of(page, size, Sort.by("startTime").ascending());
         Page<Showtime> showtimePage = showtimeRepository.findAll(spec, pageable);
 
-        List<ShowtimeDto> showtimeDtos = showtimePage.getContent().stream()
-                .map(showtimeMapper::toDto)
+        List<Showtime> showtimes = showtimePage.getContent();
+        List<Long> movieIds = showtimes.stream()
+                .map(showtime -> showtime.getMovie().getId())
+                .distinct()
+                .toList();
+        Map<Long, String> primaryPosters = movieIds.isEmpty()
+                ? Map.of()
+                : movieMediaRepository
+                        .findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                                movieIds, MovieMediaType.POSTER, ActiveStatus.ACTIVE)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                media -> media.getMovie().getId(),
+                                media -> media.getUrl(),
+                                (first, ignored) -> first));
+
+        List<ShowtimeDto> showtimeDtos = showtimes.stream()
+                .map(showtime -> {
+                    ShowtimeDto dto = showtimeMapper.toDto(showtime);
+                    if (dto != null && dto.getMovie() != null) {
+                        dto.getMovie().setPosterUrl(primaryPosters.get(showtime.getMovie().getId()));
+                    }
+                    return dto;
+                })
                 .collect(Collectors.toList());
 
         return new PageResponse<>(

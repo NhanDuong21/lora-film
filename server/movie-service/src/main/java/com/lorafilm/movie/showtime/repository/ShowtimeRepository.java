@@ -14,6 +14,10 @@ import java.time.LocalDate;
 public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSpecificationExecutor<Showtime> {
     boolean existsByAuditoriumId(Long auditoriumId);
     boolean existsByMovieIdAndDeletedAtIsNull(Long movieId);
+    boolean existsByMovieIdAndStatusAndStartTimeAfterAndDeletedAtIsNull(
+            Long movieId,
+            com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus status,
+            Instant startTime);
 
     Optional<Showtime> findByPublicIdAndDeletedAtIsNull(String publicId);
 
