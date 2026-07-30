@@ -23,19 +23,19 @@ export default function ComingSoonLayout() {
   ];
 
   return (
-    <div className="rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 border border-zinc-800 p-8 shadow-2xl relative overflow-hidden">
+    <div className="rounded-[2rem] bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 shadow-2xl relative overflow-hidden">
       {/* Decorative Blur */}
-      <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-brand-orange/10 rounded-full filter blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-20 -right-20 w-72 h-72 bg-brand-orange/5 rounded-full filter blur-3xl pointer-events-none" />
 
-      <div className="max-w-xl mb-8 relative z-10">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-orange/10 px-3 py-1 text-xs font-black text-brand-orange border border-brand-orange/20 uppercase tracking-wider mb-3">
-          <Sparkles className="h-3.5 w-3.5" />
+      <div className="max-w-xl mb-10 relative z-10">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2.5 py-1 text-[9px] font-black text-brand-orange border border-white/10 uppercase tracking-widest mb-4 shadow-sm">
+          <Sparkles className="h-3 w-3" />
           Hệ sinh thái điểm thưởng mới
         </span>
-        <h3 className="text-2xl font-black text-white tracking-tight">
+        <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2">
           Khám phá những đặc quyền sắp ra mắt
         </h3>
-        <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+        <p className="text-xs text-zinc-400 leading-relaxed tracking-wide">
           Chúng tôi đang tiếp tục nâng cấp Trung tâm Khách hàng Thành viên với nhiều tính năng mới giúp tối ưu hóa giá trị mỗi chuyến đi của bạn.
         </p>
       </div>
@@ -44,21 +44,21 @@ export default function ComingSoonLayout() {
         {perks.map((perk, index) => (
           <div
             key={index}
-            className="group relative rounded-2xl bg-zinc-800/40 border border-zinc-800/80 p-6 hover:bg-zinc-800/70 hover:border-zinc-700 transition-all duration-300 flex flex-col justify-between"
+            className="group relative rounded-3xl bg-white/5 border border-white/5 p-6 hover:bg-white/10 hover:border-white/10 transition-all duration-300 flex flex-col justify-between shadow-xl shadow-black/10"
           >
             <div>
-              <div className="h-12 w-12 rounded-2xl bg-zinc-900 flex items-center justify-center mb-4 shadow-inner border border-zinc-800 group-hover:scale-110 transition-transform">
+              <div className="h-14 w-14 rounded-2xl bg-zinc-950/50 flex items-center justify-center mb-5 shadow-inner border border-zinc-800/50 group-hover:scale-110 transition-transform">
                 {perk.icon}
               </div>
-              <h4 className="text-base font-black text-white mb-2 group-hover:text-brand-orange transition-colors">
+              <h4 className="text-sm font-black text-white mb-2 tracking-wide group-hover:text-brand-orange transition-colors">
                 {perk.title}
               </h4>
-              <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+              <p className="text-[11px] text-zinc-400 leading-relaxed mb-6 font-medium">
                 {perk.desc}
               </p>
             </div>
-            <div className="pt-4 border-t border-zinc-800/60 flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-zinc-900 px-2.5 py-1 rounded-md border border-zinc-800">
+            <div className="pt-4 border-t border-zinc-800/40 flex items-center justify-between">
+              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 bg-black/20 px-2.5 py-1 rounded-md border border-white/5 shadow-inner">
                 {perk.badge}
               </span>
             </div>

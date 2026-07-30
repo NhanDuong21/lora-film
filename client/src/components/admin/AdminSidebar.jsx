@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Film, 
-  Users, 
-  Calendar, 
-  Gift, 
-  Ticket, 
-  Coffee, 
-  Home, 
-  LogOut, 
+import {
+  LayoutDashboard,
+  Film,
+  Users,
+  Calendar,
+  Gift,
+  Ticket,
+  Coffee,
+  Home,
+  LogOut,
   ChevronDown,
   TrendingUp,
   Coins,
@@ -35,12 +35,12 @@ import {
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
 
-export default function AdminSidebar({ 
-  activeTab, 
-  setActiveTab, 
-  user, 
-  onBackHome, 
-  handleLogout 
+export default function AdminSidebar({
+  activeTab,
+  setActiveTab,
+  user,
+  onBackHome,
+  handleLogout
 }) {
   const navigate = useNavigate();
   const permissions = user?.permissions || [];
@@ -117,10 +117,10 @@ export default function AdminSidebar({
         {/* Brand Top Header */}
         <div className="px-6 py-6 border-b border-zinc-800/60 flex items-center justify-between shrink-0 h-[72px]">
           <Link to={adminHomePath} className="flex items-center gap-2.5 bg-transparent p-0 m-0 shadow-none border-none select-none decoration-none group">
-            <img 
-              src="/images/main-logo.png" 
-              alt="LoraFilm Icon" 
-              className="h-8 w-auto object-contain bg-transparent" 
+            <img
+              src="/images/main-logo.png"
+              alt="LoraFilm Icon"
+              className="h-8 w-auto object-contain bg-transparent"
             />
             <span className="text-xl font-black tracking-tight text-white leading-none">
               Lora<span className="text-brand-orange ml-0.5">Film</span>
@@ -155,9 +155,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Nội dung</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.noiDung ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.noiDung ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.noiDung && (
@@ -187,9 +186,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Cơ sở & Lịch chiếu</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.coSo ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.coSo ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.coSo && (
@@ -308,9 +306,8 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Khách hàng</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.khachHang ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.khachHang ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.khachHang && (
@@ -345,32 +342,31 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Nhân sự</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.nhanSu ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.nhanSu ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.nhanSu && (
               <div className="space-y-0.5">
                 {canManageEmployees && <button onClick={() => handleTabClick('staff', '#/admin/staff')} className={getSubLinkClass('staff')}>
-                      <Shield className="w-4 h-4 shrink-0" />
-                      <span>Nhân viên</span>
-                    </button>}
+                  <Shield className="w-4 h-4 shrink-0" />
+                  <span>Nhân viên</span>
+                </button>}
                 {canManageDepartments && <button onClick={() => handleTabClick('departments', '#/admin/departments')} className={getSubLinkClass('departments')}>
-                      <Building className="w-4 h-4 shrink-0" />
-                      <span>Phòng ban</span>
-                    </button>}
+                  <Building className="w-4 h-4 shrink-0" />
+                  <span>Phòng ban</span>
+                </button>}
                 {canManagePositions && <button onClick={() => handleTabClick('positions', '#/admin/positions')} className={getSubLinkClass('positions')}>
-                      <BadgeDollarSign className="w-4 h-4 shrink-0" />
-                      <span>Vị trí</span>
-                    </button>}
+                  <BadgeDollarSign className="w-4 h-4 shrink-0" />
+                  <span>Vị trí</span>
+                </button>}
                 {canManagePayroll && <button onClick={() => handleTabClick('payroll', '#/admin/payroll')} className={getSubLinkClass('payroll')}>
                   <TrendingUp className="w-4 h-4 shrink-0" />
                   <span>Bảng lương</span>
                 </button>}
               </div>
             )}
-          </div>}
+          </div >}
 
           {/* Section 9: Settings */}
           {hasSystemAccess && (
@@ -385,54 +381,43 @@ export default function AdminSidebar({
                 }`} />
               </button>
 
-              {!collapsedSections.cauHinh && (
-                <div className="space-y-0.5">
-                  {canManageRoles && <button onClick={() => handleTabClick('roles', '#/admin/roles')} className={getSubLinkClass('roles')}>
-                    <ShieldAlert className="w-4 h-4 shrink-0" />
-                    <span>Quản lý vai trò (Role)</span>
-                  </button>}
-                  {canConfigureSystem && <button onClick={() => handleTabClick('accounts', '#/admin/accounts')} className={getSubLinkClass('accounts')}>
-                    <UserCircle className="w-4 h-4 shrink-0" />
-                    <span>Tài khoản đăng nhập</span>
-                  </button>}
-                  {canManagePermissions && <button onClick={() => handleTabClick('permissions', '#/admin/permissions')} className={getSubLinkClass('permissions')}>
-                    <Key className="w-4 h-4 shrink-0" />
-                    <span>Quản lý quyền hạn (Permission)</span>
-                  </button>}
-                  {canConfigureSystem && <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
-                    <Sliders className="w-4 h-4 shrink-0" />
-                    <span>Cấu hình chung</span>
-                  </button>}
-                  {canConfigureSystem && <button onClick={() => handleTabClick('audits', '#/admin/audits')} className={getSubLinkClass('audits')}>
-                    <FileSearch className="w-4 h-4 shrink-0" />
-                    <span>Nhật ký truy cập (Audit)</span>
-                  </button>}
-                  {canViewUserAudits && <button onClick={() => handleTabClick('user-audits', '#/admin/user-audits')} className={getSubLinkClass('user-audits')}>
-                    <FileSearch className="w-4 h-4 shrink-0" />
-                    <span>Nhật ký nghiệp vụ</span>
-                  </button>}
-                  {isFullAdmin && <button onClick={() => handleTabClick('notification-dashboard', '#/admin/notifications')} className={getSubLinkClass('notification-dashboard')}>
-                    <BellRing className="w-4 h-4 shrink-0" />
-                    <span>Notification dashboard</span>
-                  </button>}
-                  {isFullAdmin && <button onClick={() => handleTabClick('notification-templates', '#/admin/notification-templates')} className={getSubLinkClass('notification-templates')}>
-                    <Mail className="w-4 h-4 shrink-0" />
-                    <span>Notification templates</span>
-                  </button>}
-                  {isFullAdmin && <button onClick={() => handleTabClick('notification-operations', '#/admin/notification-operations')} className={getSubLinkClass('notification-operations')}>
-                    <ListChecks className="w-4 h-4 shrink-0" />
-                    <span>Delivery operations</span>
-                  </button>}
-                </div>
-              )}
-            </div>
-          )}
+                {!collapsedSections.cauHinh && (
+                  <div className="space-y-0.5">
+                    {canManageRoles && <button onClick={() => handleTabClick('roles', '#/admin/roles')} className={getSubLinkClass('roles')}>
+                      <ShieldAlert className="w-4 h-4 shrink-0" />
+                      <span>Quản lý vai trò (Role)</span>
+                    </button>}
+                    {canConfigureSystem && <button onClick={() => handleTabClick('accounts', '#/admin/accounts')} className={getSubLinkClass('accounts')}>
+                      <UserCircle className="w-4 h-4 shrink-0" />
+                      <span>Tài khoản đăng nhập</span>
+                    </button>}
+                    {canManagePermissions && <button onClick={() => handleTabClick('permissions', '#/admin/permissions')} className={getSubLinkClass('permissions')}>
+                      <Key className="w-4 h-4 shrink-0" />
+                      <span>Quản lý quyền hạn (Permission)</span>
+                    </button>}
+                    {canConfigureSystem && <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
+                      <Sliders className="w-4 h-4 shrink-0" />
+                      <span>Cấu hình chung</span>
+                    </button>}
+                    {canConfigureSystem && <button onClick={() => handleTabClick('audits', '#/admin/audits')} className={getSubLinkClass('audits')}>
+                      <FileSearch className="w-4 h-4 shrink-0" />
+                      <span>Nhật ký truy cập (Audit)</span>
+                    </button>}
+                    {canViewUserAudits && <button onClick={() => handleTabClick('user-audits', '#/admin/user-audits')} className={getSubLinkClass('user-audits')}>
+                      <FileSearch className="w-4 h-4 shrink-0" />
+                      <span>Nhật ký nghiệp vụ</span>
+                    </button>}
+                  </div>
+                )}
+              </div>
+            )
+          }
 
-        </nav>
-      </div>
+        </nav >
+      </div >
 
       {/* Pinned Bottom User Profile Card */}
-      <div className="p-4 border-t border-zinc-800/60 bg-zinc-950 shrink-0">
+      < div className="p-4 border-t border-zinc-800/60 bg-zinc-950 shrink-0" >
         <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl flex flex-col gap-3 hover-scale">
           <div className="flex items-center justify-start gap-3">
             <div className="w-10 h-10 rounded-full bg-brand-orange/10 border border-brand-orange/20 flex items-center justify-center font-bold text-brand-orange text-sm shrink-0">
@@ -460,7 +445,7 @@ export default function AdminSidebar({
               <span>Tài khoản của tôi</span>
             </button>
             <div className="flex items-center justify-between pt-2 mt-1 border-t border-zinc-800/50">
-              <button 
+              <button
                 onClick={onBackHome}
                 className="flex items-center justify-start gap-1.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-brand-orange transition-colors rounded"
                 title="Quay lại trang chủ"
@@ -468,7 +453,7 @@ export default function AdminSidebar({
                 <Home className="w-4 h-4" />
                 <span>Trang chủ</span>
               </button>
-              <button 
+              <button
                 onClick={handleLogout}
                 className="flex items-center justify-start gap-1.5 px-2 py-1.5 text-xs font-bold text-red-500 hover:text-red-400 transition-colors rounded"
               >
@@ -478,8 +463,8 @@ export default function AdminSidebar({
             </div>
           </div>
         </div>
-      </div>
+      </div >
 
-    </aside>
+    </aside >
   );
 }

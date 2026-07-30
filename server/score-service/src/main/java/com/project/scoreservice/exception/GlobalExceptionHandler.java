@@ -1,6 +1,10 @@
 package com.project.scoreservice.exception;
  
 import com.project.scoreservice.common.ApiResponse;
+import com.project.scoreservice.filter.CorrelationIdFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -11,10 +15,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
  
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
  
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
  
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
@@ -52,7 +59,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneralException(Exception ex) {
-        ApiResponse<Void> response = ApiResponse.error("Internal server error: " + ex.getMessage(), "INTERNAL_SERVER_ERROR");
+        String errorId = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+        if (errorId == null || errorId.trim().isEmpty()) {
+            errorId = UUID.randomUUID().toString();
+        }
+        log.error("Unhandled internal exception [Reference ID: {}]: ", errorId, ex);
+        ApiResponse<Void> response = ApiResponse.error("An unexpected internal error occurred. Reference ID: " + errorId, "INTERNAL_SERVER_ERROR");
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
