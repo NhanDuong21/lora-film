@@ -31,5 +31,16 @@ class GatewayRouteConfigurationTest {
                 .isEqualTo("#{@clientKeyResolver}");
         assertThat(properties.getProperty("spring.cloud.gateway.routes[9].filters[0]"))
                 .isEqualTo("AddRequestHeader=x-api-key,${TMDB_API_KEY}");
+
+        assertThat(properties.getProperty("spring.cloud.gateway.routes[2].predicates[0]"))
+                .contains("/api/admin/locations/**");
+        assertThat(properties.getProperty("spring.cloud.gateway.routes[3].predicates[0]"))
+                .contains("/api/admin/coupons/**", "/api/admin/configurations/**");
+        assertThat(properties.getProperty("spring.cloud.gateway.routes[6].predicates[0]"))
+                .contains("/api/employee/payments/**", "/api/admin/payments/**");
+        assertThat(properties.getProperty("spring.cloud.gateway.routes[10].uri"))
+                .isEqualTo("${LOCATION_API_BASE_URL:https://location-api.nyanmovie.site}");
+        assertThat(properties.getProperty("spring.cloud.gateway.routes[10].filters[0]"))
+                .isEqualTo("AddRequestHeader=x-api-key,${LOCATION_API_KEY}");
     }
 }

@@ -44,6 +44,14 @@ class RouteValidatorTest {
         assertThat(isSecured(HttpMethod.GET, "/api/cinemas/cinema-1")).isFalse();
         assertThat(isSecured(HttpMethod.GET, "/api/showtimes/showtime-1")).isFalse();
         assertThat(isSecured(HttpMethod.GET, "/api/customer/concessions")).isFalse();
+        assertThat(isSecured(HttpMethod.GET, "/api/membership-tiers")).isFalse();
+    }
+
+    @Test
+    void paymentProviderCallbacksAndReturnsDoNotRequireCustomerJwt() {
+        assertThat(isSecured(HttpMethod.GET, "/api/payments/callback/vnpay")).isFalse();
+        assertThat(isSecured(HttpMethod.POST, "/api/payments/callback/momo")).isFalse();
+        assertThat(isSecured(HttpMethod.GET, "/api/payments/return/vnpay")).isFalse();
     }
 
     private boolean isSecured(HttpMethod method, String path) {

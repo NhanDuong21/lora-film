@@ -28,7 +28,10 @@ import {
   ShieldAlert,
   UserCircle,
   FileSearch,
-  CreditCard
+  CreditCard,
+  BellRing,
+  Mail,
+  ListChecks
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
 
@@ -403,6 +406,18 @@ export default function AdminSidebar({
                     {canViewUserAudits && <button onClick={() => handleTabClick('user-audits', '#/admin/user-audits')} className={getSubLinkClass('user-audits')}>
                       <FileSearch className="w-4 h-4 shrink-0" />
                       <span>Nhật ký nghiệp vụ</span>
+                    </button>}
+                    {isFullAdmin && <button onClick={() => handleTabClick('notification-dashboard', '#/admin/notifications')} className={getSubLinkClass('notification-dashboard')}>
+                      <BellRing className="w-4 h-4 shrink-0" />
+                      <span>Tổng quan thông báo</span>
+                    </button>}
+                    {isFullAdmin && <button onClick={() => handleTabClick('notification-templates', '#/admin/notification-templates')} className={getSubLinkClass('notification-templates')}>
+                      <Mail className="w-4 h-4 shrink-0" />
+                      <span>Mẫu thông báo</span>
+                    </button>}
+                    {isFullAdmin && <button onClick={() => handleTabClick('notification-operations', '#/admin/notification-operations')} className={getSubLinkClass('notification-operations')}>
+                      <ListChecks className="w-4 h-4 shrink-0" />
+                      <span>Vận hành gửi thông báo</span>
                     </button>}
                   </div>
                 )}
