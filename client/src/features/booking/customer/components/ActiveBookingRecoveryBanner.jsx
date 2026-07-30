@@ -108,7 +108,7 @@ export default function ActiveBookingRecoveryBanner() {
     <>
       <aside
         aria-label="Đơn đặt vé đang giữ ghế"
-        className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-md rounded-2xl border border-amber-400/30 bg-zinc-950/95 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-xl sm:left-auto sm:right-6 sm:mx-0 sm:w-[390px]"
+        className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-md rounded-2xl border border-amber-400/30 bg-zinc-950 p-4 text-white shadow-2xl shadow-black/60 sm:left-auto sm:right-6 sm:mx-0 sm:w-[390px]"
       >
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-brand-orange/15 p-2.5 text-brand-orange">

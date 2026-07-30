@@ -79,8 +79,9 @@ public class PaymentOutboxWorker {
         BookingPaymentResultRequest request = objectMapper.readValue(
                 event.getPayload(), BookingPaymentResultRequest.class);
         try {
-            BookingPaymentResultResponse response = bookingClient.notifyPaymentResult(
-                    bookingPublicId(event), request);
+            BookingPaymentResultResponse response = "REFUND_RESULT".equals(event.getEventType())
+                    ? bookingClient.notifyRefundResult(bookingPublicId(event), request)
+                    : bookingClient.notifyPaymentResult(bookingPublicId(event), request);
             boolean accepted = Boolean.TRUE.equals(response.getAccepted())
                     && !Boolean.TRUE.equals(response.getReconciliationRequired());
             stateService.markBookingPublished(

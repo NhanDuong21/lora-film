@@ -117,4 +117,28 @@ describe('AdminConcessionInventoryPage', () => {
     await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/api/admin/foods/9/restore'));
     expect(await screen.findByRole('alertdialog', { name: 'Đã khôi phục sản phẩm' })).toBeInTheDocument();
   });
+
+  it('loads optimized lazy thumbnails and keeps a bounded number of rows in the DOM', async () => {
+    const items = Array.from({ length: 21 }, (_, index) => ({
+      ...sellingItem,
+      id: index + 1,
+      code: `POP_${index + 1}`,
+      name: `Sản phẩm ${index + 1}`,
+      imageUrl: `https://images.unsplash.com/photo-${index + 1}`
+    }));
+    apiClient.get.mockResolvedValue({ data: { data: items } });
+
+    render(<AdminConcessionInventoryPage />);
+
+    const firstThumbnail = await screen.findByRole('img', { name: 'Sản phẩm 1' });
+    expect(firstThumbnail).toHaveAttribute('loading', 'lazy');
+    expect(firstThumbnail).toHaveAttribute('decoding', 'async');
+    expect(firstThumbnail.getAttribute('src')).toContain('w=112');
+    expect(firstThumbnail.getAttribute('src')).toContain('h=112');
+    expect(screen.queryByText('Sản phẩm 21')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sau' }));
+    expect(await screen.findByText('Sản phẩm 21')).toBeInTheDocument();
+    expect(screen.queryByText('Sản phẩm 1')).not.toBeInTheDocument();
+  });
 });

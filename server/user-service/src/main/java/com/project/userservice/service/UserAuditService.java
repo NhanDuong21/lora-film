@@ -1,6 +1,7 @@
 package com.project.userservice.service;
 
 import com.project.userservice.entity.UserAuditLog;
+import com.project.userservice.mapper.UserAuditMapper;
 import com.project.userservice.repository.UserAuditLogRepository;
 import com.project.userservice.security.CurrentActor;
 import org.springframework.stereotype.Service;
@@ -10,9 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UserAuditService {
     private final UserAuditLogRepository repository;
+    private final UserAuditMapper userAuditMapper;
 
-    public UserAuditService(UserAuditLogRepository repository) {
+    public UserAuditService(UserAuditLogRepository repository, UserAuditMapper userAuditMapper) {
         this.repository = repository;
+        this.userAuditMapper = userAuditMapper;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -41,14 +44,7 @@ public class UserAuditService {
                 Math.min(Math.max(1, pageable.getPageSize()), 100),
                 org.springframework.data.domain.Sort.by(
                         org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
-        return repository.search(normalizedKeyword, normalizedType, safe).map(entry ->
-                new com.project.userservice.dto.response.UserAuditResponse(
-                        entry.getId(),
-                        entry.getActorAccountId(),
-                        entry.getAction(),
-                        entry.getTargetType(),
-                        entry.getTargetId(),
-                        entry.getDetails(),
-                        entry.getCreatedAt()));
+        return repository.search(normalizedKeyword, normalizedType, safe)
+                .map(userAuditMapper::toResponse);
     }
 }

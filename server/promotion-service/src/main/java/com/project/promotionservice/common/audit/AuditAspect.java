@@ -2,6 +2,8 @@ package com.project.promotionservice.common.audit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.configuration.security.principal.UserPrincipal;
+import com.project.promotionservice.configuration.security.principal.InternalServicePrincipal;
+import com.project.promotionservice.common.json.SensitiveDataSanitizer;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -23,10 +25,15 @@ public class AuditAspect {
 
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final SensitiveDataSanitizer sanitizer;
 
-    public AuditAspect(AuditLogRepository auditLogRepository, ObjectMapper objectMapper) {
+    public AuditAspect(
+            AuditLogRepository auditLogRepository,
+            ObjectMapper objectMapper,
+            SensitiveDataSanitizer sanitizer) {
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
+        this.sanitizer = sanitizer;
     }
 
     @Around("@annotation(auditable)")
@@ -46,7 +53,8 @@ public class AuditAspect {
             Object[] args = joinPoint.getArgs();
             if (args != null && args.length > 0) {
                 try {
-                    auditLog.setBeforeData(objectMapper.writeValueAsString(args[0]));
+                    auditLog.setBeforeData(objectMapper.writeValueAsString(
+                            sanitizer.sanitize(objectMapper.valueToTree(args[0]))));
                 } catch (Exception ex) {
                     log.warn("Failed to serialize method arguments for audit log", ex);
                 }
@@ -54,7 +62,8 @@ public class AuditAspect {
 
             if (result != null) {
                 try {
-                    auditLog.setAfterData(objectMapper.writeValueAsString(result));
+                    auditLog.setAfterData(objectMapper.writeValueAsString(
+                            sanitizer.sanitize(objectMapper.valueToTree(result))));
                     // Try to reflectively get publicId
                     java.lang.reflect.Method getPublicIdMethod = result.getClass().getMethod("getPublicId");
                     entityPublicId = (String) getPublicIdMethod.invoke(result);
@@ -72,6 +81,10 @@ public class AuditAspect {
                 auditLog.setActorPublicId(principal.getUserId() != null ? principal.getUserId().toString() : "anonymous");
                 auditLog.setActorType("USER");
                 auditLog.setCreatedBy(principal.getUserId() != null ? principal.getUserId().toString() : "anonymous");
+            } else if (auth != null && auth.getPrincipal() instanceof InternalServicePrincipal principal) {
+                auditLog.setActorPublicId(principal.getServiceName());
+                auditLog.setActorType("SERVICE");
+                auditLog.setCreatedBy(principal.getServiceName());
             } else {
                 auditLog.setActorPublicId("anonymous");
                 auditLog.setActorType("SYSTEM");

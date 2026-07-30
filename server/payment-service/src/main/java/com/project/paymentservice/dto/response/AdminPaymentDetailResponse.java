@@ -10,5 +10,6 @@ public record AdminPaymentDetailResponse(
         List<Map<String, Object>> logs,
         List<Map<String, Object>> webhooks,
         List<Map<String, Object>> outboxEvents,
-        List<Map<String, Object>> reconciliationCases) {
+        List<Map<String, Object>> reconciliationCases,
+        List<RefundResponse> refunds) {
 }

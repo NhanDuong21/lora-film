@@ -3,8 +3,11 @@ package com.project.paymentservice.controller;
 import com.project.paymentservice.common.ApiResponse;
 import com.project.paymentservice.dto.request.ReconciliationAssignRequest;
 import com.project.paymentservice.dto.request.ReconciliationResolveRequest;
+import com.project.paymentservice.dto.request.CreateRefundRequest;
+import com.project.paymentservice.dto.request.CompleteCashRefundRequest;
 import com.project.paymentservice.dto.response.AdminPaymentDetailResponse;
 import com.project.paymentservice.dto.response.PaymentDetailResponse;
+import com.project.paymentservice.dto.response.RefundResponse;
 import com.project.paymentservice.entity.PaymentOutboxEvent;
 import com.project.paymentservice.entity.PaymentReconciliationCase;
 import com.project.paymentservice.entity.PaymentWebhookEvent;
@@ -13,9 +16,11 @@ import com.project.paymentservice.enumtype.PaymentStatus;
 import com.project.paymentservice.enumtype.ProviderCode;
 import com.project.paymentservice.enumtype.ReconciliationCaseStatus;
 import com.project.paymentservice.enumtype.ReconciliationStatus;
+import com.project.paymentservice.enumtype.RefundStatus;
 import com.project.paymentservice.enumtype.WebhookProcessingStatus;
 import com.project.paymentservice.security.CurrentUserProvider;
 import com.project.paymentservice.service.AdminPaymentService;
+import com.project.paymentservice.service.RefundService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -31,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.time.Instant;
 
@@ -39,12 +45,15 @@ import java.time.Instant;
 public class AdminPaymentController {
     private final AdminPaymentService service;
     private final CurrentUserProvider currentUserProvider;
+    private final RefundService refundService;
 
     public AdminPaymentController(
             AdminPaymentService service,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            RefundService refundService) {
         this.service = service;
         this.currentUserProvider = currentUserProvider;
+        this.refundService = refundService;
     }
 
     @GetMapping
@@ -69,6 +78,59 @@ public class AdminPaymentController {
     public ResponseEntity<ApiResponse<AdminPaymentDetailResponse>> detail(
             @PathVariable String paymentPublicId) {
         return ResponseEntity.ok(ApiResponse.success(service.detail(paymentPublicId)));
+    }
+
+    @PostMapping("/{paymentPublicId}/refunds")
+    public ResponseEntity<ApiResponse<RefundResponse>> createRefund(
+            @PathVariable String paymentPublicId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody CreateRefundRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã tiếp nhận yêu cầu hoàn tiền",
+                refundService.createAdminRefund(
+                        paymentPublicId,
+                        idempotencyKey,
+                        currentUserProvider.getCurrentUserId(),
+                        request)));
+    }
+
+    @GetMapping("/refunds")
+    public ResponseEntity<ApiResponse<Page<RefundResponse>>> refunds(
+            @RequestParam(required = false) RefundStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(refundService.list(
+                status,
+                PageRequest.of(page, Math.min(size, 100),
+                        Sort.by(Sort.Direction.DESC, "requestedAt")))));
+    }
+
+    @GetMapping("/refunds/{refundPublicId}")
+    public ResponseEntity<ApiResponse<RefundResponse>> refundDetail(
+            @PathVariable String refundPublicId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                refundService.detail(refundPublicId)));
+    }
+
+    @PostMapping("/refunds/{refundPublicId}/retry")
+    public ResponseEntity<ApiResponse<RefundResponse>> retryRefund(
+            @PathVariable String refundPublicId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã đưa yêu cầu hoàn tiền vào hàng đợi xử lý lại",
+                refundService.retry(refundPublicId)));
+    }
+
+    @PostMapping("/refunds/{refundPublicId}/cash/complete")
+    public ResponseEntity<ApiResponse<RefundResponse>> completeCashRefund(
+            @PathVariable String refundPublicId,
+            @Valid @RequestBody CompleteCashRefundRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã ghi nhận hoàn tiền mặt cho khách",
+                refundService.completeCashRefund(
+                        refundPublicId,
+                        currentUserProvider.getCurrentUserId(),
+                        request.getProviderReference(),
+                        request.getNote())));
     }
 
     @GetMapping(value = "/export", produces = "text/csv")

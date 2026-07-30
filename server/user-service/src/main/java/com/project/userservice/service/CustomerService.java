@@ -5,6 +5,7 @@ import com.project.userservice.entity.CustomerProfile;
 import com.project.userservice.entity.User;
 import com.project.userservice.enumtype.UserStatus;
 import com.project.userservice.exception.BusinessException;
+import com.project.userservice.mapper.CustomerMapper;
 import com.project.userservice.repository.CustomerProfileRepository;
 import com.project.userservice.repository.UserRepository;
 import org.springframework.data.domain.Page;
@@ -23,13 +24,16 @@ public class CustomerService {
     private final UserRepository userRepository;
     private final UserAuditService auditService;
     private final UserDomainEventService eventService;
+    private final CustomerMapper customerMapper;
 
     public CustomerService(CustomerProfileRepository customerRepository, UserRepository userRepository,
-                           UserAuditService auditService, UserDomainEventService eventService) {
+                           UserAuditService auditService, UserDomainEventService eventService,
+                           CustomerMapper customerMapper) {
         this.customerRepository = customerRepository;
         this.userRepository = userRepository;
         this.auditService = auditService;
         this.eventService = eventService;
+        this.customerMapper = customerMapper;
     }
 
     @Transactional(readOnly = true)
@@ -41,7 +45,8 @@ public class CustomerService {
         Map<Long, User> users = userRepository.findAllById(
                         page.getContent().stream().map(CustomerProfile::getAccountId).toList())
                 .stream().collect(Collectors.toMap(User::getAccountId, Function.identity()));
-        return page.map(profile -> map(profile, users.get(profile.getAccountId())));
+        return page.map(profile -> customerMapper.toResponse(
+                profile, users.get(profile.getAccountId())));
     }
 
     @Transactional(readOnly = true)
@@ -50,7 +55,7 @@ public class CustomerService {
                 .orElseThrow(() -> new BusinessException("Customer not found", "USER_002"));
         User user = userRepository.findById(profile.getAccountId())
                 .orElseThrow(() -> new BusinessException("User not found", "USER_001"));
-        return map(profile, user);
+        return customerMapper.toResponse(profile, user);
     }
 
     @Transactional
@@ -65,15 +70,6 @@ public class CustomerService {
         String event = status == UserStatus.BLOCKED ? "CUSTOMER_BLOCKED" : "CUSTOMER_UNBLOCKED";
         auditService.log(event, "CUSTOMER", id, null);
         eventService.record(event, "CUSTOMER", id, Map.of("customerId", id, "accountId", user.getAccountId()));
-        return map(profile, user);
-    }
-
-    private CustomerResponse map(CustomerProfile profile, User user) {
-        if (user == null) {
-            throw new BusinessException("User not found", "USER_001");
-        }
-        return new CustomerResponse(profile.getId(), user.getAccountId(), profile.getCustomerCode(),
-                user.getFullName(), user.getEmail(), user.getPhoneNumber(), user.getGender(), user.getBirthday(),
-                user.getAvatarUrl(), user.getStatus(), profile.getJoinedAt(), profile.getNote());
+        return customerMapper.toResponse(profile, user);
     }
 }

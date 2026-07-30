@@ -155,8 +155,9 @@ export default function EmployeeCashPaymentPage() {
           <aside className="rounded-3xl border border-amber-500/30 bg-zinc-900 p-6">
             <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Số tiền phải thu</p>
             <p className="mt-2 text-3xl font-black text-amber-500">{money(booking.amount, booking.currency)}</p>
-            <label className="mt-6 block text-xs font-bold uppercase text-zinc-400">Tiền khách đưa</label>
-            <input type="number" min="0" step="1000" value={receivedAmount}
+            <label htmlFor="cash-received-amount"
+              className="mt-6 block text-xs font-bold uppercase text-zinc-400">Tiền khách đưa</label>
+            <input id="cash-received-amount" type="number" min="0" step="1000" value={receivedAmount}
               onChange={event => setReceivedAmount(event.target.value)}
               disabled={payment?.status === 'SUCCESS' || payment?.status === 'CANCELLED'}
               className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-lg font-black outline-none focus:border-amber-500" />

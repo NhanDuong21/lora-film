@@ -383,6 +383,68 @@ class InternalBookingPaymentServiceTest {
         verify(refundRepository, atLeastOnce()).save(any());
     }
 
+    @Test
+    void partialRefundKeepsConfirmedBookingTicketsAndBookedCapacity() {
+        booking.changeStatus(BookingStatus.CONFIRMED, Instant.now());
+        booking.setPaymentStatus(PaymentStatus.SUCCESS);
+        SeatReservation booked = heldReservation();
+        booked.setStatus(SeatReservationStatus.BOOKED);
+        InternalPaymentResultRequest refund = result(
+                UUID.randomUUID().toString(),
+                "REFUND_SUCCESS",
+                new BigDecimal("50000.00"));
+        when(bookingRepository.findByPublicIdWithLock(BOOKING_PUBLIC_ID))
+                .thenReturn(Optional.of(booking));
+        when(eventRepository.findByPublicId(refund.eventId())).thenReturn(Optional.empty());
+        when(refundRepository.sumSuccessfulAmountByBookingId(booking.getId()))
+                .thenReturn(BigDecimal.ZERO);
+
+        service.recordRefundResult(BOOKING_PUBLIC_ID, refund);
+
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.SUCCESS, booking.getPaymentStatus());
+        assertEquals(SeatReservationStatus.BOOKED, booked.getStatus());
+        verify(lifecycleService, never()).transition(
+                any(), any(), anyString(), anyString());
+        verify(reservationRepository, never()).saveAll(any());
+        verify(refundRepository, atLeastOnce()).save(any());
+    }
+
+    @Test
+    void cumulativePartialRefundBecomesFullOnlyAtOriginalOrderAmount() {
+        booking.changeStatus(BookingStatus.CONFIRMED, Instant.now());
+        booking.setPaymentStatus(PaymentStatus.SUCCESS);
+        InternalPaymentResultRequest refund = result(
+                UUID.randomUUID().toString(),
+                "REFUND_SUCCESS",
+                new BigDecimal("190000.00"));
+        when(bookingRepository.findByPublicIdWithLock(BOOKING_PUBLIC_ID))
+                .thenReturn(Optional.of(booking));
+        when(eventRepository.findByPublicId(refund.eventId())).thenReturn(Optional.empty());
+        when(refundRepository.sumSuccessfulAmountByBookingId(booking.getId()))
+                .thenReturn(new BigDecimal("50000.00"));
+        when(lifecycleService.transition(
+                any(Booking.class),
+                org.mockito.ArgumentMatchers.eq(BookingStatus.REFUNDED),
+                anyString(),
+                anyString()))
+                .thenAnswer(invocation -> {
+                    Booking candidate = invocation.getArgument(0);
+                    candidate.changeStatus(BookingStatus.REFUNDED, Instant.now());
+                    return candidate;
+                });
+
+        service.recordRefundResult(BOOKING_PUBLIC_ID, refund);
+
+        assertEquals(BookingStatus.REFUNDED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
+        verify(lifecycleService).transition(
+                any(Booking.class),
+                org.mockito.ArgumentMatchers.eq(BookingStatus.REFUNDED),
+                anyString(),
+                anyString());
+    }
+
     private BookingPriceSnapshot snapshot() throws Exception {
         BookingPriceSnapshotPayload payload = new BookingPriceSnapshotPayload(
                 1001L,

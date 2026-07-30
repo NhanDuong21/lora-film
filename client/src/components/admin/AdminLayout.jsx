@@ -2,7 +2,8 @@ import { useState, useCallback, useMemo } from 'react';
 import { 
   Menu,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  LogOut
 } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
@@ -19,6 +20,7 @@ export default function AdminLayout({ onBackHome }) {
   // Derive activeTab from pathname
   const activeTab = (() => {
     const path = location.pathname;
+    if (path.endsWith('/me')) return 'my-account';
     if (path.endsWith('/movies') || path.includes('/movies/')) return 'movies';
     if (path.endsWith('/genres')) return 'genres';
     if (path.includes('/showtimes')) return 'showtimes';
@@ -29,7 +31,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/cinemas') || path.includes('/cinemas')) return 'clusters';
     if (path.endsWith('/rooms') || path.includes('/rooms')) return 'rooms';
     if (path.endsWith('/seat-types') || path.includes('/seat-types')) return 'seat-types';
-    if (path.endsWith('/finance')) return 'tickets';
+    if (path.endsWith('/finance')) return 'finance';
     if (path.endsWith('/payments') || path.includes('/payments/')) return 'payments';
     if (path.endsWith('/bookings') || path.includes('/bookings/')) return 'bookings';
     if (path.endsWith('/concessions')) return 'concessions';
@@ -210,6 +212,11 @@ export default function AdminLayout({ onBackHome }) {
                 <AlertCircle className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-orange rounded-full border-2 border-zinc-950"></span>
               </div>
+            </button>
+            <div className="h-6 w-px bg-zinc-800 hidden md:block"></div>
+            <button onClick={handleLogout} className="text-zinc-400 hover:text-red-500 transition-colors p-2 flex items-center gap-2" title="Đăng xuất">
+              <LogOut className="w-5 h-5" />
+              <span className="hidden md:block text-sm font-bold">Đăng xuất</span>
             </button>
           </div>
         </header>

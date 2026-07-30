@@ -33,16 +33,21 @@ public class RuleCreateRequest {
     @NotNull(message = "ruleType is required")
     private RuleType ruleType;
 
+    @NotNull(message = "priority is required")
     @Min(value = 0, message = "priority must be >= 0")
     private Integer priority = 100;
 
+    @NotNull(message = "executionOrder is required")
     @Min(value = 1, message = "executionOrder must be >= 1")
     private Integer executionOrder = 1;
 
+    @NotNull(message = "stackable is required")
     private Boolean stackable = false;
 
+    @NotNull(message = "stopFurtherRules is required")
     private Boolean stopFurtherRules = false;
 
+    @NotNull(message = "enabled is required")
     private Boolean enabled = true;
 
     @NotBlank(message = "conditionsJson is required")

@@ -6,6 +6,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -20,6 +21,7 @@ public class CccdCheckClient {
     private static final Logger log = LoggerFactory.getLogger(CccdCheckClient.class);
 
     private final RestTemplate restTemplate;
+    private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
 
     @Value("${cccd.api.url}")
     private String cccdApiUrl;
@@ -27,13 +29,14 @@ public class CccdCheckClient {
     @Value("${cccd.api.key}")
     private String cccdApiKey;
 
-    public CccdCheckClient(RestTemplate restTemplate) {
+    public CccdCheckClient(RestTemplate restTemplate,
+                           CircuitBreakerFactory<?, ?> circuitBreakerFactory) {
         this.restTemplate = restTemplate;
+        this.circuitBreakerFactory = circuitBreakerFactory;
     }
 
     /**
-     * Checks CCCD and returns derived info. Falls back to local validation if external API fails.
-     * Never logs full CCCD values.
+     * Checks CCCD and returns derived info. Never logs full CCCD values.
      *
      * @param cccd CCCD number
      * @return CCCD check result
@@ -46,7 +49,12 @@ public class CccdCheckClient {
         String maskedCccd = cccd.substring(0, 3) + "******" + cccd.substring(9);
         log.info("Checking CCCD for: {}", maskedCccd);
 
-        // Try calling the remote service
+        return circuitBreakerFactory.create("cccdVerification").run(
+                () -> callRemoteService(cccd, maskedCccd),
+                this::fallback);
+    }
+
+    private CccdInfo callRemoteService(String cccd, String maskedCccd) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -78,14 +86,39 @@ public class CccdCheckClient {
         } catch (InvalidCccdException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Failed to connect to CCCD Check API: {}", e.getMessage());
-            throw new InvalidCccdException();
+            throw new CccdServiceCallException(e);
         }
 
-            throw new InvalidCccdException();
+        throw new CccdServiceCallException("CCCD verification service returned an empty response");
     }
 
-    
+    private CccdInfo fallback(Throwable throwable) {
+        Throwable cause = throwable;
+        Throwable rootCause = throwable;
+        while (cause != null) {
+            rootCause = cause;
+            if (cause instanceof InvalidCccdException invalidCccdException) {
+                throw invalidCccdException;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+            cause = cause.getCause();
+        }
+        log.error("CCCD verification service is unavailable: {}",
+                rootCause.getClass().getSimpleName());
+        throw new InvalidCccdException();
+    }
+
+    private static class CccdServiceCallException extends RuntimeException {
+        CccdServiceCallException(String message) {
+            super(message);
+        }
+
+        CccdServiceCallException(Throwable cause) {
+            super(cause);
+        }
+    }
 
     public static class CccdInfo {
         private String cccdMasked;

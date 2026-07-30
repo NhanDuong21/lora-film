@@ -3,17 +3,22 @@ package com.project.promotionservice.promotion.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEventRepository;
+import com.project.promotionservice.integration.outbox.PromotionOutboxEnvelopeFactory;
 import com.project.promotionservice.promotion.dto.request.CampaignCreateRequest;
 import com.project.promotionservice.promotion.dto.request.CampaignUpdateRequest;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignType;
 import com.project.promotionservice.promotion.enums.FundingSource;
+import com.project.promotionservice.promotion.enums.LegalStatus;
+import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.promotion.mapper.CampaignMapper;
 import com.project.promotionservice.promotion.repository.ApprovalHistoryRepository;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.repository.PromotionRuleRepository;
+import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +49,10 @@ class CampaignServiceImplTest {
     private CampaignMapper campaignMapper;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private PromotionReservationRepository reservationRepository;
+    @Mock
+    private PromotionOutboxEnvelopeFactory envelopeFactory;
 
     @InjectMocks
     private CampaignServiceImpl campaignService;
@@ -119,5 +128,43 @@ class CampaignServiceImplTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
         assertEquals("Only DRAFT campaigns can be updated", exception.getMessage());
+    }
+
+    @Test
+    void publishCampaign_requiresPassedLegalReview() {
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setPublicId("550e8400-e29b-41d4-a716-446655440001");
+        campaign.setStatus(CampaignStatus.DRAFT);
+        campaign.setApprovalStatus(CampaignApprovalStatus.APPROVED);
+        campaign.setLegalStatus(LegalStatus.PENDING);
+        campaign.setBudgetAmount(new BigDecimal("100000.00"));
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> campaignService.publishCampaign(campaign.getPublicId(), "admin"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        assertTrue(exception.getMessage().contains("legal compliance"));
+        verify(campaignRepository, never()).save(campaign);
+    }
+
+    @Test
+    void deleteCampaign_rejectsAnActiveReservation() {
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setPublicId("550e8400-e29b-41d4-a716-446655440002");
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+        when(reservationRepository.countByCampaignPublicIdAndStatusAndDeletedAtIsNull(
+                campaign.getPublicId(), ReservationStatus.ACTIVE))
+                .thenReturn(1L);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> campaignService.deleteCampaign(campaign.getPublicId(), "admin"));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
+        verify(campaignRepository, never()).save(campaign);
     }
 }

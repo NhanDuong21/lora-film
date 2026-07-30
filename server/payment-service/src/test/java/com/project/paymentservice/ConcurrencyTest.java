@@ -243,4 +243,38 @@ public class ConcurrencyTest {
             }
         }
     }
+
+    @Test
+    void expiredOutboxLeaseShouldBeRecoveredByAnotherWorker() {
+        PaymentOutboxEvent event = transactionTemplate.execute(status -> {
+            PaymentOutboxEvent item = new PaymentOutboxEvent();
+            item.setEventId("EVT-RECOVERY-" + System.currentTimeMillis());
+            item.setAggregateType("PAYMENT");
+            item.setAggregateId("AG-RECOVERY");
+            item.setEventType("PAYMENT_RESULT");
+            item.setSchemaVersion("1.0");
+            item.setDestination(
+                    com.project.paymentservice.enumtype.OutboxDestination.BOOKING_SERVICE_REST);
+            item.setPayload("{}");
+            item.setStatus(com.project.paymentservice.enumtype.OutboxStatus.PROCESSING);
+            item.setLockedBy("worker-before-restart");
+            item.setLockedAt(Instant.now().minusSeconds(60));
+            item.setLockedUntil(Instant.now().minusSeconds(1));
+            return outboxRepository.saveAndFlush(item);
+        });
+
+        List<PaymentOutboxEvent> recovered = transactionTemplate.execute(status ->
+                outboxRepository.findAndClaimPendingEvents(
+                        Instant.now(),
+                        Instant.now().plusSeconds(30),
+                        "worker-after-restart",
+                        5));
+
+        Assertions.assertNotNull(recovered);
+        PaymentOutboxEvent reclaimed = recovered.stream()
+                .filter(item -> event.getId().equals(item.getId()))
+                .findFirst()
+                .orElseThrow();
+        Assertions.assertEquals("worker-after-restart", reclaimed.getLockedBy());
+    }
 }

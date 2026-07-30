@@ -15,6 +15,12 @@ import java.io.IOException;
 @Component
 public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
+    private final ObjectMapper objectMapper;
+
+    public CustomAuthenticationEntryPoint(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response,
                          AuthenticationException authException) throws IOException, ServletException {
@@ -24,7 +30,6 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
 
         ApiResponse<Void> apiResponse = ApiResponse.error("ERR_401_UNAUTHORIZED: Unauthorized access");
 
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.writeValue(response.getOutputStream(), apiResponse);
+        objectMapper.writeValue(response.getOutputStream(), apiResponse);
     }
 }

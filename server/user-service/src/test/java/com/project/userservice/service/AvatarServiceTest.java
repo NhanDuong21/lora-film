@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,7 +32,7 @@ class AvatarServiceTest {
     @Mock
     private UserDomainEventService eventService;
     @Mock
-    private SecureFileStorageService fileStorageService;
+    private FileStorageService fileStorageService;
     @Mock
     private MultipartFile multipartFile;
 
@@ -64,13 +65,19 @@ class AvatarServiceTest {
     @Test
     void uploadReplacesMetadataAndSchedulesOldFileDeletionAfterCommit() {
         when(fileStorageService.storeAvatar(multipartFile))
-                .thenReturn(new SecureFileStorageService.StoredFile(
-                        "new.png", "image/png", 200L));
+                .thenReturn(new FileStorageService.StoredFile(
+                        "avatar-new", "https://res.cloudinary.com/test/image/upload/avatar-new.png",
+                        "image/png", 200L));
 
         String avatarUrl = avatarService.upload(18L, multipartFile);
 
-        assertEquals("/api/users/profile/avatar/files/new.png", avatarUrl);
+        assertEquals("https://res.cloudinary.com/test/image/upload/avatar-new.png", avatarUrl);
         assertEquals(avatarUrl, user.getAvatarUrl());
+        ArgumentCaptor<Avatar> savedAvatar = ArgumentCaptor.forClass(Avatar.class);
+        verify(avatarRepository).save(savedAvatar.capture());
+        assertEquals("avatar-new", savedAvatar.getValue().getFileName());
+        assertEquals(avatarUrl, savedAvatar.getValue().getFileUrl());
+        verify(fileStorageService).deleteOnRollback("avatars", "avatar-new");
         verify(avatarRepository).deleteAll(List.of(previousAvatar));
         verify(fileStorageService).deleteAfterCommit("avatars", "old.png");
     }

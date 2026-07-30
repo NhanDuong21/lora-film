@@ -42,6 +42,13 @@ Promotion Service **không phải** là nơi lưu trữ điểm thưởng hay x�
 
 ## 04. Scope
 
+> **Ranh giới implementation hiện tại (ISSUE-003/004):** checkout dùng mã và chỉ
+> reserve một `COUPON` hoặc `VOUCHER` trên mỗi order/booking. Các API đồng bộ của
+> Booking/Payment là nguồn sự thật; Promotion publish lifecycle event bằng outbox
+> nhưng chưa consume event thay đổi reservation. Automatic rule discovery,
+> multi-benefit stacking và point saga vẫn là roadmap, không được xem là logic đã
+> chạy production chỉ vì có bảng/configuration admin.
+
 Promotion Service chịu trách nhiệm:
 - Vòng đời **Campaign** (khởi tạo → duyệt → kích hoạt → tạm dừng → kết thúc → báo cáo).
 - **Coupon Code** (mã dùng chung, mã cá nhân hoá, mã một lần).
@@ -476,7 +483,7 @@ Kết quả: `ELIGIBLE`, `NOT_ELIGIBLE(reason)`.
 4a. Payment thành công → Promotion.confirm():
        - Coupon/voucher: HELD → CONFIRMED, trừ lượt/ngân sách thật
        - Nếu có point hold: gọi score-service POST /points/commit (score-service trừ điểm thật)
-4b. Payment thất bại/timeout → Promotion.rollback():
+4b. Payment thất bại/timeout → Promotion.release():
        - Giải phóng lượt coupon/voucher đã giữ
        - Nếu có point hold: gọi score-service POST /points/release (score-service huỷ giữ, không trừ)
 5. Sau CONFIRMED → phát event promotion.redeemed (score-service tự nghe để CỘNG điểm tích lũy cho phần tiền thực trả — Promotion không tính hộ)
@@ -484,11 +491,11 @@ Kết quả: `ELIGIBLE`, `NOT_ELIGIBLE(reason)`.
 
 ---
 
-## 25. Rollback
+## 25. Release, Cancel và Compensation
 
-Trường hợp bắt buộc rollback: thanh toán thất bại/huỷ, hết TTL giữ ghế, huỷ đơn trong hạn cho phép, lỗi hệ thống downstream (Saga compensating transaction).
+Trước confirm: payment thất bại/timeout dùng `RELEASED`; booking bị hủy dùng `CANCELLED`; quá TTL do hệ thống tự chuyển `EXPIRED`. Sau `COMPLETED` không rollback reservation/redemption mà phải dùng refund hoặc compensation ledger riêng.
 
-Rollback phải **idempotent**. Nếu có point-hold đã gửi sang score-service, **bắt buộc gọi compensating API `release`** — đây là điểm dễ gây rò rỉ dữ liệu giữa 2 service nếu thiếu retry/DLQ (xem mục 47, 52).
+Mọi transition phải **idempotent**. Nếu có point-hold đã gửi sang score-service, **bắt buộc gọi compensating API `release`** — đây là điểm dễ gây rò rỉ dữ liệu giữa 2 service nếu thiếu retry/DLQ (xem mục 47, 52).
 
 ---
 
@@ -496,20 +503,26 @@ Rollback phải **idempotent**. Nếu có point-hold đã gửi sang score-servi
 
 - TTL đồng bộ với TTL giữ ghế của booking-service.
 - Dùng Redis lock atomic cho `couponCode`/`campaignId`.
-- Background job quét Reservation quá hạn để tự rollback (self-healing), **bao gồm cả việc gọi `release` sang score-service** nếu có point-hold treo.
+- Background job quét Reservation quá hạn để chuyển sang `EXPIRED` (self-healing), **bao gồm cả việc gọi `release` sang score-service** nếu có point-hold treo.
 
 ---
 
 ## 27. Event Driven
 
-**Consume:**
+**Consume (kiến trúc mục tiêu, chưa bật trong ISSUE-004):**
 - `booking.order.created` → khởi tạo eligibility check.
 - `payment.completed` → confirm redemption.
-- `payment.failed` / `booking.order.cancelled` → rollback redemption.
+- `payment.failed` → release active reservation; `booking.order.cancelled` → cancel active reservation. Giao dịch đã completed đi qua refund/compensation.
 - `user.registered` → phát voucher chào mừng.
 - `user.birthday.today` → phát voucher sinh nhật.
 - `score.tier.upgraded` (**từ score-service**) → phát voucher/benefit hạng mới, invalidate ACL cache.
 - `movie.updated` (từ movie-service) → invalidate cache metadata phim dùng trong rule.
+
+Reservation Runtime hiện tại không consume `payment.completed`,
+`payment.failed` hay `booking.order.cancelled`, vì chưa có producer contract và
+inbox/idempotency ownership thống nhất. Booking/Payment gọi API canonical;
+consumer chỉ được bật khi có versioned schema, inbox table, replay/DLQ và một
+quy tắc single-writer rõ ràng.
 
 **Produce:**
 - `promotion.applied` — cho analytics-service.
@@ -585,9 +598,14 @@ GET    /api/v1/vouchers/my-wallet                  Ví voucher (Promotion sở h
 
 ```
 # Promotion cung cấp cho service khác
-POST   /internal/promotions/reserve              (booking-service gọi)
-POST   /internal/promotions/confirm                (payment-service gọi)
-POST   /internal/promotions/rollback               (payment-service/booking-service gọi)
+POST   /internal/runtime/validate                              (booking-service preview, không giữ)
+POST   /internal/reservations                                  (booking-service reserve)
+GET    /internal/reservations/{reservationId}                  (booking/payment-service đọc)
+POST   /internal/reservations/{reservationId}/confirm          (payment-service gọi)
+POST   /internal/reservations/{reservationId}/release          (payment-service gọi khi thất bại)
+POST   /internal/reservations/{reservationId}/cancel           (booking-service gọi khi hủy)
+POST   /internal/reservations/{reservationId}/refresh          (booking-service gia hạn)
+GET    /api/admin/reservations                                 (admin/operations tra cứu)
 POST   /internal/promotions/vouchers/issue-from-point-exchange   (score-service gọi khi khách đổi điểm)
 
 # Promotion gọi sang service khác (ACL client)
@@ -607,7 +625,7 @@ Bảo vệ bằng **mTLS + service token**, không public qua Gateway.
 
 | Job | Tần suất | Chức năng |
 |---|---|---|
-| `ExpireReservationsJob` | mỗi 1 phút | Rollback reservation quá hạn (kể cả release point-hold) |
+| `ExpireReservationsJob` | mỗi 1 phút | Chuyển reservation quá hạn sang `EXPIRED` (kể cả release point-hold) |
 | `ExpireCouponsVouchersJob` | mỗi giờ | Cập nhật status EXPIRED |
 | `CampaignAutoStartJob` | mỗi 5 phút | SCHEDULED → ACTIVE |
 | `CampaignAutoEndJob` | mỗi 5 phút | ACTIVE → COMPLETED khi hết hạn/ngân sách |
@@ -648,7 +666,7 @@ Bảo vệ bằng **mTLS + service token**, không public qua Gateway.
 
 - Redeem coupon giới hạn số lượng: optimistic/pessimistic lock hoặc Redis atomic decrement.
 - Ngân sách campaign: atomic decrement + reconciliation.
-- Idempotency bắt buộc cho `apply`, `confirm`, `rollback`.
+- Idempotency bắt buộc cho `reserve`, `confirm`, `release`, `cancel`, `refresh`.
 - **Point hold/commit/release**: đây là **giao dịch phân tán 2 service** (Promotion + score-service) — cần Saga pattern với compensating action rõ ràng, không dùng 2-phase-commit truyền thống (không phù hợp microservices).
 
 ---
@@ -704,9 +722,10 @@ Bảo vệ bằng **mTLS + service token**, không public qua Gateway.
 - Campaign sắp hết ngân sách (< 10%).
 - Tỷ lệ lỗi `apply`/`redeem` vượt ngưỡng.
 - Redis lock timeout tăng bất thường.
-- Reservation không được confirm/rollback đúng hạn.
+- Reservation `ACTIVE` không được confirm/release/cancel trước deadline.
 - **Point hold không được commit/release trong X phút** (rủi ro điểm bị "kẹt" phía score-service) → cảnh báo riêng, vì đây là lỗi liên service dễ bị bỏ sót.
-- Kafka consumer lag ở topic `payment.completed`, `score.tier.upgraded`.
+- Kafka outbox publish failure/stale lease; consumer lag chỉ áp dụng cho các
+  consumer mục tiêu đã thực sự được bật.
 
 ---
 
@@ -774,7 +793,8 @@ Nguyên tắc: nếu Promotion lỗi/timeout, `booking-service` vẫn cho đặt
 
 - Gọi Booking/Payment ↔ Promotion: exponential backoff, tối đa 3 lần, kèm idempotency key.
 - **Gọi Promotion ↔ score-service (point hold/commit/release)**: retry bắt buộc + Dead Letter Queue riêng, vì đây là dữ liệu tài chính (điểm) dễ gây khiếu nại khách hàng nếu kẹt.
-- Kafka consumer: retry topic + DLQ, cảnh báo vận hành khi vào DLQ.
+- Kafka consumer tương lai: retry topic + DLQ, cảnh báo vận hành khi vào DLQ;
+  runtime hiện tại dùng outbox producer ACK + exponential retry.
 - Circuit Breaker giữa Promotion ↔ score-service/movie-service để tránh cascading failure.
 
 ---
@@ -802,7 +822,7 @@ Nguyên tắc: nếu Promotion lỗi/timeout, `booking-service` vẫn cho đặt
 
 | Giai đoạn | Hạng mục |
 |---|---|
-| **Phase 1 (MVP)** | Coupon cơ bản, Discount tự động theo tier (đọc từ score-service), reserve/confirm/rollback |
+| **Phase 1 (MVP)** | Coupon/Voucher dùng mã, validate điều kiện đã hỗ trợ, reserve/confirm/release/cancel/expire |
 | **Phase 2** | Campaign Engine đầy đủ (approval + legal-check workflow), Voucher cá nhân hoá, budget cap, fraud detection cơ bản |
 | **Phase 3** | Rule Engine tự cấu hình (self-service Marketing), A/B testing, mở rộng tích hợp đối tác thanh toán, partner settlement tự động |
 | **Phase 4** | Cá nhân hoá khuyến mãi bằng ML (phối hợp analytics-service), dynamic pricing thử nghiệm |
@@ -902,3 +922,15 @@ Với các khuyến mãi **đồng tài trợ** (co-funded) bởi đối tác th
 ---
 
 *Tài liệu v2 được xây dựng dựa trên phân tích mô hình vận hành thực tế của CGV Cinemas, Galaxy Cinema tại Việt Nam, kết hợp nguyên tắc DDD/Bounded Context, và quy định pháp luật Việt Nam về khuyến mại (Nghị định 81/2018/NĐ-CP, Thông tư 39/2025/TT-BCT). Ranh giới với `score-service` đã được tách bạch hoàn toàn: score-service là nguồn sự thật duy nhất cho điểm & hạng thành viên; Promotion Service chỉ tiêu thụ dữ liệu đó qua hợp đồng API/event rõ ràng (mục 52).*
+
+## 57. Runtime reconciliation (2026-07-29)
+
+This plan is the target architecture, not a promise that every cross-service
+feature is already wired. The current production core supports one coupon or
+one voucher per checkout, deterministic rule evaluation, atomic reservation,
+confirmation/release/cancel, transactional outbox, partner settlement and
+campaign lifecycle jobs. Automatic discovery, multi-benefit stacking and the
+Score point saga remain roadmap items until Booking, Payment and Score publish
+the agreed contracts. See
+`promotion-service-production-readiness-report.md` for the release gate and
+the read-only findings from related services.

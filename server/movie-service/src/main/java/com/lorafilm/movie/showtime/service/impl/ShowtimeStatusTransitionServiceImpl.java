@@ -14,6 +14,7 @@ import com.lorafilm.movie.showtime.dto.response.BatchStatusBlockedShowtime;
 import com.lorafilm.movie.showtime.dto.response.BatchStatusReasonGroup;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.pricing.service.ShowtimePricingService;
+import com.lorafilm.movie.showtime.service.ShowtimeRefundOutboxService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
 import org.springframework.stereotype.Service;
@@ -37,19 +38,22 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     private final AdminShowtimeMapper adminShowtimeMapper;
     private final Clock clock;
     private final ShowtimePricingService showtimePricingService;
+    private final ShowtimeRefundOutboxService refundOutboxService;
 
     public ShowtimeStatusTransitionServiceImpl(ShowtimeRepository showtimeRepository,
                                                ShowtimeStatusHistoryService historyService,
                                                CurrentUserProvider currentUserProvider,
                                                AdminShowtimeMapper adminShowtimeMapper,
                                                Clock clock,
-                                               ShowtimePricingService showtimePricingService) {
+                                               ShowtimePricingService showtimePricingService,
+                                               ShowtimeRefundOutboxService refundOutboxService) {
         this.showtimeRepository = showtimeRepository;
         this.historyService = historyService;
         this.currentUserProvider = currentUserProvider;
         this.adminShowtimeMapper = adminShowtimeMapper;
         this.clock = clock;
         this.showtimePricingService = showtimePricingService;
+        this.refundOutboxService = refundOutboxService;
     }
 
     @Override
@@ -88,6 +92,10 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         Showtime savedShowtime = showtimeRepository.saveAndFlush(showtime);
         historyService.recordTransitionHistory(
                 savedShowtime, currentStatus, newStatus, reason, currentUserId, now);
+        if (newStatus == ShowtimeStatus.CANCELLED) {
+            refundOutboxService.enqueueCancellation(
+                    savedShowtime.getPublicId(), reason);
+        }
         return savedShowtime;
     }
 

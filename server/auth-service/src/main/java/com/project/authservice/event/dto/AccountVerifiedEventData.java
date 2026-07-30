@@ -27,6 +27,9 @@ public class AccountVerifiedEventData {
     /** Full name as supplied during registration. */
     private final String fullName;
 
+    /** Avatar URL supplied by a trusted OAuth2 provider. */
+    private final String avatarUrl;
+
     /** Phone number as supplied during registration. */
     private final String phoneNumber;
 
@@ -65,6 +68,7 @@ public class AccountVerifiedEventData {
                                    String email,
                                    String role,
                                    String fullName,
+                                   String avatarUrl,
                                    String phoneNumber,
                                    String cccd,
                                    String cccdMasked,
@@ -78,6 +82,7 @@ public class AccountVerifiedEventData {
         this.email        = email;
         this.role         = role;
         this.fullName     = fullName;
+        this.avatarUrl    = avatarUrl;
         this.phoneNumber  = phoneNumber;
         this.cccd         = cccd;
         this.cccdMasked   = cccdMasked;
@@ -95,6 +100,7 @@ public class AccountVerifiedEventData {
     public String  getEmail()       { return email; }
     public String  getRole()        { return role; }
     public String  getFullName()    { return fullName; }
+    public String  getAvatarUrl()   { return avatarUrl; }
     public String  getPhoneNumber() { return phoneNumber; }
     public String  getCccd()        { return cccd; }
     public String  getCccdMasked()  { return cccdMasked; }
@@ -116,6 +122,7 @@ public class AccountVerifiedEventData {
         private String   email;
         private String   role;
         private String   fullName;
+        private String   avatarUrl;
         private String   phoneNumber;
         private String   cccd;
         private String   cccdMasked;
@@ -132,6 +139,7 @@ public class AccountVerifiedEventData {
         public Builder email(String email)             { this.email = email;               return this; }
         public Builder role(String role)               { this.role = role;                 return this; }
         public Builder fullName(String fullName)       { this.fullName = fullName;         return this; }
+        public Builder avatarUrl(String avatarUrl)     { this.avatarUrl = avatarUrl;       return this; }
         public Builder phoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber;   return this; }
         public Builder cccd(String cccd)               { this.cccd = cccd;                 return this; }
         public Builder cccdMasked(String cccdMasked)   { this.cccdMasked = cccdMasked;     return this; }
@@ -143,7 +151,7 @@ public class AccountVerifiedEventData {
 
         public AccountVerifiedEventData build() {
             return new AccountVerifiedEventData(
-                    requestId, accountId, email, role, fullName, phoneNumber,
+                    requestId, accountId, email, role, fullName, avatarUrl, phoneNumber,
                     cccd, cccdMasked, provinceCode, provinceName,
                     gender, birthday, birthYear);
         }

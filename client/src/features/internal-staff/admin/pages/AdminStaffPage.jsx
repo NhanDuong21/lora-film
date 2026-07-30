@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   changeEmployeeStatus, getDepartments, getEmployees, getPositions, createEmployee, updateEmployee
 } from '../services/userAdminService';
-import { getAccounts } from '../services/authAdminService';
+import { getAccounts, createEmployeeAccount } from '../services/authAdminService';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
 import AdminStatCard from '../components/AdminStatCard';
 import useAdminAccess from '../hooks/useAdminAccess';
@@ -24,6 +24,8 @@ export default function AdminStaffPage() {
   const [formData, setFormData] = useState({
     accountId: '', departmentId: '', positionId: '', hireDate: '', baseSalary: ''
   });
+  const [creationMode, setCreationMode] = useState('existing'); // 'existing' | 'new'
+  const [newAccountData, setNewAccountData] = useState({ email: '', password: '', fullName: '' });
   const [stats, setStats] = useState({ total: 0, active: 0, onLeave: 0, departments: 0 });
   const outlet = useOutletContext();
   const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
@@ -40,6 +42,8 @@ export default function AdminStaffPage() {
         baseSalary: emp.baseSalary || ''
       });
     } else {
+      setCreationMode('existing');
+      setNewAccountData({ email: '', password: '', fullName: '' });
       setFormData({
         accountId: '', departmentId: '', positionId: '',
         hireDate: new Date().toISOString().slice(0, 10), baseSalary: ''
@@ -50,18 +54,45 @@ export default function AdminStaffPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const payload = {
-      accountId: Number(formData.accountId),
-      departmentId: Number(formData.departmentId),
-      positionId: Number(formData.positionId),
-      hireDate: formData.hireDate,
-      baseSalary: Number(formData.baseSalary)
-    };
     try {
+      let finalAccountId = Number(formData.accountId);
+      
+      if (!editingEmployee && creationMode === 'new') {
+        const newAcc = await createEmployeeAccount(newAccountData);
+        finalAccountId = newAcc.id;
+        // Wait 1.5 seconds for Kafka event to create User Profile in user-service
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+
+      const payload = {
+        accountId: finalAccountId,
+        departmentId: Number(formData.departmentId),
+        positionId: Number(formData.positionId),
+        hireDate: formData.hireDate,
+        baseSalary: Number(formData.baseSalary)
+      };
+
       if (editingEmployee) {
         await updateEmployee(editingEmployee.accountId, payload);
       } else {
-        await createEmployee(payload);
+        // Retry logic for employee creation in case Kafka profile creation was delayed
+        let success = false;
+        let lastError = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                await createEmployee(payload);
+                success = true;
+                break;
+            } catch (err) {
+                lastError = err;
+                if (err?.errorCode === 'USER_001') { // User not found
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // wait 1s and retry
+                } else {
+                    throw err; // Other errors, throw immediately
+                }
+            }
+        }
+        if (!success) throw lastError;
       }
       setIsModalOpen(false);
       await load();
@@ -319,20 +350,56 @@ export default function AdminStaffPage() {
             </div>
             
             <div className="space-y-4 pt-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Tài khoản đăng nhập</label>
-                  <select value={formData.accountId} onChange={e => setFormData({ ...formData, accountId: e.target.value })} required disabled={!!editingEmployee} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors disabled:opacity-50">
-                    <option value="">Chọn tài khoản đã kích hoạt</option>
-                    {editingEmployee && !options.accounts.some(account => String(account.id) === String(formData.accountId)) && (
-                      <option value={formData.accountId}>Tài khoản #{formData.accountId}</option>
-                    )}
-                    {options.accounts.map(account => (
-                      <option key={account.id} value={account.id}>{account.email} · #{account.id}</option>
-                    ))}
-                  </select>
+              {!editingEmployee && (
+                <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setCreationMode('existing')} 
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${creationMode === 'existing' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  >
+                    Chọn tài khoản có sẵn
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setCreationMode('new')} 
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${creationMode === 'new' ? 'bg-zinc-800 text-brand-orange' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  >
+                    Tạo tài khoản mới
+                  </button>
                 </div>
-              </div>
+              )}
+
+              {creationMode === 'existing' || editingEmployee ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Tài khoản đăng nhập</label>
+                    <select value={formData.accountId} onChange={e => setFormData({ ...formData, accountId: e.target.value })} required disabled={!!editingEmployee} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors disabled:opacity-50">
+                      <option value="">Chọn tài khoản đã kích hoạt</option>
+                      {editingEmployee && !options.accounts.some(account => String(account.id) === String(formData.accountId)) && (
+                        <option value={formData.accountId}>Tài khoản #{formData.accountId}</option>
+                      )}
+                      {options.accounts.map(account => (
+                        <option key={account.id} value={account.id}>{account.email} · #{account.id}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 bg-brand-orange/5 border border-brand-orange/20 p-4 rounded-xl">
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Email (Tên đăng nhập)</label>
+                    <input type="email" value={newAccountData.email} onChange={e => setNewAccountData({ ...newAccountData, email: e.target.value })} required className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors" placeholder="email@example.com" />
+                  </div>
+                  <div className="col-span-1 space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Mật khẩu</label>
+                    <input type="password" value={newAccountData.password} onChange={e => setNewAccountData({ ...newAccountData, password: e.target.value })} required minLength={6} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors" placeholder="••••••••" />
+                  </div>
+                  <div className="col-span-1 space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Họ và tên</label>
+                    <input type="text" value={newAccountData.fullName} onChange={e => setNewAccountData({ ...newAccountData, fullName: e.target.value })} required className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors" placeholder="Nguyễn Văn A" />
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ngày bắt đầu làm việc</label>

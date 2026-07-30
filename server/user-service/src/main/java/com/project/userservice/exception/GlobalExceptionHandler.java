@@ -29,6 +29,10 @@ public class GlobalExceptionHandler {
         if (code.contains("DUPLICATE") || code.contains("ALREADY_EXISTS")
                 || code.endsWith("_IN_USE") || "USER_010".equals(code)) {
             status = HttpStatus.CONFLICT;
+        } else if ("USER_FILE_TOO_LARGE".equals(code)) {
+            status = HttpStatus.PAYLOAD_TOO_LARGE;
+        } else if ("USER_STORAGE_UNAVAILABLE".equals(code)) {
+            status = HttpStatus.SERVICE_UNAVAILABLE;
         } else if ("USER_NOT_FOUND".equals(code) || "USER_001".equals(code)
                 || "USER_002".equals(code) || "USER_003".equals(code)
                 || "USER_004".equals(code) || "USER_005".equals(code)
