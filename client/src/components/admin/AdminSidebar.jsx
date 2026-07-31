@@ -22,6 +22,7 @@ import {
   History,
   Zap,
   BadgeDollarSign,
+  BadgePercent,
   Award,
   Key,
   ShieldAlert,
@@ -74,6 +75,7 @@ export default function AdminSidebar({
     coSo: false,
     lichGia: false,
     vanHanhDatVe: false,
+    khuyenMai: false,
     thanhToan: false,
     baoCao: false,
     khachHang: false,
@@ -278,6 +280,26 @@ export default function AdminSidebar({
                 <button onClick={() => handleTabClick('concessions', '#/admin/concessions')} className={getSubLinkClass('concessions')}>
                   <Coffee className="w-4 h-4 shrink-0" />
                   <span>Danh mục bắp nước</span>
+                </button>
+              </div>
+            )}
+          </div>}
+
+          {isFullAdmin && <div className="space-y-1">
+            <button
+              onClick={() => toggleSection('khuyenMai')}
+              className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
+            >
+              <span>Khuyến mãi</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.khuyenMai ? 'rotate-180' : ''
+                }`} />
+            </button>
+
+            {!collapsedSections.khuyenMai && (
+              <div className="space-y-0.5">
+                <button onClick={() => handleTabClick('promotions', '#/admin/promotions')} className={getSubLinkClass('promotions')}>
+                  <BadgePercent className="w-4 h-4 shrink-0" />
+                  <span>Promotion Center</span>
                 </button>
               </div>
             )}

@@ -23,6 +23,7 @@ const routeNameMap = {
   'movies': 'Phim',
   'genres': 'Thể loại',
   'events': 'Sự kiện',
+  'promotions': 'Khuyến mãi',
   'cinemas': 'Cụm rạp',
   'rooms': 'Phòng chiếu',
   'seat-types': 'Loại ghế',

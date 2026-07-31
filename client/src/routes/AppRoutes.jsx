@@ -21,6 +21,7 @@ import { employeeStaffRoutes } from "@/features/internal-staff/employee/routes";
 import { customerScoreRoutes } from "@/features/score/customer/routes";
 import { adminScoreRoutes } from "@/features/score/admin/routes";
 import { adminNotificationRoutes } from "@/features/notifications/admin/routes";
+import { adminPromotionRoutes } from "@/features/promotion/admin/routes";
 import {
     adminPaymentRoutes,
     customerPaymentRoutes,
@@ -121,6 +122,9 @@ function AppRoutes() {
                     ))}
                     {adminBookingRoutes.map((route, index) => (
                         <Route key={`book-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
+                    ))}
+                    {adminPromotionRoutes.map((route, index) => (
+                        <Route key={`promo-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminScoreRoutes.map((route, index) => (
                         <Route key={`score-adm-${index}`} path={route.path} element={adminOnly(route.element)} />

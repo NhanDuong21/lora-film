@@ -30,6 +30,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path === '/admin/showtime-schedules/create') return 'auto-schedule-create';
     if (path.includes('/showtime-schedules')) return 'auto-schedule-history';
     if (path.endsWith('/events') || path.includes('/events')) return 'events-promo';
+    if (path.includes('/promotions')) return 'promotions';
     if (path.endsWith('/cinemas') || path.includes('/cinemas')) return 'clusters';
     if (path.endsWith('/rooms') || path.includes('/rooms')) return 'rooms';
     if (path.endsWith('/seat-types') || path.includes('/seat-types')) return 'seat-types';
