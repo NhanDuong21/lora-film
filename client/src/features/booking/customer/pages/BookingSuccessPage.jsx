@@ -20,6 +20,7 @@ export default function BookingSuccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+
   const fetchBooking = useCallback(async () => {
     if (!bookingId) {
       setError("Mã đơn hàng không hợp lệ.");
@@ -106,6 +107,8 @@ export default function BookingSuccessPage() {
             Cảm ơn bạn đã mua vé xem phim tại LoraFilm. Mã đặt vé của bạn là <span className="text-brand-orange font-black text-sm tracking-wider">{booking.bookingCode}</span>.
           </p>
         </div>
+
+
 
         {/* Dynamic Tickets list with QR Code */}
         <div className="space-y-6">
@@ -252,14 +255,18 @@ export default function BookingSuccessPage() {
         </div>
 
         {/* Buttons & Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between items-center print:hidden">
-          <button
-            onClick={handlePrint}
-            className="w-full sm:w-auto bg-zinc-900 hover:bg-zinc-850 text-zinc-300 font-bold px-6 py-3.5 rounded-2xl border border-zinc-800 flex items-center justify-center gap-2 cursor-pointer transition-colors"
-          >
-            <Printer className="w-4 h-4" />
-            <span>In / Tải PDF Hóa Đơn</span>
-          </button>
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-center print:hidden w-full">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <button
+              onClick={handlePrint}
+              className="w-full sm:w-auto bg-zinc-900 hover:bg-zinc-850 text-zinc-300 font-bold px-6 py-3.5 rounded-2xl border border-zinc-800 flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            >
+              <Printer className="w-4 h-4" />
+              <span>In / Tải PDF Hóa Đơn</span>
+            </button>
+
+
+          </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <Link

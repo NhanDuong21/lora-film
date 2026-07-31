@@ -43,10 +43,10 @@ public class BookingTicketServiceImpl implements BookingTicketService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BookingTicketServiceImpl.class);
 
     public BookingTicketServiceImpl(BookingTicketRepository bookingTicketRepository,
-                                    BookingRepository bookingRepository,
-                                    BookingTicketMapper bookingTicketMapper,
-                                    BookingSnapshotRepository bookingSnapshotRepository,
-                                    ObjectMapper objectMapper) {
+            BookingRepository bookingRepository,
+            BookingTicketMapper bookingTicketMapper,
+            BookingSnapshotRepository bookingSnapshotRepository,
+            ObjectMapper objectMapper) {
         this.bookingTicketRepository = bookingTicketRepository;
         this.bookingRepository = bookingRepository;
         this.bookingTicketMapper = bookingTicketMapper;
@@ -83,7 +83,8 @@ public class BookingTicketServiceImpl implements BookingTicketService {
             }
             BookingTicket ticket = bookingTicketMapper.toEntity(req);
             ticket.setBooking(booking);
-            String code = "TK-" + (booking.getBookingCode() != null ? booking.getBookingCode() : bookingId) + "-" + req.getSeatId();
+            String code = "TK-" + (booking.getBookingCode() != null ? booking.getBookingCode() : bookingId) + "-"
+                    + req.getSeatId();
             ticket.setTicketCode(code);
             if (ticket.getPublicId() == null) {
                 ticket.setPublicId(UUID.randomUUID().toString());
@@ -187,9 +188,12 @@ public class BookingTicketServiceImpl implements BookingTicketService {
 
         List<ShowtimeBookingContext.SeatContext> seats;
         try {
-            seats = objectMapper.readValue(snapshot.getSnapshotJson(), new TypeReference<List<ShowtimeBookingContext.SeatContext>>() {});
+            seats = objectMapper.readValue(snapshot.getSnapshotJson(),
+                    new TypeReference<List<ShowtimeBookingContext.SeatContext>>() {
+                    });
         } catch (Exception e) {
-            throw new BusinessException("SNAPSHOT_DESERIALIZATION_FAILED", "Failed to deserialize seat snapshot data: " + e.getMessage());
+            throw new BusinessException("SNAPSHOT_DESERIALIZATION_FAILED",
+                    "Failed to deserialize seat snapshot data: " + e.getMessage());
         }
 
         List<CreateTicketRequest> ticketRequests = seats.stream().map(seat -> {
@@ -220,7 +224,20 @@ public class BookingTicketServiceImpl implements BookingTicketService {
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         put(payload, "userPublicId", String.valueOf(booking.getUserId()));
-        put(payload, "customerName", "Customer");
+
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.lorafilm.booking.security.principal.UserPrincipal principal) {
+            if (principal.getEmail() != null && !principal.getEmail().isBlank()) {
+                put(payload, "email", principal.getEmail());
+            }
+            if (principal.getUsername() != null && !principal.getUsername().isBlank()) {
+                put(payload, "customerName", principal.getUsername());
+            }
+        } else {
+            put(payload, "customerName", "Customer");
+        }
+
         put(payload, "bookingPublicId", booking.getPublicId());
         put(payload, "bookingCode", booking.getBookingCode());
         put(payload, "paymentCode", booking.getPaymentReference());
@@ -246,6 +263,19 @@ public class BookingTicketServiceImpl implements BookingTicketService {
         put(payload, "paymentMethod", booking.getPaymentMethodSnapshot());
         put(payload, "paymentTime", booking.getConfirmedAt());
         put(payload, "deepLink", "/bookings/" + booking.getPublicId());
+        // Per-ticket list: each entry has seatLabel, seatType, ticketCode,
+        // ticketAccessUrl
+        List<Map<String, Object>> ticketEntries = tickets.stream().map(t -> {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            put(entry, "seatLabel", t.getSeatLabel());
+            put(entry, "seatType", t.getSeatType());
+            put(entry, "ticketCode", t.getTicketCode());
+            String accessUrl = ticketAccessBaseUrl + "/" + t.getPublicId() + "?access=" + t.getQrCode();
+            put(entry, "ticketAccessUrl", accessUrl);
+            return entry;
+        }).toList();
+        put(payload, "tickets", ticketEntries);
+        // Keep single ticketAccessUrl (first ticket) for legacy templates
         BookingTicketDto first = tickets.getFirst();
         put(payload, "ticketAccessUrl", ticketAccessBaseUrl + "/" + first.getPublicId()
                 + "?access=" + first.getQrCode());
@@ -265,6 +295,30 @@ public class BookingTicketServiceImpl implements BookingTicketService {
             put(food, "total", item.getFinalAmount());
             return food;
         }).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void resendBookingEmail(String publicId) {
+        log.info("Resending booking email for public ID: {}", publicId);
+        Booking booking = bookingRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
+
+        Long bookingId = booking.getId();
+        BookingSnapshot snapshot = bookingSnapshotRepository.findByBookingId(bookingId)
+                .orElseThrow(() -> new BusinessException("SNAPSHOT_NOT_FOUND",
+                        "Snapshot not found for booking ID: " + bookingId));
+
+        List<BookingTicket> tickets = bookingTicketRepository.findByBookingId(bookingId);
+        if (tickets.isEmpty()) {
+            throw new BusinessException("TICKETS_NOT_FOUND", "No tickets found for booking ID: " + bookingId);
+        }
+
+        List<BookingTicketDto> ticketDtos = tickets.stream()
+                .map(bookingTicketMapper::toDto)
+                .collect(Collectors.toList());
+
+        publishTicketIssued(booking, snapshot, ticketDtos);
     }
 
     private void put(Map<String, Object> payload, String key, Object value) {

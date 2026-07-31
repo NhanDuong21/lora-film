@@ -93,6 +93,7 @@ export default function BookingDetailPage() {
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelError, setCancelError] = useState('');
 
+
   const fetchDetail = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -381,6 +382,8 @@ export default function BookingDetailPage() {
                 </button>
               </div>
             )}
+
+
           </div>
         </section>
 

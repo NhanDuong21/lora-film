@@ -47,7 +47,7 @@ class TemplatePayloadAdapterTest {
                 .containsEntry("room_name", "Hall 2")
                 .containsEntry("seats", "A1, A2")
                 .containsEntry("combos", "Popcorn x2")
-                .containsEntry("qr_code_url", "https://tickets/one")
+                .containsEntry("qr_code_url", "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https%3A%2F%2Ftickets%2Fone")
                 .containsEntry("retry_link", "/payments/retry")
                 .containsEntry("failure_reason", "Provider rejected payment")
                 .doesNotContainKey("internalOnly");

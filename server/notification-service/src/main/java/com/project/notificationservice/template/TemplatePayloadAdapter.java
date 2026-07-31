@@ -24,7 +24,52 @@ public class TemplatePayloadAdapter {
         alias(expanded, "user_name", "customerName", "userName", "fullName", "name");
         alias(expanded, "poster_url", "moviePosterUrl", "posterUrl");
         alias(expanded, "room_name", "auditoriumName", "roomName");
-        alias(expanded, "qr_code_url", "ticketAccessUrl", "qrCodeUrl");
+        Object qrCodeUrlObj = first(expanded, "ticketAccessUrl", "qrCodeUrl", "bookingCode", "ticketCode");
+        if (qrCodeUrlObj != null) {
+            String qrCodeUrlStr = String.valueOf(qrCodeUrlObj);
+            if (qrCodeUrlStr.startsWith("https://api.qrserver.com")) {
+                expanded.put("qr_code_url", qrCodeUrlStr);
+            } else if (!qrCodeUrlStr.isBlank()) {
+                try {
+                    String encoded = java.net.URLEncoder.encode(qrCodeUrlStr, java.nio.charset.StandardCharsets.UTF_8.name());
+                    expanded.put("qr_code_url", "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encoded);
+                } catch (Exception e) {
+                    expanded.put("qr_code_url", qrCodeUrlStr);
+                }
+            }
+        }
+
+        // Enrich each ticket entry in `tickets` list with a `qr_code_url` field
+        Object ticketsObj = expanded.get("tickets");
+        if (ticketsObj instanceof java.util.List<?> ticketsList) {
+            java.util.List<Map<String, Object>> enrichedTickets = new java.util.ArrayList<>();
+            for (Object entry : ticketsList) {
+                if (entry instanceof Map<?, ?> rawEntry) {
+                    Map<String, Object> ticket = new LinkedHashMap<>();
+                    rawEntry.forEach((k, v) -> ticket.put(String.valueOf(k), v));
+                    // Generate qr_code_url from ticketCode or ticketAccessUrl
+                    String qrData = ticket.containsKey("ticketCode")
+                            ? String.valueOf(ticket.get("ticketCode"))
+                            : ticket.containsKey("ticketAccessUrl")
+                                    ? String.valueOf(ticket.get("ticketAccessUrl"))
+                                    : null;
+                    if (qrData != null && !qrData.isBlank()) {
+                        try {
+                            String encoded = java.net.URLEncoder.encode(qrData,
+                                    java.nio.charset.StandardCharsets.UTF_8.name());
+                            ticket.put("qr_code_url",
+                                    "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encoded);
+                        } catch (Exception ignored) {
+                            ticket.put("qr_code_url", qrData);
+                        }
+                    }
+                    enrichedTickets.add(ticket);
+                }
+            }
+            if (!enrichedTickets.isEmpty()) {
+                expanded.put("tickets", enrichedTickets);
+            }
+        }
         alias(expanded, "ticket_link", "ticketAccessUrl", "deepLink");
         alias(expanded, "amount", "totalAmount", "totalPaid");
         alias(expanded, "transaction_id", "paymentCode", "transactionId");
@@ -59,6 +104,12 @@ public class TemplatePayloadAdapter {
         for (String variable : template.variablesSchema().keySet()) {
             if (expanded.containsKey(variable)) {
                 renderingPayload.put(variable, expanded.get(variable));
+            }
+        }
+        // Always preserve collection & ticket structural properties for Handlebars loops & sections
+        for (String key : new String[]{"tickets", "foodItems", "combos", "food_items", "ticketCodes", "ticketTypes", "seatNames"}) {
+            if (expanded.containsKey(key)) {
+                renderingPayload.put(key, expanded.get(key));
             }
         }
         return Map.copyOf(renderingPayload);

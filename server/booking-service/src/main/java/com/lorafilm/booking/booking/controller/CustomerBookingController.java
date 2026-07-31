@@ -44,6 +44,8 @@ import java.util.Map;
 
 import com.lorafilm.booking.infrastructure.idempotency.Idempotent;
 
+import com.lorafilm.booking.booking.service.BookingTicketService;
+
 @RestController
 @RequestMapping("/api/bookings")
 @Validated
@@ -61,12 +63,15 @@ public class CustomerBookingController {
 
     private final BookingService bookingService;
     private final SecurityContextService securityContextService;
+    private final BookingTicketService bookingTicketService;
 
     public CustomerBookingController(
             BookingService bookingService,
-            SecurityContextService securityContextService) {
+            SecurityContextService securityContextService,
+            BookingTicketService bookingTicketService) {
         this.bookingService = bookingService;
         this.securityContextService = securityContextService;
+        this.bookingTicketService = bookingTicketService;
     }
 
     @PostMapping
@@ -186,6 +191,24 @@ public class CustomerBookingController {
                 "PAYMENT_SERVICE_HANDOFF_REQUIRED",
                 "Payment initiation is owned by Payment Service",
                 HttpStatus.GONE);
+    }
+
+
+    @PostMapping("/{publicId}/resend-email")
+    @Operation(summary = "Resend booking email", description = "Resends the email confirmation for a confirmed booking")
+    public ResponseEntity<ApiResponse<Void>> resendEmail(
+            @PathVariable
+            @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")
+            String publicId) {
+        BookingDetailResponse detail = bookingService.findById(publicId);
+        if (!BookingStatus.CONFIRMED.equals(detail.status()) && !BookingStatus.COMPLETED.equals(detail.status())) {
+            throw new com.lorafilm.booking.common.exception.BusinessException(
+                    "INVALID_BOOKING_STATUS",
+                    "Email can only be resent for CONFIRMED or COMPLETED bookings",
+                    HttpStatus.BAD_REQUEST);
+        }
+        bookingTicketService.resendBookingEmail(publicId);
+        return ResponseEntity.ok(ApiResponse.success("Email resent successfully", null));
     }
 
 
