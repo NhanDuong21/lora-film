@@ -17,6 +17,7 @@ import {
   getOrCreatePaymentAttemptKey
 } from '../services/paymentHandoffService';
 import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
+import customerPromotionService from '@/features/promotion/customer/services/customerPromotionService';
 
 vi.mock('../services/bookingService', () => ({
   BOOKING_CHANGED_EVENT: 'lorafilm:booking-changed',
@@ -43,6 +44,12 @@ vi.mock('@/features/score/customer/services/scoreCustomerService', () => ({
   default: {
     getScoreBalance: vi.fn(),
     redeemPreview: vi.fn()
+  }
+}));
+
+vi.mock('@/features/promotion/customer/services/customerPromotionService', () => ({
+  default: {
+    getMyVouchers: vi.fn()
   }
 }));
 
@@ -90,6 +97,12 @@ describe('BookingCheckoutPage cancellation', () => {
         currentPoints: 100,
         heldPoints: 0
       }
+    });
+    customerPromotionService.getMyVouchers.mockResolvedValue({
+      content: [],
+      page: 0,
+      totalElements: 0,
+      totalPages: 0
     });
     finalizeCheckout.mockResolvedValue({});
     getOrCreateScoreRedemptionKey.mockReturnValue('score-redemption-key');
@@ -372,6 +385,52 @@ describe('BookingCheckoutPage cancellation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
     expect(await screen.findByText('Bắp nước 13')).toBeInTheDocument();
     expect(screen.queryByText('Bắp nước 1')).not.toBeInTheDocument();
+  });
+
+  it('loads the customer voucher wallet and keeps selection informational', async () => {
+    customerPromotionService.getMyVouchers.mockResolvedValue({
+      content: [{
+        publicId: 'voucher-public-id',
+        code: 'WELCOME50',
+        name: 'Voucher chào mừng',
+        status: 'ACTIVE',
+        voucherType: 'FIXED_AMOUNT',
+        faceValue: 50000,
+        minimumOrderAmount: 100000,
+        validFrom: '2020-01-01T00:00:00Z',
+        validTo: '2099-12-31T23:59:59Z',
+        usageCount: 0,
+        maxUsage: 1,
+        conditionsJson: { minimumOrderAmount: 100000 },
+        actionsJson: { discountType: 'FIXED_AMOUNT', discountValue: 50000 }
+      }],
+      page: 0,
+      totalElements: 1,
+      totalPages: 1
+    });
+
+    render(
+      <MemoryRouter initialEntries={[
+        '/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111'
+      ]}>
+        <BookingCheckoutPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('1 voucher')).toBeInTheDocument();
+    expect(customerPromotionService.getMyVouchers).toHaveBeenCalledWith({
+      page: 0,
+      size: 50,
+      sort: 'validTo,asc'
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /chọn ưu đãi/i }));
+    const dialog = screen.getByRole('dialog', { name: /ví voucher/i });
+    expect(within(dialog).getByText('Voucher chào mừng')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: /chọn voucher/i }));
+
+    expect(await screen.findByText(/đã chọn để đối chiếu/i)).toBeInTheDocument();
+    expect(finalizeCheckout).not.toHaveBeenCalled();
   });
 
   it('does not rerender concession cards when the hold countdown ticks', async () => {

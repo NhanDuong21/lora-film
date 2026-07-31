@@ -8,7 +8,7 @@ import {
   useState
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, AlertTriangle, Search, ShieldCheck, CreditCard } from 'lucide-react';
+import { Clock, AlertTriangle, Search, ShieldCheck, CreditCard, Gift, X } from 'lucide-react';
 import {
   BOOKING_CHANGED_EVENT,
   getBookingDetails,
@@ -22,6 +22,9 @@ import BookingCancellationModal from '../components/BookingCancellationModal';
 import BookingNoticeModal from '../components/BookingNoticeModal';
 import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
+import PromotionChooser from '@/features/promotion/customer/components/PromotionChooser';
+import customerPromotionService from '@/features/promotion/customer/services/customerPromotionService';
+import { voucherDiscountSummary } from '@/features/promotion/shared/promotionPresentation';
 import {
   createPaymentHandoff,
   getOrCreatePaymentAttemptKey
@@ -260,11 +263,36 @@ export default function BookingCheckoutPage() {
   const [scorePreview, setScorePreview] = useState(null);
   const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
   const [scorePreviewError, setScorePreviewError] = useState('');
+  const [promotionWallet, setPromotionWallet] = useState([]);
+  const [promotionLoading, setPromotionLoading] = useState(false);
+  const [promotionError, setPromotionError] = useState('');
+  const [promotionChooserOpen, setPromotionChooserOpen] = useState(false);
+  const [selectedPromotion, setSelectedPromotion] = useState(null);
   const lastTerminalNoticeRef = useRef(null);
   const cartUpdatingRef = useRef(false);
   const expirationHandledRef = useRef(false);
   const [deadlineExpired, setDeadlineExpired] = useState(false);
   const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  const loadPromotionWallet = useCallback(async () => {
+    setPromotionLoading(true);
+    setPromotionError('');
+    try {
+      const response = await customerPromotionService.getMyVouchers({
+        page: 0,
+        size: 50,
+        sort: 'validTo,asc',
+      });
+      const payload = response?.data ?? response;
+      const vouchers = Array.isArray(payload) ? payload : payload?.content;
+      setPromotionWallet(Array.isArray(vouchers) ? vouchers : []);
+    } catch {
+      setPromotionWallet([]);
+      setPromotionError('Không thể tải ví voucher lúc này.');
+    } finally {
+      setPromotionLoading(false);
+    }
+  }, []);
 
   // Load initial data
   const fetchData = useCallback(async () => {
@@ -274,6 +302,7 @@ export default function BookingCheckoutPage() {
       return;
     }
     setLoading(true);
+    void loadPromotionWallet();
     try {
       const bookingData = await getBookingDetails(bookingId);
       let foodOrder = null;
@@ -321,7 +350,7 @@ export default function BookingCheckoutPage() {
     } finally {
       setLoading(false);
     }
-  }, [bookingId, bookingDraft.showtime]);
+  }, [bookingId, bookingDraft.showtime, loadPromotionWallet]);
 
   useEffect(() => {
     // Data loading is intentionally triggered when the public Booking ID changes.
@@ -490,6 +519,7 @@ export default function BookingCheckoutPage() {
         }));
         setScorePreview(null);
         setScorePreviewError('');
+        setSelectedPromotion(null);
         setCartUpdatingId(null);
         return;
       }
@@ -504,6 +534,7 @@ export default function BookingCheckoutPage() {
       }));
       setScorePreview(null);
       setScorePreviewError('');
+      setSelectedPromotion(null);
     } catch (err) {
       setNotice({
         title: 'Không thể cập nhật bắp nước',
@@ -752,6 +783,13 @@ export default function BookingCheckoutPage() {
     Number(userScore?.currentPoints || 0) - Number(userScore?.heldPoints || 0)
   );
   const selectedScoreDiscount = Number(scorePreview?.discountAmount || 0);
+  const promotionDiscountTotal = Number(booking.promotionDiscount || 0)
+    + Number(booking.voucherDiscount || 0);
+  const selectedPromotionId = selectedPromotion?.publicId
+    || selectedPromotion?.voucherPublicId
+    || selectedPromotion?.id
+    || selectedPromotion?.code
+    || '';
   const displayFinalAmount = scorePreview?.eligible
     ? Number(scorePreview.remainingAmount)
     : Number(booking.finalAmount || 0);
@@ -791,6 +829,22 @@ export default function BookingCheckoutPage() {
           onConfirm={handleCancelBooking}
         />
       )}
+
+      <PromotionChooser
+        open={promotionChooserOpen}
+        vouchers={promotionWallet}
+        loading={promotionLoading}
+        error={promotionError}
+        selectedPromotionId={selectedPromotionId}
+        bookingAmount={Number(booking.finalAmount || 0)}
+        onSelect={setSelectedPromotion}
+        onClear={() => {
+          setSelectedPromotion(null);
+          setPromotionChooserOpen(false);
+        }}
+        onClose={() => setPromotionChooserOpen(false)}
+        onRefresh={loadPromotionWallet}
+      />
 
       <div className="max-w-7xl mx-auto w-full">
         {/* Booking Stepper */}
@@ -1147,16 +1201,86 @@ export default function BookingCheckoutPage() {
                 <span className="font-bold">Tiền bắp nước:</span>
                 <span className="font-black text-sm">{formatCurrency(foodAmount)}</span>
               </div>
-              {booking.promotionDiscount > 0 && (
+              {promotionDiscountTotal > 0 && (
                 <div className="flex justify-between items-center text-emerald-400 font-bold bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
                   <span>Khuyến mãi / Giảm giá:</span>
-                  <span>-{formatCurrency(booking.promotionDiscount)}</span>
+                  <span>-{formatCurrency(promotionDiscountTotal)}</span>
                 </div>
               )}
               <div className="flex justify-between pt-1 text-[10px] text-zinc-500">
                 <span>Thuế GTGT (VAT) đã bao gồm:</span>
                 <span>10%</span>
               </div>
+            </div>
+
+            <div className="space-y-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.05] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Gift className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-200">
+                    Voucher của bạn
+                  </span>
+                </div>
+                <span className="whitespace-nowrap text-[10px] font-black text-emerald-400">
+                  {promotionLoading ? 'Đang tải...' : `${promotionWallet.length} voucher`}
+                </span>
+              </div>
+
+              {selectedPromotion ? (
+                <div className="rounded-xl border border-emerald-500/20 bg-zinc-950/60 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-xs font-black text-white">
+                        {selectedPromotion.name || 'Voucher LoraFilm'}
+                      </p>
+                      <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
+                        {selectedPromotion.code}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs font-black text-emerald-400">
+                      {voucherDiscountSummary(selectedPromotion)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[10px] leading-4 text-amber-300">
+                    Đã chọn để đối chiếu. Tổng tiền chỉ thay đổi khi Booking backend xác nhận ưu đãi.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPromotionChooserOpen(true)}
+                      className="flex-1 rounded-lg border border-zinc-700 py-2 text-[10px] font-black uppercase text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white"
+                    >
+                      Đổi voucher
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPromotion(null)}
+                      aria-label="Bỏ chọn voucher"
+                      className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-500 transition-colors hover:border-zinc-500 hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[10px] leading-relaxed text-zinc-500">
+                    Xem voucher trong tài khoản và đối chiếu điều kiện với giá trị đơn hiện tại.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPromotionChooserOpen(true)}
+                    disabled={isExpired}
+                    className="w-full rounded-xl bg-emerald-500 py-2.5 text-[10px] font-black uppercase tracking-wider text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+                  >
+                    Chọn ưu đãi
+                  </button>
+                </>
+              )}
+
+              {promotionError && !promotionChooserOpen && (
+                <p role="alert" className="text-[10px] leading-4 text-red-400">{promotionError}</p>
+              )}
             </div>
 
             {/* Score redemption is available before Payment handoff on both checkout steps. */}
