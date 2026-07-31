@@ -1,9 +1,6 @@
-// eslint-disable-next-line no-unused-vars
-import React from 'react';
- 
-// eslint-disable-next-line no-unused-vars
-import { Search, MapPin, Trash2, Plus, Phone, Pencil } from 'lucide-react';
+import { Search, MapPin, Plus, Archive, Settings2 } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
+import { getCinemaStatus } from '../utils/facilityPresentation';
 
 export default function CinemaTable({
   cinemas,
@@ -42,18 +39,10 @@ export default function CinemaTable({
   };
 
   const renderStatusBadge = (status) => {
-    const config = {
-      DRAFT: 'bg-zinc-800 text-zinc-400 border-zinc-700',
-      ACTIVE: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-      MAINTENANCE: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-      TEMPORARILY_CLOSED: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-      INACTIVE: 'bg-zinc-800 text-zinc-500 border-zinc-700',
-      PERMANENTLY_CLOSED: 'bg-red-500/10 text-red-500 border-red-500/20'
-    };
-
+    const config = getCinemaStatus(status);
     return (
-      <span className={`px-2.5 py-1 text-[10px] font-black border rounded-full uppercase tracking-wider ${config[status] || config.DRAFT}`}>
-        {status.replace('_', ' ')}
+      <span className={`px-2.5 py-1 text-[10px] font-black border rounded-full uppercase tracking-wider ${config.className}`}>
+        {config.label}
       </span>
     );
   };
@@ -62,7 +51,8 @@ export default function CinemaTable({
     <div className="flex flex-col flex-1 p-6 md:p-8 overflow-auto min-h-[400px] bg-zinc-950 text-white space-y-6 animate-fade-in">
       {/* Title Header */}
       <div className="flex flex-col border-b border-zinc-800 pb-4">
-        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">HỆ THỐNG CỤM RẠP</h1>
+        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">CỤM RẠP & VẬN HÀNH</h1>
+        <p className="text-xs text-zinc-500 mt-2">Theo dõi mức sẵn sàng, giờ mở cửa và các việc cần xử lý của từng cụm rạp.</p>
       </div>
 
       {/* Filter and search bar */}
@@ -103,12 +93,12 @@ export default function CinemaTable({
             className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 focus:border-brand-orange/40 rounded-xl py-2.5 px-3.5 text-xs transition-colors cursor-pointer focus:outline-none"
           >
             <option value="">Tất cả trạng thái</option>
-            <option value="DRAFT">DRAFT</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="MAINTENANCE">MAINTENANCE</option>
-            <option value="TEMPORARILY_CLOSED">TEMPORARILY CLOSED</option>
-            <option value="INACTIVE">INACTIVE</option>
-            <option value="PERMANENTLY_CLOSED">PERMANENTLY CLOSED</option>
+            <option value="DRAFT">Bản nháp</option>
+            <option value="ACTIVE">Đang hoạt động</option>
+            <option value="MAINTENANCE">Đang bảo trì</option>
+            <option value="TEMPORARILY_CLOSED">Tạm đóng cửa</option>
+            <option value="INACTIVE">Tạm ngừng</option>
+            <option value="PERMANENTLY_CLOSED">Đã lưu trữ</option>
           </select>
         </div>
       </div>
@@ -120,7 +110,7 @@ export default function CinemaTable({
           className="bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-lg shadow-brand-orange/10 flex items-center gap-2 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>THÊM CỤM RẠP</span>
+          <span>Thiết lập cụm rạp mới</span>
         </button>
       </div>
 
@@ -138,7 +128,7 @@ export default function CinemaTable({
                   <th className="py-4 px-6">ĐỊA CHỈ</th>
                   <th className="py-4 px-6">HOTLINE</th>
                   <th className="py-4 px-6 w-44">TRẠNG THÁI</th>
-                  <th className="py-4 px-6 w-24 text-right">THAO TÁC</th>
+                  <th className="py-4 px-6 w-72 text-right">HÀNH ĐỘNG</th>
                 </tr>
               </thead>
               <tbody>
@@ -180,26 +170,28 @@ export default function CinemaTable({
                         </span>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
                           {renderStatusBadge(cinema.status)}
-                          
-                          <button
-                            onClick={() => onEdit(cinema.publicId)}
-                            className="text-[10px] text-orange-500 hover:text-orange-400 font-black uppercase tracking-wider bg-orange-500/5 hover:bg-orange-500/10 border border-orange-500/10 hover:border-orange-500/20 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
-                          >
-                            Chỉnh sửa
-                          </button>
                         </div>
                       </td>
                       <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                          <button
+                            onClick={() => onEdit(cinema.publicId)}
+                            className="inline-flex items-center gap-2 px-3 py-2 text-[10px] text-orange-400 font-black uppercase tracking-wider bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-lg transition-colors"
+                          >
+                            <Settings2 className="w-3.5 h-3.5" />
+                            Mở trung tâm vận hành
+                          </button>
+                          {cinema.status !== 'PERMANENTLY_CLOSED' && (
                           <button
                             onClick={() => onDelete(cinema.publicId, cinema.name)}
-                            className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-lg transition-all cursor-pointer"
-                            title="Xóa cụm rạp"
+                            className="inline-flex items-center gap-2 px-3 py-2 text-[10px] text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-zinc-800 hover:border-red-500/20 rounded-lg transition-all"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Archive className="w-3.5 h-3.5" />
+                            Lưu trữ
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>

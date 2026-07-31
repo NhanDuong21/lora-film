@@ -12,6 +12,8 @@ import com.lorafilm.movie.movie.dto.MovieMapper;
 import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +21,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -32,17 +35,20 @@ public class CustomerMovieService {
     private final MovieMediaRepository movieMediaRepository;
     private final MovieMapper movieMapper;
     private final MovieService movieService;
+    private final ShowtimeRepository showtimeRepository;
 
     public CustomerMovieService(MovieRepository movieRepository,
                                 MovieGenreRepository movieGenreRepository,
                                 MovieMediaRepository movieMediaRepository,
                                 MovieMapper movieMapper,
-                                MovieService movieService) {
+                                MovieService movieService,
+                                ShowtimeRepository showtimeRepository) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMediaRepository = movieMediaRepository;
         this.movieMapper = movieMapper;
         this.movieService = movieService;
+        this.showtimeRepository = showtimeRepository;
     }
 
     public PageResponse<MovieDto> getMoviesByStatus(String statusStr, String keyword, Pageable pageable) {
@@ -111,7 +117,11 @@ public class CustomerMovieService {
         Movie movie = movieRepository.findByIdentifierAndDeletedAtIsNull(identifier)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
         
-        if (movie.getStatus() == MovieStatus.DRAFT || movie.getStatus() == MovieStatus.INACTIVE) {
+        boolean normallyVisible = movie.getStatus() != MovieStatus.DRAFT
+                && movie.getStatus() != MovieStatus.INACTIVE;
+        if (!normallyVisible && !showtimeRepository
+                .existsByMovieIdAndStatusAndStartTimeAfterAndDeletedAtIsNull(
+                        movie.getId(), ShowtimeStatus.OPEN_FOR_BOOKING, Instant.now())) {
             throw new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null);
         }
 

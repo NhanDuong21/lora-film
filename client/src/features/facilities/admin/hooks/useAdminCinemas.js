@@ -49,26 +49,25 @@ export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
     }
   }, [currentPage, pageSize, searchTerm, cityFilter, statusFilter, triggerToast]);
 
-  // Handle delete
+  // Keep historical data intact: "remove" in the UI means archive, never hard-delete.
   const handleDeleteCinema = async (id, name) => {
-    const shouldDelete = triggerConfirm 
-      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa cụm rạp "${name}"?`)
-      : window.confirm(`Bạn có chắc chắn muốn xóa cụm rạp "${name}"?`);
+    const shouldDelete = await triggerConfirm?.({
+      title: `Lưu trữ cụm rạp “${name}”?`,
+      message: 'Cụm rạp sẽ ngừng xuất hiện trong hoạt động bán vé nhưng toàn bộ lịch sử suất chiếu, đơn đặt vé và báo cáo vẫn được giữ lại. Hãy kiểm tra các suất chiếu sắp tới trước khi tiếp tục.',
+      confirmLabel: 'Lưu trữ cụm rạp',
+      tone: 'danger',
+    });
 
     if (shouldDelete) {
       setIsLoading(true);
       setError(null);
       try {
-        await adminCinemaService.deleteCinema(id);
-        setCinemas(cinemas.filter(c => c.publicId !== id));
-        triggerToast?.('Xóa cụm rạp thành công', 'success');
+        await adminCinemaService.updateCinemaStatus(id, 'PERMANENTLY_CLOSED');
+        triggerToast?.('Đã lưu trữ cụm rạp và giữ nguyên dữ liệu lịch sử', 'success');
+        await fetchCinemas();
         return true;
       } catch (err) {
-        const errorMsg = err.response?.data?.message || err.message || 'Không thể xóa cụm rạp';
-        let displayMsg = errorMsg;
-        if (errorMsg.includes('showtime history') || errorMsg.includes('CINEMA_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY')) {
-            displayMsg = 'Cụm rạp này đã có dữ liệu giao dịch, không thể xóa. Vui lòng chuyển trạng thái sang ĐÓNG CỬA (CLOSED).';
-        }
+        const displayMsg = err.response?.data?.message || err.message || 'Không thể lưu trữ cụm rạp';
         setError(displayMsg);
         triggerToast?.(displayMsg, 'error');
         return false;

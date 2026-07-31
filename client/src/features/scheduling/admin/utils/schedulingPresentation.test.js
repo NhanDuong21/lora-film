@@ -60,7 +60,7 @@ describe('schedulingPresentation', () => {
 
   it('localizes scheduling lifecycle values without losing technical values', () => {
     expect(getPreviewStatusPresentation('PREVIEWED')).toMatchObject({
-      label: 'Sẵn sàng rà soát',
+      label: 'Chờ kiểm tra',
       technicalValue: 'PREVIEWED',
     });
     expect(getCandidateValidationPresentation('VALID').label).toBe('Hợp lệ');
@@ -76,11 +76,11 @@ describe('schedulingPresentation', () => {
       isFallback: false,
     });
     expect(getBatchStatusReasonPresentation('PRICE_POLICY_NOT_FOUND').label)
-      .toBe('Không có chính sách giá hiệu lực');
+      .toBe('Chưa có bảng giá đang áp dụng');
     expect(getBatchStatusReasonPresentation('SHOWTIME_OUTSIDE_RELEASE_WINDOW').label)
       .toBe('Phim nằm ngoài thời gian được phép chiếu');
     expect(getBatchStatusReasonPresentation('AUDITORIUM_NOT_ACTIVE').label)
-      .toBe('Phòng chiếu không hoạt động');
+      .toBe('Phòng chiếu đang tạm ngừng hoạt động');
   });
 
   it('uses a safe fallback while retaining an unknown technical value', () => {

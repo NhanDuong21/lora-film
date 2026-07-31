@@ -12,9 +12,9 @@ describe('MovieTmdbQueuePanel', () => {
       />,
     );
 
-    expect(screen.getByText('Phim tương lai')).toBeInTheDocument();
-    expect(screen.getByText('Phim đã phát hành')).toBeInTheDocument();
-    expect(screen.getByText('Thiếu ngày phát hành')).toBeInTheDocument();
+    expect(screen.getByText('Phim sắp phát hành')).toBeInTheDocument();
+    expect(screen.getByText('Đã quá ngày phát hành')).toBeInTheDocument();
+    expect(screen.getByText('Chưa có ngày khởi chiếu')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
     expect(screen.getByText('6')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe('MovieTmdbQueuePanel', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Duyệt 1 phim' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu trữ 1 phim' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tạm ngừng 1 phim' }));
     expect(onApprove).toHaveBeenCalledTimes(1);
     expect(onArchive).toHaveBeenCalledTimes(1);
   });

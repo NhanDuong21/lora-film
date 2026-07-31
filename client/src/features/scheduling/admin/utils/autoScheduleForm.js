@@ -71,7 +71,7 @@ export const validateAutoScheduleDateRange = ({
     errors.scheduleTo = 'Ngày kết thúc phải từ ngày bắt đầu trở đi';
   }
   if (!errors.scheduleFrom && !errors.scheduleTo && dayCount !== null && dayCount > 7) {
-    errors.scheduleTo = `Mỗi bản xem trước chỉ gồm tối đa 7 ngày. Khoảng hợp lệ đầu tiên là ${scheduleFrom} đến ${suggestedScheduleTo}.`;
+    errors.scheduleTo = `Mỗi bản lịch chỉ gồm tối đa 7 ngày. Bạn có thể chọn từ ${scheduleFrom} đến ${suggestedScheduleTo}.`;
   }
 
   return {

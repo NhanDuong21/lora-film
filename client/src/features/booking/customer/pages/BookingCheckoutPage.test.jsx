@@ -133,7 +133,7 @@ describe('BookingCheckoutPage cancellation', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', {
-      name: /xác nhận & tiếp tục/i
+      name: /tiếp tục thanh toán/i
     }));
     const momoLogo = screen.getByRole('img', { name: 'Logo MoMo' });
     expect(momoLogo).toHaveAttribute(
@@ -201,7 +201,7 @@ describe('BookingCheckoutPage cancellation', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', {
-      name: /xác nhận & tiếp tục/i
+      name: /tiếp tục thanh toán/i
     }));
     fireEvent.click(screen.getByRole('button', { name: /momo/i }));
     fireEvent.click(screen.getByRole('checkbox'));
@@ -312,6 +312,7 @@ describe('BookingCheckoutPage cancellation', () => {
     expect(firstThumbnail.getAttribute('src')).toContain('h=192');
     expect(screen.queryByText('Bắp nước 13')).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Xem tất cả' }));
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
     expect(await screen.findByText('Bắp nước 13')).toBeInTheDocument();
     expect(screen.queryByText('Bắp nước 1')).not.toBeInTheDocument();

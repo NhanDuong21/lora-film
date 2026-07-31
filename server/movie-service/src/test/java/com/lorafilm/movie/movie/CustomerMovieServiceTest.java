@@ -13,6 +13,8 @@ import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.service.CustomerMovieService;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,6 +52,9 @@ public class CustomerMovieServiceTest {
 
     @Mock
     private com.lorafilm.movie.movie.service.MovieService movieService;
+
+    @Mock
+    private ShowtimeRepository showtimeRepository;
 
     @InjectMocks
     private CustomerMovieService customerMovieService;
@@ -152,5 +157,24 @@ public class CustomerMovieServiceTest {
             () -> customerMovieService.getMovieDetail("movie-draft"));
             
         assertEquals(ErrorCode.MOVIE_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void getMovieDetail_InactiveMovieWithBookableShowtime_ReturnsDetail() {
+        draftMovie.setStatus(MovieStatus.INACTIVE);
+        when(movieRepository.findByIdentifierAndDeletedAtIsNull("movie-draft"))
+                .thenReturn(Optional.of(draftMovie));
+        when(showtimeRepository.existsByMovieIdAndStatusAndStartTimeAfterAndDeletedAtIsNull(
+                eq(2L), eq(ShowtimeStatus.OPEN_FOR_BOOKING), any()))
+                .thenReturn(true);
+
+        com.lorafilm.movie.movie.dto.MovieDetailDto detailDto =
+                new com.lorafilm.movie.movie.dto.MovieDetailDto();
+        detailDto.setPublicId("movie-draft");
+        when(movieService.getMovieByIdentifier("movie-draft")).thenReturn(detailDto);
+
+        var response = customerMovieService.getMovieDetail("movie-draft");
+
+        assertEquals("movie-draft", response.getPublicId());
     }
 }

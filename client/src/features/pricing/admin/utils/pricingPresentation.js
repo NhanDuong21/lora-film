@@ -1,40 +1,40 @@
 export const PRICING_REASON_PRESENTATIONS = {
   PRICING_INCOMPLETE: {
-    label: 'Thiếu chính sách hoặc quy tắc giá hiệu lực',
-    guidance: 'Bổ sung quy tắc giá cho tất cả loại ghế có thể bán trước khi áp dụng lịch.',
+    label: 'Chưa đủ giá cho tất cả loại ghế',
+    guidance: 'Bổ sung giá cho tất cả loại ghế có thể bán trước khi tạo suất chiếu.',
     tone: 'red',
   },
   PRICING_AMBIGUOUS: {
-    label: 'Có nhiều quy tắc giá cùng mức ưu tiên',
-    guidance: 'Điều chỉnh phạm vi, ngày, khung giờ hoặc độ ưu tiên để chỉ còn một quy tắc thắng.',
+    label: 'Có nhiều mức giá phù hợp cùng lúc',
+    guidance: 'Giới hạn lại theo phòng, ngày hoặc khung giờ để mỗi loại ghế chỉ còn một mức giá.',
     tone: 'red',
   },
   PRICE_POLICY_NOT_FOUND: {
-    label: 'Không có chính sách giá hiệu lực',
-    guidance: 'Tạo hoặc kích hoạt chính sách giá bao phủ ngày chiếu này.',
+    label: 'Chưa có bảng giá đang áp dụng',
+    guidance: 'Tạo hoặc kích hoạt một bảng giá bao phủ ngày chiếu này.',
     tone: 'red',
   },
   PRICE_RULE_MISSING: {
-    label: 'Thiếu quy tắc giá cho một hoặc nhiều loại ghế',
-    guidance: 'Bổ sung quy tắc cho các loại ghế được liệt kê.',
+    label: 'Thiếu giá cho một hoặc nhiều loại ghế',
+    guidance: 'Bổ sung giá cho các loại ghế được liệt kê.',
     tone: 'red',
   },
   PRICE_POLICY_OVERLAP: {
-    label: 'Các quy tắc giá xung đột cùng hạng',
-    guidance: 'Điều chỉnh phạm vi, loại ngày, khung giờ hoặc độ ưu tiên trước khi kích hoạt.',
+    label: 'Có các mức giá bị trùng điều kiện',
+    guidance: 'Điều chỉnh phòng, loại ngày hoặc khung giờ để mỗi trường hợp chỉ còn một mức giá.',
     tone: 'red',
   },
   INVALID_CINEMA_TIMEZONE: {
-    label: 'Múi giờ của rạp không hợp lệ',
-    guidance: 'Cập nhật múi giờ IANA hợp lệ cho rạp trước khi phân giải giá.',
+    label: 'Cấu hình giờ của rạp chưa đúng',
+    guidance: 'Cập nhật lại cấu hình giờ của rạp trước khi kiểm tra giá.',
     tone: 'red',
   },
 };
 
 export const getPricingReasonPresentation = reasonCode => (
   PRICING_REASON_PRESENTATIONS[reasonCode] || {
-    label: 'Không xác định — xem chi tiết kỹ thuật',
-    guidance: 'Kiểm tra mã chẩn đoán kỹ thuật hoặc liên hệ quản trị hệ thống.',
+    label: 'Không xác định được nguyên nhân',
+    guidance: 'Thử kiểm tra lại; nếu lỗi vẫn còn, hãy liên hệ quản trị hệ thống.',
     tone: 'zinc',
   }
 );
@@ -75,7 +75,7 @@ export const getConflictPresentation = conflict => {
     : 'Loại ghế chưa xác định';
   return {
     title: `${seatType} · ${scope.label}${scope.detail ? `: ${scope.detail}` : ''}`,
-    facts: `${getDayTypeLabel(conflict?.dayType)} · ${getTimeBandLabel(conflict?.timeBandStart, conflict?.timeBandEnd)} · ${conflict?.conflictingRuleCount || 2} quy tắc xung đột`,
+    facts: `${getDayTypeLabel(conflict?.dayType)} · ${getTimeBandLabel(conflict?.timeBandStart, conflict?.timeBandEnd)} · ${conflict?.conflictingRuleCount || 2} mức giá bị trùng`,
     guidance: reason.guidance,
     technical: {
       reasonCode: conflict?.reasonCode || 'PRICE_POLICY_OVERLAP',

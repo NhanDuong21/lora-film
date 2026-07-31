@@ -1,29 +1,152 @@
-import { useState } from 'react';
-import { 
-  ChevronDown, Menu, X, Star, Search, User, LogOut, KeyRound, Mail
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ChevronDown,
+  KeyRound,
+  LogOut,
+  Mail,
+  Menu,
+  Search,
+  Star,
+  User,
+  X
 } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { getCinemas } from '@/features/catalog/customer/services/movieService';
 import CustomerNotificationBell from '@/features/notifications/customer/components/CustomerNotificationBell';
+
+const dropdownPanelClass =
+  'overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/95 p-2 shadow-[0_20px_55px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl';
+
+const dropdownItemClass =
+  'flex min-h-11 w-full items-center rounded-xl px-4 text-left text-sm font-bold text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white focus:outline-none focus-visible:bg-zinc-800 focus-visible:text-white';
+
+const focusRingClass =
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950';
+
+function NavDropdown({
+  id,
+  label,
+  isOpen,
+  isActive,
+  onOpen,
+  onClose,
+  onToggle,
+  children
+}) {
+  const menuId = `header-menu-${id}`;
+
+  return (
+    <div
+      className="relative flex h-20 items-center"
+      onMouseEnter={() => onOpen(id)}
+      onMouseLeave={onClose}
+    >
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={menuId}
+        aria-haspopup="menu"
+        onClick={() => onToggle(id)}
+        className={`group inline-flex min-h-11 items-center gap-1.5 rounded-lg px-1 text-[13px] font-bold whitespace-nowrap transition-colors ${focusRingClass} ${
+          isOpen || isActive
+            ? 'text-brand-orange'
+            : 'text-zinc-300 hover:text-brand-orange'
+        }`}
+      >
+        <span>{label}</span>
+        <ChevronDown
+          aria-hidden="true"
+          className={`h-3.5 w-3.5 transition duration-200 ${
+            isOpen ? 'rotate-180 text-brand-orange' : 'text-zinc-500 group-hover:text-brand-orange'
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-1/2 top-full z-50 w-60 -translate-x-1/2 pt-2">
+          <div id={menuId} role="menu" aria-label={label} className={dropdownPanelClass}>
+            {children}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Header() {
   const { user, userRole, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
-  const isCustomer = (userRole || '').replace(/^ROLE_/, '') === 'CUSTOMER';
-  
-  // Mobile drawer state
+  const { pathname } = useLocation();
+  const headerRef = useRef(null);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
-  // Navigation dropdown visibility states
-  const [activeDropdown, setActiveDropdown] = useState(null); // 'phim' | 'hoc-dien-anh' | null
+  const [activeDropdown, setActiveDropdown] = useState(null);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  
-  // Cinema info modal state
   const [infoModalContent, setInfoModalContent] = useState(null);
- 
-  // Centralized search query state
   const [searchQuery, setSearchQuery] = useState('');
- 
+  const [cinemas, setCinemas] = useState([]);
+  const [cinemaMenuLoading, setCinemaMenuLoading] = useState(true);
+  const [cinemaMenuError, setCinemaMenuError] = useState('');
+
+  const normalizedRole = (userRole || '').replace(/^ROLE_/, '');
+  const isCustomer = normalizedRole === 'CUSTOMER';
+  const brandPath = isAuthenticated && normalizedRole === 'ADMIN' ? '/admin' : '/';
+
+  const loadCinemaMenu = useCallback(async () => {
+    setCinemaMenuLoading(true);
+    setCinemaMenuError('');
+    try {
+      const cinemaPage = await getCinemas({ page: 0, size: 100 });
+      setCinemas(Array.isArray(cinemaPage?.data) ? cinemaPage.data : []);
+    } catch {
+      setCinemas([]);
+      setCinemaMenuError('Không thể tải danh sách rạp');
+    } finally {
+      setCinemaMenuLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const closeOpenMenus = event => {
+      if (!headerRef.current?.contains(event.target)) {
+        setActiveDropdown(null);
+        setProfileDropdownOpen(false);
+        setMobileMenuOpen(false);
+      }
+    };
+
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') {
+        setActiveDropdown(null);
+        setProfileDropdownOpen(false);
+        setMobileMenuOpen(false);
+        setInfoModalContent(null);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOpenMenus);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOpenMenus);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadCinemaMenu();
+  }, [loadCinemaMenu]);
+
+  const closeNavigation = () => {
+    setActiveDropdown(null);
+    setMobileMenuOpen(false);
+  };
+
+  const navigateFromHeader = path => {
+    closeNavigation();
+    navigate(path);
+  };
 
   const handleLogoutClick = async () => {
     await logout();
@@ -31,387 +154,546 @@ export default function Header() {
     navigate('/');
   };
 
-  const handleQuickTicketClick = () => {
-    navigate('/booking');
-  };
-
-  const handlePhimOptionClick = () => {
-    setActiveDropdown(null);
-    setMobileMenuOpen(false);
-    navigate('/movies');
-  };
-
-  const handleInfoOptionClick = (optionName) => {
-    setActiveDropdown(null);
-    setMobileMenuOpen(false);
+  const handleInfoOptionClick = optionName => {
+    closeNavigation();
     if (optionName === 'Thể loại phim') {
       navigate('/movies');
-    } else if (optionName === 'Diễn viên') {
-      setInfoModalContent('Diễn viên');
-    } else if (optionName === 'Đạo diễn') {
-      setInfoModalContent('Đạo diễn');
-    } else if (optionName === 'Khuyến mãi và Sự kiện') {
-      setInfoModalContent('Khuyến mãi và Sự kiện');
-    } else {
-      setInfoModalContent(optionName);
+      return;
     }
+    setInfoModalContent(optionName);
+  };
+
+  const handleSearchSubmit = event => {
+    event.preventDefault();
+    const normalizedQuery = searchQuery.trim();
+    if (!normalizedQuery) return;
+    closeNavigation();
+    navigate(`/movies?search=${encodeURIComponent(normalizedQuery)}`);
+  };
+
+  const toggleDropdown = id => {
+    setProfileDropdownOpen(false);
+    setActiveDropdown(current => (current === id ? null : id));
   };
 
   return (
-    <header className="fixed top-0 left-0 w-full z-50 bg-zinc-950/95 backdrop-blur-md px-3 sm:px-6 md:px-12 py-3.5 flex justify-between items-center border-b border-zinc-800/80 transition-all duration-300">
-      
-      {/* LEFT SECTION: Brand Logo & Mua Ve Coupon Stub */}
-      <div className="flex items-center gap-6">
-        <Link to={isAuthenticated && (userRole?.replace(/^ROLE_/, '') === 'ADMIN') ? '/admin' : '/'} className="flex items-center gap-2.5 shrink-0 bg-transparent p-0 m-0 border-none shadow-none outline-none group mr-4 md:mr-6 select-none decoration-none transition-transform duration-200 hover:scale-[1.02]">
-          <img 
-            src="/images/main-logo.png" 
-            alt="LoraFilm Mascot" 
-            className="h-9 sm:h-10 md:h-11 w-auto object-contain bg-transparent will-change-transform"
-          />
-          <span className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white font-sans flex items-center leading-none">
-            Lora
-            <span className="text-amber-500 font-black ml-0.5 group-hover:text-amber-400 transition-colors">
-              Film
-            </span>
-          </span>
-        </Link>
+    <>
+      <header
+        ref={headerRef}
+        className="fixed inset-x-0 top-0 z-50 h-20 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur-xl"
+      >
+        <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 shrink-0 items-center gap-5 xl:gap-7">
+            <Link
+              to={brandPath}
+              aria-label="Về trang chủ LoraFilm"
+              className={`group flex shrink-0 items-center gap-2.5 rounded-xl transition-transform hover:scale-[1.02] ${focusRingClass}`}
+            >
+              <img
+                src="/images/main-logo.png"
+                alt=""
+                className="h-10 w-auto object-contain sm:h-11"
+              />
+              <span className="flex items-center text-2xl font-black leading-none tracking-tight text-white sm:text-[28px]">
+                Lora
+                <span className="ml-0.5 text-amber-500 transition-colors group-hover:text-amber-400">
+                  Film
+                </span>
+              </span>
+            </Link>
 
-        {/* Orange Ticket Button */}
-        <div className="hidden sm:flex items-center shrink-0">
-          <button
-            onClick={handleQuickTicketClick}
-            className="bg-brand-orange hover:bg-orange-600 transition-colors text-white text-[11px] font-black uppercase tracking-wider pl-4 pr-3 py-2 rounded-l-lg flex items-center gap-1.5 shadow-lg shadow-brand-orange/20 h-9"
-          >
-            <Star className="w-3.5 h-3.5 fill-white text-white" />
-            <span>Mua Vé</span>
-          </button>
-          <div className="h-9 w-[1px] border-r border-dashed border-white/40 bg-brand-orange"></div>
-          <button
-            onClick={handleQuickTicketClick}
-            className="bg-brand-orange hover:bg-orange-600 transition-colors text-white w-7 h-9 rounded-r-lg relative flex items-center justify-center shadow-lg shadow-brand-orange/20 shrink-0"
-          >
-            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-zinc-950 rounded-full border border-zinc-800/80"></div>
-            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-zinc-950 rounded-full border border-zinc-800/80"></div>
-            <div className="w-1 h-1 bg-white/70 rounded-full"></div>
-          </button>
-        </div>
-      </div>
+            <button
+              type="button"
+              onClick={() => navigateFromHeader('/booking')}
+              aria-label="Mua vé nhanh"
+              className={`group relative hidden h-11 w-[154px] shrink-0 overflow-hidden rounded-xl bg-brand-orange text-white shadow-[0_10px_28px_-10px_rgba(255,122,0,0.85)] transition hover:-translate-y-0.5 hover:bg-orange-600 xl:flex ${focusRingClass}`}
+            >
+              <span className="flex flex-1 items-center justify-center gap-2 pl-4 pr-3 text-xs font-black uppercase tracking-wide">
+                <Star aria-hidden="true" className="h-4 w-4 fill-current" />
+                Mua vé
+              </span>
+              <span
+                aria-hidden="true"
+                className="flex w-10 items-center justify-center border-l border-dashed border-white/55"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-white/90 transition-transform group-hover:scale-125" />
+              </span>
+              <span
+                aria-hidden="true"
+                className="absolute -top-1.5 right-10 h-3 w-3 translate-x-1/2 rounded-full bg-zinc-950"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute -bottom-1.5 right-10 h-3 w-3 translate-x-1/2 rounded-full bg-zinc-950"
+              />
+            </button>
+          </div>
 
-      {/* CENTER SECTION: Structured Navigation Dropdown Menus */}
-      <nav className="hidden lg:flex items-center gap-6 font-semibold text-xs uppercase tracking-wider">
-        <div 
-          className="relative py-2"
-          onMouseEnter={() => setActiveDropdown('phim')}
-          onMouseLeave={() => setActiveDropdown(null)}
-        >
-          <button 
-            type="button"
-            className="text-zinc-300 hover:text-brand-orange flex items-center gap-1 transition-colors duration-250 focus:outline-none"
+          <nav
+            aria-label="Điều hướng chính"
+            className="hidden min-w-0 items-center justify-center gap-4 lg:flex xl:gap-5"
           >
-            <span>Phim</span>
-            <ChevronDown className="w-3 h-3 shrink-0 text-zinc-500 group-hover:text-brand-orange" />
-          </button>
-          {activeDropdown === 'phim' && (
-            <div className="absolute left-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl z-50 py-2">
+            <NavDropdown
+              id="movies"
+              label="Phim"
+              isOpen={activeDropdown === 'movies'}
+              isActive={pathname.startsWith('/movies')}
+              onOpen={setActiveDropdown}
+              onClose={() => setActiveDropdown(null)}
+              onToggle={toggleDropdown}
+            >
               <button
-                onClick={() => handlePhimOptionClick('NOW_SHOWING')}
-                className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white font-bold transition-colors"
+                type="button"
+                role="menuitem"
+                onClick={() => navigateFromHeader('/movies?status=NOW_SHOWING')}
+                className={dropdownItemClass}
               >
                 Phim đang chiếu
               </button>
               <button
-                onClick={() => handlePhimOptionClick('COMING_SOON')}
-                className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white font-bold transition-colors"
+                type="button"
+                role="menuitem"
+                onClick={() => navigateFromHeader('/movies?status=UPCOMING')}
+                className={dropdownItemClass}
               >
                 Phim sắp chiếu
               </button>
-            </div>
-          )}
-        </div>
+            </NavDropdown>
 
-        <div 
-          className="relative py-2"
-          onMouseEnter={() => setActiveDropdown('goc-dien-anh')}
-          onMouseLeave={() => setActiveDropdown(null)}
-        >
-          <button 
-            type="button"
-            className="text-zinc-300 hover:text-brand-orange flex items-center gap-1 transition-colors duration-250 focus:outline-none"
-          >
-            <span>Góc Điện Ảnh</span>
-            <ChevronDown className="w-3 h-3 shrink-0 text-zinc-500" />
-          </button>
-          {activeDropdown === 'goc-dien-anh' && (
-            <div className="absolute left-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl z-50 py-2">
-              <button
-                onClick={() => handleInfoOptionClick('Thể loại phim')}
-                className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white font-bold transition-colors"
-              >
-                Thể loại phim
-              </button>
-              <button
-                onClick={() => handleInfoOptionClick('Diễn viên')}
-                className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white font-bold transition-colors"
-              >
-                Diễn viên
-              </button>
-              <button
-                onClick={() => handleInfoOptionClick('Đạo diễn')}
-                className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white font-bold transition-colors"
-              >
-                Đạo diễn
-              </button>
-            </div>
-          )}
-        </div>
+            <NavDropdown
+              id="cinema-corner"
+              label="Góc Điện Ảnh"
+              isOpen={activeDropdown === 'cinema-corner'}
+              isActive={false}
+              onOpen={setActiveDropdown}
+              onClose={() => setActiveDropdown(null)}
+              onToggle={toggleDropdown}
+            >
+              {['Thể loại phim', 'Diễn viên', 'Đạo diễn'].map(item => (
+                <button
+                  key={item}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handleInfoOptionClick(item)}
+                  className={dropdownItemClass}
+                >
+                  {item}
+                </button>
+              ))}
+            </NavDropdown>
 
-        <button
-          onClick={() => handleInfoOptionClick('Khuyến mãi và Sự kiện')}
-          className="text-zinc-300 hover:text-brand-orange py-2 transition-colors duration-250 focus:outline-none"
-        >
-          Sự Kiện
-        </button>
+            <button
+              type="button"
+              onClick={() => handleInfoOptionClick('Khuyến mãi và Sự kiện')}
+              className={`min-h-11 rounded-lg px-1 text-[13px] font-bold whitespace-nowrap text-zinc-300 transition-colors hover:text-brand-orange ${focusRingClass}`}
+            >
+              Sự Kiện
+            </button>
 
-        <div 
-          className="relative py-2"
-          onMouseEnter={() => setActiveDropdown('rap-gia-ve')}
-          onMouseLeave={() => setActiveDropdown(null)}
-        >
-          <button 
-            type="button"
-            className="text-zinc-300 hover:text-brand-orange flex items-center gap-1 transition-colors duration-250 focus:outline-none"
-          >
-            <span>Rạp/Giá Vé</span>
-            <ChevronDown className="w-3 h-3 shrink-0 text-zinc-500" />
-          </button>
-          {activeDropdown === 'rap-gia-ve' && (
-            <div className="absolute left-0 mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl z-50 py-2">
-              <button
-                onClick={() => {
-                  setActiveDropdown(null);
-                  navigate('/cinema/1');
-                }}
-                className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white font-bold transition-colors"
-              >
-                Lora Nguyễn Du
-              </button>
-              <button
-                onClick={() => {
-                  setActiveDropdown(null);
-                  navigate('/cinema/2');
-                }}
-                className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white font-bold transition-colors"
-              >
-                Lora Thảo Điền
-              </button>
-              <button
-                onClick={() => {
-                  setActiveDropdown(null);
-                  navigate('/cinema/3');
-                }}
-                className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white font-bold transition-colors"
-              >
-                Lora Royal City
-              </button>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={() => handleInfoOptionClick('Trải nghiệm Rạp Đặc Biệt')}
-          className="text-zinc-300 hover:text-brand-orange py-2 transition-colors duration-250 focus:outline-none"
-        >
-          Rạp Đặc Biệt
-        </button>
-
-      </nav>
-
-      {/* RIGHT SECTION: Live Auth Session Status Dropdown */}
-      <div className="flex items-center gap-1 sm:gap-4">
-        <div className="relative hidden xl:block">
-          <div className="relative w-64 md:w-72 bg-zinc-900/90 border border-zinc-800 focus-within:border-brand-orange/60 rounded-full px-4 h-10 flex items-center text-xs text-zinc-100 transition-colors duration-200 outline-none">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm phim, diễn viên, đạo diễn..."
-              className="bg-transparent text-white text-xs w-full h-full focus:outline-none placeholder-zinc-600"
-            />
-            <Search className="w-4 h-4 text-zinc-500 absolute right-3 pointer-events-none" />
-          </div>
-        </div>
-
-        {isAuthenticated ? (
-          <div className="flex items-center gap-3 relative">
-            
-            {isCustomer && <CustomerNotificationBell />}
-
-            <div className="relative">
-              <button
-                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="w-9 h-9 rounded-full bg-brand-orange/10 border border-brand-orange/40 flex items-center justify-center text-brand-orange hover:bg-brand-orange/20 transition-all font-black text-sm uppercase focus:outline-none overflow-hidden"
-              >
-                {user?.avatarUrl ? (
-                  <img src={user.avatarUrl} alt={user?.fullName} className="w-full h-full object-cover" />
-                ) : (
-                  user?.fullName ? user.fullName.charAt(0) : 'U'
-                )}
-              </button>
-
-              {profileDropdownOpen && (
-                <div className="absolute right-0 mt-3 w-56 bg-zinc-900 border border-zinc-850 rounded-2xl overflow-hidden shadow-2xl z-50 py-2">
-                  <div className="px-4 py-2 border-b border-zinc-800 mb-1">
-                    <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Tài khoản</p>
-                    <p className="text-sm font-bold text-white truncate">{user?.fullName}</p>
-                    <p className="text-[10px] text-brand-orange font-semibold uppercase">{userRole}</p>
-                  </div>
-
-                  {userRole === 'CUSTOMER' ? (
-                    <>
-                      <button
-                        onClick={() => {
-                          setProfileDropdownOpen(false);
-                          navigate('/profile');
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
-                      >
-                        <User className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Hồ sơ cá nhân</span>
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setProfileDropdownOpen(false);
-                        if (userRole === 'ADMIN' || userRole === 'ROLE_ADMIN' || userRole === 'ROLE_ACCOUNTANT') navigate('/admin');
-                        if (userRole === 'EMPLOYEE' || userRole === 'ROLE_STAFF') navigate('/employee');
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs text-brand-orange hover:bg-zinc-800 font-bold flex items-center gap-2"
-                    >
-                      <span>Vào trang quản lý</span>
-                    </button>
-                  )}
-
+            <NavDropdown
+              id="cinemas"
+              label="Rạp/Giá Vé"
+              isOpen={activeDropdown === 'cinemas'}
+              isActive={pathname.startsWith('/cinema/')}
+              onOpen={setActiveDropdown}
+              onClose={() => setActiveDropdown(null)}
+              onToggle={toggleDropdown}
+            >
+              {cinemaMenuLoading ? (
+                <div role="status" className="px-4 py-3 text-sm font-semibold text-zinc-500">
+                  Đang tải danh sách rạp...
+                </div>
+              ) : cinemaMenuError ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={loadCinemaMenu}
+                  className={`${dropdownItemClass} text-amber-400`}
+                >
+                  Tải lại danh sách rạp
+                </button>
+              ) : cinemas.length > 0 ? (
+                cinemas.map(cinema => (
                   <button
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      navigate('/change-email');
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
+                    key={cinema.publicId}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => navigateFromHeader(`/cinema/${cinema.slug || cinema.publicId}`)}
+                    className={dropdownItemClass}
                   >
-                    <Mail className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>Thay đổi email</span>
+                    {cinema.name}
                   </button>
-                  <button
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      navigate('/change-password');
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
-                  >
-                    <KeyRound className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>Đổi mật khẩu</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      navigate('/sessions');
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
-                  >
-                    <KeyRound className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>Phiên đăng nhập</span>
-                  </button>
-
-                  <button
-                    onClick={handleLogoutClick}
-                    className="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-950/20 hover:text-red-300 font-bold border-t border-zinc-800 mt-1 flex items-center gap-2"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Đăng xuất</span>
-                  </button>
+                ))
+              ) : (
+                <div className="px-4 py-3 text-sm font-semibold text-zinc-500">
+                  Chưa có rạp đang hoạt động
                 </div>
               )}
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => navigate('/login')}
-            className="hidden sm:block bg-brand-orange hover:bg-orange-600 text-white text-xs font-black py-2.5 px-5 rounded-full transition-all duration-300 shadow-lg shadow-brand-orange/10 uppercase tracking-wider focus:outline-none"
-          >
-            Đăng Nhập
-          </button>
-        )}
+            </NavDropdown>
 
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label={mobileMenuOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'}
-          aria-expanded={mobileMenuOpen}
-          aria-controls="mobile-navigation"
-          className="lg:hidden flex items-center justify-center p-2 text-zinc-400 hover:text-white focus:outline-none"
-        >
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
-
-      </div>
-
-      {/* MOBILE DRAWERS */}
-      {mobileMenuOpen && (
-        <div id="mobile-navigation" className="absolute top-[65px] left-0 w-full bg-zinc-950 border-b border-zinc-800 px-6 py-6 flex flex-col gap-4 lg:hidden z-40 animate-in slide-in-from-top duration-300">
-          {!isAuthenticated && (
             <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                navigate('/login');
-              }}
-              className="sm:hidden w-full border border-brand-orange text-brand-orange py-3 rounded-xl text-xs font-black uppercase tracking-wider"
+              type="button"
+              onClick={() => handleInfoOptionClick('Trải nghiệm Rạp Đặc Biệt')}
+              className={`min-h-11 rounded-lg px-1 text-[13px] font-bold whitespace-nowrap text-zinc-300 transition-colors hover:text-brand-orange ${focusRingClass}`}
             >
-              Đăng Nhập
+              Rạp Đặc Biệt
             </button>
-          )}
-          <button
-            onClick={() => {
-              setMobileMenuOpen(false);
-              handleQuickTicketClick();
-            }}
-            className="w-full bg-brand-orange text-white py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2"
-          >
-            <Star className="w-4 h-4 fill-white text-white" />
-            <span>Mua Vé Nhanh</span>
-          </button>
+          </nav>
 
-          <div className="space-y-1 border-b border-zinc-900 pb-2">
-            <span className="text-[10px] text-zinc-500 font-black tracking-wider uppercase block">Phim</span>
-            <button
-              onClick={() => handlePhimOptionClick('NOW_SHOWING')}
-              className="w-full text-left text-zinc-200 hover:text-brand-orange py-1.5 text-xs font-bold uppercase"
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <form
+              role="search"
+              onSubmit={handleSearchSubmit}
+              className="relative hidden 2xl:block"
             >
-              Phim đang chiếu
+              <label htmlFor="header-search" className="sr-only">
+                Tìm kiếm phim
+              </label>
+              <input
+                id="header-search"
+                type="search"
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="Tìm phim..."
+                className="h-11 w-56 rounded-full border border-zinc-800 bg-zinc-900/90 py-2 pl-5 pr-12 text-sm text-white outline-none transition placeholder:text-zinc-500 hover:border-zinc-700 focus:border-brand-orange/70 focus:ring-2 focus:ring-brand-orange/15"
+              />
+              <button
+                type="submit"
+                aria-label="Tìm kiếm"
+                className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/70"
+              >
+                <Search aria-hidden="true" className="h-4 w-4" />
+              </button>
+            </form>
+
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2.5">
+                {isCustomer && <CustomerNotificationBell />}
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-label="Mở menu tài khoản"
+                    aria-expanded={profileDropdownOpen}
+                    aria-controls="profile-menu"
+                    onClick={() => {
+                      setActiveDropdown(null);
+                      setProfileDropdownOpen(current => !current);
+                    }}
+                    className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-brand-orange/50 bg-brand-orange/10 text-sm font-black uppercase text-brand-orange transition hover:bg-brand-orange/20 ${focusRingClass}`}
+                  >
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user?.fullName || 'Ảnh đại diện'}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      user?.fullName?.charAt(0) || 'U'
+                    )}
+                  </button>
+
+                  {profileDropdownOpen && (
+                    <div className="absolute right-0 top-full w-64 pt-3">
+                      <div id="profile-menu" className={dropdownPanelClass}>
+                        <div className="mb-1 border-b border-zinc-800 px-3 pb-3 pt-1">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                            Tài khoản
+                          </p>
+                          <p className="truncate text-sm font-bold text-white">{user?.fullName}</p>
+                          <p className="text-[10px] font-semibold uppercase text-brand-orange">
+                            {normalizedRole}
+                          </p>
+                        </div>
+
+                        {isCustomer ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProfileDropdownOpen(false);
+                              navigate('/profile');
+                            }}
+                            className={dropdownItemClass}
+                          >
+                            <User aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" />
+                            Hồ sơ cá nhân
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProfileDropdownOpen(false);
+                              navigate(normalizedRole === 'EMPLOYEE' || normalizedRole === 'STAFF' ? '/employee' : '/admin');
+                            }}
+                            className={`${dropdownItemClass} text-brand-orange`}
+                          >
+                            Vào trang quản lý
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileDropdownOpen(false);
+                            navigate('/change-email');
+                          }}
+                          className={dropdownItemClass}
+                        >
+                          <Mail aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" />
+                          Thay đổi email
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileDropdownOpen(false);
+                            navigate('/change-password');
+                          }}
+                          className={dropdownItemClass}
+                        >
+                          <KeyRound aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" />
+                          Đổi mật khẩu
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileDropdownOpen(false);
+                            navigate('/sessions');
+                          }}
+                          className={dropdownItemClass}
+                        >
+                          <KeyRound aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" />
+                          Phiên đăng nhập
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleLogoutClick}
+                          className={`${dropdownItemClass} mt-1 border-t border-zinc-800 text-red-400 hover:bg-red-950/30 hover:text-red-300`}
+                        >
+                          <LogOut aria-hidden="true" className="mr-2 h-4 w-4" />
+                          Đăng xuất
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className={`hidden min-h-11 rounded-full bg-brand-orange px-5 text-xs font-black uppercase tracking-wide text-white shadow-lg shadow-brand-orange/10 transition hover:bg-orange-600 sm:block ${focusRingClass}`}
+              >
+                Đăng nhập
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveDropdown(null);
+                setProfileDropdownOpen(false);
+                setMobileMenuOpen(current => !current);
+              }}
+              aria-label={mobileMenuOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-navigation"
+              className={`flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-800 text-zinc-300 transition hover:bg-zinc-900 hover:text-white lg:hidden ${focusRingClass}`}
+            >
+              {mobileMenuOpen ? (
+                <X aria-hidden="true" className="h-5 w-5" />
+              ) : (
+                <Menu aria-hidden="true" className="h-5 w-5" />
+              )}
             </button>
           </div>
         </div>
-      )}
 
-      {/* GALAXY INFO CONTENT DISPLAY OVERLAY MODAL */}
+        {mobileMenuOpen && (
+          <div
+            id="mobile-navigation"
+            className="absolute inset-x-0 top-full max-h-[calc(100vh-5rem)] overflow-y-auto border-b border-zinc-800 bg-zinc-950 px-4 py-5 shadow-2xl lg:hidden"
+          >
+            <div className="mx-auto flex max-w-7xl flex-col gap-5 sm:px-2">
+              <form role="search" onSubmit={handleSearchSubmit} className="relative">
+                <label htmlFor="mobile-header-search" className="sr-only">
+                  Tìm kiếm phim
+                </label>
+                <input
+                  id="mobile-header-search"
+                  type="search"
+                  value={searchQuery}
+                  onChange={event => setSearchQuery(event.target.value)}
+                  placeholder="Tìm phim..."
+                  className="h-12 w-full rounded-xl border border-zinc-800 bg-zinc-900 pl-4 pr-12 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-brand-orange"
+                />
+                <button
+                  type="submit"
+                  aria-label="Tìm kiếm"
+                  className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-400"
+                >
+                  <Search aria-hidden="true" className="h-5 w-5" />
+                </button>
+              </form>
+
+              <button
+                type="button"
+                onClick={() => navigateFromHeader('/booking')}
+                className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-brand-orange/20 ${focusRingClass}`}
+              >
+                <Star aria-hidden="true" className="h-4 w-4 fill-current" />
+                Mua vé nhanh
+              </button>
+
+              {!isAuthenticated && (
+                <button
+                  type="button"
+                  onClick={() => navigateFromHeader('/login')}
+                  className={`min-h-12 w-full rounded-xl border border-brand-orange/60 text-sm font-black uppercase tracking-wide text-brand-orange sm:hidden ${focusRingClass}`}
+                >
+                  Đăng nhập
+                </button>
+              )}
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <section aria-labelledby="mobile-movies-heading">
+                  <h2
+                    id="mobile-movies-heading"
+                    className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500"
+                  >
+                    Phim
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => navigateFromHeader('/movies?status=NOW_SHOWING')}
+                    className={dropdownItemClass}
+                  >
+                    Phim đang chiếu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateFromHeader('/movies?status=UPCOMING')}
+                    className={dropdownItemClass}
+                  >
+                    Phim sắp chiếu
+                  </button>
+                </section>
+
+                <section aria-labelledby="mobile-cinema-corner-heading">
+                  <h2
+                    id="mobile-cinema-corner-heading"
+                    className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500"
+                  >
+                    Góc Điện Ảnh
+                  </h2>
+                  {['Thể loại phim', 'Diễn viên', 'Đạo diễn'].map(item => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => handleInfoOptionClick(item)}
+                      className={dropdownItemClass}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </section>
+
+                <section aria-labelledby="mobile-cinemas-heading">
+                  <h2
+                    id="mobile-cinemas-heading"
+                    className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500"
+                  >
+                    Rạp/Giá Vé
+                  </h2>
+                  {cinemaMenuLoading ? (
+                    <p className="px-4 py-3 text-sm font-semibold text-zinc-500">
+                      Đang tải danh sách rạp...
+                    </p>
+                  ) : cinemaMenuError ? (
+                    <button
+                      type="button"
+                      onClick={loadCinemaMenu}
+                      className={`${dropdownItemClass} text-amber-400`}
+                    >
+                      Tải lại danh sách rạp
+                    </button>
+                  ) : cinemas.length > 0 ? (
+                    cinemas.map(cinema => (
+                      <button
+                        key={cinema.publicId}
+                        type="button"
+                        onClick={() => navigateFromHeader(`/cinema/${cinema.slug || cinema.publicId}`)}
+                        className={dropdownItemClass}
+                      >
+                        {cinema.name}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-4 py-3 text-sm font-semibold text-zinc-500">
+                      Chưa có rạp đang hoạt động
+                    </p>
+                  )}
+                </section>
+
+                <section aria-labelledby="mobile-more-heading">
+                  <h2
+                    id="mobile-more-heading"
+                    className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500"
+                  >
+                    Khám phá thêm
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => handleInfoOptionClick('Khuyến mãi và Sự kiện')}
+                    className={dropdownItemClass}
+                  >
+                    Sự kiện
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInfoOptionClick('Trải nghiệm Rạp Đặc Biệt')}
+                    className={dropdownItemClass}
+                  >
+                    Rạp Đặc Biệt
+                  </button>
+                </section>
+              </div>
+            </div>
+          </div>
+        )}
+      </header>
+
       {infoModalContent && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6">
+        <div
+          role="presentation"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setInfoModalContent(null);
+          }}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="header-info-title"
+            className="w-full max-w-md space-y-6 rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl md:p-8"
+          >
             <div>
-              <h3 className="text-base font-black text-white uppercase tracking-wider">{infoModalContent}</h3>
-              <p className="text-zinc-500 text-[10px] mt-0.5">Hệ thống thông tin giải trí LoraFilm</p>
+              <h2
+                id="header-info-title"
+                className="text-base font-black uppercase tracking-wider text-white"
+              >
+                {infoModalContent}
+              </h2>
+              <p className="mt-1 text-xs text-zinc-500">Hệ thống thông tin giải trí LoraFilm</p>
             </div>
-            
-            <div className="text-xs text-zinc-300 leading-relaxed py-4 border-y border-zinc-800">
-              <p>
-                Thông tin mục **{infoModalContent}** đang được đồng bộ và cập nhật tự động từ ban quản lý rạp. Vui lòng quay lại sau!
-              </p>
-            </div>
-
+            <p className="border-y border-zinc-800 py-5 text-sm leading-relaxed text-zinc-300">
+              Thông tin mục <strong className="text-white">{infoModalContent}</strong> đang được
+              đồng bộ và cập nhật từ ban quản lý rạp. Vui lòng quay lại sau.
+            </p>
             <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => setInfoModalContent(null)}
-                className="bg-brand-orange hover:bg-orange-600 text-white font-black py-2.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-colors"
+                className={`rounded-xl bg-brand-orange px-6 py-2.5 text-xs font-black uppercase tracking-wider text-white transition hover:bg-orange-600 ${focusRingClass}`}
               >
                 Đóng
               </button>
@@ -419,6 +701,6 @@ export default function Header() {
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import adminRoomService from '../services/adminRoomService';
 import { getErrorMessage } from '@/utils/apiErrorHandler';
 
@@ -12,46 +12,63 @@ export default function useAuditoriumDetail(roomId, triggerToast) {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await adminRoomService.getAdminSeatLayout(roomId);
-      if (res?.success && res.data) {
-        setAuditorium(res.data);
-      } else {
+      const response = await adminRoomService.getAdminSeatLayout(roomId);
+      if (!response?.success || !response.data) {
         throw new Error('Dữ liệu phòng chiếu không hợp lệ');
       }
-    } catch (err) {
-      const errMsg = getErrorMessage(err, 'Lỗi khi tải chi tiết phòng chiếu');
-      setError(errMsg);
-      triggerToast?.(errMsg, 'error');
+      setAuditorium(response.data);
+    } catch (requestError) {
+      const message = getErrorMessage(
+        requestError,
+        'Không thể tải thông tin phòng chiếu',
+      );
+      setError(message);
+      triggerToast?.(message, 'error');
     } finally {
       setIsLoading(false);
     }
   }, [roomId, triggerToast]);
 
-  const updateAuditoriumBasicInfo = async (data) => {
+  const updateAuditoriumBasicInfo = useCallback(async (data, successMessage) => {
     try {
-      const res = await adminRoomService.updateAuditorium(roomId, data);
-      if (res?.success) {
-        triggerToast?.('Cập nhật thông tin phòng chiếu thành công!');
-        fetchAuditorium();
+      const response = await adminRoomService.updateAuditorium(roomId, data);
+      if (response?.success) {
+        triggerToast?.(successMessage || 'Đã cập nhật phòng chiếu');
+        await fetchAuditorium();
         return true;
       }
-    } catch (err) {
-      triggerToast?.(getErrorMessage(err, 'Cập nhật phòng chiếu thất bại'), 'error');
-      return false;
+    } catch (requestError) {
+      triggerToast?.(
+        getErrorMessage(requestError, 'Không thể cập nhật phòng chiếu'),
+        'error',
+      );
     }
-  };
+    return false;
+  }, [fetchAuditorium, roomId, triggerToast]);
+
+  const changeAuditoriumStatus = useCallback(async (targetStatus, successMessage) => {
+    if (!auditorium) return false;
+    return updateAuditoriumBasicInfo({
+      name: auditorium.auditoriumName,
+      screenType: auditorium.screenType,
+      soundType: auditorium.soundType,
+      capacity: auditorium.capacity,
+      cleaningBufferMinutes: auditorium.cleaningBufferMinutes,
+      status: targetStatus,
+    }, successMessage);
+  }, [auditorium, updateAuditoriumBasicInfo]);
 
   const updateSeatLayout = async (seatsList) => {
     try {
-      const res = await adminRoomService.bulkCreateSeats(roomId, { seats: seatsList });
-      if (res?.success) {
-        // triggerToast?.('Cập nhật sơ đồ ghế thành công!'); // Handled by caller to avoid double toast
-        return true;
-      }
-    } catch (err) {
-      triggerToast?.(getErrorMessage(err, 'Cập nhật sơ đồ ghế thất bại'), 'error');
-      return false;
+      const response = await adminRoomService.bulkCreateSeats(roomId, { seats: seatsList });
+      if (response?.success) return true;
+    } catch (requestError) {
+      triggerToast?.(
+        getErrorMessage(requestError, 'Không thể cập nhật sơ đồ ghế'),
+        'error',
+      );
     }
+    return false;
   };
 
   return {
@@ -60,6 +77,7 @@ export default function useAuditoriumDetail(roomId, triggerToast) {
     error,
     fetchAuditorium,
     updateAuditoriumBasicInfo,
-    updateSeatLayout
+    changeAuditoriumStatus,
+    updateSeatLayout,
   };
 }

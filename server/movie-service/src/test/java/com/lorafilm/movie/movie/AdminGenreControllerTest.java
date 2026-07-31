@@ -63,6 +63,7 @@ public class AdminGenreControllerTest {
         response.setName("Action");
         response.setSlug("action");
         response.setStatus(ActiveStatus.ACTIVE);
+        response.setMovieCount(12L);
 
         when(adminGenreService.createGenre(any(GenreRequest.class))).thenReturn(response);
 
@@ -72,7 +73,8 @@ public class AdminGenreControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.publicId").value("genre-id"))
-                .andExpect(jsonPath("$.data.name").value("Action"));
+                .andExpect(jsonPath("$.data.name").value("Action"))
+                .andExpect(jsonPath("$.data.movieCount").value(12));
     }
 
     @Test

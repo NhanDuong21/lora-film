@@ -7,6 +7,7 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
 import com.lorafilm.movie.seat.dto.*;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
@@ -48,10 +49,6 @@ public class SeatServiceImpl implements SeatService {
             throw new BusinessException(ErrorCode.AUDITORIUM_LAYOUT_NOT_EDITABLE, errorData);
         }
         
-        // Since the room is in DRAFT status, any layout save is a full replacement.
-        // Wipe existing seats before inserting new ones.
-        seatRepository.deleteByAuditoriumId(auditorium.getId());
-
         List<BulkItemError> errors = new ArrayList<>();
         int totalItems = request.seats().size();
 
@@ -122,9 +119,6 @@ public class SeatServiceImpl implements SeatService {
                 }
             }
 
-            // Database conflicts checks removed since we hard deleted existing seats
-
-
             // Seat Type validation
             if (item.seatTypePublicId() != null && !item.seatTypePublicId().isEmpty()) {
                 SeatType type = seatTypeMap.get(item.seatTypePublicId());
@@ -135,6 +129,18 @@ public class SeatServiceImpl implements SeatService {
                 } else if (type.getStatus() != ActiveStatus.ACTIVE) {
                     errors.add(new BulkItemError(i, normalizedSeatCode, "seatTypePublicId", item.seatTypePublicId(),
                             "SEAT_TYPE_INACTIVE", "Seat type is inactive"));
+                    hasError = true;
+                } else if (type.getCode() == SeatTypeCode.COUPLE
+                        && (normalizedPairGroup == null || normalizedPairGroup.isEmpty())) {
+                    errors.add(new BulkItemError(i, normalizedSeatCode, "pairGroup", normalizedPairGroup,
+                            "COUPLE_PAIR_GROUP_REQUIRED",
+                            "Couple seats must belong to a pairGroup"));
+                    hasError = true;
+                } else if (type.getCode() != SeatTypeCode.COUPLE
+                        && normalizedPairGroup != null && !normalizedPairGroup.isEmpty()) {
+                    errors.add(new BulkItemError(i, normalizedSeatCode, "pairGroup", normalizedPairGroup,
+                            "PAIR_GROUP_NOT_ALLOWED",
+                            "Only couple seats may define pairGroup"));
                     hasError = true;
                 }
             }
@@ -156,20 +162,69 @@ public class SeatServiceImpl implements SeatService {
             }
         }
 
+        validateCouplePairGroups(request.seats(), seatTypeMap, errors);
+
         if (!errors.isEmpty()) {
             int invalidCount = (int) errors.stream().map(BulkItemError::index).distinct().count();
 
             BulkValidationErrorData errorData = new BulkValidationErrorData(
                     totalItems,
-                    totalItems - invalidCount, // Không còn bị lỗi long - int nữa
+                    totalItems - invalidCount,
                     invalidCount,
                     errors);
             throw new BusinessException(ErrorCode.BULK_SEAT_VALIDATION_ERROR,
                     errorData.invalidItems() + " invalid seat(s) found", errorData);
         }
 
+        // Saving a DRAFT room layout is a full replacement. Validate the complete
+        // incoming layout first so invalid input never executes a delete statement.
+        seatRepository.deleteByAuditoriumId(auditorium.getId());
         seatsToSave = seatRepository.saveAll(seatsToSave);
         return seatsToSave.stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    private void validateCouplePairGroups(
+            List<BulkSeatItemRequest> items,
+            Map<String, SeatType> seatTypeMap,
+            List<BulkItemError> errors) {
+        Map<String, List<Integer>> groupIndexes = new LinkedHashMap<>();
+        for (int index = 0; index < items.size(); index++) {
+            BulkSeatItemRequest item = items.get(index);
+            SeatType type = seatTypeMap.get(item.seatTypePublicId());
+            String group = item.pairGroup() == null ? null : item.pairGroup().trim();
+            if (type == null || type.getCode() != SeatTypeCode.COUPLE
+                    || group == null || group.isEmpty()) {
+                continue;
+            }
+            groupIndexes.computeIfAbsent(group, ignored -> new ArrayList<>()).add(index);
+        }
+
+        groupIndexes.forEach((group, indexes) -> {
+            boolean valid = indexes.size() == 2;
+            if (valid) {
+                BulkSeatItemRequest first = items.get(indexes.get(0));
+                BulkSeatItemRequest second = items.get(indexes.get(1));
+                valid = Objects.equals(normalize(first.rowLabel()), normalize(second.rowLabel()))
+                        && Objects.equals(first.positionRow(), second.positionRow())
+                        && Math.abs(first.positionColumn() - second.positionColumn()) == 1;
+            }
+            if (valid) return;
+
+            for (Integer index : indexes) {
+                BulkSeatItemRequest item = items.get(index);
+                errors.add(new BulkItemError(
+                        index,
+                        item.seatCode(),
+                        "pairGroup",
+                        group,
+                        "INVALID_COUPLE_PAIR_GROUP",
+                        "A couple pairGroup must contain exactly two adjacent seats in the same row"));
+            }
+        });
+    }
+
+    private String normalize(String value) {
+        return value == null ? null : value.trim();
     }
 
     @Override
@@ -229,12 +284,53 @@ public class SeatServiceImpl implements SeatService {
             seat.setPositionRow(request.positionRow());
             seat.setPositionColumn(request.positionColumn());
             seat.setPairGroup(normalizedPairGroup);
+            validateUpdatedCoupleLayout(auditorium.getId(), seat);
         }
 
         // Always allow status update if it's ACTIVE or MAINTENANCE
         seat.setStatus(request.status());
 
         return mapToResponse(seat);
+    }
+
+    private void validateUpdatedCoupleLayout(Long auditoriumId, Seat updatedSeat) {
+        List<Seat> layout = new ArrayList<>(
+                seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditoriumId));
+        layout.removeIf(existing -> Objects.equals(existing.getId(), updatedSeat.getId()));
+        layout.add(updatedSeat);
+
+        Map<String, List<Seat>> coupleGroups = new LinkedHashMap<>();
+        for (Seat seat : layout) {
+            boolean couple = seat.getSeatType().getCode() == SeatTypeCode.COUPLE;
+            String group = normalize(seat.getPairGroup());
+            if (couple && (group == null || group.isEmpty())) {
+                throw new BusinessException(
+                        ErrorCode.INVALID_COUPLE_PAIR_CONFIGURATION,
+                        "Couple seats must belong to a pairGroup");
+            }
+            if (!couple && group != null && !group.isEmpty()) {
+                throw new BusinessException(
+                        ErrorCode.INVALID_COUPLE_PAIR_CONFIGURATION,
+                        "Only couple seats may define pairGroup");
+            }
+            if (couple) {
+                coupleGroups.computeIfAbsent(group, ignored -> new ArrayList<>()).add(seat);
+            }
+        }
+
+        for (Map.Entry<String, List<Seat>> entry : coupleGroups.entrySet()) {
+            List<Seat> pair = entry.getValue();
+            boolean valid = pair.size() == 2
+                    && Objects.equals(normalize(pair.get(0).getRowLabel()),
+                            normalize(pair.get(1).getRowLabel()))
+                    && Objects.equals(pair.get(0).getPositionRow(), pair.get(1).getPositionRow())
+                    && Math.abs(pair.get(0).getPositionColumn() - pair.get(1).getPositionColumn()) == 1;
+            if (!valid) {
+                throw new BusinessException(
+                        ErrorCode.INVALID_COUPLE_PAIR_CONFIGURATION,
+                        "A couple pairGroup must contain exactly two adjacent seats in the same row");
+            }
+        }
     }
 
     private SeatResponse mapToResponse(Seat s) {

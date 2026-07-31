@@ -25,7 +25,6 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
       const mappedCompanies = allCompanies.map((c, i) => ({ ...c, localId: Date.now() + i }));
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCompanies(mappedCompanies);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsDirty(false);
     }
   }, [movie]);
@@ -100,7 +99,10 @@ export default function MovieCompanyTab({ movie, onUpdate }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-zinc-100">Hãng phim & Phân phối</h3>
+        <div>
+          <h3 className="text-base font-bold text-zinc-100">Nhà sản xuất & đơn vị phát hành</h3>
+          <p className="mt-1 text-xs text-zinc-500">Thông tin khuyến nghị, có thể bổ sung sau khi hoàn thành các mục bắt buộc.</p>
+        </div>
         <button
           onClick={handleSave}
           disabled={isSaving || !isDirty}

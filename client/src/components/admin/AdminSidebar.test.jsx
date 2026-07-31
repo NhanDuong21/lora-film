@@ -16,13 +16,17 @@ const renderSidebar = (user = { role: 'ADMIN', permissions: [] }, activeTab = 'd
 );
 
 describe('AdminSidebar', () => {
-  it('distinguishes operational Showtimes from preview history', () => {
+  it('organizes movie operations by the administrator workflow', () => {
     renderSidebar({ role: 'ADMIN', permissions: [] }, 'auto-schedule-history');
 
+    expect(screen.getByText('Trung tâm vận hành phim')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nội dung & phát hành' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cơ sở rạp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lịch chiếu & giá vé' })).toBeInTheDocument();
     expect(screen.getByText('Lịch chiếu')).toBeInTheDocument();
-    expect(screen.getByText('Lịch sử bản xem trước')).toBeInTheDocument();
-    expect(screen.queryByText('Lịch sử bản xem trước xếp lịch')).not.toBeInTheDocument();
-    expect(screen.queryByText('Lịch sử xếp lịch')).not.toBeInTheDocument();
+    expect(screen.getByText('Tạo lịch tuần')).toBeInTheDocument();
+    expect(screen.getByText('Lịch đang soạn')).toBeInTheDocument();
+    expect(screen.getByText('Bảng giá')).toBeInTheDocument();
   });
 
   it('separates booking, payment and reporting operations for administrators', () => {

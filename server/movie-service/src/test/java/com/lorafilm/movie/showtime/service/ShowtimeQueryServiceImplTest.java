@@ -22,6 +22,7 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
@@ -55,6 +56,9 @@ class ShowtimeQueryServiceImplTest {
     @Mock
     private ShowtimeMapper showtimeMapper;
 
+    @Mock
+    private MovieMediaRepository movieMediaRepository;
+
     @InjectMocks
     private ShowtimeQueryServiceImpl showtimeService;
 
@@ -68,7 +72,7 @@ class ShowtimeQueryServiceImplTest {
     void setUp() {
         seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(seatRepository, null, null);
         showtimeService = new ShowtimeQueryServiceImpl(showtimeRepository, showtimePriceRepository,
-                showtimeBlockedSeatRepository, seatService, showtimeMapper);
+                showtimeBlockedSeatRepository, seatService, showtimeMapper, movieMediaRepository);
 
         Movie movie = new Movie();
         movie.setId(1L);
