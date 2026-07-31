@@ -35,6 +35,38 @@ public class TemplatePayloadAdapter {
         } else {
             alias(expanded, "qr_code_url", "ticketAccessUrl", "qrCodeUrl");
         }
+
+        // Enrich each ticket entry in `tickets` list with a `qr_code_url` field
+        Object ticketsObj = expanded.get("tickets");
+        if (ticketsObj instanceof java.util.List<?> ticketsList) {
+            java.util.List<Map<String, Object>> enrichedTickets = new java.util.ArrayList<>();
+            for (Object entry : ticketsList) {
+                if (entry instanceof Map<?, ?> rawEntry) {
+                    Map<String, Object> ticket = new LinkedHashMap<>();
+                    rawEntry.forEach((k, v) -> ticket.put(String.valueOf(k), v));
+                    // Generate qr_code_url from ticketCode or ticketAccessUrl
+                    String qrData = ticket.containsKey("ticketCode")
+                            ? String.valueOf(ticket.get("ticketCode"))
+                            : ticket.containsKey("ticketAccessUrl")
+                                    ? String.valueOf(ticket.get("ticketAccessUrl"))
+                                    : null;
+                    if (qrData != null && !qrData.isBlank()) {
+                        try {
+                            String encoded = java.net.URLEncoder.encode(qrData,
+                                    java.nio.charset.StandardCharsets.UTF_8.name());
+                            ticket.put("qr_code_url",
+                                    "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encoded);
+                        } catch (Exception ignored) {
+                            ticket.put("qr_code_url", qrData);
+                        }
+                    }
+                    enrichedTickets.add(ticket);
+                }
+            }
+            if (!enrichedTickets.isEmpty()) {
+                expanded.put("tickets", enrichedTickets);
+            }
+        }
         alias(expanded, "ticket_link", "ticketAccessUrl", "deepLink");
         alias(expanded, "amount", "totalAmount", "totalPaid");
         alias(expanded, "transaction_id", "paymentCode", "transactionId");

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, Info, Printer, ArrowRight, ShoppingBag, Mail } from 'lucide-react';
-import { getBookingDetails, resendBookingEmail } from '../services/bookingService';
+import { CheckCircle, Info, Printer, ArrowRight, ShoppingBag } from 'lucide-react';
+import { getBookingDetails } from '../services/bookingService';
 import BookingStepper from '../components/BookingStepper';
 import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 
@@ -19,26 +19,7 @@ export default function BookingSuccessPage() {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [resendingEmail, setResendingEmail] = useState(false);
-  const [resendMessage, setResendMessage] = useState('');
-  const [resendError, setResendError] = useState('');
 
-  const handleResendEmail = async () => {
-    if (!booking?.publicId) return;
-    setResendingEmail(true);
-    setResendMessage('');
-    setResendError('');
-    try {
-      await resendBookingEmail(booking.publicId);
-      setResendMessage('Đã gửi lại email xác nhận vé thành công!');
-      setTimeout(() => setResendMessage(''), 5000);
-    } catch (err) {
-      setResendError(err.response?.data?.message || 'Có lỗi xảy ra khi gửi lại email. Vui lòng thử lại.');
-      setTimeout(() => setResendError(''), 5000);
-    } finally {
-      setResendingEmail(false);
-    }
-  };
 
   const fetchBooking = useCallback(async () => {
     if (!bookingId) {
@@ -127,16 +108,7 @@ export default function BookingSuccessPage() {
           </p>
         </div>
 
-        {resendMessage && (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-2xl text-xs font-semibold text-center max-w-md mx-auto print:hidden">
-            {resendMessage}
-          </div>
-        )}
-        {resendError && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-2xl text-xs font-semibold text-center max-w-md mx-auto print:hidden">
-            {resendError}
-          </div>
-        )}
+
 
         {/* Dynamic Tickets list with QR Code */}
         <div className="space-y-6">
@@ -293,14 +265,7 @@ export default function BookingSuccessPage() {
               <span>In / Tải PDF Hóa Đơn</span>
             </button>
 
-            <button
-              onClick={handleResendEmail}
-              disabled={resendingEmail}
-              className="w-full sm:w-auto bg-zinc-900 hover:bg-zinc-850 text-zinc-300 font-bold px-6 py-3.5 rounded-2xl border border-zinc-800 flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-50"
-            >
-              <Mail className="w-4 h-4" />
-              <span>{resendingEmail ? 'Đang gửi...' : 'Gửi lại email vé'}</span>
-            </button>
+
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
