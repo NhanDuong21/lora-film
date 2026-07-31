@@ -55,8 +55,16 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
   };
 
   const items = history?.content || [];
-  const currentPage = history?.number || 0;
-  const totalPages = history?.totalPages || 0;
+  const totalPages = Number(history?.totalPages) || 0;
+  const reportedPage = history?.page
+    ?? history?.number
+    ?? history?.pageNumber
+    ?? history?.pageNo
+    ?? 0;
+  const currentPage = Math.min(
+    Math.max(Number(reportedPage) || 0, 0),
+    Math.max(totalPages - 1, 0)
+  );
 
   return (
     <div className="rounded-[2rem] bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-6 shadow-2xl shadow-black/20 space-y-6">
@@ -157,11 +165,12 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-zinc-800/50 pt-5 text-xs">
-          <span className="text-zinc-500 font-medium">
+          <span className="text-zinc-500 font-medium" role="status" aria-live="polite">
             Trang <span className="text-white font-bold">{currentPage + 1}</span> / <span className="text-white font-bold">{totalPages}</span>
           </span>
           <div className="flex items-center gap-2" role="navigation" aria-label="Điều hướng trang">
             <button
+              type="button"
               onClick={() => onPageChange && onPageChange(currentPage - 1)}
               disabled={currentPage === 0}
               aria-label="Trang trước"
@@ -170,6 +179,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
+              type="button"
               onClick={() => onPageChange && onPageChange(currentPage + 1)}
               disabled={currentPage >= totalPages - 1}
               aria-label="Trang sau"

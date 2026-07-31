@@ -32,6 +32,7 @@ const routeNameMap = {
   'bookings': 'Đơn hàng',
   'payments': 'Giao dịch & đối soát',
   'finance': 'Tài chính',
+  'analytics': 'Báo cáo doanh thu',
   'concessions': 'Bắp nước',
   'concession-sales': 'Doanh thu bắp nước',
   'me': 'Tài khoản của tôi',

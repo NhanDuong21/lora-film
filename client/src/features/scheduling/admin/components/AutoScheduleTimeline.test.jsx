@@ -108,12 +108,12 @@ describe('AutoScheduleTimeline Milestone C', () => {
     expect(screen.getByTestId('runtime-segment-Segments')).toHaveStyle({ width: '80%' });
     expect(screen.getByTestId('cleaning-segment-Segments')).toHaveStyle({ width: '20%' });
     expect(screen.getByTestId('cleaning-segment-Segments').style.backgroundImage).toContain('repeating-linear-gradient');
-    const legend = screen.getByRole('list', { name: 'Chú giải timeline' });
+    const legend = screen.getByRole('list', { name: 'Chú giải sơ đồ phòng chiếu' });
     expect(legend).toHaveTextContent('Thời lượng phim');
     expect(legend).toHaveTextContent('Thời gian dọn phòng');
-    expect(legend).toHaveTextContent('Đề xuất đã chọn');
-    expect(legend).toHaveTextContent('Phủ chẩn đoán');
-    expect(legend).toHaveTextContent('Không hợp lệ / xung đột');
+    expect(legend).toHaveTextContent('Suất đã chọn');
+    expect(legend).toHaveTextContent('Suất đang kiểm tra');
+    expect(legend).toHaveTextContent('Không hợp lệ / trùng lịch');
   });
 
   it('keeps a stable movie palette and pairs state colors with visible markers', () => {
@@ -142,7 +142,7 @@ describe('AutoScheduleTimeline Milestone C', () => {
     block.focus();
     fireEvent.click(block);
     expect(onOpenDetails).toHaveBeenCalledWith(candidates[0], block);
-    expect(screen.getByTestId('timeline-track-aud-2')).toHaveTextContent('Chưa có đề xuất đã chọn');
+    expect(screen.getByTestId('timeline-track-aud-2')).toHaveTextContent('Chưa có suất đã chọn');
   });
 
   it('marks one diagnostic overlay with dashed styling and text', () => {

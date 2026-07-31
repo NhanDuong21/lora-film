@@ -7,7 +7,6 @@ import { getAdminLandingPath, hasPermissionAccess } from './permissionAccess';
 
 const AdminDashboardView = lazy(() => import('./pages/AdminDashboardPage'));
 const AdminEventView = lazy(() => import('./pages/AdminEventPage'));
-const AdminFinanceView = lazy(() => import('./pages/AdminFinancePage'));
 const AdminMembersView = lazy(() => import('./pages/AdminMembersPage'));
 const AdminSettingsView = lazy(() => import('./pages/AdminSettingsPage'));
 const AdminStaffView = lazy(() => import('./pages/AdminStaffPage'));
@@ -20,6 +19,7 @@ const AdminAuthAuditPage = lazy(() => import('./pages/AdminAuthAuditPage'));
 const AdminEmployeeDocumentPage = lazy(() => import('./pages/AdminEmployeeDocumentPage'));
 const AdminAccountPage = lazy(() => import('./pages/AdminAccountPage'));
 const AdminUserAuditPage = lazy(() => import('./pages/AdminUserAuditPage'));
+const AdminAnalyticsPage = lazy(() => import('@/features/analytics/admin/pages/AdminAnalyticsPage'));
 const AdminMyAccountPage = lazy(() => import('./pages/AdminMyAccountPage'));
 
 const lazyPage = (element) => (
@@ -56,7 +56,8 @@ export const adminStaffRoutes = [
     { index: true, element: <AdminLanding /> },
     { path: 'me', element: lazyPage(<AdminMyAccountPage />) },
     { path: 'events', element: requireAdminRole(<AdminEventView />) },
-    { path: 'finance', element: requirePermission(<AdminFinanceView />, 'PERM_VIEW_FINANCE') },
+    { path: 'finance', element: <Navigate to="/admin/analytics" replace /> },
+    { path: 'analytics', element: requirePermission(<AdminAnalyticsPage />, 'PERM_VIEW_FINANCE', 'DASHBOARD_VIEW') },
     { path: 'members', element: requirePermission(<AdminMembersView />, 'CUSTOMER_VIEW') },
     { path: 'settings', element: requirePermission(<AdminSettingsView />, 'SYSTEM_CONFIGURATION') },
     { path: 'staff', element: requirePermission(<AdminStaffView />, 'EMPLOYEE_VIEW') },

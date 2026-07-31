@@ -23,4 +23,6 @@ public interface BookingTicketService {
     List<BookingTicketDto> findByBooking(Long bookingId);
 
     void generateTicketsForConfirmedBooking(Long bookingId);
+
+    void resendBookingEmail(String publicId);
 }

@@ -2,7 +2,7 @@ package com.project.analyticsservice.controller;
 
 import com.project.analyticsservice.common.ApiResponse;
 import com.project.analyticsservice.dto.*;
-import com.project.analyticsservice.service.MovieAnalyticsService;
+import com.project.analyticsservice.application.MovieAnalyticsApplicationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,9 +14,9 @@ import org.springframework.web.bind.annotation.*;
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_MANAGER')")
 public class MovieAnalyticsController {
 
-    private final MovieAnalyticsService movieAnalyticsService;
+    private final MovieAnalyticsApplicationService movieAnalyticsService;
 
-    public MovieAnalyticsController(MovieAnalyticsService movieAnalyticsService) {
+    public MovieAnalyticsController(MovieAnalyticsApplicationService movieAnalyticsService) {
         this.movieAnalyticsService = movieAnalyticsService;
     }
 

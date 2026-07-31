@@ -46,9 +46,12 @@ export default function MovieVersionTab({ movie, onUpdate }) {
   };
 
   const handleRemove = async (id) => {
-    const shouldRemove = triggerConfirm 
-      ? await triggerConfirm('Xóa phiên bản này?')
-      : window.confirm('Xóa phiên bản này?');
+    const shouldRemove = await triggerConfirm?.({
+      title: 'Xóa phiên bản phim?',
+      message: 'Chỉ có thể xóa phiên bản chưa được dùng trong lịch chiếu.',
+      confirmLabel: 'Xóa phiên bản',
+      tone: 'danger',
+    });
       
     if (!shouldRemove) return;
     
@@ -66,7 +69,7 @@ export default function MovieVersionTab({ movie, onUpdate }) {
       <AsyncState isLoading={isLoading} error={error} onRetry={reload}>
         {versions.length === 0 && !showAdd ? (
           <div className="text-center py-12 bg-zinc-900/50 rounded-xl border border-zinc-800 border-dashed">
-            <p className="text-sm text-zinc-500 mb-4">Chưa có phiên bản chiếu nào.<br />Tạo phiên bản đầu tiên để chuẩn bị cho việc lên lịch suất chiếu.</p>
+            <p className="text-sm text-zinc-500 mb-4">Chưa có bản chiếu nào.<br />Thêm bản chiếu đầu tiên để nhân viên có thể lập lịch suất chiếu.</p>
             <button
               onClick={() => setShowAdd(true)}
               className="inline-flex items-center gap-2 bg-brand-orange text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-orange/90 transition-colors"
@@ -77,7 +80,10 @@ export default function MovieVersionTab({ movie, onUpdate }) {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-zinc-100">Danh sách phiên bản</h3>
+              <div>
+                <h3 className="text-base font-bold text-zinc-100">Bản chiếu của phim</h3>
+                <p className="mt-1 text-xs text-zinc-500">Ví dụ: 2D phụ đề, 3D lồng tiếng hoặc IMAX.</p>
+              </div>
               {!showAdd && (
                 <button
                   onClick={() => setShowAdd(true)}

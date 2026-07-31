@@ -27,18 +27,7 @@ public class AdminScoreOperationController {
         this.adminScoreOperationService = adminScoreOperationService;
     }
 
-    @PostMapping({"/adjustment", "/adjustments"})
-    @Operation(summary = "Adjust user points", description = "Manually add or deduct points for a user with userId in body.")
-    public ResponseEntity<ApiResponse<AdminAdjustmentResponse>> adjustScore(
-            @Valid @RequestBody ScoreAdjustmentRequest request,
-            @RequestHeader(value = "X-Operator-Id", required = false) String operatorId,
-            @RequestHeader(value = "X-Client-Ip", required = false, defaultValue = "127.0.0.1") String clientIp) {
-        AdminAdjustmentResponse response = adminScoreOperationService.adjustScore(request.userId(), request, operatorId, clientIp);
-        return ResponseEntity.status(Boolean.TRUE.equals(response.getIdempotent()) ? 200 : 201)
-                .body(ApiResponse.success("Score adjusted successfully", response));
-    }
-
-    @PostMapping({"/reconciliation", "/reconciliations"})
+    @PostMapping("/reconciliation")
     @Operation(summary = "Trigger reconciliation job", description = "Run balance and ledger consistency check.")
     public ResponseEntity<ApiResponse<ReconciliationDTOs.ReconciliationRunResponse>> runReconciliation(
             @Valid @RequestBody(required = false) ReconciliationDTOs.ReconciliationRunRequest request,
@@ -47,7 +36,7 @@ public class AdminScoreOperationController {
         return ResponseEntity.ok(ApiResponse.success("Reconciliation job completed successfully", response));
     }
 
-    @GetMapping({"/reconciliation/runs", "/reconciliations/runs"})
+    @GetMapping("/reconciliation/runs")
     @Operation(summary = "Get reconciliation runs", description = "List reconciliation batches with pagination and filtering.")
     public ResponseEntity<ApiResponse<PageResponse<ReconciliationDTOs.ReconciliationRunResponse>>> getReconciliationRuns(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -59,7 +48,7 @@ public class AdminScoreOperationController {
         return ResponseEntity.ok(ApiResponse.success("Reconciliation runs retrieved successfully", response));
     }
 
-    @GetMapping({"/reconciliation/details", "/reconciliations/details"})
+    @GetMapping("/reconciliation/details")
     @Operation(summary = "Get reconciliation details", description = "List reconciliation details/discrepancies for a batch.")
     public ResponseEntity<ApiResponse<PageResponse<ReconciliationDTOs.ReconciliationDetailResponse>>> getReconciliationDetails(
             @RequestParam(value = "runId", required = false) Long runId,
@@ -70,7 +59,7 @@ public class AdminScoreOperationController {
         return ResponseEntity.ok(ApiResponse.success("Reconciliation details retrieved successfully", response));
     }
 
-    @GetMapping({"/audit", "/audits", "/audit-logs"})
+    @GetMapping("/audit")
     @Operation(summary = "Get audit logs", description = "List admin audit logs with multi-field filtering.")
     public ResponseEntity<ApiResponse<PageResponse<AuditLogDTOs.AuditLogResponse>>> getAuditLogs(
             @RequestParam(value = "page", defaultValue = "0") int page,

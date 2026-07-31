@@ -8,9 +8,11 @@ import ExpiringPointsSection from '@/features/score/customer/components/Expiring
 import TierHistoryTimeline from '@/features/score/customer/components/TierHistoryTimeline';
 import { Award, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useState } from 'react';
 
 export default function LoyaltyCenterPage() {
   const { user } = useAuth();
+  const [historyFilters, setHistoryFilters] = useState({});
   const {
     scoreData,
     history,
@@ -26,10 +28,11 @@ export default function LoyaltyCenterPage() {
   } = useCustomerScore();
 
   const handlePageChange = (newPage) => {
-    fetchHistory({ page: newPage, size: 10 });
+    fetchHistory({ page: newPage, size: 10, ...historyFilters });
   };
 
   const handleFilterChange = (filters) => {
+    setHistoryFilters(filters);
     fetchHistory({ page: 0, size: 10, ...filters });
   };
 

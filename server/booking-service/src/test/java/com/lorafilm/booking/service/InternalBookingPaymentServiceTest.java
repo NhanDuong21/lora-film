@@ -2,6 +2,7 @@ package com.lorafilm.booking.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
+import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
 import com.lorafilm.booking.booking.dto.request.InternalPaymentResultRequest;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
@@ -42,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -75,6 +77,8 @@ class InternalBookingPaymentServiceTest {
     private BookingRefundRepository refundRepository;
     @Mock
     private BookingLifecycleService lifecycleService;
+    @Mock
+    private ScoreRedemptionClient scoreRedemptionClient;
 
     private InternalBookingPaymentServiceImpl service;
     private ObjectMapper objectMapper;
@@ -96,6 +100,7 @@ class InternalBookingPaymentServiceTest {
                 reconciliationTaskRepository,
                 refundRepository,
                 lifecycleService);
+        service.setScoreRedemptionClient(scoreRedemptionClient);
         booking = Booking.create(
                 BOOKING_PUBLIC_ID,
                 "LORAFILM-1",
@@ -230,6 +235,35 @@ class InternalBookingPaymentServiceTest {
         verify(eventRepository).saveAndFlush(eventCaptor.capture());
         assertNotNull(eventCaptor.getValue().getPayloadHash());
         assertNotNull(eventCaptor.getValue().getResponsePayload());
+    }
+
+    @Test
+    void commitsHeldScoreAfterAuthoritativePaymentSuccess() {
+        booking.setAmountLockedAt(null);
+        booking.applyScoreRedemption(50, new BigDecimal("50000"), "HOLD-1");
+        booking.lockAmount(Instant.now());
+        InternalPaymentResultRequest request = result(
+                UUID.randomUUID().toString(),
+                "SUCCESS",
+                new BigDecimal("190000.00"));
+        when(eventRepository.findByPublicId(request.eventId())).thenReturn(Optional.empty());
+        when(bookingRepository.findByIdForPaymentUpdate(100L)).thenReturn(Optional.of(booking));
+        when(reservationRepository.findAllByBookingId(100L))
+                .thenReturn(List.of(heldReservation()));
+        when(lifecycleService.confirmPayment(any(Booking.class), any(Instant.class), anyString()))
+                .thenAnswer(invocation -> {
+                    Booking candidate = invocation.getArgument(0);
+                    candidate.changeStatus(BookingStatus.CONFIRMED, invocation.getArgument(1));
+                    return candidate;
+                });
+
+        service.recordPaymentResult(100L, request);
+
+        verify(scoreRedemptionClient).commit(
+                eq(100L),
+                eq("HOLD-1"),
+                eq(request.eventId()),
+                anyString());
     }
 
     @Test

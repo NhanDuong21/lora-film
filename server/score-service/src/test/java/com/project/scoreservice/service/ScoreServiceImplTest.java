@@ -1,6 +1,8 @@
 package com.project.scoreservice.service;
 
 import com.project.scoreservice.dto.*;
+import com.project.scoreservice.client.BookingContext;
+import com.project.scoreservice.client.BookingInternalClient;
 import com.project.scoreservice.entity.MembershipTier;
 import com.project.scoreservice.entity.UserScore;
 import com.project.scoreservice.enumtype.UserScoreStatus;
@@ -10,13 +12,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -53,6 +58,9 @@ public class ScoreServiceImplTest {
     @Autowired
     private MembershipTierHistoryRepository membershipTierHistoryRepository;
 
+    @MockBean
+    private BookingInternalClient bookingInternalClient;
+
     private MembershipTier bronzeTier;
     private UserScore userScore;
 
@@ -64,19 +72,11 @@ public class ScoreServiceImplTest {
         pointExpirationBucketRepository.deleteAll();
         scoreHoldRepository.deleteAll();
         scoreHistoryRepository.deleteAll();
-        userScoreRepository.deleteAll();
         membershipTierHistoryRepository.deleteAll();
-        membershipTierRepository.deleteAll();
-
-        bronzeTier = MembershipTier.builder()
-                .tierCode("BRONZE")
-                .tierName("Bronze Member")
-                .minAccumulatedPoints(0)
-                .earningRate(new BigDecimal("0.05"))
-                .priority(1)
-                .isActive(true)
-                .build();
-        membershipTierRepository.save(bronzeTier);
+        userScoreRepository.deleteAll();
+        bronzeTier = membershipTierRepository
+                .findFirstByIsActiveTrueOrderByMinAccumulatedPointsAsc()
+                .orElseThrow();
 
         userScore = UserScore.builder()
                 .userId(100L)
@@ -99,7 +99,7 @@ public class ScoreServiceImplTest {
         assertEquals(100L, response.getUserId());
         assertEquals(500, response.getCurrentPoints());
         assertEquals(500, response.getAccumulatedPoints());
-        assertEquals("BRONZE", response.getCurrentTier().getTierCode());
+        assertEquals(bronzeTier.getTierCode(), response.getCurrentTier().getTierCode());
     }
 
     @Test
@@ -109,7 +109,7 @@ public class ScoreServiceImplTest {
         assertNotNull(response);
         assertEquals(101L, response.getUserId());
         assertEquals(0, response.getCurrentPoints());
-        assertEquals("BRONZE", response.getCurrentTier().getTierCode());
+        assertEquals(bronzeTier.getTierCode(), response.getCurrentTier().getTierCode());
 
         assertTrue(userScoreRepository.findByUserId(101L).isPresent());
     }
@@ -171,5 +171,60 @@ public class ScoreServiceImplTest {
 
         UserScore updated = userScoreRepository.findByUserId(100L).orElseThrow();
         assertEquals(300, updated.getCurrentPoints());
+    }
+
+    @Test
+    void previewRedeem_WithPublicBookingId_ShouldUseAuthoritativeBookingAmount() {
+        String bookingPublicId = "550e8400-e29b-41d4-a716-446655440000";
+        when(bookingInternalClient.getBookingContext(bookingPublicId))
+                .thenReturn(new BookingContext(
+                        300L,
+                        bookingPublicId,
+                        100L,
+                        "PENDING_PAYMENT",
+                        Instant.now().plusSeconds(600),
+                        true,
+                        new BigDecimal("300000")));
+
+        RedeemPreviewResponse response = scoreService.previewRedeem(
+                100L,
+                new RedeemPreviewRequest(null, bookingPublicId, 200));
+
+        assertTrue(response.eligible());
+        assertEquals(299, response.maxRedeemablePoints());
+        assertEquals(new BigDecimal("200000.00"), response.discountAmount());
+        assertEquals(new BigDecimal("100000.00"), response.remainingAmount());
+    }
+
+    @Test
+    void holdPoints_ShouldReturnTheAuthoritativeDiscountValue() {
+        ScoreHoldResponse response = scoreService.holdPoints(new ScoreHoldRequest(
+                100L,
+                300L,
+                50,
+                900,
+                "EVT-HOLD-1",
+                "HOLD-IDEM-1",
+                new BigDecimal("300000")));
+
+        assertEquals(50, response.pointsHeld());
+        assertEquals(new BigDecimal("50000.00"), response.discountAmount());
+        assertEquals(new BigDecimal("1000"), response.valuePerPoint());
+        assertEquals("ACTIVE", response.status());
+    }
+
+    @Test
+    void holdPoints_ShouldNotAllowScoreToPayTheWholeBooking() {
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                scoreService.holdPoints(new ScoreHoldRequest(
+                        100L,
+                        300L,
+                        300,
+                        900,
+                        "EVT-HOLD-2",
+                        "HOLD-IDEM-2",
+                        new BigDecimal("300000"))));
+
+        assertEquals("SCORE_DISCOUNT_EXCEEDS_BOOKING_AMOUNT", exception.getErrorCode());
     }
 }

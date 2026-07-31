@@ -64,6 +64,15 @@ public class Booking extends FullAuditableEntity {
     @Column(name = "voucher_discount", precision = 12, scale = 2, nullable = false)
     private BigDecimal voucherDiscount = BigDecimal.ZERO;
 
+    @Column(name = "score_points_used", nullable = false)
+    private Integer scorePointsUsed = 0;
+
+    @Column(name = "score_discount", precision = 12, scale = 2, nullable = false)
+    private BigDecimal scoreDiscount = BigDecimal.ZERO;
+
+    @Column(name = "score_hold_code", length = 80)
+    private String scoreHoldCode;
+
     @Column(name = "final_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal finalAmount;
 
@@ -204,7 +213,10 @@ public class Booking extends FullAuditableEntity {
 
     public void recalculateFinalAmount() {
         BigDecimal grossAmount = ticketAmount.add(foodAmount).add(serviceFee).add(taxAmount).setScale(2, java.math.RoundingMode.HALF_UP);
-        BigDecimal totalDiscount = promotionDiscount.add(voucherDiscount).setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal totalDiscount = promotionDiscount
+                .add(voucherDiscount)
+                .add(scoreDiscount == null ? BigDecimal.ZERO : scoreDiscount)
+                .setScale(2, java.math.RoundingMode.HALF_UP);
         finalAmount = grossAmount.subtract(totalDiscount).setScale(2, java.math.RoundingMode.HALF_UP);
         if (finalAmount.signum() < 0) {
             throw new IllegalArgumentException("finalAmount cannot be negative");
@@ -339,6 +351,57 @@ public class Booking extends FullAuditableEntity {
 
     public void setVoucherDiscount(BigDecimal voucherDiscount) {
         this.voucherDiscount = voucherDiscount;
+    }
+
+    public Integer getScorePointsUsed() {
+        return scorePointsUsed;
+    }
+
+    public void setScorePointsUsed(Integer scorePointsUsed) {
+        this.scorePointsUsed = scorePointsUsed == null ? 0 : scorePointsUsed;
+    }
+
+    public BigDecimal getScoreDiscount() {
+        return scoreDiscount;
+    }
+
+    public void setScoreDiscount(BigDecimal scoreDiscount) {
+        this.scoreDiscount = scoreDiscount == null ? BigDecimal.ZERO : scoreDiscount;
+    }
+
+    public String getScoreHoldCode() {
+        return scoreHoldCode;
+    }
+
+    public void setScoreHoldCode(String scoreHoldCode) {
+        this.scoreHoldCode = scoreHoldCode;
+    }
+
+    public void applyScoreRedemption(int points, BigDecimal discount, String holdCode) {
+        if (amountLockedAt != null) {
+            throw new IllegalStateException("Cannot change score redemption after amount lock");
+        }
+        if (points <= 0) {
+            throw new IllegalArgumentException("score points must be positive");
+        }
+        BigDecimal normalizedDiscount = requireNonNegative(discount, "scoreDiscount")
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        if (normalizedDiscount.signum() == 0) {
+            throw new IllegalArgumentException("scoreDiscount must be positive");
+        }
+        if (holdCode == null || holdCode.isBlank()) {
+            throw new IllegalArgumentException("scoreHoldCode is required");
+        }
+        BigDecimal amountBeforeScore = finalAmount == null
+                ? BigDecimal.ZERO
+                : finalAmount.add(scoreDiscount == null ? BigDecimal.ZERO : scoreDiscount);
+        if (normalizedDiscount.compareTo(amountBeforeScore) >= 0) {
+            throw new IllegalArgumentException("scoreDiscount must be lower than finalAmount");
+        }
+        this.scorePointsUsed = points;
+        this.scoreDiscount = normalizedDiscount;
+        this.scoreHoldCode = holdCode.trim();
+        recalculateFinalAmount();
     }
 
     public BigDecimal getFinalAmount() {

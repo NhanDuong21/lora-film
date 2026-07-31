@@ -5,6 +5,7 @@ import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
@@ -26,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Collections;
 import java.util.Optional;
 
@@ -50,6 +52,9 @@ public class ShowtimeSeatLayoutQueryTest {
 
     @Mock
     private ShowtimeMapper showtimeMapper;
+
+    @Mock
+    private MovieMediaRepository movieMediaRepository;
 
     @InjectMocks
     private ShowtimeQueryServiceImpl showtimeQueryService;
@@ -127,5 +132,43 @@ public class ShowtimeSeatLayoutQueryTest {
         
         // Ensure it's not blocked since we returned empty block list
         assertFalse(returnedSeat.isBlockedForShowtime());
+    }
+
+    @Test
+    void testGetSeatLayoutExposesCouplePairMetadata() {
+        seatType.setCode(SeatTypeCode.COUPLE);
+        seat.setSeatCode("I1");
+        seat.setRowLabel("I");
+        seat.setPositionRow(9);
+        seat.setPositionColumn(1);
+        seat.setPairGroup("I-01");
+
+        Seat pairedSeat = new Seat();
+        pairedSeat.setId(2L);
+        pairedSeat.setPublicId("seat-124");
+        pairedSeat.setSeatCode("I2");
+        pairedSeat.setRowLabel("I");
+        pairedSeat.setPositionRow(9);
+        pairedSeat.setPositionColumn(2);
+        pairedSeat.setPairGroup("I-01");
+        pairedSeat.setSeatType(seatType);
+        pairedSeat.setStatus(SeatStatus.ACTIVE);
+
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("showtime-id"))
+                .thenReturn(Optional.of(showtime));
+        when(seatService.getSeatsByAuditoriumId(10L)).thenReturn(List.of(seat, pairedSeat));
+        when(showtimePriceRepository.findByShowtimeId(100L))
+                .thenReturn(Collections.singletonList(showtimePrice));
+        when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(100L, ActionStatus.ACTIVE))
+                .thenReturn(Collections.emptyList());
+
+        SeatLayoutDto layout = showtimeQueryService.getSeatLayout("showtime-id");
+
+        assertEquals(2, layout.getSeats().size());
+        assertEquals("I-01", layout.getSeats().get(0).getPairGroup());
+        assertEquals(2L, layout.getSeats().get(0).getPairedSeatId());
+        assertEquals(1L, layout.getSeats().get(1).getPairedSeatId());
+        assertEquals(new BigDecimal("75000"), layout.getSeats().get(0).getPrice());
+        assertEquals(new BigDecimal("75000"), layout.getSeats().get(1).getPrice());
     }
 }

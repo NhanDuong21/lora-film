@@ -7,7 +7,10 @@ import com.lorafilm.movie.movie.domain.entity.Genre;
 import com.lorafilm.movie.movie.dto.GenreRequest;
 import com.lorafilm.movie.movie.dto.GenreResponse;
 import com.lorafilm.movie.movie.repository.GenreRepository;
+import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.service.AdminGenreService;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +33,9 @@ public class AdminGenreServiceTest {
 
     @Mock
     private com.lorafilm.movie.movie.dto.GenreMapper genreMapper;
+
+    @Mock
+    private MovieGenreRepository movieGenreRepository;
 
     @InjectMocks
     private AdminGenreService adminGenreService;
@@ -111,5 +118,29 @@ public class AdminGenreServiceTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> adminGenreService.updateGenre("non-existent", request));
         assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void getGenres_IncludesMovieUsageCount() {
+        GenreResponse mappedResponse = new GenreResponse();
+        mappedResponse.setPublicId("genre-id");
+        mappedResponse.setName("Action");
+        mappedResponse.setStatus(ActiveStatus.ACTIVE);
+
+        MovieGenreRepository.GenreMovieCount count = org.mockito.Mockito.mock(
+                MovieGenreRepository.GenreMovieCount.class);
+
+        when(genreRepository.findByDeletedAtIsNull(PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(existingGenre), PageRequest.of(0, 20), 1));
+        when(movieGenreRepository.countMoviesByGenreIds(List.of(1L))).thenReturn(List.of(count));
+        when(count.getGenreId()).thenReturn(1L);
+        when(count.getMovieCount()).thenReturn(12L);
+        when(genreMapper.toResponse(existingGenre)).thenReturn(mappedResponse);
+
+        com.lorafilm.movie.common.api.PageResponse<GenreResponse> response =
+                adminGenreService.getGenres(1, 20);
+
+        assertEquals(1, response.getContent().size());
+        assertEquals(12L, response.getContent().get(0).getMovieCount());
     }
 }

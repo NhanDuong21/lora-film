@@ -189,7 +189,7 @@ const AdminShowtimeCreatePage = () => {
                 {errors.startTime && <p className="text-red-500 text-xs mt-1">{errors.startTime}</p>}
                 <p className="text-zinc-600 text-[10px] mt-1.5 flex items-center gap-1">
                   <Info className="w-3 h-3" />
-                  Theo múi giờ của cụm rạp: {selectedCinema ? selectedCinema.timezone : 'Asia/Ho_Chi_Minh'}
+                  Thời gian sẽ được hiểu theo giờ địa phương của rạp đã chọn.
                 </p>
               </div>
 

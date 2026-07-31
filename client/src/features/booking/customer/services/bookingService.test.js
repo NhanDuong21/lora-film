@@ -3,8 +3,11 @@ import apiClient from '@/services/apiClient';
 import {
   cancelBooking,
   createBooking,
+  finalizeCheckout,
   getActiveBookingForShowtime,
-  getBookingHistory
+  getBookingHistory,
+  getBookingSpendingSummary,
+  getOrCreateScoreRedemptionKey
 } from './bookingService';
 
 vi.mock('@/services/apiClient', () => ({
@@ -115,5 +118,50 @@ describe('bookingService customer history normalization', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/api/bookings/active', {
       params: { showtimePublicId: 'showtime-public-1' }
     });
+  });
+
+  it('reads the server-authoritative annual spending summary', async () => {
+    apiClient.get.mockResolvedValue({
+      data: {
+        data: {
+          year: 2026,
+          totalSpending: 176000,
+          currency: 'VND'
+        }
+      }
+    });
+
+    const result = await getBookingSpendingSummary(2026);
+
+    expect(result.totalSpending).toBe(176000);
+    expect(apiClient.get).toHaveBeenCalledWith('/api/bookings/spending-summary', {
+      params: { year: 2026 }
+    });
+  });
+
+  it('sends the selected score points when finalizing checkout', async () => {
+    apiClient.post.mockResolvedValue({
+      data: { data: { publicId: 'booking-1', scorePointsUsed: 50 } }
+    });
+
+    await finalizeCheckout('booking-1', {
+      scorePoints: 50,
+      scoreIdempotencyKey: 'score-key-1'
+    });
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/bookings/booking-1/finalize-checkout',
+      {
+        scorePoints: 50,
+        scoreIdempotencyKey: 'score-key-1'
+      }
+    );
+  });
+
+  it('keeps one score idempotency key for the same Booking and points', () => {
+    const first = getOrCreateScoreRedemptionKey('booking-1', 50);
+    const second = getOrCreateScoreRedemptionKey('booking-1', 50);
+
+    expect(first).toBe(second);
   });
 });

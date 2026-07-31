@@ -13,7 +13,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 @Component
@@ -49,7 +50,10 @@ public class JwtFilter extends OncePerRequestFilter {
                     role = "ROLE_" + role;
                 }
 
-                List<SimpleGrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(role));
+                List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+                authorities.add(new SimpleGrantedAuthority(role));
+                addAuthorities(authorities, claims.get("roles"));
+                addAuthorities(authorities, claims.get("permissions"));
 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         claims.getSubject(), null, authorities);
@@ -69,5 +73,16 @@ public class JwtFilter extends OncePerRequestFilter {
             return bearerToken.substring(7);
         }
         return null;
+    }
+
+    private void addAuthorities(List<SimpleGrantedAuthority> authorities, Object claim) {
+        if (claim instanceof Collection<?> values) {
+            values.stream()
+                    .map(String::valueOf)
+                    .filter(value -> !value.isBlank())
+                    .map(SimpleGrantedAuthority::new)
+                    .filter(authority -> !authorities.contains(authority))
+                    .forEach(authorities::add);
+        }
     }
 }

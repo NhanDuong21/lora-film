@@ -4,18 +4,23 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
+import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
+import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingFoodResponse;
 import com.lorafilm.booking.booking.dto.response.BookingPresentationResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
+import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
+import com.lorafilm.booking.booking.policy.SingleSeatGapPolicy;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingSpecification;
@@ -46,6 +51,7 @@ import com.lorafilm.booking.booking.service.BookingTicketService;
 import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import com.lorafilm.booking.realtime.SeatAvailabilityEventService;
+import com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -61,10 +67,17 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -98,6 +111,7 @@ public class BookingServiceImpl implements BookingService {
     private final RedisLockService redisLockService;
     private final BookingLifecycleService lifecycleService;
     private SeatAvailabilityEventService seatAvailabilityEventService;
+    private ScoreRedemptionClient scoreRedemptionClient;
 
     @Autowired
     public BookingServiceImpl(
@@ -146,6 +160,11 @@ public class BookingServiceImpl implements BookingService {
     @Autowired(required = false)
     public void setSeatAvailabilityEventService(SeatAvailabilityEventService service) {
         this.seatAvailabilityEventService = service;
+    }
+
+    @Autowired(required = false)
+    public void setScoreRedemptionClient(ScoreRedemptionClient service) {
+        this.scoreRedemptionClient = service;
     }
 
     /** Backwards-compatible constructor for existing unit/integration callers. */
@@ -220,6 +239,7 @@ public class BookingServiceImpl implements BookingService {
         List<Long> seatIds = reservations.stream().map(SeatReservation::getSeatId).toList();
         ShowtimeBookingContext context = showtimeClient.getBookingContext(showtimeId, seatIds);
         validateShowtimeContext(context, showtimeId, validatedRequest.showtimePublicId(), seatIds);
+        validateSingleSeatGap(showtimeId, seatIds);
 
         Instant now = Instant.now();
         enforceSingleActiveBooking(currentUserId, context.showtimeId(), now);
@@ -308,6 +328,7 @@ public class BookingServiceImpl implements BookingService {
             throw new IntegrationException("Movie Service returned mismatched public seat information");
         }
         validateShowtimeContext(context, context.showtimeId(), request.showtimePublicId(), seatIds);
+        validateSingleSeatGap(context.showtimeId(), seatIds);
         if (seatIds.size() > bookingPolicyProperties.getMaxSeatsPerBooking()) {
             throw new BusinessException("BOOKING_TOO_MANY_SEATS",
                     "A booking cannot contain more than " + bookingPolicyProperties.getMaxSeatsPerBooking() + " seats",
@@ -633,6 +654,34 @@ public class BookingServiceImpl implements BookingService {
                 .map(this::toCustomerSummaryResponse);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public BookingSpendingSummaryResponse getMySpendingSummary(int year) {
+        Long currentUserId = requireAuthenticatedUser();
+        ZoneId businessZone = ZoneId.of("Asia/Ho_Chi_Minh");
+        Instant periodStart = LocalDate.of(year, 1, 1)
+                .atStartOfDay(businessZone)
+                .toInstant();
+        Instant periodEnd = LocalDate.of(year + 1, 1, 1)
+                .atStartOfDay(businessZone)
+                .toInstant();
+        BigDecimal totalSpending = bookingRepository.sumPaidSpendingByUserAndPeriod(
+                currentUserId,
+                List.of(BookingStatus.CONFIRMED, BookingStatus.COMPLETED),
+                PaymentStatus.SUCCESS,
+                periodStart,
+                periodEnd);
+
+        return new BookingSpendingSummaryResponse(
+                year,
+                totalSpending == null
+                        ? BigDecimal.ZERO.setScale(2)
+                        : totalSpending.setScale(2, RoundingMode.HALF_UP),
+                "VND",
+                periodStart,
+                periodEnd);
+    }
+
     private BookingSummaryResponse toCustomerSummaryResponse(Booking booking) {
         return bookingMapper.toSummaryResponse(
                 booking,
@@ -931,7 +980,76 @@ public class BookingServiceImpl implements BookingService {
                 || !returnedSeatIds.containsAll(requestedSeatIds)) {
             throw new IntegrationException("Movie Service returned mismatched seat information");
         }
+        validateCoupleSeatPairs(context.seats());
         validatePricing(context);
+    }
+
+    private void validateCoupleSeatPairs(List<ShowtimeBookingContext.SeatContext> seats) {
+        Map<String, List<ShowtimeBookingContext.SeatContext>> coupleGroups = new HashMap<>();
+        for (ShowtimeBookingContext.SeatContext seat : seats) {
+            boolean couple = "COUPLE".equalsIgnoreCase(seat.seatType());
+            String pairGroup = seat.pairGroup() == null ? null : seat.pairGroup().trim();
+            if (couple && (pairGroup == null || pairGroup.isEmpty())) {
+                throw new IntegrationException(
+                        "Movie Service returned a couple seat without pairGroup");
+            }
+            if (!couple && pairGroup != null && !pairGroup.isEmpty()) {
+                throw new IntegrationException(
+                        "Movie Service returned pairGroup for a non-couple seat");
+            }
+            if (couple) {
+                coupleGroups.computeIfAbsent(pairGroup, ignored -> new ArrayList<>()).add(seat);
+            }
+        }
+
+        for (Map.Entry<String, List<ShowtimeBookingContext.SeatContext>> entry
+                : coupleGroups.entrySet()) {
+            int memberCount = entry.getValue().size();
+            if (memberCount == 1) {
+                throw new BusinessException(
+                        "SEAT_COUPLE_PAIR_REQUIRED",
+                        "Couple seats must be booked together",
+                        HttpStatus.BAD_REQUEST);
+            }
+            if (memberCount != 2) {
+                throw new IntegrationException(
+                        "Movie Service returned an invalid couple pairGroup");
+            }
+        }
+    }
+
+    private void validateSingleSeatGap(Long showtimeId, List<Long> selectedSeatIds) {
+        ShowtimeSeatLayoutResponse layout = showtimeClient.getSeatLayout(showtimeId);
+        if (layout == null || layout.getSeats() == null
+                || !Objects.equals(layout.getShowtimeId(), showtimeId)) {
+            throw new IntegrationException("Movie Service returned an invalid seat layout");
+        }
+
+        Set<Long> selected = new HashSet<>(selectedSeatIds);
+        Set<Long> layoutSeatIds = layout.getSeats().stream()
+                .map(ShowtimeSeatLayoutResponse.SeatDetailDto::getSeatId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!layoutSeatIds.containsAll(selected)) {
+            throw new IntegrationException("Movie Service seat layout omitted selected seats");
+        }
+
+        Instant now = Instant.now();
+        Set<Long> occupied = reservationRepository
+                .findAllActiveReservationsByShowtimeId(showtimeId, now)
+                .stream()
+                .map(SeatReservation::getSeatId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        occupied.addAll(reservationRepository.findSoldSeatIdsFromBookingsByShowtimeId(showtimeId));
+        occupied.removeAll(selected);
+
+        if (SingleSeatGapPolicy.leavesSingleSeatGap(layout.getSeats(), selected, occupied)) {
+            throw new BusinessException(
+                    "SEAT_SINGLE_GAP_NOT_ALLOWED",
+                    "Seat selection must not leave an isolated single seat",
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 
     private void validatePricing(ShowtimeBookingContext context) {
@@ -1073,17 +1191,87 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse finalizeCheckout(String publicId) {
+    public BookingResponse finalizeCheckout(String publicId, FinalizeCheckoutRequest request) {
         Long currentUserId = requireAuthenticatedUser();
-        Booking booking = getBooking(publicId);
+        Booking booking = bookingRepository.findByPublicIdWithLock(publicId)
+                .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()))
+                .orElseThrow(() -> new BookingNotFoundException(publicId));
         requireOwnerOrAdmin(booking, currentUserId);
         if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BusinessException("BOOKING_NOT_PENDING", "Only pending Bookings can be finalized", HttpStatus.CONFLICT);
         }
-        if (booking.getExpiresAt() == null || !Instant.now().isBefore(booking.getExpiresAt())) {
+        Instant now = Instant.now();
+        if (booking.getExpiresAt() == null || !now.isBefore(booking.getExpiresAt())) {
             throw new BusinessException("BOOKING_EXPIRED", "The Booking payment deadline has passed", HttpStatus.CONFLICT);
         }
-        booking.lockAmount(Instant.now());
-        return bookingMapper.toResponse(bookingRepository.save(booking));
+        int requestedPoints = request == null ? 0 : request.normalizedScorePoints();
+        String scoreIdempotencyKey = request == null ? null : request.scoreIdempotencyKey();
+
+        if (booking.getAmountLockedAt() != null) {
+            if (!Objects.equals(booking.getScorePointsUsed(), requestedPoints)) {
+                throw new BusinessException(
+                        "BOOKING_AMOUNT_ALREADY_LOCKED",
+                        "Checkout amount was already locked with another score selection",
+                        HttpStatus.CONFLICT);
+            }
+            return bookingMapper.toResponse(booking);
+        }
+        if (requestedPoints == 0) {
+            booking.lockAmount(now);
+            return bookingMapper.toResponse(bookingRepository.saveAndFlush(booking));
+        }
+        if (scoreIdempotencyKey == null || scoreIdempotencyKey.isBlank()) {
+            throw new BusinessException(
+                    "SCORE_IDEMPOTENCY_KEY_REQUIRED",
+                    "scoreIdempotencyKey is required when scorePoints is greater than zero",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (scoreRedemptionClient == null) {
+            throw new IntegrationException("Score Service integration is unavailable");
+        }
+
+        long ttlWithSettlementGrace = Duration.between(now, booking.getExpiresAt()).getSeconds() + 300;
+        int ttlSeconds = (int) Math.min(Integer.MAX_VALUE, Math.max(60, ttlWithSettlementGrace));
+        String holdEventId = stableScoreKey("hold-event", scoreIdempotencyKey);
+        ScoreRedemptionClient.ScoreHoldResult hold = scoreRedemptionClient.hold(
+                booking.getUserId(),
+                booking.getId(),
+                requestedPoints,
+                ttlSeconds,
+                booking.getFinalAmount(),
+                holdEventId,
+                scoreIdempotencyKey.trim());
+        try {
+            if (hold == null
+                    || !"ACTIVE".equalsIgnoreCase(hold.status())
+                    || hold.pointsHeld() != requestedPoints
+                    || hold.discountAmount() == null
+                    || hold.discountAmount().signum() <= 0) {
+                throw new IntegrationException("Score Service did not create a valid active hold");
+            }
+            booking.applyScoreRedemption(
+                    requestedPoints,
+                    hold.discountAmount(),
+                    hold.holdCode());
+            booking.lockAmount(now);
+            return bookingMapper.toResponse(bookingRepository.saveAndFlush(booking));
+        } catch (RuntimeException exception) {
+            try {
+                scoreRedemptionClient.release(
+                        booking.getId(),
+                        hold == null ? null : hold.holdCode(),
+                        "Booking checkout finalization failed",
+                        stableScoreKey("release-event", scoreIdempotencyKey),
+                        stableScoreKey("release", scoreIdempotencyKey));
+            } catch (RuntimeException releaseException) {
+                log.error("Failed to compensate Score hold for Booking {}", publicId, releaseException);
+            }
+            throw exception;
+        }
+    }
+
+    private String stableScoreKey(String purpose, String source) {
+        return purpose + "-" + UUID.nameUUIDFromBytes(
+                (purpose + ":" + source).getBytes(StandardCharsets.UTF_8));
     }
 }

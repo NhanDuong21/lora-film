@@ -1,20 +1,129 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-// eslint-disable-next-line no-unused-vars
-import { Film, Star, ChevronDown, Check, MapPin, AlertCircle } from 'lucide-react';
+import { Film, ChevronDown, Check, MapPin, AlertCircle } from 'lucide-react';
 import { getMovies, getCinemas, getShowtimes } from '@/features/catalog/customer/services/movieService';
 import { seatSelectionPath } from '@/features/catalog/customer/utils/customerMovieFlow';
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import BookingStepper from '../components/BookingStepper';
 
+const getItems = payload => payload?.data || payload?.content || payload || [];
+const getMovieKey = movie => movie?.publicId || movie?.id || movie?.slug;
+const getMoviePoster = movie => movie?.posterUrl || movie?.primaryPoster || movie?.image || '';
+const getGenreNames = movie => (movie?.genres || [])
+  .map(genre => typeof genre === 'string' ? genre : genre?.name)
+  .filter(Boolean)
+  .join(', ');
+
+const createDateOptions = movie => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const releaseDate = movie?.releaseDate ? new Date(`${movie.releaseDate}T00:00:00`) : null;
+  const startDate = releaseDate && !Number.isNaN(releaseDate.getTime()) && releaseDate > today
+    ? releaseDate
+    : today;
+  const weekdays = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+    const isToday = date.getTime() === today.getTime();
+    const isTomorrow = date.getTime() === today.getTime() + 86_400_000;
+
+    return {
+      dateStr: date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
+      dateQuery: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+      label: isToday ? 'Hôm nay' : isTomorrow ? 'Ngày mai' : weekdays[date.getDay()]
+    };
+  });
+};
+
+function MovieChoiceGroup({ title, movies, status, selectedMovie, onSelect }) {
+  const isUpcoming = status === 'UPCOMING';
+
+  return (
+    <section className="space-y-3" aria-label={title}>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className={`text-[10px] font-black uppercase tracking-[0.18em] ${
+          isUpcoming ? 'text-amber-400' : 'text-brand-orange'
+        }`}>
+          {title}
+        </h4>
+        <span className="rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[9px] font-black text-zinc-500">
+          {movies.length} phim
+        </span>
+      </div>
+
+      {movies.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/60 px-4 py-5 text-center text-xs text-zinc-500">
+          Chưa có phim trong nhóm này.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {movies.map(movie => {
+            const movieKey = getMovieKey(movie);
+            const isSelected = getMovieKey(selectedMovie) === movieKey;
+            const poster = getMoviePoster(movie);
+            return (
+              <button
+                key={movieKey}
+                type="button"
+                onClick={() => onSelect(movie)}
+                aria-pressed={isSelected}
+                className={`flex items-center gap-4 rounded-xl border p-3 text-left transition-all ${
+                  isSelected
+                    ? 'border-brand-orange bg-brand-orange/10 shadow-md'
+                    : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex h-[72px] w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
+                  {poster ? (
+                    <img src={poster} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <Film className="h-5 w-5 text-zinc-600" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-wider ${
+                    isUpcoming
+                      ? 'bg-amber-500/10 text-amber-400'
+                      : 'bg-brand-orange/10 text-brand-orange'
+                  }`}>
+                    {isUpcoming ? 'Sắp chiếu' : 'Đang chiếu'}
+                  </span>
+                  <h5 className="truncate text-xs font-black leading-tight text-white">{movie.title}</h5>
+                  <p className="truncate text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                    {getGenreNames(movie) || 'Đang cập nhật thể loại'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {movie.ageRating && (
+                      <span className="rounded border border-zinc-800 bg-zinc-900 px-1 text-[8px] font-black uppercase text-brand-yellow">
+                        {movie.ageRating}
+                      </span>
+                    )}
+                    {movie.durationMinutes && (
+                      <span className="text-[9px] font-semibold text-zinc-400">{movie.durationMinutes} phút</span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function MasterBookingFunnelPage() {
   const navigate = useNavigate();
   
-  const [movies, setMovies] = useState([]);
+  const [nowShowingMovies, setNowShowingMovies] = useState([]);
+  const [upcomingMovies, setUpcomingMovies] = useState([]);
   const [cinemas, setCinemas] = useState([]);
   const [showtimes, setShowtimes] = useState([]);
   
   const [loading, setLoading] = useState(true);
+  const [showtimeLoading, setShowtimeLoading] = useState(false);
   const [notice, setNotice] = useState(null);
 
   const [activeSection, setActiveSection] = useState('location'); // 'location' | 'movie' | 'showtime'
@@ -26,16 +135,22 @@ export default function MasterBookingFunnelPage() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedShowtime, setSelectedShowtime] = useState(null);
 
-  // Fetch all initial cinemas and movies
+  // Fetch all active cinemas plus both customer-facing movie groups.
   const fetchInitialData = useCallback(async () => {
     setLoading(true);
     setNotice(null);
     try {
-      const cinemasData = await getCinemas();
-      const moviesData = await getMovies({ size: 100, status: 'NOW_SHOWING' });
+      const [cinemasData, nowShowingData, upcomingData] = await Promise.all([
+        getCinemas({ page: 0, size: 100 }),
+        getMovies({ page: 0, size: 100, status: 'NOW_SHOWING', sort: 'releaseDate,asc' }),
+        getMovies({ page: 0, size: 100, status: 'UPCOMING', sort: 'releaseDate,asc' })
+      ]);
+      const currentMovies = getItems(nowShowingData);
+      const currentMovieIds = new Set(currentMovies.map(getMovieKey));
       
-      setCinemas(cinemasData.data || cinemasData.content || cinemasData || []);
-      setMovies(moviesData.data || moviesData.content || moviesData || []);
+      setCinemas(getItems(cinemasData));
+      setNowShowingMovies(currentMovies);
+      setUpcomingMovies(getItems(upcomingData).filter(movie => !currentMovieIds.has(getMovieKey(movie))));
     } catch {
       setNotice({
         title: 'Không thể tải phòng vé',
@@ -54,57 +169,50 @@ export default function MasterBookingFunnelPage() {
 
   // Group cinemas by city/region dynamically
   const regionsList = useMemo(() => {
-    const list = [
-      { id: 'hcm', name: 'TP Hồ Chí Minh', theaters: [] },
-      { id: 'hn', name: 'Hà Nội', theaters: [] },
-      { id: 'dn', name: 'Đà Nẵng', theaters: [] },
-      { id: 'kh', name: 'Khánh Hòa', theaters: [] }
-    ];
-    
-    cinemas.forEach(c => {
-      const addr = (c.address || '').toLowerCase();
-      if (addr.includes('hồ chí minh') || addr.includes('hcm') || addr.includes('quận 1') || addr.includes('quận 2')) {
-        list[0].theaters.push(c);
-      } else if (addr.includes('hà nội') || addr.includes('hn') || addr.includes('thanh xuân')) {
-        list[1].theaters.push(c);
-      } else if (addr.includes('đà nẵng') || addr.includes('dn')) {
-        list[2].theaters.push(c);
-      } else if (addr.includes('nha trang') || addr.includes('khánh hòa')) {
-        list[3].theaters.push(c);
-      } else {
-        list[0].theaters.push(c);
+    const regions = new Map();
+    cinemas.forEach(cinema => {
+      const city = cinema.city?.trim() || 'Khu vực khác';
+      const id = city
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'other';
+      if (!regions.has(id)) {
+        regions.set(id, { id, name: city, theaters: [] });
       }
+      regions.get(id).theaters.push(cinema);
     });
 
-    return list.filter(r => r.theaters.length > 0);
+    return [...regions.values()]
+      .map(region => ({
+        ...region,
+        theaters: region.theaters.sort((left, right) => left.name.localeCompare(right.name, 'vi'))
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name, 'vi'));
   }, [cinemas]);
 
-  // Generate next 4 dates starting from today
-  const dates = useMemo(() => {
-    const list = [];
-    const weekdays = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
-    for (let i = 0; i < 4; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-      const queryStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const label = i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : weekdays[d.getDay()];
-      list.push({ dateStr, dateQuery: queryStr, label });
-    }
-    return list;
-  }, []);
+  // Upcoming movies begin at their release date; current movies begin today.
+  const dates = useMemo(() => createDateOptions(selectedMovie), [selectedMovie]);
 
   // Fetch showtimes once movie, cinema, and date are selected
-  const fetchShowtimesData = useCallback(async () => {
+  const fetchShowtimesData = useCallback(async signal => {
     if (!selectedMovie || !selectedCinema || !selectedDate) return;
+    await Promise.resolve();
+    if (signal?.aborted) return;
+    setShowtimeLoading(true);
+    setShowtimes([]);
     try {
       const showtimeData = await getShowtimes({
         movieSlug: selectedMovie.slug,
         cinemaSlug: selectedCinema.slug,
-        date: selectedDate.dateQuery
+        date: selectedDate.dateQuery,
+        signal
       });
-      setShowtimes(showtimeData.data || showtimeData.content || []);
+      setShowtimes(getItems(showtimeData));
     } catch (e) {
+      if (e?.name === 'CanceledError') return;
       console.error(e);
       setShowtimes([]);
       setNotice({
@@ -112,12 +220,16 @@ export default function MasterBookingFunnelPage() {
         message: 'Lịch chiếu hiện chưa tải được. Vui lòng chọn lại hoặc thử lại sau.',
         variant: 'error'
       });
+    } finally {
+      if (!signal?.aborted) setShowtimeLoading(false);
     }
   }, [selectedMovie, selectedCinema, selectedDate]);
 
   useEffect(() => {
+    const controller = new AbortController();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchShowtimesData();
+    fetchShowtimesData(controller.signal);
+    return () => controller.abort();
   }, [fetchShowtimesData]);
 
   // Group showtimes by movie version format
@@ -145,6 +257,7 @@ export default function MasterBookingFunnelPage() {
     setSelectedMovie(null);
     setSelectedDate(null);
     setSelectedShowtime(null);
+    setShowtimes([]);
     setActiveSection('location'); // Stay on location to choose cinema!
   };
 
@@ -153,13 +266,15 @@ export default function MasterBookingFunnelPage() {
     setSelectedMovie(null);
     setSelectedDate(null);
     setSelectedShowtime(null);
+    setShowtimes([]);
     setActiveSection('movie');
   };
 
   const handleSelectMovie = (movie) => {
     setSelectedMovie(movie);
-    setSelectedDate(dates[0]); // Default to today
+    setSelectedDate(createDateOptions(movie)[0]);
     setSelectedShowtime(null);
+    setShowtimes([]);
     setActiveSection('showtime');
   };
 
@@ -189,7 +304,7 @@ export default function MasterBookingFunnelPage() {
   }
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen pt-28 pb-16 px-4 md:px-8 selection:bg-brand-orange selection:text-zinc-950 font-sans font-medium">
+    <div className="min-h-screen bg-zinc-950 px-4 pb-16 pt-6 font-sans font-medium text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 md:px-8">
       {notice && (
         <CustomerNoticeModal
           title={notice.title}
@@ -314,36 +429,22 @@ export default function MasterBookingFunnelPage() {
               </button>
 
               {activeSection === 'movie' && selectedCinema && (
-                <div className="px-6 pb-6 pt-2 border-t border-zinc-800/50 space-y-4 animate-in fade-in duration-200">
-                  <label className="text-[9px] text-zinc-500 font-black uppercase tracking-wider block">Phim đang chiếu</label>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {movies.map((movie) => (
-                      <div
-                        key={movie.publicId}
-                        onClick={() => handleSelectMovie(movie)}
-                        className={`p-3 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${
-                          selectedMovie?.publicId === movie.publicId
-                            ? 'bg-brand-orange/10 border-brand-orange shadow-md'
-                            : 'bg-zinc-950 border-zinc-850 hover:border-zinc-700'
-                        }`}
-                      >
-                        <div className="w-12 h-18 rounded-lg overflow-hidden shrink-0 border border-zinc-800 bg-zinc-900">
-                          <img src={movie.primaryPoster} alt={movie.title} className="w-full h-full object-cover" />
-                        </div>
-                        <div className="space-y-1 min-w-0">
-                          <h4 className="text-xs font-black text-white leading-tight truncate">{movie.title}</h4>
-                          <p className="text-[9px] text-zinc-550 font-bold uppercase tracking-wider truncate">{movie.genres?.join(', ')}</p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[8px] font-black uppercase bg-zinc-900 border border-zinc-800 text-brand-yellow px-1 rounded">
-                              {movie.ageRating}
-                            </span>
-                            <span className="text-[9px] font-semibold text-zinc-400">{movie.durationMinutes} phút</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="space-y-7 border-t border-zinc-800/50 px-6 pb-6 pt-5 animate-in fade-in duration-200">
+                  <MovieChoiceGroup
+                    title="Phim đang chiếu"
+                    movies={nowShowingMovies}
+                    status="NOW_SHOWING"
+                    selectedMovie={selectedMovie}
+                    onSelect={handleSelectMovie}
+                  />
+                  <div className="border-t border-zinc-800/70" />
+                  <MovieChoiceGroup
+                    title="Phim sắp chiếu"
+                    movies={upcomingMovies}
+                    status="UPCOMING"
+                    selectedMovie={selectedMovie}
+                    onSelect={handleSelectMovie}
+                  />
                 </div>
               )}
             </div>
@@ -389,6 +490,7 @@ export default function MasterBookingFunnelPage() {
                           onClick={() => {
                             setSelectedDate(dateObj);
                             setSelectedShowtime(null);
+                            setShowtimes([]);
                           }}
                           className={`px-4 py-2 rounded-xl border text-center transition-all cursor-pointer ${
                             selectedDate?.dateStr === dateObj.dateStr
@@ -407,9 +509,16 @@ export default function MasterBookingFunnelPage() {
                   <div className="space-y-4 pt-2">
                     <label className="text-[9px] text-zinc-500 font-black uppercase tracking-wider block">Suất chiếu khả dụng</label>
                     
-                    {Object.keys(showtimesByFormat).length === 0 ? (
+                    {showtimeLoading ? (
+                      <div className="flex items-center justify-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs font-semibold text-zinc-400">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-brand-orange" />
+                        Đang tải suất chiếu…
+                      </div>
+                    ) : Object.keys(showtimesByFormat).length === 0 ? (
                       <div className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl text-center text-xs text-zinc-500 font-semibold">
-                        Không tìm thấy suất chiếu nào vào ngày đã chọn.
+                        {selectedMovie.status === 'UPCOMING'
+                          ? 'Phim sắp chiếu chưa có suất mở bán vào ngày này.'
+                          : 'Không tìm thấy suất chiếu nào vào ngày đã chọn.'}
                       </div>
                     ) : (
                       <div className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl space-y-4">
@@ -454,7 +563,11 @@ export default function MasterBookingFunnelPage() {
               <div className="aspect-[16/10] bg-zinc-950 relative overflow-hidden border-b border-zinc-800 flex items-center justify-center">
                 {selectedMovie ? (
                   <>
-                    <img src={selectedMovie.primaryPoster} alt={selectedMovie.title} className="w-full h-full object-cover" />
+                    {getMoviePoster(selectedMovie) ? (
+                      <img src={getMoviePoster(selectedMovie)} alt={selectedMovie.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <Film className="h-10 w-10 text-zinc-700" aria-hidden="true" />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                   </>
                 ) : (
@@ -468,7 +581,7 @@ export default function MasterBookingFunnelPage() {
                   <div className="absolute bottom-3 left-4 right-4">
                     <h3 className="text-sm font-black text-white leading-tight line-clamp-1">{selectedMovie.title}</h3>
                     <p className="text-[9px] text-zinc-400 font-bold mt-1 uppercase tracking-wider truncate">
-                      {selectedMovie.durationMinutes} phút • {selectedMovie.genres?.join(', ')}
+                      {selectedMovie.durationMinutes} phút • {getGenreNames(selectedMovie)}
                     </p>
                   </div>
                 )}

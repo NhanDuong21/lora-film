@@ -5,6 +5,7 @@ import BookingCheckoutPage from './BookingCheckoutPage';
 import {
   cancelBooking,
   finalizeCheckout,
+  getOrCreateScoreRedemptionKey,
   getBookingDetails
 } from '../services/bookingService';
 import {
@@ -21,6 +22,7 @@ vi.mock('../services/bookingService', () => ({
   BOOKING_CHANGED_EVENT: 'lorafilm:booking-changed',
   cancelBooking: vi.fn(),
   finalizeCheckout: vi.fn(),
+  getOrCreateScoreRedemptionKey: vi.fn(),
   getBookingDetails: vi.fn()
 }));
 
@@ -39,7 +41,8 @@ vi.mock('../services/paymentHandoffService', () => ({
 
 vi.mock('@/features/score/customer/services/scoreCustomerService', () => ({
   default: {
-    getScoreBalance: vi.fn()
+    getScoreBalance: vi.fn(),
+    redeemPreview: vi.fn()
   }
 }));
 
@@ -89,6 +92,7 @@ describe('BookingCheckoutPage cancellation', () => {
       }
     });
     finalizeCheckout.mockResolvedValue({});
+    getOrCreateScoreRedemptionKey.mockReturnValue('score-redemption-key');
     cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
     getOrCreatePaymentAttemptKey.mockReturnValue('payment-attempt-key');
     createPaymentHandoff.mockResolvedValue({
@@ -133,7 +137,7 @@ describe('BookingCheckoutPage cancellation', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', {
-      name: /xác nhận & tiếp tục/i
+      name: /tiếp tục thanh toán/i
     }));
     const momoLogo = screen.getByRole('img', { name: 'Logo MoMo' });
     expect(momoLogo).toHaveAttribute(
@@ -152,7 +156,11 @@ describe('BookingCheckoutPage cancellation', () => {
 
     await waitFor(() => {
       expect(finalizeCheckout).toHaveBeenCalledWith(
-        '11111111-1111-4111-8111-111111111111'
+        '11111111-1111-4111-8111-111111111111',
+        {
+          scorePoints: 0,
+          scoreIdempotencyKey: null
+        }
       );
       expect(createPaymentHandoff).toHaveBeenCalledWith({
         bookingPublicId: '11111111-1111-4111-8111-111111111111',
@@ -163,6 +171,54 @@ describe('BookingCheckoutPage cancellation', () => {
     expect(finalizeCheckout.mock.invocationCallOrder[0])
       .toBeLessThan(createPaymentHandoff.mock.invocationCallOrder[0]);
     expect(screen.queryByText(/mô phỏng thanh toán/i)).not.toBeInTheDocument();
+  });
+
+  it('lets the customer apply Score points and sends the selection while finalizing', async () => {
+    scoreCustomerService.redeemPreview.mockResolvedValue({
+      data: {
+        eligible: true,
+        requestedPoints: 50,
+        discountAmount: 50000,
+        remainingAmount: 285000
+      }
+    });
+
+    render(
+      <MemoryRouter initialEntries={[
+        '/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111'
+      ]}>
+        <BookingCheckoutPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(await screen.findByRole('spinbutton', {
+      name: /số điểm muốn dùng/i
+    }), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: /^dùng điểm$/i }));
+
+    expect(await screen.findByText(/đã chọn 50 điểm/i)).toBeInTheDocument();
+    expect(scoreCustomerService.redeemPreview).toHaveBeenCalledWith({
+      bookingPublicId: '11111111-1111-4111-8111-111111111111',
+      points: 50
+    });
+
+    fireEvent.click(screen.getByRole('button', {
+      name: /tiếp tục thanh toán/i
+    }));
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', {
+      name: /thanh toán qua vnpay/i
+    }));
+
+    await waitFor(() => {
+      expect(finalizeCheckout).toHaveBeenCalledWith(
+        '11111111-1111-4111-8111-111111111111',
+        {
+          scorePoints: 50,
+          scoreIdempotencyKey: 'score-redemption-key'
+        }
+      );
+    });
   });
 
   it('revalidates the Booking before Payment and does not call MoMo for a cancelled order', async () => {
@@ -201,7 +257,7 @@ describe('BookingCheckoutPage cancellation', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', {
-      name: /xác nhận & tiếp tục/i
+      name: /tiếp tục thanh toán/i
     }));
     fireEvent.click(screen.getByRole('button', { name: /momo/i }));
     fireEvent.click(screen.getByRole('checkbox'));
@@ -312,6 +368,7 @@ describe('BookingCheckoutPage cancellation', () => {
     expect(firstThumbnail.getAttribute('src')).toContain('h=192');
     expect(screen.queryByText('Bắp nước 13')).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Xem tất cả' }));
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
     expect(await screen.findByText('Bắp nước 13')).toBeInTheDocument();
     expect(screen.queryByText('Bắp nước 1')).not.toBeInTheDocument();

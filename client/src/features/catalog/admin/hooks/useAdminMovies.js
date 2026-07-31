@@ -238,9 +238,12 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
   }, [query, refreshAll, triggerToast]);
 
   const handleDelete = async (publicId, title) => {
-    const shouldDelete = triggerConfirm
-      ? await triggerConfirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`)
-      : window.confirm(`Bạn có chắc chắn muốn xóa phim "${title}"?`);
+    const shouldDelete = await triggerConfirm?.({
+      title: `Xóa phim “${title}”?`,
+      message: 'Chỉ phim chưa có lịch chiếu hoặc dữ liệu vận hành liên quan mới có thể xóa.',
+      confirmLabel: 'Xóa phim',
+      tone: 'danger',
+    });
 
     if (!shouldDelete) return;
     try {

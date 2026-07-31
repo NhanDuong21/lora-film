@@ -1,28 +1,51 @@
-import { useState } from 'react';
-import { PlusCircle, Trash2, Image as ImageIcon, Star } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  GripVertical,
+  Image as ImageIcon,
+  PlusCircle,
+  Star,
+} from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import adminCinemaService from '../../services/adminCinemaService';
 import CinemaImageUploader from '../../components/CinemaImageUploader';
+import { MEDIA_TYPE_LABELS } from '../../utils/facilityPresentation';
 
-export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
+const PAGE_SIZE = 6;
+
+export default function CinemaMediaTab({
+  cinema,
+  onAdd,
+  onUpdate,
+  onArchive,
+  onReorder,
+}) {
   const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    mediaType: 'GALLERY',
-    url: '',
-    file: null,
-    title: '',
-    displayOrder: 0,
-    isPrimary: false,
-    status: 'ACTIVE'
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [orderedMedia, setOrderedMedia] = useState(() =>
+    [...(cinema?.gallery || [])].sort(
+      (left, right) => (left.displayOrder || 0) - (right.displayOrder || 0),
+    ),
+  );
+  const [draggedId, setDraggedId] = useState(null);
+  const [isOrderDirty, setIsOrderDirty] = useState(false);
+  const [formData, setFormData] = useState(emptyForm());
 
-  const mediaList = cinema?.gallery || [];
+  const pageCount = Math.max(1, Math.ceil(orderedMedia.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const visibleMedia = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return orderedMedia.slice(start, start + PAGE_SIZE);
+  }, [orderedMedia, safePage]);
 
   const openAddForm = () => {
-    setFormData({ mediaType: 'GALLERY', url: '', file: null, title: '', displayOrder: 0, isPrimary: false, status: 'ACTIVE' });
+    setFormData({ ...emptyForm(), displayOrder: orderedMedia.length + 1 });
     setEditingId(null);
     setIsFormOpen(true);
   };
@@ -34,214 +57,305 @@ export default function CinemaMediaTab({ cinema, onAdd, onUpdate, onDelete }) {
       file: null,
       title: media.title || '',
       displayOrder: media.displayOrder || 0,
-      isPrimary: media.isPrimary || false,
-      status: media.status || 'ACTIVE'
+      isPrimary: Boolean(media.isPrimary),
+      status: media.status || 'ACTIVE',
     });
     setEditingId(media.publicId);
     setIsFormOpen(true);
   };
 
-  const closeForm = () => {
-    setIsFormOpen(false);
-    setEditingId(null);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
     setIsSubmitting(true);
-    let success;
-    let submitData = { ...formData };
-    
+    const payload = { ...formData };
     if (formData.file) {
       try {
-        const uploadRes = await adminCinemaService.uploadCinemaMedia(formData.file, formData.mediaType, cinema.publicId);
-        submitData.url = uploadRes.data?.secureUrl || uploadRes.data || uploadRes.secureUrl;
-      } catch (err) {
-        console.error("Lỗi upload:", err);
+        const upload = await adminCinemaService.uploadCinemaMedia(
+          formData.file,
+          formData.mediaType,
+          cinema.publicId,
+        );
+        payload.url = upload.data?.secureUrl || upload.data || upload.secureUrl;
+      } catch {
+        triggerToast?.('Không thể tải hình ảnh lên. Vui lòng thử lại.', 'error');
         setIsSubmitting(false);
-        triggerToast?.("Upload ảnh thất bại!", "error");
         return;
       }
     }
-
-    if (editingId) {
-      success = await onUpdate(editingId, submitData);
-    } else {
-      success = await onAdd(submitData);
+    if (!payload.url) {
+      triggerToast?.('Vui lòng chọn hình ảnh trước khi lưu.', 'warning');
+      setIsSubmitting(false);
+      return;
     }
-    
+    const success = editingId
+      ? await onUpdate(editingId, payload)
+      : await onAdd(payload);
     setIsSubmitting(false);
-    if (success) {
-      closeForm();
-    }
+    if (success) setIsFormOpen(false);
   };
 
-  const handleDelete = async (mediaId, title) => {
-    const shouldDelete = triggerConfirm
-      ? await triggerConfirm(`Bạn có chắc muốn xóa phương tiện "${title || 'Không tên'}"?`)
-      : window.confirm(`Bạn có chắc muốn xóa phương tiện "${title || 'Không tên'}"?`);
-      
-    if (shouldDelete) {
-      await onDelete(mediaId);
-    }
+  const archive = async (media) => {
+    const confirmed = await triggerConfirm?.({
+      title: 'Lưu trữ hình ảnh này?',
+      message:
+        'Hình ảnh sẽ ngừng hiển thị cho khách hàng nhưng vẫn được giữ trong dữ liệu lịch sử.',
+      confirmLabel: 'Lưu trữ hình ảnh',
+      tone: 'danger',
+    });
+    if (confirmed) await onArchive(media);
+  };
+
+  const dropOn = (targetId) => {
+    if (!draggedId || draggedId === targetId) return;
+    setOrderedMedia((current) => {
+      const next = [...current];
+      const from = next.findIndex((item) => item.publicId === draggedId);
+      const to = next.findIndex((item) => item.publicId === targetId);
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setDraggedId(null);
+    setIsOrderDirty(true);
+  };
+
+  const saveOrder = async () => {
+    const success = await onReorder(orderedMedia);
+    if (success) setIsOrderDirty(false);
   };
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex justify-between items-center bg-zinc-900/30 border border-zinc-800 p-5 rounded-2xl">
+      <section className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-sm font-black text-zinc-50 uppercase tracking-wider">HÌNH ẢNH RẠP CHIẾU</h2>
-          <p className="text-xs text-zinc-500 mt-1">Quản lý banner, logo, và thư viện ảnh của rạp</p>
+          <h2 className="text-sm font-black uppercase tracking-wider text-white">
+            Hình ảnh cụm rạp
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Kéo thả các thẻ để đổi thứ tự. Danh sách được chia trang để giữ giao diện mượt.
+          </p>
         </div>
-        <button
-          onClick={openAddForm}
-          className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors border border-zinc-700"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Thêm Ảnh</span>
-        </button>
-      </div>
+        <div className="flex flex-wrap gap-2">
+          {isOrderDirty && (
+            <button
+              type="button"
+              onClick={saveOrder}
+              className="rounded-xl border border-emerald-500/40 px-4 py-2.5 text-xs font-black text-emerald-300"
+            >
+              Lưu thứ tự mới
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={openAddForm}
+            className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Thêm hình ảnh
+          </button>
+        </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {mediaList.map(media => (
-          <div key={media.publicId} className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden group">
-            <div className="relative aspect-video bg-zinc-950 flex items-center justify-center">
-              <img 
-                src={media.url} 
-                alt={media.title || 'Cinema media'} 
-                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
-                }}
-              />
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-600 hidden">
-                <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                <span className="text-[10px] uppercase font-bold tracking-widest">Lỗi ảnh</span>
-              </div>
-              
-              {media.isPrimary && (
-                <div className="absolute top-3 left-3 bg-brand-orange text-white text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg flex items-center gap-1 shadow-lg shadow-brand-orange/20">
-                  <Star className="w-3 h-3 fill-current" />
-                  Ảnh Chính
+      {orderedMedia.length === 0 ? (
+        <div className="flex flex-col items-center rounded-3xl border-2 border-dashed border-zinc-800 py-16 text-center">
+          <ImageIcon className="h-10 w-10 text-zinc-700" />
+          <p className="mt-4 text-sm font-bold text-zinc-300">Chưa có hình ảnh</p>
+          <p className="mt-2 text-xs text-zinc-500">
+            Thêm ít nhất một ảnh chính để hoàn thành hồ sơ cụm rạp.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {visibleMedia.map((media) => (
+              <article
+                key={media.publicId}
+                draggable
+                onDragStart={() => setDraggedId(media.publicId)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => dropOn(media.publicId)}
+                className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50"
+              >
+                <div className="relative aspect-video bg-zinc-950">
+                  <img
+                    src={media.url}
+                    alt={media.title || 'Hình ảnh cụm rạp'}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute left-3 top-3 flex gap-2">
+                    <span className="rounded-lg bg-zinc-950/85 px-2 py-1 text-[10px] font-bold text-zinc-200">
+                      {MEDIA_TYPE_LABELS[media.mediaType] || 'Thư viện'}
+                    </span>
+                    {media.isPrimary && (
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-orange-500 px-2 py-1 text-[10px] font-black text-white">
+                        <Star className="h-3 w-3 fill-current" />
+                        Ảnh chính
+                      </span>
+                    )}
+                  </div>
                 </div>
-              )}
-              
-              <div className="absolute top-3 right-3 bg-zinc-950/80 backdrop-blur-md text-zinc-300 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border border-zinc-800 font-mono">
-                {media.mediaType}
-              </div>
-            </div>
-            
-            <div className="p-4 flex justify-between items-center">
-              <div className="truncate pr-4">
-                <h3 className="text-sm font-bold truncate text-zinc-200">{media.title || 'Không có tiêu đề'}</h3>
-                <p className="text-[10px] text-zinc-500 font-mono mt-1 truncate">{media.url}</p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => openEditForm(media)}
-                  className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors"
-                >
-                  <PlusCircle className="w-4 h-4 rotate-45" style={{ transform: 'rotate(0deg)' }} /> 
-                  {/* Reuse plus icon for Edit but let's actually just use it as an action button, it should be an edit icon but we used what we imported */}
-                </button>
-                <button
-                  onClick={() => handleDelete(media.publicId, media.title)}
-                  className="p-2 bg-zinc-800 hover:bg-red-500/20 rounded-lg text-zinc-400 hover:text-red-400 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+                <div className="p-4">
+                  <div className="flex items-start gap-3">
+                    <GripVertical className="mt-0.5 h-5 w-5 cursor-grab text-zinc-600" />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-bold text-zinc-100">
+                        {media.title || 'Hình ảnh chưa đặt tên'}
+                      </h3>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Vị trí hiển thị {media.displayOrder || 'chưa sắp xếp'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEditForm(media)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-200"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      Chỉnh sửa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => archive(media)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 px-3 py-2 text-xs font-bold text-zinc-400 hover:border-red-500/40 hover:text-red-300"
+                    >
+                      <Archive className="h-4 w-4" />
+                      Lưu trữ
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
-        ))}
 
-        {mediaList.length === 0 && (
-          <div className="col-span-full py-12 flex flex-col items-center justify-center border-2 border-dashed border-zinc-800 rounded-3xl">
-            <ImageIcon className="w-12 h-12 text-zinc-700 mb-4" />
-            <p className="text-sm font-bold text-zinc-500 uppercase tracking-widest">Chưa có phương tiện nào</p>
+          <div className="flex items-center justify-between rounded-2xl border border-zinc-800 px-4 py-3">
+            <p className="text-xs text-zinc-500">
+              Trang {safePage}/{pageCount} · {orderedMedia.length} hình ảnh
+            </p>
+            <div className="flex gap-2">
+              <PageButton
+                label="Trang trước"
+                icon={ChevronLeft}
+                disabled={safePage === 1}
+                onClick={() => setPage(Math.max(1, safePage - 1))}
+              />
+              <PageButton
+                label="Trang sau"
+                icon={ChevronRight}
+                disabled={safePage === pageCount}
+                onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+              />
+            </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl p-6">
-            <h2 className="text-lg font-black uppercase tracking-wider mb-6 text-zinc-50">
-              {editingId ? 'Cập Nhật Phương Tiện' : 'Thêm Phương Tiện'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <form
+            onSubmit={submit}
+            className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+          >
+            <h2 className="text-lg font-black text-white">
+              {editingId ? 'Chỉnh sửa hình ảnh' : 'Thêm hình ảnh mới'}
             </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <CinemaImageUploader 
-                  label="Tệp Hình Ảnh"
-                  description="Ảnh sẽ được tự động upload khi lưu"
-                  aspectRatio={16/9}
-                  value={formData.file || formData.url}
-                  onChange={(val) => setFormData({...formData, file: val})}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                    Loại (Type)
-                  </label>
+            <div className="mt-5">
+              <CinemaImageUploader
+                label="Tệp hình ảnh"
+                description="Ảnh được tải lên khi bạn lưu"
+                aspectRatio={16 / 9}
+                value={formData.file || formData.url}
+                onChange={(file) => setFormData({ ...formData, file })}
+              />
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {!editingId && (
+                <label>
+                  <span className="text-[10px] font-black uppercase text-zinc-500">
+                    Mục đích sử dụng
+                  </span>
                   <select
                     value={formData.mediaType}
-                    onChange={(e) => setFormData({...formData, mediaType: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors cursor-pointer"
+                    onChange={(event) =>
+                      setFormData({ ...formData, mediaType: event.target.value })
+                    }
+                    className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm"
                   >
-                    <option value="GALLERY">Gallery</option>
-                    <option value="BANNER">Banner</option>
-                    <option value="MAP">Bản Đồ</option>
+                    <option value="BANNER">Ảnh bìa</option>
+                    <option value="GALLERY">Thư viện</option>
+                    <option value="MAP">Sơ đồ rạp</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                    Tiêu Đề
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:border-brand-orange outline-none transition-colors"
-                    placeholder="Mặt tiền rạp..."
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 pt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isPrimary}
-                    onChange={(e) => setFormData({...formData, isPrimary: e.target.checked})}
-                    className="w-4 h-4 bg-zinc-900 border-zinc-800 rounded accent-brand-orange"
-                  />
-                  <span className="text-sm font-bold text-zinc-300">Đặt làm ảnh chính</span>
                 </label>
-              </div>
-
-              <div className="flex gap-3 pt-6">
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors"
-                >
-                  Hủy Bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 bg-brand-orange hover:bg-opacity-90 text-white font-bold py-3 rounded-xl uppercase tracking-wider text-xs transition-colors disabled:opacity-50"
-                >
-                  {isSubmitting ? 'ĐANG LƯU...' : 'LƯU PHƯƠNG TIỆN'}
-                </button>
-              </div>
-            </form>
-          </div>
+              )}
+              <label className={editingId ? 'sm:col-span-2' : ''}>
+                <span className="text-[10px] font-black uppercase text-zinc-500">
+                  Tên mô tả
+                </span>
+                <input
+                  value={formData.title}
+                  onChange={(event) => setFormData({ ...formData, title: event.target.value })}
+                  placeholder="Ví dụ: Sảnh chờ tầng 2"
+                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-orange-500"
+                />
+              </label>
+            </div>
+            <label className="mt-4 flex items-center gap-3 text-sm font-bold text-zinc-300">
+              <input
+                type="checkbox"
+                checked={formData.isPrimary}
+                onChange={(event) =>
+                  setFormData({ ...formData, isPrimary: event.target.checked })
+                }
+              />
+              Dùng làm ảnh đại diện chính
+            </label>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="flex-1 rounded-xl border border-zinc-800 py-3 text-xs font-black text-zinc-300"
+              >
+                Quay lại
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 rounded-xl bg-orange-500 py-3 text-xs font-black text-white disabled:opacity-50"
+              >
+                {isSubmitting ? 'Đang lưu...' : 'Lưu hình ảnh'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
+  );
+}
+
+function emptyForm() {
+  return {
+    mediaType: 'GALLERY',
+    url: '',
+    file: null,
+    title: '',
+    displayOrder: 0,
+    isPrimary: false,
+    status: 'ACTIVE',
+  };
+}
+
+function PageButton({ label, icon: Icon, ...props }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-3 py-2 text-xs font-bold text-zinc-300 disabled:opacity-30"
+    >
+      <Icon className="h-4 w-4" />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
   );
 }

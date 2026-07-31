@@ -8,6 +8,8 @@ public interface InternalBookingPaymentService {
     InternalPaymentContextResponse getPaymentContext(Long bookingId);
     InternalPaymentContextResponse getPaymentContext(String bookingPublicId);
     InternalPaymentContextResponse getPaymentContextByCode(String bookingCode);
+    InternalPaymentContextResponse getScoreRedemptionContext(Long bookingId);
+    InternalPaymentContextResponse getScoreRedemptionContext(String bookingPublicId);
     InternalPaymentResultResponse recordPaymentResult(Long bookingId, InternalPaymentResultRequest request);
     InternalPaymentResultResponse recordPaymentResult(String bookingPublicId, InternalPaymentResultRequest request);
     InternalPaymentResultResponse recordRefundResult(

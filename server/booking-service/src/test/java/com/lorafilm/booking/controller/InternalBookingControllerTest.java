@@ -127,6 +127,30 @@ public class InternalBookingControllerTest {
     }
 
     @Test
+    public void getScoreRedemptionContext_DoesNotRequireAmountLock() throws Exception {
+        String publicId = "550e8400-e29b-41d4-a716-446655440000";
+        InternalPaymentContextResponse response = new InternalPaymentContextResponse(
+                10L,
+                publicId,
+                15L,
+                "PENDING_PAYMENT",
+                true,
+                new BigDecimal("240000.00"),
+                "VND",
+                null,
+                Instant.now().plusSeconds(900),
+                new InternalPaymentContextResponse.AnalyticsSnapshot(101L, "Superman", 2));
+        when(internalBookingPaymentService.getScoreRedemptionContext(publicId)).thenReturn(response);
+
+        mockMvc.perform(get("/internal/bookings/" + publicId + "/score-redemption-context")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.payable").value(true))
+                .andExpect(jsonPath("$.data.amount").value(240000.00))
+                .andExpect(jsonPath("$.data.amountLockedAt").doesNotExist());
+    }
+
+    @Test
     public void recordPaymentResult_Success_ReturnsAuthoritativeState() throws Exception {
         String eventId = UUID.randomUUID().toString();
         InternalPaymentResultRequest request = new InternalPaymentResultRequest(

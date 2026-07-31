@@ -103,13 +103,13 @@ const AutoScheduleTimeline = ({
   const invalidCount = (candidates || []).filter(candidate => !candidate.timelineEligible).length;
 
   return (
-    <section className="space-y-4" aria-label={`Timeline ${formatServiceDateKey(serviceDate)}`}>
+    <section className="space-y-4" aria-label={`Sơ đồ phòng chiếu ${formatServiceDateKey(serviceDate)}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-black text-white">{formatServiceDateKey(serviceDate, { weekday: true })}</h2>
           <p className="mt-1 text-xs text-zinc-500">Thời gian rạp · phạm vi tự động theo thời gian chiếm phòng</p>
         </div>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1" role="group" aria-label="Mức thu phóng timeline">
+        <div className="flex flex-wrap gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1" role="group" aria-label="Mức thu phóng sơ đồ">
           {ZOOM_OPTIONS.map(option => (
             <button
               key={option.value}
@@ -126,7 +126,7 @@ const AutoScheduleTimeline = ({
 
       <ul
         className="flex flex-wrap gap-x-4 gap-y-2 rounded-xl border border-zinc-800 bg-zinc-950/55 p-3 text-xs text-zinc-300"
-        aria-label="Chú giải timeline"
+        aria-label="Chú giải sơ đồ phòng chiếu"
       >
         <li className="flex items-center gap-2">
           <span className="h-4 w-8 rounded border border-orange-300 bg-orange-500" aria-hidden="true" />
@@ -142,29 +142,29 @@ const AutoScheduleTimeline = ({
         </li>
         <li className="flex items-center gap-2">
           <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-emerald-300 text-emerald-300" aria-hidden="true"><Star className="h-3 w-3" /></span>
-          Đề xuất đã chọn
+          Suất đã chọn
         </li>
         <li className="flex items-center gap-2">
           <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-dashed border-white text-white" aria-hidden="true"><Search className="h-3 w-3" /></span>
-          Phủ chẩn đoán
+          Suất đang kiểm tra
         </li>
         <li className="flex items-center gap-2">
           <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-dashed border-red-300 text-red-300" aria-hidden="true"><AlertTriangle className="h-3 w-3" /></span>
-          Không hợp lệ / xung đột
+          Không hợp lệ / trùng lịch
         </li>
       </ul>
 
       {invalidCount > 0 && (
         <p className="flex items-center gap-2 text-sm text-amber-300" role="status">
           <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-          {invalidCount} ứng viên có thời gian không hợp lệ đã được bỏ qua khỏi timeline.
+          {invalidCount} suất có thời gian không hợp lệ đã được bỏ qua khỏi sơ đồ.
         </p>
       )}
 
       <div ref={viewportRef} className="max-w-full overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/40" data-zoom-mode={zoomMode} data-pixels-per-hour={pixelsPerHour.toFixed(2)}>
         {!timelineWindow ? (
           <div className="p-8 text-center text-sm text-zinc-500">
-            Chưa có đề xuất hợp lệ để dựng trục thời gian cho ngày này.
+            Chưa có suất hợp lệ để hiển thị cho ngày này.
           </div>
         ) : (
           <div style={{ width: `${LABEL_WIDTH + contentWidth}px` }}>
@@ -197,7 +197,7 @@ const AutoScheduleTimeline = ({
                         <div key={tick} className="pointer-events-none absolute inset-y-0 border-l border-zinc-800/60" style={{ left: `${((tick - timelineWindow.startMinute) / timelineWindow.totalMinutes) * 100}%` }} />
                       ))}
                       {rowCandidates.length === 0 && (
-                        <span className="absolute inset-0 flex items-center px-4 text-xs text-zinc-600">Chưa có đề xuất đã chọn</span>
+                        <span className="absolute inset-0 flex items-center px-4 text-xs text-zinc-600">Chưa có suất đã chọn</span>
                       )}
                       {rowCandidates.map(candidate => {
                         const state = getStatePresentation(candidate);
@@ -214,7 +214,7 @@ const AutoScheduleTimeline = ({
                             key={candidate.id}
                             type="button"
                             onClick={event => onOpenDetails(candidate, event.currentTarget)}
-                            aria-label={`${candidate.diagnostic ? 'Ứng viên chẩn đoán. ' : ''}${candidate.movieTitle}, ${candidate.startTimeDisplay}, ${state.marker}. Mở chi tiết`}
+                            aria-label={`${candidate.diagnostic ? 'Suất đang kiểm tra. ' : ''}${candidate.movieTitle}, ${candidate.startTimeDisplay}, ${state.marker}. Mở chi tiết`}
                             data-testid={`timeline-candidate-${candidate.id}`}
                             data-palette-index={candidate.palette.index}
                             data-state-marker={state.marker}

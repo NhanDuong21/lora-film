@@ -1,9 +1,11 @@
 package com.lorafilm.booking.booking.controller;
 
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
+import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
+import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.service.BookingService;
@@ -44,6 +46,8 @@ import java.util.Map;
 
 import com.lorafilm.booking.infrastructure.idempotency.Idempotent;
 
+import com.lorafilm.booking.booking.service.BookingTicketService;
+
 @RestController
 @RequestMapping("/api/bookings")
 @Validated
@@ -61,12 +65,15 @@ public class CustomerBookingController {
 
     private final BookingService bookingService;
     private final SecurityContextService securityContextService;
+    private final BookingTicketService bookingTicketService;
 
     public CustomerBookingController(
             BookingService bookingService,
-            SecurityContextService securityContextService) {
+            SecurityContextService securityContextService,
+            BookingTicketService bookingTicketService) {
         this.bookingService = bookingService;
         this.securityContextService = securityContextService;
+        this.bookingTicketService = bookingTicketService;
     }
 
     @PostMapping
@@ -112,6 +119,17 @@ public class CustomerBookingController {
                 bookings.getTotalPages(),
                 bookings.isLast());
         return ResponseEntity.ok(ApiResponse.success("Bookings retrieved successfully", response));
+    }
+
+    @GetMapping("/spending-summary")
+    @Operation(
+            summary = "Get my annual paid spending",
+            description = "Sums successful CONFIRMED or COMPLETED bookings in the requested calendar year")
+    public ResponseEntity<ApiResponse<BookingSpendingSummaryResponse>> getMySpendingSummary(
+            @RequestParam @Min(2000) @Max(2100) int year) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Spending summary retrieved successfully",
+                bookingService.getMySpendingSummary(year)));
     }
 
     @GetMapping("/active")
@@ -169,9 +187,11 @@ public class CustomerBookingController {
 
     @PostMapping("/{publicId}/finalize-checkout")
     @Operation(summary = "Lock the checkout amount", description = "Locks the server-owned amount before Payment handoff")
-    public ResponseEntity<ApiResponse<BookingResponse>> finalizeCheckout(@PathVariable String publicId) {
+    public ResponseEntity<ApiResponse<BookingResponse>> finalizeCheckout(
+            @PathVariable String publicId,
+            @Valid @RequestBody(required = false) FinalizeCheckoutRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Checkout finalized successfully", bookingService.finalizeCheckout(publicId)));
+                "Checkout finalized successfully", bookingService.finalizeCheckout(publicId, request)));
     }
 
     @PostMapping("/{publicId}/payment")
@@ -186,6 +206,24 @@ public class CustomerBookingController {
                 "PAYMENT_SERVICE_HANDOFF_REQUIRED",
                 "Payment initiation is owned by Payment Service",
                 HttpStatus.GONE);
+    }
+
+
+    @PostMapping("/{publicId}/resend-email")
+    @Operation(summary = "Resend booking email", description = "Resends the email confirmation for a confirmed booking")
+    public ResponseEntity<ApiResponse<Void>> resendEmail(
+            @PathVariable
+            @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")
+            String publicId) {
+        BookingDetailResponse detail = bookingService.findById(publicId);
+        if (!BookingStatus.CONFIRMED.equals(detail.status()) && !BookingStatus.COMPLETED.equals(detail.status())) {
+            throw new com.lorafilm.booking.common.exception.BusinessException(
+                    "INVALID_BOOKING_STATUS",
+                    "Email can only be resent for CONFIRMED or COMPLETED bookings",
+                    HttpStatus.BAD_REQUEST);
+        }
+        bookingTicketService.resendBookingEmail(publicId);
+        return ResponseEntity.ok(ApiResponse.success("Email resent successfully", null));
     }
 
 

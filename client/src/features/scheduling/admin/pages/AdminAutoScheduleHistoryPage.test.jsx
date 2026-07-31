@@ -7,7 +7,7 @@ import AdminAutoScheduleHistoryPage from './AdminAutoScheduleHistoryPage';
 vi.mock('../hooks/useAutoScheduleHistory');
 
 const statuses = ['GENERATING', 'PREVIEWED', 'APPLYING', 'APPLIED', 'EXPIRED', 'FAILED', 'CANCELLED'];
-const labels = ['Đang tạo bản xem trước', 'Sẵn sàng rà soát', 'Đang áp dụng', 'Đã áp dụng', 'Đã hết hạn', 'Thất bại', 'Đã hủy'];
+const labels = ['Đang xếp lịch', 'Chờ kiểm tra', 'Đang tạo suất chiếu', 'Đã tạo suất chiếu', 'Đã hết hạn', 'Thất bại', 'Đã hủy'];
 
 const preview = (status, index) => ({
   previewPublicId: `preview-${index}`,
@@ -79,12 +79,12 @@ describe('AdminAutoScheduleHistoryPage', () => {
   it('renders every backend display status and authoritative action flags', () => {
     renderPage();
 
-    expect(screen.getByRole('heading', { name: 'Lịch sử bản xem trước xếp lịch' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Lịch đang soạn' })).toBeInTheDocument();
     labels.forEach(label => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
-    expect(screen.getByText('Có thể áp dụng trong chi tiết')).toBeInTheDocument();
+    expect(screen.getByText('Sẵn sàng tạo suất chiếu')).toBeInTheDocument();
     expect(screen.getByText('Auto schedule generation failed')).toBeInTheDocument();
-    expect(screen.getByText('4 suất đã tạo')).toBeInTheDocument();
-    expect(screen.getAllByText('Mở / chỉnh sửa')).toHaveLength(1);
+    expect(screen.getByText('4 suất chiếu đã tạo')).toBeInTheDocument();
+    expect(screen.getAllByText('Tiếp tục kiểm tra')).toHaveLength(1);
     expect(screen.getAllByText('22/07/2026 – 23/07/2026').length).toBeGreaterThan(0);
     expect(screen.queryByText('2026-07-22 – 2026-07-23')).not.toBeInTheDocument();
   });
@@ -92,9 +92,9 @@ describe('AdminAutoScheduleHistoryPage', () => {
   it('emphasizes applied time/count and links an applied row to its operational batch', () => {
     renderPage();
 
-    expect(screen.getByText('4 suất đã tạo')).toBeInTheDocument();
-    expect(screen.getByText(/Đã áp dụng lúc/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Xem các suất chiếu đã tạo' }));
+    expect(screen.getByText('4 suất chiếu đã tạo')).toBeInTheDocument();
+    expect(screen.getByText(/Đã tạo suất lúc/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem suất chiếu đã tạo' }));
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/admin/showtimes?source=AUTO&batchId=preview-3',
     );
@@ -120,7 +120,7 @@ describe('AdminAutoScheduleHistoryPage', () => {
     renderPage();
 
     expect(screen.getAllByRole('button', { name: 'LoraFilm Quận 1' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Mã rút gọn: PREVIEW0/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Mã lịch: PREVIEW0/).length).toBeGreaterThan(0);
     expect(screen.getByText('previewPublicId: preview-0')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'LoraFilm Quận 1' })[0]);
     expect(screen.getByTestId('location')).toHaveTextContent('/admin/showtime-schedules/preview-0');
@@ -151,7 +151,7 @@ describe('AdminAutoScheduleHistoryPage', () => {
       resetFilters,
     });
     renderPage();
-    expect(screen.getByText('Không có bản xem trước phù hợp với bộ lọc.')).toBeInTheDocument();
+    expect(screen.getByText('Không có lịch phù hợp với bộ lọc.')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Xóa bộ lọc' }).at(-1));
     expect(resetFilters).toHaveBeenCalled();
   });

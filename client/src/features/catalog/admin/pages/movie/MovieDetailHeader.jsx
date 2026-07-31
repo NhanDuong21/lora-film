@@ -1,104 +1,112 @@
-import { ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock3, Image as ImageIcon, Star } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getStatusConfig } from '@/features/catalog/admin/config/movieStatusConfig';
 import { LazyImage } from '@/components/common/ui/uiKit';
 import { formatDate, AGE_RATING_LABELS } from '@/utils/movieHelpers';
 
+function MetaItem({ icon: Icon, label, value, emptyText }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2">
+      <Icon className="h-4 w-4 shrink-0 text-zinc-500" />
+      <span className="text-xs text-zinc-500">{label}</span>
+      <strong className={`truncate text-xs ${value ? 'text-zinc-200' : 'font-medium text-zinc-600'}`}>
+        {value || emptyText}
+      </strong>
+    </div>
+  );
+}
+
 export default function MovieDetailHeader({ movie }) {
   const navigate = useNavigate();
   const location = useLocation();
   const returnToList = () => navigate(`/admin/movies${location.search}`);
-  
+
   if (!movie) {
     return (
-      <div className="flex items-center gap-4 mb-6">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
         <button
+          type="button"
           onClick={returnToList}
-          className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors"
-          aria-label="Quay lại danh sách"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-white"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft className="h-4 w-4" />
+          Quay lại danh sách phim
         </button>
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Đang tải...</h1>
-        </div>
+        <div className="mt-5 h-24 animate-pulse rounded-xl bg-zinc-900" />
       </div>
     );
   }
 
-  const statusCfg = getStatusConfig(movie.status);
+  const status = getStatusConfig(movie.status);
+  const sourceLabel = movie.source === 'TMDB' ? 'Nhập tự động' : 'Tạo thủ công';
 
   return (
-    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
-      <div className="flex items-start gap-4">
-        <button
-          onClick={returnToList}
-          className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-100 transition-colors shrink-0 mt-1"
-          aria-label="Quay lại danh sách"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="w-20 h-28 bg-zinc-800 rounded-lg overflow-hidden shrink-0 border border-zinc-700">
-            {movie.primaryPoster ? (
-              <LazyImage
-                src={movie.primaryPoster}
-                alt={movie.title || 'Poster'}
-                containerClassName="w-full h-full border-none rounded-none bg-transparent"
-                className="object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 p-2 text-center">
-                <ImageIcon className="w-6 h-6 mb-1" />
-                <span className="text-[9px] leading-tight">Chưa có poster</span>
-              </div>
-            )}
-          </div>
-          
-          <div className="flex flex-col justify-center">
-            <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-3 flex-wrap">
-              {movie.title || <span className="italic text-zinc-500 text-lg">Chưa có tên</span>}
-              {movie.source === 'TMDB' && (
-                <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded-md uppercase font-bold tracking-wider" title={`Đồng bộ từ TMDB (${movie.tmdbId})\nCập nhật: ${formatDate(movie.tmdbLastUpdated)}`}>TMDB</span>
-              )}
-              {movie.source === 'MANUAL' && (
-                <span className="text-xs bg-zinc-700/50 text-zinc-400 border border-zinc-600/50 px-2 py-1 rounded-md uppercase font-bold tracking-wider" title="Tạo thủ công">Thủ công</span>
-              )}
-              <span className={`text-xs font-black px-2.5 py-1 rounded-md border uppercase tracking-wider ${statusCfg.colorClass}`}>
-                {statusCfg.label}
-              </span>
-            </h1>
-            
-            {movie.originalTitle && (
-              <p className="text-sm text-zinc-400 mt-0.5">{movie.originalTitle}</p>
-            )}
-            
-            <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-zinc-300">
-              <span className="bg-zinc-800/60 px-2 py-1 rounded border border-zinc-700/50">
-                <span className="text-zinc-500 mr-1">Khởi chiếu:</span>
-                <span className="font-medium text-zinc-200">
-                  {movie.releaseDate ? formatDate(movie.releaseDate) : <span className="italic text-zinc-500">Chưa có ngày</span>}
-                </span>
-              </span>
-              
-              <span className="bg-zinc-800/60 px-2 py-1 rounded border border-zinc-700/50">
-                <span className="text-zinc-500 mr-1">Thời lượng:</span>
-                <span className="font-medium text-zinc-200">
-                  {movie.durationMinutes ? `${movie.durationMinutes} phút` : <span className="italic text-zinc-500">Chưa có</span>}
-                </span>
-              </span>
-              
-              <span className="bg-zinc-800/60 px-2 py-1 rounded border border-zinc-700/50">
-                <span className="text-zinc-500 mr-1">Phân loại:</span>
-                <span className="font-medium text-zinc-200">
-                  {movie.ageRating ? (AGE_RATING_LABELS[movie.ageRating] || movie.ageRating) : <span className="italic text-zinc-500">Chưa phân loại</span>}
-                </span>
-              </span>
+    <header className="rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900/80 to-zinc-950 p-5 md:p-6">
+      <button
+        type="button"
+        onClick={returnToList}
+        className="inline-flex items-center gap-2 rounded-lg text-sm font-semibold text-zinc-400 transition hover:text-white"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Quay lại danh sách phim
+      </button>
+
+      <div className="mt-5 flex flex-col gap-5 sm:flex-row">
+        <div className="h-32 w-24 shrink-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900">
+          {movie.primaryPoster ? (
+            <LazyImage
+              src={movie.primaryPoster}
+              alt={`Poster ${movie.title || 'phim'}`}
+              containerClassName="h-full w-full"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-2 text-center text-zinc-600">
+              <ImageIcon className="h-6 w-6" />
+              <span className="text-[10px]">Chưa có poster</span>
             </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+              {sourceLabel}
+            </span>
+            <span className={`rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${status.colorClass}`}>
+              {status.label}
+            </span>
+          </div>
+
+          <h1 className="mt-3 break-words text-2xl font-black text-white md:text-3xl">
+            {movie.title || 'Phim chưa đặt tên'}
+          </h1>
+          {movie.originalTitle && movie.originalTitle !== movie.title && (
+            <p className="mt-1 text-sm text-zinc-500">{movie.originalTitle}</p>
+          )}
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <MetaItem
+              icon={CalendarDays}
+              label="Khởi chiếu"
+              value={movie.releaseDate ? formatDate(movie.releaseDate) : ''}
+              emptyText="Chưa có ngày"
+            />
+            <MetaItem
+              icon={Clock3}
+              label="Thời lượng"
+              value={movie.durationMinutes ? `${movie.durationMinutes} phút` : ''}
+              emptyText="Chưa có"
+            />
+            <MetaItem
+              icon={Star}
+              label="Độ tuổi"
+              value={movie.ageRating ? (AGE_RATING_LABELS[movie.ageRating] || movie.ageRating) : ''}
+              emptyText="Chưa phân loại"
+            />
           </div>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

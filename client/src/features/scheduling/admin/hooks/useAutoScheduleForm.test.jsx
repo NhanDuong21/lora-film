@@ -138,7 +138,7 @@ describe('useAutoScheduleForm', () => {
     const secondKey = adminAutoScheduleService.generatePreview.mock.calls[1][0].idempotencyKey;
     expect(firstKey).toBeTruthy();
     expect(secondKey).toBe(firstKey);
-    expect(triggerToast).toHaveBeenLastCalledWith(expect.stringContaining('quá nhiều ứng viên'), 'error');
+    expect(triggerToast).toHaveBeenLastCalledWith(expect.stringContaining('quá nhiều suất đề xuất'), 'error');
   });
 
   it('rotates the idempotency key after a request-affecting edit', async () => {

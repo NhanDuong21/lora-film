@@ -33,6 +33,9 @@ public class ProviderCallbackService {
     private final PaymentTransactionService transactionService;
     private final ObjectMapper objectMapper;
 
+    @org.springframework.beans.factory.annotation.Value("${payment.providers.vnpay.trust-return-url:false}")
+    private boolean trustVnPayReturnUrl;
+
     public ProviderCallbackService(
             PaymentProviderRegistry registry,
             PaymentWebhookEventRepository webhookRepository,
@@ -113,7 +116,7 @@ public class ProviderCallbackService {
         Payment payment = paymentRepository.findByProviderCodeAndProviderOrderId(
                 provider, result.getProviderOrderId()).orElse(null);
         if (payment != null && payment.getStatus() == PaymentStatus.PROCESSING) {
-            resolveVerifiedReturn(provider, adapter, payment);
+            resolveVerifiedReturn(provider, adapter, payment, result);
         }
         return payment == null
                 ? new ReturnOutcome(true, null, null)
@@ -121,7 +124,14 @@ public class ProviderCallbackService {
     }
 
     private void resolveVerifiedReturn(
-            ProviderCode provider, PaymentProvider adapter, Payment payment) {
+            ProviderCode provider, PaymentProvider adapter, Payment payment, ProviderCallbackResult result) {
+        if (trustVnPayReturnUrl && provider == ProviderCode.VNPAY && result != null && ("SUCCESS".equals(result.getResult()) || "CANCELLED".equals(result.getResult()))) {
+            log.info("Directly trusting verified Return URL redirect result: provider={}, paymentId={}, result={}",
+                    provider, payment.getId(), result.getResult());
+            transactionService.applyProviderResult(provider, result, null);
+            return;
+        }
+
         try {
             // Browser Return remains navigation data only. It merely prompts a
             // server-to-server provider query; only that authoritative query
@@ -137,6 +147,15 @@ public class ProviderCallbackService {
                             + "provider={}, paymentId={}, error={}",
                     provider, payment.getId(), exception.getClass().getSimpleName());
         }
+
+        // Second fallback: if queryStatus failed/returned empty, but we trust return URL fallback
+        if (trustVnPayReturnUrl && result != null && ("SUCCESS".equals(result.getResult()) || "CANCELLED".equals(result.getResult()))) {
+            log.info("Authoritative query returned empty. Falling back to verified redirect callback result: provider={}, paymentId={}, result={}",
+                    provider, payment.getId(), result.getResult());
+            transactionService.applyProviderResult(provider, result, null);
+            return;
+        }
+
         int retryDelaySeconds = Math.max(5, adapter.recoveryRetryDelaySeconds());
         transactionService.scheduleProviderStatusCheck(
                 payment.getId(), Instant.now().plusSeconds(retryDelaySeconds));

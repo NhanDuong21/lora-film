@@ -83,13 +83,22 @@ export const getGenres = async () => {
 
 /**
  * Fetch cinemas list from the public API
- * @param {string} [city] - Optional city name to filter
+ * @param {Object} [filters] - Public cinema filters and pagination
  * @returns {Promise<Object>} The cinemas page response
  */
-export const getCinemas = async (city) => {
-  const params = {};
+export const getCinemas = async ({
+  city,
+  district,
+  keyword,
+  page = 0,
+  size = 100,
+  signal
+} = {}) => {
+  const params = { page, size };
   if (city) params.city = city;
-  const response = await apiClient.get("/api/cinemas", { params });
+  if (district) params.district = district;
+  if (keyword) params.keyword = keyword;
+  const response = await apiClient.get("/api/cinemas", { params, signal });
   return response.data.data;
 };
 
@@ -108,13 +117,21 @@ export const getCinemaBySlug = async (slug) => {
  * @param {Object} params - Query filters (movieSlug, cinemaSlug, city, date)
  * @returns {Promise<Array>} The list of showtimes
  */
-export const getShowtimes = async ({ movieSlug, cinemaSlug, city, date }) => {
-  const params = {};
+export const getShowtimes = async ({
+  movieSlug,
+  cinemaSlug,
+  city,
+  date,
+  page = 0,
+  size = 100,
+  signal
+}) => {
+  const params = { page, size };
   if (movieSlug) params.movieSlug = movieSlug;
   if (cinemaSlug) params.cinemaSlug = cinemaSlug;
   if (city) params.city = city;
   if (date) params.date = date; // date as YYYY-MM-DD
-  const response = await apiClient.get("/api/showtimes", { params });
+  const response = await apiClient.get("/api/showtimes", { params, signal });
   return response.data.data;
 };
 
