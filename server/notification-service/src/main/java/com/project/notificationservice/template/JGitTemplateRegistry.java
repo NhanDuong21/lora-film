@@ -64,14 +64,11 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     private static final String SUBJECT = "subject.hbs";
     private static final String HTML = "content.html.hbs";
     private static final String TEXT = "content.txt.hbs";
-    private static final Pattern LEGACY_EXPRESSION =
-            Pattern.compile("\\{\\{\\s*#?(?:each|if|unless)?\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*}}");
-    private static final Pattern HTML_TITLE =
-            Pattern.compile("(?is)<title[^>]*>(.*?)</title>");
-    private static final Pattern FIRST_HEADING =
-            Pattern.compile("(?is)<h1[^>]*>(.*?)</h1>");
-    private static final Pattern FIRST_PARAGRAPH =
-            Pattern.compile("(?is)<p[^>]*>(.*?)</p>");
+    private static final Pattern LEGACY_EXPRESSION = Pattern
+            .compile("\\{\\{\\s*#?(?:each|if|unless)?\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*}}");
+    private static final Pattern HTML_TITLE = Pattern.compile("(?is)<title[^>]*>(.*?)</title>");
+    private static final Pattern FIRST_HEADING = Pattern.compile("(?is)<h1[^>]*>(.*?)</h1>");
+    private static final Pattern FIRST_PARAGRAPH = Pattern.compile("(?is)<p[^>]*>(.*?)</p>");
     private static final Map<String, String> LEGACY_TEMPLATE_ALIASES = Map.of(
             "TICKET_PURCHASED", "booking/booking_confirmed.html");
 
@@ -151,7 +148,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                         .setTimeout(fetchTimeoutSeconds)
                         .call();
             } catch (org.eclipse.jgit.api.errors.TransportException ex) {
-                log.warn("Git clone with configured credentials failed ({}), falling back to unauthenticated clone...", ex.getMessage());
+                log.warn("Git clone with configured credentials failed ({}), falling back to unauthenticated clone...",
+                        ex.getMessage());
                 git = Git.cloneRepository()
                         .setURI(remoteUri)
                         .setDirectory(workingDirectory.toFile())
@@ -179,9 +177,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         }
     }
 
-    @Scheduled(
-            fixedDelayString = "${notification.git.refresh-interval-ms:30000}",
-            initialDelayString = "${notification.git.refresh-initial-delay-ms:5000}")
+    @Scheduled(fixedDelayString = "${notification.git.refresh-interval-ms:30000}", initialDelayString = "${notification.git.refresh-initial-delay-ms:5000}")
     public void refreshFromRemote() {
         if (!autoRefreshEnabled || remoteUri == null || remoteUri.isBlank() || !lock.tryLock()) {
             return;
@@ -245,11 +241,13 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                     command.content().locale()));
             writeContent(templateKey, command.content(), TemplateStatus.DRAFT, previous.baseCommitSha());
             RevCommit commit = commit(command.changeSummary() == null || command.changeSummary().isBlank()
-                    ? "Update draft " + templateKey : command.changeSummary());
+                    ? "Update draft " + templateKey
+                    : command.changeSummary());
             pushBranch(branch);
             TemplateDocument document = readDocument(templateKey, command.content().channel(),
                     command.content().locale(), commit.getName(), null);
-            return new TemplateDraft(templateKey, draftId, branch, previous.baseCommitSha(), commit.getName(), document);
+            return new TemplateDraft(templateKey, draftId, branch, previous.baseCommitSha(), commit.getName(),
+                    document);
         } catch (NotificationException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -271,7 +269,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             return new TemplateDraft(templateKey, draftId, branch, manifest.baseCommitSha(),
                     document.commitSha(), document);
         } catch (Exception exception) {
-            if (exception instanceof NotificationException notificationException) throw notificationException;
+            if (exception instanceof NotificationException notificationException)
+                throw notificationException;
             throw registryFailure("Unable to load template draft", exception);
         } finally {
             lock.unlock();
@@ -290,7 +289,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                 document = readDocument(templateKey, channel, locale, currentHead,
                         findVersionForCommit(templateKey, channel, locale, currentHead));
             } catch (NotificationException exception) {
-                if (!"TEMPLATE_NOT_FOUND".equals(exception.getErrorCode())) throw exception;
+                if (!"TEMPLATE_NOT_FOUND".equals(exception.getErrorCode()))
+                    throw exception;
                 document = readLegacyDocument(templateKey, channel, locale, currentHead);
             }
             if (document.status() != TemplateStatus.PUBLISHED) {
@@ -346,7 +346,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                 Manifest manifest = readManifest(manifestPath.getParent());
                 TemplateDocument document = readDocument(manifest.templateKey(), manifest.channel(),
                         manifest.locale(), currentHead,
-                        findVersionForCommit(manifest.templateKey(), manifest.channel(), manifest.locale(), currentHead));
+                        findVersionForCommit(manifest.templateKey(), manifest.channel(), manifest.locale(),
+                                currentHead));
                 nativeTemplates.add(templateIdentity(
                         document.templateKey(), document.channel(), document.locale()));
                 if (matches(document, criteria)) {
@@ -380,7 +381,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             String prefix = "refs/tags/" + tagPrefix(templateKey, channel, locale);
             List<TemplateVersionSummary> versions = new ArrayList<>();
             for (Ref tag : requireGit().tagList().call()) {
-                if (!tag.getName().startsWith(prefix)) continue;
+                if (!tag.getName().startsWith(prefix))
+                    continue;
                 RevCommit commit = parseCommit(tag);
                 String version = tag.getName().substring(prefix.length());
                 versions.add(new TemplateVersionSummary(version,
@@ -406,7 +408,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             TemplateDocument document = readOnlyTemplateOnCurrentBranch(templateKey);
             return renderer.validate(document, document.sampleData());
         } catch (Exception exception) {
-            if (exception instanceof NotificationException notificationException) throw notificationException;
+            if (exception instanceof NotificationException notificationException)
+                throw notificationException;
             throw registryFailure("Unable to validate template draft", exception);
         } finally {
             lock.unlock();
@@ -421,12 +424,14 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             checkout(findDraftBranch(templateKey, draftId));
             TemplateDocument document = readOnlyTemplateOnCurrentBranch(templateKey);
             Map<String, Object> data = sampleData == null || sampleData.isEmpty()
-                    ? document.sampleData() : sampleData;
+                    ? document.sampleData()
+                    : sampleData;
             TemplateValidationResult validation = renderer.validate(document, data);
             RenderedTemplate rendered = validation.valid() ? renderer.render(document, data) : null;
             return new TemplatePreviewResult(validation, rendered, document.commitSha());
         } catch (Exception exception) {
-            if (exception instanceof NotificationException notificationException) throw notificationException;
+            if (exception instanceof NotificationException notificationException)
+                throw notificationException;
             throw registryFailure("Unable to preview template draft", exception);
         } finally {
             lock.unlock();
@@ -589,7 +594,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             invalidate(templateKey, channel, locale);
             audit(actorPublicId, status.name(), templateKey, commit.getName(), null);
         } catch (Exception exception) {
-            if (exception instanceof NotificationException notificationException) throw notificationException;
+            if (exception instanceof NotificationException notificationException)
+                throw notificationException;
             throw registryFailure("Unable to change template status", exception);
         } finally {
             lock.unlock();
@@ -597,7 +603,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private void writeContent(
-            String templateKey, TemplateContent content, TemplateStatus status, String baseCommitSha) throws IOException {
+            String templateKey, TemplateContent content, TemplateStatus status, String baseCommitSha)
+            throws IOException {
         TemplateDocument document = new TemplateDocument(templateKey, content.displayName(), content.description(),
                 content.category(), content.channel(), content.locale(), status, content.variablesSchema(),
                 content.sampleData(), content.subject(), content.htmlContent(), content.textContent(),
@@ -721,12 +728,14 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         List<String> languages = new ArrayList<>();
         languages.add(locale.substring(0, 2).toLowerCase(Locale.ROOT));
         for (String fallback : List.of("vi", "en")) {
-            if (!languages.contains(fallback)) languages.add(fallback);
+            if (!languages.contains(fallback))
+                languages.add(fallback);
         }
         for (String language : languages) {
             Path localeDirectory = safePath(workingDirectory.resolve("email").resolve(language));
             Path match = findLegacyEmailPath(templateKey, localeDirectory);
-            if (match != null) return match;
+            if (match != null)
+                return match;
         }
         throw new NotificationException("TEMPLATE_NOT_FOUND",
                 "Git email template " + templateKey + "/" + locale + " was not found",
@@ -734,11 +743,13 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private Path findLegacyEmailPath(String templateKey, Path localeDirectory) throws IOException {
-        if (!Files.isDirectory(localeDirectory, LinkOption.NOFOLLOW_LINKS)) return null;
+        if (!Files.isDirectory(localeDirectory, LinkOption.NOFOLLOW_LINKS))
+            return null;
         String alias = LEGACY_TEMPLATE_ALIASES.get(templateKey);
         if (alias != null) {
             Path aliased = safePath(localeDirectory.resolve(alias));
-            if (Files.isRegularFile(aliased, LinkOption.NOFOLLOW_LINKS)) return aliased;
+            if (Files.isRegularFile(aliased, LinkOption.NOFOLLOW_LINKS))
+                return aliased;
         }
         String fileName = templateKey.toLowerCase(Locale.ROOT) + ".html";
         try (Stream<Path> paths = Files.walk(localeDirectory)) {
@@ -751,7 +762,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
 
     private List<Path> legacyTemplatePaths() throws IOException {
         Path emailDirectory = safePath(workingDirectory.resolve("email"));
-        if (!Files.isDirectory(emailDirectory, LinkOption.NOFOLLOW_LINKS)) return List.of();
+        if (!Files.isDirectory(emailDirectory, LinkOption.NOFOLLOW_LINKS))
+            return List.of();
         try (Stream<Path> paths = Files.walk(emailDirectory)) {
             return paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                     .filter(path -> path.getFileName().toString().endsWith(".html"))
@@ -804,7 +816,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
 
     private String legacySubject(String html, String fallback) {
         Matcher matcher = HTML_TITLE.matcher(html);
-        if (!matcher.find()) return fallback;
+        if (!matcher.find())
+            return fallback;
         String subject = HtmlUtils.htmlUnescape(matcher.group(1).replaceAll("\\s+", " ").trim());
         return subject.isBlank() ? fallback : subject;
     }
@@ -814,12 +827,14 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         Matcher heading = FIRST_HEADING.matcher(html);
         if (heading.find()) {
             String text = legacyTextFragment(heading.group(1));
-            if (!text.isBlank()) parts.add(text);
+            if (!text.isBlank())
+                parts.add(text);
         }
         Matcher paragraph = FIRST_PARAGRAPH.matcher(html);
         if (paragraph.find()) {
             String text = legacyTextFragment(paragraph.group(1));
-            if (!text.isBlank() && !parts.contains(text)) parts.add(text);
+            if (!text.isBlank() && !parts.contains(text))
+                parts.add(text);
         }
         return parts.isEmpty() ? fallback : String.join("\n\n", parts);
     }
@@ -847,7 +862,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
 
     private String displayName(String templateKey) {
         String lower = templateKey.toLowerCase(Locale.ROOT).replace('_', ' ');
-        if (lower.isBlank()) return templateKey;
+        if (lower.isBlank())
+            return templateKey;
         return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 
@@ -876,7 +892,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
 
     private List<Path> manifestPaths() throws IOException {
         Path templates = safePath(workingDirectory.resolve("templates"));
-        if (!Files.exists(templates)) return List.of();
+        if (!Files.exists(templates))
+            return List.of();
         try (Stream<Path> paths = Files.walk(templates)) {
             return paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                     .filter(path -> MANIFEST.equals(path.getFileName().toString()))
@@ -987,12 +1004,13 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     private RevCommit parseCommit(Ref ref) throws IOException {
         Ref peeled = requireGit().getRepository().getRefDatabase().peel(ref);
         return parseCommit(peeled.getPeeledObjectId() == null
-                ? ref.getObjectId() : peeled.getPeeledObjectId());
+                ? ref.getObjectId()
+                : peeled.getPeeledObjectId());
     }
 
     private RevCommit parseCommit(ObjectId objectId) throws IOException {
-        try (org.eclipse.jgit.revwalk.RevWalk walk =
-                     new org.eclipse.jgit.revwalk.RevWalk(requireGit().getRepository())) {
+        try (org.eclipse.jgit.revwalk.RevWalk walk = new org.eclipse.jgit.revwalk.RevWalk(
+                requireGit().getRepository())) {
             return walk.parseCommit(objectId);
         }
     }
@@ -1003,7 +1021,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         for (Ref ref : requireGit().tagList().call()) {
             if (ref.getName().startsWith(prefix)) {
                 String suffix = ref.getName().substring(prefix.length());
-                if (suffix.matches("\\d{6}")) maximum = Math.max(maximum, Integer.parseInt(suffix));
+                if (suffix.matches("\\d{6}"))
+                    maximum = Math.max(maximum, Integer.parseInt(suffix));
             }
         }
         return "v%06d".formatted(maximum + 1);
@@ -1033,7 +1052,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private boolean matches(TemplateDocument document, TemplateSearchCriteria criteria) {
-        if (criteria == null) return true;
+        if (criteria == null)
+            return true;
         String query = criteria.query() == null ? "" : criteria.query().trim().toLowerCase(Locale.ROOT);
         boolean queryMatch = query.isEmpty()
                 || document.templateKey().toLowerCase(Locale.ROOT).contains(query)
@@ -1081,7 +1101,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             try {
                 git.fetch().setCredentialsProvider(credentials()).setTimeout(fetchTimeoutSeconds).call();
             } catch (org.eclipse.jgit.api.errors.TransportException ex) {
-                log.warn("Git fetch with configured credentials failed ({}), falling back to unauthenticated fetch...", ex.getMessage());
+                log.warn("Git fetch with configured credentials failed ({}), falling back to unauthenticated fetch...",
+                        ex.getMessage());
                 git.fetch().setCredentialsProvider(null).setTimeout(fetchTimeoutSeconds).call();
             }
         }
@@ -1140,7 +1161,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private void push() throws Exception {
-        if (remoteUri == null || remoteUri.isBlank()) return;
+        if (remoteUri == null || remoteUri.isBlank())
+            return;
         pushRef(Constants.R_HEADS + publishedBranch, Constants.R_HEADS + publishedBranch,
                 "published branch " + publishedBranch);
         try {
@@ -1165,7 +1187,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private void deleteRemoteBranch(String branch) throws Exception {
-        if (remoteUri == null || remoteUri.isBlank()) return;
+        if (remoteUri == null || remoteUri.isBlank())
+            return;
         String safeBranch = requireGitName(branch, "branch");
         String remoteRef = Constants.R_HEADS + safeBranch;
         try {
@@ -1183,7 +1206,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private void pushRef(String localRef, String remoteRef, String description) throws Exception {
-        if (remoteUri == null || remoteUri.isBlank()) return;
+        if (remoteUri == null || remoteUri.isBlank())
+            return;
         try {
             assertPushSucceeded(
                     requireGit().push()
@@ -1255,8 +1279,9 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private String safeSegment(String value) {
-        String safe = value == null ? "" : value.toLowerCase(Locale.ROOT)
-                .replaceAll("[^a-z0-9._-]", "-").replaceAll("-+", "-");
+        String safe = value == null ? ""
+                : value.toLowerCase(Locale.ROOT)
+                        .replaceAll("[^a-z0-9._-]", "-").replaceAll("-+", "-");
         if (safe.isBlank() || safe.equals(".") || safe.equals("..")) {
             throw new NotificationException("GIT_PATH_REJECTED", "Invalid Git path segment", HttpStatus.BAD_REQUEST);
         }
@@ -1287,7 +1312,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private void closeGit() {
-        if (git != null) git.close();
+        if (git != null)
+            git.close();
         git = null;
     }
 

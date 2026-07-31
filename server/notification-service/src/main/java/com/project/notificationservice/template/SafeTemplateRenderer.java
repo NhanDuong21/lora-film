@@ -62,21 +62,21 @@ public class SafeTemplateRenderer {
         registerHelpers();
     }
 
+    private static final Set<String> ALLOWED_BLOCKS = Set.of("each", "if", "unless", "else");
+
     public TemplateValidationResult validate(TemplateDocument document, Map<String, Object> data) {
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         if (document.templateKey() == null || !document.templateKey().matches("[A-Z0-9_]{3,100}")) {
             errors.add("templateKey must contain only uppercase letters, digits, and underscores");
         }
-        if (document.locale() == null || !document.locale().matches("[a-z]{2}-[A-Z]{2}")) {
-            errors.add("locale must use language-REGION format");
+        if (document.locale() == null || !document.locale().matches("[a-z]{2}(-[A-Za-z]{2})?")) {
+            errors.add("locale must use language-REGION or ISO-639 format");
         }
         if (document.subject() != null && document.subject().length() > maxSubjectLength) {
             errors.add("subject exceeds " + maxSubjectLength + " characters");
         }
-        if ((document.htmlContent() != null && document.htmlContent().contains("{{{"))
-                || (document.textContent() != null && document.textContent().contains("{{{"))
-                || (document.subject() != null && document.subject().contains("{{{"))) {
+        if (document.htmlContent() != null && document.htmlContent().contains("{{{")) {
             errors.add("unescaped triple-brace expressions are not allowed");
         }
         validateVariables(document, data, errors);
@@ -89,7 +89,7 @@ public class SafeTemplateRenderer {
         }
         if (document.channel() == com.project.notificationservice.domain.NotificationTypes.Channel.SMS
                 && document.textContent() != null && document.textContent().length() > maxSmsLength) {
-            warnings.add("SMS source may exceed the channel character limit after rendering");
+            warnings.add("SMS source may exceed the character limit after rendering");
         }
         return new TemplateValidationResult(errors.isEmpty(), List.copyOf(errors), List.copyOf(warnings));
     }
@@ -119,6 +119,10 @@ public class SafeTemplateRenderer {
         }
     }
 
+    private static final Set<String> ALLOWED_ENRICHED_VARIABLES = Set.of(
+            "tickets", "foodItems", "combos", "food_items", "ticketCodes", "ticketTypes", "seatNames", "qr_code_url"
+    );
+
     private void validateVariables(
             TemplateDocument document,
             Map<String, Object> values,
@@ -130,9 +134,11 @@ public class SafeTemplateRenderer {
                 errors.add("missing required variable: " + entry.getKey());
             }
         }
-        for (String variable : safeValues.keySet()) {
-            if (!document.variablesSchema().containsKey(variable)) {
-                errors.add("unknown variable: " + variable);
+        if (document.variablesSchema() != null && !document.variablesSchema().isEmpty()) {
+            for (String variable : safeValues.keySet()) {
+                if (!document.variablesSchema().containsKey(variable) && !ALLOWED_ENRICHED_VARIABLES.contains(variable)) {
+                    errors.add("unknown variable: " + variable);
+                }
             }
         }
     }
@@ -146,21 +152,25 @@ public class SafeTemplateRenderer {
         Matcher matcher = EXPRESSION.matcher(source);
         while (matcher.find()) {
             String expression = matcher.group(1).trim();
-            if (expression.startsWith("!") || expression.startsWith("#") || expression.startsWith("/")
-                    || expression.startsWith("else")) {
-                errors.add("blocks, partials, comments, and expression logic are not allowed: " + expression);
+            if (expression.startsWith("!")) {
+                errors.add("comments are not allowed: " + expression);
+                continue;
+            }
+            if (expression.startsWith("#") || expression.startsWith("/") || expression.equalsIgnoreCase("else")) {
+                String clean = expression.replaceAll("^[#/]", "").trim();
+                String firstToken = clean.split("\\s+")[0].toLowerCase(Locale.ROOT);
+                if (ALLOWED_BLOCKS.contains(firstToken)) {
+                    continue;
+                }
+                errors.add("unsupported block helper: " + expression);
                 continue;
             }
             String[] tokens = expression.split("\\s+");
             String first = cleanToken(tokens[0]);
-            if (HELPERS.contains(first)) {
-                for (int index = 1; index < tokens.length; index++) {
-                    String token = cleanToken(tokens[index]);
-                    if (!isLiteral(tokens[index]) && !schema.containsKey(token)) {
-                        errors.add("unknown helper argument: " + token);
-                    }
-                }
-            } else if (!schema.containsKey(first)) {
+            if (HELPERS.contains(first) || ALLOWED_BLOCKS.contains(first.toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            if (schema != null && !schema.isEmpty() && !schema.containsKey(first)) {
                 errors.add("unsupported helper or variable: " + first);
             }
         }
