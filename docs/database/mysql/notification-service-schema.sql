@@ -1,153 +1,286 @@
-CREATE TABLE `notification_templates` (
-  `id` INT PRIMARY KEY AUTO_INCREMENT
-    COMMENT 'Primary Key - Template ID',
+-- LoraFilm notification-service schema for MySQL 8.
+-- DESTRUCTIVE: this intentionally replaces the legacy notification_db.
+-- Template content is never stored in this database.
 
-  `template_code` VARCHAR(100) UNIQUE NOT NULL
-    COMMENT 'e.g., EMAIL_VERIFICATION, TICKET_CONFIRMATION',
+DROP DATABASE IF EXISTS notification_db;
+CREATE DATABASE notification_db
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_0900_ai_ci;
 
-  `title` VARCHAR(255) NOT NULL
-    COMMENT 'Tieu de email hoac tieu de thong bao push',
+CREATE USER IF NOT EXISTS 'notification_app'@'%'
+    IDENTIFIED BY 'replace-through-secret-manager';
+ALTER USER 'notification_app'@'%'
+    IDENTIFIED BY 'replace-through-secret-manager';
 
-  `content` MEDIUMTEXT NOT NULL
-    COMMENT 'Noi dung mau co chua cac bien cho',
+USE notification_db;
 
-  `channel_type` VARCHAR(30) NOT NULL
-    COMMENT 'EMAIL, SMS, PUSH_NOTIFICATION, IN_APP',
+CREATE TABLE notification_requests (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL,
+    idempotency_key VARCHAR(200) NOT NULL,
+    source_service VARCHAR(80) NOT NULL,
+    source_event_id VARCHAR(80) NULL,
+    event_type VARCHAR(100) NOT NULL,
+    correlation_id VARCHAR(80) NULL,
+    causation_id VARCHAR(80) NULL,
+    template_key VARCHAR(100) NOT NULL,
+    template_commit_sha VARCHAR(64) NULL,
+    template_version VARCHAR(40) NULL,
+    locale VARCHAR(20) NOT NULL,
+    category VARCHAR(30) NOT NULL,
+    priority VARCHAR(20) NOT NULL,
+    scheduled_at DATETIME(6) NULL,
+    expires_at DATETIME(6) NULL,
+    status VARCHAR(30) NOT NULL,
+    payload_json LONGTEXT NOT NULL,
+    is_test BIT(1) NOT NULL DEFAULT b'0',
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    version BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_request_public_id (public_id),
+    UNIQUE KEY uk_notification_request_idempotency (idempotency_key),
+    KEY ix_notification_request_source_event (source_service, source_event_id),
+    KEY ix_notification_request_status_schedule (status, scheduled_at),
+    KEY ix_notification_request_correlation (correlation_id),
+    KEY ix_notification_request_template_created (template_key, created_at),
+    CONSTRAINT ck_notification_request_payload_json CHECK (JSON_VALID(payload_json)),
+    CONSTRAINT ck_notification_request_locale CHECK (locale REGEXP '^[a-z]{2}-[A-Z]{2}$')
+) ENGINE=InnoDB;
 
-  `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
+CREATE TABLE notification_recipients (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    notification_request_id BIGINT UNSIGNED NOT NULL,
+    user_public_id VARCHAR(80) NULL,
+    recipient_type VARCHAR(30) NOT NULL,
+    email_encrypted VARCHAR(1000) NULL,
+    phone_encrypted VARCHAR(1000) NULL,
+    web_push_subscription_encrypted VARCHAR(4000) NULL,
+    locale VARCHAR(20) NOT NULL,
+    timezone VARCHAR(60) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_notification_recipient_request (notification_request_id),
+    KEY ix_notification_recipient_user (user_public_id),
+    CONSTRAINT fk_notification_recipient_request
+        FOREIGN KEY (notification_request_id) REFERENCES notification_requests (id)
+) ENGINE=InnoDB;
 
-  `version` INT NOT NULL DEFAULT 0
-    COMMENT 'Optimistic locking version',
+CREATE TABLE notification_deliveries (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL,
+    notification_request_id BIGINT UNSIGNED NOT NULL,
+    notification_recipient_id BIGINT UNSIGNED NOT NULL,
+    channel VARCHAR(20) NOT NULL,
+    provider VARCHAR(50) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    provider_message_id VARCHAR(200) NULL,
+    failure_category VARCHAR(40) NULL,
+    failure_code VARCHAR(80) NULL,
+    failure_message VARCHAR(500) NULL,
+    attempt_count INT NOT NULL DEFAULT 0,
+    next_retry_at DATETIME(6) NULL,
+    sent_at DATETIME(6) NULL,
+    delivered_at DATETIME(6) NULL,
+    failed_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    version BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_delivery_public_id (public_id),
+    KEY ix_notification_delivery_request (notification_request_id),
+    KEY ix_notification_delivery_recipient (notification_recipient_id),
+    KEY ix_notification_delivery_worker (status, next_retry_at, created_at),
+    KEY ix_notification_delivery_provider_status (provider, status),
+    CONSTRAINT fk_notification_delivery_request
+        FOREIGN KEY (notification_request_id) REFERENCES notification_requests (id),
+    CONSTRAINT fk_notification_delivery_recipient
+        FOREIGN KEY (notification_recipient_id) REFERENCES notification_recipients (id),
+    CONSTRAINT ck_notification_delivery_attempt_count CHECK (attempt_count >= 0)
+) ENGINE=InnoDB;
 
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE notification_delivery_attempts (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    notification_delivery_id BIGINT UNSIGNED NOT NULL,
+    attempt_number INT NOT NULL,
+    provider VARCHAR(50) NOT NULL,
+    outcome VARCHAR(30) NOT NULL,
+    failure_category VARCHAR(40) NULL,
+    failure_code VARCHAR(80) NULL,
+    failure_message VARCHAR(500) NULL,
+    duration_ms BIGINT NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_attempt_number
+        (notification_delivery_id, attempt_number),
+    KEY ix_notification_attempt_created (created_at),
+    CONSTRAINT fk_notification_attempt_delivery
+        FOREIGN KEY (notification_delivery_id) REFERENCES notification_deliveries (id),
+    CONSTRAINT ck_notification_attempt_number CHECK (attempt_number > 0),
+    CONSTRAINT ck_notification_attempt_duration CHECK (duration_ms >= 0)
+) ENGINE=InnoDB;
 
-  `updated_at` TIMESTAMP NOT NULL
-    DEFAULT CURRENT_TIMESTAMP
-    ON UPDATE CURRENT_TIMESTAMP
-);
+CREATE TABLE notification_event_inbox (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    source_service VARCHAR(80) NOT NULL,
+    source_event_id VARCHAR(80) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version INT NOT NULL,
+    payload_json LONGTEXT NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    received_at DATETIME(6) NOT NULL,
+    processed_at DATETIME(6) NULL,
+    failure_message VARCHAR(500) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_inbox_source_event
+        (source_service, source_event_id),
+    KEY ix_notification_inbox_status_received (status, received_at),
+    CONSTRAINT ck_notification_inbox_payload_json CHECK (JSON_VALID(payload_json)),
+    CONSTRAINT ck_notification_inbox_version CHECK (event_version > 0)
+) ENGINE=InnoDB;
 
-CREATE TABLE `notification_logs` (
-  `id` BIGINT PRIMARY KEY AUTO_INCREMENT
-    COMMENT 'Primary Key - Log ID',
+CREATE TABLE notification_outbox (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    event_id CHAR(36) NOT NULL,
+    aggregate_public_id VARCHAR(80) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    payload_json LONGTEXT NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    attempt_count INT NOT NULL DEFAULT 0,
+    next_retry_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    published_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_outbox_event_id (event_id),
+    KEY ix_notification_outbox_worker (status, next_retry_at, created_at),
+    CONSTRAINT ck_notification_outbox_payload_json CHECK (JSON_VALID(payload_json))
+) ENGINE=InnoDB;
 
-  `template_code` VARCHAR(100) NULL
-    COMMENT 'Co the null neu la thong bao tu do khong dung mau',
+CREATE TABLE notification_preferences (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_public_id VARCHAR(80) NOT NULL,
+    channel VARCHAR(20) NOT NULL,
+    category VARCHAR(30) NOT NULL,
+    enabled BIT(1) NOT NULL DEFAULT b'1',
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_preference_user_channel_category
+        (user_public_id, channel, category)
+) ENGINE=InnoDB;
 
-  `event_id` VARCHAR(150) NULL
-    COMMENT 'Idempotency key cho Kafka/event redelivery',
+CREATE TABLE notification_suppressions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    destination_hash CHAR(64) NOT NULL,
+    channel VARCHAR(20) NOT NULL,
+    reason VARCHAR(80) NOT NULL,
+    source VARCHAR(80) NOT NULL,
+    expires_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_suppression_destination
+        (destination_hash, channel),
+    KEY ix_notification_suppression_expiry (expires_at)
+) ENGINE=InnoDB;
 
-  `idempotency_key` VARCHAR(150) NULL
-    COMMENT 'Idempotency key cho Internal REST retry',
+CREATE TABLE in_app_notifications (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL,
+    notification_delivery_id BIGINT UNSIGNED NOT NULL,
+    user_public_id VARCHAR(80) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    body VARCHAR(2000) NOT NULL,
+    category VARCHAR(40) NOT NULL,
+    deep_link VARCHAR(500) NULL,
+    read_at DATETIME(6) NULL,
+    expires_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_in_app_public_id (public_id),
+    UNIQUE KEY uk_in_app_delivery (notification_delivery_id),
+    KEY ix_in_app_user_created (user_public_id, created_at),
+    KEY ix_in_app_user_unread (user_public_id, read_at),
+    CONSTRAINT fk_in_app_delivery
+        FOREIGN KEY (notification_delivery_id) REFERENCES notification_deliveries (id)
+) ENGINE=InnoDB;
 
-  `user_id` BIGINT NOT NULL
-    COMMENT 'Logical Ref sang users.account_id cua User Service',
+CREATE TABLE web_push_subscriptions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL,
+    user_public_id VARCHAR(80) NOT NULL,
+    endpoint_encrypted VARCHAR(3000) NOT NULL,
+    p256dh_encrypted VARCHAR(1000) NOT NULL,
+    auth_encrypted VARCHAR(1000) NOT NULL,
+    user_agent_hash CHAR(64) NULL,
+    active BIT(1) NOT NULL DEFAULT b'1',
+    expires_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_web_push_public_id (public_id),
+    KEY ix_web_push_user_active (user_public_id, active)
+) ENGINE=InnoDB;
 
-  `recipient` VARCHAR(150) NULL
-    COMMENT 'Email, phone number, device token. NULL chi duoc phep voi IN_APP',
+CREATE TABLE notification_audit_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    actor_public_id VARCHAR(80) NOT NULL,
+    action VARCHAR(80) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_public_id VARCHAR(150) NOT NULL,
+    metadata_json TEXT NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_notification_audit_target
+        (target_type, target_public_id, created_at),
+    KEY ix_notification_audit_actor (actor_public_id, created_at)
+) ENGINE=InnoDB;
 
-  `channel_type` VARCHAR(30) NOT NULL
-    COMMENT 'EMAIL, SMS, PUSH_NOTIFICATION, IN_APP',
+CREATE TABLE notification_scheduled_jobs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL,
+    notification_request_id BIGINT UNSIGNED NULL,
+    job_type VARCHAR(80) NOT NULL,
+    schedule_expression VARCHAR(120) NULL,
+    run_at DATETIME(6) NULL,
+    status VARCHAR(30) NOT NULL,
+    lock_owner VARCHAR(100) NULL,
+    lock_until DATETIME(6) NULL,
+    last_run_at DATETIME(6) NULL,
+    next_run_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_scheduled_job_public_id (public_id),
+    KEY ix_notification_scheduled_job_worker (status, next_run_at, lock_until),
+    CONSTRAINT fk_notification_job_request
+        FOREIGN KEY (notification_request_id) REFERENCES notification_requests (id)
+        ON DELETE SET NULL
+) ENGINE=InnoDB;
 
-  `provider_name` VARCHAR(100) NULL
-    COMMENT 'SMTP, Firebase, Twilio',
+CREATE TABLE notification_dead_letters (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    notification_delivery_id BIGINT UNSIGNED NOT NULL,
+    reason VARCHAR(80) NOT NULL,
+    failure_message VARCHAR(500) NULL,
+    reprocess_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME(6) NOT NULL,
+    reprocessed_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_dead_letter_delivery (notification_delivery_id),
+    KEY ix_notification_dead_letter_created (created_at),
+    CONSTRAINT fk_notification_dead_letter_delivery
+        FOREIGN KEY (notification_delivery_id) REFERENCES notification_deliveries (id),
+    CONSTRAINT ck_notification_dead_letter_reprocess_count
+        CHECK (reprocess_count >= 0)
+) ENGINE=InnoDB;
 
-  `provider_message_id` VARCHAR(255) NULL
-    COMMENT 'Message ID tra ve tu provider',
+-- Operational development data only; no template bodies, subjects, schemas, or samples.
+INSERT INTO notification_preferences (
+    user_public_id, channel, category, enabled, updated_at
+) VALUES
+    ('dev-customer-marketing-opt-out', 'EMAIL', 'MARKETING', b'0', UTC_TIMESTAMP(6)),
+    ('dev-customer-marketing-opt-out', 'IN_APP', 'MARKETING', b'0', UTC_TIMESTAMP(6)),
+    ('dev-customer-transactional', 'EMAIL', 'MARKETING', b'1', UTC_TIMESTAMP(6));
 
-  `request_source` VARCHAR(100) NULL
-    COMMENT 'Service gui request',
-
-  `reference_type` VARCHAR(50) NULL
-    COMMENT 'BOOKING, PAYMENT, ORDER',
-
-  `reference_id` VARCHAR(100) NULL
-    COMMENT 'ID cua nghiep vu',
-
-  `actual_title` VARCHAR(255) NULL
-    COMMENT 'Tieu de thuc te sau khi render template',
-
-  `actual_content` MEDIUMTEXT NOT NULL
-    COMMENT 'Noi dung thuc te sau khi render template',
-
-  `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING'
-    COMMENT 'PENDING, PROCESSING, SENT, FAILED, RETRYING, CANCELLED',
-
-  `failure_code` VARCHAR(100) NULL
-    COMMENT 'Ma loi phan loai retryable/non-retryable',
-
-  `error_message` TEXT NULL
-    COMMENT 'Chi tiet loi tra ve tu provider',
-
-  `retry_count` INT NOT NULL DEFAULT 0,
-
-  `max_retries` INT NOT NULL DEFAULT 3,
-
-  `last_retry_at` TIMESTAMP NULL,
-
-  `next_retry_at` TIMESTAMP NULL,
-
-  `sent_at` TIMESTAMP NULL
-    COMMENT 'Provider accepted send request',
-
-  `delivered_at` TIMESTAMP NULL
-    COMMENT 'Provider confirmed delivery',
-
-  `is_read` BOOLEAN NOT NULL DEFAULT FALSE
-    COMMENT 'Chi ap dung cho IN_APP',
-
-  `read_at` TIMESTAMP NULL
-    COMMENT 'Chi ap dung cho IN_APP',
-
-  `version` INT NOT NULL DEFAULT 0
-    COMMENT 'Optimistic locking version',
-
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  `updated_at` TIMESTAMP NOT NULL
-    DEFAULT CURRENT_TIMESTAMP
-    ON UPDATE CURRENT_TIMESTAMP,
-
-  CONSTRAINT `fk_notification_template`
-    FOREIGN KEY (`template_code`)
-    REFERENCES `notification_templates` (`template_code`)
-    ON DELETE RESTRICT
-    ON UPDATE RESTRICT,
-
-  CONSTRAINT `uk_notification_logs_event_id`
-    UNIQUE (`event_id`),
-
-  CONSTRAINT `uk_notification_logs_idempotency_key`
-    UNIQUE (`idempotency_key`)
-);
-
-CREATE INDEX `idx_notification_retry`
-ON `notification_logs`
-(`status`, `next_retry_at`);
-
-CREATE INDEX `idx_notification_provider`
-ON `notification_logs`
-(`provider_name`, `provider_message_id`);
-
-CREATE INDEX `idx_notification_reference`
-ON `notification_logs`
-(`reference_type`, `reference_id`);
-
-CREATE INDEX `idx_notification_reference_source`
-ON `notification_logs`
-(`request_source`, `reference_type`, `reference_id`);
-
-CREATE INDEX `idx_notification_user_channel_status_created`
-ON `notification_logs`
-(`user_id`, `channel_type`, `status`, `created_at`);
-
-CREATE INDEX `idx_notification_user_read`
-ON `notification_logs`
-(`user_id`, `is_read`, `created_at`);
-
-CREATE INDEX `idx_notification_status_created`
-ON `notification_logs`
-(`status`, `created_at`);
-
-CREATE INDEX `idx_notification_template_created`
-ON `notification_logs`
-(`template_code`, `created_at`);
+GRANT SELECT, INSERT, UPDATE, DELETE
+    ON notification_db.* TO 'notification_app'@'%';
+FLUSH PRIVILEGES;

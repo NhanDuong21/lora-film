@@ -4,6 +4,7 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
 import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.pricing.util.SeatPriceAllocation;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
 import com.lorafilm.movie.seat.service.SeatService;
@@ -150,15 +151,19 @@ public class CustomerShowtimeService {
 
     private CustomerSeatLayoutResponse.CustomerSeat toCustomerSeat(
             Seat seat, ShowtimePrice snapshot, boolean blocked) {
-        BigDecimal price = snapshot == null ? null : snapshot.getPrice();
-        boolean priced = price != null && price.signum() > 0;
+        BigDecimal configuredPrice = snapshot == null ? null : snapshot.getPrice();
+        boolean priced = configuredPrice != null && configuredPrice.signum() > 0;
+        BigDecimal allocatedPrice = priced
+                ? SeatPriceAllocation.perPhysicalSeat(
+                        seat.getSeatType().getCode(), configuredPrice)
+                : null;
         boolean sellable = seat.getStatus() == SeatStatus.ACTIVE && !blocked && priced;
         return new CustomerSeatLayoutResponse.CustomerSeat(
                 seat.getId(),
                 seat.getPublicId(), seat.getSeatCode(), seat.getRowLabel(), seat.getSeatNumber(),
                 seat.getPositionRow(), seat.getPositionColumn(),
                 seat.getSeatType().getCode().name(), seat.getSeatType().getName(),
-                priced ? price : null, snapshot == null ? null : snapshot.getCurrency(),
+                allocatedPrice, snapshot == null ? null : snapshot.getCurrency(),
                 seat.getStatus().name(), blocked, priced, sellable,
                 seat.getPairGroup());
     }

@@ -68,6 +68,10 @@ export const changePassword = async (oldPassword, newPassword) =>
 export const requestChangeEmail = async (newEmail, password) =>
     (await apiClient.post("/api/auth/change-email/request", { newEmail, currentPassword: password })).data;
 
+// Compatibility wrapper for the existing admin account screen. The backend owns
+// the OTP verification workflow; callers receive the request response unchanged.
+export const changeEmail = requestChangeEmail;
+
 export const verifyChangeEmail = async (otp) =>
     (await apiClient.post("/api/auth/change-email/verify", { otp })).data;
 

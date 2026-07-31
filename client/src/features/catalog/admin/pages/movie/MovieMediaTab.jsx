@@ -41,9 +41,12 @@ export default function MovieMediaTab({ movie, onUpdate }) {
   };
 
   const handleRemove = async (id) => {
-    const shouldRemove = triggerConfirm 
-      ? await triggerConfirm('Xóa hình ảnh/video này?')
-      : window.confirm('Xóa hình ảnh/video này?');
+    const shouldRemove = await triggerConfirm?.({
+      title: 'Xóa nội dung hình ảnh?',
+      message: 'Hình ảnh hoặc video này sẽ không còn hiển thị trong thông tin phim.',
+      confirmLabel: 'Xóa nội dung',
+      tone: 'danger',
+    });
       
     if (!shouldRemove) return;
     
@@ -60,7 +63,10 @@ export default function MovieMediaTab({ movie, onUpdate }) {
     <div className="space-y-6">
       <AsyncState isLoading={isLoading} error={error} onRetry={reload}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-zinc-100">Danh sách hình ảnh/video</h3>
+          <div>
+            <h3 className="text-base font-bold text-zinc-100">Poster, hình ảnh và trailer</h3>
+            <p className="mt-1 text-xs text-zinc-500">Đặt poster chính để phim đủ điều kiện phát hành.</p>
+          </div>
           {!showAdd && (
             <button
               onClick={() => setShowAdd(true)}
@@ -132,11 +138,24 @@ export default function MovieMediaTab({ movie, onUpdate }) {
               return acc;
             }, {})
           ).map(([type, items]) => (
-            <div key={type} className="space-y-4">
-              <h4 className="text-xs font-black uppercase tracking-widest text-amber-500 border-b border-zinc-800 pb-2">
-                {getMediaTypeLabel(type)}
-              </h4>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+            <details
+              key={type}
+              open={type === 'POSTER' || type === 'TRAILER' || type === 'TEASER'}
+              className="group rounded-xl border border-zinc-800 bg-zinc-950/30"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                <span className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-widest text-orange-300">
+                    {getMediaTypeLabel(type)}
+                  </span>
+                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-500">
+                    {items.length} mục
+                  </span>
+                </span>
+                <span className="text-xs text-zinc-600 transition group-open:rotate-180">⌄</span>
+              </summary>
+              <div className="border-t border-zinc-800 p-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
                 {items.map(m => {
                   const isVideo = m.mediaType === 'TRAILER' || m.mediaType === 'TEASER';
                   const isPoster = m.mediaType === 'POSTER';
@@ -199,8 +218,9 @@ export default function MovieMediaTab({ movie, onUpdate }) {
                     </div>
                   );
                 })}
+                </div>
               </div>
-            </div>
+            </details>
           ))}
         </div>
         {mediaList.length === 0 && !showAdd && (

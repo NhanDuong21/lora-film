@@ -1,6 +1,8 @@
-// eslint-disable-next-line no-unused-vars
-import React from 'react';
 import { Settings } from 'lucide-react';
+import {
+  SCREEN_TYPE_LABELS,
+  SOUND_TYPE_LABELS,
+} from '@/features/facilities/admin/utils/facilityPresentation';
 
 export default function RoomForm({
   roomName,
@@ -11,105 +13,111 @@ export default function RoomForm({
   setSoundType,
   cleaningBuffer,
   setCleaningBuffer,
-  status,
-  setStatus,
   capacity,
-  availableStatuses,
-  isCreateMode = false
+  isCreateMode = false,
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
-        <Settings className="w-4 h-4 text-brand-orange" />
-        <h3 className="font-bold text-xs text-white uppercase tracking-wider">Cấu hình phòng</h3>
-      </div>
-
-      {/* Room Name */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Tên phòng chiếu</label>
-        <input
-          type="text"
-          placeholder="Ví dụ: Phòng Chiếu 1, Room 01..."
-          value={roomName}
-          onChange={(e) => setRoomName(e.target.value)}
-          className="bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none transition-colors"
-        />
-      </div>
-
-      {/* Screen Type */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Định dạng màn hình</label>
-        <select
-          value={screenType}
-          onChange={(e) => setScreenType(e.target.value)}
-          className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none cursor-pointer"
-        >
-          <option value="STANDARD">STANDARD (Tiêu chuẩn)</option>
-          <option value="IMAX">IMAX (Siêu cực đại)</option>
-          <option value="4DX">4DX (Mô phỏng chuyển động)</option>
-          <option value="SCREENX">SCREENX (Màn chiếu 3 mặt)</option>
-        </select>
-      </div>
-
-      {/* Sound Type */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Định dạng âm thanh</label>
-        <select
-          value={soundType}
-          onChange={(e) => setSoundType(e.target.value)}
-          className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none cursor-pointer"
-        >
-          <option value="STANDARD">STANDARD (Hệ thống thường)</option>
-          <option value="DOLBY_ATMOS">DOLBY ATMOS (Âm thanh vòm)</option>
-        </select>
-      </div>
-
-      {/* Cleaning Buffer */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Thời gian dọn dẹp (phút)</label>
-        <input
-          type="number"
-          min="0"
-          max="120"
-          value={cleaningBuffer}
-          onChange={(e) => setCleaningBuffer(parseInt(e.target.value) || 0)}
-          className="bg-zinc-950 border border-zinc-800 focus:border-brand-orange rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none transition-colors"
-        />
-      </div>
-
-      {/* Auto-Capacity display (Read-Only) */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
-          <span>Tổng số ghế (Sức chứa)</span>
-          <span className="bg-brand-orange/20 text-brand-orange px-1.5 py-0.5 rounded text-[8px] tracking-widest font-black uppercase">TỰ ĐỘNG</span>
-        </label>
-        <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-400 select-none flex justify-between items-center">
-          <span>{capacity} ghế</span>
-          <span className="text-[9px] text-zinc-500 font-medium">Được tính toán tự động từ Sơ đồ ghế</span>
+      <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+        <Settings className="h-4 w-4 text-brand-orange" />
+        <div>
+          <h3 className="text-sm font-black uppercase tracking-wider text-white">
+            Cấu hình phục vụ
+          </h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Các thông tin nhân viên vận hành cần biết về phòng chiếu.
+          </p>
         </div>
       </div>
 
-      {/* Room Status */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Trạng thái phát hành</label>
-        {isCreateMode ? (
-          <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-500 select-none">
-            Trạng thái mặc định: Bản nháp (DRAFT)
-          </div>
-        ) : (
+        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+          Tên phòng chiếu
+        </label>
+        <input
+          type="text"
+          required
+          placeholder="Ví dụ: Phòng 01, Phòng IMAX"
+          value={roomName}
+          onChange={(event) => setRoomName(event.target.value)}
+          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-200 outline-none transition-colors focus:border-brand-orange"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Công nghệ màn hình
+          </label>
           <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-zinc-200 outline-none cursor-pointer"
+            value={screenType}
+            onChange={(event) => setScreenType(event.target.value)}
+            className="cursor-pointer rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-200 outline-none focus:border-brand-orange"
           >
-            {availableStatuses?.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
+            {Object.entries(SCREEN_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
             ))}
           </select>
-        )}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Hệ thống âm thanh
+          </label>
+          <select
+            value={soundType}
+            onChange={(event) => setSoundType(event.target.value)}
+            className="cursor-pointer rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-200 outline-none focus:border-brand-orange"
+          >
+            {Object.entries(SOUND_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+          Thời gian dọn phòng giữa hai suất
+        </label>
+        <div className="relative">
+          <input
+            type="number"
+            min="0"
+            max="120"
+            value={cleaningBuffer}
+            onChange={(event) => setCleaningBuffer(Number.parseInt(event.target.value, 10) || 0)}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 pr-16 text-sm font-semibold text-zinc-200 outline-none transition-colors focus:border-brand-orange"
+          />
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-500">
+            phút
+          </span>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Khoảng thời gian này được chừa tự động khi xếp lịch.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              Sức chứa hiện tại
+            </p>
+            <p className="mt-1 text-lg font-black text-white">{capacity} ghế</p>
+          </div>
+          <span className="rounded-lg bg-brand-orange/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-brand-orange">
+            Tính từ sơ đồ ghế
+          </span>
+        </div>
+      </div>
+
+      {isCreateMode && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-200">
+          Phòng mới được lưu ở trạng thái <strong>đang thiết lập</strong>. Hãy hoàn
+          thiện sơ đồ ghế rồi dùng tác vụ “Đưa vào phục vụ”.
+        </div>
+      )}
     </div>
   );
 }

@@ -5,10 +5,10 @@ const UNKNOWN_PRESENTATION = Object.freeze({
 });
 
 export const PREVIEW_STATUS_PRESENTATION = Object.freeze({
-  GENERATING: { label: 'Đang tạo bản xem trước', tone: 'blue' },
-  PREVIEWED: { label: 'Sẵn sàng rà soát', tone: 'green' },
-  APPLYING: { label: 'Đang áp dụng', tone: 'blue' },
-  APPLIED: { label: 'Đã áp dụng', tone: 'violet' },
+  GENERATING: { label: 'Đang xếp lịch', tone: 'blue' },
+  PREVIEWED: { label: 'Chờ kiểm tra', tone: 'green' },
+  APPLYING: { label: 'Đang tạo suất chiếu', tone: 'blue' },
+  APPLIED: { label: 'Đã tạo suất chiếu', tone: 'violet' },
   EXPIRED: { label: 'Đã hết hạn', tone: 'amber' },
   FAILED: { label: 'Thất bại', tone: 'red' },
   CANCELLED: { label: 'Đã hủy', tone: 'zinc' },
@@ -17,12 +17,12 @@ export const PREVIEW_STATUS_PRESENTATION = Object.freeze({
 export const CANDIDATE_VALIDATION_PRESENTATION = Object.freeze({
   VALID: {
     label: 'Hợp lệ',
-    description: 'Ứng viên đã vượt qua kiểm tra tại thời điểm tạo bản xem trước.',
+    description: 'Suất đề xuất đã vượt qua kiểm tra tại thời điểm tạo lịch.',
     tone: 'green',
   },
   REJECTED: {
     label: 'Không hợp lệ',
-    description: 'Ứng viên không vượt qua kiểm tra khi tạo bản xem trước.',
+    description: 'Suất đề xuất chưa vượt qua kiểm tra khi tạo lịch.',
     tone: 'red',
   },
 });
@@ -30,33 +30,33 @@ export const CANDIDATE_VALIDATION_PRESENTATION = Object.freeze({
 export const CANDIDATE_APPLY_PRESENTATION = Object.freeze({
   PENDING: {
     label: 'Đang chờ',
-    description: 'Ứng viên đang chờ lựa chọn hoặc áp dụng.',
+    description: 'Suất đề xuất đang chờ bạn lựa chọn.',
     tone: 'blue',
   },
   CREATED: {
     label: 'Đã tạo suất chiếu',
-    description: 'Một suất chiếu chính thức đã được tạo từ ứng viên này.',
+    description: 'Một suất chiếu đang soạn đã được tạo từ đề xuất này.',
     tone: 'green',
   },
   SKIPPED: {
     label: 'Không được chọn',
-    description: 'Ứng viên không được chọn khi bản xem trước được áp dụng.',
+    description: 'Suất đề xuất không được chọn khi tạo lịch.',
     tone: 'zinc',
   },
   CONFLICT: {
     label: 'Xung đột',
-    description: 'Ứng viên gặp xung đột trong quá trình áp dụng.',
+    description: 'Suất đề xuất gặp xung đột khi tạo lịch.',
     tone: 'red',
   },
   FAILED: {
     label: 'Thất bại',
-    description: 'Không thể tạo suất chiếu từ ứng viên này.',
+    description: 'Không thể tạo suất chiếu từ đề xuất này.',
     tone: 'red',
   },
 });
 
 export const SHOWTIME_STATUS_PRESENTATION = Object.freeze({
-  DRAFT: { label: 'Bản nháp', tone: 'zinc' },
+  DRAFT: { label: 'Đang soạn', tone: 'zinc' },
   OPEN_FOR_BOOKING: { label: 'Đang mở bán', tone: 'green' },
   CLOSED: { label: 'Đã đóng bán', tone: 'amber' },
   CANCELLED: { label: 'Đã hủy', tone: 'red' },
@@ -106,16 +106,16 @@ export const BATCH_STATUS_REASON_PRESENTATION = Object.freeze({
     label: 'Chưa có bảng giá đầy đủ',
   },
   PRICE_POLICY_NOT_FOUND: {
-    label: 'Không có chính sách giá hiệu lực',
+    label: 'Chưa có bảng giá đang áp dụng',
   },
   PRICING_AMBIGUOUS: {
-    label: 'Có nhiều quy tắc giá cùng mức ưu tiên',
+    label: 'Có nhiều mức giá phù hợp cùng lúc',
   },
   PRICE_POLICY_OVERLAP: {
-    label: 'Các quy tắc giá đang bị chồng lấn',
+    label: 'Có các mức giá bị trùng điều kiện',
   },
   INVALID_CINEMA_TIMEZONE: {
-    label: 'Múi giờ của rạp không hợp lệ',
+    label: 'Cấu hình giờ của rạp chưa đúng',
   },
   SHOWTIME_OUTSIDE_RELEASE_WINDOW: {
     label: 'Phim nằm ngoài thời gian được phép chiếu',
@@ -124,16 +124,16 @@ export const BATCH_STATUS_REASON_PRESENTATION = Object.freeze({
     label: 'Phim không khả dụng để xếp lịch',
   },
   MOVIE_VERSION_NOT_ACTIVE: {
-    label: 'Phiên bản phim không hoạt động',
+    label: 'Định dạng phim không còn hoạt động',
   },
   CINEMA_NOT_ACTIVE: {
-    label: 'Rạp chiếu phim không hoạt động',
+    label: 'Rạp đang tạm ngừng hoạt động',
   },
   AUDITORIUM_NOT_ACTIVE: {
-    label: 'Phòng chiếu không hoạt động',
+    label: 'Phòng chiếu đang tạm ngừng hoạt động',
   },
   CINEMA_OPERATING_HOURS_NOT_CONFIGURED: {
-    label: 'Rạp chưa cấu hình giờ hoạt động',
+    label: 'Rạp chưa thiết lập giờ hoạt động',
   },
   SHOWTIME_OUTSIDE_OPERATING_HOURS: {
     label: 'Suất chiếu nằm ngoài giờ hoạt động của rạp',

@@ -1,40 +1,63 @@
 package com.project.notificationservice.controller;
 
-import com.project.notificationservice.common.ApiResponse;
-import com.project.notificationservice.dto.request.SendNotificationRequest;
-import com.project.notificationservice.dto.response.SendNotificationResponse;
-import com.project.notificationservice.service.NotificationService;
+import com.project.notificationservice.api.ApiResponse;
+import com.project.notificationservice.service.NotificationApplicationService;
+import com.project.notificationservice.service.NotificationApplicationService.RequestDetails;
+import com.project.notificationservice.service.NotificationCommands.AcceptedNotification;
+import com.project.notificationservice.service.NotificationCommands.CreateNotificationCommand;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
+@Validated
 @RestController
-@RequestMapping("/internal/notifications")
+@RequestMapping("/api/v1/internal/notifications")
 public class InternalNotificationController {
 
-    private final NotificationService service;
+    private final NotificationApplicationService service;
 
-    public InternalNotificationController(NotificationService service) {
+    public InternalNotificationController(NotificationApplicationService service) {
         this.service = service;
     }
 
-    @PostMapping("/send")
-    public ResponseEntity<ApiResponse<SendNotificationResponse>> sendNotification(
-            @Valid @RequestBody SendNotificationRequest request) {
-        SendNotificationResponse response = service.sendNotification(request);
+    @PostMapping
+    public ResponseEntity<ApiResponse<AcceptedNotification>> create(
+            @Valid @RequestBody CreateNotificationCommand command) {
+        AcceptedNotification accepted = service.accept(command);
+        return ResponseEntity.status(accepted.idempotent() ? HttpStatus.OK : HttpStatus.ACCEPTED)
+                .body(ApiResponse.accepted(accepted));
+    }
 
-        if (Boolean.TRUE.equals(response.getIdempotent())) {
-            ApiResponse<SendNotificationResponse> apiResponse = ApiResponse.success(
-                    "Notification request was already processed", response);
-            return ResponseEntity.ok(apiResponse);
-        }
+    @PostMapping("/batch")
+    public ResponseEntity<ApiResponse<List<AcceptedNotification>>> batch(
+            @RequestBody @Size(min = 1, max = 100) List<@Valid CreateNotificationCommand> commands) {
+        return ResponseEntity.accepted().body(ApiResponse.accepted(commands.stream()
+                .map(service::accept).toList()));
+    }
 
-        ApiResponse<SendNotificationResponse> apiResponse = ApiResponse.success(
-                "Notification sent successfully", response);
-        return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
+    @GetMapping("/{publicId}")
+    public ApiResponse<RequestDetails> get(@PathVariable String publicId) {
+        return ApiResponse.success(service.get(publicId));
+    }
+
+    @GetMapping("/{publicId}/deliveries")
+    public ApiResponse<List<NotificationApplicationService.DeliveryDetails>> deliveries(
+            @PathVariable String publicId) {
+        return ApiResponse.success(service.get(publicId).deliveries());
+    }
+
+    @PostMapping("/{publicId}/cancel")
+    public ApiResponse<RequestDetails> cancel(@PathVariable String publicId) {
+        return ApiResponse.success(service.cancel(publicId));
     }
 }

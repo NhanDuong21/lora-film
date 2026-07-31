@@ -24,11 +24,11 @@ export default function MovieTmdbQueuePanel({
         </div>
         <div>
           <h2 id="tmdb-queue-title" className="text-sm font-black uppercase tracking-wide text-sky-200">
-            Xử lý hàng đợi TMDB
+            Xử lý phim nhập tự động
           </h2>
           <p className="mt-1 max-w-4xl text-xs leading-5 text-zinc-400">
-            Máy chủ phân loại lại theo ngày phát hành. Phim tương lai mới được duyệt sang Sắp chiếu;
-            phim đã phát hành chỉ được đưa vào Không hoạt động. Phim thiếu ngày vẫn chờ admin xem xét.
+            Hệ thống chia phim theo ngày khởi chiếu để bạn xử lý nhanh. Phim sắp phát hành có thể duyệt sang “Sắp chiếu”;
+            phim đã quá ngày sẽ được đưa sang “Tạm ngừng”. Phim thiếu ngày cần mở hồ sơ để kiểm tra.
           </p>
         </div>
       </div>
@@ -43,22 +43,22 @@ export default function MovieTmdbQueuePanel({
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <QueueBucket
           icon={<Clock3 className="h-4 w-4" />}
-          label="Phim tương lai"
-          description="Có thể duyệt sang Sắp chiếu"
+          label="Phim sắp phát hành"
+          description="Có thể chuyển sang nhóm Sắp chiếu"
           count={future}
           tone="emerald"
-          actionLabel={future ? `Duyệt ${futureBatch} phim` : 'Không có phim tương lai'}
+          actionLabel={future ? `Duyệt ${futureBatch} phim` : 'Không có phim sắp phát hành'}
           disabled={isBreakdownLoading || future === 0 || approval.isPending || archive.isPending}
           isPending={approval.isPending}
           onAction={onApprove}
         />
         <QueueBucket
           icon={<Archive className="h-4 w-4" />}
-          label="Phim đã phát hành"
-          description="Đưa vào Không hoạt động"
+          label="Đã quá ngày phát hành"
+          description="Chuyển sang trạng thái Tạm ngừng"
           count={old}
           tone="amber"
-          actionLabel={old ? `Lưu trữ ${oldBatch} phim` : 'Không có phim cũ'}
+          actionLabel={old ? `Tạm ngừng ${oldBatch} phim` : 'Không có phim đã quá ngày'}
           disabled={isBreakdownLoading || old === 0 || approval.isPending || archive.isPending}
           isPending={archive.isPending}
           onAction={onArchive}
@@ -66,13 +66,13 @@ export default function MovieTmdbQueuePanel({
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
           <div className="flex items-center gap-2 text-zinc-300">
             <AlertTriangle className="h-4 w-4 text-zinc-400" />
-            <span className="text-xs font-black uppercase tracking-wide">Thiếu ngày phát hành</span>
+            <span className="text-xs font-black uppercase tracking-wide">Chưa có ngày khởi chiếu</span>
           </div>
           <p className="mt-2 text-2xl font-black text-zinc-100">
             {isBreakdownLoading ? '—' : undated}
           </p>
           <p className="mt-1 text-xs leading-5 text-zinc-500">
-            Không tự động chuyển trạng thái; cần mở Xem xét để bổ sung quyết định.
+            Không tự động chuyển trạng thái; cần mở hồ sơ để bổ sung quyết định.
           </p>
         </div>
       </div>

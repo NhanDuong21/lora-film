@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
-import { 
-  ArrowLeft, RefreshCw, LayoutGrid, Settings, Wrench
+import { useEffect, useState } from 'react';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  LayoutGrid,
+  RefreshCw,
+  Settings,
+  Wrench,
 } from 'lucide-react';
 import useAuditoriumDetail from '../hooks/useAuditoriumDetail';
-import { LoadingState, ErrorState } from '@/components/common/ui/uiKit';
-
+import { ErrorState, LoadingState } from '@/components/common/ui/uiKit';
+import { getAuditoriumStatus } from '../utils/facilityPresentation';
 import AuditoriumOverviewTab from './auditorium/AuditoriumOverviewTab';
 import AuditoriumMaintenanceTab from './auditorium/AuditoriumMaintenanceTab';
 import AuditoriumSeatLayoutTab from './auditorium/AuditoriumSeatLayoutTab';
@@ -14,32 +18,30 @@ export default function AdminAuditoriumDetailPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { triggerToast } = useOutletContext() || {};
-
   const {
     auditorium,
     isLoading,
     error,
     fetchAuditorium,
     updateAuditoriumBasicInfo,
-    updateSeatLayout
+    changeAuditoriumStatus,
+    updateSeatLayout,
   } = useAuditoriumDetail(roomId, triggerToast);
-
-  const [activeTab, setActiveTab] = useState('seat-layout');
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
-     
     fetchAuditorium();
   }, [fetchAuditorium]);
 
   const tabs = [
-    { id: 'overview', label: 'CẤU HÌNH PHÒNG', icon: Settings },
-    { id: 'seat-layout', label: 'SƠ ĐỒ GHẾ', icon: LayoutGrid },
-    { id: 'maintenance', label: 'BẢO TRÌ', icon: Wrench },
+    { id: 'overview', label: 'Tổng quan & tác vụ', icon: Settings },
+    { id: 'seat-layout', label: 'Sơ đồ ghế', icon: LayoutGrid },
+    { id: 'maintenance', label: 'Đóng phòng & bảo trì', icon: Wrench },
   ];
 
   if (isLoading && !auditorium) {
     return (
-      <div className="flex-1 p-8 bg-zinc-950 flex flex-col items-center justify-center">
+      <div className="flex min-h-[480px] flex-1 items-center justify-center bg-zinc-950 p-8">
         <LoadingState message="Đang tải thông tin phòng chiếu..." />
       </div>
     );
@@ -47,118 +49,110 @@ export default function AdminAuditoriumDetailPage() {
 
   if (error && !auditorium) {
     return (
-      <div className="flex-1 p-8 bg-zinc-950 flex flex-col items-center justify-center">
+      <div className="flex min-h-[480px] flex-1 items-center justify-center bg-zinc-950 p-8">
         <ErrorState message={error} onRetry={fetchAuditorium} />
       </div>
     );
   }
 
   if (!auditorium) return null;
+  const status = getAuditoriumStatus(auditorium.auditoriumStatus);
 
   return (
-    <div className="flex flex-col flex-1 bg-zinc-950 text-white font-sans h-full overflow-hidden">
-      
-      {/* Header */}
-      <div className="px-6 md:px-8 py-5 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-10 shrink-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+    <div className="flex h-full flex-1 flex-col overflow-hidden bg-zinc-950 text-white">
+      <header className="sticky top-0 z-10 shrink-0 border-b border-zinc-900 bg-zinc-950/95 px-6 py-5 backdrop-blur-md md:px-8">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div className="flex items-start gap-4">
             <button
+              type="button"
               onClick={() => navigate(-1)}
-              className="p-2 hover:bg-zinc-900 rounded-xl transition-colors text-zinc-400 hover:text-white"
-              title="Quay lại"
+              className="flex items-center gap-2 rounded-xl border border-zinc-800 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-brand-orange hover:text-white"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="h-4 w-4" />
+              Quay lại
             </button>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-zinc-50">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-xl font-black uppercase tracking-wider text-zinc-50 md:text-2xl">
                   {auditorium.auditoriumName}
                 </h1>
-                {auditorium.auditoriumStatus === 'ACTIVE' && (
-                  <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-lg">
-                    HOẠT ĐỘNG
-                  </span>
-                )}
-                {auditorium.auditoriumStatus === 'DRAFT' && (
-                  <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-lg">
-                    BẢN NHÁP
-                  </span>
-                )}
-                {auditorium.auditoriumStatus === 'MAINTENANCE' && (
-                  <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg">
-                    BẢO TRÌ
-                  </span>
-                )}
-                {auditorium.auditoriumStatus === 'INACTIVE' && (
-                  <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-zinc-800 border border-zinc-700 text-zinc-400 rounded-lg">
-                    NGƯNG HOẠT ĐỘNG
-                  </span>
-                )}
+                <span className={`rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${status.className}`}>
+                  {status.label}
+                </span>
               </div>
-              <p className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider mt-1 font-mono">
-                Mã ID: {roomId}
+              <p className="mt-1 text-xs text-zinc-500">
+                Cấu hình, kiểm tra mức sẵn sàng và thực hiện tác vụ vận hành phòng.
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={fetchAuditorium}
-            className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-xs font-bold transition-colors"
+            className="flex items-center gap-2 self-start rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-xs font-bold transition-colors hover:bg-zinc-800 md:self-auto"
           >
-            <RefreshCw className="w-4 h-4 text-brand-orange" />
-            <span>Tải lại</span>
+            <RefreshCw className={`h-4 w-4 text-brand-orange ${isLoading ? 'animate-spin' : ''}`} />
+            Làm mới dữ liệu
           </button>
         </div>
 
-        {/* Tabs navigation */}
-        <div className="flex gap-2 mt-6 overflow-x-auto no-scrollbar">
-          {tabs.map(tab => (
+        <nav className="mt-6 flex gap-2 overflow-x-auto">
+          {tabs.map((tab) => (
             <button
+              type="button"
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-black uppercase tracking-wider transition-all select-none whitespace-nowrap
-                ${activeTab === tab.id 
-                  ? 'bg-zinc-900/50 text-brand-orange border-b-2 border-brand-orange' 
-                  : 'text-zinc-500 hover:bg-zinc-900/30 hover:text-zinc-300 border-b-2 border-transparent'
-                }
-              `}
+              className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-xs font-black uppercase tracking-wider transition-all ${
+                activeTab === tab.id
+                  ? 'border-brand-orange text-brand-orange'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
             >
-              <tab.icon className="w-4 h-4" />
-              <span>{tab.label}</span>
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
             </button>
           ))}
-        </div>
-      </div>
+        </nav>
+      </header>
 
-      {/* Tab Content - We don't use padding here to allow SeatLayout to use full screen width/height */}
-      <div className="flex-1 overflow-hidden relative">
+      <main className="relative flex-1 overflow-hidden">
         {activeTab === 'overview' && (
           <div className="h-full overflow-auto p-6 md:p-8">
-            <AuditoriumOverviewTab 
-              auditorium={auditorium} 
-              onUpdate={updateAuditoriumBasicInfo} 
+            <AuditoriumOverviewTab
+              key={[
+                auditorium.publicId,
+                auditorium.auditoriumName,
+                auditorium.auditoriumStatus,
+                auditorium.screenType,
+                auditorium.soundType,
+                auditorium.cleaningBufferMinutes,
+              ].join('-')}
+              auditorium={auditorium}
+              onUpdate={updateAuditoriumBasicInfo}
+              onChangeStatus={changeAuditoriumStatus}
             />
           </div>
         )}
-        
+
         {activeTab === 'seat-layout' && (
-          <AuditoriumSeatLayoutTab 
-            auditorium={auditorium} 
+          <AuditoriumSeatLayoutTab
+            auditorium={auditorium}
             roomId={roomId}
             onUpdateBasicInfo={updateAuditoriumBasicInfo}
             onUpdateSeats={updateSeatLayout}
             triggerToast={triggerToast}
           />
         )}
-        
+
         {activeTab === 'maintenance' && (
           <div className="h-full overflow-auto p-6 md:p-8">
-            <AuditoriumMaintenanceTab 
-              roomId={roomId} 
-              triggerToast={triggerToast} 
+            <AuditoriumMaintenanceTab
+              roomId={roomId}
+              auditorium={auditorium}
+              triggerToast={triggerToast}
             />
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

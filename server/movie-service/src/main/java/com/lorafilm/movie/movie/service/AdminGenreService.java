@@ -11,7 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class AdminGenreService {
@@ -28,13 +32,17 @@ public class AdminGenreService {
 
     public com.lorafilm.movie.common.api.PageResponse<GenreResponse> getGenres(int page, int size) {
         org.springframework.data.domain.Page<Genre> genrePage = genreRepository.findByDeletedAtIsNull(org.springframework.data.domain.PageRequest.of(page - 1, size));
-        return com.lorafilm.movie.common.api.PageResponse.of(genrePage, genrePage.getContent().stream().map(genreMapper::toResponse).toList());
+        Map<Long, Long> movieCounts = getMovieCounts(genrePage.getContent());
+        List<GenreResponse> content = genrePage.getContent().stream()
+                .map(genre -> toResponse(genre, movieCounts.getOrDefault(genre.getId(), 0L)))
+                .toList();
+        return com.lorafilm.movie.common.api.PageResponse.of(genrePage, content);
     }
 
     public GenreResponse getGenre(String publicId) {
         Genre genre = genreRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Genre not found", null));
-        return genreMapper.toResponse(genre);
+        return toResponse(genre, getMovieCounts(List.of(genre)).getOrDefault(genre.getId(), 0L));
     }
 
     @Transactional
@@ -53,7 +61,7 @@ public class AdminGenreService {
         }
         
         Genre saved = genreRepository.save(genre);
-        return genreMapper.toResponse(saved);
+        return toResponse(saved, 0L);
     }
 
     @Transactional
@@ -73,7 +81,7 @@ public class AdminGenreService {
         }
 
         Genre saved = genreRepository.save(genre);
-        return genreMapper.toResponse(saved);
+        return toResponse(saved, getMovieCounts(List.of(saved)).getOrDefault(saved.getId(), 0L));
     }
     
     @Transactional
@@ -96,6 +104,33 @@ public class AdminGenreService {
         genre.setStatus(com.lorafilm.movie.common.enums.ActiveStatus.INACTIVE);
         genre.performSoftDelete(userId);
         genreRepository.save(genre);
+    }
+
+    private Map<Long, Long> getMovieCounts(List<Genre> genres) {
+        if (genres == null || genres.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Long> genreIds = genres.stream()
+                .map(Genre::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (genreIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return movieGenreRepository.countMoviesByGenreIds(genreIds).stream()
+                .collect(Collectors.toMap(
+                        com.lorafilm.movie.movie.repository.MovieGenreRepository.GenreMovieCount::getGenreId,
+                        com.lorafilm.movie.movie.repository.MovieGenreRepository.GenreMovieCount::getMovieCount,
+                        Long::max
+                ));
+    }
+
+    private GenreResponse toResponse(Genre genre, long movieCount) {
+        GenreResponse response = genreMapper.toResponse(genre);
+        response.setMovieCount(movieCount);
+        return response;
     }
     
     private String generateSlug(String input) {

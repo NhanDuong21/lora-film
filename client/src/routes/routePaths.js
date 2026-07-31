@@ -50,5 +50,9 @@ export const routePaths = {
     permissions: '/admin/permissions',
     accounts: '/admin/accounts',
     audits: '/admin/audits',
+    notificationDashboard: '/admin/notifications',
+    notificationTemplates: '/admin/notification-templates',
+    notificationTemplateEditor: '/admin/notification-templates/:templateKey',
+    notificationOperations: '/admin/notification-operations',
   }
 };

@@ -707,7 +707,7 @@ public class AuthServiceImpl implements AuthService {
 			throw new RuntimeException("Internal error saving OTP");
 		}
 
-		verificationService.sendChangeEmailOtp(account.getId(), normalizedCurrentEmail, otp);
+		verificationService.sendChangeEmailOtp(account.getId(), normalizedCurrentEmail, newEmail, otp);
 		log.info("Requested change email for accountId={}, OTP sent to {}", account.getId(), maskEmail(normalizedCurrentEmail));
 	}
 

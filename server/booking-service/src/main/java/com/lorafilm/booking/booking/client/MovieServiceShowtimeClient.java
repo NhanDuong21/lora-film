@@ -1,6 +1,7 @@
 package com.lorafilm.booking.booking.client;
 
 import com.lorafilm.booking.common.exception.IntegrationException;
+import com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
@@ -76,6 +77,30 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         }
     }
 
+    @Override
+    public ShowtimeSeatLayoutResponse getSeatLayout(Long showtimeId) {
+        try {
+            SeatLayoutEnvelope envelope = restClient.get()
+                    .uri("/internal/showtimes/{showtimeId}/seat-layout", showtimeId)
+                    .header("X-Internal-Token", internalToken)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> {
+                        throw new IntegrationException(
+                                "Movie Service rejected seat layout request with status "
+                                        + response.getStatusCode());
+                    })
+                    .body(SeatLayoutEnvelope.class);
+            if (envelope == null || envelope.data == null || envelope.data.getSeats() == null) {
+                throw new IntegrationException("Movie Service returned an empty seat layout");
+            }
+            return envelope.data;
+        } catch (IntegrationException ex) {
+            throw ex;
+        } catch (RestClientException ex) {
+            throw new IntegrationException("Cannot retrieve seat layout from Movie Service", ex);
+        }
+    }
+
     private record BookingContextRequest(List<Long> seatIds) {
     }
 
@@ -84,6 +109,10 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
 
     private static class BookingContextEnvelope {
         public BookingContextPayload data;
+    }
+
+    private static class SeatLayoutEnvelope {
+        public ShowtimeSeatLayoutResponse data;
     }
 
     private static class BookingContextPayload {
@@ -152,11 +181,13 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         public String seatPublicId;
         public String seatCode;
         public String seatType;
+        public String pairGroup;
         public BigDecimal price;
         public String currency;
 
         private ShowtimeBookingContext.SeatContext toDomain() {
-            return new ShowtimeBookingContext.SeatContext(seatId, seatPublicId, seatCode, seatType, price, currency);
+            return new ShowtimeBookingContext.SeatContext(
+                    seatId, seatPublicId, seatCode, seatType, price, currency, pairGroup);
         }
     }
 

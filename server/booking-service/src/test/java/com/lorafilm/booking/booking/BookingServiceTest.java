@@ -22,6 +22,7 @@ import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.service.impl.BookingServiceImpl;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.util.BookingCodeGenerator;
+import com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse;
 import com.lorafilm.booking.reservation.entity.SeatReservation;
 import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
 import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
@@ -44,7 +45,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -55,6 +58,9 @@ class BookingServiceTest {
         private static final String RESERVATION_PUBLIC_ID_1 = "8712253d-dc49-4f85-a6db-f99908dd61d7";
         private static final String RESERVATION_PUBLIC_ID_2 = "6f5867c6-9596-4011-844e-183f23e65bb6";
         private static final String SHOWTIME_PUBLIC_ID = "550e8400-e29b-41d4-a716-446655440001";
+        private static final String COUPLE_SEAT_PUBLIC_ID = "550e8400-e29b-41d4-a716-446655440091";
+        private static final String SEAT_PUBLIC_ID_A2 = "550e8400-e29b-41d4-a716-446655440102";
+        private static final String SEAT_PUBLIC_ID_A3 = "550e8400-e29b-41d4-a716-446655440103";
 
     @Mock
     private BookingRepository bookingRepository;
@@ -117,6 +123,8 @@ class BookingServiceTest {
                 bookingTicketService,
                 bookingSnapshotService);
         bookingService.setScoreRedemptionClient(scoreRedemptionClient);
+        lenient().when(showtimeClient.getSeatLayout(anyLong()))
+                .thenReturn(nonAdjacentDefaultSeatLayout());
     }
 
         @Test
@@ -205,6 +213,47 @@ class BookingServiceTest {
         assertThrows(com.lorafilm.booking.common.exception.IntegrationException.class,
                 () -> bookingService.createBooking(request));
 
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(priceSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectSingleCoupleSeatBeforePersistingBooking() {
+        Instant now = Instant.now();
+        CreateBookingRequest request = new CreateBookingRequest(
+                SHOWTIME_PUBLIC_ID, List.of(COUPLE_SEAT_PUBLIC_ID), true);
+
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(showtimeClient.getBookingContextByPublicId(
+                SHOWTIME_PUBLIC_ID, List.of(COUPLE_SEAT_PUBLIC_ID)))
+                .thenReturn(singleCoupleSeatShowtimeContext(now));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> bookingService.createBooking(request));
+
+        assertEquals("SEAT_COUPLE_PAIR_REQUIRED", exception.getErrorCode());
+        verify(showtimeClient).getBookingContextByPublicId(
+                SHOWTIME_PUBLIC_ID, List.of(COUPLE_SEAT_PUBLIC_ID));
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(priceSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectSelectionThatLeavesSingleSeatGapBeforePersistingBooking() {
+        Instant now = Instant.now();
+        CreateBookingRequest request = new CreateBookingRequest(
+                SHOWTIME_PUBLIC_ID, List.of(SEAT_PUBLIC_ID_A2, SEAT_PUBLIC_ID_A3), true);
+
+        when(securityContextService.getCurrentUserId()).thenReturn(15L);
+        when(showtimeClient.getBookingContextByPublicId(
+                SHOWTIME_PUBLIC_ID, List.of(SEAT_PUBLIC_ID_A2, SEAT_PUBLIC_ID_A3)))
+                .thenReturn(singleGapShowtimeContext(now));
+        when(showtimeClient.getSeatLayout(1001L)).thenReturn(adjacentThreeSeatLayout());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> bookingService.createBooking(request));
+
+        assertEquals("SEAT_SINGLE_GAP_NOT_ALLOWED", exception.getErrorCode());
         verify(bookingRepository, never()).saveAndFlush(any());
         verify(priceSnapshotRepository, never()).save(any());
     }
@@ -579,6 +628,106 @@ class BookingServiceTest {
                 fullContext.cinemaName(),
                 fullContext.auditoriumName(),
                 List.of(fullContext.seats().getFirst()));
+    }
+
+    private ShowtimeBookingContext singleCoupleSeatShowtimeContext(Instant now) {
+        ShowtimeBookingContext fullContext = showtimeContext(now);
+        return new ShowtimeBookingContext(
+                fullContext.showtimeId(),
+                fullContext.showtimePublicId(),
+                fullContext.movieId(),
+                fullContext.cinemaId(),
+                fullContext.auditoriumId(),
+                fullContext.status(),
+                fullContext.startsAt(),
+                fullContext.endsAt(),
+                fullContext.paymentExpiresAt(),
+                new BigDecimal("78000"),
+                fullContext.serviceFee(),
+                fullContext.discountAmount(),
+                new BigDecimal("78000"),
+                fullContext.currency(),
+                fullContext.movieTitle(),
+                fullContext.moviePosterUrl(),
+                fullContext.cinemaName(),
+                fullContext.auditoriumName(),
+                List.of(new ShowtimeBookingContext.SeatContext(
+                        101L,
+                        COUPLE_SEAT_PUBLIC_ID,
+                        "I1",
+                        "COUPLE",
+                        new BigDecimal("78000"),
+                        "VND",
+                        "I-01")));
+    }
+
+    private ShowtimeBookingContext singleGapShowtimeContext(Instant now) {
+        ShowtimeBookingContext fullContext = showtimeContext(now);
+        return new ShowtimeBookingContext(
+                fullContext.showtimeId(),
+                fullContext.showtimePublicId(),
+                fullContext.movieId(),
+                fullContext.cinemaId(),
+                fullContext.auditoriumId(),
+                fullContext.status(),
+                fullContext.startsAt(),
+                fullContext.endsAt(),
+                fullContext.paymentExpiresAt(),
+                new BigDecimal("240000"),
+                fullContext.serviceFee(),
+                fullContext.discountAmount(),
+                new BigDecimal("240000"),
+                fullContext.currency(),
+                fullContext.movieTitle(),
+                fullContext.moviePosterUrl(),
+                fullContext.cinemaName(),
+                fullContext.auditoriumName(),
+                List.of(
+                        new ShowtimeBookingContext.SeatContext(
+                                102L, SEAT_PUBLIC_ID_A2, "A2", "STANDARD",
+                                new BigDecimal("120000"), "VND", null),
+                        new ShowtimeBookingContext.SeatContext(
+                                103L, SEAT_PUBLIC_ID_A3, "A3", "STANDARD",
+                                new BigDecimal("120000"), "VND", null)));
+    }
+
+    private ShowtimeSeatLayoutResponse nonAdjacentDefaultSeatLayout() {
+        return seatLayout(List.of(
+                layoutSeat(101L, "A1", "STANDARD", 1, 1, null),
+                layoutSeat(102L, "B1", "STANDARD", 2, 1, null)));
+    }
+
+    private ShowtimeSeatLayoutResponse adjacentThreeSeatLayout() {
+        return seatLayout(List.of(
+                layoutSeat(101L, "A1", "STANDARD", 1, 1, null),
+                layoutSeat(102L, "A2", "STANDARD", 1, 2, null),
+                layoutSeat(103L, "A3", "STANDARD", 1, 3, null)));
+    }
+
+    private ShowtimeSeatLayoutResponse seatLayout(
+            List<ShowtimeSeatLayoutResponse.SeatDetailDto> seats) {
+        return new ShowtimeSeatLayoutResponse(
+                1001L,
+                Instant.now().plusSeconds(1800),
+                Instant.now().plusSeconds(9000),
+                "OPEN_FOR_BOOKING",
+                301L,
+                seats);
+    }
+
+    private ShowtimeSeatLayoutResponse.SeatDetailDto layoutSeat(
+            Long id,
+            String code,
+            String type,
+            int row,
+            int column,
+            String pairGroup) {
+        ShowtimeSeatLayoutResponse.SeatDetailDto seat =
+                new ShowtimeSeatLayoutResponse.SeatDetailDto(
+                        id, code, type, null, false, row, column);
+        seat.setStatus("ACTIVE");
+        seat.setPairGroup(pairGroup);
+        return seat;
     }
 
         private Booking existingBooking(Instant expiresAt) {

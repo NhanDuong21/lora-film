@@ -41,7 +41,9 @@ public class CinemaDetailDto extends CinemaDto {
         private String mediaType;
         private String url;
         private String title;
+        private Integer displayOrder;
         private Boolean isPrimary;
+        private String status;
 
         public String getPublicId() { return publicId; }
         public void setPublicId(String publicId) { this.publicId = publicId; }
@@ -51,8 +53,12 @@ public class CinemaDetailDto extends CinemaDto {
         public void setUrl(String url) { this.url = url; }
         public String getTitle() { return title; }
         public void setTitle(String title) { this.title = title; }
+        public Integer getDisplayOrder() { return displayOrder; }
+        public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
         public Boolean getIsPrimary() { return isPrimary; }
         public void setIsPrimary(Boolean isPrimary) { this.isPrimary = isPrimary; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 
     public static class AuditoriumDto {

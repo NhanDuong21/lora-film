@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import apiClient from '@/services/apiClient';
-import { getMovies } from './movieService';
+import {
+  getCinemaBySlug,
+  getCinemas,
+  getMovies,
+  getSeatLayout,
+  getShowtimes
+} from './movieService';
 
 vi.mock('@/services/apiClient', () => ({
   default: {
@@ -64,5 +70,46 @@ describe('customer movie service', () => {
       }),
       signal: undefined
     });
+  });
+
+  it('uses public customer APIs for cinemas, showtimes and real seat prices', async () => {
+    apiClient.get
+      .mockResolvedValueOnce({
+        data: { data: { data: [{ publicId: 'cinema-1', slug: 'lorafilm-01' }] } }
+      })
+      .mockResolvedValueOnce({
+        data: { data: { publicId: 'cinema-1', slug: 'lorafilm-01' } }
+      })
+      .mockResolvedValueOnce({
+        data: { data: { data: [{ showtimePublicId: 'showtime-1' }] } }
+      })
+      .mockResolvedValueOnce({
+        data: { data: { seats: [{ seatType: 'VIP', price: 86000 }] } }
+      });
+
+    await getCinemas({ page: 0, size: 100 });
+    await getCinemaBySlug('lorafilm-01');
+    await getShowtimes({ cinemaSlug: 'lorafilm-01', date: '2026-07-30' });
+    await getSeatLayout('showtime-1');
+
+    expect(apiClient.get).toHaveBeenNthCalledWith(1, '/api/cinemas', {
+      params: { page: 0, size: 100 },
+      signal: undefined
+    });
+    expect(apiClient.get).toHaveBeenNthCalledWith(2, '/api/cinemas/lorafilm-01');
+    expect(apiClient.get).toHaveBeenNthCalledWith(3, '/api/showtimes', {
+      params: {
+        page: 0,
+        size: 100,
+        cinemaSlug: 'lorafilm-01',
+        date: '2026-07-30'
+      },
+      signal: undefined
+    });
+    expect(apiClient.get).toHaveBeenNthCalledWith(
+      4,
+      '/api/customer/showtimes/showtime-1/seat-layout',
+      { signal: undefined }
+    );
   });
 });

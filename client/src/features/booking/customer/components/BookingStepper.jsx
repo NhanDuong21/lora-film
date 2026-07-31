@@ -3,16 +3,27 @@ import { Check } from 'lucide-react';
 
 export default function BookingStepper({ currentStep = 1 }) {
   const steps = [
-    { label: 'Rạp & Phim', desc: 'Chọn suất chiếu' },
-    { label: 'Chỗ Ngồi', desc: 'Vị trí yêu thích' },
-    { label: 'Bắp Nước', desc: 'Dịch vụ đi kèm' },
-    { label: 'Thanh Toán', desc: 'Xác nhận đơn' },
-    { label: 'Hoàn Tất', desc: 'Nhận vé xem phim' }
+    { label: 'Chọn suất', desc: 'Rạp, phim và giờ chiếu' },
+    { label: 'Chọn ghế', desc: 'Vị trí yêu thích' },
+    { label: 'Thanh toán', desc: 'Bắp nước không bắt buộc' },
+    { label: 'Nhận vé', desc: 'Hoàn tất đặt vé' }
   ];
 
   return (
-    <div className="w-full bg-zinc-900/80 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-4 sm:p-6 mb-8 shadow-2xl max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-2 sm:gap-4 overflow-x-auto scrollbar-none pb-2 sm:pb-0">
+    <nav
+      aria-label="Tiến trình đặt vé"
+      className="mx-auto mb-5 w-full max-w-7xl rounded-2xl border border-zinc-800/80 bg-zinc-900/80 px-4 py-3 shadow-xl backdrop-blur-md sm:px-5"
+    >
+      <div className="mb-2 flex items-center justify-between sm:hidden">
+        <span className="text-xs font-black text-white">
+          Bước {Math.min(currentStep, steps.length)}/{steps.length}
+        </span>
+        <span className="text-xs font-bold text-brand-orange">
+          {steps[Math.min(currentStep, steps.length) - 1]?.label}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
         {steps.map((step, idx) => {
           const stepNum = idx + 1;
           const isCompleted = stepNum < currentStep;
@@ -21,35 +32,31 @@ export default function BookingStepper({ currentStep = 1 }) {
 
           return (
             <React.Fragment key={idx}>
-              <div className="flex flex-col items-center gap-2 sm:gap-3 shrink-0 group relative min-w-[70px] sm:min-w-[90px]">
-                {/* Step Circle Indicator */}
+              <div
+                aria-current={isActive ? 'step' : undefined}
+                className="relative flex shrink-0 items-center gap-2 sm:min-w-[118px]"
+              >
                 <div
-                  className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-black text-xs sm:text-sm transition-all duration-500 relative z-10 ${
+                  className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-black transition-all duration-300 sm:h-8 sm:w-8 ${
                     isCompleted
-                      ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+                      ? 'bg-emerald-500 text-black'
                       : isActive
-                      ? 'bg-brand-orange text-white shadow-[0_0_25px_rgba(255,122,0,0.5)] scale-110 border-2 border-orange-400/50'
+                      ? 'bg-brand-orange text-white shadow-[0_0_18px_rgba(255,122,0,0.35)]'
                       : 'bg-zinc-950 text-zinc-600 border border-zinc-800'
                   }`}
                 >
-                  {isCompleted ? <Check className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" /> : stepNum}
-                  
-                  {/* Active Ripple Effect */}
-                  {isActive && (
-                    <div className="absolute inset-0 rounded-full border-2 border-brand-orange animate-ping opacity-20 pointer-events-none" />
-                  )}
+                  {isCompleted ? <Check className="h-4 w-4 stroke-[3]" /> : stepNum}
                 </div>
 
-                {/* Step Details */}
-                <div className="flex flex-col items-center text-center">
+                <div className="hidden min-w-0 flex-col sm:flex">
                   <span
-                    className={`text-[10px] sm:text-xs font-black uppercase tracking-wider transition-colors duration-300 whitespace-nowrap ${
+                    className={`whitespace-nowrap text-[10px] font-black uppercase tracking-wider ${
                       isActive ? 'text-brand-orange' : isCompleted ? 'text-emerald-400' : 'text-zinc-500'
                     }`}
                   >
                     {step.label}
                   </span>
-                  <span className={`hidden sm:block text-[9px] font-bold mt-0.5 whitespace-nowrap ${
+                  <span className={`mt-0.5 whitespace-nowrap text-[9px] font-bold ${
                     isPending ? 'text-zinc-600' : 'text-zinc-400'
                   }`}>
                     {step.desc}
@@ -57,11 +64,10 @@ export default function BookingStepper({ currentStep = 1 }) {
                 </div>
               </div>
 
-              {/* Connecting line */}
               {idx < steps.length - 1 && (
-                <div className="hidden sm:block flex-grow h-0.5 mx-2 sm:mx-4 bg-zinc-800/60 rounded overflow-hidden relative -translate-y-4">
+                <div className="relative h-px flex-grow overflow-hidden rounded bg-zinc-800/80">
                   <div
-                    className={`absolute left-0 top-0 bottom-0 rounded transition-all duration-700 ease-in-out ${
+                    className={`absolute inset-y-0 left-0 rounded transition-all duration-500 ${
                       isCompleted ? 'bg-emerald-500 w-full' : 'bg-brand-orange w-0'
                     }`}
                   />
@@ -71,6 +77,6 @@ export default function BookingStepper({ currentStep = 1 }) {
           );
         })}
       </div>
-    </div>
+    </nav>
   );
 }

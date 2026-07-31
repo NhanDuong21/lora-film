@@ -3,10 +3,11 @@ import { Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react';
 
 export const LazyImage = ({ src, alt, className = '', containerClassName = '', ...props }) => {
   const [visible, setVisible] = useState(false);
+  const [failedSrc, setFailedSrc] = useState('');
   const ref = useRef(null);
 
   useEffect(() => {
-    if (!src) return;
+    if (!src) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         setVisible(true);
@@ -21,19 +22,23 @@ export const LazyImage = ({ src, alt, className = '', containerClassName = '', .
     return () => observer.disconnect();
   }, [src]);
 
+  const hasError = Boolean(src && failedSrc === src);
+
   return (
     <div ref={ref} className={`relative bg-zinc-900 overflow-hidden ${containerClassName}`}>
-      {visible && src ? (
+      {visible && src && !hasError ? (
         <img
           src={src}
           alt={alt}
           className={`w-full h-full object-cover transition-opacity duration-300 opacity-100 ${className}`}
           loading="lazy"
+          onError={() => setFailedSrc(src)}
           {...props}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-zinc-800 animate-pulse bg-zinc-900">
+        <div className={`w-full h-full flex flex-col items-center justify-center gap-2 bg-zinc-900 px-3 text-center ${hasError ? 'text-zinc-500' : 'text-zinc-800 animate-pulse'}`}>
           <ImageIcon className="w-5 h-5" />
+          {hasError && <span className="text-[10px] font-medium">Không tải được ảnh</span>}
         </div>
       )}
     </div>
@@ -54,28 +59,52 @@ export const Field = ({ label, required, error, children }) => (
   </div>
 );
 
-export const Input = ({ className = '', ...props }) => (
-  <input
-    className={`w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-sm focus-ring text-zinc-100 placeholder:text-zinc-500 transition-all ${className}`}
-    {...props}
-  />
-);
+export const Input = ({ label, className = '', ...props }) => {
+  const input = (
+    <input
+      className={`w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-sm focus-ring text-zinc-100 placeholder:text-zinc-500 transition-all ${className}`}
+      {...props}
+    />
+  );
+  return label ? (
+    <label className="block space-y-1.5">
+      <span className="block text-xs font-semibold text-zinc-400">{label}</span>
+      {input}
+    </label>
+  ) : input;
+};
 
-export const Select = ({ children, className = '', ...props }) => (
-  <select
-    className={`w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-sm focus-ring text-zinc-100 outline-none transition-all ${className}`}
-    {...props}
-  >
-    {children}
-  </select>
-);
+export const Select = ({ label, children, className = '', ...props }) => {
+  const select = (
+    <select
+      className={`w-full bg-zinc-900 border border-zinc-800 rounded-xl h-10 px-4 text-sm focus-ring text-zinc-100 outline-none transition-all ${className}`}
+      {...props}
+    >
+      {children}
+    </select>
+  );
+  return label ? (
+    <label className="block space-y-1.5">
+      <span className="block text-xs font-semibold text-zinc-400">{label}</span>
+      {select}
+    </label>
+  ) : select;
+};
 
-export const Textarea = ({ className = '', ...props }) => (
-  <textarea
-    className={`w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-sm focus-ring text-zinc-100 leading-relaxed placeholder:text-zinc-500 transition-all ${className}`}
-    {...props}
-  />
-);
+export const Textarea = ({ label, className = '', ...props }) => {
+  const textarea = (
+    <textarea
+      className={`w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-sm focus-ring text-zinc-100 leading-relaxed placeholder:text-zinc-500 transition-all ${className}`}
+      {...props}
+    />
+  );
+  return label ? (
+    <label className="block space-y-1.5">
+      <span className="block text-xs font-semibold text-zinc-400">{label}</span>
+      {textarea}
+    </label>
+  ) : textarea;
+};
 
 export const SkeletonLoader = ({ className = '', type = 'rectangle' }) => {
   const baseClass = "animate-pulse bg-zinc-800/50";
@@ -170,8 +199,8 @@ export const StatusBadge = ({ status, label }) => {
   );
 };
 
-export const AsyncState = ({ loading, error, onRetry, empty, emptyMessage, emptyDescription, emptyIcon, emptyAction, children }) => {
-  if (loading) return <LoadingState />;
+export const AsyncState = ({ loading, isLoading, error, onRetry, empty, emptyMessage, emptyDescription, emptyIcon, emptyAction, children }) => {
+  if (loading ?? isLoading) return <LoadingState />;
   if (error) return <ErrorState message={typeof error === 'string' ? error : error?.message} onRetry={onRetry} />;
   if (empty) return <EmptyState message={emptyMessage} description={emptyDescription} icon={emptyIcon} action={emptyAction} />;
   return children;

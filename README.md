@@ -48,6 +48,36 @@ hcm26_cpl_java_05_group3/
    git checkout develop
    ```
 
+## Run the complete project on Windows
+
+Prerequisites: Java 21, Maven 3.9+, Node.js/npm, and Docker Desktop.
+
+From PowerShell at the repository root:
+
+```powershell
+Copy-Item .env.example .env
+# Fill the required passwords, API keys and mail/payment credentials in .env.
+.\scripts\start-all.ps1
+```
+
+The script starts the infrastructure, Eureka, all nine backend services, API
+Gateway, and the React frontend in dependency order. It also waits for every
+port and verifies that all applications are registered as `UP` in Eureka.
+
+```powershell
+.\scripts\status-all.ps1
+.\scripts\stop-all.ps1
+# Also stop Docker infrastructure:
+.\scripts\stop-all.ps1 -Infrastructure
+```
+
+Use `.\scripts\start-all.ps1 -SkipBuild` when the JAR files have already been
+built. Runtime logs are written under `artifacts/runtime/`.
+
+- Frontend: `http://localhost:5173`
+- API Gateway: `http://localhost:8080`
+- Eureka dashboard: `http://localhost:8761`
+
 ## Frontend Run Instructions
 
 Open a new terminal and run the following commands:
@@ -60,7 +90,8 @@ npm run dev
 
 ## Backend Run Instructions
 
-The backend uses a Microservices architecture. Ensure that you have MySQL installed and the corresponding databases created (`auth_db`, `movie_db`, `booking_db`, `payment_db`, `notification_db`, `user_db`, `promotion_db`, `score_db`, `analytics_db`).
+The backend uses a microservices architecture. Docker Compose creates all
+required databases and loads the required schemas automatically.
 
 Open a terminal in each service directory and run them independently. You can use the commands:
 
@@ -70,27 +101,11 @@ mvn spring-boot:run
 ```
 
 **Recommended Startup Order:**
-1. `cd server/auth-service && mvn spring-boot:run` (Port: `8081`)
-2. `cd server/movie-service && mvn spring-boot:run` (Port: `8082`)
-3. `cd server/booking-service && mvn spring-boot:run` (Port: `8083`)
-4. `cd server/payment-service && mvn spring-boot:run` (Port: `8084`)
-5. `cd server/notification-service && mvn spring-boot:run` (Port: `8085`)
-6. `cd server/user-service && mvn spring-boot:run` (Port: `8086`)
-7. `cd server/promotion-service && mvn spring-boot:run` (Port: `8087`)
-8. `cd server/score-service && mvn spring-boot:run` (Port: `8088`)
-9. `cd server/analytics-service && mvn spring-boot:run` (Port: `8089`)
-10. `cd api-gateway && mvn spring-boot:run` (Port: `8080`)
-
-1. `auth-service` (8081)
-2. `movie-service` (8082)
-3. `booking-service` (8083)
-4. `payment-service` (8084)
-5. `notification-service` (8085)
-6. `user-service` (8086)
-7. `promotion-service` (8087)
-8. `score-service` (8088)
-9. `analytics-service` (8089)
-10. `api-gateway` (8080)
+1. Docker infrastructure: MySQL, Redis, Kafka
+2. `eureka-server` (8761)
+3. Backend services: `auth-service` (8081) through `analytics-service` (8089)
+4. `api-gateway` (8080)
+5. React frontend (5173)
 
 ## Docker Compose Local Development
 
@@ -100,6 +115,9 @@ A base local environment is available at the repository root with:
 - Redis
 - Zookeeper
 - Kafka
+
+Application services run as local Java processes. Docker Compose supplies the
+shared infrastructure and initializes the service databases.
 
 ### Prerequisites
 
@@ -154,7 +172,7 @@ docker compose down -v
 
 ### Verify services are running
 
-- MySQL: `localhost:3306`
+- MySQL: `localhost:3307`
 - Redis: `localhost:6379`
 - Zookeeper: `localhost:2181`
 - Kafka: `localhost:9092`
@@ -166,16 +184,8 @@ docker compose ps
 ```
 Check the health status via the `GET /health` endpoint for each service (e.g., `http://localhost:8081/health`, `http://localhost:8086/health`). 
 
-The Gateway routes requests using the following static routes:
-- `/api/auth/**` -> `http://localhost:8081` (auth-service)
-- `/api/movies/**` -> `http://localhost:8082` (movie-service)
-- `/api/bookings/**` -> `http://localhost:8083` (booking-service)
-- `/api/payments/**` -> `http://localhost:8084` (payment-service)
-- `/api/notifications/**` -> `http://localhost:8085` (notification-service)
-- `/api/users/**` -> `http://localhost:8086` (user-service)
-- `/api/promotions/**` -> `http://localhost:8087` (promotion-service)
-- `/api/scores/**` -> `http://localhost:8088` (score-service)
-- `/api/analytics/**` -> `http://localhost:8089` (analytics-service)
+The Gateway discovers the Java services through Eureka and exposes their APIs
+through `http://localhost:8080`.
 
 ## Basic Branching Rules
 

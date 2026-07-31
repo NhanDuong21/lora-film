@@ -1,5 +1,6 @@
 package com.lorafilm.booking.booking.client;
 
+import com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse;
 import java.util.List;
 
 public interface ShowtimeClient {
@@ -9,4 +10,6 @@ public interface ShowtimeClient {
     default ShowtimeBookingContext getBookingContextByPublicId(String showtimePublicId, List<String> seatPublicIds) {
         throw new UnsupportedOperationException("Public Showtime booking context is not configured");
     }
+
+    ShowtimeSeatLayoutResponse getSeatLayout(Long showtimeId);
 }

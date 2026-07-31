@@ -127,8 +127,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
+        // If the client aborted the connection, we don't need to try to write an error response
+        if (ex.getClass().getName().contains("ClientAbortException")) {
+            log.warn("Client aborted connection: {}", ex.getMessage());
+            return null;
+        }
         log.error("Unhandled user-service exception", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Internal server error", "INTERNAL_SERVER_ERROR"));
+    }
+
+    @ExceptionHandler(org.springframework.web.context.request.async.AsyncRequestNotUsableException.class)
+    public void handleAsyncRequestNotUsableException(org.springframework.web.context.request.async.AsyncRequestNotUsableException ex) {
+        log.warn("Client disconnected during async request: {}", ex.getMessage());
     }
 }
