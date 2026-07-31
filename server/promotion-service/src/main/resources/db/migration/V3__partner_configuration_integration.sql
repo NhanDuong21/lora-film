@@ -89,9 +89,15 @@ BEGIN
         CONSTRAINT uk_integration_event_public UNIQUE (public_id),
         CONSTRAINT uk_integration_event_source_id UNIQUE (source_service, event_id)
     );
-    CREATE INDEX idx_integration_event_status ON promotion_integration_events
-        (processing_status, next_retry_at, created_at);
-    CREATE INDEX idx_integration_event_type ON promotion_integration_events (event_type, created_at);
+    IF NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE()
+        AND table_name = 'promotion_integration_events' AND index_name = 'idx_integration_event_status') THEN
+        CREATE INDEX idx_integration_event_status ON promotion_integration_events
+            (processing_status, next_retry_at, created_at);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE()
+        AND table_name = 'promotion_integration_events' AND index_name = 'idx_integration_event_type') THEN
+        CREATE INDEX idx_integration_event_type ON promotion_integration_events (event_type, created_at);
+    END IF;
 
     CREATE TABLE IF NOT EXISTS promotion_scheduler_job_executions (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -107,10 +113,16 @@ BEGIN
         created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         CONSTRAINT uk_scheduler_execution_public UNIQUE (public_id)
     );
-    CREATE INDEX idx_scheduler_execution_job ON promotion_scheduler_job_executions
-        (job_name, started_at);
-    CREATE INDEX idx_scheduler_execution_status ON promotion_scheduler_job_executions
-        (status, started_at);
+    IF NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE()
+        AND table_name = 'promotion_scheduler_job_executions' AND index_name = 'idx_scheduler_execution_job') THEN
+        CREATE INDEX idx_scheduler_execution_job ON promotion_scheduler_job_executions
+            (job_name, started_at);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE()
+        AND table_name = 'promotion_scheduler_job_executions' AND index_name = 'idx_scheduler_execution_status') THEN
+        CREATE INDEX idx_scheduler_execution_status ON promotion_scheduler_job_executions
+            (status, started_at);
+    END IF;
 
     CREATE TABLE IF NOT EXISTS promotion_scheduler_locks (
         job_name VARCHAR(100) PRIMARY KEY,

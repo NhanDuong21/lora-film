@@ -18,10 +18,16 @@ public class TemplateRegistryHealthIndicator implements HealthIndicator {
     public Health health() {
         TemplateRegistry.RegistryHealth registryHealth = registry.health();
         Health.Builder builder = registryHealth.available() ? Health.up() : Health.down();
-        return builder.withDetail("provider", registryHealth.provider())
-                .withDetail("branch", registryHealth.branch())
-                .withDetail("headCommit", registryHealth.headCommit())
-                .withDetail("message", registryHealth.message())
-                .build();
+        addDetail(builder, "provider", registryHealth.provider());
+        addDetail(builder, "branch", registryHealth.branch());
+        addDetail(builder, "headCommit", registryHealth.headCommit());
+        addDetail(builder, "message", registryHealth.message());
+        return builder.build();
+    }
+
+    private void addDetail(Health.Builder builder, String key, String value) {
+        if (value != null) {
+            builder.withDetail(key, value);
+        }
     }
 }

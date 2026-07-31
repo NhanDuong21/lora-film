@@ -44,7 +44,7 @@ public class NotificationEventConsumer {
         this.userRecipientClient = userRecipientClient;
     }
 
-    @KafkaListener(topics = "${notification.kafka.booking-topic}")
+    @KafkaListener(topics = "${notification.kafka.booking-topic:booking.domain.events.v1}")
     @Transactional
     public void consumeBookingEvent(String json) {
         DomainEventEnvelope event = parse(json);
@@ -105,7 +105,7 @@ public class NotificationEventConsumer {
         markProcessed(event);
     }
 
-    @KafkaListener(topics = "${notification.kafka.payment-topic}")
+    @KafkaListener(topics = "${notification.kafka.payment-topic:payment.domain.events.v1}")
     @Transactional
     public void consumePaymentEvent(String json) {
         DomainEventEnvelope event = parse(json);
