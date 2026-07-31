@@ -3,6 +3,7 @@ import apiClient from '@/services/apiClient';
 import {
   acknowledgeAnalyticsAlert,
   getAnalyticsDashboard,
+  getCinemaDirectory,
   updateAnalyticsRecommendation
 } from './analyticsAdminService';
 
@@ -42,6 +43,36 @@ describe('analyticsAdminService', () => {
         cinemaKey: 'cinema-1'
       }
     });
+  });
+
+  it('resolves cinema identifiers through the cinema directory and detail API', async () => {
+    apiClient.get.mockImplementation(url => {
+      if (url === '/api/admin/cinemas') {
+        return Promise.resolve({
+          data: {
+            data: {
+              data: [{ publicId: 'cinema-1', name: 'LoraFilm Quận 1' }]
+            }
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          data: { publicId: 'cinema-2', name: 'LoraFilm Thủ Đức' }
+        }
+      });
+    });
+
+    const cinemas = await getCinemaDirectory(['cinema-1', 'cinema-2']);
+
+    expect(apiClient.get).toHaveBeenNthCalledWith(1, '/api/admin/cinemas', {
+      params: { page: 0, size: 200, showDeleted: false }
+    });
+    expect(apiClient.get).toHaveBeenNthCalledWith(2, '/api/cinemas/cinema-2');
+    expect(cinemas).toEqual([
+      { publicId: 'cinema-1', name: 'LoraFilm Quận 1' },
+      { publicId: 'cinema-2', name: 'LoraFilm Thủ Đức' }
+    ]);
   });
 
   it('updates alert and recommendation lifecycle through explicit endpoints', async () => {

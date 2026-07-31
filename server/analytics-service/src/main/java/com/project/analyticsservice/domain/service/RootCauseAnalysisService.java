@@ -70,15 +70,17 @@ public class RootCauseAnalysisService {
         String label = Objects.toString(primary.evidence().get("label"), primary.dimensionKey());
         return switch (primary.causeType()) {
             case "CINEMA_REVENUE_DECLINE" ->
-                    "Đóng góp lớn nhất đến từ " + label + ", có doanh thu thấp hơn đường cơ sở.";
+                    "Ảnh hưởng lớn nhất đến từ " + label
+                            + ", nơi có doanh thu thấp hơn mức trung bình gần đây.";
             case "CINEMA_REFUND_PRESSURE" ->
                     "Áp lực hoàn tiền tập trung nhiều nhất tại " + label + ".";
             case "CINEMA_LOW_OCCUPANCY" ->
                     "Công suất ghế thấp tập trung nhiều nhất tại " + label + ".";
             case "MISSING_EVENT_SNAPSHOT" ->
-                    "Event nguồn đang thiếu dimension hoặc snapshot sức chứa cần cho phân tích.";
+                    "Dữ liệu giao dịch đang thiếu một số thông tin về rạp, khách hàng "
+                            + "hoặc sức chứa phòng chiếu.";
             default ->
-                    "Biến động của chỉ số hệ thống vượt khỏi vùng kỳ vọng của đường cơ sở.";
+                    "Kết quả chung thay đổi nhiều hơn mức thường thấy trong những ngày gần đây.";
         };
     }
 
@@ -100,14 +102,21 @@ public class RootCauseAnalysisService {
         }
         if ("REVENUE_DROP".equals(category) || "ANOMALY_NET_REVENUE".equals(category)) {
             List<CinemaPerformanceDaily> baseline =
-                    cinemaRepository.findAllByStatDateBetween(date.minusDays(7), date.minusDays(1));
+                    cinemaRepository.findAllByStatDateBetween(date.minusDays(28), date.minusDays(1));
             Map<String, List<CinemaPerformanceDaily>> byCinema = baseline.stream()
                     .collect(Collectors.groupingBy(CinemaPerformanceDaily::getCinemaKey));
             List<Candidate> values = new ArrayList<>();
             for (CinemaPerformanceDaily cinema : current) {
                 List<CinemaPerformanceDaily> history =
                         byCinema.getOrDefault(cinema.getCinemaKey(), List.of());
-                BigDecimal expected = average(history, CinemaPerformanceDaily::getNetRevenue);
+                List<CinemaPerformanceDaily> sameWeekday = history.stream()
+                        .filter(value -> value.getStatDate().getDayOfWeek()
+                                == date.getDayOfWeek())
+                        .toList();
+                List<CinemaPerformanceDaily> reference = sameWeekday.size() >= 3
+                        ? sameWeekday : history;
+                BigDecimal expected = average(
+                        reference, CinemaPerformanceDaily::getNetRevenue);
                 BigDecimal decline = expected.subtract(cinema.getNetRevenue()).max(BigDecimal.ZERO);
                 if (decline.signum() > 0) {
                     values.add(candidate(

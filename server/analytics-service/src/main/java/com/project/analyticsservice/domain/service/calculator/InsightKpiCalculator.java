@@ -77,10 +77,15 @@ public class InsightKpiCalculator implements KpiCalculator {
         });
         insightRepository.saveAll(existingInsights);
 
-        LocalDate baselineStart = statDate.minusDays(7);
+        LocalDate baselineStart = statDate.minusDays(28);
         LocalDate baselineEnd = statDate.minusDays(1);
-        List<DailyBusinessKpi> baseline = dailyRepository
+        List<DailyBusinessKpi> history = dailyRepository
                 .findAllByStatDateBetweenOrderByStatDateAsc(baselineStart, baselineEnd);
+        List<DailyBusinessKpi> sameWeekday = history.stream()
+                .filter(value -> value.getStatDate().getDayOfWeek() == statDate.getDayOfWeek())
+                .toList();
+        List<DailyBusinessKpi> baseline = sameWeekday.size() >= 3
+                ? sameWeekday : history;
         BigDecimal baselineRevenue = average(
                 baseline.stream().map(DailyBusinessKpi::getNetRevenue).toList());
         Set<String> generatedCategories = new HashSet<>();
@@ -92,14 +97,16 @@ public class InsightKpiCalculator implements KpiCalculator {
                 create(
                         statDate, "REVENUE_DROP",
                         severity(deviation.abs(), new BigDecimal("0.40")),
-                        "Doanh thu giảm so với đường cơ sở",
+                        "Doanh thu giảm so với mức trung bình gần đây",
                         "Doanh thu thuần thấp hơn "
                                 + percent(deviation.abs())
-                                + " so với trung bình 7 ngày gần nhất.",
+                                + " so với mức thường thấy của cùng thứ trong các tuần gần đây.",
                         baselineStart, baselineEnd, baselineRevenue,
                         current.getNetRevenue(), deviation,
                         current.getDataCompleteness(),
-                        Map.of("baselineDays", baseline.size()));
+                        Map.of(
+                                "baselineDays", baseline.size(),
+                                "weekdayMatched", sameWeekday.size() >= 3));
                 generatedCategories.add("REVENUE_DROP");
             }
         }
@@ -110,7 +117,7 @@ public class InsightKpiCalculator implements KpiCalculator {
                     statDate, "HIGH_REFUND_RATE",
                     severity(current.getRefundRate(), new BigDecimal("0.20")),
                     "Tỷ lệ hoàn tiền đang cao",
-                    "Refund Rate hiện ở mức " + percent(current.getRefundRate())
+                    "Tỷ lệ hoàn tiền hiện ở mức " + percent(current.getRefundRate())
                             + ", cao hơn ngưỡng vận hành "
                             + percent(refundRateThreshold) + ".",
                     baselineStart, baselineEnd, refundRateThreshold,
@@ -125,7 +132,7 @@ public class InsightKpiCalculator implements KpiCalculator {
             create(
                     statDate, "LOW_OCCUPANCY", "MEDIUM",
                     "Công suất ghế thấp",
-                    "Occupancy chỉ đạt " + percent(current.getOccupancyRate())
+                    "Tỷ lệ lấp đầy ghế chỉ đạt " + percent(current.getOccupancyRate())
                             + ", thấp hơn ngưỡng mục tiêu "
                             + percent(lowOccupancyThreshold) + ".",
                     baselineStart, baselineEnd, lowOccupancyThreshold,
@@ -142,7 +149,7 @@ public class InsightKpiCalculator implements KpiCalculator {
                     "Dữ liệu phân tích chưa đầy đủ",
                     "Mức đầy đủ dữ liệu hiện là "
                             + percent(current.getDataCompleteness())
-                            + "; insight và forecast có thể giảm độ tin cậy.",
+                            + "; kết quả phân tích và dự báo có thể kém tin cậy.",
                     baselineStart, baselineEnd, expected,
                     current.getDataCompleteness(), deviation,
                     BigDecimal.ONE,
@@ -197,7 +204,7 @@ public class InsightKpiCalculator implements KpiCalculator {
         insight.setCategory(category);
         insight.setTitle(title);
         insight.setSummary(summary);
-        insight.setRootCause("Đang phân tích các dimension đóng góp.");
+        insight.setRootCause("Đang phân tích các nhóm dữ liệu có ảnh hưởng.");
         insight.setEvidenceJson(json(evidence));
         insight.setBaselineStartDate(baselineStart);
         insight.setBaselineEndDate(baselineEnd);
@@ -237,7 +244,7 @@ public class InsightKpiCalculator implements KpiCalculator {
 
     private String anomalySummary(AnomalyDetection anomaly) {
         return "Giá trị thực tế lệch " + percent(anomaly.getDeviationRate().abs())
-                + " so với đường cơ sở và có anomaly score "
+                + " so với mức trung bình gần đây. Mức độ bất thường là "
                 + anomaly.getAnomalyScore().setScale(2, RoundingMode.HALF_UP) + ".";
     }
 

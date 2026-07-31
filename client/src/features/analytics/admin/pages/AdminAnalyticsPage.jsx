@@ -23,6 +23,7 @@ import { ErrorState, LoadingState } from '@/components/common/ui/uiKit';
 import {
   acknowledgeAnalyticsAlert,
   getAnalyticsDashboard,
+  getCinemaDirectory,
   getCinemaKpis,
   updateAnalyticsRecommendation
 } from '../services/analyticsAdminService';
@@ -51,27 +52,27 @@ const DATE_RANGE_OPTIONS = [
 const DECISION_VIEWS = [
   {
     value: 'happened',
-    eyebrow: '01 · Mô tả',
+    eyebrow: '01 · Kết quả',
     label: 'Đã xảy ra gì?',
-    description: 'KPI và hiệu suất'
+    description: 'Doanh thu và hiệu quả'
   },
   {
     value: 'why',
-    eyebrow: '02 · Chẩn đoán',
+    eyebrow: '02 · Nguyên nhân',
     label: 'Vì sao?',
-    description: 'Bất thường và nguyên nhân'
+    description: 'Điểm bất thường cần chú ý'
   },
   {
     value: 'next',
     eyebrow: '03 · Dự báo',
     label: 'Sắp xảy ra gì?',
-    description: 'Doanh thu và nhu cầu'
+    description: 'Doanh thu trong thời gian tới'
   },
   {
     value: 'action',
-    eyebrow: '04 · Quyết định',
+    eyebrow: '04 · Hành động',
     label: 'Nên làm gì?',
-    description: 'Khuyến nghị và cảnh báo'
+    description: 'Việc cần xử lý tiếp theo'
   }
 ];
 
@@ -109,6 +110,131 @@ const PRIORITY_LABELS = {
   LOW: 'Ưu tiên thấp'
 };
 
+const STATUS_LABELS = {
+  SUCCESS: 'Thành công',
+  FAILED: 'Gặp lỗi',
+  RUNNING: 'Đang xử lý',
+  NEVER_RUN: 'Chưa từng cập nhật',
+  FRESH: 'Dữ liệu mới',
+  DEGRADED: 'Cập nhật chậm',
+  STALE: 'Dữ liệu đã cũ',
+  NO_DATA: 'Chưa có dữ liệu',
+  CRITICAL: 'Nghiêm trọng',
+  HIGH: 'Mức cao',
+  WARNING: 'Cần chú ý',
+  MEDIUM: 'Mức vừa',
+  LOW: 'Mức thấp',
+  INFO: 'Thông tin',
+  PENDING: 'Chờ xử lý',
+  ACCEPTED: 'Đang xử lý',
+  COMPLETED: 'Đã hoàn tất',
+  DISMISSED: 'Đã bỏ qua',
+  ACKNOWLEDGED: 'Đã ghi nhận',
+  HEALTHY: 'Khỏe mạnh',
+  STABLE: 'Ổn định',
+  AT_RISK: 'Có rủi ro'
+};
+
+const PIPELINE_LABELS = {
+  SUCCESS: 'Lần tổng hợp gần nhất thành công',
+  FAILED: 'Lần tổng hợp gần nhất gặp lỗi',
+  RUNNING: 'Hệ thống đang tổng hợp dữ liệu',
+  NEVER_RUN: 'Hệ thống chưa từng tổng hợp dữ liệu'
+};
+
+const DETECTION_LABELS = {
+  Z_SCORE: 'So với mức thông thường',
+  ROBUST_Z_SCORE: 'So với mức thông thường',
+  WEEKDAY_ROBUST_MAD_56D_V2: 'So với cùng thứ của các tuần trước',
+  SEASONAL_BASELINE: 'So với cùng thời điểm trước đó',
+  IQR: 'So với khoảng dao động thường thấy'
+};
+
+const SERVICE_LABELS = {
+  'analytics-service': 'Bộ phận dữ liệu',
+  'booking-service': 'Bộ phận đơn hàng',
+  'business-operations': 'Bộ phận kinh doanh',
+  'movie-service': 'Bộ phận lịch chiếu',
+  'payment-service': 'Bộ phận thanh toán',
+  'promotion-service': 'Bộ phận ưu đãi'
+};
+
+const CAUSE_LABELS = {
+  CINEMA_REVENUE_DECLINE: 'Doanh thu tại rạp giảm',
+  CINEMA_REFUND_PRESSURE: 'Hoàn tiền tập trung tại rạp',
+  CINEMA_LOW_OCCUPANCY: 'Tỷ lệ lấp đầy ghế tại rạp thấp',
+  MISSING_EVENT_SNAPSHOT: 'Dữ liệu đầu vào còn thiếu',
+  SYSTEM_METRIC_DEVIATION: 'Kết quả chung thay đổi ngoài mức thông thường'
+};
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_IN_TEXT_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+
+const formatDisplayDate = value => {
+  if (!value) return 'chưa xác định';
+  const [year, month, day] = String(value).slice(0, 10).split('-');
+  return year && month && day ? `${day}/${month}/${year}` : value;
+};
+
+const cinemaKeyOf = cinema => cinema?.cinemaKey
+  || cinema?.publicId
+  || cinema?.cinemaPublicId
+  || cinema?.id;
+
+const cinemaNameOf = cinema => cinema?.name || cinema?.cinemaName;
+
+const isReadableCinemaName = (name, cinemaKey) => {
+  const normalizedName = String(name || '').trim();
+  return Boolean(normalizedName)
+    && normalizedName !== String(cinemaKey || '').trim()
+    && !UUID_PATTERN.test(normalizedName);
+};
+
+const resolveCinemaName = (cinemaKey, fallbackName, cinemaNameByKey) => {
+  const directoryName = cinemaNameByKey.get(String(cinemaKey || ''));
+  if (isReadableCinemaName(directoryName, cinemaKey)) return directoryName;
+  if (isReadableCinemaName(fallbackName, cinemaKey)) return fallbackName;
+  return 'Rạp chưa cập nhật tên';
+};
+
+const localizeAnalyticsText = (value, cinemaNameByKey) => {
+  if (!value) return 'Chưa có mô tả.';
+  let result = String(value);
+  [...cinemaNameByKey.entries()]
+    .sort(([left], [right]) => right.length - left.length)
+    .forEach(([cinemaKey, cinemaName]) => {
+      result = result.split(cinemaKey).join(cinemaName);
+    });
+
+  const replacements = {
+    'Refund Rate': 'Tỷ lệ hoàn tiền',
+    Occupancy: 'Tỷ lệ lấp đầy ghế',
+    'anomaly score': 'mức độ bất thường',
+    'root-cause factor': 'nguyên nhân',
+    'root-cause': 'nguyên nhân',
+    snapshot: 'thông tin chi tiết',
+    Snapshot: 'Thông tin chi tiết',
+    dimension: 'nhóm dữ liệu',
+    Dimension: 'Nhóm dữ liệu',
+    event: 'dữ liệu đầu vào',
+    Event: 'Dữ liệu đầu vào',
+    insight: 'kết quả phân tích',
+    Insight: 'Kết quả phân tích',
+    forecast: 'dự báo',
+    Forecast: 'Dự báo',
+    provider: 'đơn vị thanh toán',
+    producer: 'hệ thống cung cấp dữ liệu',
+    booking: 'đơn hàng',
+    Booking: 'Đơn hàng',
+    KPI: 'số liệu',
+    'đường cơ sở': 'mức trung bình trước đó'
+  };
+  Object.entries(replacements).forEach(([source, replacement]) => {
+    result = result.split(source).join(replacement);
+  });
+  return result.replace(UUID_IN_TEXT_PATTERN, 'rạp chưa cập nhật tên');
+};
+
 const statusTone = status => {
   if (['CRITICAL', 'FAILED', 'AT_RISK'].includes(status)) {
     return 'border-red-500/25 bg-red-500/10 text-red-300';
@@ -125,7 +251,7 @@ const statusTone = status => {
 function Badge({ value, label }) {
   return (
     <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(value)}`}>
-      {label || value || 'Chưa xác định'}
+      {label || STATUS_LABELS[value] || 'Chưa xác định'}
     </span>
   );
 }
@@ -179,7 +305,7 @@ function RevenueChart({ values = [] }) {
     return (
       <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-zinc-800">
         <p className="max-w-sm text-center text-sm leading-6 text-zinc-600">
-          Chưa có KPI trong khoảng đã chọn. Dữ liệu hôm nay được tổng hợp lại mỗi phút khi có event mới.
+          Chưa có số liệu trong khoảng đã chọn. Dữ liệu hôm nay được cập nhật mỗi phút khi có giao dịch mới.
         </p>
       </div>
     );
@@ -222,7 +348,8 @@ function HealthScore({ health, quality }) {
     ['Nhu cầu', health?.demandScore],
     ['Công suất', health?.occupancyScore],
     ['Khách hàng', health?.customerScore],
-    ['Vận hành', health?.operationalScore]
+    ['Vận hành', health?.operationalScore],
+    ['Độ đầy đủ dữ liệu', health?.dataQualityScore]
   ];
 
   return (
@@ -270,16 +397,16 @@ function HealthScore({ health, quality }) {
             </div>
           ))}
         </div>
-        <p className="mt-5 border-t border-zinc-800 pt-4 text-xs text-zinc-600">
-          Chất lượng dữ liệu: {percent(quality?.latestCompleteness)} ·
-          {' '}{health?.algorithmVersion || 'HEALTH_SCORE_V1'}
+        <p className="mt-5 border-t border-zinc-800 pt-4 text-xs leading-5 text-zinc-600">
+          Mức độ đầy đủ của dữ liệu: {percent(quality?.latestCompleteness)}.
+          Điểm càng cao cho thấy số liệu toàn hệ thống càng đáng tin cậy.
         </p>
       </div>
     </section>
   );
 }
 
-function RankingTable({ rows = [], kind }) {
+function RankingTable({ rows = [], kind, cinemaNameByKey }) {
   const isMovie = kind === 'movie';
   return (
     <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/55">
@@ -300,7 +427,9 @@ function RankingTable({ rows = [], kind }) {
             <span className="text-xs font-semibold text-zinc-600">{String(index + 1).padStart(2, '0')}</span>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-zinc-200">
-                {isMovie ? row.movieTitle : (row.cinemaName || row.cinemaKey)}
+                {isMovie
+                  ? row.movieTitle
+                  : resolveCinemaName(row.cinemaKey, row.cinemaName, cinemaNameByKey)}
               </p>
               <p className="mt-1 text-[11px] text-zinc-600">
                 {number(row.ticketCount)} vé · Lấp đầy {percent(row.occupancyRate)}
@@ -329,7 +458,8 @@ export default function AdminAnalyticsPage() {
   const [days, setDays] = useState(30);
   const [view, setView] = useState('happened');
   const [selectedCinemaKey, setSelectedCinemaKey] = useState('');
-  const [cinemaOptions, setCinemaOptions] = useState([]);
+  const [cinemaKpis, setCinemaKpis] = useState([]);
+  const [cinemaDirectory, setCinemaDirectory] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -350,8 +480,15 @@ export default function AdminAnalyticsPage() {
         }),
         getCinemaKpis({ ...period, limit: 100 })
       ]);
+      const cinemaKeys = [
+        ...cinemas.map(cinema => cinema.cinemaKey),
+        dashboardData?.scope?.cinemaKey,
+        selectedCinemaKey
+      ];
+      const directory = await getCinemaDirectory(cinemaKeys);
       setDashboard(dashboardData);
-      setCinemaOptions(cinemas);
+      setCinemaKpis(cinemas);
+      setCinemaDirectory(directory);
     } catch (requestError) {
       setDashboard(null);
       setError(requestError?.message || 'Không thể tải dữ liệu Analytics.');
@@ -365,6 +502,44 @@ export default function AdminAnalyticsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  const cinemaNameByKey = useMemo(() => {
+    const names = new Map();
+    cinemaDirectory.forEach(cinema => {
+      const cinemaKey = cinemaKeyOf(cinema);
+      const cinemaName = cinemaNameOf(cinema);
+      if (cinemaKey && isReadableCinemaName(cinemaName, cinemaKey)) {
+        names.set(String(cinemaKey), cinemaName);
+      }
+    });
+    cinemaKpis.forEach(cinema => {
+      const cinemaKey = cinemaKeyOf(cinema);
+      const cinemaName = cinemaNameOf(cinema);
+      if (cinemaKey && !names.has(String(cinemaKey))
+          && isReadableCinemaName(cinemaName, cinemaKey)) {
+        names.set(String(cinemaKey), cinemaName);
+      }
+    });
+    return names;
+  }, [cinemaDirectory, cinemaKpis]);
+
+  const cinemaOptions = useMemo(() => {
+    const optionsByKey = new Map();
+    [...cinemaDirectory, ...cinemaKpis].forEach(cinema => {
+      const cinemaKey = cinemaKeyOf(cinema);
+      if (!cinemaKey) return;
+      optionsByKey.set(String(cinemaKey), {
+        cinemaKey,
+        cinemaName: resolveCinemaName(cinemaKey, cinemaNameOf(cinema), cinemaNameByKey)
+      });
+    });
+    return [...optionsByKey.values()]
+      .sort((left, right) => left.cinemaName.localeCompare(right.cinemaName, 'vi'));
+  }, [
+    cinemaDirectory,
+    cinemaKpis,
+    cinemaNameByKey
+  ]);
 
   const handleAlert = async id => {
     setActing(`alert-${id}`);
@@ -408,9 +583,17 @@ export default function AdminAnalyticsPage() {
   const summary = dashboard?.summary || {};
   const quality = dashboard?.dataQuality || {};
   const isCinemaScope = dashboard?.scope?.type === 'CINEMA';
+  const scopeCinemaKey = dashboard?.scope?.cinemaKey || selectedCinemaKey;
   const scopeName = isCinemaScope
-    ? (dashboard?.scope?.cinemaName || dashboard?.scope?.cinemaKey)
+    ? resolveCinemaName(
+        scopeCinemaKey,
+        dashboard?.scope?.cinemaName,
+        cinemaNameByKey
+      )
     : 'Toàn hệ thống';
+  const hasCinemaData = !isCinemaScope
+    || Boolean(dashboard?.daily?.length)
+    || Number(summary.bookingCount) > 0;
   const revenueForecasts = dashboard?.forecasts?.filter(item => item.forecastType === 'REVENUE') || [];
 
   return (
@@ -418,11 +601,11 @@ export default function AdminAnalyticsPage() {
       <header className="flex flex-col justify-between gap-5 border-b border-zinc-800 pb-6 xl:flex-row xl:items-end">
         <div>
           <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-400">
-            <Activity className="h-4 w-4" /> Business Intelligence
+            <Activity className="h-4 w-4" /> Báo cáo và phân tích kinh doanh
           </p>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">Trung tâm điều hành kinh doanh</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            Một luồng đọc thống nhất từ kết quả kinh doanh đến nguyên nhân, dự báo và hành động tiếp theo.
+            Theo dõi kết quả kinh doanh, tìm nguyên nhân thay đổi và xem những việc cần xử lý tiếp theo.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -438,7 +621,7 @@ export default function AdminAnalyticsPage() {
               <option value="">Toàn hệ thống</option>
               {cinemaOptions.map(cinema => (
                 <option key={cinema.cinemaKey} value={cinema.cinemaKey}>
-                  {cinema.cinemaName || cinema.cinemaKey}
+                  {cinema.cinemaName}
                 </option>
               ))}
             </select>
@@ -490,20 +673,23 @@ export default function AdminAnalyticsPage() {
             quality.lastPipelineStatus === 'SUCCESS' ? 'bg-emerald-400' : 'bg-amber-400'
           }`} />
           <p className="text-xs text-zinc-400">
-            Dữ liệu đến <strong className="font-medium text-zinc-200">
-              {quality.lastCalculatedDate || 'chưa xác định'}
+            Số liệu cập nhật đến <strong className="font-medium text-zinc-200">
+              {formatDisplayDate(quality.lastCalculatedDate)}
             </strong>
-            {' '}· Pipeline {quality.lastPipelineStatus || 'NEVER_RUN'}
+            {' '}· {PIPELINE_LABELS[quality.lastPipelineStatus] || 'Chưa rõ trạng thái cập nhật'}
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <Clock3 className="h-3.5 w-3.5" />
           Hôm nay tự cập nhật mỗi phút
-          <Badge value={quality.freshnessStatus} label={quality.freshnessStatus || 'NO_DATA'} />
+          <Badge
+            value={quality.freshnessStatus}
+            label={STATUS_LABELS[quality.freshnessStatus] || STATUS_LABELS.NO_DATA}
+          />
         </div>
       </section>
 
-      <nav className="grid gap-2 md:grid-cols-2 xl:grid-cols-4" aria-label="Bốn câu hỏi BI">
+      <nav className="grid gap-2 md:grid-cols-2 xl:grid-cols-4" aria-label="Bốn nhóm báo cáo">
         {DECISION_VIEWS.map(item => (
           <button
             key={item.value}
@@ -539,13 +725,37 @@ export default function AdminAnalyticsPage() {
             icon={BarChart3}
             eyebrow="Đã xảy ra gì?"
             title={isCinemaScope ? `Hiệu suất riêng · ${scopeName}` : 'Bức tranh kinh doanh'}
-            description={`${dashboard?.period?.startDate} → ${dashboard?.period?.endDate}`}
+            description={`${formatDisplayDate(dashboard?.period?.startDate)} – ${formatDisplayDate(dashboard?.period?.endDate)}`}
           />
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/55 p-5">
+            <SectionTitle
+              icon={TrendingUp}
+              eyebrow="Xu hướng doanh thu"
+              title="Doanh thu thuần theo ngày"
+              description="Số tiền thực nhận sau khi trừ giảm giá và hoàn tiền"
+              aside={(
+                <span className="flex items-center gap-2 text-xs text-zinc-600">
+                  <CalendarDays className="h-4 w-4" /> {days === 1 ? 'Trong ngày' : `${days} ngày`}
+                </span>
+              )}
+            />
+            <RevenueChart values={dashboard?.daily} />
+          </section>
           {!isCinemaScope && <HealthScore health={dashboard?.healthScore} quality={quality} />}
           {isCinemaScope && (
             <section className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5 text-sm leading-6 text-zinc-400">
-              Các KPI bên dưới chỉ lấy giao dịch của <strong className="font-semibold text-zinc-200">{scopeName}</strong>.
-              Dự báo và điểm sức khỏe toàn chuỗi không được trộn vào số liệu của rạp này.
+              {hasCinemaData ? (
+                <>
+                  Các số liệu bên dưới chỉ lấy giao dịch của <strong className="font-semibold text-zinc-200">{scopeName}</strong>.
+                  Dự báo và điểm sức khỏe toàn chuỗi không được trộn vào số liệu của rạp này.
+                </>
+              ) : (
+                <>
+                  <strong className="font-semibold text-zinc-200">{scopeName}</strong> chưa phát sinh
+                  giao dịch trong khoảng thời gian này. Các chỉ số bằng 0 là trạng thái chưa có dữ liệu,
+                  không phải lỗi hệ thống.
+                </>
+              )}
             </section>
           )}
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -557,9 +767,9 @@ export default function AdminAnalyticsPage() {
             />
             <MetricCard
               icon={Ticket}
-              label="Booking thành công"
+              label="Đơn hàng thành công"
               value={number(summary.bookingCount)}
-              detail={`Giá trị trung bình ${money(summary.averageBookingValue)}`}
+              detail={`Trung bình mỗi đơn ${money(summary.averageBookingValue)}`}
             />
             <MetricCard
               icon={Target}
@@ -571,26 +781,22 @@ export default function AdminAnalyticsPage() {
               icon={AlertTriangle}
               label="Tỷ lệ hoàn tiền"
               value={percent(summary.refundRate)}
-              detail={`${number(summary.refundBookingCount)} booking hoàn tiền`}
+              detail={`${number(summary.refundBookingCount)} đơn hàng đã hoàn tiền`}
             />
-          </section>
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/55 p-5">
-            <SectionTitle
-              icon={TrendingUp}
-              eyebrow="Xu hướng"
-              title="Doanh thu thuần theo ngày"
-              description="Doanh thu gộp − giảm giá − hoàn tiền"
-              aside={(
-                <span className="flex items-center gap-2 text-xs text-zinc-600">
-                  <CalendarDays className="h-4 w-4" /> {days === 1 ? 'Trong ngày' : `${days} ngày`}
-                </span>
-              )}
-            />
-            <RevenueChart values={dashboard?.daily} />
           </section>
           <section className={`grid gap-6 ${isCinemaScope ? '' : 'xl:grid-cols-2'}`}>
-            <RankingTable rows={dashboard?.topMovies} kind="movie" />
-            {!isCinemaScope && <RankingTable rows={dashboard?.topCinemas} kind="cinema" />}
+            <RankingTable
+              rows={dashboard?.topMovies}
+              kind="movie"
+              cinemaNameByKey={cinemaNameByKey}
+            />
+            {!isCinemaScope && (
+              <RankingTable
+                rows={dashboard?.topCinemas}
+                kind="cinema"
+                cinemaNameByKey={cinemaNameByKey}
+              />
+            )}
           </section>
         </div>
       )}
@@ -600,8 +806,8 @@ export default function AdminAnalyticsPage() {
           <SectionTitle
             icon={Search}
             eyebrow="Vì sao xảy ra?"
-            title="Chẩn đoán và nguyên nhân gốc"
-            description="Bất thường được phát hiện bằng đường cơ sở 28 ngày; nguyên nhân được xếp theo mức đóng góp."
+            title="Nguyên nhân và điểm bất thường"
+            description="So sánh với kết quả những ngày trước để chỉ ra thay đổi đáng chú ý và nơi ảnh hưởng nhiều nhất."
           />
           <section className="grid gap-4 lg:grid-cols-2">
             {dashboard?.anomalies?.map(item => (
@@ -609,13 +815,14 @@ export default function AdminAnalyticsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
-                      {item.statDate} · {item.detectionMethod}
+                      {formatDisplayDate(item.statDate)} ·
+                      {' '}{DETECTION_LABELS[item.detectionMethod] || 'Hệ thống tự động phát hiện'}
                     </p>
                     <h3 className="mt-2 font-semibold text-zinc-100">
-                      {METRIC_LABELS[item.metricName] || item.metricName}
+                      {METRIC_LABELS[item.metricName] || 'Chỉ số kinh doanh'}
                     </h3>
                   </div>
-                  <Badge value={item.severity} label={item.severity} />
+                  <Badge value={item.severity} label={STATUS_LABELS[item.severity]} />
                 </div>
                 <div className="mt-5 grid grid-cols-3 gap-3">
                   <div><p className="text-[11px] text-zinc-600">Thực tế</p><strong className="mt-1 block text-sm text-zinc-200">{number(item.actualValue)}</strong></div>
@@ -637,21 +844,27 @@ export default function AdminAnalyticsPage() {
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                   <div>
                     <div className="mb-3 flex items-center gap-2">
-                      <Badge value={item.severity} label={item.severity} />
+                      <Badge value={item.severity} label={STATUS_LABELS[item.severity]} />
                       <span className="text-[11px] text-zinc-600">
-                        Tin cậy {percent(item.confidenceScore)}
+                        Mức tin cậy {percent(item.confidenceScore)}
                       </span>
                     </div>
-                    <h3 className="font-semibold text-zinc-100">{item.title}</h3>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">{item.summary}</p>
+                    <h3 className="font-semibold text-zinc-100">
+                      {localizeAnalyticsText(item.title, cinemaNameByKey)}
+                    </h3>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">
+                      {localizeAnalyticsText(item.summary, cinemaNameByKey)}
+                    </p>
                   </div>
-                  <time className="text-xs text-zinc-600">{item.statDate}</time>
+                  <time className="text-xs text-zinc-600">{formatDisplayDate(item.statDate)}</time>
                 </div>
                 <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
                   <p className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
                     <Lightbulb className="h-4 w-4 text-orange-400" /> Kết luận nguyên nhân
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-zinc-500">{item.rootCause}</p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-500">
+                    {localizeAnalyticsText(item.rootCause, cinemaNameByKey)}
+                  </p>
                   {!!item.rootCauses?.length && (
                     <div className="mt-4 grid gap-2 md:grid-cols-3">
                       {item.rootCauses.map(cause => (
@@ -660,7 +873,15 @@ export default function AdminAnalyticsPage() {
                             Nguyên nhân #{cause.rank}
                           </p>
                           <p className="mt-1 text-xs font-medium text-zinc-300">
-                            {cause.dimensionKey || cause.causeType}
+                            {cause.dimensionType === 'CINEMA'
+                              ? `${CAUSE_LABELS[cause.causeType] || 'Ảnh hưởng tại rạp'}: ${
+                                  resolveCinemaName(
+                                    cause.dimensionKey,
+                                    null,
+                                    cinemaNameByKey
+                                  )
+                                }`
+                              : CAUSE_LABELS[cause.causeType] || 'Biến động chung của hệ thống'}
                           </p>
                           <p className="mt-1 text-[11px] text-zinc-600">
                             Đóng góp {percent(cause.contributionScore)}
@@ -673,7 +894,7 @@ export default function AdminAnalyticsPage() {
               </article>
             ))}
             {!dashboard?.insights?.length && (
-              <EmptyState>Không có insight đang hoạt động trong khoảng đã chọn.</EmptyState>
+              <EmptyState>Không có phân tích nào cần chú ý trong khoảng đã chọn.</EmptyState>
             )}
           </section>
         </div>
@@ -685,7 +906,7 @@ export default function AdminAnalyticsPage() {
             icon={TrendingUp}
             eyebrow="Sắp xảy ra gì?"
             title="Dự báo 7 ngày tiếp theo"
-            description="Mô hình có mùa vụ theo thứ trong tuần, kèm khoảng dự báo và kết quả backtest."
+            description="Ước tính dựa trên kết quả các ngày trước, kèm khoảng doanh thu thấp nhất và cao nhất có thể xảy ra."
           />
           <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/55">
             <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-zinc-800 px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
@@ -695,9 +916,11 @@ export default function AdminAnalyticsPage() {
               {revenueForecasts.map(item => (
                 <article key={`${item.forecastDate}-${item.forecastType}`} className="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-5 py-4">
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">{item.forecastDate}</p>
+                    <p className="text-sm font-medium text-zinc-200">
+                      {formatDisplayDate(item.forecastDate)}
+                    </p>
                     <p className="mt-1 text-[11px] text-zinc-600">
-                      Tin cậy {percent(item.confidenceScore)} · v{item.modelVersion || '1.0'}
+                      Mức tin cậy {percent(item.confidenceScore)}
                     </p>
                   </div>
                   <p className="text-right text-xs text-zinc-600">
@@ -710,38 +933,40 @@ export default function AdminAnalyticsPage() {
               ))}
               {!revenueForecasts.length && (
                 <p className="px-5 py-12 text-center text-sm text-zinc-600">
-                  Cần ít nhất một ngày KPI để sinh dự báo.
+                  Cần thêm số liệu kinh doanh trước khi có thể dự báo.
                 </p>
               )}
             </div>
           </section>
 
           <section>
-            <h3 className="mb-3 text-sm font-semibold text-zinc-300">Chất lượng mô hình gần nhất</h3>
+            <h3 className="mb-3 text-sm font-semibold text-zinc-300">Độ chính xác của dự báo gần nhất</h3>
             <div className="grid gap-4 md:grid-cols-3">
               {dashboard?.forecastQuality?.map(item => (
                 <article key={item.forecastType} className="rounded-2xl border border-zinc-800 bg-zinc-900/55 p-5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-zinc-300">
-                      {METRIC_LABELS[item.forecastType] || item.forecastType}
+                      {METRIC_LABELS[item.forecastType] || 'Chỉ số kinh doanh'}
                     </span>
                     <Badge
                       value={Number(item.mape) <= 0.2 ? 'SUCCESS' : 'WARNING'}
-                      label={`${number(item.sampleSize)} mẫu`}
+                      label={Number(item.mape) <= 0.2 ? 'Đáng tin cậy' : 'Cần theo dõi'}
                     />
                   </div>
                   <strong className="mt-5 block text-2xl font-semibold text-zinc-100">
                     {item.mape == null ? '—' : percent(item.mape)}
                   </strong>
-                  <p className="mt-1 text-xs text-zinc-600">MAPE · sai số phần trăm trung bình</p>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    Mức chênh lệch trung bình giữa dự báo và thực tế
+                  </p>
                   <p className="mt-4 text-[11px] text-zinc-600">
-                    MAE {number(item.mae)} · RMSE {number(item.rmse)}
+                    Được đánh giá trên {number(item.sampleSize)} ngày có dữ liệu
                   </p>
                 </article>
               ))}
               {!dashboard?.forecastQuality?.length && (
                 <div className="md:col-span-3">
-                  <EmptyState>Cần thêm lịch sử để backtest chất lượng mô hình.</EmptyState>
+                  <EmptyState>Cần thêm dữ liệu thực tế để đánh giá độ chính xác của dự báo.</EmptyState>
                 </div>
               )}
             </div>
@@ -754,8 +979,8 @@ export default function AdminAnalyticsPage() {
           <SectionTitle
             icon={Target}
             eyebrow="Nên làm gì tiếp theo?"
-            title="Hàng đợi quyết định"
-            description="Mỗi hành động gắn trực tiếp với insight và có trạng thái theo dõi."
+            title="Danh sách việc cần xử lý"
+            description="Mỗi đề xuất đều có mức ưu tiên và trạng thái để người quản lý dễ theo dõi."
           />
           <section className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
             <div className="space-y-4">
@@ -767,16 +992,26 @@ export default function AdminAnalyticsPage() {
                   <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-400">
-                        {PRIORITY_LABELS[item.priority] || item.priority} · {item.targetService}
+                        {PRIORITY_LABELS[item.priority] || 'Ưu tiên thường'} ·
+                        {' '}{SERVICE_LABELS[item.targetService] || 'Bộ phận liên quan'}
                       </p>
-                      <h4 className="mt-2 font-semibold text-zinc-100">{item.title}</h4>
+                      <h4 className="mt-2 font-semibold text-zinc-100">
+                        {localizeAnalyticsText(item.title, cinemaNameByKey)}
+                      </h4>
+                      {item.confidenceScore != null && (
+                        <p className="mt-1 text-[11px] text-zinc-600">
+                          Mức tin cậy {percent(item.confidenceScore)}
+                        </p>
+                      )}
                     </div>
-                    <Badge value={item.status} label={item.status} />
+                    <Badge value={item.status} label={STATUS_LABELS[item.status]} />
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-zinc-500">{item.description}</p>
+                  <p className="mt-3 text-sm leading-6 text-zinc-500">
+                    {localizeAnalyticsText(item.description, cinemaNameByKey)}
+                  </p>
                   <div className="mt-4 rounded-xl bg-zinc-950/45 p-3 text-xs leading-5 text-zinc-500">
                     <span className="font-medium text-zinc-300">Tác động kỳ vọng:</span>{' '}
-                    {item.expectedImpact}
+                    {localizeAnalyticsText(item.expectedImpact, cinemaNameByKey)}
                   </div>
                   {item.status === 'PENDING' && (
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -822,11 +1057,17 @@ export default function AdminAnalyticsPage() {
               {dashboard?.alerts?.map(item => (
                 <article key={item.id} className="rounded-2xl border border-red-500/15 bg-red-500/5 p-5">
                   <div className="flex items-center justify-between gap-3">
-                    <Badge value={item.severity} label={item.severity} />
-                    <time className="text-[11px] text-zinc-600">{item.createdAt?.slice?.(0, 10)}</time>
+                    <Badge value={item.severity} label={STATUS_LABELS[item.severity]} />
+                    <time className="text-[11px] text-zinc-600">
+                      {formatDisplayDate(item.createdAt)}
+                    </time>
                   </div>
-                  <h4 className="mt-3 text-sm font-semibold text-zinc-100">{item.title}</h4>
-                  <p className="mt-2 text-xs leading-5 text-zinc-500">{item.message}</p>
+                  <h4 className="mt-3 text-sm font-semibold text-zinc-100">
+                    {localizeAnalyticsText(item.title, cinemaNameByKey)}
+                  </h4>
+                  <p className="mt-2 text-xs leading-5 text-zinc-500">
+                    {localizeAnalyticsText(item.message, cinemaNameByKey)}
+                  </p>
                   {item.acknowledged ? (
                     <p className="mt-4 flex items-center gap-2 text-xs text-emerald-400">
                       <CheckCircle2 className="h-4 w-4" /> Đã ghi nhận

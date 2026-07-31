@@ -124,6 +124,27 @@ class AnalyticsQueryDomainServiceTest {
         assertTrue(dashboard.forecasts().isEmpty());
     }
 
+    @Test
+    void dashboard_ShouldReturnEmptyCinemaViewWhenCinemaHasNoAnalyticsYet() {
+        when(cinemaRepository.findAllByCinemaKeyAndStatDateBetweenOrderByStatDateAsc(
+                "cinema-2", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 2)))
+                .thenReturn(List.of());
+        when(cinemaRepository.findFirstByCinemaKeyOrderByStatDateDesc("cinema-2"))
+                .thenReturn(Optional.empty());
+        when(bookingFactRepository.findAllByCinemaPublicIdAndBusinessDateBetween(
+                "cinema-2", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 2)))
+                .thenReturn(List.of());
+
+        AnalyticsResponses.Dashboard dashboard =
+                service.dashboard("2026-07-01", "2026-07-02", "cinema-2");
+
+        assertEquals("CINEMA", dashboard.scope().type());
+        assertEquals("cinema-2", dashboard.scope().cinemaKey());
+        assertEquals(BigDecimal.ZERO.setScale(2), dashboard.summary().netRevenue());
+        assertEquals(0, dashboard.summary().bookingCount());
+        assertTrue(dashboard.daily().isEmpty());
+    }
+
     private CinemaPerformanceDaily cinemaKpi(
             LocalDate date,
             String netRevenue,

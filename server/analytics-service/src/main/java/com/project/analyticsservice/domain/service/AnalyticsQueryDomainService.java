@@ -123,15 +123,12 @@ public class AnalyticsQueryDomainService {
         List<CinemaPerformanceDaily> values =
                 cinemaRepository.findAllByCinemaKeyAndStatDateBetweenOrderByStatDateAsc(
                         cinemaKey, range.start(), range.end());
-        CinemaPerformanceDaily reference = values.stream().findFirst()
-                .or(() -> cinemaRepository.findFirstByCinemaKeyOrderByStatDateDesc(cinemaKey))
-                .orElseThrow(() -> new BusinessException(
-                        "Cinema has no analytics data",
-                        "ANALYTICS_CINEMA_NOT_FOUND",
-                        HttpStatus.NOT_FOUND));
-        String cinemaName = StringUtils.hasText(reference.getCinemaName())
-                ? reference.getCinemaName()
-                : cinemaKey;
+        Optional<CinemaPerformanceDaily> reference = values.stream().findFirst()
+                .or(() -> cinemaRepository.findFirstByCinemaKeyOrderByStatDateDesc(cinemaKey));
+        String cinemaName = reference
+                .map(CinemaPerformanceDaily::getCinemaName)
+                .filter(StringUtils::hasText)
+                .orElse(cinemaKey);
         List<AnalyticsResponses.Insight> scopedInsights = insights(range.start(), range.end())
                 .stream()
                 .filter(insight -> insight.rootCauses().stream().anyMatch(cause ->

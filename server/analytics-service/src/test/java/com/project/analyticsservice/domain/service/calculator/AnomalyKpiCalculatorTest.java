@@ -41,7 +41,7 @@ class AnomalyKpiCalculatorTest {
                 .toList();
         when(dailyRepository.findByStatDate(date)).thenReturn(Optional.of(current));
         when(dailyRepository.findAllByStatDateBetweenOrderByStatDateAsc(
-                date.minusDays(28), date.minusDays(1))).thenReturn(baseline);
+                date.minusDays(56), date.minusDays(1))).thenReturn(baseline);
         when(anomalyRepository.findAllByStatDate(date)).thenReturn(List.of());
         when(anomalyRepository.findByFingerprint(anyString())).thenReturn(Optional.empty());
 
@@ -59,7 +59,8 @@ class AnomalyKpiCalculatorTest {
                 .findFirst().orElseThrow();
         assertEquals("ACTIVE", revenueAnomaly.getStatus());
         assertEquals(new BigDecimal("-0.500000"), revenueAnomaly.getDeviationRate());
-        assertTrue(revenueAnomaly.getAnomalyScore().compareTo(new BigDecimal("2")) > 0);
+        assertTrue(revenueAnomaly.getAnomalyScore().compareTo(new BigDecimal("3")) > 0);
+        assertEquals("WEEKDAY_ROBUST_MAD_56D_V2", revenueAnomaly.getDetectionMethod());
     }
 
     private DailyBusinessKpi kpi(LocalDate date, String revenue) {

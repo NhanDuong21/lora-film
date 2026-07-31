@@ -4,6 +4,7 @@ import AdminAnalyticsPage from './AdminAnalyticsPage';
 import {
   acknowledgeAnalyticsAlert,
   getAnalyticsDashboard,
+  getCinemaDirectory,
   getCinemaKpis,
   updateAnalyticsRecommendation
 } from '../services/analyticsAdminService';
@@ -11,6 +12,7 @@ import {
 vi.mock('../services/analyticsAdminService', () => ({
   acknowledgeAnalyticsAlert: vi.fn(),
   getAnalyticsDashboard: vi.fn(),
+  getCinemaDirectory: vi.fn(),
   getCinemaKpis: vi.fn(),
   updateAnalyticsRecommendation: vi.fn()
 }));
@@ -81,6 +83,10 @@ describe('AdminAnalyticsPage', () => {
     getCinemaKpis.mockResolvedValue([
       { cinemaKey: 'cinema-1', cinemaName: 'LoraFilm Quận 1' }
     ]);
+    getCinemaDirectory.mockResolvedValue([
+      { publicId: 'cinema-1', name: 'LoraFilm Quận 1' },
+      { publicId: 'cinema-2', name: 'KingHouse Q10' }
+    ]);
     acknowledgeAnalyticsAlert.mockResolvedValue({ status: 'ACKNOWLEDGED' });
     updateAnalyticsRecommendation.mockResolvedValue({ status: 'ACCEPTED' });
   });
@@ -92,6 +98,18 @@ describe('AdminAnalyticsPage', () => {
     expect(screen.getByText('Sức khỏe hoạt động toàn chuỗi')).toBeInTheDocument();
     expect(screen.getByText('76')).toBeInTheDocument();
     expect(screen.getByText('50.0%')).toBeInTheDocument();
+  });
+
+  it('places the revenue chart before the business health overview', async () => {
+    render(<AdminAnalyticsPage />);
+
+    const revenueChart = await screen.findByText('Doanh thu thuần theo ngày');
+    const healthOverview = screen.getByText('Sức khỏe hoạt động toàn chuỗi');
+
+    expect(
+      revenueChart.compareDocumentPosition(healthOverview)
+      & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it('exposes the four BI questions as simple navigation', async () => {
@@ -140,6 +158,74 @@ describe('AdminAnalyticsPage', () => {
         expect.objectContaining({ cinemaKey: 'cinema-1' })
       );
     });
+  });
+
+  it('allows selecting a cinema that has no analytics data yet', async () => {
+    render(<AdminAnalyticsPage />);
+    await screen.findByText('Trung tâm điều hành kinh doanh');
+    getAnalyticsDashboard.mockClear();
+
+    expect(screen.getByRole('option', { name: 'KingHouse Q10' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Chọn rạp phân tích'), {
+      target: { value: 'cinema-2' }
+    });
+
+    await waitFor(() => {
+      expect(getAnalyticsDashboard).toHaveBeenCalledWith(
+        expect.objectContaining({ cinemaKey: 'cinema-2' })
+      );
+    });
+  });
+
+  it('explains zero values when the selected cinema has no transactions', async () => {
+    getAnalyticsDashboard.mockResolvedValue({
+      ...dashboard,
+      scope: {
+        type: 'CINEMA',
+        cinemaKey: 'cinema-2',
+        cinemaName: 'cinema-2'
+      },
+      summary: {
+        ...dashboard.summary,
+        netRevenue: 0,
+        grossRevenue: 0,
+        bookingCount: 0,
+        ticketCount: 0
+      },
+      daily: []
+    });
+
+    render(<AdminAnalyticsPage />);
+
+    expect(await screen.findByText(/chưa phát sinh/)).toBeInTheDocument();
+    expect(screen.getByText(/không phải lỗi hệ thống/)).toBeInTheDocument();
+  });
+
+  it('shows the cinema name from the directory instead of a UUID', async () => {
+    const cinemaId = '479a04f1-32a1-4b9d-94cd-3e1842cb33f6';
+    getAnalyticsDashboard.mockResolvedValue({
+      ...dashboard,
+      scope: { type: 'CINEMA', cinemaKey: cinemaId, cinemaName: cinemaId },
+      topCinemas: [{
+        cinemaKey: cinemaId,
+        cinemaName: cinemaId,
+        ticketCount: 20,
+        occupancyRate: 0.5,
+        netRevenue: 1000000
+      }]
+    });
+    getCinemaKpis.mockResolvedValue([
+      { cinemaKey: cinemaId, cinemaName: cinemaId }
+    ]);
+    getCinemaDirectory.mockResolvedValue([
+      { publicId: cinemaId, name: 'LoraFilm Gò Vấp' }
+    ]);
+
+    render(<AdminAnalyticsPage />);
+
+    expect(await screen.findByText('Hiệu suất riêng · LoraFilm Gò Vấp')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'LoraFilm Gò Vấp' })).toBeInTheDocument();
+    expect(screen.queryByText(cinemaId)).not.toBeInTheDocument();
   });
 
   it('lets managers acknowledge alerts and accept recommendations', async () => {

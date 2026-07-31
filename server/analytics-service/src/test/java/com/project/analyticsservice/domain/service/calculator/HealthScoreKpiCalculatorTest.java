@@ -44,7 +44,7 @@ class HealthScoreKpiCalculatorTest {
 
         when(dailyRepository.findByStatDate(date)).thenReturn(Optional.of(current));
         when(dailyRepository.findAllByStatDateBetweenOrderByStatDateAsc(
-                date.minusDays(7), date.minusDays(1))).thenReturn(baseline);
+                date.minusDays(28), date.minusDays(1))).thenReturn(baseline);
         when(healthRepository.findByEntityTypeAndEntityKeyAndStatDate(
                 "SYSTEM", "SYSTEM", date)).thenReturn(Optional.empty());
 
@@ -58,9 +58,10 @@ class HealthScoreKpiCalculatorTest {
         verify(healthRepository).save(captor.capture());
         AnalyticsHealthScore value = captor.getValue();
         assertEquals("HEALTHY", value.getHealthStatus());
-        assertEquals("HEALTH_SCORE_V1", value.getAlgorithmVersion());
+        assertEquals("HEALTH_SCORE_V2", value.getAlgorithmVersion());
         assertTrue(value.getOverallScore().compareTo(new BigDecimal("80")) >= 0);
-        assertEquals(new BigDecimal("0.960000"), value.getConfidenceScore());
+        assertEquals(new BigDecimal("0.477500"), value.getConfidenceScore());
+        assertEquals(new BigDecimal("90.000000"), value.getDataQualityScore());
     }
 
     private DailyBusinessKpi kpi(LocalDate date, String revenue, long tickets) {

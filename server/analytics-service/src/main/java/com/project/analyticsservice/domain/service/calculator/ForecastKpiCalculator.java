@@ -23,8 +23,8 @@ import java.util.function.Function;
 @Component
 @Order(60)
 public class ForecastKpiCalculator implements KpiCalculator {
-    static final String ALGORITHM = "WEEKDAY_SEASONAL_WEIGHTED_AVERAGE";
-    static final String MODEL_VERSION = "2.0";
+    static final String ALGORITHM = "HYBRID_WEEKDAY_RECENCY_DAMPED_TREND";
+    static final String MODEL_VERSION = "3.0";
 
     private final DailyBusinessKpiRepository dailyRepository;
     private final ForecastResultRepository forecastRepository;
@@ -53,12 +53,13 @@ public class ForecastKpiCalculator implements KpiCalculator {
     @Override
     @Transactional
     public void calculate(LocalDate statDate) {
-        LocalDate trainingStart = statDate.minusDays(55);
+        LocalDate trainingStart = statDate.minusDays(83);
         List<DailyBusinessKpi> history =
                 dailyRepository.findAllByStatDateBetweenOrderByStatDateAsc(trainingStart, statDate);
-        if (history.isEmpty()) {
+        if (history.size() < 14) {
             return;
         }
+        trainingStart = history.getFirst().getStatDate();
         BigDecimal completeness = average(history, DailyBusinessKpi::getDataCompleteness);
 
         for (int day = 1; day <= horizonDays; day++) {
@@ -87,29 +88,53 @@ public class ForecastKpiCalculator implements KpiCalculator {
             Function<DailyBusinessKpi, BigDecimal> extractor) {
         List<DailyBusinessKpi> seasonal = history.stream()
                 .filter(value -> value.getStatDate().getDayOfWeek() == targetDate.getDayOfWeek())
+                .skip(Math.max(0, history.stream()
+                        .filter(value -> value.getStatDate().getDayOfWeek() == targetDate.getDayOfWeek())
+                        .count() - 8))
                 .toList();
-        List<DailyBusinessKpi> sample = seasonal.size() >= 2
-                ? seasonal : history.stream().skip(Math.max(0, history.size() - 28L)).toList();
+        List<DailyBusinessKpi> recent = history.stream()
+                .skip(Math.max(0, history.size() - 21L))
+                .toList();
+        BigDecimal recentLevel = weightedAverage(recent, extractor);
+        BigDecimal seasonalLevel = seasonal.size() >= 3
+                ? weightedAverage(seasonal, extractor)
+                : recentLevel;
+        BigDecimal trendLevel = dampedTrend(recent, targetDate, extractor, recentLevel);
 
-        BigDecimal weightedTotal = BigDecimal.ZERO;
-        long totalWeight = 0;
-        for (int index = 0; index < sample.size(); index++) {
-            long weight = index + 1L;
-            weightedTotal = weightedTotal.add(
-                    math.zero(extractor.apply(sample.get(index)))
-                            .multiply(BigDecimal.valueOf(weight)));
-            totalWeight += weight;
-        }
-        BigDecimal predicted = math.ratio(weightedTotal, totalWeight);
-        double variance = sample.stream()
+        BigDecimal seasonalWeight = seasonal.size() >= 3
+                ? new BigDecimal("0.55") : BigDecimal.ZERO;
+        BigDecimal recentWeight = seasonal.size() >= 3
+                ? new BigDecimal("0.30") : new BigDecimal("0.70");
+        BigDecimal trendWeight = seasonal.size() >= 3
+                ? new BigDecimal("0.15") : new BigDecimal("0.30");
+        BigDecimal predicted = seasonalLevel.multiply(seasonalWeight)
+                .add(recentLevel.multiply(recentWeight))
+                .add(trendLevel.multiply(trendWeight))
+                .max(BigDecimal.ZERO);
+
+        List<BigDecimal> recentValues = recent.stream()
                 .map(extractor)
                 .map(math::zero)
-                .mapToDouble(value -> Math.pow(value.subtract(predicted).doubleValue(), 2))
-                .average().orElse(0);
-        BigDecimal interval = BigDecimal.valueOf(Math.sqrt(variance))
-                .multiply(new BigDecimal("1.96"));
-        BigDecimal coverage = math.ratio(sample.size(), 8).min(BigDecimal.ONE);
-        return new Prediction(predicted, interval, coverage);
+                .toList();
+        BigDecimal center = median(recentValues);
+        BigDecimal mad = median(recentValues.stream()
+                .map(value -> value.subtract(center).abs())
+                .toList());
+        BigDecimal interval = mad.multiply(new BigDecimal("1.4826"))
+                .multiply(new BigDecimal("1.645"))
+                .max(predicted.abs().multiply(new BigDecimal("0.08")));
+        BigDecimal seasonalCoverage = math.ratio(seasonal.size(), 6).min(BigDecimal.ONE);
+        BigDecimal historyCoverage = math.ratio(history.size(), 42).min(BigDecimal.ONE);
+        BigDecimal coverage = seasonalCoverage.multiply(new BigDecimal("0.60"))
+                .add(historyCoverage.multiply(new BigDecimal("0.40")));
+        BigDecimal disagreement = maxDifference(
+                predicted, List.of(seasonalLevel, recentLevel, trendLevel));
+        BigDecimal agreement = predicted.signum() == 0
+                ? BigDecimal.ONE
+                : BigDecimal.ONE.subtract(disagreement
+                        .divide(predicted.abs(), 6, RoundingMode.HALF_UP)
+                        .min(BigDecimal.ONE));
+        return new Prediction(predicted, interval, coverage, agreement);
     }
 
     private void upsertForecast(
@@ -120,17 +145,24 @@ public class ForecastKpiCalculator implements KpiCalculator {
             LocalDate trainingStart,
             LocalDate trainingEnd,
             boolean money) {
-        BigDecimal confidence = prediction.coverage().multiply(new BigDecimal("0.60"))
-                .add(completeness.multiply(new BigDecimal("0.40")))
-                .min(new BigDecimal("0.980000"));
+        BigDecimal confidence = prediction.coverage().multiply(new BigDecimal("0.45"))
+                .add(completeness.multiply(new BigDecimal("0.35")))
+                .add(prediction.agreement().multiply(new BigDecimal("0.20")))
+                .min(new BigDecimal("0.950000"));
+        BigDecimal rawPrediction = "OCCUPANCY".equals(type)
+                ? prediction.value().min(BigDecimal.ONE)
+                : prediction.value();
         BigDecimal predicted = money
-                ? math.money(prediction.value())
+                ? math.money(rawPrediction)
                 : "TICKET".equals(type)
-                    ? prediction.value().setScale(0, RoundingMode.HALF_UP)
-                    : prediction.value().setScale(6, RoundingMode.HALF_UP);
-        BigDecimal lower = prediction.value().subtract(prediction.interval())
+                    ? rawPrediction.setScale(0, RoundingMode.HALF_UP)
+                    : rawPrediction.setScale(6, RoundingMode.HALF_UP);
+        BigDecimal lower = rawPrediction.subtract(prediction.interval())
                 .max(BigDecimal.ZERO);
-        BigDecimal upper = prediction.value().add(prediction.interval());
+        BigDecimal upper = rawPrediction.add(prediction.interval());
+        if ("OCCUPANCY".equals(type)) {
+            upper = upper.min(BigDecimal.ONE);
+        }
 
         ForecastResult forecast = forecastRepository
                 .findByEntityTypeAndEntityKeyAndForecastDateAndForecastType(
@@ -159,9 +191,9 @@ public class ForecastKpiCalculator implements KpiCalculator {
         LocalDate testStart = evaluationDate.minusDays(13);
         List<DailyBusinessKpi> completeHistory =
                 dailyRepository.findAllByStatDateBetweenOrderByStatDateAsc(
-                        evaluationDate.minusDays(69), evaluationDate);
+                        evaluationDate.minusDays(104), evaluationDate);
         List<BigDecimal> errors = new ArrayList<>();
-        List<BigDecimal> percentageErrors = new ArrayList<>();
+        BigDecimal absoluteActualTotal = BigDecimal.ZERO;
 
         for (DailyBusinessKpi actualKpi : completeHistory) {
             if (actualKpi.getStatDate().isBefore(testStart)) {
@@ -169,9 +201,9 @@ public class ForecastKpiCalculator implements KpiCalculator {
             }
             List<DailyBusinessKpi> training = completeHistory.stream()
                     .filter(value -> value.getStatDate().isBefore(actualKpi.getStatDate()))
-                    .filter(value -> !value.getStatDate().isBefore(actualKpi.getStatDate().minusDays(56)))
+                    .filter(value -> !value.getStatDate().isBefore(actualKpi.getStatDate().minusDays(84)))
                     .toList();
-            if (training.size() < 7) {
+            if (training.size() < 14) {
                 continue;
             }
             BigDecimal predicted = prediction(
@@ -179,10 +211,7 @@ public class ForecastKpiCalculator implements KpiCalculator {
             BigDecimal actual = math.zero(extractor.apply(actualKpi));
             BigDecimal error = predicted.subtract(actual);
             errors.add(error);
-            if (actual.signum() != 0) {
-                percentageErrors.add(error.abs()
-                        .divide(actual.abs(), 6, RoundingMode.HALF_UP));
-            }
+            absoluteActualTotal = absoluteActualTotal.add(actual.abs());
         }
         if (errors.isEmpty()) {
             return;
@@ -192,8 +221,11 @@ public class ForecastKpiCalculator implements KpiCalculator {
         double meanSquared = errors.stream()
                 .mapToDouble(value -> Math.pow(value.doubleValue(), 2)).average().orElse(0);
         BigDecimal rmse = BigDecimal.valueOf(Math.sqrt(meanSquared));
-        BigDecimal mape = percentageErrors.isEmpty()
-                ? null : averageValues(percentageErrors);
+        BigDecimal mape = absoluteActualTotal.signum() == 0
+                ? null
+                : errors.stream().map(BigDecimal::abs)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                        .divide(absoluteActualTotal, 6, RoundingMode.HALF_UP);
         BigDecimal bias = averageValues(errors);
 
         ForecastModelMetric metric = modelMetricRepository
@@ -230,6 +262,82 @@ public class ForecastKpiCalculator implements KpiCalculator {
                 : math.ratio(values.stream().reduce(BigDecimal.ZERO, BigDecimal::add), values.size());
     }
 
-    private record Prediction(BigDecimal value, BigDecimal interval, BigDecimal coverage) {
+    private BigDecimal weightedAverage(
+            List<DailyBusinessKpi> values,
+            Function<DailyBusinessKpi, BigDecimal> extractor) {
+        BigDecimal weightedTotal = BigDecimal.ZERO;
+        long totalWeight = 0;
+        for (int index = 0; index < values.size(); index++) {
+            long weight = index + 1L;
+            weightedTotal = weightedTotal.add(
+                    math.zero(extractor.apply(values.get(index)))
+                            .multiply(BigDecimal.valueOf(weight)));
+            totalWeight += weight;
+        }
+        return math.ratio(weightedTotal, totalWeight);
+    }
+
+    private BigDecimal dampedTrend(
+            List<DailyBusinessKpi> values,
+            LocalDate targetDate,
+            Function<DailyBusinessKpi, BigDecimal> extractor,
+            BigDecimal recentLevel) {
+        if (values.size() < 7) {
+            return recentLevel;
+        }
+        double meanX = (values.size() - 1) / 2.0;
+        double meanY = values.stream()
+                .map(extractor)
+                .map(math::zero)
+                .mapToDouble(BigDecimal::doubleValue)
+                .average()
+                .orElse(0);
+        double numerator = 0;
+        double denominator = 0;
+        for (int index = 0; index < values.size(); index++) {
+            double centeredX = index - meanX;
+            numerator += centeredX
+                    * (math.zero(extractor.apply(values.get(index))).doubleValue() - meanY);
+            denominator += centeredX * centeredX;
+        }
+        BigDecimal slope = denominator == 0
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(numerator / denominator);
+        BigDecimal maximumDailyChange = recentLevel.abs().multiply(new BigDecimal("0.08"));
+        slope = slope.max(maximumDailyChange.negate()).min(maximumDailyChange);
+        long daysAhead = Math.max(1,
+                java.time.temporal.ChronoUnit.DAYS.between(
+                        values.getLast().getStatDate(), targetDate));
+        return recentLevel.add(
+                slope.multiply(BigDecimal.valueOf(daysAhead))
+                        .multiply(new BigDecimal("0.65")))
+                .max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal median(List<BigDecimal> values) {
+        if (values.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        List<BigDecimal> sorted = values.stream().sorted().toList();
+        int middle = sorted.size() / 2;
+        if (sorted.size() % 2 == 1) {
+            return sorted.get(middle);
+        }
+        return sorted.get(middle - 1).add(sorted.get(middle))
+                .divide(new BigDecimal("2"), 6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal maxDifference(BigDecimal center, List<BigDecimal> values) {
+        return values.stream()
+                .map(value -> value.subtract(center).abs())
+                .max(BigDecimal::compareTo)
+                .orElse(BigDecimal.ZERO);
+    }
+
+    private record Prediction(
+            BigDecimal value,
+            BigDecimal interval,
+            BigDecimal coverage,
+            BigDecimal agreement) {
     }
 }
