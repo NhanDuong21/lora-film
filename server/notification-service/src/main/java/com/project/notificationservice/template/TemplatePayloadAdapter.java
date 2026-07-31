@@ -24,16 +24,19 @@ public class TemplatePayloadAdapter {
         alias(expanded, "user_name", "customerName", "userName", "fullName", "name");
         alias(expanded, "poster_url", "moviePosterUrl", "posterUrl");
         alias(expanded, "room_name", "auditoriumName", "roomName");
-        Object qrCodeUrlObj = first(expanded, "ticketAccessUrl", "qrCodeUrl");
-        if (qrCodeUrlObj instanceof String qrCodeUrlStr && !qrCodeUrlStr.isBlank()) {
-            try {
-                String encoded = java.net.URLEncoder.encode(qrCodeUrlStr, java.nio.charset.StandardCharsets.UTF_8.name());
-                expanded.put("qr_code_url", "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encoded);
-            } catch (Exception e) {
+        Object qrCodeUrlObj = first(expanded, "ticketAccessUrl", "qrCodeUrl", "bookingCode", "ticketCode");
+        if (qrCodeUrlObj != null) {
+            String qrCodeUrlStr = String.valueOf(qrCodeUrlObj);
+            if (qrCodeUrlStr.startsWith("https://api.qrserver.com")) {
                 expanded.put("qr_code_url", qrCodeUrlStr);
+            } else if (!qrCodeUrlStr.isBlank()) {
+                try {
+                    String encoded = java.net.URLEncoder.encode(qrCodeUrlStr, java.nio.charset.StandardCharsets.UTF_8.name());
+                    expanded.put("qr_code_url", "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encoded);
+                } catch (Exception e) {
+                    expanded.put("qr_code_url", qrCodeUrlStr);
+                }
             }
-        } else {
-            alias(expanded, "qr_code_url", "ticketAccessUrl", "qrCodeUrl");
         }
 
         // Enrich each ticket entry in `tickets` list with a `qr_code_url` field
