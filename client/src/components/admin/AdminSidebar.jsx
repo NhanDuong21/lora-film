@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Film, 
-  Users, 
-  Calendar, 
-  Gift, 
-  Ticket, 
-  Coffee, 
-  Home, 
-  LogOut, 
+import {
+  LayoutDashboard,
+  Film,
+  Users,
+  Calendar,
+  Gift,
+  Ticket,
+  Coffee,
+  Home,
+  LogOut,
   ChevronDown,
   TrendingUp,
   Coins,
@@ -36,12 +36,12 @@ import {
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
 
-export default function AdminSidebar({ 
-  activeTab, 
-  setActiveTab, 
-  user, 
-  onBackHome, 
-  handleLogout 
+export default function AdminSidebar({
+  activeTab,
+  setActiveTab,
+  user,
+  onBackHome,
+  handleLogout
 }) {
   const navigate = useNavigate();
   const permissions = user?.permissions || [];
@@ -114,15 +114,15 @@ export default function AdminSidebar({
 
   return (
     <aside className="w-[280px] h-screen h-[100dvh] sticky top-0 bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0 z-30 select-none overflow-hidden font-sans">
-      
+
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Brand Top Header */}
         <div className="px-6 py-6 border-b border-zinc-800/60 flex items-center justify-between shrink-0 h-[72px]">
           <Link to={adminHomePath} className="flex items-center gap-2.5 bg-transparent p-0 m-0 shadow-none border-none select-none decoration-none group">
-            <img 
-              src="/images/main-logo.png" 
-              alt="LoraFilm Icon" 
-              className="h-8 w-auto object-contain bg-transparent" 
+            <img
+              src="/images/main-logo.png"
+              alt="LoraFilm Icon"
+              className="h-8 w-auto object-contain bg-transparent"
             />
             <span className="text-xl font-black tracking-tight text-white leading-none">
               Lora<span className="text-brand-orange ml-0.5">Film</span>
@@ -135,7 +135,7 @@ export default function AdminSidebar({
 
         {/* Scrollable Navigation List */}
         <nav className="min-h-0 flex-1 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-          
+
           {/* Section 1: Dashboard */}
           {can('DASHBOARD_VIEW') && (
             <div className="mb-2">
@@ -169,9 +169,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Nội dung & phát hành</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.noiDung ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.noiDung ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.noiDung && (
@@ -201,9 +200,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Cơ sở rạp</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.coSo ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.coSo ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.coSo && (
@@ -233,9 +231,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Lịch chiếu & giá vé</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.lichGia ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.lichGia ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.lichGia && (
@@ -268,9 +265,8 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Vận hành đặt vé</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.vanHanhDatVe ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.vanHanhDatVe ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.vanHanhDatVe && (
@@ -294,9 +290,8 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Thanh toán</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.thanhToan ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.thanhToan ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.thanhToan && (
@@ -316,9 +311,8 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Báo cáo & phân tích</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.baoCao ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.baoCao ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.baoCao && (
@@ -346,9 +340,8 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Khách hàng</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.khachHang ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.khachHang ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.khachHang && (
@@ -383,25 +376,24 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Nhân sự</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.nhanSu ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.nhanSu ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.nhanSu && (
               <div className="space-y-0.5">
                 {canManageEmployees && <button onClick={() => handleTabClick('staff', '#/admin/staff')} className={getSubLinkClass('staff')}>
-                      <Shield className="w-4 h-4 shrink-0" />
-                      <span>Nhân viên</span>
-                    </button>}
+                  <Shield className="w-4 h-4 shrink-0" />
+                  <span>Nhân viên</span>
+                </button>}
                 {canManageDepartments && <button onClick={() => handleTabClick('departments', '#/admin/departments')} className={getSubLinkClass('departments')}>
-                      <Building className="w-4 h-4 shrink-0" />
-                      <span>Phòng ban</span>
-                    </button>}
+                  <Building className="w-4 h-4 shrink-0" />
+                  <span>Phòng ban</span>
+                </button>}
                 {canManagePositions && <button onClick={() => handleTabClick('positions', '#/admin/positions')} className={getSubLinkClass('positions')}>
-                      <BadgeDollarSign className="w-4 h-4 shrink-0" />
-                      <span>Vị trí</span>
-                    </button>}
+                  <BadgeDollarSign className="w-4 h-4 shrink-0" />
+                  <span>Vị trí</span>
+                </button>}
                 {canManagePayroll && <button onClick={() => handleTabClick('payroll', '#/admin/payroll')} className={getSubLinkClass('payroll')}>
                   <TrendingUp className="w-4 h-4 shrink-0" />
                   <span>Bảng lương</span>
@@ -418,9 +410,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Hệ thống</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.cauHinh ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.cauHinh ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.cauHinh && (
@@ -464,7 +455,8 @@ export default function AdminSidebar({
                 </div>
               )}
             </div>
-          )}
+          )
+          }
 
         </nav>
       </div>
@@ -488,17 +480,16 @@ export default function AdminSidebar({
           <div className="flex flex-col gap-1 border-t border-zinc-800 pt-3 mt-1">
             <button
               onClick={() => handleTabClick('my-account', '#/admin/me')}
-              className={`flex items-center justify-start gap-2.5 rounded px-2 py-2 text-xs font-semibold transition-colors ${
-                activeTab === 'my-account'
-                  ? 'bg-brand-orange/10 text-brand-orange'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
-              }`}
+              className={`flex items-center justify-start gap-2.5 rounded px-2 py-2 text-xs font-semibold transition-colors ${activeTab === 'my-account'
+                ? 'bg-brand-orange/10 text-brand-orange'
+                : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
+                }`}
             >
               <UserCircle className="w-3.5 h-3.5" />
               <span>Tài khoản của tôi</span>
             </button>
             <div className="flex items-center justify-between pt-2 mt-1 border-t border-zinc-800/50">
-              <button 
+              <button
                 onClick={onBackHome}
                 className="flex items-center justify-start gap-1.5 px-2 py-1.5 text-xs font-medium text-zinc-400 hover:text-brand-orange transition-colors rounded"
                 title="Quay lại trang chủ"
@@ -506,7 +497,7 @@ export default function AdminSidebar({
                 <Home className="w-4 h-4" />
                 <span>Trang chủ</span>
               </button>
-              <button 
+              <button
                 onClick={handleLogout}
                 className="flex items-center justify-start gap-1.5 px-2 py-1.5 text-xs font-bold text-red-500 hover:text-red-400 transition-colors rounded"
               >
