@@ -119,6 +119,16 @@ export const getBookingTickets = async (bookingId) => {
 };
 
 /**
+ * Resend the booking confirmation email
+ * @param {string} bookingId - Booking UUID
+ * @returns {Promise<Object>} Success response
+ */
+export const resendBookingEmail = async (bookingId) => {
+  const response = await apiClient.post(`/api/bookings/${bookingId}/resend-email`);
+  return response.data;
+};
+
+/**
  * Get current user's bookings with pagination and status filters
  * @param {Object} params - Query params
  * @param {number} [params.page] - Page index (0-based)

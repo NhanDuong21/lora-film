@@ -700,8 +700,9 @@ public class VnPayPaymentProvider implements PaymentProvider {
         result.setCurrency("VND");
         result.setEventType(eventType);
         result.setOccurredAt(Instant.now());
-        result.setResult("00".equals(responseCode) && "00".equals(transactionStatus)
-                ? "SUCCESS" : ("24".equals(responseCode) ? "CANCELLED" : "FAILED"));
+        boolean isSuccess = "00".equals(responseCode) && ("00".equals(transactionStatus) || transactionStatus == null || transactionStatus.isEmpty());
+        boolean isCancelled = "24".equals(responseCode) || "24".equals(transactionStatus);
+        result.setResult(isSuccess ? "SUCCESS" : (isCancelled ? "CANCELLED" : "FAILED"));
         String transaction = parameters.getOrDefault("vnp_TransactionNo", "NO_TX");
         result.setDeduplicationKey(eventType + ":" + parameters.get("vnp_TxnRef")
                 + ":" + transaction + ":" + responseCode);

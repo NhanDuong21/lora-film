@@ -12,12 +12,14 @@ import {
   Printer,
   ReceiptText,
   Sofa,
-  Trash2
+  Trash2,
+  Mail
 } from 'lucide-react';
 import {
   cancelBooking,
   getBookingDetails,
-  getBookingTickets
+  getBookingTickets,
+  resendBookingEmail
 } from '../services/bookingService';
 import BookingCancellationModal from '../components/BookingCancellationModal';
 import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
@@ -92,6 +94,26 @@ export default function BookingDetailPage() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+  const [resendError, setResendError] = useState('');
+
+  const handleResendEmail = async () => {
+    if (!bookingId) return;
+    setResendingEmail(true);
+    setResendMessage('');
+    setResendError('');
+    try {
+      await resendBookingEmail(bookingId);
+      setResendMessage('Đã gửi lại email vé thành công!');
+      setTimeout(() => setResendMessage(''), 5000);
+    } catch (err) {
+      setResendError(err.response?.data?.message || 'Có lỗi xảy ra khi gửi lại email. Vui lòng thử lại.');
+      setTimeout(() => setResendError(''), 5000);
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -378,6 +400,26 @@ export default function BookingDetailPage() {
                 >
                   <Trash2 className="h-4 w-4" />
                   Hủy giữ ghế
+                </button>
+              </div>
+            )}
+
+            {(currentStatus === 'CONFIRMED' || currentStatus === 'COMPLETED') && (
+              <div className="flex flex-col sm:flex-row items-center gap-3 print:hidden">
+                {resendMessage && (
+                  <span className="text-xs font-semibold text-emerald-400">{resendMessage}</span>
+                )}
+                {resendError && (
+                  <span className="text-xs font-semibold text-red-400">{resendError}</span>
+                )}
+                <button
+                  type="button"
+                  disabled={resendingEmail}
+                  onClick={handleResendEmail}
+                  className="flex items-center gap-2 rounded-xl bg-brand-orange px-5 py-3 text-xs font-black uppercase text-white shadow-lg shadow-brand-orange/20 disabled:opacity-50"
+                >
+                  <Mail className="h-4 w-4" />
+                  {resendingEmail ? 'Đang gửi...' : 'Gửi lại email vé'}
                 </button>
               </div>
             )}

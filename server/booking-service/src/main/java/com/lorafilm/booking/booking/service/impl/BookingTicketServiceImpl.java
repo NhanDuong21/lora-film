@@ -267,6 +267,29 @@ public class BookingTicketServiceImpl implements BookingTicketService {
         }).toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public void resendBookingEmail(String publicId) {
+        log.info("Resending booking email for public ID: {}", publicId);
+        Booking booking = bookingRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new BookingNotFoundException(java.util.UUID.fromString(publicId)));
+
+        Long bookingId = booking.getId();
+        BookingSnapshot snapshot = bookingSnapshotRepository.findByBookingId(bookingId)
+                .orElseThrow(() -> new BusinessException("SNAPSHOT_NOT_FOUND", "Snapshot not found for booking ID: " + bookingId));
+
+        List<BookingTicket> tickets = bookingTicketRepository.findByBookingId(bookingId);
+        if (tickets.isEmpty()) {
+            throw new BusinessException("TICKETS_NOT_FOUND", "No tickets found for booking ID: " + bookingId);
+        }
+
+        List<BookingTicketDto> ticketDtos = tickets.stream()
+                .map(bookingTicketMapper::toDto)
+                .collect(Collectors.toList());
+
+        publishTicketIssued(booking, snapshot, ticketDtos);
+    }
+
     private void put(Map<String, Object> payload, String key, Object value) {
         if (value != null) {
             payload.put(key, value);
