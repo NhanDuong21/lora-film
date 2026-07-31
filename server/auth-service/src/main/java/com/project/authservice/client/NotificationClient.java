@@ -55,6 +55,7 @@ public class NotificationClient {
                 Map.of(
                         "user_name", fallbackName(null),
                         "otp_code", otp,
+                        "email", email,
                         "expiry_minutes", 15));
     }
 
