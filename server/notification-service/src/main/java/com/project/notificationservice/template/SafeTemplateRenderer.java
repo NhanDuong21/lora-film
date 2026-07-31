@@ -141,7 +141,8 @@ public class SafeTemplateRenderer {
             String source,
             Map<String, VariableDefinition> schema,
             List<String> errors) {
-        if (source == null) return;
+        if (source == null)
+            return;
         Matcher matcher = EXPRESSION.matcher(source);
         while (matcher.find()) {
             String expression = matcher.group(1).trim();
@@ -176,7 +177,8 @@ public class SafeTemplateRenderer {
     }
 
     private String apply(String source, Map<String, Object> values) throws Exception {
-        if (source == null) return "";
+        if (source == null)
+            return "";
         Template template = handlebars.compileInline(source);
         return template.apply(values == null ? Map.of() : values);
     }
@@ -201,18 +203,21 @@ public class SafeTemplateRenderer {
     }
 
     private void registerHelpers() {
-        handlebars.registerHelper("uppercase", (value, options) ->
-                value == null ? "" : String.valueOf(value).toUpperCase(options.context.model() instanceof Locale locale
-                        ? locale : Locale.ROOT));
-        handlebars.registerHelper("lowercase", (value, options) ->
-                value == null ? "" : String.valueOf(value).toLowerCase(Locale.ROOT));
+        handlebars.registerHelper("uppercase",
+                (value, options) -> value == null ? ""
+                        : String.valueOf(value).toUpperCase(options.context.model() instanceof Locale locale
+                                ? locale
+                                : Locale.ROOT));
+        handlebars.registerHelper("lowercase",
+                (value, options) -> value == null ? "" : String.valueOf(value).toLowerCase(Locale.ROOT));
         handlebars.registerHelper("join", (value, options) -> {
-            if (!(value instanceof Collection<?> collection)) return "";
+            if (!(value instanceof Collection<?> collection))
+                return "";
             String delimiter = options.param(0, ", ");
             return collection.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(delimiter));
         });
-        handlebars.registerHelper("defaultValue", (value, options) ->
-                value == null || String.valueOf(value).isBlank() ? options.param(0, "") : value);
+        handlebars.registerHelper("defaultValue",
+                (value, options) -> value == null || String.valueOf(value).isBlank() ? options.param(0, "") : value);
         handlebars.registerHelper("maskEmail", (value, options) -> maskEmail(value));
         handlebars.registerHelper("maskPhone", (value, options) -> maskPhone(value));
         handlebars.registerHelper("formatCurrency", (value, options) -> formatCurrency(value, options));
@@ -224,7 +229,8 @@ public class SafeTemplateRenderer {
     private String maskEmail(Object value) {
         String email = value == null ? "" : String.valueOf(value);
         int marker = email.indexOf('@');
-        if (marker < 2) return "***";
+        if (marker < 2)
+            return "***";
         return email.substring(0, 2) + "***" + email.substring(marker);
     }
 
@@ -234,7 +240,8 @@ public class SafeTemplateRenderer {
     }
 
     private String formatCurrency(Object value, Options options) {
-        if (value == null) return "";
+        if (value == null)
+            return "";
         BigDecimal amount = new BigDecimal(String.valueOf(value));
         String currency = options.param(0, "VND");
         NumberFormat format = NumberFormat.getCurrencyInstance(
@@ -243,7 +250,8 @@ public class SafeTemplateRenderer {
     }
 
     private String formatTemporal(Object value, String pattern) {
-        if (value == null) return "";
+        if (value == null)
+            return "";
         OffsetDateTime temporal;
         if (value instanceof Instant instant) {
             temporal = instant.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toOffsetDateTime();
