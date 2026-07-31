@@ -114,7 +114,7 @@ public class EmailNotificationSender implements NotificationChannelSender {
         return htmlContent + qrBlock;
     }
 
-    /** Resolves each ticket's code, fetches the QR PNG, and encodes it as base64. */
+    /** Resolves each ticket's code, fetches the QR PNG (or falls back to direct URL). */
     private List<TicketQr> buildTicketQrList(Map<String, Object> payload) {
         List<Map<?, ?>> tickets = extractTickets(payload);
         List<TicketQr> result = new ArrayList<>();
@@ -124,7 +124,8 @@ public class EmailNotificationSender implements NotificationChannelSender {
             String code = resolveFirstTicketCode(payload);
             if (code != null) {
                 String b64 = fetchQrAsBase64(code);
-                if (b64 != null) result.add(new TicketQr(code, b64, null, null));
+                String url = QR_API_BASE + java.net.URLEncoder.encode(code, StandardCharsets.UTF_8);
+                result.add(new TicketQr(code, b64, url, null, null));
             }
             return result;
         }
@@ -133,10 +134,10 @@ public class EmailNotificationSender implements NotificationChannelSender {
             String code = resolveTicketCode(ticket);
             if (code == null) continue;
             String b64 = fetchQrAsBase64(code);
-            if (b64 == null) continue;
+            String url = QR_API_BASE + java.net.URLEncoder.encode(code, StandardCharsets.UTF_8);
             String seat = objectStr(ticket.get("seatLabel"));
             String type = objectStr(ticket.get("seatType"));
-            result.add(new TicketQr(code, b64, seat, type));
+            result.add(new TicketQr(code, b64, url, seat, type));
         }
         return result;
     }
@@ -158,11 +159,14 @@ public class EmailNotificationSender implements NotificationChannelSender {
             String label = (tq.seat() != null && tq.type() != null)
                     ? "Gh&#7871; " + escapeHtml(tq.seat()) + " &middot; " + escapeHtml(tq.type())
                     : escapeHtml(tq.code());
+            String imgSrc = tq.base64() != null
+                    ? "data:image/png;base64," + tq.base64()
+                    : tq.imageUrl();
             sb.append(
                 "<td style=\"padding:0 12px 0 0;\">" +
                 "<div style=\"background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;" +
                 "padding:16px;text-align:center;width:160px;\">" +
-                "<img src=\"data:image/png;base64," + tq.base64() + "\"" +
+                "<img src=\"" + imgSrc + "\"" +
                 " alt=\"QR " + label + "\"" +
                 " width=\"160\" height=\"160\"" +
                 " style=\"display:block;margin:0 auto 8px;border-radius:6px;\"/>" +
@@ -240,5 +244,5 @@ public class EmailNotificationSender implements NotificationChannelSender {
     }
 
     /** Holds resolved data for a single ticket's QR image. */
-    private record TicketQr(String code, String base64, String seat, String type) {}
+    private record TicketQr(String code, String base64, String imageUrl, String seat, String type) {}
 }

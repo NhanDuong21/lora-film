@@ -103,6 +103,12 @@ public class TemplatePayloadAdapter {
                 renderingPayload.put(variable, expanded.get(variable));
             }
         }
+        // Always preserve collection & ticket structural properties for Handlebars loops & sections
+        for (String key : new String[]{"tickets", "foodItems", "combos", "food_items", "ticketCodes", "ticketTypes", "seatNames"}) {
+            if (expanded.containsKey(key)) {
+                renderingPayload.put(key, expanded.get(key));
+            }
+        }
         return Map.copyOf(renderingPayload);
     }
 

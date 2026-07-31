@@ -224,7 +224,20 @@ public class BookingTicketServiceImpl implements BookingTicketService {
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         put(payload, "userPublicId", String.valueOf(booking.getUserId()));
-        put(payload, "customerName", "Customer");
+
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.lorafilm.booking.security.principal.UserPrincipal principal) {
+            if (principal.getEmail() != null && !principal.getEmail().isBlank()) {
+                put(payload, "email", principal.getEmail());
+            }
+            if (principal.getUsername() != null && !principal.getUsername().isBlank()) {
+                put(payload, "customerName", principal.getUsername());
+            }
+        } else {
+            put(payload, "customerName", "Customer");
+        }
+
         put(payload, "bookingPublicId", booking.getPublicId());
         put(payload, "bookingCode", booking.getBookingCode());
         put(payload, "paymentCode", booking.getPaymentReference());

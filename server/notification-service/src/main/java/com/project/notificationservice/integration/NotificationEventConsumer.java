@@ -62,14 +62,19 @@ public class NotificationEventConsumer {
         String userPublicId = event.userPublicId() == null
                 ? text(payload, "userPublicId") : event.userPublicId();
         if (email == null && userPublicId != null) {
-            UserRecipientClient.ResolvedRecipient resolved = userRecipientClient
-                    .findByUserPublicId(userPublicId)
-                    .orElse(null);
-            if (resolved != null) {
-                email = resolved.email();
-                if (resolved.fullName() != null) {
-                    payload.put("customerName", resolved.fullName());
+            try {
+                UserRecipientClient.ResolvedRecipient resolved = userRecipientClient
+                        .findByUserPublicId(userPublicId)
+                        .orElse(null);
+                if (resolved != null) {
+                    email = resolved.email();
+                    if (resolved.fullName() != null) {
+                        payload.put("customerName", resolved.fullName());
+                    }
                 }
+            } catch (Exception ex) {
+                org.slf4j.LoggerFactory.getLogger(NotificationEventConsumer.class)
+                        .warn("Could not resolve recipient email for userPublicId={}: {}", userPublicId, ex.getMessage());
             }
         }
         Set<Channel> channels = new LinkedHashSet<>();

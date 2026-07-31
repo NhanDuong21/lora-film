@@ -65,7 +65,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     private static final String HTML = "content.html.hbs";
     private static final String TEXT = "content.txt.hbs";
     private static final Pattern LEGACY_EXPRESSION =
-            Pattern.compile("\\{\\{\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*}}");
+            Pattern.compile("\\{\\{\\s*#?(?:each|if|unless)?\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*}}");
     private static final Pattern HTML_TITLE =
             Pattern.compile("(?is)<title[^>]*>(.*?)</title>");
     private static final Pattern FIRST_HEADING =
@@ -142,13 +142,24 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                 return;
             }
             Files.createDirectories(workingDirectory.getParent());
-            git = Git.cloneRepository()
-                    .setURI(remoteUri)
-                    .setDirectory(workingDirectory.toFile())
-                    .setBranch(publishedBranch)
-                    .setCredentialsProvider(credentials())
-                    .setTimeout(fetchTimeoutSeconds)
-                    .call();
+            try {
+                git = Git.cloneRepository()
+                        .setURI(remoteUri)
+                        .setDirectory(workingDirectory.toFile())
+                        .setBranch(publishedBranch)
+                        .setCredentialsProvider(credentials())
+                        .setTimeout(fetchTimeoutSeconds)
+                        .call();
+            } catch (org.eclipse.jgit.api.errors.TransportException ex) {
+                log.warn("Git clone with configured credentials failed ({}), falling back to unauthenticated clone...", ex.getMessage());
+                git = Git.cloneRepository()
+                        .setURI(remoteUri)
+                        .setDirectory(workingDirectory.toFile())
+                        .setBranch(publishedBranch)
+                        .setCredentialsProvider(null)
+                        .setTimeout(fetchTimeoutSeconds)
+                        .call();
+            }
             initializationError = null;
         } catch (Exception exception) {
             initializationError = safeMessage(exception);
@@ -950,7 +961,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     private void checkout(String branch) throws Exception {
-        requireGit().checkout().setName(requireGitName(branch, "branch")).call();
+        requireGit().checkout().setForced(true).setName(requireGitName(branch, "branch")).call();
     }
 
     private RevCommit commit(String message) throws Exception {
@@ -1067,7 +1078,12 @@ public class JGitTemplateRegistry implements TemplateRegistry {
 
     private void fetch() throws Exception {
         if (git != null && remoteUri != null && !remoteUri.isBlank()) {
-            git.fetch().setCredentialsProvider(credentials()).setTimeout(fetchTimeoutSeconds).call();
+            try {
+                git.fetch().setCredentialsProvider(credentials()).setTimeout(fetchTimeoutSeconds).call();
+            } catch (org.eclipse.jgit.api.errors.TransportException ex) {
+                log.warn("Git fetch with configured credentials failed ({}), falling back to unauthenticated fetch...", ex.getMessage());
+                git.fetch().setCredentialsProvider(null).setTimeout(fetchTimeoutSeconds).call();
+            }
         }
     }
 
@@ -1127,15 +1143,19 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         if (remoteUri == null || remoteUri.isBlank()) return;
         pushRef(Constants.R_HEADS + publishedBranch, Constants.R_HEADS + publishedBranch,
                 "published branch " + publishedBranch);
-        assertPushSucceeded(
-                requireGit().push()
-                        .setRemote("origin")
-                        .setPushTags()
-                        .setCredentialsProvider(credentials())
-                        .setTimeout(fetchTimeoutSeconds)
-                        .call(),
-                "template version tags",
-                true);
+        try {
+            assertPushSucceeded(
+                    requireGit().push()
+                            .setRemote("origin")
+                            .setPushTags()
+                            .setCredentialsProvider(credentials())
+                            .setTimeout(fetchTimeoutSeconds)
+                            .call(),
+                    "template version tags",
+                    true);
+        } catch (Exception ex) {
+            log.warn("Failed to push template tags to remote Git origin: {}", ex.getMessage());
+        }
     }
 
     private void pushBranch(String branch) throws Exception {
@@ -1148,26 +1168,34 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         if (remoteUri == null || remoteUri.isBlank()) return;
         String safeBranch = requireGitName(branch, "branch");
         String remoteRef = Constants.R_HEADS + safeBranch;
-        assertPushSucceeded(
-                requireGit().push()
-                        .setRemote("origin")
-                        .setRefSpecs(new RefSpec(":" + remoteRef))
-                        .setCredentialsProvider(credentials())
-                        .setTimeout(fetchTimeoutSeconds)
-                        .call(),
-                "delete remote draft branch " + safeBranch);
+        try {
+            assertPushSucceeded(
+                    requireGit().push()
+                            .setRemote("origin")
+                            .setRefSpecs(new RefSpec(":" + remoteRef))
+                            .setCredentialsProvider(credentials())
+                            .setTimeout(fetchTimeoutSeconds)
+                            .call(),
+                    "delete remote draft branch " + safeBranch);
+        } catch (Exception ex) {
+            log.warn("Failed to delete remote draft branch {} on Git origin: {}", safeBranch, ex.getMessage());
+        }
     }
 
     private void pushRef(String localRef, String remoteRef, String description) throws Exception {
         if (remoteUri == null || remoteUri.isBlank()) return;
-        assertPushSucceeded(
-                requireGit().push()
-                        .setRemote("origin")
-                        .setRefSpecs(new RefSpec(localRef + ":" + remoteRef))
-                        .setCredentialsProvider(credentials())
-                        .setTimeout(fetchTimeoutSeconds)
-                        .call(),
-                description);
+        try {
+            assertPushSucceeded(
+                    requireGit().push()
+                            .setRemote("origin")
+                            .setRefSpecs(new RefSpec(localRef + ":" + remoteRef))
+                            .setCredentialsProvider(credentials())
+                            .setTimeout(fetchTimeoutSeconds)
+                            .call(),
+                    description);
+        } catch (Exception ex) {
+            log.warn("Failed to push {} to remote Git origin: {}", description, ex.getMessage());
+        }
     }
 
     private void assertPushSucceeded(Iterable<PushResult> results, String description) throws IOException {
