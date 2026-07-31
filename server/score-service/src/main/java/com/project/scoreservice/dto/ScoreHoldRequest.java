@@ -4,6 +4,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
+
 public record ScoreHoldRequest(
     @NotNull(message = "User ID is required")
     Long userId,
@@ -20,5 +22,17 @@ public record ScoreHoldRequest(
     String eventId,
 
     @NotBlank(message = "Idempotency key is required")
-    String idempotencyKey
-) {}
+    String idempotencyKey,
+
+    BigDecimal bookingAmount
+) {
+    public ScoreHoldRequest(
+            Long userId,
+            Long bookingId,
+            Integer points,
+            Integer ttlSeconds,
+            String eventId,
+            String idempotencyKey) {
+        this(userId, bookingId, points, ttlSeconds, eventId, idempotencyKey, null);
+    }
+}

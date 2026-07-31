@@ -9,11 +9,6 @@ const scoreCustomerService = {
     return response.data;
   },
 
-  getScoreTier: async () => {
-    const response = await apiClient.get(`${SCORE_API_URL}/tier`);
-    return response.data;
-  },
-
   getScoreHistory: async (params = {}) => {
     const response = await apiClient.get(`${SCORE_API_URL}/history`, { params });
     return response.data;

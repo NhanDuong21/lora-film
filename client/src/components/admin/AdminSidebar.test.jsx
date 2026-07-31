@@ -29,6 +29,23 @@ describe('AdminSidebar', () => {
     expect(screen.getByText('Bảng giá')).toBeInTheDocument();
   });
 
+  it('shows the new revenue report once and removes the legacy sidebar entry', () => {
+    render(
+      <MemoryRouter>
+        <AdminSidebar
+          activeTab="analytics"
+          setActiveTab={vi.fn()}
+          user={{ role: 'ADMIN', permissions: [] }}
+          onBackHome={vi.fn()}
+          handleLogout={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByText('Báo cáo doanh thu')).toHaveLength(1);
+    expect(screen.queryByText('Analytics & KPI')).not.toBeInTheDocument();
+  });
+
   it('separates booking, payment and reporting operations for administrators', () => {
     renderSidebar();
 

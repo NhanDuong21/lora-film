@@ -70,8 +70,26 @@ export const createBooking = async ({ showtimePublicId, seatPublicIds, reservati
   return booking;
 };
 
-export const finalizeCheckout = async (bookingId) => {
-  const response = await apiClient.post(`/api/bookings/${bookingId}/finalize-checkout`);
+export const getOrCreateScoreRedemptionKey = (bookingId, points) => {
+  const storageKey = `booking:score-redemption:${bookingId}:${points}`;
+  const existing = sessionStorage.getItem(storageKey);
+  if (existing) return existing;
+  const created = uuidv4();
+  sessionStorage.setItem(storageKey, created);
+  return created;
+};
+
+export const finalizeCheckout = async (bookingId, {
+  scorePoints = 0,
+  scoreIdempotencyKey = null
+} = {}) => {
+  const response = await apiClient.post(
+    `/api/bookings/${bookingId}/finalize-checkout`,
+    {
+      scorePoints,
+      ...(scorePoints > 0 && scoreIdempotencyKey ? { scoreIdempotencyKey } : {})
+    }
+  );
   const booking = response.data.data;
   emitBookingChanged({ action: "FINALIZED", publicId: booking?.publicId || bookingId });
   return booking;
@@ -151,6 +169,17 @@ export const getBookingHistory = async ({ page = 0, size = 10, status, fromDate,
     ...responsePage,
     content: (responsePage?.content || []).map(normalizeCustomerBooking)
   };
+};
+
+/**
+ * Get the authenticated customer's successful paid spending for one calendar year.
+ * Booking Service owns this aggregation so pagination cannot make the total incomplete.
+ */
+export const getBookingSpendingSummary = async (year = new Date().getFullYear()) => {
+  const response = await apiClient.get("/api/bookings/spending-summary", {
+    params: { year }
+  });
+  return response.data.data;
 };
 
 /**

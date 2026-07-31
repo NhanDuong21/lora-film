@@ -58,6 +58,22 @@ class BookingAggregateTest {
     }
 
     @Test
+    void shouldApplyScoreDiscountBeforeLockingAmount() {
+        Booking booking = createBooking(Instant.now().plusSeconds(900));
+
+        booking.applyScoreRedemption(
+                50,
+                new BigDecimal("50000"),
+                "HOLD-POINTS-1");
+        booking.lockAmount(Instant.now());
+
+        assertEquals(50, booking.getScorePointsUsed());
+        assertEquals(new BigDecimal("50000.00"), booking.getScoreDiscount());
+        assertEquals(new BigDecimal("160000.00"), booking.getFinalAmount());
+        assertEquals("HOLD-POINTS-1", booking.getScoreHoldCode());
+    }
+
+    @Test
     void shouldOnlyExpireAfterPaymentDeadline() {
         Booking activeBooking = createBooking(Instant.now().plusSeconds(900));
         assertThrows(

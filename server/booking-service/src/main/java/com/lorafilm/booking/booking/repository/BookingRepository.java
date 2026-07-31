@@ -2,6 +2,7 @@ package com.lorafilm.booking.booking.repository;
 
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.List;
 
@@ -37,6 +39,23 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     Page<Booking> findByUserId(Long userId, Pageable pageable);
 
     Page<Booking> findByUserIdAndBookingStatus(Long userId, BookingStatus bookingStatus, Pageable pageable);
+
+    @Query("""
+            SELECT SUM(b.finalAmount)
+            FROM Booking b
+            WHERE b.userId = :userId
+              AND b.bookingStatus IN :bookingStatuses
+              AND b.paymentStatus = :paymentStatus
+              AND b.confirmedAt >= :periodStart
+              AND b.confirmedAt < :periodEnd
+              AND b.isDeleted = false
+            """)
+    BigDecimal sumPaidSpendingByUserAndPeriod(
+            @Param("userId") Long userId,
+            @Param("bookingStatuses") List<BookingStatus> bookingStatuses,
+            @Param("paymentStatus") PaymentStatus paymentStatus,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

@@ -19,7 +19,8 @@ public class UserRecipientClient {
     public UserRecipientClient(
             RestClient.Builder builder,
             @Value("${notification.user-service.url:http://localhost:8086}") String userServiceUrl,
-            @Value("${notification.user-service.internal-token}") String internalToken) {
+            @Value("${notification.user-service.internal-token:"
+                    + "${USER_SERVICE_INTERNAL_TOKEN:${INTERNAL_NOTIFICATION_TOKEN:}}}") String internalToken) {
         this.restClient = builder
                 .baseUrl(userServiceUrl)
                 .defaultHeader("X-Internal-Token", internalToken)

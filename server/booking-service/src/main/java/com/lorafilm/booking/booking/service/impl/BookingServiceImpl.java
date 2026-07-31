@@ -4,17 +4,21 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
+import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
+import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingFoodResponse;
 import com.lorafilm.booking.booking.dto.response.BookingPresentationResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
+import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
 import com.lorafilm.booking.booking.policy.SingleSeatGapPolicy;
 import com.lorafilm.booking.booking.repository.BookingRepository;
@@ -63,7 +67,12 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -102,6 +111,7 @@ public class BookingServiceImpl implements BookingService {
     private final RedisLockService redisLockService;
     private final BookingLifecycleService lifecycleService;
     private SeatAvailabilityEventService seatAvailabilityEventService;
+    private ScoreRedemptionClient scoreRedemptionClient;
 
     @Autowired
     public BookingServiceImpl(
@@ -150,6 +160,11 @@ public class BookingServiceImpl implements BookingService {
     @Autowired(required = false)
     public void setSeatAvailabilityEventService(SeatAvailabilityEventService service) {
         this.seatAvailabilityEventService = service;
+    }
+
+    @Autowired(required = false)
+    public void setScoreRedemptionClient(ScoreRedemptionClient service) {
+        this.scoreRedemptionClient = service;
     }
 
     /** Backwards-compatible constructor for existing unit/integration callers. */
@@ -637,6 +652,34 @@ public class BookingServiceImpl implements BookingService {
         validateDateRange(fromDate, toDate);
         return bookingRepository.findAll(buildSpecification(userId, status, fromDate, toDate), pageable)
                 .map(this::toCustomerSummaryResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingSpendingSummaryResponse getMySpendingSummary(int year) {
+        Long currentUserId = requireAuthenticatedUser();
+        ZoneId businessZone = ZoneId.of("Asia/Ho_Chi_Minh");
+        Instant periodStart = LocalDate.of(year, 1, 1)
+                .atStartOfDay(businessZone)
+                .toInstant();
+        Instant periodEnd = LocalDate.of(year + 1, 1, 1)
+                .atStartOfDay(businessZone)
+                .toInstant();
+        BigDecimal totalSpending = bookingRepository.sumPaidSpendingByUserAndPeriod(
+                currentUserId,
+                List.of(BookingStatus.CONFIRMED, BookingStatus.COMPLETED),
+                PaymentStatus.SUCCESS,
+                periodStart,
+                periodEnd);
+
+        return new BookingSpendingSummaryResponse(
+                year,
+                totalSpending == null
+                        ? BigDecimal.ZERO.setScale(2)
+                        : totalSpending.setScale(2, RoundingMode.HALF_UP),
+                "VND",
+                periodStart,
+                periodEnd);
     }
 
     private BookingSummaryResponse toCustomerSummaryResponse(Booking booking) {
@@ -1148,17 +1191,87 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse finalizeCheckout(String publicId) {
+    public BookingResponse finalizeCheckout(String publicId, FinalizeCheckoutRequest request) {
         Long currentUserId = requireAuthenticatedUser();
-        Booking booking = getBooking(publicId);
+        Booking booking = bookingRepository.findByPublicIdWithLock(publicId)
+                .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()))
+                .orElseThrow(() -> new BookingNotFoundException(publicId));
         requireOwnerOrAdmin(booking, currentUserId);
         if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BusinessException("BOOKING_NOT_PENDING", "Only pending Bookings can be finalized", HttpStatus.CONFLICT);
         }
-        if (booking.getExpiresAt() == null || !Instant.now().isBefore(booking.getExpiresAt())) {
+        Instant now = Instant.now();
+        if (booking.getExpiresAt() == null || !now.isBefore(booking.getExpiresAt())) {
             throw new BusinessException("BOOKING_EXPIRED", "The Booking payment deadline has passed", HttpStatus.CONFLICT);
         }
-        booking.lockAmount(Instant.now());
-        return bookingMapper.toResponse(bookingRepository.save(booking));
+        int requestedPoints = request == null ? 0 : request.normalizedScorePoints();
+        String scoreIdempotencyKey = request == null ? null : request.scoreIdempotencyKey();
+
+        if (booking.getAmountLockedAt() != null) {
+            if (!Objects.equals(booking.getScorePointsUsed(), requestedPoints)) {
+                throw new BusinessException(
+                        "BOOKING_AMOUNT_ALREADY_LOCKED",
+                        "Checkout amount was already locked with another score selection",
+                        HttpStatus.CONFLICT);
+            }
+            return bookingMapper.toResponse(booking);
+        }
+        if (requestedPoints == 0) {
+            booking.lockAmount(now);
+            return bookingMapper.toResponse(bookingRepository.saveAndFlush(booking));
+        }
+        if (scoreIdempotencyKey == null || scoreIdempotencyKey.isBlank()) {
+            throw new BusinessException(
+                    "SCORE_IDEMPOTENCY_KEY_REQUIRED",
+                    "scoreIdempotencyKey is required when scorePoints is greater than zero",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (scoreRedemptionClient == null) {
+            throw new IntegrationException("Score Service integration is unavailable");
+        }
+
+        long ttlWithSettlementGrace = Duration.between(now, booking.getExpiresAt()).getSeconds() + 300;
+        int ttlSeconds = (int) Math.min(Integer.MAX_VALUE, Math.max(60, ttlWithSettlementGrace));
+        String holdEventId = stableScoreKey("hold-event", scoreIdempotencyKey);
+        ScoreRedemptionClient.ScoreHoldResult hold = scoreRedemptionClient.hold(
+                booking.getUserId(),
+                booking.getId(),
+                requestedPoints,
+                ttlSeconds,
+                booking.getFinalAmount(),
+                holdEventId,
+                scoreIdempotencyKey.trim());
+        try {
+            if (hold == null
+                    || !"ACTIVE".equalsIgnoreCase(hold.status())
+                    || hold.pointsHeld() != requestedPoints
+                    || hold.discountAmount() == null
+                    || hold.discountAmount().signum() <= 0) {
+                throw new IntegrationException("Score Service did not create a valid active hold");
+            }
+            booking.applyScoreRedemption(
+                    requestedPoints,
+                    hold.discountAmount(),
+                    hold.holdCode());
+            booking.lockAmount(now);
+            return bookingMapper.toResponse(bookingRepository.saveAndFlush(booking));
+        } catch (RuntimeException exception) {
+            try {
+                scoreRedemptionClient.release(
+                        booking.getId(),
+                        hold == null ? null : hold.holdCode(),
+                        "Booking checkout finalization failed",
+                        stableScoreKey("release-event", scoreIdempotencyKey),
+                        stableScoreKey("release", scoreIdempotencyKey));
+            } catch (RuntimeException releaseException) {
+                log.error("Failed to compensate Score hold for Booking {}", publicId, releaseException);
+            }
+            throw exception;
+        }
+    }
+
+    private String stableScoreKey(String purpose, String source) {
+        return purpose + "-" + UUID.nameUUIDFromBytes(
+                (purpose + ":" + source).getBytes(StandardCharsets.UTF_8));
     }
 }

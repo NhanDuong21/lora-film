@@ -90,6 +90,7 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
                 .defaultIfEmpty("");
 
         return Mono.zip(tokenRevoked, sessionRevoked, accountRevokedAt)
+                .onErrorMap(exception -> new RuntimeException("REDIS_ERROR", exception))
                 .flatMap(revocation -> {
                     if (isRevoked(revocation, preliminaryClaims)) {
                         return onError(sanitizedExchange, "Access token has been revoked",
@@ -97,9 +98,14 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
                     }
                     return authenticate(sanitizedExchange, sanitizedRequest, chain, token);
                 })
-                .onErrorResume(exception -> onError(sanitizedExchange,
-                        "Authentication service is temporarily unavailable",
-                        "AUTH_SERVICE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE));
+                .onErrorResume(exception -> {
+                    if ("REDIS_ERROR".equals(exception.getMessage())) {
+                        return onError(sanitizedExchange,
+                                "Authentication service is temporarily unavailable",
+                                "AUTH_SERVICE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE);
+                    }
+                    return Mono.error(exception);
+                });
     }
 
     private boolean isRevoked(Tuple3<Boolean, Boolean, String> revocation, Claims claims) {

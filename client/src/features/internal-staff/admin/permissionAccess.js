@@ -57,7 +57,7 @@ const ADMIN_LANDING_ROUTES = [
   ['PERMISSION_VIEW', '/admin/permissions'],
   ['SYSTEM_CONFIGURATION', '/admin/accounts'],
   ['USER_AUDIT_VIEW', '/admin/user-audits'],
-  ['PERM_VIEW_FINANCE', '/admin/finance']
+  ['PERM_VIEW_FINANCE', '/admin/analytics']
 ];
 
 export const getAdminLandingPath = (role, permissions = []) => {

@@ -2,7 +2,7 @@ package com.project.analyticsservice.controller;
 
 import com.project.analyticsservice.common.ApiResponse;
 import com.project.analyticsservice.dto.*;
-import com.project.analyticsservice.service.MovieAnalyticsService;
+import com.project.analyticsservice.application.MovieAnalyticsApplicationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -29,7 +29,7 @@ public class MovieAnalyticsControllerTest {
     private MockMvc mockMvc;
 
     @MockBean
-    private MovieAnalyticsService movieAnalyticsService;
+    private MovieAnalyticsApplicationService movieAnalyticsService;
 
     @Test
     @WithMockUser(username = "admin", authorities = {"ROLE_ADMIN"})

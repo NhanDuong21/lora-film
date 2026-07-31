@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import CustomerBookingHistory from '@/features/booking/customer/components/CustomerBookingHistory';
+import { getBookingSpendingSummary } from '@/features/booking/customer/services/bookingService';
 import CustomerNotificationCenter from '@/features/notifications/customer/components/CustomerNotificationCenter';
 import useCustomerScore from '@/features/score/customer/hooks/useCustomerScore';
 import LoyaltyCenterPage from '@/features/score/customer/pages/LoyaltyCenterPage';
@@ -85,8 +86,32 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
 
   // Loyalty and spending states connected to Score Service API
   const { scoreData } = useCustomerScore();
-  const totalSpending = useMemo(() => user?.totalSpending ?? 0, [user]);
+  const spendingYear = new Date().getFullYear();
+  const [spendingSummary, setSpendingSummary] = useState(undefined);
+  const totalSpending = useMemo(
+    () => Number(spendingSummary?.totalSpending ?? 0),
+    [spendingSummary]
+  );
   const points = useMemo(() => scoreData?.currentPoints ?? user?.points ?? 0, [scoreData, user]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !accountId) {
+      setSpendingSummary(undefined);
+      return undefined;
+    }
+
+    let active = true;
+    getBookingSpendingSummary(spendingYear)
+      .then(summary => {
+        if (active) setSpendingSummary(summary);
+      })
+      .catch(() => {
+        if (active) setSpendingSummary(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accountId, isAuthenticated, spendingYear]);
 
   // Modal / toggle states
   const [showToast, setShowToast] = useState(false);
@@ -368,8 +393,14 @@ export default function CustomerProfileView({ onBackHome, initialTab = 'info' })
               {/* Progress Milestones Bar */}
               <div className="pt-6 space-y-4">
                 <div className="flex justify-between items-end">
-                  <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider">Tổng chi tiêu 2026</span>
-                  <span className="text-sm font-black text-white">{(totalSpending).toLocaleString('vi-VN')}đ</span>
+                  <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider">Tổng chi tiêu {spendingYear}</span>
+                  <span className="text-sm font-black text-white">
+                    {spendingSummary === undefined
+                      ? '...'
+                      : spendingSummary === null
+                        ? '—'
+                        : `${totalSpending.toLocaleString('vi-VN')}đ`}
+                  </span>
                 </div>
 
                 {/* Progress bar container */}

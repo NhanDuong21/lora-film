@@ -22,13 +22,13 @@ import {
   History,
   Zap,
   BadgeDollarSign,
-  BarChart3,
   Award,
   Key,
   ShieldAlert,
   UserCircle,
   FileSearch,
   CreditCard,
+  BarChart3,
   BellRing,
   Mail,
   ListChecks,
@@ -114,7 +114,7 @@ export default function AdminSidebar({
 
   return (
     <aside className="w-[280px] h-screen h-[100dvh] sticky top-0 bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0 z-30 select-none overflow-hidden font-sans">
-      
+
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Brand Top Header */}
         <div className="px-6 py-6 border-b border-zinc-800/60 flex items-center justify-between shrink-0 h-[72px]">
@@ -135,7 +135,7 @@ export default function AdminSidebar({
 
         {/* Scrollable Navigation List */}
         <nav className="min-h-0 flex-1 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-          
+
           {/* Section 1: Dashboard */}
           {can('DASHBOARD_VIEW') && (
             <div className="mb-2">
@@ -169,9 +169,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Nội dung & phát hành</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.noiDung ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.noiDung ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.noiDung && (
@@ -201,9 +200,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Cơ sở rạp</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.coSo ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.coSo ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.coSo && (
@@ -233,9 +231,8 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Lịch chiếu & giá vé</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.lichGia ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.lichGia ? 'rotate-180' : ''
+                  }`} />
               </button>
 
               {!collapsedSections.lichGia && (
@@ -268,9 +265,8 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Vận hành đặt vé</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.vanHanhDatVe ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.vanHanhDatVe ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.vanHanhDatVe && (
@@ -294,9 +290,8 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Thanh toán</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.thanhToan ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.thanhToan ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.thanhToan && (
@@ -316,13 +311,16 @@ export default function AdminSidebar({
               className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
             >
               <span>Báo cáo & phân tích</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                !collapsedSections.baoCao ? 'rotate-180' : ''
-              }`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.baoCao ? 'rotate-180' : ''
+                }`} />
             </button>
 
             {!collapsedSections.baoCao && (
               <div className="space-y-0.5">
+                <button onClick={() => handleTabClick('analytics', '#/admin/analytics')} className={getSubLinkClass('analytics')}>
+                  <TrendingUp className="w-4 h-4 shrink-0" />
+                  <span>Báo cáo doanh thu</span>
+                </button>
                 <button onClick={() => handleTabClick('finance', '#/admin/finance')} className={getSubLinkClass('finance')}>
                   <BarChart3 className="w-4 h-4 shrink-0" />
                   <span>Doanh thu tổng hợp</span>
@@ -402,7 +400,7 @@ export default function AdminSidebar({
                 </button>}
               </div>
             )}
-          </div >}
+          </div>}
 
           {/* Section 9: Settings */}
           {hasSystemAccess && (
@@ -412,60 +410,59 @@ export default function AdminSidebar({
                 className="w-full flex items-center justify-between px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 transition-colors select-none text-left whitespace-nowrap mt-4 mb-1"
               >
                 <span>Hệ thống</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  !collapsedSections.cauHinh ? 'rotate-180' : ''
-                }`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${!collapsedSections.cauHinh ? 'rotate-180' : ''
+                  }`} />
               </button>
 
-                {!collapsedSections.cauHinh && (
-                  <div className="space-y-0.5">
-                    {canManageRoles && <button onClick={() => handleTabClick('roles', '#/admin/roles')} className={getSubLinkClass('roles')}>
-                      <ShieldAlert className="w-4 h-4 shrink-0" />
-                      <span>Quản lý vai trò (Role)</span>
-                    </button>}
-                    {canConfigureSystem && <button onClick={() => handleTabClick('accounts', '#/admin/accounts')} className={getSubLinkClass('accounts')}>
-                      <UserCircle className="w-4 h-4 shrink-0" />
-                      <span>Tài khoản đăng nhập</span>
-                    </button>}
-                    {canManagePermissions && <button onClick={() => handleTabClick('permissions', '#/admin/permissions')} className={getSubLinkClass('permissions')}>
-                      <Key className="w-4 h-4 shrink-0" />
-                      <span>Quản lý quyền hạn (Permission)</span>
-                    </button>}
-                    {canConfigureSystem && <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
-                      <Sliders className="w-4 h-4 shrink-0" />
-                      <span>Cấu hình chung</span>
-                    </button>}
-                    {canConfigureSystem && <button onClick={() => handleTabClick('audits', '#/admin/audits')} className={getSubLinkClass('audits')}>
-                      <FileSearch className="w-4 h-4 shrink-0" />
-                      <span>Nhật ký truy cập (Audit)</span>
-                    </button>}
-                    {canViewUserAudits && <button onClick={() => handleTabClick('user-audits', '#/admin/user-audits')} className={getSubLinkClass('user-audits')}>
-                      <FileSearch className="w-4 h-4 shrink-0" />
-                      <span>Nhật ký nghiệp vụ</span>
-                    </button>}
-                    {isFullAdmin && <button onClick={() => handleTabClick('notification-dashboard', '#/admin/notifications')} className={getSubLinkClass('notification-dashboard')}>
-                      <BellRing className="w-4 h-4 shrink-0" />
-                      <span>Tổng quan thông báo</span>
-                    </button>}
-                    {isFullAdmin && <button onClick={() => handleTabClick('notification-templates', '#/admin/notification-templates')} className={getSubLinkClass('notification-templates')}>
-                      <Mail className="w-4 h-4 shrink-0" />
-                      <span>Mẫu thông báo</span>
-                    </button>}
-                    {isFullAdmin && <button onClick={() => handleTabClick('notification-operations', '#/admin/notification-operations')} className={getSubLinkClass('notification-operations')}>
-                      <ListChecks className="w-4 h-4 shrink-0" />
-                      <span>Vận hành gửi thông báo</span>
-                    </button>}
-                  </div>
-                )}
-              </div>
-            )
+              {!collapsedSections.cauHinh && (
+                <div className="space-y-0.5">
+                  {canManageRoles && <button onClick={() => handleTabClick('roles', '#/admin/roles')} className={getSubLinkClass('roles')}>
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    <span>Quản lý vai trò (Role)</span>
+                  </button>}
+                  {canConfigureSystem && <button onClick={() => handleTabClick('accounts', '#/admin/accounts')} className={getSubLinkClass('accounts')}>
+                    <UserCircle className="w-4 h-4 shrink-0" />
+                    <span>Tài khoản đăng nhập</span>
+                  </button>}
+                  {canManagePermissions && <button onClick={() => handleTabClick('permissions', '#/admin/permissions')} className={getSubLinkClass('permissions')}>
+                    <Key className="w-4 h-4 shrink-0" />
+                    <span>Quản lý quyền hạn (Permission)</span>
+                  </button>}
+                  {canConfigureSystem && <button onClick={() => handleTabClick('settings', '#/admin/settings')} className={getSubLinkClass('settings')}>
+                    <Sliders className="w-4 h-4 shrink-0" />
+                    <span>Cấu hình chung</span>
+                  </button>}
+                  {canConfigureSystem && <button onClick={() => handleTabClick('audits', '#/admin/audits')} className={getSubLinkClass('audits')}>
+                    <FileSearch className="w-4 h-4 shrink-0" />
+                    <span>Nhật ký truy cập (Audit)</span>
+                  </button>}
+                  {canViewUserAudits && <button onClick={() => handleTabClick('user-audits', '#/admin/user-audits')} className={getSubLinkClass('user-audits')}>
+                    <FileSearch className="w-4 h-4 shrink-0" />
+                    <span>Nhật ký nghiệp vụ</span>
+                  </button>}
+                  {isFullAdmin && <button onClick={() => handleTabClick('notification-dashboard', '#/admin/notifications')} className={getSubLinkClass('notification-dashboard')}>
+                    <BellRing className="w-4 h-4 shrink-0" />
+                    <span>Tổng quan thông báo</span>
+                  </button>}
+                  {isFullAdmin && <button onClick={() => handleTabClick('notification-templates', '#/admin/notification-templates')} className={getSubLinkClass('notification-templates')}>
+                    <Mail className="w-4 h-4 shrink-0" />
+                    <span>Mẫu thông báo</span>
+                  </button>}
+                  {isFullAdmin && <button onClick={() => handleTabClick('notification-operations', '#/admin/notification-operations')} className={getSubLinkClass('notification-operations')}>
+                    <ListChecks className="w-4 h-4 shrink-0" />
+                    <span>Vận hành gửi thông báo</span>
+                  </button>}
+                </div>
+              )}
+            </div>
+          )
           }
 
-        </nav >
-      </div >
+        </nav>
+      </div>
 
       {/* Pinned Bottom User Profile Card */}
-      < div className="p-4 border-t border-zinc-800/60 bg-zinc-950 shrink-0" >
+      <div className="p-4 border-t border-zinc-800/60 bg-zinc-950 shrink-0">
         <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl flex flex-col gap-3 hover-scale">
           <div className="flex items-center justify-start gap-3">
             <div className="w-10 h-10 rounded-full bg-brand-orange/10 border border-brand-orange/20 flex items-center justify-center font-bold text-brand-orange text-sm shrink-0">
@@ -483,11 +480,10 @@ export default function AdminSidebar({
           <div className="flex flex-col gap-1 border-t border-zinc-800 pt-3 mt-1">
             <button
               onClick={() => handleTabClick('my-account', '#/admin/me')}
-              className={`flex items-center justify-start gap-2.5 rounded px-2 py-2 text-xs font-semibold transition-colors ${
-                activeTab === 'my-account'
-                  ? 'bg-brand-orange/10 text-brand-orange'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
-              }`}
+              className={`flex items-center justify-start gap-2.5 rounded px-2 py-2 text-xs font-semibold transition-colors ${activeTab === 'my-account'
+                ? 'bg-brand-orange/10 text-brand-orange'
+                : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-white'
+                }`}
             >
               <UserCircle className="w-3.5 h-3.5" />
               <span>Tài khoản của tôi</span>
@@ -511,8 +507,8 @@ export default function AdminSidebar({
             </div>
           </div>
         </div>
-      </div >
+      </div>
 
-    </aside >
+    </aside>
   );
 }

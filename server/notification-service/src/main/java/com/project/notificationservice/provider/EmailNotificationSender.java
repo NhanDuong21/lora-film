@@ -38,7 +38,7 @@ public class EmailNotificationSender implements NotificationChannelSender {
 
     public EmailNotificationSender(
             JavaMailSender mailSender,
-            @Value("${notification.delivery.from-address}") String fromAddress,
+            @Value("${notification.delivery.from-address:notifications@lorafilm.local}") String fromAddress,
             @Value("${notification.delivery.from-name:LoraFilm}") String fromName) {
         this.mailSender = mailSender;
         this.fromAddress = fromAddress;

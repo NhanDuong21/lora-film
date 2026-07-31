@@ -76,6 +76,7 @@ public class AuditLog {
     public AuditLog() {
         this.publicId = UUID.randomUUID().toString();
         this.createdAt = Instant.now();
+        this.updatedAt = this.createdAt;
     }
 
     public Long getId() {

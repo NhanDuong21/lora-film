@@ -33,6 +33,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/cinemas') || path.includes('/cinemas')) return 'clusters';
     if (path.endsWith('/rooms') || path.includes('/rooms')) return 'rooms';
     if (path.endsWith('/seat-types') || path.includes('/seat-types')) return 'seat-types';
+    if (path.endsWith('/analytics')) return 'analytics';
     if (path.endsWith('/finance')) return 'finance';
     if (path.endsWith('/payments') || path.includes('/payments/')) return 'payments';
     if (path.endsWith('/bookings') || path.includes('/bookings/')) return 'bookings';
