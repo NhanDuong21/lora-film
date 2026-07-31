@@ -60,7 +60,6 @@ class AdminCampaignControllerTest {
         request.setCode("WINTER2026");
         request.setName("Winter 2026 Promo");
         request.setCampaignType(com.project.promotionservice.promotion.enums.CampaignType.COUPON);
-        request.setFundingSource(com.project.promotionservice.promotion.enums.FundingSource.SYSTEM);
         request.setTimezone("Asia/Ho_Chi_Minh");
         request.setStartAt(Instant.now());
         request.setEndAt(Instant.now().plusSeconds(3600));

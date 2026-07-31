@@ -11,8 +11,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
-import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Optional;
 
 @Repository
@@ -50,55 +48,4 @@ public interface VoucherRedemptionRepository extends JpaRepository<VoucherRedemp
             @Param("paymentPublicId") String paymentPublicId,
             @Param("statuses") Collection<RedemptionStatus> statuses);
 
-    @Query("""
-            select coalesce(sum(r.discountAmount), 0) from VoucherRedemption r
-            where r.campaignPublicId = :campaignPublicId
-              and r.status in :statuses
-              and r.confirmedAt >= :from and r.confirmedAt < :to
-              and r.deletedAt is null
-            """)
-    BigDecimal sumConfirmedDiscount(@Param("campaignPublicId") String campaignPublicId,
-                                    @Param("from") Instant from,
-                                    @Param("to") Instant to,
-                                    @Param("statuses") Collection<RedemptionStatus> statuses);
-
-    @Query("""
-            select count(r) from VoucherRedemption r
-            where r.campaignPublicId = :campaignPublicId
-              and r.status in :statuses
-              and r.confirmedAt >= :from and r.confirmedAt < :to
-              and r.deletedAt is null
-            """)
-    long countConfirmed(@Param("campaignPublicId") String campaignPublicId,
-                        @Param("from") Instant from,
-                        @Param("to") Instant to,
-                        @Param("statuses") Collection<RedemptionStatus> statuses);
-
-    @Query("""
-            select coalesce(sum(r.discountAmount), 0) from VoucherRedemption r
-            where r.campaignPublicId in
-                (select c.publicId from PromotionCampaign c
-                 where c.partnerPublicId = :partnerPublicId and c.deletedAt is null)
-              and r.status in :statuses
-              and r.confirmedAt >= :from and r.confirmedAt < :to
-              and r.deletedAt is null
-            """)
-    BigDecimal sumConfirmedDiscountForPartner(@Param("partnerPublicId") String partnerPublicId,
-                                               @Param("from") Instant from,
-                                               @Param("to") Instant to,
-                                               @Param("statuses") Collection<RedemptionStatus> statuses);
-
-    @Query("""
-            select count(r) from VoucherRedemption r
-            where r.campaignPublicId in
-                (select c.publicId from PromotionCampaign c
-                 where c.partnerPublicId = :partnerPublicId and c.deletedAt is null)
-              and r.status in :statuses
-              and r.confirmedAt >= :from and r.confirmedAt < :to
-              and r.deletedAt is null
-            """)
-    long countConfirmedForPartner(@Param("partnerPublicId") String partnerPublicId,
-                                  @Param("from") Instant from,
-                                  @Param("to") Instant to,
-                                  @Param("statuses") Collection<RedemptionStatus> statuses);
 }

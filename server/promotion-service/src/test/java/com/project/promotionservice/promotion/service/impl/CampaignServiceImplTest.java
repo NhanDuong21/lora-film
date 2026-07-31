@@ -14,7 +14,6 @@ import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignType;
-import com.project.promotionservice.promotion.enums.FundingSource;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.promotion.mapper.CampaignMapper;
@@ -80,7 +79,6 @@ class CampaignServiceImplTest {
         request.setCode("SUMMER2026");
         request.setName("Summer 2026 Campaign");
         request.setCampaignType(CampaignType.COUPON);
-        request.setFundingSource(FundingSource.SYSTEM);
         request.setStartAt(Instant.now().plusSeconds(3600));
         request.setEndAt(Instant.now().plusSeconds(7200));
         request.setBudgetAmount(new BigDecimal("1000000.00"));

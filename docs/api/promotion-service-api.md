@@ -5,14 +5,14 @@
 | Mục | Nội dung |
 | :--- | :--- |
 | Service | `promotion-service` |
-| Feature | Campaign, Coupon, Voucher, Rule Configuration, Reservation and Partner Settlements |
-| API liên quan | Campaign Admin, Coupon/Voucher Admin, Customer Wallet, Promotion Checkout, Partner & Settlement |
+| Feature | Campaign, Coupon, Voucher, Rule Configuration and Reservation |
+| API liên quan | Campaign Admin, Coupon/Voucher Admin, Customer Wallet and Promotion Checkout |
 | Contract Owner | Dương Thiện Nhân |
 | Backend Owner | Trần Lương Thiện Hoàng |
 | Reviewer | Trần Lương Thiện Hoàng |
 | Trạng thái | Promotion core implemented/verified; end-to-end Booking/Payment integration pending |
 | Milestone | Sprint 2 - Core Service API Foundation & Consolidated Benefit Domain |
-| Ngày cập nhật | 29/07/2026 |
+| Ngày cập nhật | 31/07/2026 |
 
 ---
 
@@ -30,17 +30,17 @@ Tài liệu này **hợp nhất** nội dung từ đặc tả cũ của `promoti
 - **Promotion Reservation (Giữ chỗ khuyến mại)**: Lock atomically coupon/voucher, quota, và budget trong quá trình checkout.
 - **Redemption & Reservation lifecycle**: Confirm khi thanh toán thành công; release khi thanh toán thất bại; cancel khi booking bị hủy; job tự expire phiên quá hạn. Giao dịch đã confirm phải dùng refund/compensation, không rollback ledger.
 - **Compensation (Bồi thường)**: Phát hành voucher đền bù chăm sóc khách hàng.
-- **Partner & Settlement**: Quản lý đối tác tài trợ và đối soát quyết toán tài chính.
 
 ### Nằm Ngoài Phạm Vi (Out of Scope)
 - Lưu trữ điểm tích lũy hoặc xếp hạng thành viên (thuộc về `score-service`). Promotion Service chỉ tích hợp qua API/Event để đọc hạng thành viên hoặc yêu cầu hold/commit/release điểm.
 - Độc lập hoàn toàn với `movie-service` (phim/suất chiếu) và `user-service` (thông tin đăng ký).
+- Promotion do đối tác tài trợ, quản lý hợp đồng đối tác và đối soát tài chính. Mọi campaign hiện do hệ thống tự chịu ngân sách.
 
 ---
 
 ## 3. Physical Database Schema
 
-Hệ thống sử dụng MySQL làm Database chính, bao gồm 15 bảng nghiệp vụ và hạ tầng đã được align:
+Hệ thống sử dụng MySQL làm Database chính, bao gồm 13 bảng nghiệp vụ cốt lõi:
 
 ### 3.1. Bảng `promotion_campaigns`
 ```sql
@@ -52,7 +52,6 @@ CREATE TABLE promotion_campaigns (
     slug VARCHAR(255) NOT NULL COMMENT 'Slug duy nhất',
     description TEXT NULL COMMENT 'Mô tả chiến dịch',
     campaign_type VARCHAR(50) NOT NULL COMMENT 'Loại chiến dịch',
-    funding_source VARCHAR(50) NOT NULL COMMENT 'Nguồn tài trợ',
     status VARCHAR(30) NOT NULL COMMENT 'Trạng thái chiến dịch',
     approval_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái phê duyệt',
     legal_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái pháp lý',
@@ -374,77 +373,7 @@ CREATE TABLE compensation_vouchers (
 ) COMMENT = 'Voucher bồi thường';
 ```
 
-### 3.8. Bảng `partners`
-```sql
-CREATE TABLE partners (
-    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
-    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
-    code VARCHAR(100) NOT NULL COMMENT 'Mã đối tác',
-    name VARCHAR(255) NOT NULL COMMENT 'Tên đối tác',
-    partner_type VARCHAR(50) NOT NULL COMMENT 'Loại đối tác',
-    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái',
-    tax_code VARCHAR(50) NULL COMMENT 'Mã số thuế',
-    email VARCHAR(255) NULL COMMENT 'Email liên hệ',
-    phone VARCHAR(30) NULL COMMENT 'Số điện thoại',
-    contact_person VARCHAR(255) NULL COMMENT 'Người liên hệ',
-    address VARCHAR(500) NULL COMMENT 'Địa chỉ',
-    website VARCHAR(255) NULL COMMENT 'Website',
-    contract_number VARCHAR(100) NULL COMMENT 'Số hợp đồng',
-    contract_start_at DATETIME(6) NULL COMMENT 'Ngày bắt đầu hợp đồng',
-    contract_end_at DATETIME(6) NULL COMMENT 'Ngày kết thúc hợp đồng',
-    settlement_cycle VARCHAR(30) NOT NULL COMMENT 'Chu kỳ đối soát',
-    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
-    created_by CHAR(36) NULL COMMENT 'Người tạo',
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
-    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
-    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
-    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
-    CONSTRAINT uk_partner_public UNIQUE (public_id),
-    CONSTRAINT uk_partner_code UNIQUE (code)
-) COMMENT = 'Thông tin đối tác';
-```
-
-### 3.9. Bảng `partner_settlements`
-```sql
-CREATE TABLE partner_settlements (
-    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
-    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
-    partner_public_id CHAR(36) NOT NULL COMMENT 'Public ID đối tác',
-    campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
-    settlement_code VARCHAR(100) NOT NULL COMMENT 'Mã đối soát',
-    settlement_period_from DATETIME(6) NOT NULL COMMENT 'Kỳ đối soát từ',
-    settlement_period_to DATETIME(6) NOT NULL COMMENT 'Kỳ đối soát đến',
-    total_orders INT NOT NULL DEFAULT 0 COMMENT 'Tổng số đơn',
-    total_discount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Tổng tiền giảm',
-    partner_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền đối tác thanh toán',
-    platform_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền hệ thống chịu',
-    adjustment_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Khoản điều chỉnh',
-    final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền quyết toán',
-    currency VARCHAR(10) NOT NULL DEFAULT 'VND' COMMENT 'Đơn vị tiền tệ',
-    settlement_rule VARCHAR(50) NOT NULL DEFAULT 'PERCENTAGE_OF_DISCOUNT' COMMENT 'Quy tắc quyết toán',
-    partner_percentage DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT 'Tỷ lệ đối tác tài trợ',
-    fixed_amount_per_redemption DECIMAL(18,2) NULL COMMENT 'Mức cố định mỗi redemption',
-    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái đối soát',
-    approved_at DATETIME(6) NULL COMMENT 'Ngày phê duyệt',
-    paid_at DATETIME(6) NULL COMMENT 'Ngày thanh toán',
-    note TEXT NULL COMMENT 'Ghi chú',
-    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
-    created_by CHAR(36) NULL COMMENT 'Người tạo',
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
-    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
-    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
-    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
-    CONSTRAINT uk_settlement_public UNIQUE (public_id),
-    CONSTRAINT uk_settlement_code UNIQUE (settlement_code),
-    CONSTRAINT chk_settlement_period CHECK (
-        settlement_period_to > settlement_period_from
-    )
-) COMMENT = 'Đối soát với đối tác';
-```
-
-### 3.10. Bảng `promotion_configurations`
+### 3.8. Bảng `promotion_configurations`
 ```sql
 CREATE TABLE promotion_configurations (
     id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
@@ -470,7 +399,7 @@ CREATE TABLE promotion_configurations (
 ) COMMENT = 'Cấu hình Promotion Service';
 ```
 
-### 3.11. Bảng `approval_histories`
+### 3.9. Bảng `approval_histories`
 ```sql
 CREATE TABLE approval_histories (
     id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
@@ -494,7 +423,7 @@ CREATE TABLE approval_histories (
 ) COMMENT = 'Lịch sử phê duyệt';
 ```
 
-### 3.12. Bảng `audit_logs`
+### 3.10. Bảng `audit_logs`
 ```sql
 CREATE TABLE audit_logs (
     id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
@@ -520,7 +449,7 @@ CREATE TABLE audit_logs (
 ) COMMENT = 'Nhật ký thao tác';
 ```
 
-### 3.13. Bảng `outbox_events`
+### 3.11. Bảng `outbox_events`
 ```sql
 CREATE TABLE outbox_events (
     id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
@@ -549,7 +478,7 @@ CREATE TABLE outbox_events (
 ) COMMENT = 'Outbox Event';
 ```
 
-### 3.14. Bảng `promotion_idempotency_keys`
+### 3.12. Bảng `promotion_idempotency_keys`
 ```sql
 CREATE TABLE promotion_idempotency_keys (
     id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
@@ -585,7 +514,7 @@ CREATE TABLE promotion_idempotency_keys (
 ) COMMENT = 'Lưu khóa chống xử lý trùng request';
 ```
 
-### 3.15. Bảng `promotion_rules`
+### 3.13. Bảng `promotion_rules`
 ```sql
 CREATE TABLE promotion_rules (
     id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
@@ -737,15 +666,6 @@ Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm trán
 | | POST | `/internal/reservations/{reservationId}/cancel` | Booking Service | Booking bị hủy: hủy phiên giữ |
 | | POST | `/internal/reservations/{reservationId}/refresh` | Booking Service | Gia hạn bằng deadline tuyệt đối |
 | | GET | `/api/admin/reservations` | Admin/Operations | Tra cứu lịch sử reservation có lọc và phân trang |
-| **Partner & Settlement**| POST | `/api/admin/partners` | Admin/Finance | Thêm đối tác tài trợ mới |
-| | GET | `/api/admin/partners` | Admin/Finance | Danh sách đối tác hệ thống |
-| | GET | `/api/admin/partners/{id}` | Admin/Finance | Xem chi tiết thông tác |
-| | PUT | `/api/admin/partners/{id}` | Admin/Finance | Cập nhật thông tin đối tác |
-| | DELETE | `/api/admin/partners/{id}` | Admin/Finance | Xóa mềm đối tác |
-| | POST | `/api/admin/partner-settlements` | Admin/Finance | Tạo phiên đối soát quyết toán kỳ hạn |
-| | GET | `/api/admin/partner-settlements` | Admin/Finance | Danh sách phiên đối soát tài chính |
-| | GET | `/api/admin/partner-settlements/{id}` | Admin/Finance | Chi tiết quyết toán với đối tác |
-| | PUT | `/api/admin/partner-settlements/{id}/status` | Admin/Finance | Phê duyệt/Thay đổi trạng thái đối soát |
 | **Configuration** | POST | `/api/admin/configurations` | Admin/Configuration | Tạo cấu hình động |
 | | PUT | `/api/admin/configurations/{id}` | Admin/Configuration | Cập nhật và refresh cache |
 | | DELETE | `/api/admin/configurations/{id}` | Admin/Configuration | Deprecate cấu hình (xóa mềm) |
@@ -1113,7 +1033,6 @@ Lấy danh sách các voucher thuộc quyền sở hữu của khách hàng đan
     "name": "LoraFilm Summer Campaign 2026",
     "description": "Chiến dịch ưu đãi vé hè 2026",
     "campaignType": "COUPON",
-    "fundingSource": "PLATFORM",
     "priority": 100,
     "startAt": "2026-08-01T00:00:00.000",
     "endAt": "2026-08-31T23:59:59.000",
@@ -1132,43 +1051,8 @@ Lấy danh sách các voucher thuộc quyền sở hữu của khách hàng đan
       "campaignPublicId": "cam-1010-1010",
       "code": "LORAFILM_SUMMER_2026",
       "status": "DRAFT",
-      "approvalStatus": "PENDING",
+      "approvalStatus": "DRAFT",
       "legalStatus": "PENDING"
-    }
-  }
-  ```
-
----
-
-### 7.5. Nhóm Partner & Settlement (Admin APIs)
-
-#### 7.5.1. Create Partner Settlement
-Tạo đợt đối soát và quyết toán chi phí khuyến mãi với các đối tác ví điện tử / ngân hàng.
-
-- **Endpoint**: `POST /api/admin/partner-settlements`
-- **Request Body**:
-  ```json
-  {
-    "partnerPublicId": "part-9999-9999",
-    "campaignPublicId": "cam-1010-1010",
-    "settlementPeriodFrom": "2026-07-01T00:00:00.000",
-    "settlementPeriodTo": "2026-07-31T23:59:59.000"
-  }
-  ```
-- **Response Success (201 Created)**:
-  ```json
-  {
-    "success": true,
-    "message": "Partner settlement session initialized successfully",
-    "data": {
-      "settlementPublicId": "set-1111-2222",
-      "settlementCode": "SET-MOMO-JULY26",
-      "totalOrders": 120,
-      "totalDiscount": 6000000.00,
-      "partnerAmount": 3000000.00,
-      "platformAmount": 3000000.00,
-      "finalAmount": 3000000.00,
-      "status": "PENDING_APPROVAL"
     }
   }
   ```
@@ -1195,7 +1079,6 @@ Tạo đợt đối soát và quyết toán chi phí khuyến mãi với các đ
 | `RESERVATION_COMPLETED` | 409 | Không thể release/cancel reservation đã tạo redemption |
 | `RESERVATION_IDEMPOTENCY_CONFLICT` | 409 | Replay có payload, payment hoặc transition data khác request ban đầu |
 | `RESERVATION_INVALID_STATE` | 409 hoặc 400 | Chuyển trạng thái hoặc deadline không hợp lệ |
-| `PARTNER_NOT_FOUND` | 404 | Không tìm thấy đối tác |
 | `IDEMPOTENCY_CONFLICT` | 409 | Trùng Idempotency Key với dữ liệu yêu cầu khác biệt |
 | `SCORE_SERVICE_UNAVAILABLE` | 503 | Dịch vụ Loyalty Point bị lỗi (Áp dụng Circuit Breaker fallback) |
 
@@ -1205,6 +1088,7 @@ Tạo đợt đối soát và quyết toán chi phí khuyến mãi với các đ
 
 | Ngày | Nội dung chỉnh sửa | Người thực hiện |
 | :--- | :--- | :--- |
+| 31/07/2026 | Loại bỏ partner-funded promotion, partner settlement, API và schema liên quan; campaign chỉ dùng ngân sách hệ thống | Codex |
 | 21/06/2026 | Khởi tạo Promotion Service API Contract dựa trên schema Sprint 0 | Dương Thiện Nhân |
 | 22/06/2026 | Cập nhật theo review của Owner: lifecycle, snapshot, revert audit. | Dương Thiện Nhân |
 | 24/06/2026 | Đồng bộ timestamps với DB schema & approve | Dương Thiện Nhân |

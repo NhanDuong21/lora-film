@@ -1,7 +1,6 @@
 package com.project.promotionservice.promotion.dto.request;
 
 import com.project.promotionservice.promotion.enums.CampaignType;
-import com.project.promotionservice.promotion.enums.FundingSource;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
@@ -13,8 +12,6 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-
-import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
 
 @Schema(description = "Request body to create a new promotion campaign")
 public class CampaignCreateRequest {
@@ -32,12 +29,6 @@ public class CampaignCreateRequest {
 
     @NotNull(message = "campaignType is required")
     private CampaignType campaignType;
-
-    @NotNull(message = "fundingSource is required")
-    private FundingSource fundingSource;
-
-    @Pattern(regexp = UUID_PATTERN, message = "partnerPublicId must be a valid UUID")
-    private String partnerPublicId;
 
     @NotNull(message = "priority is required")
     @Min(value = 0, message = "priority must be >= 0")
@@ -117,22 +108,6 @@ public class CampaignCreateRequest {
 
     public void setCampaignType(CampaignType campaignType) {
         this.campaignType = campaignType;
-    }
-
-    public FundingSource getFundingSource() {
-        return fundingSource;
-    }
-
-    public void setFundingSource(FundingSource fundingSource) {
-        this.fundingSource = fundingSource;
-    }
-
-    public String getPartnerPublicId() {
-        return partnerPublicId;
-    }
-
-    public void setPartnerPublicId(String partnerPublicId) {
-        this.partnerPublicId = partnerPublicId;
     }
 
     public Integer getPriority() {

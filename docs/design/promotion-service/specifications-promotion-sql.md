@@ -4,7 +4,7 @@
 
 | STT | Bảng | Công dụng |
 |-----|-------|-----------|
-| 1 | **promotion_campaigns** | Quản lý thông tin tổng thể của các chương trình khuyến mãi như tên, thời gian, trạng thái, đối tác tài trợ và phạm vi áp dụng. Đây là điểm bắt đầu của mọi chương trình Promotion. |
+| 1 | **promotion_campaigns** | Quản lý thông tin tổng thể của các chương trình khuyến mãi như tên, thời gian, trạng thái, ngân sách và phạm vi áp dụng. Đây là điểm bắt đầu của mọi chương trình Promotion. |
 | 2 | **promotion_rules** | Lưu các điều kiện và hành động của từng chương trình khuyến mãi. Promotion Engine sử dụng bảng này để xác định khách hàng có đủ điều kiện nhận ưu đãi hay không. |
 | 3 | **coupons** | Quản lý toàn bộ Coupon được phát hành trong hệ thống, bao gồm mã Coupon, điều kiện sử dụng, giới hạn sử dụng và trạng thái hiện tại. |
 | 4 | **coupon_redemptions** | Ghi nhận toàn bộ lịch sử sử dụng Coupon sau khi giao dịch thanh toán thành công, phục vụ đối soát, thống kê và kiểm toán. |
@@ -12,25 +12,26 @@
 | 6 | **voucher_redemptions** | Ghi nhận lịch sử sử dụng Voucher của khách hàng, lưu giá trị ưu đãi thực tế và liên kết với Booking, Payment để phục vụ Audit và Analytics. |
 | 7 | **promotion_reservations** | Khóa tạm thời (Soft Lock) Coupon hoặc Voucher trong quá trình thanh toán nhằm ngăn chặn nhiều giao dịch sử dụng cùng một Promotion tại cùng một thời điểm. |
 | 8 | **compensation_vouchers** | Quản lý các Voucher bồi thường được phát hành khi xảy ra lỗi hệ thống hoặc theo chính sách chăm sóc khách hàng, đồng thời theo dõi quy trình phê duyệt và phát hành. |
-| 9 | **partners** | Quản lý thông tin các đối tác tham gia tài trợ chương trình khuyến mãi như ngân hàng, ví điện tử, hãng thẻ hoặc đối tác Marketing. |
-| 10 | **partner_settlements** | Quản lý quá trình đối soát và quyết toán chi phí khuyến mãi với các đối tác dựa trên dữ liệu sử dụng Coupon và Voucher trong từng kỳ đối soát. |
-| 11 | **promotion_configurations** | Lưu các cấu hình động của Promotion Service như thời gian Reservation, giới hạn Promotion, Retry Policy và các tham số vận hành mà không cần thay đổi mã nguồn. |
-| 12 | **approval_histories** | Lưu toàn bộ lịch sử phê duyệt các nghiệp vụ quan trọng như Campaign, Rule, Settlement, Compensation và Configuration nhằm đáp ứng yêu cầu quản trị doanh nghiệp. |
-| 13 | **audit_logs** | Ghi nhận toàn bộ lịch sử thao tác trên hệ thống để phục vụ kiểm toán, bảo mật, truy vết sự cố và tuân thủ quy định (Compliance). |
-| 14 | **outbox_events** | Triển khai Transactional Outbox Pattern, lưu các Business Event trước khi publish sang Kafka nhằm đảm bảo dữ liệu và sự kiện luôn nhất quán. |
-| 15 | **promotion_idempotency_keys** | Lưu Idempotency Key của các yêu cầu quan trọng để ngăn chặn xử lý trùng lặp khi Client hoặc các Microservices gửi lại cùng một Request. |
+| 9 | **promotion_configurations** | Lưu các cấu hình động của Promotion Service như thời gian Reservation, giới hạn Promotion, Retry Policy và các tham số vận hành mà không cần thay đổi mã nguồn. |
+| 10 | **approval_histories** | Lưu toàn bộ lịch sử phê duyệt các nghiệp vụ quan trọng như Campaign, Rule, Compensation và Configuration nhằm đáp ứng yêu cầu quản trị doanh nghiệp. |
+| 11 | **audit_logs** | Ghi nhận toàn bộ lịch sử thao tác trên hệ thống để phục vụ kiểm toán, bảo mật, truy vết sự cố và tuân thủ quy định (Compliance). |
+| 12 | **outbox_events** | Triển khai Transactional Outbox Pattern, lưu các Business Event trước khi publish sang Kafka nhằm đảm bảo dữ liệu và sự kiện luôn nhất quán. |
+| 13 | **promotion_idempotency_keys** | Lưu Idempotency Key của các yêu cầu quan trọng để ngăn chặn xử lý trùng lặp khi Client hoặc các Microservices gửi lại cùng một Request. |
+| 14 | **promotion_integration_events** | Lưu trạng thái xử lý, retry và chống trùng lặp cho các sự kiện tích hợp đi vào Promotion Service. |
+| 15 | **promotion_scheduler_job_executions** | Lưu lịch sử chạy và kết quả của các scheduler job. |
+| 16 | **promotion_scheduler_locks** | Quản lý distributed lock cho scheduler khi chạy nhiều instance. |
 
 ## Phân loại theo chức năng
 
 | Nhóm | Các bảng | Vai trò |
 |------|-----------|----------|
-| **Master Data** | partners, promotion_configurations | Quản lý dữ liệu nền và cấu hình hệ thống. |
+| **Master Data** | promotion_configurations | Quản lý cấu hình nền của hệ thống. |
 | **Core Business** | promotion_campaigns, promotion_rules, coupons, vouchers | Quản lý toàn bộ chương trình khuyến mãi và quyền lợi của khách hàng. |
 | **Runtime Business** | promotion_reservations, coupon_redemptions, voucher_redemptions | Xử lý và ghi nhận dữ liệu phát sinh trong quá trình áp dụng khuyến mãi theo thời gian thực. |
-| **Financial** | partner_settlements, compensation_vouchers | Quản lý nghiệp vụ tài chính, đối soát và bồi thường. |
+| **Financial** | compensation_vouchers | Quản lý ngân sách bồi thường do hệ thống phát hành. |
 | **Governance** | approval_histories, audit_logs | Đảm bảo kiểm soát, phê duyệt và truy vết toàn bộ hoạt động của hệ thống. |
-| **Integration** | outbox_events | Đồng bộ dữ liệu và giao tiếp với các Microservices thông qua Kafka theo Event-Driven Architecture. |
-| **Infrastructure** | promotion_idempotency_keys | Đảm bảo tính nhất quán dữ liệu bằng cơ chế chống xử lý trùng lặp (Idempotency). |
+| **Integration** | outbox_events, promotion_integration_events | Đồng bộ dữ liệu và giao tiếp với các Microservices thông qua Kafka theo Event-Driven Architecture. |
+| **Infrastructure** | promotion_idempotency_keys, promotion_scheduler_job_executions, promotion_scheduler_locks | Đảm bảo tính nhất quán dữ liệu, chống xử lý trùng lặp và điều phối scheduler. |
 
 # Promotion Service Domain Design
 
@@ -57,10 +58,9 @@ Việc tổ chức theo Domain giúp:
 | promotion | Quản lý chương trình khuyến mãi và Rule | promotion_campaigns, promotion_rules, approval_histories |
 | benefit | Quản lý Coupon, Voucher và quyền lợi khách hàng | coupons, coupon_redemptions, vouchers, voucher_redemptions, compensation_vouchers |
 | reservation | Quản lý Reservation trong quá trình Booking | promotion_reservations |
-| partner | Quản lý đối tác và đối soát | partners, partner_settlements |
 | configuration | Quản lý cấu hình động của Promotion Service | promotion_configurations |
-| integration | Kafka, Event, Outbox, Redis, Feign | outbox_events |
-| common | Thành phần dùng chung của toàn bộ Service | audit_logs, promotion_idempotency_keys |
+| integration | Kafka, Event, Outbox, Redis, Feign | outbox_events, promotion_integration_events |
+| common | Thành phần dùng chung của toàn bộ Service | audit_logs, promotion_idempotency_keys, promotion_scheduler_job_executions, promotion_scheduler_locks |
 
 ---
 
@@ -224,50 +224,7 @@ Payment
 
 ---
 
-# 3.4 Partner Domain
-
-## Mục đích
-
-Quản lý các đối tác tham gia tài trợ chương trình khuyến mãi và thực hiện đối soát tài chính.
-
----
-
-## Bảng sử dụng
-
-| Bảng | Vai trò |
-|-------|----------|
-| partners | Quản lý đối tác |
-| partner_settlements | Đối soát và quyết toán |
-
----
-
-## Chức năng
-
-- CRUD Partner
-- Sponsor Management
-- Settlement
-- Finance Report
-- Export Settlement
-
----
-
-## Quan hệ
-
-```
-Partner
-
-↓
-
-Settlement
-
-↓
-
-Finance
-```
-
----
-
-# 3.5 Configuration Domain
+# 3.4 Configuration Domain
 
 ## Mục đích
 
@@ -315,7 +272,7 @@ Scheduler
 
 ---
 
-# 3.6 Integration Domain
+# 3.5 Integration Domain
 
 ## Mục đích
 
@@ -375,7 +332,7 @@ Other Services
 
 ---
 
-# 3.7 Common Domain
+# 3.6 Common Domain
 
 ## Mục đích
 
@@ -434,12 +391,13 @@ Không chứa nghiệp vụ Promotion.
 | benefit | voucher_redemptions |
 | benefit | compensation_vouchers |
 | reservation | promotion_reservations |
-| partner | partners |
-| partner | partner_settlements |
 | configuration | promotion_configurations |
 | integration | outbox_events |
+| integration | promotion_integration_events |
 | common | audit_logs |
 | common | promotion_idempotency_keys |
+| common | promotion_scheduler_job_executions |
+| common | promotion_scheduler_locks |
 
 ---
 
@@ -453,8 +411,6 @@ promotion-service
 ├── benefit
 │
 ├── reservation
-│
-├── partner
 │
 ├── configuration
 │
@@ -479,9 +435,6 @@ promotion-service
                 Reservation
                      │
                      ▼
-                 Settlement
-                     │
-                     ▼
                  Integration
                      │
                      ▼
@@ -498,7 +451,7 @@ Common ────────────────────────�
 
 # 7. Tổng kết
 
-Promotion Service được chia thành **07 Domain chính**, mỗi Domain đại diện cho một nhóm nghiệp vụ lớn thay vì một bảng dữ liệu riêng lẻ.
+Promotion Service được chia thành **06 Domain chính**, mỗi Domain đại diện cho một nhóm nghiệp vụ lớn thay vì một bảng dữ liệu riêng lẻ.
 
 Cách tổ chức này đồng nhất với cấu trúc của Movie Service, giúp mã nguồn dễ bảo trì, dễ mở rộng và phù hợp với kiến trúc **Package by Feature (DDD Lite)** trong môi trường Microservices Production.
 
@@ -522,7 +475,6 @@ Promotion Service là nơi duy nhất quản lý:
 - Redemption History
 - Compensation Voucher
 - Approval Workflow
-- Partner Settlement
 - Audit
 - Kafka Outbox
 - Idempotency
@@ -544,7 +496,6 @@ Bao gồm:
 - Voucher
 - Reservation
 - Redemption
-- Settlement
 - Audit
 - Configuration
 
@@ -680,22 +631,6 @@ Hệ thống tự phát hành Voucher xin lỗi.
 
 ---
 
-## Partner Settlement
-
-Quản lý việc đối soát doanh thu với đối tác.
-
-Ví dụ
-
-Ngân hàng
-
-Ví điện tử
-
-Đối tác phát hành Voucher
-
-Đối tác Marketing
-
----
-
 ## Approval Workflow
 
 Quản lý luồng duyệt.
@@ -813,7 +748,7 @@ Promotion Service phát Event cho:
 
 # 5. Danh sách bảng
 
-Promotion Service hiện bao gồm 15 bảng.
+Promotion Service hiện bao gồm 16 bảng.
 
 ## Core Business
 
@@ -827,11 +762,9 @@ Promotion Service hiện bao gồm 15 bảng.
 
 ---
 
-## Settlement
+## Compensation
 
 - compensation_vouchers
-- partners
-- partner_settlements
 
 ---
 
@@ -842,6 +775,9 @@ Promotion Service hiện bao gồm 15 bảng.
 - audit_logs
 - outbox_events
 - promotion_idempotency_keys
+- promotion_integration_events
+- promotion_scheduler_job_executions
+- promotion_scheduler_locks
 
 ---
 
@@ -876,9 +812,6 @@ Payment
            ▼
 Coupon Redemption
 Voucher Redemption
-           │
-           ▼
-Partner Settlement
            │
            ▼
 Kafka Outbox
@@ -1224,10 +1157,6 @@ Reservation
 ↓
 
 Redemption
-
-↓
-
-Settlement
 ```
 
 ---
@@ -1263,8 +1192,6 @@ Campaign là dữ liệu gốc hỗ trợ:
 - voucher_redemptions
 
 - compensation_vouchers
-
-- partner_settlements
 
 ---
 
@@ -1430,8 +1357,6 @@ VOUCHER
 CASHBACK
 
 FLASHSALE
-
-PARTNER
 ```
 
 Promotion Engine sử dụng trường này để xác định hướng xử lý.
@@ -2608,7 +2533,6 @@ Coupon hỗ trợ
 - promotion_reservations
 - coupon_redemptions
 - compensation_vouchers
-- partner_settlements
 
 Coupon là nguồn dữ liệu để xác định khách hàng đang sở hữu quyền giảm giá nào.
 
@@ -2770,8 +2694,6 @@ PUBLIC
 PRIVATE
 
 SYSTEM
-
-PARTNER
 
 COMPENSATION
 ```
@@ -3026,7 +2948,6 @@ Coupon chỉ được Reservation giữ một lần tại cùng một thời đi
 |--------------|------|--------|---------|
 | WELCOME100 | PUBLIC | NULL | ACTIVE |
 | VIP2027 | PRIVATE | User A | ACTIVE |
-| CGV50K | PARTNER | User B | USED |
 | SORRY2027 | COMPENSATION | User C | ACTIVE |
 
 ---
@@ -3144,7 +3065,6 @@ Redemption có thể được cập nhật khi
 - Booking bị hủy
 - Rollback giao dịch
 - Hoàn tiền
-- Cập nhật Settlement
 
 Thông thường Redemption rất ít thay đổi sau khi được tạo.
 
@@ -3164,10 +3084,6 @@ Analytics
 ↓
 
 Finance
-
-↓
-
-Partner Settlement
 
 ↓
 
@@ -3231,10 +3147,6 @@ coupon_redemptions
 
 ↓
 
-Settlement
-
-↓
-
 Analytics
 ```
 
@@ -3244,7 +3156,6 @@ Analytics
 
 | Bảng | Mục đích |
 |-------|----------|
-| partner_settlements | Đối soát chi phí Coupon |
 | audit_logs | Ghi Audit |
 | outbox_events | Publish Event |
 | compensation_vouchers | Phát Voucher bồi thường nếu cần |
@@ -3255,7 +3166,6 @@ Analytics
 
 Coupon Redemption hỗ trợ
 
-- partner_settlements
 - analytics
 - audit_logs
 - dashboard
@@ -3283,10 +3193,6 @@ coupons
         ▼
 
 coupon_redemptions
-
-        │
-
-        ├────────► partner_settlements
 
         │
 
@@ -3539,7 +3445,6 @@ Các Index phục vụ
 - Lịch sử khách hàng
 - Dashboard
 - Analytics
-- Settlement
 - Audit
 
 ---
@@ -3596,7 +3501,7 @@ Coupon Redemption là dữ liệu lịch sử, không được chỉnh sửa gi�
 
 Bảng **coupon_redemptions** là nguồn dữ liệu lịch sử chính của Coupon.
 
-Toàn bộ báo cáo doanh thu, thống kê hiệu quả Campaign, đối soát với đối tác, kiểm tra gian lận và Audit đều dựa trên dữ liệu của bảng này.
+Toàn bộ báo cáo doanh thu, thống kê hiệu quả Campaign, theo dõi chi phí khuyến mãi, kiểm tra gian lận và Audit đều dựa trên dữ liệu của bảng này.
 
 Đây là bảng xác nhận rằng một Coupon đã thực sự được sử dụng trong một giao dịch và là căn cứ để ngăn Coupon tiếp tục được sử dụng vượt quá giới hạn cho phép.
 
@@ -3636,7 +3541,6 @@ Thông thường Voucher sẽ được:
 - Quà sinh nhật.
 - Quà thành viên.
 - Quà tích điểm.
-- Quà từ đối tác.
 
 Voucher luôn có chủ sở hữu.
 
@@ -3683,7 +3587,6 @@ Voucher được tạo khi
 - Hoàn tiền
 - Đền bù giao dịch
 - Admin phát Voucher
-- Đối tác phát Voucher
 
 Ví dụ
 
@@ -3828,7 +3731,6 @@ Voucher hỗ trợ
 - promotion_reservations
 - voucher_redemptions
 - compensation_vouchers
-- partner_settlements
 - analytics
 
 Voucher là nguồn dữ liệu để xác định khách hàng đang sở hữu quyền lợi gì.
@@ -3984,8 +3886,6 @@ COMPENSATION
 CASHBACK
 
 MEMBERSHIP
-
-PARTNER
 
 SYSTEM
 ```
@@ -4247,7 +4147,6 @@ Một Voucher chỉ được Reservation giữ bởi một giao dịch tại cù
 | VIP2027 | User A | REWARD | ACTIVE |
 | BIRTHDAY50 | User B | MEMBERSHIP | ACTIVE |
 | SORRY001 | User C | COMPENSATION | ACTIVE |
-| GOLD100 | User D | PARTNER | USED |
 
 ---
 
@@ -4362,7 +4261,6 @@ Voucher Redemption được cập nhật khi
 - Booking bị hủy
 - Payment Refund
 - Rollback
-- Settlement hoàn tất
 
 Thông thường dữ liệu rất ít thay đổi sau khi tạo.
 
@@ -4386,10 +4284,6 @@ Analytics
 ↓
 
 Customer Support
-
-↓
-
-Partner Settlement
 
 ↓
 
@@ -4468,10 +4362,6 @@ voucher_redemptions
 
 ↓
 
-Settlement
-
-↓
-
 Analytics
 ```
 
@@ -4481,7 +4371,6 @@ Analytics
 
 | Bảng | Mục đích |
 |-------|----------|
-| partner_settlements | Đối soát chi phí Voucher |
 | compensation_vouchers | Sinh Voucher bồi thường nếu giao dịch lỗi |
 | audit_logs | Ghi Audit |
 | outbox_events | Publish Event |
@@ -4492,7 +4381,6 @@ Analytics
 
 Voucher Redemption hỗ trợ
 
-- partner_settlements
 - audit_logs
 - analytics
 - dashboard
@@ -4520,10 +4408,6 @@ promotion_rules
         ▼
 
 voucher_redemptions
-
-        │
-
-        ├────────► partner_settlements
 
         │
 
@@ -4562,7 +4446,6 @@ UUID của Voucher Redemption.
 
 - Kafka
 - Audit
-- Settlement
 
 ---
 
@@ -4600,7 +4483,7 @@ Liên kết với Booking Service thông qua Public ID.
 
 Payment liên quan.
 
-Phục vụ Refund và Settlement.
+Phục vụ Refund và truy vết giao dịch.
 
 ---
 
@@ -4779,7 +4662,6 @@ Các Index phục vụ
 - Customer History
 - Audit
 - Analytics
-- Settlement
 
 ---
 
@@ -4912,7 +4794,6 @@ Không lưu
 
 - Lịch sử sử dụng
 - Giá trị giảm giá cuối cùng
-- Settlement
 
 ---
 
@@ -5728,12 +5609,6 @@ vouchers
       ▼
 
 voucher_redemptions
-
-      │
-
-      ▼
-
-partner_settlements
 ```
 
 ---
@@ -6061,1264 +5936,7 @@ Bảng này giúp doanh nghiệp kiểm soát chi phí phát sinh do lỗi hệ 
 
 # Promotion Service Database Design Specification
 
-# Phase 10 - Bảng partners
-
----
-
-# 1. Thông tin bảng
-
-| Thuộc tính | Giá trị |
-|------------|----------|
-| Tên bảng | partners |
-| Vai trò | Master Data |
-| Độ ưu tiên | Cao |
-| Được tạo khi | Thêm đối tác mới vào hệ thống |
-| Chức năng | Quản lý toàn bộ đối tác tham gia chương trình khuyến mãi |
-
----
-
-# 2. Tóm tắt công dụng
-
-Bảng **partners** dùng để quản lý thông tin của tất cả đối tác tham gia vào hệ thống Promotion.
-
-Đối tác có thể là
-
-- Ngân hàng
-- Ví điện tử
-- Hãng thẻ
-- Công ty phát hành Voucher
-- Chuỗi cửa hàng
-- Nhà tài trợ
-- Đơn vị Marketing
-- Đối tác liên kết
-
-Đây là bảng Master Data.
-
-Promotion Service sẽ tham chiếu tới bảng này khi triển khai các chương trình khuyến mãi có tài trợ từ bên thứ ba.
-
-Ví dụ
-
-```
-Vietcombank
-
-MoMo
-
-ZaloPay
-
-Visa
-
-Mastercard
-
-ShopeePay
-```
-
----
-
-# 3. Mục đích của bảng
-
-Bảng này lưu
-
-- Thông tin đối tác
-- Mã đối tác
-- Tên đối tác
-- Loại đối tác
-- Trạng thái hoạt động
-- Thông tin liên hệ
-- Chính sách đối soát
-
-Không lưu
-
-- Chi phí đối soát
-- Voucher
-- Coupon
-- Settlement
-
----
-
-# 4. Khi nào dữ liệu được tạo
-
-Partner được tạo khi
-
-- Ký hợp đồng mới
-- Tích hợp cổng thanh toán mới
-- Thêm ngân hàng
-- Thêm đối tác Marketing
-- Thêm nhà tài trợ
-
-Ví dụ
-
-```
-Marketing Team
-
-↓
-
-Create Partner
-
-↓
-
-MoMo
-```
-
----
-
-# 5. Khi nào dữ liệu được cập nhật
-
-Được cập nhật khi
-
-- đổi tên
-- đổi hotline
-- đổi email
-- đổi trạng thái
-- thay đổi hợp đồng
-- cập nhật thông tin liên hệ
-
----
-
-# 6. Khi nào dữ liệu được đọc
-
-Được đọc bởi
-
-```
-Promotion Engine
-
-↓
-
-Finance
-
-↓
-
-Settlement
-
-↓
-
-Admin Portal
-
-↓
-
-Dashboard
-```
-
----
-
-# 7. Khi nào dữ liệu được xóa
-
-Không Hard Delete.
-
-Chỉ Soft Delete.
-
-Đối tác đã từng tham gia Campaign phải được lưu để phục vụ đối soát và Audit.
-
----
-
-# 8. Vai trò trong hệ thống
-
-Partner đại diện cho tổ chức hoặc doanh nghiệp tài trợ chương trình khuyến mãi.
-
-Ví dụ
-
-```
-MoMo
-
-↓
-
-Giảm 50.000
-
-↓
-
-Partner Settlement
-
-↓
-
-Đối soát chi phí
-```
-
-Partner là nền tảng để hệ thống xác định đơn vị chịu trách nhiệm chi trả ưu đãi.
-
----
-
-# 9. Luồng nghiệp vụ
-
-```
-Partner
-
-↓
-
-Create Campaign
-
-↓
-
-Promotion Rule
-
-↓
-
-Coupon
-
-↓
-
-Voucher
-
-↓
-
-Redemption
-
-↓
-
-Settlement
-```
-
----
-
-# 10. Những bảng sử dụng partners
-
-| Bảng | Mục đích |
-|-------|----------|
-| promotion_campaigns | Campaign thuộc Partner |
-| partner_settlements | Đối soát chi phí |
-| audit_logs | Ghi Audit |
-| approval_histories | Lưu lịch sử phê duyệt |
-| outbox_events | Publish Event |
-
----
-
-# 11. partners hỗ trợ bảng nào
-
-Partner hỗ trợ
-
-- promotion_campaigns
-- partner_settlements
-- analytics
-- dashboard
-- finance
-
-Đây là bảng Master Data dùng xuyên suốt toàn bộ Promotion Service.
-
----
-
-# 12. Quan hệ với các bảng
-
-```
-partners
-
-      │
-
-      ▼
-
-promotion_campaigns
-
-      │
-
-      ▼
-
-promotion_rules
-
-      │
-
-      ▼
-
-coupons / vouchers
-
-      │
-
-      ▼
-
-coupon_redemptions
-
-voucher_redemptions
-
-      │
-
-      ▼
-
-partner_settlements
-```
-
----
-
-# 13. Giải thích từng trường
-
-## id
-
-### Công dụng
-
-Khóa chính nội bộ.
-
-Không trả về API.
-
----
-
-## public_id
-
-### Công dụng
-
-UUID của Partner.
-
-Được sử dụng trong
-
-- Campaign
-- Settlement
-- Audit
-- Kafka
-
----
-
-## partner_code
-
-### Công dụng
-
-Mã định danh duy nhất của Partner.
-
-Ví dụ
-
-```
-MOMO
-
-VCB
-
-VISA
-
-MASTER
-
-ZALOPAY
-```
-
-Không được trùng lặp.
-
----
-
-## partner_name
-
-### Công dụng
-
-Tên hiển thị của Partner.
-
-Ví dụ
-
-```
-MoMo
-
-Ngân hàng Vietcombank
-
-Visa Worldwide
-```
-
----
-
-## partner_type
-
-### Công dụng
-
-Phân loại Partner.
-
-Ví dụ
-
-```
-BANK
-
-E_WALLET
-
-CARD
-
-MARKETING
-
-MERCHANT
-
-SPONSOR
-
-INTERNAL
-```
-
-Promotion Engine có thể áp dụng Rule khác nhau theo từng loại.
-
----
-
-## contact_name
-
-### Công dụng
-
-Người đại diện liên hệ.
-
----
-
-## contact_email
-
-### Công dụng
-
-Email làm việc.
-
-Ví dụ
-
-```
-promotion@momo.vn
-```
-
----
-
-## contact_phone
-
-### Công dụng
-
-Số điện thoại liên hệ.
-
----
-
-## settlement_cycle
-
-### Công dụng
-
-Chu kỳ đối soát.
-
-Ví dụ
-
-```
-DAILY
-
-WEEKLY
-
-MONTHLY
-
-CUSTOM
-```
-
-Finance sử dụng để tạo kỳ đối soát.
-
----
-
-## settlement_method
-
-### Công dụng
-
-Phương thức thanh toán.
-
-Ví dụ
-
-```
-BANK_TRANSFER
-
-INVOICE
-
-MANUAL
-```
-
----
-
-## status
-
-### Công dụng
-
-Trạng thái Partner.
-
-Ví dụ
-
-```
-ACTIVE
-
-INACTIVE
-
-SUSPENDED
-
-TERMINATED
-```
-
-Partner không hoạt động sẽ không được tạo Campaign mới.
-
----
-
-## metadata_json
-
-### Công dụng
-
-Thông tin mở rộng.
-
-Ví dụ
-
-```
-Contract Number
-
-Tax Code
-
-Business License
-
-Website
-
-Remark
-```
-
----
-
-## version
-
-### Công dụng
-
-Hỗ trợ Optimistic Lock.
-
----
-
-## created_at
-
-Ngày tạo.
-
----
-
-## created_by
-
-Người tạo.
-
----
-
-## updated_at
-
-Ngày cập nhật.
-
----
-
-## updated_by
-
-Người cập nhật.
-
----
-
-## deleted_at
-
-Ngày Soft Delete.
-
----
-
-## deleted_by
-
-Người Soft Delete.
-
----
-
-# 14. Index
-
-Partner được Index theo
-
-- public_id
-- partner_code
-- partner_name
-- partner_type
-- status
-- settlement_cycle
-- deleted_at
-
-Các Index phục vụ
-
-- Dashboard
-- Finance
-- Campaign
-- Settlement
-- Analytics
-
----
-
-# 15. Business Rule
-
-BR-052
-
-Partner Code phải là duy nhất trong toàn hệ thống.
-
----
-
-BR-053
-
-Partner ở trạng thái INACTIVE hoặc SUSPENDED không được tạo Campaign mới.
-
----
-
-BR-054
-
-Partner phải có ít nhất một thông tin liên hệ hợp lệ.
-
----
-
-BR-055
-
-Mọi Campaign tài trợ phải tham chiếu đến một Partner hợp lệ.
-
----
-
-BR-056
-
-Partner đã phát sinh Settlement không được Hard Delete.
-
----
-
-BR-057
-
-Mọi thay đổi thông tin Partner phải được ghi nhận vào Audit Log.
-
----
-
-# 16. Ví dụ dữ liệu
-
-| Partner Code | Partner Name | Type | Settlement | Status |
-|---------------|--------------|------|------------|---------|
-| MOMO | MoMo | E_WALLET | DAILY | ACTIVE |
-| VCB | Vietcombank | BANK | MONTHLY | ACTIVE |
-| VISA | Visa Worldwide | CARD | MONTHLY | ACTIVE |
-| SHOPEEPAY | ShopeePay | E_WALLET | WEEKLY | SUSPENDED |
-
----
-
-# 17. Vai trò trong toàn bộ hệ thống
-
-Bảng **partners** là bảng dữ liệu gốc (Master Data) quản lý toàn bộ các đối tác tham gia vào hệ sinh thái khuyến mãi.
-
-Thông qua bảng này, Promotion Service có thể xác định đơn vị tài trợ cho từng chương trình, hỗ trợ tính toán chi phí, đối soát tài chính, phân tích hiệu quả hợp tác và quản lý toàn bộ vòng đời của các chương trình khuyến mãi có sự tham gia của bên thứ ba.
-
----
-
-**Kết thúc Phase 10**
-
-# Promotion Service Database Design Specification
-
-# Phase 11 - Bảng partner_settlements
-
----
-
-# 1. Thông tin bảng
-
-| Thuộc tính | Giá trị |
-|------------|----------|
-| Tên bảng | partner_settlements |
-| Vai trò | Financial Business |
-| Độ ưu tiên | Rất cao |
-| Được tạo khi | Đến kỳ đối soát với đối tác |
-| Chức năng | Quản lý toàn bộ quá trình đối soát và thanh toán với đối tác |
-
----
-
-# 2. Tóm tắt công dụng
-
-Bảng **partner_settlements** dùng để quản lý toàn bộ quá trình đối soát chi phí khuyến mãi giữa doanh nghiệp và các đối tác.
-
-Trong rất nhiều Campaign, doanh nghiệp không phải là bên chịu toàn bộ chi phí.
-
-Ví dụ
-
-```
-Giảm 100.000
-
-↓
-
-MoMo tài trợ 70%
-
-↓
-
-Cinema tài trợ 30%
-```
-
-hoặc
-
-```
-Visa
-
-↓
-
-Giảm 20%
-
-↓
-
-Visa chịu toàn bộ chi phí
-```
-
-Toàn bộ số tiền này phải được thống kê, đối chiếu và quyết toán định kỳ.
-
-Bảng này chính là trung tâm quản lý nghiệp vụ đó.
-
----
-
-# 3. Mục đích của bảng
-
-Bảng này lưu
-
-- Đối tác cần đối soát
-- Campaign liên quan
-- Kỳ đối soát
-- Tổng số giao dịch
-- Tổng số Coupon sử dụng
-- Tổng số Voucher sử dụng
-- Tổng số tiền đối tác phải thanh toán
-- Trạng thái đối soát
-- Trạng thái thanh toán
-
-Không lưu
-
-- Coupon
-- Voucher
-- Redemption chi tiết
-
-Những dữ liệu đó được tổng hợp từ các bảng nghiệp vụ.
-
----
-
-# 4. Khi nào dữ liệu được tạo
-
-Settlement được tạo khi
-
-- Scheduler chạy cuối ngày
-- Scheduler cuối tuần
-- Scheduler cuối tháng
-- Admin tạo thủ công
-- Finance yêu cầu tạo Settlement
-
-Ví dụ
-
-```
-01/08
-
-↓
-
-Tổng hợp toàn bộ giao dịch
-
-↓
-
-Sinh Settlement
-
-↓
-
-Gửi Finance
-```
-
----
-
-# 5. Khi nào dữ liệu được cập nhật
-
-Settlement được cập nhật khi
-
-- Được phê duyệt
-- Điều chỉnh số liệu
-- Đối tác xác nhận
-- Đối tác thanh toán
-- Hoàn tất quyết toán
-
----
-
-# 6. Khi nào dữ liệu được đọc
-
-Được đọc bởi
-
-```
-Finance
-
-↓
-
-Accounting
-
-↓
-
-Partner Portal
-
-↓
-
-Admin Portal
-
-↓
-
-Audit
-
-↓
-
-Dashboard
-```
-
----
-
-# 7. Khi nào dữ liệu được xóa
-
-Không Hard Delete.
-
-Chỉ Soft Delete theo chính sách lưu trữ.
-
-Các Settlement đã hoàn tất phải được lưu nhiều năm phục vụ kiểm toán.
-
----
-
-# 8. Vai trò trong hệ thống
-
-Partner Settlement là trung tâm của nghiệp vụ tài chính trong Promotion Service.
-
-Nó giúp doanh nghiệp biết
-
-- Đối tác nào phải thanh toán.
-- Thanh toán bao nhiêu.
-- Thanh toán cho Campaign nào.
-- Thanh toán đến thời điểm nào.
-- Đã thanh toán hay chưa.
-
----
-
-# 9. Luồng nghiệp vụ
-
-```
-Coupon Redemption
-
-Voucher Redemption
-
-        │
-
-        ▼
-
-Aggregation Job
-
-        │
-
-        ▼
-
-partner_settlements
-
-        │
-
-        ▼
-
-Finance Review
-
-        │
-
-        ▼
-
-Partner Confirmation
-
-        │
-
-        ▼
-
-Completed
-```
-
----
-
-# 10. Những bảng sử dụng partner_settlements
-
-| Bảng | Mục đích |
-|-------|----------|
-| partners | Xác định đối tác |
-| promotion_campaigns | Xác định Campaign |
-| coupon_redemptions | Tổng hợp Coupon |
-| voucher_redemptions | Tổng hợp Voucher |
-| audit_logs | Ghi Audit |
-| approval_histories | Phê duyệt Settlement |
-| outbox_events | Publish Event |
-
----
-
-# 11. partner_settlements hỗ trợ bảng nào
-
-Settlement hỗ trợ
-
-- Finance
-- Dashboard
-- Accounting
-- Partner Portal
-- Analytics
-
-Đây là nguồn dữ liệu chính cho toàn bộ nghiệp vụ đối soát.
-
----
-
-# 12. Quan hệ với các bảng
-
-```
-partners
-
-      │
-
-promotion_campaigns
-
-      │
-
-coupon_redemptions
-
-voucher_redemptions
-
-      │
-
-      ▼
-
-partner_settlements
-
-      │
-
-      ├────────► Finance
-
-      ├────────► Accounting
-
-      ├────────► Dashboard
-
-      └────────► Audit
-```
-
----
-
-# 13. Giải thích từng trường
-
-## id
-
-### Công dụng
-
-Khóa chính nội bộ.
-
----
-
-## public_id
-
-### Công dụng
-
-UUID của Settlement.
-
-Được sử dụng trong
-
-- API
-- Kafka
-- Audit
-
----
-
-## partner_public_id
-
-### Công dụng
-
-Đối tác được đối soát.
-
-Liên kết
-
-```
-partners.public_id
-
-↓
-
-partner_settlements.partner_public_id
-```
-
----
-
-## campaign_public_id
-
-### Công dụng
-
-Campaign phát sinh chi phí.
-
-Cho phép thống kê theo từng Campaign.
-
----
-
-## settlement_code
-
-### Công dụng
-
-Mã Settlement.
-
-Ví dụ
-
-```
-SET-202608-0001
-
-SET-202608-0002
-```
-
-Không được trùng.
-
----
-
-## settlement_period_start
-
-### Công dụng
-
-Ngày bắt đầu kỳ đối soát.
-
----
-
-## settlement_period_end
-
-### Công dụng
-
-Ngày kết thúc kỳ đối soát.
-
----
-
-## total_coupon_redemptions
-
-### Công dụng
-
-Tổng số Coupon đã sử dụng.
-
----
-
-## total_voucher_redemptions
-
-### Công dụng
-
-Tổng số Voucher đã sử dụng.
-
----
-
-## total_transactions
-
-### Công dụng
-
-Tổng số giao dịch hợp lệ.
-
----
-
-## partner_amount
-
-### Công dụng
-
-Số tiền Partner phải thanh toán.
-
-Ví dụ
-
-```
-15.000.000 VND
-```
-
----
-
-## company_amount
-
-### Công dụng
-
-Số tiền doanh nghiệp chịu.
-
-Ví dụ
-
-```
-5.000.000 VND
-```
-
----
-
-## currency
-
-### Công dụng
-
-Đơn vị tiền tệ.
-
-Ví dụ
-
-```
-VND
-
-USD
-```
-
----
-
-## settlement_status
-
-### Công dụng
-
-Trạng thái đối soát.
-
-Ví dụ
-
-```
-PENDING
-
-REVIEWING
-
-CONFIRMED
-
-COMPLETED
-
-CANCELLED
-```
-
----
-
-## payment_status
-
-### Công dụng
-
-Trạng thái thanh toán.
-
-Ví dụ
-
-```
-UNPAID
-
-PARTIALLY_PAID
-
-PAID
-
-OVERDUE
-```
-
----
-
-## confirmed_at
-
-### Công dụng
-
-Ngày đối tác xác nhận.
-
----
-
-## paid_at
-
-### Công dụng
-
-Ngày hoàn tất thanh toán.
-
----
-
-## metadata_json
-
-### Công dụng
-
-Thông tin mở rộng.
-
-Ví dụ
-
-```
-Invoice Number
-
-Contract
-
-Remark
-
-Accounting Note
-
-Reference Code
-```
-
----
-
-## version
-
-### Công dụng
-
-Hỗ trợ Optimistic Lock.
-
----
-
-## created_at
-
-Ngày tạo Settlement.
-
----
-
-## created_by
-
-Thông thường là Scheduler hoặc Finance.
-
----
-
-## updated_at
-
-Ngày cập nhật.
-
----
-
-## updated_by
-
-Người cập nhật.
-
----
-
-## deleted_at
-
-Ngày Soft Delete.
-
----
-
-## deleted_by
-
-Người Soft Delete.
-
----
-
-# 14. Index
-
-Settlement được Index theo
-
-- public_id
-- settlement_code
-- partner_public_id
-- campaign_public_id
-- settlement_status
-- payment_status
-- settlement_period_start
-- settlement_period_end
-- paid_at
-
-Các Index phục vụ
-
-- Finance Dashboard
-- Accounting
-- Settlement Report
-- Partner Portal
-- Audit
-
----
-
-# 15. Business Rule
-
-BR-058
-
-Một Settlement chỉ thuộc một Partner.
-
----
-
-BR-059
-
-Settlement phải có khoảng thời gian đối soát hợp lệ.
-
----
-
-BR-060
-
-Settlement chỉ tổng hợp các Redemption thành công.
-
----
-
-BR-061
-
-Settlement đã COMPLETED không được sửa số liệu tài chính.
-
----
-
-BR-062
-
-Partner Amount + Company Amount phải bằng tổng giá trị khuyến mãi của kỳ đối soát.
-
----
-
-BR-063
-
-Một Redemption chỉ được xuất hiện trong một Settlement.
-
----
-
-BR-064
-
-Settlement phải được ghi nhận đầy đủ vào Audit Log.
-
----
-
-# 16. Ví dụ dữ liệu
-
-| Settlement Code | Partner | Period | Partner Amount | Status |
-|-----------------|----------|--------|----------------|---------|
-| SET-202608-0001 | MoMo | 01/08 - 31/08 | 15.000.000 | COMPLETED |
-| SET-202608-0002 | Visa | 01/08 - 31/08 | 8.500.000 | REVIEWING |
-| SET-202608-0003 | Vietcombank | 01/08 - 31/08 | 12.000.000 | PENDING |
-
----
-
-# 17. Vai trò trong toàn bộ hệ thống
-
-Bảng **partner_settlements** là trung tâm quản lý toàn bộ nghiệp vụ đối soát tài chính giữa doanh nghiệp và các đối tác tham gia chương trình khuyến mãi.
-
-Bảng này tổng hợp dữ liệu từ các giao dịch sử dụng Coupon và Voucher để tính toán chi phí mà từng đối tác phải chịu, hỗ trợ kế toán, tài chính và kiểm toán thực hiện đối chiếu, lập hóa đơn, thanh toán và đánh giá hiệu quả hợp tác một cách chính xác và minh bạch.
-
----
-
-**Kết thúc Phase 11**
-
-# Promotion Service Database Design Specification
-
-# Phase 12 - Bảng promotion_configurations
+# Phase 10 - Bảng promotion_configurations
 
 ---
 
@@ -7914,11 +6532,11 @@ Việc đưa các tham số nghiệp vụ và vận hành vào cơ sở dữ li�
 
 ---
 
-**Kết thúc Phase 12**
+**Kết thúc Phase 10**
 
 # Promotion Service Database Design Specification
 
-# Phase 13 - Bảng approval_histories
+# Phase 11 - Bảng approval_histories
 
 ---
 
@@ -7945,7 +6563,6 @@ Ví dụ
 - Publish Campaign
 - Kích hoạt Promotion
 - Phát Voucher bồi thường
-- Điều chỉnh Settlement
 - Hủy Campaign
 - Thay đổi Rule
 - Thay đổi Configuration
@@ -7977,7 +6594,6 @@ Không lưu
 - Dữ liệu Campaign
 - Rule
 - Voucher
-- Settlement
 
 Bảng này chỉ quản lý quy trình phê duyệt.
 
@@ -7988,7 +6604,6 @@ Bảng này chỉ quản lý quy trình phê duyệt.
 Approval History được tạo khi
 
 - Campaign gửi duyệt
-- Settlement gửi duyệt
 - Compensation gửi duyệt
 - Configuration gửi duyệt
 - Rule gửi duyệt
@@ -8121,7 +6736,6 @@ Campaign Status Updated
 | promotion_campaigns | Publish Campaign |
 | promotion_rules | Publish Rule |
 | compensation_vouchers | Phê duyệt Voucher bồi thường |
-| partner_settlements | Phê duyệt đối soát |
 | promotion_configurations | Phê duyệt thay đổi cấu hình |
 | audit_logs | Ghi lịch sử |
 
@@ -8134,7 +6748,6 @@ Approval History hỗ trợ
 - promotion_campaigns
 - promotion_rules
 - compensation_vouchers
-- partner_settlements
 - promotion_configurations
 
 Đây là bảng dùng chung cho toàn bộ Workflow của Promotion Service.
@@ -8147,8 +6760,6 @@ Approval History hỗ trợ
 promotion_campaigns
 
 promotion_rules
-
-partner_settlements
 
 compensation_vouchers
 
@@ -8204,8 +6815,6 @@ CAMPAIGN
 
 RULE
 
-SETTLEMENT
-
 COMPENSATION
 
 CONFIGURATION
@@ -8225,8 +6834,6 @@ Ví dụ
 
 ```
 Campaign UUID
-
-Settlement UUID
 
 Voucher UUID
 ```
@@ -8468,7 +7075,6 @@ Approval đã APPROVED hoặc REJECTED không được chỉnh sửa trực ti�
 | Resource | Request By | Approver | Action | Status |
 |------------|------------|----------|---------|---------|
 | Campaign Summer | Marketing | Manager | APPROVED | APPROVED |
-| Settlement 08/2026 | Finance | Finance Director | PENDING | PENDING |
 | Compensation Voucher | CSKH | Operations Manager | REJECTED | REJECTED |
 
 ---
@@ -8481,11 +7087,11 @@ Bảng này giúp đảm bảo mọi thay đổi quan trọng đều được ki
 
 ---
 
-**Kết thúc Phase 13**
+**Kết thúc Phase 11**
 
 # Promotion Service Database Design Specification
 
-# Phase 14 - Bảng audit_logs
+# Phase 12 - Bảng audit_logs
 
 ---
 
@@ -8566,7 +7172,6 @@ Audit Log được tạo khi
 - Tạo Voucher
 - Sử dụng Voucher
 - Reservation
-- Settlement
 - Compensation
 - Approval
 - Thay đổi Configuration
@@ -8711,7 +7316,6 @@ Compliance
 | vouchers | Ghi thay đổi Voucher |
 | promotion_reservations | Ghi Reservation |
 | compensation_vouchers | Ghi bồi thường |
-| partner_settlements | Ghi đối soát |
 | promotion_configurations | Ghi thay đổi cấu hình |
 | approval_histories | Ghi phê duyệt |
 
@@ -8746,8 +7350,6 @@ vouchers
 promotion_reservations
 
 compensation_vouchers
-
-partner_settlements
 
 promotion_configurations
 
@@ -8800,8 +7402,6 @@ RULE
 COUPON
 
 VOUCHER
-
-SETTLEMENT
 
 CONFIGURATION
 
@@ -9119,7 +7719,6 @@ Audit Log phải được lưu giữ theo chính sách lưu trữ và tuân th�
 |-----------|--------|-------|----------|-------------|
 | Campaign Summer | CREATE | Admin | true | 2026-08-01 08:00 |
 | Voucher VIP50 | REDEEM | Customer | true | 2026-08-01 10:35 |
-| Settlement 08/2026 | APPROVE | Finance Manager | true | 2026-08-02 14:15 |
 | Promotion Config | UPDATE | DevOps | false | 2026-08-03 09:20 |
 
 ---
@@ -9132,11 +7731,11 @@ Bảng **audit_logs** là nền tảng cho khả năng truy vết và kiểm to�
 
 ---
 
-**Kết thúc Phase 14**
+**Kết thúc Phase 12**
 
 # Promotion Service Database Design Specification
 
-# Phase 15 - Bảng outbox_events
+# Phase 13 - Bảng outbox_events
 
 ---
 
@@ -9230,7 +7829,6 @@ Outbox Event được tạo khi
 - Voucher được tạo
 - Coupon được sử dụng
 - Voucher được sử dụng
-- Settlement hoàn tất
 - Compensation hoàn tất
 - Approval hoàn tất
 - Reservation hết hạn
@@ -9408,7 +8006,6 @@ Dead Letter
 | vouchers | Voucher Created |
 | voucher_redemptions | Voucher Redeemed |
 | promotion_reservations | Reservation Event |
-| partner_settlements | Settlement Event |
 | compensation_vouchers | Compensation Event |
 | approval_histories | Approval Event |
 
@@ -9446,8 +8043,6 @@ Business Tables
 ├──────── Voucher
 
 ├──────── Reservation
-
-├──────── Settlement
 
 ├──────── Approval
 
@@ -9523,8 +8118,6 @@ COUPON
 
 VOUCHER
 
-SETTLEMENT
-
 RESERVATION
 ```
 
@@ -9570,8 +8163,6 @@ COUPON_REDEEMED
 VOUCHER_CREATED
 
 VOUCHER_REDEEMED
-
-SETTLEMENT_COMPLETED
 ```
 
 ---
@@ -9861,7 +8452,6 @@ Outbox Publisher phải bảo đảm tính **idempotent**, tránh publish trùng
 |------------|-----------|---------|--------|--------|
 | COUPON_CREATED | Coupon | PUBLISHED | 0 | promotion-events |
 | VOUCHER_REDEEMED | Voucher | PUBLISHED | 0 | voucher-events |
-| SETTLEMENT_COMPLETED | Settlement | FAILED | 2 | settlement-events |
 | CAMPAIGN_ACTIVATED | Campaign | DEAD_LETTER | 5 | promotion-events |
 
 ---
@@ -9874,11 +8464,11 @@ Việc áp dụng **Transactional Outbox Pattern** giúp đảm bảo dữ liệ
 
 ---
 
-**Kết thúc Phase 15**
+**Kết thúc Phase 13**
 
 # Promotion Service Database Design Specification
 
-# Phase 16 - Bảng promotion_idempotency_keys
+# Phase 14 - Bảng promotion_idempotency_keys
 
 ---
 
@@ -9956,7 +8546,6 @@ Không lưu
 - Coupon
 - Voucher
 - Campaign
-- Settlement
 
 Đây là bảng hạ tầng phục vụ tính nhất quán dữ liệu.
 
@@ -10497,11 +9086,11 @@ Bằng cách lưu trữ khóa định danh, nội dung yêu cầu và kết qu�
 
 ---
 
-**Kết thúc Phase 16**
+**Kết thúc Phase 14**
 
 # Promotion Service Database Design Specification
 
-# Phase 17 - Tổng quan quan hệ dữ liệu (ERD), Data Flow và Dependency
+# Phase 15 - Tổng quan quan hệ dữ liệu (ERD), Data Flow và Dependency
 
 ---
 
@@ -10526,12 +9115,11 @@ Bao gồm
 
 # 2. Phân loại bảng theo chức năng
 
-Promotion Service gồm 15 bảng, chia thành 7 nhóm.
+Promotion Service gồm 16 bảng, chia thành 7 nhóm.
 
 ## 2.1 Master Data
 
 ```
-partners
 promotion_configurations
 ```
 
@@ -10576,16 +9164,14 @@ voucher_redemptions
 ## 2.4 Financial
 
 ```
-partner_settlements
-
 compensation_vouchers
 ```
 
 Liên quan đến
 
 - tài chính
-- đối soát
 - chi phí
+- bồi thường
 
 ---
 
@@ -10605,6 +9191,8 @@ Quản trị doanh nghiệp.
 
 ```
 outbox_events
+
+promotion_integration_events
 ```
 
 Kết nối Kafka.
@@ -10615,19 +9203,19 @@ Kết nối Kafka.
 
 ```
 promotion_idempotency_keys
+
+promotion_scheduler_job_executions
+
+promotion_scheduler_locks
 ```
 
-Chống Duplicate Request.
+Chống Duplicate Request và điều phối scheduler.
 
 ---
 
 # 3. Quan hệ giữa các bảng
 
 ```
-                        partners
-                            │
-                            │
-                            ▼
                   promotion_campaigns
                             │
                             │
@@ -10644,10 +9232,6 @@ Chống Duplicate Request.
                ┌────────┴─────────┐
                ▼                  ▼
  coupon_redemptions      voucher_redemptions
-               │                  │
-               └──────────┬───────┘
-                          ▼
-               partner_settlements
 ```
 
 ---
@@ -10688,8 +9272,6 @@ Configuration được sử dụng xuyên suốt hệ thống.
 promotion_campaigns
 
 promotion_rules
-
-partner_settlements
 
 compensation_vouchers
 
@@ -10772,16 +9354,15 @@ Idempotency được kiểm tra trước khi xử lý Business Logic.
 
 | Bảng | Phụ thuộc |
 |--------|-----------|
-| promotion_campaigns | partners |
+| promotion_campaigns | Không phụ thuộc |
 | promotion_rules | promotion_campaigns |
 | coupons | promotion_rules |
 | vouchers | promotion_rules |
 | promotion_reservations | coupons, vouchers |
 | coupon_redemptions | promotion_reservations |
 | voucher_redemptions | promotion_reservations |
-| partner_settlements | coupon_redemptions, voucher_redemptions |
 | compensation_vouchers | vouchers |
-| approval_histories | Campaign, Rule, Settlement, Compensation |
+| approval_histories | Campaign, Rule, Compensation |
 | audit_logs | Toàn bộ bảng |
 | outbox_events | Toàn bộ bảng |
 | promotion_configurations | Không phụ thuộc |
@@ -10883,24 +9464,10 @@ Voucher Redemption
 
 ## Bước 7
 
-Settlement
-
-```
-Redemption
-
-↓
-
-Settlement
-```
-
----
-
-## Bước 8
-
 Analytics
 
 ```
-Settlement
+Redemption
 
 ↓
 
@@ -11242,7 +9809,7 @@ Theo nghiệp vụ Production
 | 7 | audit_logs |
 | 8 | coupon_redemptions |
 | 9 | voucher_redemptions |
-| 10 | partner_settlements |
+| 10 | promotion_idempotency_keys |
 
 ---
 
@@ -11272,21 +9839,21 @@ Promotion Service được thiết kế theo kiến trúc **Production-Ready Mic
 - Đảm bảo tính nhất quán bằng Reservation, Idempotency và các cơ chế khóa phù hợp.
 - Có đầy đủ khả năng Audit, Approval và Governance cho môi trường doanh nghiệp.
 - Hỗ trợ mở rộng theo chiều ngang (Horizontal Scaling) và xử lý đồng thời với lưu lượng lớn.
-- Tối ưu cho khả năng vận hành, giám sát, đối soát tài chính và truy vết trong môi trường Production.
+- Tối ưu cho khả năng vận hành, giám sát, theo dõi chi phí khuyến mãi và truy vết trong môi trường Production.
 
 ---
 
-**Kết thúc Phase 17**
+**Kết thúc Phase 15**
 
 # Promotion Service Database Design Specification
 
-# Phase 18 - Tổng Business Flow của Promotion Service
+# Phase 16 - Tổng Business Flow của Promotion Service
 
 ---
 
 # 1. Mục tiêu
 
-Phase này mô tả toàn bộ vòng đời của một chương trình khuyến mãi trong hệ thống, từ lúc được tạo bởi Marketing cho đến khi hoàn tất đối soát tài chính với đối tác.
+Phase này mô tả toàn bộ vòng đời của một chương trình khuyến mãi trong hệ thống, từ lúc được tạo bởi Marketing cho đến khi hoàn tất ghi nhận sử dụng, phân tích và lưu trữ.
 
 Đây là góc nhìn tổng thể về nghiệp vụ (Business View), không tập trung vào thiết kế bảng dữ liệu mà tập trung vào cách các thành phần phối hợp với nhau để vận hành Promotion Service trong môi trường Production.
 
@@ -11320,10 +9887,6 @@ Payment
 ↓
 
 Redemption
-
-↓
-
-Settlement
 
 ↓
 
@@ -11632,7 +10195,6 @@ Ví dụ Event:
 - CampaignActivated
 - CouponCreated
 - VoucherRedeemed
-- SettlementCompleted
 
 ---
 
@@ -11668,40 +10230,9 @@ Toàn bộ quá trình được lưu tại:
 
 ---
 
-# 13. Business Flow 11 - Settlement
+# 13. Business Flow 11 - Analytics
 
-```
-Scheduler
-
-↓
-
-Coupon Redemption
-
-+
-
-Voucher Redemption
-
-↓
-
-Aggregation
-
-↓
-
-partner_settlements
-```
-
-Finance sẽ:
-
-- Kiểm tra.
-- Phê duyệt.
-- Đối soát với đối tác.
-- Xác nhận thanh toán.
-
----
-
-# 14. Business Flow 12 - Analytics
-
-Sau khi Settlement hoàn tất:
+Từ dữ liệu Redemption và các event nghiệp vụ:
 
 ```
 Kafka
@@ -11730,12 +10261,11 @@ Các chỉ số thường được thống kê:
 - Tỷ lệ sử dụng Coupon.
 - Tỷ lệ sử dụng Voucher.
 - Hiệu quả Campaign.
-- Hiệu quả theo đối tác.
 - Hiệu quả theo khu vực.
 
 ---
 
-# 15. Business Flow 13 - Audit
+# 14. Business Flow 12 - Audit
 
 Mọi thao tác quan trọng đều tạo Audit.
 
@@ -11761,7 +10291,7 @@ Investigation
 
 ---
 
-# 16. Business Flow 14 - Retry
+# 15. Business Flow 13 - Retry
 
 Nếu Kafka lỗi
 
@@ -11801,7 +10331,7 @@ Return Previous Response
 
 ---
 
-# 17. Luồng tổng thể
+# 16. Luồng tổng thể
 
 ```
 Marketing
@@ -11844,10 +10374,6 @@ Redemption
 
 ↓
 
-Settlement
-
-↓
-
 Analytics
 
 ↓
@@ -11857,7 +10383,7 @@ Archive
 
 ---
 
-# 18. Tương tác với các Microservices
+# 17. Tương tác với các Microservices
 
 | Microservice | Vai trò |
 |--------------|---------|
@@ -11872,7 +10398,7 @@ Archive
 
 ---
 
-# 19. Luồng dữ liệu theo thời gian
+# 18. Luồng dữ liệu theo thời gian
 
 ```
 Campaign
@@ -11893,9 +10419,6 @@ Payment
 Redemption
     │
     ▼
-Settlement
-    │
-    ▼
 Analytics
     │
     ▼
@@ -11904,7 +10427,7 @@ Archive
 
 ---
 
-# 20. Mục tiêu thiết kế
+# 19. Mục tiêu thiết kế
 
 Promotion Service được xây dựng với các mục tiêu:
 
@@ -11914,45 +10437,48 @@ Promotion Service được xây dựng với các mục tiêu:
 - Dễ dàng tích hợp với các Microservices khác.
 - Hỗ trợ Event-Driven Architecture.
 - Đảm bảo khả năng Audit và Compliance.
-- Hỗ trợ đối soát tài chính và báo cáo.
+- Hỗ trợ theo dõi ngân sách, chi phí khuyến mãi và báo cáo.
 - Đảm bảo khả năng phục hồi khi xảy ra lỗi thông qua Retry, Idempotency và Transactional Outbox.
 
 ---
 
-# 21. Tổng kết
+# 20. Tổng kết
 
-Promotion Service được thiết kế theo mô hình **Production-Ready Enterprise Microservices**, bao phủ toàn bộ vòng đời của một chương trình khuyến mãi từ khâu xây dựng, phê duyệt, áp dụng cho khách hàng, xử lý giao dịch, đối soát tài chính đến phân tích dữ liệu.
+Promotion Service được thiết kế theo mô hình **Production-Ready Enterprise Microservices**, bao phủ toàn bộ vòng đời của một chương trình khuyến mãi từ khâu xây dựng, phê duyệt, áp dụng cho khách hàng, xử lý giao dịch đến phân tích dữ liệu.
 
 Hệ thống kết hợp các nguyên tắc **Domain-Driven Design (DDD)**, **Event-Driven Architecture (EDA)** và các mẫu thiết kế như **Transactional Outbox**, **Idempotency**, **Optimistic Locking**, **Soft Delete**, **Audit Trail** và **Saga Pattern** (ở mức phối hợp liên dịch vụ) để đảm bảo khả năng mở rộng, tính nhất quán dữ liệu, khả năng phục hồi và đáp ứng các yêu cầu vận hành trong môi trường Production.
 
 ---
 
-# 22. Kết luận
+# 21. Kết luận
 
 Tài liệu này đã hoàn thành toàn bộ thiết kế cơ sở dữ liệu và nghiệp vụ của Promotion Service, bao gồm:
 
-- 15 bảng dữ liệu cốt lõi và hỗ trợ.
+- 16 bảng dữ liệu cốt lõi và hỗ trợ.
 - Quan hệ giữa các bảng.
 - Business Rules.
 - Luồng dữ liệu và luồng nghiệp vụ.
 - Kiến trúc tích hợp Microservices.
 - Các cơ chế bảo đảm tính nhất quán và độ tin cậy.
-- Quy trình quản trị, kiểm toán và đối soát tài chính.
+- Quy trình quản trị, kiểm toán và theo dõi chi phí khuyến mãi.
 
 Đây là nền tảng để triển khai Promotion Service theo tiêu chuẩn doanh nghiệp, đáp ứng yêu cầu về hiệu năng, khả năng mở rộng, tính bảo mật và khả năng vận hành trong môi trường Production.
 
 ---
 
-**Kết thúc Phase 18 - Hoàn thành Promotion Service Database Design Specification**
+**Kết thúc Phase 16 - Hoàn thành Promotion Service Database Design Specification**
 
-## 23. Runtime schema reconciliation (2026-07-29)
+## 22. Runtime schema reconciliation (2026-07-31)
 
 The Flyway files under `server/promotion-service/src/main/resources/db/migration`
 are authoritative for deployment. The current sequence is V1 (base schema),
-V2 (reservation/outbox hardening), V3 (partner/configuration/integration), and
-V4 (normalization of legacy `CHAR(n)` columns to `VARCHAR(n)`). V4 is
-data-preserving and aligns Hibernate validation with the numeric account IDs
-now emitted by Auth/User/Score while retaining UUID compatibility.
+V2 (reservation/outbox hardening), V3 (configuration/integration and legacy
+partner support), V4 (normalization of legacy `CHAR(n)` columns to
+`VARCHAR(n)`), and V5 (removal of partner-funded promotions and financial
+settlement). V4 is data-preserving and aligns Hibernate validation with the
+numeric account IDs now emitted by Auth/User/Score while retaining UUID
+compatibility. V5 removes `partners`, `partner_settlements` and the obsolete
+partner/funding columns from existing databases.
 
 This SQL design describes the full target domain. The implemented checkout
 runtime intentionally remains one coupon or one voucher; multi-benefit

@@ -125,7 +125,6 @@ public class BenefitMapper {
         CouponResponse response = new CouponResponse();
         mapAudited(entity, response);
         response.setCampaignPublicId(entity.getCampaignPublicId());
-        response.setPartnerPublicId(entity.getPartnerPublicId());
         response.setCode(entity.getCode());
         response.setName(entity.getName());
         response.setDescription(entity.getDescription());
@@ -152,7 +151,6 @@ public class BenefitMapper {
         VoucherResponse response = new VoucherResponse();
         mapAudited(entity, response);
         response.setCampaignPublicId(entity.getCampaignPublicId());
-        response.setPartnerPublicId(entity.getPartnerPublicId());
         response.setOwnerPublicId(entity.getOwnerPublicId());
         response.setCode(entity.getCode());
         response.setName(entity.getName());

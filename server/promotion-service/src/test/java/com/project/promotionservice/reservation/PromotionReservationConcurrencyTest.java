@@ -15,7 +15,6 @@ import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignType;
-import com.project.promotionservice.promotion.enums.FundingSource;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ReserveRequest;
@@ -143,7 +142,6 @@ class PromotionReservationConcurrencyTest {
         campaign.setName("Concurrency Test " + suffix);
         campaign.setSlug("concurrency-test-" + suffix);
         campaign.setCampaignType(CampaignType.COUPON);
-        campaign.setFundingSource(FundingSource.SYSTEM);
         campaign.setStatus(CampaignStatus.ACTIVE);
         campaign.setApprovalStatus(CampaignApprovalStatus.APPROVED);
         campaign.setLegalStatus(LegalStatus.PASSED);

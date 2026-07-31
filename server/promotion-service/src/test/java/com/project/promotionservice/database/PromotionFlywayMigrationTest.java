@@ -31,14 +31,19 @@ class PromotionFlywayMigrationTest {
                 .baselineVersion("1")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(4);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(5);
         assertColumnExists("promotion_reservations", "reservation_scope_key");
         assertColumnExists("promotion_reservations", "expiration_next_attempt_at");
         assertColumnExists("outbox_events", "processing_started_at");
         assertIndexExists("promotion_reservations", "uk_promotion_reservation_scope");
         assertIndexExists("promotion_idempotency_keys", "uk_idempotency_scope");
         assertIndexExists("outbox_events", "idx_outbox_claim");
-        assertColumnExists("partners", "version");
+        assertTableDoesNotExist("partners");
+        assertTableDoesNotExist("partner_settlements");
+        assertColumnDoesNotExist("promotion_campaigns", "funding_source");
+        assertColumnDoesNotExist("promotion_campaigns", "partner_public_id");
+        assertColumnDoesNotExist("coupons", "partner_public_id");
+        assertColumnDoesNotExist("vouchers", "partner_public_id");
         assertColumnExists("promotion_configurations", "requires_restart");
         assertColumnExists("promotion_integration_events", "schema_version");
         assertIndexExists("promotion_scheduler_locks", "PRIMARY");
@@ -55,6 +60,27 @@ class PromotionFlywayMigrationTest {
                   AND column_name = ?
                 """;
         assertThat(queryCount(sql, tableName, columnName)).isEqualTo(1);
+    }
+
+    private void assertColumnDoesNotExist(String tableName, String columnName) throws Exception {
+        String sql = """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = ?
+                  AND column_name = ?
+                """;
+        assertThat(queryCount(sql, tableName, columnName)).isZero();
+    }
+
+    private void assertTableDoesNotExist(String tableName) throws Exception {
+        String sql = """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                  AND table_name = ?
+                """;
+        assertThat(queryCount(sql, tableName)).isZero();
     }
 
     private void assertIndexExists(String tableName, String indexName) throws Exception {
@@ -93,6 +119,17 @@ class PromotionFlywayMigrationTest {
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, first);
             statement.setString(2, second);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                return resultSet.getLong(1);
+            }
+        }
+    }
+
+    private long queryCount(String sql, String value) throws Exception {
+        try (Connection connection = MYSQL.createConnection("");
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, value);
             try (ResultSet resultSet = statement.executeQuery()) {
                 assertThat(resultSet.next()).isTrue();
                 return resultSet.getLong(1);

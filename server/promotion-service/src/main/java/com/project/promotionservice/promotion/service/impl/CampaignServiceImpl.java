@@ -25,7 +25,6 @@ import com.project.promotionservice.promotion.enums.ApprovalTargetType;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignType;
-import com.project.promotionservice.promotion.enums.FundingSource;
 import com.project.promotionservice.promotion.mapper.CampaignMapper;
 import com.project.promotionservice.promotion.repository.ApprovalHistoryRepository;
 import com.project.promotionservice.promotion.repository.CampaignSpecification;
@@ -37,7 +36,6 @@ import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.common.audit.Auditable;
 import com.project.promotionservice.promotion.service.CampaignService;
 import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
-import com.project.promotionservice.partner.service.PartnerService;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -67,7 +65,6 @@ public class CampaignServiceImpl implements CampaignService {
     private final ObjectMapper objectMapper;
     private final PromotionReservationRepository reservationRepository;
     private final PromotionOutboxEnvelopeFactory envelopeFactory;
-    private final PartnerService partnerService;
     private final CampaignConfigurationPolicy configurationPolicy;
 
     public CampaignServiceImpl(PromotionCampaignRepository campaignRepository,
@@ -80,7 +77,6 @@ public class CampaignServiceImpl implements CampaignService {
                                ObjectMapper objectMapper,
                                PromotionReservationRepository reservationRepository,
                                PromotionOutboxEnvelopeFactory envelopeFactory,
-                               PartnerService partnerService,
                                CampaignConfigurationPolicy configurationPolicy) {
         this.campaignRepository = campaignRepository;
         this.ruleRepository = ruleRepository;
@@ -92,7 +88,6 @@ public class CampaignServiceImpl implements CampaignService {
         this.objectMapper = objectMapper;
         this.reservationRepository = reservationRepository;
         this.envelopeFactory = envelopeFactory;
-        this.partnerService = partnerService;
         this.configurationPolicy = configurationPolicy;
     }
 
@@ -112,8 +107,6 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaignRepository.existsByCodeAndDeletedAtIsNull(request.getCode())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Campaign code already exists", HttpStatus.BAD_REQUEST);
         }
-
-        validatePartnerFunding(request.getFundingSource(), request.getPartnerPublicId());
 
         String slug = slugify(request.getName());
         if (campaignRepository.existsBySlugAndDeletedAtIsNull(slug)) {
@@ -146,14 +139,6 @@ public class CampaignServiceImpl implements CampaignService {
 
         if (request.getEndAt().isBefore(request.getStartAt())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "End date must be after start date", HttpStatus.BAD_REQUEST);
-        }
-
-        if (campaign.getFundingSource() == FundingSource.PARTNER) {
-            validatePartnerFunding(campaign.getFundingSource(), request.getPartnerPublicId());
-            campaign.setPartnerPublicId(request.getPartnerPublicId());
-        } else if (request.getPartnerPublicId() != null) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "System-funded campaign cannot reference a partner", HttpStatus.BAD_REQUEST);
         }
 
         campaign.setName(request.getName());
@@ -539,23 +524,6 @@ public class CampaignServiceImpl implements CampaignService {
         recordOutboxEvent("CAMPAIGN", saved.getPublicId(), "CAMPAIGN_CANCELLED", campaignMapper.toResponse(saved), "promotion.campaign.lifecycle", user);
 
         return campaignMapper.toResponse(saved);
-    }
-
-    private void validatePartnerFunding(FundingSource fundingSource, String partnerPublicId) {
-        if (fundingSource == FundingSource.PARTNER) {
-            if (partnerPublicId == null || partnerPublicId.isBlank()) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER,
-                        "Partner-funded campaign requires partnerPublicId", HttpStatus.BAD_REQUEST);
-            }
-            if (partnerService == null) {
-                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR,
-                        "Partner policy is not configured", HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-            partnerService.requireActive(partnerPublicId);
-        } else if (partnerPublicId != null && !partnerPublicId.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "Only partner-funded campaigns may reference a partner", HttpStatus.BAD_REQUEST);
-        }
     }
 
     private void requireConfiguredBenefit(PromotionCampaign campaign) {

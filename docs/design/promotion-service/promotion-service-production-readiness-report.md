@@ -1,14 +1,14 @@
 # Promotion Service – production-readiness audit
 
-Audit date: 2026-07-29  
+Audit date: 2026-07-31
 Audited revision: merge commit `3344cb3a` plus the working-tree Promotion
 changes visible after the latest branch pull.
 
 ## Executive conclusion
 
 The Promotion service now has a coherent production core for campaign,
-coupon, voucher, rule, compensation, reservation, partner settlement,
-configuration, audit, outbox, and scheduler operations. Database migrations
+coupon, voucher, rule, compensation, reservation, configuration, audit,
+outbox, and scheduler operations. Database migrations
 are executable on MySQL 8.4 and Hibernate validation passes against the
 migrated schema.
 
@@ -42,7 +42,6 @@ new APIs will be unreachable or discounts will not be applied to a booking.
 | Voucher | Issue/batch issue, update, revoke, extend, search, customer wallet, validation, redemption ledger |
 | Reservation | Runtime validate; atomic reserve; detail; confirm; release; cancel; refresh; expiry and admin history |
 | Compensation | Issue/update/search/detail with an auditable approval history |
-| Partner | Partner CRUD and settlement lifecycle |
 | Configuration | Versioned dynamic configuration, cache refresh, deprecation |
 | Integration | Transactional outbox, broker acknowledgement/retry/DLQ, inbox deduplication (disabled by default until event contracts are agreed) |
 | Operations | Job execution history, DB lease locks, internal scheduler hooks |
@@ -73,9 +72,8 @@ runtime does not pretend to support them.
 - Added a lease guard to inbound-event processing so two workers cannot apply
   the same event concurrently; expired leases are recoverable and manual DLQ
   reprocessing resets its retry budget.
-- Completed the financial settlement state machine: a disputed settlement can
-  be resolved back to approved, and a paid settlement can be closed as
-  completed without reopening financial fields.
+- Removed partner-funded promotions and the unused financial settlement
+  subsystem. Campaign budgets are now funded entirely by the platform.
 - Added Flyway V4 to normalize legacy `CHAR(n)` references to `VARCHAR(n)`;
   this aligns JPA and permits numeric account references without padding.
 - Added MySQL/JPA schema validation, lifecycle, request-validation, and
@@ -86,7 +84,7 @@ runtime does not pretend to support them.
 | Service | Finding | Effect |
 |---|---|---|
 | Auth | JWT now carries `userId: Long`, one role, permissions, and session ID; Promotion accepts the numeric identity. Bootstrap currently seeds only `ADMIN`, `EMPLOYEE`, and `CUSTOMER`. | Token format is compatible, but Promotion business roles must be provisioned before rollout. |
-| API Gateway | Current routes cover only campaign paths. Coupon, voucher, rule, partner, configuration, customer wallet, reservation, event, and scheduler paths are absent. | Public/admin APIs return gateway 404 until routes are added. |
+| API Gateway | The example route covers current public/admin Promotion paths; internal runtime and scheduler paths remain service-to-service only. | Deployments must keep the example route synchronized with the service contract. |
 | Booking | No Promotion HTTP client or reservation-id propagation; booking event publisher is a logging/mock publisher. | Discounts cannot be reserved/confirmed/cancelled in a real checkout. |
 | Payment | No Promotion client and no Promotion payment event; payment success is sent to an analytics topic. | Promotion confirmation/release is not triggered by payment. |
 | Score | Internal hold/commit/release endpoints exist but no Promotion caller or event integration. | Loyalty-point promotions are not available. |
@@ -110,7 +108,7 @@ silently lose lifecycle events.
    reachable only from trusted service-to-service networks.
 2. Provision and assign the Promotion roles used by RBAC (`MARKETING_MANAGER`,
    `MARKETING_STAFF`, `FINANCE_DIRECTOR`, `CSKH_AGENT`,
-   `LEGAL_COMPLIANCE`, `OPERATIONS_MANAGER`, and configuration/partner roles);
+   `LEGAL_COMPLIANCE`, `OPERATIONS_MANAGER`, and configuration roles);
    Auth bootstrap does not create them.
 3. Implement Booking → Promotion validate/reserve/refresh/cancel and carry the
    Promotion reservation ID through the booking/payment flow.
@@ -132,10 +130,9 @@ mvn -q "-Dtest=PromotionSecurityIntegrationTest" test
 mvn -q "-Dtest=BenefitRequestValidationTest,ReservationRequestValidationTest,PromotionLifecycleServiceTest" test
 mvn -q "-Dtest=PromotionMySqlJpaSchemaValidationTest" test
 mvn -q "-Dtest=IntegrationEventStateServiceTest" test
-mvn -q "-Dtest=PartnerSettlementServiceImplTest" test
 mvn -q test
 ```
 
-The MySQL test runs Flyway V1–V4 against MySQL 8.4 with
+The MySQL test runs Flyway V1–V5 against MySQL 8.4 with
 `hibernate.ddl-auto=validate`; it is the release gate for schema drift. The
-final full suite completed with 68 tests, 0 failures, 0 errors, and 0 skipped.
+final full suite completed with 72 tests, 0 failures, 0 errors, and 0 skipped.

@@ -26,7 +26,6 @@ import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignType;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
-import com.project.promotionservice.partner.service.PartnerService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -50,7 +49,6 @@ public class VoucherServiceImpl implements VoucherService {
     private final BenefitMapper mapper;
     private final BenefitEventService eventService;
     private final BenefitPolicyValidator policyValidator;
-    private final PartnerService partnerService;
     private final CampaignConfigurationPolicy configurationPolicy;
 
     public VoucherServiceImpl(VoucherRepository voucherRepository,
@@ -58,14 +56,12 @@ public class VoucherServiceImpl implements VoucherService {
                               BenefitMapper mapper,
                               BenefitEventService eventService,
                               BenefitPolicyValidator policyValidator,
-                              PartnerService partnerService,
                               CampaignConfigurationPolicy configurationPolicy) {
         this.voucherRepository = voucherRepository;
         this.campaignRepository = campaignRepository;
         this.mapper = mapper;
         this.eventService = eventService;
         this.policyValidator = policyValidator;
-        this.partnerService = partnerService;
         this.configurationPolicy = configurationPolicy;
     }
 
@@ -270,9 +266,6 @@ public class VoucherServiceImpl implements VoucherService {
                         "Vouchers can only be attached to a VOUCHER campaign");
             }
             configurationPolicy.requireEditable(campaign);
-            if (campaign.getPartnerPublicId() != null && partnerService != null) {
-                partnerService.requireActive(campaign.getPartnerPublicId());
-            }
         }
         if (request.getSource() == VoucherSource.BIRTHDAY
                 && request.getValidTo().isAfter(Instant.now().plus(120, ChronoUnit.DAYS))) {
@@ -289,9 +282,6 @@ public class VoucherServiceImpl implements VoucherService {
             throw badRequest(BenefitErrorCode.VOUCHER_DUPLICATE, "Voucher code already exists");
         }
         Voucher voucher = mapper.toVoucher(request, code, actor);
-        if (campaign != null) {
-            voucher.setPartnerPublicId(campaign.getPartnerPublicId());
-        }
         Voucher saved = voucherRepository.save(voucher);
         if (campaign != null) {
             markCampaignChanged(campaign, actor);

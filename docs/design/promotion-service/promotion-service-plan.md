@@ -52,12 +52,11 @@ Promotion Service **không phải** là nơi lưu trữ điểm thưởng hay x�
 Promotion Service chịu trách nhiệm:
 - Vòng đời **Campaign** (khởi tạo → duyệt → kích hoạt → tạm dừng → kết thúc → báo cáo).
 - **Coupon Code** (mã dùng chung, mã cá nhân hoá, mã một lần).
-- **Voucher** (giá trị cố định/phần trăm, vé tặng, combo tặng, gắn với hạng thành viên hoặc đối tác — hạng do score-service cung cấp).
+- **Voucher** (giá trị cố định/phần trăm, vé tặng, combo tặng hoặc gắn với hạng thành viên do score-service cung cấp).
 - **Discount Rule tự động** (Happy Wednesday, Culture Day, giá vé theo khung giờ).
 - **Ánh xạ hạng thành viên → mức ưu đãi** (`tier_benefit_mapping`): Promotion sở hữu bảng "hạng VIP được giảm 10%" nhưng **không** sở hữu việc "user X có phải VIP không" — đó là câu trả lời từ score-service.
 - **Eligibility Engine**, **Stacking/Priority/Conflict Resolution Engine**.
 - **Redemption & Reservation** trong lúc thanh toán.
-- Tích hợp đối tác bên ngoài (MoMo, ZaloPay, VNPay, ngân hàng) cho chương trình đồng tài trợ.
 - **Yêu cầu** score-service trừ/hoàn điểm khi khách dùng điểm quy đổi ưu đãi (Promotion không tự trừ).
 - Tuân thủ và validate trần pháp lý khuyến mại trước khi Campaign được duyệt.
 
@@ -72,6 +71,7 @@ Promotion Service chịu trách nhiệm:
 | Thông tin phim, thể loại, định dạng (2D/3D/IMAX), rạp | **movie-service** | Gọi API `GET /internal/movies/{id}` hoặc cache dữ liệu định kỳ (xem mục 53) |
 | Xác thực người dùng, hồ sơ cá nhân, ngày sinh, KYC | **user-service** | Nhận `userId` đã xác thực từ Gateway; nghe event `user.birthday.today`, `user.registered` |
 | Xử lý thanh toán thực, đối soát ngân hàng | **payment-service** | Chỉ trả `finalAmount` + `appliedPromotionIds`; nghe `payment.completed/failed` |
+| Quản lý đối tác tài trợ và quyết toán chi phí đồng tài trợ | **Finance/Accounting ngoài Promotion Service** | Không thuộc runtime khuyến mãi hiện tại |
 | Gửi email/SMS/push | **notification-service** | Chỉ phát event `promotion.voucher.issued`, không tự gửi |
 | Badge, achievement, gamification | **score-service** | Không liên quan đến Promotion |
 | Phê duyệt pháp lý với Sở Công Thương (nộp hồ sơ) | **Legal/Compliance team (ngoài hệ thống)** | Promotion chỉ **chặn kỹ thuật** nếu campaign vi phạm trần luật, không tự nộp hồ sơ |
@@ -87,7 +87,7 @@ Promotion Service chịu trách nhiệm:
 | Chương trình tích điểm (số dư, lịch sử) | ❌ Không — thuộc score-service | 1 điểm = 1.000 VNĐ |
 | Đổi điểm lấy voucher (hành động thương mại) | ✅ Có (Promotion phát voucher), phối hợp trừ điểm qua score-service | — |
 | Vé tặng sinh nhật | ✅ Có (phát voucher), trigger từ user-service | Vé 0đ sinh nhật |
-| Mã giảm giá đối tác thanh toán | ✅ Có | MoMo, ZaloPay, VNPay |
+| Mã giảm giá công khai của hệ thống | ✅ Có | Mã dùng chung theo campaign |
 | Combo & Upsell | ✅ Có | Combo bắp nước kèm vé |
 | Chiến dịch theo phim/nhà phát hành | ✅ Có (rule), dữ liệu phim từ movie-service | Ưu đãi đặt vé sớm phim bom tấn |
 | Chương trình B2B | ✅ Có | Vé tập thể công ty |
@@ -297,8 +297,7 @@ coupon_redemptions (
 
 vouchers (
   id UUID PK, user_id, voucher_type, value,
-  source,                   -- BIRTHDAY, TIER_UPGRADE, PARTNER, COMPENSATION, POINT_REDEEM
-  funding_source,           -- SELF (rạp chịu), PARTNER_COFUNDED (đối tác chịu), POINT_EXCHANGE
+  source,                   -- BIRTHDAY, TIER_UPGRADE, COMPENSATION, POINT_REDEEM
   issued_at, expires_at, status
 )
 
@@ -316,11 +315,6 @@ promotion_reservations (
 
 budget_ledger (
   id UUID PK, campaign_id, delta_amount, order_id, created_at
-)
-
-partner_settlement (
-  id UUID PK, campaign_id, partner_code,   -- MOMO, ZALOPAY, STUDIO_X
-  period_start, period_end, total_cofunded_amount, status, settled_at
 )
 
 audit_logs (
@@ -395,7 +389,7 @@ DRAFT → PENDING_APPROVAL → LEGAL_COMPLIANCE_CHECK → SCHEDULED → ACTIVE �
 - Sinh mã: dùng chung, cá nhân hoá theo batch, một lần dùng (single-use).
 - Thuật toán tránh trùng: base62 + checksum.
 - Giới hạn: `max_redemptions`, `max_redemptions_per_user` (thường = 1).
-- Import hàng loạt từ CSV cho campaign đối tác.
+- Import hàng loạt từ CSV cho campaign.
 - Validate real-time: hạn dùng, lượt còn, campaign ACTIVE, điều kiện giỏ hàng.
 
 ---
@@ -406,7 +400,6 @@ Nguồn phát hành voucher:
 - **Sinh nhật**: trigger từ event `user.birthday.today` (user-service phát ra) → Promotion tự phát vé 0đ.
 - **Nâng hạng thành viên**: trigger từ event `score.tier.upgraded` (**score-service phát ra**, không phải Promotion tự tính) → Promotion phát voucher chào mừng tương ứng `tier_benefit_mapping`.
 - **Đền bù dịch vụ**: CSKH phát voucher thủ công.
-- **Đối tác liên kết**: MoMo/ZaloPay/ngân hàng phát hành, Promotion xác thực & redeem, ghi nhận vào `partner_settlement`.
 - **Đổi điểm lấy voucher**: khách yêu cầu qua Customer API của **score-service** (score-service biết số dư điểm); score-service gọi Internal API của Promotion `POST /internal/promotions/vouchers/issue-from-point-exchange` để Promotion phát voucher, đồng thời score-service tự trừ điểm bên phía nó. **Promotion không chủ động trừ điểm.**
 
 ---
@@ -575,7 +568,6 @@ GET    /admin/vouchers?userId=
 
 PUT    /admin/tier-benefit-mapping/{tierCode}    # CHỈ sửa % giảm theo hạng, KHÔNG sửa ai thuộc hạng nào
 GET    /admin/budget/{campaignId}
-GET    /admin/partner-settlement?partner=&period=
 ```
 
 ---
@@ -631,7 +623,6 @@ Bảo vệ bằng **mTLS + service token**, không public qua Gateway.
 | `CampaignAutoEndJob` | mỗi 5 phút | ACTIVE → COMPLETED khi hết hạn/ngân sách |
 | `BirthdayVoucherJob` | hằng ngày 06:00 | Phát vé sinh nhật (trigger từ event, job là cơ chế dự phòng nếu event lỡ) |
 | `BudgetReconciliationJob` | hằng đêm | Đối soát `budget_used` Redis vs DB |
-| `PartnerSettlementJob` | hằng tuần/tháng | Tổng hợp `partner_settlement` gửi đối tác đối soát |
 | `FraudScanJob` | mỗi 15 phút | Quét pattern redeem bất thường |
 | `TierCacheRefreshJob` | mỗi 15 phút | Làm mới cache `acl:tier:{userId}` chủ động (giảm phụ thuộc real-time call) |
 | `CampaignReportAggregationJob` | hằng đêm | Tổng hợp số liệu cho analytics-service |
@@ -691,7 +682,7 @@ Bảo vệ bằng **mTLS + service token**, không public qua Gateway.
 | `MARKETING_MANAGER` | Duyệt campaign, chỉnh ngân sách |
 | `LEGAL_COMPLIANCE` | Override cảnh báo trần pháp lý (có ghi lý do) |
 | `CSKH_AGENT` | Phát voucher đền bù thủ công (giới hạn giá trị) |
-| `FINANCE` | Xem báo cáo đối soát, partner settlement |
+| `FINANCE` | Xem redemption ledger và báo cáo ngân sách campaign |
 | `SYSTEM_ADMIN` | Toàn quyền, cấu hình tier-benefit-mapping, rule engine |
 | `CUSTOMER` | Xem/dùng khuyến mãi của chính mình |
 
@@ -756,7 +747,6 @@ Ghi `audit_logs` cho: tạo/sửa/duyệt/tạm dừng Campaign, override cảnh
 
 - Hiệu quả Campaign: doanh thu, số vé bán qua campaign, ngân sách đã dùng, ROI (phối hợp analytics-service).
 - Đối soát tài chính: tổng giá trị voucher/coupon redeem theo ngày.
-- **Đối soát đối tác đồng tài trợ** (`partner_settlement`): số tiền MoMo/ZaloPay/studio phim cần hoàn trả cho rạp.
 - Báo cáo gian lận.
 - Báo cáo tuân thủ pháp lý: danh sách campaign, mức giảm, số ngày áp dụng trong năm theo từng loại vé (phục vụ kiểm tra nội bộ trước khi Sở Công Thương thanh tra).
 
@@ -824,9 +814,8 @@ Nguyên tắc: nếu Promotion lỗi/timeout, `booking-service` vẫn cho đặt
 |---|---|
 | **Phase 1 (MVP)** | Coupon/Voucher dùng mã, validate điều kiện đã hỗ trợ, reserve/confirm/release/cancel/expire |
 | **Phase 2** | Campaign Engine đầy đủ (approval + legal-check workflow), Voucher cá nhân hoá, budget cap, fraud detection cơ bản |
-| **Phase 3** | Rule Engine tự cấu hình (self-service Marketing), A/B testing, mở rộng tích hợp đối tác thanh toán, partner settlement tự động |
+| **Phase 3** | Rule Engine tự cấu hình (self-service Marketing) và A/B testing |
 | **Phase 4** | Cá nhân hoá khuyến mãi bằng ML (phối hợp analytics-service), dynamic pricing thử nghiệm |
-| **Phase 5** | Liên minh loyalty đa đối tác (phối hợp score-service đổi điểm sang hệ sinh thái ngoài rạp) |
 
 ---
 
@@ -885,21 +874,11 @@ GET /internal/showtimes/{showtimeId}
 
 - Dữ liệu này được **cache định kỳ** (`acl:movie:{movieId}`, TTL 30 phút) vì phim/suất chiếu ít thay đổi trong ngày, giảm tải gọi trực tiếp mỗi lần checkout.
 - Khi `movie-service` phát event `movie.updated`/`showtime.updated`, Promotion invalidate cache tương ứng ngay để tránh áp dụng rule sai (VD phim đổi định dạng chiếu).
-- Campaign gắn với **nhà phát hành phim (distributor)** (VD ưu đãi đồng tài trợ bởi studio cho suất chiếu sớm bom tấn) được cấu hình qua `campaign_rules.conditions.movieId`/`distributor`, dữ liệu `distributor` lấy từ movie-service, không nhập tay trùng lặp.
+- Điều kiện theo **nhà phát hành phim (distributor)** được cấu hình qua `campaign_rules.conditions.movieId`/`distributor`; dữ liệu `distributor` lấy từ movie-service, không nhập tay trùng lặp.
 
 ---
 
-## 54. Partner Settlement & Reconciliation (Bổ sung mới)
-
-Với các khuyến mãi **đồng tài trợ** (co-funded) bởi đối tác thanh toán (MoMo, ZaloPay, VNPay) hoặc nhà phát hành phim:
-
-- Bảng `partner_settlement` ghi nhận: ai chịu chi phí phần nào (`funding_source` ở bảng `vouchers`/`coupons` — `SELF` do rạp chịu hoàn toàn, hay `PARTNER_COFUNDED` chia sẻ theo tỷ lệ thoả thuận).
-- `PartnerSettlementJob` chạy định kỳ (tuần/tháng) tổng hợp số tiền cần đối tác hoàn trả, xuất báo cáo cho Finance đối chiếu với hợp đồng thương mại đã ký.
-- Cần **trace được từng redemption cụ thể** (`coupon_redemptions.order_id`) để giải quyết tranh chấp khi số liệu giữa rạp và đối tác lệch nhau — đây là lý do audit log và `partner_settlement` phải liên kết chặt với `coupon_redemptions`/`voucher redemptions` qua `order_id`.
-
----
-
-## 55. Testing Strategy (Bổ sung mới)
+## 54. Testing Strategy (Bổ sung mới)
 
 | Loại test | Mục tiêu |
 |---|---|
@@ -913,7 +892,7 @@ Với các khuyến mãi **đồng tài trợ** (co-funded) bởi đối tác th
 
 ---
 
-## 56. CI/CD & Rule Versioning (Bổ sung mới)
+## 55. CI/CD & Rule Versioning (Bổ sung mới)
 
 - Mỗi thay đổi `CampaignRule`/`tier_benefit_mapping` được lưu **versioned** (không update trực tiếp, tạo bản ghi mới kèm `effective_from`) để có thể **audit lại giá đã tính đúng theo rule nào tại thời điểm giao dịch** — quan trọng khi có khiếu nại khách hàng hoặc thanh tra.
 - **Canary release** cho Campaign lớn: kích hoạt trước cho một nhóm rạp/khu vực nhỏ, theo dõi metrics (mục 42) trước khi mở rộng toàn hệ thống.
@@ -923,13 +902,13 @@ Với các khuyến mãi **đồng tài trợ** (co-funded) bởi đối tác th
 
 *Tài liệu v2 được xây dựng dựa trên phân tích mô hình vận hành thực tế của CGV Cinemas, Galaxy Cinema tại Việt Nam, kết hợp nguyên tắc DDD/Bounded Context, và quy định pháp luật Việt Nam về khuyến mại (Nghị định 81/2018/NĐ-CP, Thông tư 39/2025/TT-BCT). Ranh giới với `score-service` đã được tách bạch hoàn toàn: score-service là nguồn sự thật duy nhất cho điểm & hạng thành viên; Promotion Service chỉ tiêu thụ dữ liệu đó qua hợp đồng API/event rõ ràng (mục 52).*
 
-## 57. Runtime reconciliation (2026-07-29)
+## 56. Runtime reconciliation (2026-07-31)
 
 This plan is the target architecture, not a promise that every cross-service
 feature is already wired. The current production core supports one coupon or
 one voucher per checkout, deterministic rule evaluation, atomic reservation,
-confirmation/release/cancel, transactional outbox, partner settlement and
-campaign lifecycle jobs. Automatic discovery, multi-benefit stacking and the
+confirmation/release/cancel, transactional outbox and campaign lifecycle jobs.
+Automatic discovery, multi-benefit stacking and the
 Score point saga remain roadmap items until Booking, Payment and Score publish
 the agreed contracts. See
 `promotion-service-production-readiness-report.md` for the release gate and

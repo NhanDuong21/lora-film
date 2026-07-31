@@ -20,7 +20,7 @@
 
 7. Coupon có được phép **chuyển nhượng** giữa các tài khoản không (VD tặng bạn bè)?
 8. Với mã giới hạn `max_redemptions_per_user = 1`, định nghĩa "1 user" là theo `userId`, theo **số điện thoại**, hay theo **thiết bị/CCCD** (chống 1 người tạo nhiều tài khoản để dùng nhiều lần)?
-9. Voucher hết hạn không dùng thì xử lý thế nào — có **thông báo nhắc trước X ngày** không, và ai chịu trách nhiệm chi phí voucher đối tác phát hành nhưng khách không dùng (đối tác vẫn phải thanh toán chi phí phát hành hay không)?
+9. Voucher hết hạn không dùng thì xử lý thế nào — có **thông báo nhắc trước X ngày** không?
 10. Vé tặng (voucher 0đ) có áp dụng được cho **suất chiếu sớm, suất chiếu đặc biệt (IMAX/4DX/ScreenX), ngày Lễ/Tết** không? (Theo thực tế Galaxy: **không** áp dụng cho suất chiếu sớm.)
 11. Một giao dịch có được **dùng nhiều voucher cùng lúc** không, hay giới hạn tối đa mấy voucher/đơn (thực tế Galaxy giới hạn 1 voucher/giao dịch tại quầy)?
 12. Voucher có áp dụng được cho **vé nhóm/vé đoàn (B2B)** không, hay chỉ dành cho giao dịch cá nhân (thực tế Galaxy: chính sách thành viên không áp dụng cho Co-Sales/vé đoàn)?
@@ -51,16 +51,15 @@
 25. Khi phát hiện gian lận **sau khi** giao dịch đã hoàn tất (vé đã xuất), có thu hồi vé/report công an, hay chỉ khoá tài khoản và không cấp khuyến mãi tương lai?
 26. Nhân viên nội bộ (quầy vé, CSKH) có được cấp quyền **tự ý cấp voucher đền bù** không giới hạn không, hay bắt buộc có ngưỡng phê duyệt và audit định kỳ để tránh nhân viên lạm quyền (insider fraud)?
 
-## A7. Pháp lý & Đối tác
+## A7. Pháp lý
 
 27. Doanh nghiệp đã có quy trình nội bộ **nộp thông báo khuyến mại lên Sở Công Thương** chưa? Ai (phòng ban nào) chịu trách nhiệm nộp, và Promotion Service có cần **chặn cứng** campaign chưa có `legal_notification_ref` hay chỉ cảnh báo?
-28. Với các chương trình **đồng tài trợ** (MoMo/ZaloPay/studio phim), tỷ lệ chia sẻ chi phí được quy định trong hợp đồng cụ thể ra sao — cố định theo %, theo ngân sách trần, hay theo số lượng redemption thực tế?
-29. Có chương trình khuyến mãi nào cần phối hợp với **nhà phát hành phim quốc tế** (VD ưu đãi độc quyền suất chiếu sớm phim Hollywood) mà điều khoản hợp đồng có ràng buộc riêng (VD không được giảm giá quá X% cho phim đó) không?
+28. Có chương trình khuyến mãi nào cần giới hạn riêng theo nhà phát hành phim hoặc suất chiếu đặc biệt không?
 
 ## A8. Vận hành đa kênh (Omnichannel)
 
-30. Khuyến mãi có áp dụng **giống nhau giữa Web, App, quầy vé tại rạp, và kiosk tự phục vụ** không, hay có sự khác biệt (VD một số coupon chỉ áp dụng online)?
-31. Khi mạng tại rạp bị gián đoạn (quầy vé offline tạm thời), có cơ chế **fallback áp dụng khuyến mãi ngoại tuyến** (offline-first) rồi đồng bộ lại sau không, hay bắt buộc phải online 100%?
+29. Khuyến mãi có áp dụng **giống nhau giữa Web, App, quầy vé tại rạp, và kiosk tự phục vụ** không, hay có sự khác biệt (VD một số coupon chỉ áp dụng online)?
+30. Khi mạng tại rạp bị gián đoạn (quầy vé offline tạm thời), có cơ chế **fallback áp dụng khuyến mãi ngoại tuyến** (offline-first) rồi đồng bộ lại sau không, hay bắt buộc phải online 100%?
 
 ---
 
@@ -121,7 +120,7 @@
 | BR-STACK-01 | Thứ tự xử lý pipeline **bắt buộc** theo đúng trình tự: Base Price → Discount tự động → Coupon → Voucher → Point Redemption Request. Không được đảo thứ tự trong bất kỳ trường hợp nào (đảm bảo tính deterministic, tái tạo được kết quả). |
 | BR-STACK-02 | **Không cho phép cộng dồn 2 Coupon phần trăm** trên cùng một giao dhàng, dù đến từ 2 campaign khác nhau — chỉ 1 coupon phần trăm được áp dụng theo Priority Engine. |
 | BR-STACK-03 | **Cho phép cộng dồn** Voucher tiền mặt cố định (fixed amount) với Discount tự động theo hạng thành viên (2 loại khác bản chất: fixed amount vs percentage không xung đột về mặt tính toán và không vi phạm trần 50% nếu tính đúng thứ tự). |
-| BR-STACK-04 | Khi 2 rule có cùng `priority`, hệ thống **luôn chọn phương án giảm nhiều tiền hơn cho khách** (customer-friendly default), trừ khi rule đánh dấu `forced: true` (dùng cho trường hợp campaign độc quyền bắt buộc, VD chỉ áp dụng đúng 1 mã theo hợp đồng đối tác). |
+| BR-STACK-04 | Khi 2 rule có cùng `priority`, hệ thống **luôn chọn phương án giảm nhiều tiền hơn cho khách** (customer-friendly default), trừ khi rule đánh dấu `forced: true`. |
 | BR-STACK-05 | Nếu tổng mức giảm cộng dồn (Discount + Coupon + Voucher) làm giá vé về **≤ 0**, hệ thống chặn ở mức **giá tối thiểu = 0đ** (không cho âm), phần chênh lệch dư **bị mất, không hoàn lại, không chuyển sang giao dịch khác**. |
 | BR-STACK-06 | Voucher/Coupon loại "miễn phí vé" (100% giảm) không được **cộng dồn với Point Redemption** trên cùng vé đó — nếu vé đã 0đ, hệ thống tự động khoá tuỳ chọn "dùng điểm" cho vé đó ở UI (tránh khách lãng phí điểm không cần thiết). |
 | BR-STACK-07 | Combo (vé + bắp nước): khuyến mãi giảm giá vé **không tự động áp dụng cho phần bắp nước** trừ khi campaign khai báo tường minh `appliesTo: ["TICKET", "CONCESSION"]`. Mặc định combo tính khuyến mãi riêng theo từng dòng sản phẩm (line-item discount), không phải theo tổng combo. |
@@ -173,28 +172,21 @@
 | BR-LEGAL-03 | Các Campaign thuộc diện phải thông báo Sở Công Thương **không được** chuyển sang `ACTIVE` nếu thiếu `legal_notification_ref` VÀ `start_date` cách ngày submit hồ sơ **dưới 3 ngày làm việc**. |
 | BR-LEGAL-04 | Rượu, thuốc lá không được dùng làm hàng hoá khuyến mại — nếu combo bắp nước có đồ uống có cồn (trường hợp đặc biệt tại một số rạp cao cấp), `legal-compliance-module` phải chặn combo đó khỏi mọi hình thức khuyến mại giảm giá/tặng kèm. |
 
-## B11. Partner Settlement Rules
-
-| Mã | Business Rule |
-|---|---|
-| BR-PARTNER-01 | Mọi coupon/voucher có `funding_source = PARTNER_COFUNDED` bắt buộc gắn `partner_code` — không cho phát hành voucher đồng tài trợ mà thiếu định danh đối tác (không thể đối soát). |
-| BR-PARTNER-02 | Số tiền đối tác cần hoàn trả tính theo **đúng số redemption thực tế `CONFIRMED`** trong kỳ đối soát, không tính các Reservation `HELD` chưa xác nhận hoặc đã `ROLLED_BACK`. |
-| BR-PARTNER-03 | Có tranh chấp số liệu với đối tác → bằng chứng duy nhất được chấp nhận là `audit_logs` + `coupon_redemptions`/`voucher redemptions` liên kết `order_id`, không dùng số liệu ước tính từ dashboard báo cáo (chỉ mang tính tham khảo nhanh).
-
 ---
 
 ## Ghi chú sử dụng tài liệu này
 
 - Mọi rule đánh dấu **🟡 ASSUMPTION** là giả định kỹ thuật hợp lý dựa trên khảo sát thực tế ngành, **bắt buộc phải được Marketing/Finance/Legal xác nhận lại bằng số liệu chính thức của doanh nghiệp** trước khi đưa vào production — đây chính là mục đích của Phần A (Bộ câu hỏi khảo sát).
 - Khuyến nghị: tổ chức 1 buổi **Business Rule Workshop** với đại diện Marketing, Finance, Legal, CSKH, Vận hành rạp, dùng trực tiếp Phần A làm agenda — mỗi câu trả lời sẽ xác nhận hoặc điều chỉnh rule tương ứng ở Phần B, sau đó review lại `promotion-service-plan.md` (mục 15–23) để đồng bộ Rule Engine.
-- Mỗi Business Rule ở Phần B nên được ánh xạ trực tiếp thành **1 test case** trong Testing Strategy (mục 55 của kế hoạch chính) trước khi release.
+- Mỗi Business Rule ở Phần B nên được ánh xạ trực tiếp thành **1 test case** trong Testing Strategy (mục 54 của kế hoạch chính) trước khi release.
 
-## Runtime status note (2026-07-29)
+## Runtime status note (2026-07-31)
 
 Rules in this document include business assumptions that still require
 Marketing/Finance/Legal confirmation. Implemented runtime behavior is narrower:
 one benefit per checkout, no automatic rule discovery/stacking, and no Score
 point mutation. Campaign legal/approval gates, the 50% percentage cap,
-reservation TTL/idempotency and partner settlement are enforced in
-Promotion. Cross-service eligibility is accepted only from a trusted caller
+reservation TTL/idempotency and budget enforcement are implemented in
+Promotion. Partner-funded promotions and settlement are out of scope.
+Cross-service eligibility is accepted only from a trusted caller
 until User/Movie/Score contracts are connected.

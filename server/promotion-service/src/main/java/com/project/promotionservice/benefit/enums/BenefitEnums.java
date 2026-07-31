@@ -9,7 +9,6 @@ public final class BenefitEnums {
         PUBLIC,
         PRIVATE,
         SYSTEM,
-        PARTNER,
         COMPENSATION,
         SINGLE_USE
     }
@@ -39,8 +38,7 @@ public final class BenefitEnums {
         CASHBACK,
         REWARD,
         MEMBERSHIP,
-        COMPENSATION,
-        PARTNER
+        COMPENSATION
     }
 
     public enum VoucherSource {
@@ -49,7 +47,6 @@ public final class BenefitEnums {
         BIRTHDAY,
         TIER_UPGRADE,
         POINT_REDEEM,
-        PARTNER,
         COMPENSATION,
         SYSTEM
     }

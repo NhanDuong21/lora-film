@@ -22,9 +22,6 @@ public interface PromotionCampaignRepository extends JpaRepository<PromotionCamp
     Optional<PromotionCampaign> findBySlug(String slug);
     boolean existsByCodeAndDeletedAtIsNull(String code);
     boolean existsBySlugAndDeletedAtIsNull(String slug);
-    boolean existsByPartnerPublicIdAndDeletedAtIsNull(String partnerPublicId);
-    List<PromotionCampaign> findByPartnerPublicIdAndDeletedAtIsNull(String partnerPublicId);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from PromotionCampaign c where c.publicId = :publicId and c.deletedAt is null")
     Optional<PromotionCampaign> findByPublicIdForUpdate(@Param("publicId") String publicId);
