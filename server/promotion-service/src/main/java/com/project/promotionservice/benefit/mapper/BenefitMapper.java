@@ -51,7 +51,7 @@ public class BenefitMapper {
         coupon.setName(request.getName());
         coupon.setDescription(request.getDescription());
         coupon.setCouponType(request.getCouponType());
-        coupon.setStatus(request.getStatus() == null ? CouponStatus.ACTIVE : request.getStatus());
+        coupon.setStatus(CouponStatus.DRAFT);
         coupon.setDistributionType(request.getDistributionType());
         coupon.setStackable(defaultFalse(request.getStackable()));
         coupon.setTransferable(defaultFalse(request.getTransferable()));
@@ -74,7 +74,7 @@ public class BenefitMapper {
         coupon.setName(request.getName());
         coupon.setDescription(request.getDescription());
         coupon.setCouponType(request.getCouponType());
-        coupon.setStatus(request.getStatus() == null ? CouponStatus.ACTIVE : request.getStatus());
+        coupon.setStatus(CouponStatus.DRAFT);
         coupon.setDistributionType(request.getDistributionType());
         coupon.setStackable(defaultFalse(request.getStackable()));
         coupon.setTransferable(defaultFalse(request.getTransferable()));

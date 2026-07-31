@@ -22,7 +22,10 @@ import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.exception.ErrorCode;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
+import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.CampaignType;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
+import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
 import com.project.promotionservice.partner.service.PartnerService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -48,19 +51,22 @@ public class VoucherServiceImpl implements VoucherService {
     private final BenefitEventService eventService;
     private final BenefitPolicyValidator policyValidator;
     private final PartnerService partnerService;
+    private final CampaignConfigurationPolicy configurationPolicy;
 
     public VoucherServiceImpl(VoucherRepository voucherRepository,
                               PromotionCampaignRepository campaignRepository,
                               BenefitMapper mapper,
                               BenefitEventService eventService,
                               BenefitPolicyValidator policyValidator,
-                              PartnerService partnerService) {
+                              PartnerService partnerService,
+                              CampaignConfigurationPolicy configurationPolicy) {
         this.voucherRepository = voucherRepository;
         this.campaignRepository = campaignRepository;
         this.mapper = mapper;
         this.eventService = eventService;
         this.policyValidator = policyValidator;
         this.partnerService = partnerService;
+        this.configurationPolicy = configurationPolicy;
     }
 
     @Override
@@ -95,6 +101,7 @@ public class VoucherServiceImpl implements VoucherService {
     @CacheEvict(cacheNames = "vouchers", allEntries = true)
     public VoucherResponse update(String publicId, VoucherUpdateRequest request, String actor) {
         Voucher voucher = find(publicId);
+        PromotionCampaign campaign = requireEditableLinkedCampaign(voucher.getCampaignPublicId());
         if (voucher.getStatus() == VoucherStatus.USED || voucher.getStatus() == VoucherStatus.REVOKED) {
             throw badRequest(BenefitErrorCode.VOUCHER_INVALID, "Used or revoked voucher cannot be updated");
         }
@@ -138,6 +145,9 @@ public class VoucherServiceImpl implements VoucherService {
                 mapper.toNode(voucher.getActionsJson()));
         voucher.setUpdatedBy(actor);
         VoucherResponse response = currentResponse(voucherRepository.save(voucher));
+        if (campaign != null) {
+            markCampaignChanged(campaign, actor);
+        }
         eventService.record("VOUCHER", publicId, "VOUCHER_UPDATED", response, actor);
         return response;
     }
@@ -148,6 +158,10 @@ public class VoucherServiceImpl implements VoucherService {
     @CacheEvict(cacheNames = "vouchers", allEntries = true)
     public VoucherResponse revoke(String publicId, String reason, String actor) {
         Voucher voucher = find(publicId);
+        PromotionCampaign campaign = requireLinkedCampaign(voucher.getCampaignPublicId());
+        if (campaign != null && campaign.getStatus() == CampaignStatus.DRAFT) {
+            configurationPolicy.requireEditable(campaign);
+        }
         if (voucher.getStatus() == VoucherStatus.USED) {
             throw badRequest(BenefitErrorCode.VOUCHER_ALREADY_USED, "Used voucher cannot be revoked");
         }
@@ -156,6 +170,9 @@ public class VoucherServiceImpl implements VoucherService {
             voucher.setIssueReason(appendReason(voucher.getIssueReason(), "Revoked: " + reason));
             voucher.setUpdatedBy(actor);
             voucherRepository.save(voucher);
+            if (campaign != null && campaign.getStatus() == CampaignStatus.DRAFT) {
+                markCampaignChanged(campaign, actor);
+            }
         }
         VoucherResponse response = currentResponse(voucher);
         eventService.record("VOUCHER", publicId, "VOUCHER_REVOKED", response, actor);
@@ -177,6 +194,15 @@ public class VoucherServiceImpl implements VoucherService {
         if (!request.getValidTo().isAfter(voucher.getValidTo())) {
             throw badRequest(ErrorCode.INVALID_REQUEST_PARAMETER, "New validTo must be after current validTo");
         }
+        PromotionCampaign campaign = requireLinkedCampaign(voucher.getCampaignPublicId());
+        if (campaign != null && campaign.getStatus() == CampaignStatus.DRAFT) {
+            configurationPolicy.requireEditable(campaign);
+        }
+        if (campaign != null && request.getValidTo().isAfter(campaign.getEndAt())) {
+            throw badRequest(
+                    BenefitErrorCode.VOUCHER_INVALID,
+                    "A campaign voucher cannot be extended beyond the campaign end time");
+        }
         voucher.setValidTo(request.getValidTo());
         if (voucher.getValidFrom().isAfter(Instant.now())) {
             voucher.setStatus(VoucherStatus.ISSUED);
@@ -192,6 +218,9 @@ public class VoucherServiceImpl implements VoucherService {
         voucher.setMetadataJson(mapper.toJson(metadata));
         voucher.setUpdatedBy(actor);
         VoucherResponse response = currentResponse(voucherRepository.save(voucher));
+        if (campaign != null && campaign.getStatus() == CampaignStatus.DRAFT) {
+            markCampaignChanged(campaign, actor);
+        }
         eventService.record("VOUCHER", publicId, "VOUCHER_EXTENDED", response, actor);
         return response;
     }
@@ -235,6 +264,12 @@ public class VoucherServiceImpl implements VoucherService {
                     .filter(value -> value.getDeletedAt() == null)
                     .orElseThrow(() -> new BusinessException(
                         ErrorCode.NOT_FOUND, "Promotion campaign not found", HttpStatus.NOT_FOUND));
+            if (campaign.getCampaignType() != CampaignType.VOUCHER) {
+                throw badRequest(
+                        BenefitErrorCode.BENEFIT_CONFIGURATION_INVALID,
+                        "Vouchers can only be attached to a VOUCHER campaign");
+            }
+            configurationPolicy.requireEditable(campaign);
             if (campaign.getPartnerPublicId() != null && partnerService != null) {
                 partnerService.requireActive(campaign.getPartnerPublicId());
             }
@@ -257,7 +292,11 @@ public class VoucherServiceImpl implements VoucherService {
         if (campaign != null) {
             voucher.setPartnerPublicId(campaign.getPartnerPublicId());
         }
-        return voucherRepository.save(voucher);
+        Voucher saved = voucherRepository.save(voucher);
+        if (campaign != null) {
+            markCampaignChanged(campaign, actor);
+        }
+        return saved;
     }
 
     private String generateCode() {
@@ -273,6 +312,29 @@ public class VoucherServiceImpl implements VoucherService {
         return voucherRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new BusinessException(
                         BenefitErrorCode.VOUCHER_NOT_FOUND, "Voucher not found", HttpStatus.NOT_FOUND));
+    }
+
+    private PromotionCampaign requireEditableLinkedCampaign(String campaignPublicId) {
+        PromotionCampaign campaign = requireLinkedCampaign(campaignPublicId);
+        if (campaign != null) {
+            configurationPolicy.requireEditable(campaign);
+        }
+        return campaign;
+    }
+
+    private PromotionCampaign requireLinkedCampaign(String campaignPublicId) {
+        if (campaignPublicId == null || campaignPublicId.isBlank()) {
+            return null;
+        }
+        return campaignRepository.findByPublicId(campaignPublicId)
+                .filter(value -> value.getDeletedAt() == null)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.NOT_FOUND, "Promotion campaign not found", HttpStatus.NOT_FOUND));
+    }
+
+    private void markCampaignChanged(PromotionCampaign campaign, String actor) {
+        configurationPolicy.markConfigurationChanged(campaign, actor);
+        campaignRepository.save(campaign);
     }
 
     private VoucherResponse currentResponse(Voucher voucher) {

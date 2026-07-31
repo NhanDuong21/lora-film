@@ -1,11 +1,14 @@
 package com.project.promotionservice.promotion.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project.promotionservice.benefit.repository.CouponRepository;
+import com.project.promotionservice.benefit.repository.VoucherRepository;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEventRepository;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEnvelopeFactory;
 import com.project.promotionservice.promotion.dto.request.CampaignCreateRequest;
 import com.project.promotionservice.promotion.dto.request.CampaignUpdateRequest;
+import com.project.promotionservice.promotion.dto.request.LegalReviewRequest;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
@@ -18,6 +21,7 @@ import com.project.promotionservice.promotion.mapper.CampaignMapper;
 import com.project.promotionservice.promotion.repository.ApprovalHistoryRepository;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.repository.PromotionRuleRepository;
+import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
 import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
@@ -42,6 +47,10 @@ class CampaignServiceImplTest {
     @Mock
     private PromotionRuleRepository ruleRepository;
     @Mock
+    private CouponRepository couponRepository;
+    @Mock
+    private VoucherRepository voucherRepository;
+    @Mock
     private ApprovalHistoryRepository approvalHistoryRepository;
     @Mock
     private PromotionOutboxEventRepository outboxEventRepository;
@@ -53,6 +62,9 @@ class CampaignServiceImplTest {
     private PromotionReservationRepository reservationRepository;
     @Mock
     private PromotionOutboxEnvelopeFactory envelopeFactory;
+    @Spy
+    private CampaignConfigurationPolicy configurationPolicy =
+            new CampaignConfigurationPolicy();
 
     @InjectMocks
     private CampaignServiceImpl campaignService;
@@ -109,6 +121,20 @@ class CampaignServiceImplTest {
     }
 
     @Test
+    void createCampaign_automaticDiscountIsRejectedUntilRuntimeSupportsIt() {
+        CampaignCreateRequest request = new CampaignCreateRequest();
+        request.setCampaignType(CampaignType.AUTOMATIC_DISCOUNT);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> campaignService.createCampaign(request, "1"));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
+        assertTrue(exception.getMessage().contains("not supported"));
+        verify(campaignRepository, never()).save(any());
+    }
+
+    @Test
     void updateCampaign_nonDraft_throwsException() {
         CampaignUpdateRequest request = new CampaignUpdateRequest();
         request.setName("Updated name");
@@ -126,8 +152,10 @@ class CampaignServiceImplTest {
                 campaignService.updateCampaign("550e8400-e29b-41d4-a716-446655440000", request, "1")
         );
 
-        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
-        assertEquals("Only DRAFT campaigns can be updated", exception.getMessage());
+        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
+        assertEquals(
+                "Campaign configuration is locked after submission; reject it before editing",
+                exception.getMessage());
     }
 
     @Test
@@ -151,6 +179,82 @@ class CampaignServiceImplTest {
     }
 
     @Test
+    void submitCampaign_requiresAConfiguredRuntimeBenefit() {
+        PromotionCampaign campaign = draftCouponCampaign();
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+        when(couponRepository.existsConfiguredForCampaign(
+                eq(campaign.getPublicId()), any(), eq(campaign.getStartAt()), eq(campaign.getEndAt())))
+                .thenReturn(false);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> campaignService.submitCampaign(campaign.getPublicId(), "Ready", "marketing"));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
+        assertTrue(exception.getMessage().contains("configured coupon"));
+        verify(ruleRepository, never())
+                .findByCampaignPublicIdAndDeletedAtIsNull(campaign.getPublicId());
+    }
+
+    @Test
+    void submitCampaign_withConfiguredCoupon_locksConfigurationForReview() {
+        PromotionCampaign campaign = draftCouponCampaign();
+        CampaignResponse response = new CampaignResponse();
+        response.setApprovalStatus(CampaignApprovalStatus.PENDING);
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+        when(couponRepository.existsConfiguredForCampaign(
+                eq(campaign.getPublicId()), any(), eq(campaign.getStartAt()), eq(campaign.getEndAt())))
+                .thenReturn(true);
+        when(campaignRepository.save(campaign)).thenReturn(campaign);
+        when(campaignMapper.toResponse(campaign)).thenReturn(response);
+
+        CampaignResponse result = campaignService.submitCampaign(
+                campaign.getPublicId(), "Ready", "marketing");
+
+        assertEquals(CampaignApprovalStatus.PENDING, result.getApprovalStatus());
+        assertEquals(CampaignApprovalStatus.PENDING, campaign.getApprovalStatus());
+        verify(approvalHistoryRepository).save(any());
+    }
+
+    @Test
+    void legalReview_beforeSubmission_isRejected() {
+        PromotionCampaign campaign = draftCouponCampaign();
+        LegalReviewRequest request = new LegalReviewRequest();
+        request.setStatus(LegalStatus.PASSED);
+        request.setComment("Compliant");
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> campaignService.reviewLegalStatus(
+                        campaign.getPublicId(), request, "legal"));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
+        assertTrue(exception.getMessage().contains("after the campaign is submitted"));
+        verify(campaignRepository, never()).save(campaign);
+    }
+
+    @Test
+    void killSwitch_cannotMoveDraftCampaignToPaused() {
+        PromotionCampaign campaign = draftCouponCampaign();
+        when(campaignRepository.findByPublicIdForUpdate(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> campaignService.killSwitchCampaign(
+                        campaign.getPublicId(), "Emergency", "admin"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        assertTrue(exception.getMessage().contains("SCHEDULED, ACTIVE or PAUSED"));
+        assertEquals(CampaignStatus.DRAFT, campaign.getStatus());
+        verify(campaignRepository, never()).save(campaign);
+    }
+
+    @Test
     void deleteCampaign_rejectsAnActiveReservation() {
         PromotionCampaign campaign = new PromotionCampaign();
         campaign.setPublicId("550e8400-e29b-41d4-a716-446655440002");
@@ -166,5 +270,18 @@ class CampaignServiceImplTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatus());
         verify(campaignRepository, never()).save(campaign);
+    }
+
+    private PromotionCampaign draftCouponCampaign() {
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setPublicId("550e8400-e29b-41d4-a716-446655440099");
+        campaign.setCampaignType(CampaignType.COUPON);
+        campaign.setStatus(CampaignStatus.DRAFT);
+        campaign.setApprovalStatus(CampaignApprovalStatus.DRAFT);
+        campaign.setLegalStatus(LegalStatus.PENDING);
+        campaign.setStartAt(Instant.now().plusSeconds(3600));
+        campaign.setEndAt(Instant.now().plusSeconds(7200));
+        campaign.setBudgetAmount(new BigDecimal("100000.00"));
+        return campaign;
     }
 }

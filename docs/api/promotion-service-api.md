@@ -26,7 +26,7 @@ Tài liệu này **hợp nhất** nội dung từ đặc tả cũ của `promoti
 - **Quản lý Campaign**: Vòng đời chiến dịch khuyến mại (Draft -> Pending -> Approved -> Active -> Paused -> Completed).
 - **Quản lý Coupon**: Phát hành mã dùng chung, mã cá nhân hóa hoặc mã một lần.
 - **Quản lý Voucher**: Phát hành và theo dõi voucher nằm trong ví khách hàng (Customer Wallet).
-- **Promotion Rules**: Quản lý cấu hình và preview có kiểm tra schema. Automatic rule discovery/stacking không thuộc Reservation Runtime dùng mã trong issue này.
+- **Promotion Rules**: Cấu hình tùy chọn để preview và chuẩn bị cho automatic rule discovery. Rule không còn là điều kiện submit vì Reservation Runtime hiện áp dụng `conditions_json` và `actions_json` của coupon/voucher.
 - **Promotion Reservation (Giữ chỗ khuyến mại)**: Lock atomically coupon/voucher, quota, và budget trong quá trình checkout.
 - **Redemption & Reservation lifecycle**: Confirm khi thanh toán thành công; release khi thanh toán thất bại; cancel khi booking bị hủy; job tự expire phiên quá hạn. Giao dịch đã confirm phải dùng refund/compensation, không rollback ledger.
 - **Compensation (Bồi thường)**: Phát hành voucher đền bù chăm sóc khách hàng.
@@ -674,8 +674,11 @@ CREATE TABLE promotion_rules (
 
 Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm tránh thất thoát tài chính và gian lận:
 
-- **BR-CAMP-01 (Kích hoạt chiến dịch)**: Campaign chuyển từ `SCHEDULED` sang `ACTIVE` khi đồng thời thỏa mãn: `current_time >= start_at` VÀ `legal_status = PASSED` VÀ `budget_amount > 0`.
+- **BR-CAMP-00 (Khóa cấu hình)**: Campaign, rule và benefit gắn campaign chỉ được thay đổi khi campaign là `DRAFT` và approval là `DRAFT/REJECTED`. Submit chuyển approval sang `PENDING` và khóa cấu hình. Mọi thay đổi sau reject reset approval về `DRAFT`, legal về `PENDING` và xóa quyết định phê duyệt cũ.
+- **BR-CAMP-01 (Kích hoạt chiến dịch)**: Campaign chuyển từ `SCHEDULED` sang `ACTIVE` khi đồng thời thỏa mãn: `current_time >= start_at` VÀ `approval_status = APPROVED` VÀ `legal_status = PASSED` VÀ `budget_amount > 0`.
 - **BR-CAMP-02 (Kiểm soát ngân sách)**: Tự động chuyển chiến dịch sang `PAUSED` khi `budget_used + budget_reserved >= budget_amount * 0.98`. Campaign chỉ được publish/activate sau khi business approval đã `APPROVED`, legal review đã `PASSED` và budget dương.
+- **BR-CAMP-03 (Benefit thực thi)**: Campaign `COUPON/VOUCHER` chỉ được submit và publish khi có ít nhất một benefit đúng loại, chưa ở trạng thái terminal và có thời hạn giao với thời hạn campaign. `promotion_rules` là tùy chọn; không cho tạo `AUTOMATIC_DISCOUNT` vì checkout runtime hiện chưa hỗ trợ.
+- **BR-CAMP-04 (Coupon draft)**: Coupon mới luôn là `DRAFT`. Coupon đủ thời hạn được kích hoạt cùng lúc campaign chuyển sang `ACTIVE`; scheduler tiếp tục kích hoạt coupon có `valid_from` muộn hơn.
 - **BR-COUP-01 (Giới hạn mỗi khách hàng)**: Một `user_public_id` hoặc số điện thoại chỉ được áp dụng thành công mã coupon tối đa `max_redemptions_per_user` lần.
 - **BR-VOU-01 (Hạn chế vé tặng)**: Vé tặng 0đ (phát do sinh nhật hoặc nâng hạng thành viên) không áp dụng cho suất chiếu sớm (sneak show), các phòng chiếu VIP/IMAX/4DX/Gold Class và ngày Lễ Tết.
 - **BR-STACK-01 (Phạm vi runtime hiện tại)**: Reservation Runtime nhận đúng một mã coupon hoặc voucher và mức giá sau giảm không âm. Automatic rule discovery, stacking nhiều benefit và loyalty-point saga là pipeline riêng; không được giả lập stacking bằng cách gọi reserve nhiều lần cho cùng checkout.
@@ -753,6 +756,7 @@ Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm trán
 | | POST | `/internal/events/dlq/reprocess` | Operations Service | Reprocess inbound/outbound DLQ |
 | | GET | `/internal/events/status` | Operations Service | Thống kê trạng thái event |
 | **Scheduler Hooks** | POST | `/internal/schedulers/campaigns/expire` | Operations Service | Hết hạn campaign |
+| | POST | `/internal/schedulers/coupons/activate` | Operations Service | Kích hoạt coupon draft khi campaign và thời hạn đã active |
 | | POST | `/internal/schedulers/coupons/expire` | Operations Service | Hết hạn coupon |
 | | POST | `/internal/schedulers/vouchers/expire` | Operations Service | Hết hạn voucher |
 | | POST | `/internal/schedulers/outbox/publish` | Operations Service | Publish outbox |

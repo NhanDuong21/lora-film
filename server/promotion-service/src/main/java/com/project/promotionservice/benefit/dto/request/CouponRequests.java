@@ -33,7 +33,7 @@ public final class CouponRequests {
         @NotNull
         private CouponType couponType;
 
-        private CouponStatus status = CouponStatus.ACTIVE;
+        private CouponStatus status = CouponStatus.DRAFT;
 
         @NotNull
         private DistributionType distributionType;

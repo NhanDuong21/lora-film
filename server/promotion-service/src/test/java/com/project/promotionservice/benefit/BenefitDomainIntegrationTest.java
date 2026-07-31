@@ -152,7 +152,7 @@ class BenefitDomainIntegrationTest {
     @Test
     void reservationHoldsBudgetAndConfirmCreatesExactlyOneRedemption() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         ReserveRequest reserveRequest = reservationRequest(
                 RedemptionType.COUPON, coupon.getCode(), "reservation-user-1");
 
@@ -190,22 +190,15 @@ class BenefitDomainIntegrationTest {
     }
 
     @Test
-    void confirmConsumesTheReservedPricingSnapshotWhenBenefitConfigurationChanges() {
+    void confirmConsumesTheReservedPricingSnapshotWhenCouponIsDisabled() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         ReservationResponse reserved = reservationService.reserve(
                 reservationRequest(RedemptionType.COUPON, coupon.getCode(), "snapshot-user"),
                 "snapshot-reserve-key",
                 "booking-service");
 
-        var couponEntity = couponRepository
-                .findByPublicIdAndDeletedAtIsNull(coupon.getPublicId())
-                .orElseThrow();
-        ObjectNode changedAction = JsonNodeFactory.instance.objectNode();
-        changedAction.put("discountType", "FIXED_AMOUNT");
-        changedAction.put("discountValue", 10_000);
-        couponEntity.setActionsJson(changedAction.toString());
-        couponRepository.saveAndFlush(couponEntity);
+        couponService.disable(coupon.getPublicId(), "admin");
 
         ConfirmRequest confirmRequest = new ConfirmRequest();
         confirmRequest.setPaymentPublicId(UUID.randomUUID().toString());
@@ -223,7 +216,7 @@ class BenefitDomainIntegrationTest {
     @Test
     void reservationReleaseIsIdempotentAndReleasesHeldBudget() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         ReserveRequest reserveRequest = reservationRequest(
                 RedemptionType.COUPON, coupon.getCode(), "reservation-user-2");
         ReservationResponse reserved = reservationService.reserve(
@@ -248,7 +241,7 @@ class BenefitDomainIntegrationTest {
     @Test
     void multiUsePublicCouponAllowsIndependentActiveHolds() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         ReserveRequest firstRequest = reservationRequest(
                 RedemptionType.COUPON, coupon.getCode(), "public-coupon-user-1");
         firstRequest.setCustomerPhone("0900000101");
@@ -270,7 +263,7 @@ class BenefitDomainIntegrationTest {
     @Test
     void reservationCanBeCancelledAndAppearsInFilteredHistory() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         ReservationResponse reserved = reservationService.reserve(
                 reservationRequest(RedemptionType.COUPON, coupon.getCode(), "cancel-user"),
                 "cancel-reserve-key",
@@ -298,7 +291,7 @@ class BenefitDomainIntegrationTest {
     @Test
     void refreshUsesAbsoluteDeadlineAndRuntimeValidationSeesActiveHold() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         ReserveRequest reserveRequest = reservationRequest(
                 RedemptionType.COUPON, coupon.getCode(), "refresh-user");
 
@@ -350,7 +343,7 @@ class BenefitDomainIntegrationTest {
         assertThatThrownBy(() -> couponService.create(illegalPercentage, "admin"))
                 .hasMessageContaining("50%");
 
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         BenefitRedeemRequest validation = redemptionRequest(coupon.getCode(), "phone-required-user");
         validation.setCustomerPhone(null);
 
@@ -402,7 +395,7 @@ class BenefitDomainIntegrationTest {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void expirationSelfHealingReleasesStaleReservation() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         ReservationResponse reserved = reservationService.reserve(
                 reservationRequest(RedemptionType.COUPON, coupon.getCode(), "expired-user"),
                 "expired-reservation-key",
@@ -425,7 +418,7 @@ class BenefitDomainIntegrationTest {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void durableIdempotencyReplaysWithoutExecutingReservationTwice() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         ReserveRequest firstRequest = reservationRequest(
                 RedemptionType.COUPON, coupon.getCode(), "idempotent-user");
         String bookingId = firstRequest.getBookingPublicId();
@@ -488,10 +481,8 @@ class BenefitDomainIntegrationTest {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void checkoutCannotHoldTwoBenefitsAtTheSameTime() {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse firstCoupon =
-                couponService.create(couponRequest(campaign.getPublicId()), "admin");
-        CouponResponse secondCoupon =
-                couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse firstCoupon = createActiveCoupon(campaign);
+        CouponResponse secondCoupon = createActiveCoupon(campaign);
         ReserveRequest firstRequest = reservationRequest(
                 RedemptionType.COUPON, firstCoupon.getCode(), "checkout-user-1");
         ReserveRequest secondRequest = reservationRequest(
@@ -531,13 +522,35 @@ class BenefitDomainIntegrationTest {
         return campaignRepository.save(campaign);
     }
 
+    private CouponResponse createActiveCoupon(PromotionCampaign campaign) {
+        PromotionCampaign current = campaignRepository.findById(campaign.getId()).orElseThrow();
+        current.setStatus(CampaignStatus.DRAFT);
+        current.setApprovalStatus(CampaignApprovalStatus.DRAFT);
+        current.setLegalStatus(LegalStatus.PENDING);
+        campaignRepository.saveAndFlush(current);
+
+        CouponResponse response = couponService.create(
+                couponRequest(current.getPublicId()), "admin");
+        couponRepository.activateDraftCoupons(
+                current.getPublicId(), CouponStatus.DRAFT, CouponStatus.ACTIVE,
+                Instant.now(), "admin");
+
+        current = campaignRepository.findById(campaign.getId()).orElseThrow();
+        current.setStatus(CampaignStatus.ACTIVE);
+        current.setApprovalStatus(CampaignApprovalStatus.APPROVED);
+        current.setLegalStatus(LegalStatus.PASSED);
+        campaignRepository.saveAndFlush(current);
+        response.setStatus(CouponStatus.ACTIVE);
+        return response;
+    }
+
     private CouponCreateRequest couponRequest(String campaignPublicId) {
         CouponCreateRequest request = new CouponCreateRequest();
         request.setCampaignPublicId(campaignPublicId);
         request.setCode("CPN-" + UUID.randomUUID().toString().substring(0, 8));
         request.setName("20K off");
         request.setCouponType(CouponType.PUBLIC);
-        request.setStatus(CouponStatus.ACTIVE);
+        request.setStatus(CouponStatus.DRAFT);
         request.setDistributionType(DistributionType.PUBLIC);
         request.setMaxRedemptions(10);
         request.setMaxRedemptionsPerUser(1);

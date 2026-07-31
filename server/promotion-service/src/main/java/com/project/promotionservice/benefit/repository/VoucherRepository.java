@@ -24,6 +24,21 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>, JpaSpec
 
     boolean existsByCodeIgnoreCase(String code);
 
+    @Query("""
+            select case when count(v) > 0 then true else false end
+            from Voucher v
+            where v.campaignPublicId = :campaignPublicId
+              and v.status in :statuses
+              and v.validFrom < :campaignEnd
+              and v.validTo > :campaignStart
+              and v.deletedAt is null
+            """)
+    boolean existsConfiguredForCampaign(
+            @Param("campaignPublicId") String campaignPublicId,
+            @Param("statuses") Collection<VoucherStatus> statuses,
+            @Param("campaignStart") Instant campaignStart,
+            @Param("campaignEnd") Instant campaignEnd);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select v from Voucher v where upper(v.code) = upper(:code) and v.deletedAt is null")
     Optional<Voucher> findByCodeForUpdate(@Param("code") String code);

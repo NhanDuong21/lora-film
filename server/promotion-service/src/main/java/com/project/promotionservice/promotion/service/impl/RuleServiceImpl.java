@@ -22,6 +22,7 @@ import com.project.promotionservice.promotion.mapper.RuleMapper;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.repository.PromotionRuleRepository;
 import com.project.promotionservice.promotion.repository.RuleSpecification;
+import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
 import com.project.promotionservice.promotion.service.RuleService;
 
 import org.springframework.data.domain.Page;
@@ -48,6 +49,7 @@ public class RuleServiceImpl implements RuleService {
     private final BenefitPolicyValidator benefitPolicyValidator;
     private final BenefitConditionEvaluator conditionEvaluator;
     private final PromotionOutboxEnvelopeFactory envelopeFactory;
+    private final CampaignConfigurationPolicy configurationPolicy;
 
     public RuleServiceImpl(PromotionRuleRepository ruleRepository,
                            PromotionCampaignRepository campaignRepository,
@@ -56,7 +58,8 @@ public class RuleServiceImpl implements RuleService {
                            ObjectMapper objectMapper,
                            BenefitPolicyValidator benefitPolicyValidator,
                            BenefitConditionEvaluator conditionEvaluator,
-                           PromotionOutboxEnvelopeFactory envelopeFactory) {
+                           PromotionOutboxEnvelopeFactory envelopeFactory,
+                           CampaignConfigurationPolicy configurationPolicy) {
         this.ruleRepository = ruleRepository;
         this.campaignRepository = campaignRepository;
         this.outboxEventRepository = outboxEventRepository;
@@ -65,6 +68,7 @@ public class RuleServiceImpl implements RuleService {
         this.benefitPolicyValidator = benefitPolicyValidator;
         this.conditionEvaluator = conditionEvaluator;
         this.envelopeFactory = envelopeFactory;
+        this.configurationPolicy = configurationPolicy;
     }
 
     @Override
@@ -76,7 +80,7 @@ public class RuleServiceImpl implements RuleService {
         if (campaign.getDeletedAt() != null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Campaign is deleted", HttpStatus.BAD_REQUEST);
         }
-        requireDraftCampaign(campaign);
+        configurationPolicy.requireEditable(campaign);
 
         if (ruleRepository.existsByCodeAndCampaignPublicIdAndDeletedAtIsNull(request.getCode(), request.getCampaignPublicId())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Rule code already exists in this campaign", HttpStatus.BAD_REQUEST);
@@ -90,6 +94,7 @@ public class RuleServiceImpl implements RuleService {
         rule.setUpdatedBy(creator);
 
         PromotionRule saved = ruleRepository.save(rule);
+        markCampaignChanged(campaign, creator);
 
         recordOutboxEvent("RULE", saved.getPublicId(), "RULE_CREATED", ruleMapper.toResponse(saved), "promotion.campaign.lifecycle", creator);
 
@@ -106,7 +111,7 @@ public class RuleServiceImpl implements RuleService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Rule is deleted", HttpStatus.BAD_REQUEST);
         }
         PromotionCampaign campaign = requireRuleCampaign(rule);
-        requireDraftCampaign(campaign);
+        configurationPolicy.requireEditable(campaign);
 
         validateRuleJson(request.getConditionsJson(), request.getActionsJson());
         requireEffectivePeriod(request.getEffectiveFrom(), request.getEffectiveTo());
@@ -126,6 +131,7 @@ public class RuleServiceImpl implements RuleService {
         rule.setUpdatedBy(updater);
 
         PromotionRule saved = ruleRepository.save(rule);
+        markCampaignChanged(campaign, updater);
 
         recordOutboxEvent("RULE", saved.getPublicId(), "RULE_UPDATED", ruleMapper.toResponse(saved), "promotion.campaign.lifecycle", updater);
 
@@ -141,11 +147,13 @@ public class RuleServiceImpl implements RuleService {
         if (rule.getDeletedAt() != null) {
             return;
         }
-        requireDraftCampaign(requireRuleCampaign(rule));
+        PromotionCampaign campaign = requireRuleCampaign(rule);
+        configurationPolicy.requireEditable(campaign);
 
         rule.setDeletedAt(Instant.now());
         rule.setDeletedBy(deleter);
         ruleRepository.save(rule);
+        markCampaignChanged(campaign, deleter);
 
         recordOutboxEvent("RULE", rule.getPublicId(), "RULE_DELETED", ruleMapper.toResponse(rule), "promotion.campaign.lifecycle", deleter);
     }
@@ -208,7 +216,7 @@ public class RuleServiceImpl implements RuleService {
         if (campaign.getDeletedAt() != null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "Target Campaign is deleted", HttpStatus.BAD_REQUEST);
         }
-        requireDraftCampaign(campaign);
+        configurationPolicy.requireEditable(campaign);
         validateRuleJson(source.getConditionsJson(), source.getActionsJson());
         requireEffectivePeriod(source.getEffectiveFrom(), source.getEffectiveTo());
 
@@ -232,6 +240,7 @@ public class RuleServiceImpl implements RuleService {
         cloned.setUpdatedBy(creator);
 
         PromotionRule saved = ruleRepository.save(cloned);
+        markCampaignChanged(campaign, creator);
 
         recordOutboxEvent("RULE", saved.getPublicId(), "RULE_CLONED", ruleMapper.toResponse(saved), "promotion.campaign.lifecycle", creator);
 
@@ -318,13 +327,9 @@ public class RuleServiceImpl implements RuleService {
                         ErrorCode.NOT_FOUND, "Campaign not found", HttpStatus.NOT_FOUND));
     }
 
-    private void requireDraftCampaign(PromotionCampaign campaign) {
-        if (campaign.getStatus() != com.project.promotionservice.promotion.enums.CampaignStatus.DRAFT) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "Promotion rules can only be changed while the campaign is DRAFT",
-                    HttpStatus.CONFLICT);
-        }
+    private void markCampaignChanged(PromotionCampaign campaign, String actor) {
+        configurationPolicy.markConfigurationChanged(campaign, actor);
+        campaignRepository.save(campaign);
     }
 
     private void requireEffectivePeriod(Instant from, Instant to) {

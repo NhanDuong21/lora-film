@@ -2,6 +2,8 @@ package com.project.promotionservice.integration.job;
 
 import com.project.promotionservice.benefit.repository.CouponRepository;
 import com.project.promotionservice.benefit.repository.VoucherRepository;
+import com.project.promotionservice.benefit.entity.Coupon;
+import com.project.promotionservice.benefit.enums.BenefitEnums.CouponStatus;
 import com.project.promotionservice.common.time.DatabaseTimeProvider;
 import com.project.promotionservice.integration.outbox.PromotionDomainEventService;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
@@ -78,6 +80,36 @@ class PromotionLifecycleServiceTest {
         assertThat(campaign.getStatus()).isEqualTo(CampaignStatus.SCHEDULED);
         verify(campaigns, never()).save(any());
         verify(events, never()).enqueue(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void activatesDraftCouponOnlyWhenItsCampaignIsActive() {
+        Instant now = Instant.parse("2026-07-29T08:00:00Z");
+        PromotionCampaign campaign = scheduledCampaign(now);
+        campaign.setStatus(CampaignStatus.ACTIVE);
+        Coupon coupon = new Coupon();
+        coupon.setCampaignPublicId(campaign.getPublicId());
+        coupon.setStatus(CouponStatus.DRAFT);
+        coupon.setValidFrom(now.minusSeconds(60));
+        coupon.setValidTo(now.plusSeconds(3600));
+        when(time.now()).thenReturn(now);
+        when(coupons.findActivatableIds(
+                eq(CouponStatus.DRAFT), eq(CampaignStatus.ACTIVE),
+                eq(now), any(Pageable.class)))
+                .thenReturn(List.of(coupon.getPublicId()));
+        when(coupons.findByPublicIdForUpdate(coupon.getPublicId()))
+                .thenReturn(Optional.of(coupon));
+        when(campaigns.findByPublicIdAndDeletedAtIsNull(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+
+        int activated = service().activateCoupons("PROMOTION_SCHEDULER");
+
+        assertThat(activated).isEqualTo(1);
+        assertThat(coupon.getStatus()).isEqualTo(CouponStatus.ACTIVE);
+        verify(coupons).save(coupon);
+        verify(events).enqueue(
+                eq("COUPON"), eq(coupon.getPublicId()), eq("COUPON_ACTIVATED"),
+                eq("promotion.benefit.lifecycle"), eq(coupon), eq("PROMOTION_SCHEDULER"));
     }
 
     private PromotionLifecycleService service() {

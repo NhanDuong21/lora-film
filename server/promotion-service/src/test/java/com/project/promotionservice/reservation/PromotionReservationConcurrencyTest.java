@@ -8,6 +8,7 @@ import com.project.promotionservice.benefit.enums.BenefitEnums.CouponStatus;
 import com.project.promotionservice.benefit.enums.BenefitEnums.CouponType;
 import com.project.promotionservice.benefit.enums.BenefitEnums.DistributionType;
 import com.project.promotionservice.benefit.enums.BenefitEnums.RedemptionType;
+import com.project.promotionservice.benefit.repository.CouponRepository;
 import com.project.promotionservice.benefit.service.CouponService;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
@@ -50,12 +51,15 @@ class PromotionReservationConcurrencyTest {
     private CouponService couponService;
 
     @Autowired
+    private CouponRepository couponRepository;
+
+    @Autowired
     private PromotionReservationService reservationService;
 
     @Test
     void onlyOneConcurrentTransactionCanHoldTheSameCouponForOneVerifiedPhone() throws Exception {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse coupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse coupon = createActiveCoupon(campaign);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
 
@@ -101,8 +105,8 @@ class PromotionReservationConcurrencyTest {
     @Test
     void concurrentReuseOfOneIdempotencyKeyCannotCreateDifferentReservations() throws Exception {
         PromotionCampaign campaign = activeCampaign();
-        CouponResponse firstCoupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
-        CouponResponse secondCoupon = couponService.create(couponRequest(campaign.getPublicId()), "admin");
+        CouponResponse firstCoupon = createActiveCoupon(campaign);
+        CouponResponse secondCoupon = createActiveCoupon(campaign);
         List<ReserveRequest> requests = List.of(
                 reservationRequest(firstCoupon.getCode(), "idempotent-user-1"),
                 reservationRequest(secondCoupon.getCode(), "idempotent-user-2"));
@@ -155,13 +159,35 @@ class PromotionReservationConcurrencyTest {
         return campaignRepository.save(campaign);
     }
 
+    private CouponResponse createActiveCoupon(PromotionCampaign campaign) {
+        PromotionCampaign current = campaignRepository.findById(campaign.getId()).orElseThrow();
+        current.setStatus(CampaignStatus.DRAFT);
+        current.setApprovalStatus(CampaignApprovalStatus.DRAFT);
+        current.setLegalStatus(LegalStatus.PENDING);
+        campaignRepository.saveAndFlush(current);
+
+        CouponResponse response = couponService.create(
+                couponRequest(current.getPublicId()), "admin");
+        couponRepository.activateDraftCoupons(
+                current.getPublicId(), CouponStatus.DRAFT, CouponStatus.ACTIVE,
+                Instant.now(), "admin");
+
+        current = campaignRepository.findById(campaign.getId()).orElseThrow();
+        current.setStatus(CampaignStatus.ACTIVE);
+        current.setApprovalStatus(CampaignApprovalStatus.APPROVED);
+        current.setLegalStatus(LegalStatus.PASSED);
+        campaignRepository.saveAndFlush(current);
+        response.setStatus(CouponStatus.ACTIVE);
+        return response;
+    }
+
     private CouponCreateRequest couponRequest(String campaignPublicId) {
         CouponCreateRequest request = new CouponCreateRequest();
         request.setCampaignPublicId(campaignPublicId);
         request.setCode("CONCURRENT-CPN-" + UUID.randomUUID().toString().substring(0, 8));
         request.setName("Concurrent coupon");
         request.setCouponType(CouponType.PUBLIC);
-        request.setStatus(CouponStatus.ACTIVE);
+        request.setStatus(CouponStatus.DRAFT);
         request.setDistributionType(DistributionType.PUBLIC);
         request.setMaxRedemptions(10);
         request.setMaxRedemptionsPerUser(1);

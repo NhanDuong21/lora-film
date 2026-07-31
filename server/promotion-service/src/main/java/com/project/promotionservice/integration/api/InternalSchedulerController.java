@@ -41,6 +41,12 @@ public class InternalSchedulerController {
         return run("campaigns-expire");
     }
 
+    @PostMapping("/coupons/activate")
+    @Operation(summary = "Activate draft coupons whose campaign and validity period are active")
+    public ResponseEntity<ApiResponse<Integer>> activateCoupons() {
+        return run("coupons-activate");
+    }
+
     @PostMapping("/coupons/expire")
     @Operation(summary = "Expire coupons that reached their validity end")
     public ResponseEntity<ApiResponse<Integer>> expireCoupons() {

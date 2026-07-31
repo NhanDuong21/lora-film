@@ -16,6 +16,8 @@ import java.util.List;
 @Repository
 public interface PromotionCampaignRepository extends JpaRepository<PromotionCampaign, Long>, JpaSpecificationExecutor<PromotionCampaign> {
     Optional<PromotionCampaign> findByPublicId(String publicId);
+
+    Optional<PromotionCampaign> findByPublicIdAndDeletedAtIsNull(String publicId);
     Optional<PromotionCampaign> findByCode(String code);
     Optional<PromotionCampaign> findBySlug(String slug);
     boolean existsByCodeAndDeletedAtIsNull(String code);

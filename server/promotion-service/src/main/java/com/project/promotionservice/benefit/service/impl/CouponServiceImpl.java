@@ -25,7 +25,10 @@ import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.exception.ErrorCode;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
+import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.CampaignType;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
+import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
 import com.project.promotionservice.partner.service.PartnerService;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -66,6 +69,7 @@ public class CouponServiceImpl implements CouponService {
     private final Validator validator;
     private final BenefitPolicyValidator policyValidator;
     private final PartnerService partnerService;
+    private final CampaignConfigurationPolicy configurationPolicy;
 
     public CouponServiceImpl(CouponRepository couponRepository,
                              PromotionCampaignRepository campaignRepository,
@@ -74,7 +78,8 @@ public class CouponServiceImpl implements CouponService {
                              ObjectMapper objectMapper,
                              Validator validator,
                              BenefitPolicyValidator policyValidator,
-                             PartnerService partnerService) {
+                             PartnerService partnerService,
+                             CampaignConfigurationPolicy configurationPolicy) {
         this.couponRepository = couponRepository;
         this.campaignRepository = campaignRepository;
         this.mapper = mapper;
@@ -83,6 +88,7 @@ public class CouponServiceImpl implements CouponService {
         this.validator = validator;
         this.policyValidator = policyValidator;
         this.partnerService = partnerService;
+        this.configurationPolicy = configurationPolicy;
     }
 
     @Override
@@ -91,12 +97,14 @@ public class CouponServiceImpl implements CouponService {
     @CacheEvict(cacheNames = "promotions", allEntries = true)
     public CouponResponse create(CouponCreateRequest request, String actor) {
         validatePolicy(request);
-        PromotionCampaign campaign = requireCampaign(request.getCampaignPublicId());
+        requireDraftCreationStatus(request.getStatus());
+        PromotionCampaign campaign = requireEditableCouponCampaign(request.getCampaignPublicId());
         String code = mapper.normalizeCode(request.getCode());
         requireUniqueCode(code, null);
         Coupon coupon = mapper.toCoupon(request, actor);
         coupon.setPartnerPublicId(campaign.getPartnerPublicId());
         Coupon saved = couponRepository.save(coupon);
+        markCampaignChanged(campaign, actor);
         CouponResponse response = mapper.toCouponResponse(saved);
         eventService.record("COUPON", saved.getPublicId(), "COUPON_CREATED", response, actor);
         return response;
@@ -111,7 +119,8 @@ public class CouponServiceImpl implements CouponService {
                 request.getCouponType(), request.getDistributionType(), request.getReusable(),
                 request.getMaxRedemptions(), request.getMaxRedemptionsPerUser(),
                 request.getConditionsJson(), request.getActionsJson());
-        PromotionCampaign campaign = requireCampaign(request.getCampaignPublicId());
+        requireDraftCreationStatus(request.getStatus());
+        PromotionCampaign campaign = requireEditableCouponCampaign(request.getCampaignPublicId());
         String prefix = sanitizePrefix(request.getPrefix());
         List<Coupon> coupons = new ArrayList<>(request.getQuantity());
         Set<String> generatedCodes = new HashSet<>();
@@ -125,6 +134,7 @@ public class CouponServiceImpl implements CouponService {
             }
         }
         List<Coupon> saved = couponRepository.saveAll(coupons);
+        markCampaignChanged(campaign, actor);
         List<CouponResponse> responses = saved.stream().map(mapper::toCouponResponse).toList();
         for (CouponResponse response : responses) {
             eventService.record("COUPON", response.getPublicId(), "COUPON_CREATED", response, actor);
@@ -144,6 +154,7 @@ public class CouponServiceImpl implements CouponService {
         CouponImportResult result = new CouponImportResult();
         List<Coupon> validCoupons = new ArrayList<>();
         Set<String> fileCodes = new HashSet<>();
+        Map<String, PromotionCampaign> changedCampaigns = new HashMap<>();
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                 new ByteArrayInputStream(file.getBytes()), StandardCharsets.UTF_8))) {
@@ -165,7 +176,8 @@ public class CouponServiceImpl implements CouponService {
                 try {
                     List<String> row = parseCsvLine(line);
                     CouponCreateRequest request = importRequest(headers, row);
-                    PromotionCampaign campaign = requireCampaign(request.getCampaignPublicId());
+                    requireDraftCreationStatus(request.getStatus());
+                    PromotionCampaign campaign = requireEditableCouponCampaign(request.getCampaignPublicId());
                     String code = mapper.normalizeCode(request.getCode());
                     if (!fileCodes.add(code) || couponRepository.existsByCodeIgnoreCase(code)) {
                         throw badRequest(BenefitErrorCode.COUPON_DUPLICATE, "Coupon code already exists: " + code);
@@ -173,6 +185,7 @@ public class CouponServiceImpl implements CouponService {
                     Coupon coupon = mapper.toCoupon(request, actor);
                     coupon.setPartnerPublicId(campaign.getPartnerPublicId());
                     validCoupons.add(coupon);
+                    changedCampaigns.put(campaign.getPublicId(), campaign);
                 } catch (RuntimeException exception) {
                     result.getErrors().add("Row " + rowNumber + ": " + exception.getMessage());
                 }
@@ -182,6 +195,7 @@ public class CouponServiceImpl implements CouponService {
         }
 
         List<Coupon> saved = couponRepository.saveAll(validCoupons);
+        changedCampaigns.values().forEach(campaign -> markCampaignChanged(campaign, actor));
         List<CouponResponse> responses = saved.stream().map(mapper::toCouponResponse).toList();
         result.setCoupons(responses);
         result.setImportedRows(responses.size());
@@ -234,6 +248,20 @@ public class CouponServiceImpl implements CouponService {
     @CacheEvict(cacheNames = "promotions", allEntries = true)
     public CouponResponse update(String publicId, CouponUpdateRequest request, String actor) {
         Coupon coupon = find(publicId);
+        PromotionCampaign campaign = requireCampaign(coupon.getCampaignPublicId());
+        boolean configurationChanged = hasConfigurationChanges(request);
+        boolean draftStatusChanged = false;
+        if (configurationChanged) {
+            configurationPolicy.requireEditable(campaign);
+            if (request.getStatus() != null && request.getStatus() != CouponStatus.DRAFT) {
+                throw badRequest(
+                        BenefitErrorCode.BENEFIT_CONFIGURATION_INVALID,
+                        "A configured coupon remains DRAFT until its campaign is activated");
+            }
+        } else if (request.getStatus() != null) {
+            requireOperationalStatusTransition(coupon, campaign, request.getStatus());
+            draftStatusChanged = campaign.getStatus() == CampaignStatus.DRAFT;
+        }
         if (coupon.getRedemptionCount() > 0
                 && (request.getConditionsJson() != null || request.getActionsJson() != null)) {
             throw badRequest(
@@ -272,6 +300,12 @@ public class CouponServiceImpl implements CouponService {
                 coupon.getCouponType(), coupon.getDistributionType(), coupon.getReusable(),
                 coupon.getMaxRedemptions(), coupon.getMaxRedemptionsPerUser(),
                 mapper.toNode(coupon.getConditionsJson()), mapper.toNode(coupon.getActionsJson()));
+        if (configurationChanged) {
+            coupon.setStatus(CouponStatus.DRAFT);
+        }
+        if (configurationChanged || draftStatusChanged) {
+            markCampaignChanged(campaign, actor);
+        }
         coupon.setUpdatedBy(actor);
 
         CouponResponse response = mapper.toCouponResponse(couponRepository.save(coupon));
@@ -285,6 +319,11 @@ public class CouponServiceImpl implements CouponService {
     @CacheEvict(cacheNames = "promotions", allEntries = true)
     public void disable(String publicId, String actor) {
         Coupon coupon = find(publicId);
+        PromotionCampaign campaign = requireCampaign(coupon.getCampaignPublicId());
+        if (campaign.getStatus() == CampaignStatus.DRAFT) {
+            configurationPolicy.requireEditable(campaign);
+            markCampaignChanged(campaign, actor);
+        }
         coupon.setStatus(CouponStatus.DISABLED);
         coupon.setUpdatedBy(actor);
         CouponResponse response = mapper.toCouponResponse(couponRepository.save(coupon));
@@ -324,6 +363,67 @@ public class CouponServiceImpl implements CouponService {
         return campaign;
     }
 
+    private PromotionCampaign requireEditableCouponCampaign(String publicId) {
+        PromotionCampaign campaign = requireCampaign(publicId);
+        if (campaign.getCampaignType() != CampaignType.COUPON) {
+            throw badRequest(
+                    BenefitErrorCode.BENEFIT_CONFIGURATION_INVALID,
+                    "Coupons can only be attached to a COUPON campaign");
+        }
+        configurationPolicy.requireEditable(campaign);
+        return campaign;
+    }
+
+    private boolean hasConfigurationChanges(CouponUpdateRequest request) {
+        return request.getName() != null
+                || request.getDescription() != null
+                || request.getCouponType() != null
+                || request.getDistributionType() != null
+                || request.getStackable() != null
+                || request.getTransferable() != null
+                || request.getReusable() != null
+                || request.getAutoApply() != null
+                || request.getPriority() != null
+                || request.getMaxRedemptions() != null
+                || request.getMaxRedemptionsPerUser() != null
+                || request.getValidFrom() != null
+                || request.getValidTo() != null
+                || request.getConditionsJson() != null
+                || request.getActionsJson() != null
+                || request.getMetadataJson() != null;
+    }
+
+    private void requireOperationalStatusTransition(
+            Coupon coupon, PromotionCampaign campaign, CouponStatus targetStatus) {
+        if (targetStatus == CouponStatus.DISABLED) {
+            if (campaign.getStatus() == CampaignStatus.DRAFT) {
+                configurationPolicy.requireEditable(campaign);
+            }
+            return;
+        }
+        if (targetStatus == CouponStatus.DRAFT) {
+            configurationPolicy.requireEditable(campaign);
+            return;
+        }
+        Instant now = Instant.now();
+        boolean campaignCanEnableCoupon = campaign.getStatus() == CampaignStatus.ACTIVE
+                || campaign.getStatus() == CampaignStatus.PAUSED;
+        if (targetStatus != CouponStatus.ACTIVE
+                || !campaignCanEnableCoupon
+                || now.isBefore(coupon.getValidFrom())
+                || !now.isBefore(coupon.getValidTo())) {
+            throw badRequest(
+                    BenefitErrorCode.BENEFIT_CONFIGURATION_INVALID,
+                    "Coupon can only be activated while its campaign is ACTIVE/PAUSED"
+                            + " and its validity period is active");
+        }
+    }
+
+    private void markCampaignChanged(PromotionCampaign campaign, String actor) {
+        configurationPolicy.markConfigurationChanged(campaign, actor);
+        campaignRepository.save(campaign);
+    }
+
     private void requireUniqueCode(String code, String currentPublicId) {
         if (currentPublicId == null && couponRepository.existsByCodeIgnoreCase(code)) {
             throw badRequest(BenefitErrorCode.COUPON_DUPLICATE, "Coupon code already exists");
@@ -334,6 +434,14 @@ public class CouponServiceImpl implements CouponService {
                     throw badRequest(BenefitErrorCode.COUPON_DUPLICATE, "Coupon code already exists");
                 }
             });
+        }
+    }
+
+    private void requireDraftCreationStatus(CouponStatus status) {
+        if (status != null && status != CouponStatus.DRAFT) {
+            throw badRequest(
+                    BenefitErrorCode.BENEFIT_CONFIGURATION_INVALID,
+                    "New coupons must be DRAFT and are activated with their campaign");
         }
     }
 
@@ -357,7 +465,7 @@ public class CouponServiceImpl implements CouponService {
         request.setDescription(nullableValue(headers, row, "description"));
         request.setCouponType(CouponType.valueOf(value(headers, row, "coupontype").toUpperCase(Locale.ROOT)));
         String status = nullableValue(headers, row, "status");
-        request.setStatus(status == null ? CouponStatus.ACTIVE : CouponStatus.valueOf(status.toUpperCase(Locale.ROOT)));
+        request.setStatus(status == null ? CouponStatus.DRAFT : CouponStatus.valueOf(status.toUpperCase(Locale.ROOT)));
         request.setDistributionType(DistributionType.valueOf(
                 value(headers, row, "distributiontype").toUpperCase(Locale.ROOT)));
         request.setStackable(booleanValue(headers, row, "stackable", false));

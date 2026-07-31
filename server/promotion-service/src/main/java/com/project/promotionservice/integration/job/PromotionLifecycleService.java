@@ -67,8 +67,48 @@ public class PromotionLifecycleService {
             campaign.setStatus(CampaignStatus.ACTIVE);
             campaign.setUpdatedBy(actor);
             campaigns.save(campaign);
+            coupons.activateDraftCoupons(
+                    id, CouponStatus.DRAFT, CouponStatus.ACTIVE, now, actor);
             events.enqueue("CAMPAIGN", id, "CAMPAIGN_AUTO_ACTIVATED",
                     "promotion.campaign.lifecycle", campaign, actor);
+            count++;
+        }
+        invalidateCachesAfterCommit(count > 0);
+        return count;
+    }
+
+    @Transactional
+    public int activateCoupons(String actor) {
+        Instant now = time.now();
+        var ids = coupons.findActivatableIds(
+                CouponStatus.DRAFT, CampaignStatus.ACTIVE, now, PageRequest.of(0, 500));
+        int count = 0;
+        for (String id : ids) {
+            Coupon coupon = coupons.findByPublicIdForUpdate(id).orElse(null);
+            if (coupon == null
+                    || coupon.getStatus() != CouponStatus.DRAFT
+                    || coupon.getValidFrom().isAfter(now)
+                    || !coupon.getValidTo().isAfter(now)
+                    || coupon.getCampaignPublicId() == null) {
+                continue;
+            }
+            PromotionCampaign campaign = campaigns
+                    .findByPublicIdAndDeletedAtIsNull(coupon.getCampaignPublicId())
+                    .orElse(null);
+            if (campaign == null
+                    || campaign.getStatus() != CampaignStatus.ACTIVE
+                    || campaign.getApprovalStatus() != CampaignApprovalStatus.APPROVED
+                    || campaign.getLegalStatus() != LegalStatus.PASSED
+                    || Boolean.TRUE.equals(campaign.getKillSwitch())
+                    || campaign.getEndAt() == null
+                    || !campaign.getEndAt().isAfter(now)) {
+                continue;
+            }
+            coupon.setStatus(CouponStatus.ACTIVE);
+            coupon.setUpdatedBy(actor);
+            coupons.save(coupon);
+            events.enqueue("COUPON", id, "COUPON_ACTIVATED",
+                    "promotion.benefit.lifecycle", coupon, actor);
             count++;
         }
         invalidateCachesAfterCommit(count > 0);

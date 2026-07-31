@@ -16,6 +16,7 @@ public class PromotionLifecycleScheduler {
     @Scheduled(fixedDelayString = "${promotion.scheduler.lifecycle-delay-ms:300000}")
     public void progressCampaignLifecycle() {
         safeRun("campaigns-activate");
+        safeRun("coupons-activate");
         safeRun("campaigns-expire");
     }
 

@@ -14,7 +14,7 @@ import java.util.Map;
 @Service
 public class PromotionJobRunner {
     private static final List<String> JOBS = List.of(
-            "campaigns-activate", "campaigns-expire", "coupons-expire", "vouchers-expire",
+            "campaigns-activate", "campaigns-expire", "coupons-activate", "coupons-expire", "vouchers-expire",
             "reservations-expire", "outbox-publish", "outbox-retry",
             "integration-retry", "cache-refresh");
     private final JobExecutionService executions;
@@ -42,6 +42,7 @@ public class PromotionJobRunner {
         return executions.run(name, trigger, actor, () -> switch (name) {
             case "campaigns-activate" -> lifecycle.activateCampaigns(actor);
             case "campaigns-expire" -> lifecycle.expireCampaigns(actor);
+            case "coupons-activate" -> lifecycle.activateCoupons(actor);
             case "coupons-expire" -> lifecycle.expireCoupons(actor);
             case "vouchers-expire" -> lifecycle.expireVouchers(actor);
             case "reservations-expire" -> reservations.expireDueReservations(actor);
