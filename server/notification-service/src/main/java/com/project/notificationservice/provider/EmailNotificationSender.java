@@ -61,8 +61,7 @@ public class EmailNotificationSender implements NotificationChannelSender {
                     "INVALID_EMAIL", "Email destination is invalid", null);
         }
         try {
-            // Inject QR section directly into the rendered HTML — no template change needed
-            String finalHtml = injectQrSection(notification.htmlContent(), notification.payload());
+            String finalHtml = notification.htmlContent();
 
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(
