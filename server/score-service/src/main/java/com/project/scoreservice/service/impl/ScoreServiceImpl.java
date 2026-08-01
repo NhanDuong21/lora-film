@@ -155,15 +155,16 @@ public class ScoreServiceImpl implements ScoreService {
     }
 
     private UserScore getOrInitializeUserScore(Long userId) {
-        return userScoreRepository.findWithLockByUserId(userId).orElseGet(() -> {
+        boolean exists = userScoreRepository.existsByUserId(userId);
+        if (!exists) {
             try {
                 (self != null ? self : this).initializeUserScoreRequiresNew(userId);
             } catch (Exception e) {
                 log.warn("Concurrent initialization detected for userId: {}. Fetching existing score with lock.", userId);
             }
-            return userScoreRepository.findWithLockByUserId(userId)
-                    .orElseThrow(() -> new BusinessException("Failed to initialize or fetch user score for user: " + userId, "SCORE_INIT_FAILED", HttpStatus.INTERNAL_SERVER_ERROR));
-        });
+        }
+        return userScoreRepository.findWithLockByUserId(userId)
+                .orElseThrow(() -> new BusinessException("Failed to initialize or fetch user score for user: " + userId, "SCORE_INIT_FAILED", HttpStatus.INTERNAL_SERVER_ERROR));
     }
 
     private UserScoreResponse mapToUserScoreResponse(UserScore userScore) {
@@ -273,8 +274,7 @@ public class ScoreServiceImpl implements ScoreService {
             }
         }
 
-        UserScore userScore = userScoreRepository.findWithLockByUserId(request.userId())
-                .orElseGet(() -> getOrInitializeUserScore(request.userId()));
+        UserScore userScore = getOrInitializeUserScore(request.userId());
 
         if (userScore.getStatus() == UserScoreStatus.LOCKED) {
             throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
@@ -536,8 +536,7 @@ public class ScoreServiceImpl implements ScoreService {
             throw new BusinessException("An active hold already exists for this booking", "SCORE_HOLD_ALREADY_EXISTS", HttpStatus.CONFLICT);
         }
 
-        UserScore userScore = userScoreRepository.findWithLockByUserId(request.userId())
-                .orElseGet(() -> getOrInitializeUserScore(request.userId()));
+        UserScore userScore = getOrInitializeUserScore(request.userId());
 
         if (userScore.getStatus() == UserScoreStatus.LOCKED) {
             throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
@@ -850,8 +849,7 @@ public class ScoreServiceImpl implements ScoreService {
             );
         }
 
-        UserScore userScore = userScoreRepository.findWithLockByUserId(request.userId())
-                .orElseGet(() -> getOrInitializeUserScore(request.userId()));
+        UserScore userScore = getOrInitializeUserScore(request.userId());
 
         if (userScore.getStatus() == UserScoreStatus.LOCKED) {
             throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
@@ -950,8 +948,7 @@ public class ScoreServiceImpl implements ScoreService {
             throw new BusinessException("Transaction mismatch", "SCORE_TRANSACTION_MISMATCH", HttpStatus.BAD_REQUEST);
         }
 
-        UserScore userScore = userScoreRepository.findWithLockByUserId(request.userId())
-                .orElseGet(() -> getOrInitializeUserScore(request.userId()));
+        UserScore userScore = getOrInitializeUserScore(request.userId());
 
         if (userScore.getStatus() == UserScoreStatus.LOCKED) {
             throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
@@ -1091,8 +1088,7 @@ public class ScoreServiceImpl implements ScoreService {
             throw new BusinessException("User or booking mismatch", "SCORE_ORIGINAL_TRANSACTION_MISMATCH", HttpStatus.CONFLICT);
         }
 
-        UserScore userScore = userScoreRepository.findWithLockByUserId(request.userId())
-                .orElseGet(() -> getOrInitializeUserScore(request.userId()));
+        UserScore userScore = getOrInitializeUserScore(request.userId());
 
         if (userScore.getStatus() == UserScoreStatus.LOCKED) {
             throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);

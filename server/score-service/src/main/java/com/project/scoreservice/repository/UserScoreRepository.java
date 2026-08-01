@@ -15,6 +15,7 @@ import java.util.Optional;
 public interface UserScoreRepository extends JpaRepository<UserScore, Long> {
 
     Optional<UserScore> findByUserId(Long userId);
+    boolean existsByUserId(Long userId);
 
     long countByCurrentTier(com.project.scoreservice.entity.MembershipTier currentTier);
 
