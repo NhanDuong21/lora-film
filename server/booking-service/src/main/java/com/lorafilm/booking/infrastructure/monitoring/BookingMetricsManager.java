@@ -1,10 +1,12 @@
 package com.lorafilm.booking.infrastructure.monitoring;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -50,6 +52,10 @@ public class BookingMetricsManager {
     // Redis Metrics
     private final Counter redisLockSuccessCounter;
     private final Counter redisLockFailedCounter;
+
+    // Promotion reconciliation metrics
+    private final Counter promotionReconciliationMismatchCounter;
+    private final AtomicLong promotionReconciliationMismatch = new AtomicLong();
 
     public BookingMetricsManager(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
@@ -138,6 +144,15 @@ public class BookingMetricsManager {
         this.redisLockFailedCounter = Counter.builder("redis_lock_failed_total")
                 .description("Total failed redis lock acquisitions")
                 .register(meterRegistry);
+
+        this.promotionReconciliationMismatchCounter = Counter.builder(
+                        "booking_promotion_reconciliation_mismatch_total")
+                .description("Promotion reconciliation tasks that transitioned to mismatch")
+                .register(meterRegistry);
+        Gauge.builder("booking_promotion_reconciliation_mismatch",
+                        promotionReconciliationMismatch, AtomicLong::doubleValue)
+                .description("Current unresolved promotion reconciliation mismatches")
+                .register(meterRegistry);
     }
 
     // Helper methods to increment / record metrics
@@ -172,6 +187,14 @@ public class BookingMetricsManager {
     public void incrementRedisLockSuccess() { redisLockSuccessCounter.increment(); }
     public void incrementRedisLockFailed() { redisLockFailedCounter.increment(); }
 
+    public void incrementPromotionReconciliationMismatch() {
+        promotionReconciliationMismatchCounter.increment();
+    }
+
+    public void updatePromotionReconciliationMismatch(long count) {
+        promotionReconciliationMismatch.set(count);
+    }
+
     // Getter methods for monitoring summary
     public double getApiRequestCount() { return apiRequestCounter.count(); }
     public double getApiErrorCount() { return apiErrorCounter.count(); }
@@ -203,4 +226,10 @@ public class BookingMetricsManager {
 
     public double getRedisLockSuccess() { return redisLockSuccessCounter.count(); }
     public double getRedisLockFailed() { return redisLockFailedCounter.count(); }
+    public double getPromotionReconciliationMismatchTransitions() {
+        return promotionReconciliationMismatchCounter.count();
+    }
+    public long getPromotionReconciliationMismatch() {
+        return promotionReconciliationMismatch.get();
+    }
 }
