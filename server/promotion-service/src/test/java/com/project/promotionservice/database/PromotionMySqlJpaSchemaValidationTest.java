@@ -65,7 +65,7 @@ class PromotionMySqlJpaSchemaValidationTest {
              ResultSet result = connection.createStatement().executeQuery(
                      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")) {
             assertThat(result.next()).isTrue();
-            assertThat(result.getInt(1)).isEqualTo(9);
+            assertThat(result.getInt(1)).isEqualTo(11);
         }
     }
 }

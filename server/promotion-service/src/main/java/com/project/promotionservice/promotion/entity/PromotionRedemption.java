@@ -2,6 +2,7 @@ package com.project.promotionservice.promotion.entity;
 
 import com.project.promotionservice.common.entity.BaseAuditableEntity;
 import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
+import com.project.promotionservice.promotion.enums.PromotionType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,6 +27,34 @@ public class PromotionRedemption extends BaseAuditableEntity {
 
     @Column(name = "promotion_public_id", length = 36, nullable = false)
     private String promotionPublicId;
+
+    @Column(name = "campaign_public_id", length = 36, nullable = false)
+    private String campaignPublicId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "promotion_type", length = 30, nullable = false)
+    private PromotionType promotionType;
+
+    @Column(name = "promotion_code", length = 100)
+    private String promotionCode;
+
+    @Column(name = "promotion_name", length = 255, nullable = false)
+    private String promotionName;
+
+    @Column(name = "promotion_priority", nullable = false)
+    private Integer promotionPriority;
+
+    @Column(name = "promotion_stackable", nullable = false)
+    private Boolean promotionStackable;
+
+    @Column(name = "conditions_snapshot_json", columnDefinition = "json", nullable = false)
+    private String conditionsSnapshotJson;
+
+    @Column(name = "actions_snapshot_json", columnDefinition = "json", nullable = false)
+    private String actionsSnapshotJson;
+
+    @Column(name = "sequence_no", nullable = false)
+    private Integer sequenceNo;
 
     @Column(name = "user_promotion_public_id", length = 36)
     private String userPromotionPublicId;
@@ -95,6 +124,25 @@ public class PromotionRedemption extends BaseAuditableEntity {
     public void setPromotionPublicId(String promotionPublicId) {
         this.promotionPublicId = promotionPublicId;
     }
+
+    public String getCampaignPublicId() { return campaignPublicId; }
+    public void setCampaignPublicId(String value) { this.campaignPublicId = value; }
+    public PromotionType getPromotionType() { return promotionType; }
+    public void setPromotionType(PromotionType value) { this.promotionType = value; }
+    public String getPromotionCode() { return promotionCode; }
+    public void setPromotionCode(String value) { this.promotionCode = value; }
+    public String getPromotionName() { return promotionName; }
+    public void setPromotionName(String value) { this.promotionName = value; }
+    public Integer getPromotionPriority() { return promotionPriority; }
+    public void setPromotionPriority(Integer value) { this.promotionPriority = value; }
+    public Boolean getPromotionStackable() { return promotionStackable; }
+    public void setPromotionStackable(Boolean value) { this.promotionStackable = value; }
+    public String getConditionsSnapshotJson() { return conditionsSnapshotJson; }
+    public void setConditionsSnapshotJson(String value) { this.conditionsSnapshotJson = value; }
+    public String getActionsSnapshotJson() { return actionsSnapshotJson; }
+    public void setActionsSnapshotJson(String value) { this.actionsSnapshotJson = value; }
+    public Integer getSequenceNo() { return sequenceNo; }
+    public void setSequenceNo(Integer value) { this.sequenceNo = value; }
 
     public String getUserPromotionPublicId() {
         return userPromotionPublicId;

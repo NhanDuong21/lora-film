@@ -9,6 +9,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,25 +25,49 @@ class PromotionFlywayMigrationTest {
 
     @Test
     void migrationsBuildTheProductionRuntimeSchema() throws Exception {
-        Flyway flyway = Flyway.configure()
+        Flyway flywayToV9 = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
                 .baselineVersion("1")
+                .target("9")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(9);
+        assertThat(flywayToV9.migrate().migrationsExecuted).isEqualTo(9);
+        seedLegacyVoucherClones();
+
+        Flyway flywayToV10 = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .target("10")
+                .load();
+
+        assertThat(flywayToV10.migrate().migrationsExecuted).isEqualTo(1);
+        assertPromotionState("clone-public-1", "source-public", true);
+        assertPromotionState("clone-public-2", "source-public", true);
+        assertPromotionState("clone-private", "source-private", false);
+
+        Flyway flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .load();
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
         assertColumnDoesNotExist("promotion_campaigns", "campaign_type");
         assertColumnExists("promotions", "promotion_type");
         assertColumnExists("promotions", "cloned_from_public_id");
         assertColumnExists("user_promotions", "promotion_public_id");
         assertColumnExists("promotion_redemptions", "user_promotion_public_id");
+        assertColumnExists("promotion_redemptions", "campaign_public_id");
+        assertColumnExists("promotion_redemptions", "conditions_snapshot_json");
+        assertColumnExists("promotion_redemptions", "actions_snapshot_json");
+        assertColumnExists("promotion_redemptions", "sequence_no");
         assertColumnDoesNotExist("promotion_reservations", "reservation_type");
         assertColumnDoesNotExist("promotion_reservations", "coupon_public_id");
         assertColumnDoesNotExist("promotion_reservations", "voucher_public_id");
         assertIndexExists("promotions", "idx_promotion_discovery");
         assertIndexExists("promotions", "idx_promotions_cloned_from");
-        assertIndexExists("user_promotions", "uk_user_promotion_owner_template");
+        assertIndexExists("user_promotions", "idx_user_promotion_owner_template");
+        assertIndexExists("promotion_redemptions", "idx_promotion_redemption_campaign");
         assertIndexExists("promotion_reservations", "idx_reservation_history_v2");
         assertColumnExists("promotion_reservations", "reservation_scope_key");
         assertColumnExists("promotion_reservations", "expiration_next_attempt_at");
@@ -68,6 +93,55 @@ class PromotionFlywayMigrationTest {
         assertColumnType("promotion_reservations", "user_public_id", "varchar");
         assertColumnType("promotion_idempotency_keys", "request_hash", "varchar");
         assertColumnType("promotions", "public_id", "varchar");
+    }
+
+    private void seedLegacyVoucherClones() throws Exception {
+        String sql = """
+                INSERT INTO promotions (
+                    public_id, campaign_public_id, promotion_type, code, name,
+                    status, is_public, conditions_json, actions_json,
+                    valid_from, valid_to
+                ) VALUES
+                    ('source-public', 'campaign-1', 'VOUCHER', 'EVENT',
+                     'Event voucher', 'ACTIVE', TRUE, JSON_OBJECT(), JSON_OBJECT(),
+                     '2026-01-01 00:00:00', '2027-01-01 00:00:00'),
+                    ('clone-public-1', 'campaign-1', 'VOUCHER', 'EVENT_COPY_ABC123',
+                     'Event voucher (Copy)', 'ACTIVE', FALSE, JSON_OBJECT(), JSON_OBJECT(),
+                     '2026-01-01 00:00:00', '2027-01-01 00:00:00'),
+                    ('clone-public-2', 'campaign-1', 'VOUCHER', 'EVENT_COPY_DEF456',
+                     'Event voucher (Copy)', 'ACTIVE', FALSE, JSON_OBJECT(), JSON_OBJECT(),
+                     '2026-01-01 00:00:00', '2027-01-01 00:00:00'),
+                    ('source-private', 'campaign-1', 'VOUCHER', 'PRIVATE',
+                     'Private voucher', 'ACTIVE', FALSE, JSON_OBJECT(), JSON_OBJECT(),
+                     '2026-01-01 00:00:00', '2027-01-01 00:00:00'),
+                    ('clone-private', 'campaign-1', 'VOUCHER', 'PRIVATE_COPY_GHI789',
+                     'Private voucher (Copy)', 'ACTIVE', FALSE, JSON_OBJECT(), JSON_OBJECT(),
+                     '2026-01-01 00:00:00', '2027-01-01 00:00:00')
+                """;
+        try (Connection connection = MYSQL.createConnection("");
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        }
+    }
+
+    private void assertPromotionState(
+            String publicId, String clonedFromPublicId, boolean publicVisible)
+            throws Exception {
+        String sql = """
+                SELECT cloned_from_public_id, is_public
+                FROM promotions
+                WHERE public_id = ?
+                """;
+        try (Connection connection = MYSQL.createConnection("");
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, publicId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                assertThat(resultSet.getString("cloned_from_public_id"))
+                        .isEqualTo(clonedFromPublicId);
+                assertThat(resultSet.getBoolean("is_public")).isEqualTo(publicVisible);
+            }
+        }
     }
 
     private void assertColumnExists(String tableName, String columnName) throws Exception {
