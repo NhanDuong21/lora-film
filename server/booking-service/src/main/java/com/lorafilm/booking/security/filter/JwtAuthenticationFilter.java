@@ -59,6 +59,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 List<String> rolesList = extractListClaim(claims, "roles", "role");
                 List<String> permissionsList = extractListClaim(claims, "permissions", "permission");
+                boolean identityVerified = Boolean.TRUE.equals(
+                        claims.get("identityVerified", Boolean.class));
 
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
 
@@ -75,7 +77,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     }
                 }
 
-                UserPrincipal principal = new UserPrincipal(userId, username, email, rolesList, permissionsList, authorities);
+                UserPrincipal principal = new UserPrincipal(
+                        userId, username, email, rolesList, permissionsList,
+                        identityVerified, authorities);
 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         principal, null, authorities);

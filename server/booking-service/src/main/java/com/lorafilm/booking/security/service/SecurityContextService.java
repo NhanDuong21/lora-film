@@ -14,4 +14,6 @@ public interface SecurityContextService {
     boolean isAdmin();
 
     boolean hasPermission(String permission);
+
+    boolean isIdentityVerified();
 }

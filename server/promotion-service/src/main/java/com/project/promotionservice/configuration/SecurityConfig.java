@@ -12,6 +12,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -58,6 +59,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
                         .requestMatchers("/internal/**").hasRole("INTERNAL")
+                        .requestMatchers(HttpMethod.GET, "/api/promotions/public").permitAll()
                         // Fine-grained business roles are enforced by @PreAuthorize
                         // on every admin controller. Requiring ADMIN here would make
                         // MARKETING, LEGAL, FINANCE, CSKH and OPERATIONS unreachable.

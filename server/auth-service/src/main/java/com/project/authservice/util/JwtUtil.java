@@ -30,6 +30,11 @@ public class JwtUtil {
 
 	public String generateToken(Long userId, String email, String role,
 			Set<String> permissions, Long sessionId) {
+		return generateToken(userId, email, role, permissions, sessionId, false);
+	}
+
+	public String generateToken(Long userId, String email, String role,
+			Set<String> permissions, Long sessionId, boolean identityVerified) {
 		long issuedAtMs = System.currentTimeMillis();
 		Date issuedAt = new Date(issuedAtMs);
 		return Jwts.builder()
@@ -38,6 +43,7 @@ public class JwtUtil {
 				.claim("role", role)
 				.claim("permissions", permissions == null ? Set.of() : permissions)
 				.claim("sid", sessionId)
+				.claim("identityVerified", identityVerified)
 				.claim("tokenType", "access")
 				.claim("iatMs", issuedAtMs)
 				.id(UUID.randomUUID().toString())

@@ -69,14 +69,14 @@ public class AdminPromotionController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR', 'OPERATIONS')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR', 'OPERATIONS_MANAGER')")
     public ResponseEntity<ApiResponse<PromotionResponse>> detail(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
         return ResponseEntity.ok(ApiResponse.success(service.detail(publicId)));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR', 'OPERATIONS')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR', 'OPERATIONS_MANAGER')")
     public ResponseEntity<ApiResponse<PagedResponse<PromotionResponse>>> search(
             @RequestParam(required = false) @Size(max = 36) String campaignPublicId,
             @RequestParam(required = false) PromotionType type,
@@ -100,7 +100,7 @@ public class AdminPromotionController {
     }
 
     @PostMapping("/{id}/pause")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'OPERATIONS')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'OPERATIONS_MANAGER')")
     public ResponseEntity<ApiResponse<PromotionResponse>> pause(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
         return ResponseEntity.ok(ApiResponse.success("Promotion paused",

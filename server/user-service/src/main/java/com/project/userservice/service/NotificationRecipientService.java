@@ -7,6 +7,9 @@ import com.project.userservice.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.List;
+
 @Service
 public class NotificationRecipientService {
 
@@ -26,5 +29,10 @@ public class NotificationRecipientService {
                 user.getAccountId(),
                 user.getEmail(),
                 user.getFullName());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findActiveAccountIds(Collection<Long> accountIds) {
+        return userRepository.findActiveAccountIds(accountIds);
     }
 }

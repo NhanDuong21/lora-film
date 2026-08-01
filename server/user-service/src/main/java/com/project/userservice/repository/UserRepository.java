@@ -8,12 +8,22 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Collection;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByPhoneNumber(String phoneNumber);
     boolean existsByPhoneNumberAndAccountIdNot(String phoneNumber, Long accountId);
     boolean existsByCccd(String cccd);
+
+    @Query("""
+            select u.accountId from User u
+            where u.accountId in :accountIds
+              and u.isDeleted = false
+              and u.status = com.project.userservice.enumtype.UserStatus.ACTIVE
+            """)
+    List<Long> findActiveAccountIds(
+            @Param("accountIds") Collection<Long> accountIds);
 
     @Query("""
             select u from User u
