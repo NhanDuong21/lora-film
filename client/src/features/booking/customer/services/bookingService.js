@@ -1,18 +1,18 @@
 import apiClient from "@/services/apiClient";
 import {
   clearAllBookingCreationAttempts,
-  clearBookingCreationAttempt
-} from '../utils/bookingCreationIdempotency';
+  clearBookingCreationAttempt,
+} from "../utils/bookingCreationIdempotency";
 
 export const BOOKING_CHANGED_EVENT = "lorafilm:booking-changed";
 
-const emitBookingChanged = detail => {
+const emitBookingChanged = (detail) => {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(BOOKING_CHANGED_EVENT, { detail }));
   }
 };
 
-const normalizeCustomerBooking = booking => {
+const normalizeCustomerBooking = (booking) => {
   if (!booking) return booking;
   const presentation = booking.presentation || booking.snapshot || {};
   const seats = Array.isArray(presentation.seats) ? presentation.seats : [];
@@ -29,10 +29,13 @@ const normalizeCustomerBooking = booking => {
     auditoriumName: presentation.auditoriumName,
     showtimeStart: presentation.showtimeStart,
     showtimeEnd: presentation.showtimeEnd,
-    seatNames: seats.map(seat => seat.label).filter(Boolean).join(', '),
+    seatNames: seats
+      .map((seat) => seat.label)
+      .filter(Boolean)
+      .join(", "),
     foodNames: foodItems
-      .map(item => `${item.name || item.productName} x${item.quantity}`)
-      .join(', ')
+      .map((item) => `${item.name || item.productName} x${item.quantity}`)
+      .join(", "),
   };
 };
 
@@ -41,7 +44,7 @@ const uuidv4 = () => {
     return crypto.randomUUID();
   }
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
+    const r = (Math.random() * 16) | 0;
     const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
@@ -55,15 +58,26 @@ const uuidv4 = () => {
  * @param {string} [data.idempotencyKey] - UUID idempotency key for this logical booking request
  * @returns {Promise<Object>} The booking response
  */
-export const createBooking = async ({ showtimePublicId, seatPublicIds, reservationPublicIds, idempotencyKey = uuidv4() }) => {
+export const createBooking = async ({
+  showtimePublicId,
+  seatPublicIds,
+  reservationPublicIds,
+  idempotencyKey = uuidv4(),
+}) => {
   const payload = { showtimePublicId };
-  if (Array.isArray(seatPublicIds) && seatPublicIds.length > 0) payload.seatPublicIds = seatPublicIds;
-  if (Array.isArray(reservationPublicIds) && reservationPublicIds.length > 0) payload.reservationPublicIds = reservationPublicIds;
-  const response = await apiClient.post("/api/bookings", {
-    ...payload
-  }, {
-    headers: { "Idempotency-Key": idempotencyKey }
-  });
+  if (Array.isArray(seatPublicIds) && seatPublicIds.length > 0)
+    payload.seatPublicIds = seatPublicIds;
+  if (Array.isArray(reservationPublicIds) && reservationPublicIds.length > 0)
+    payload.reservationPublicIds = reservationPublicIds;
+  const response = await apiClient.post(
+    "/api/bookings",
+    {
+      ...payload,
+    },
+    {
+      headers: { "Idempotency-Key": idempotencyKey },
+    },
+  );
   const booking = response.data.data;
   clearBookingCreationAttempt(showtimePublicId);
   emitBookingChanged({ action: "CREATED", publicId: booking?.publicId });
@@ -79,36 +93,59 @@ export const getOrCreateScoreRedemptionKey = (bookingId, points) => {
   return created;
 };
 
-export const finalizeCheckout = async (bookingId, {
-  scorePoints = 0,
-  scoreIdempotencyKey = null,
-  selectedUserPromotionPublicIds = [],
-  couponCode = null
-} = {}) => {
+export const finalizeCheckout = async (
+  bookingId,
+  {
+    scorePoints = 0,
+    scoreIdempotencyKey = null,
+    selectedUserPromotionPublicIds = [],
+    selectedPromotionPublicIds = [],
+    couponCode = null,
+    paymentMethod = null,
+  } = {},
+) => {
   const response = await apiClient.post(
     `/api/bookings/${bookingId}/finalize-checkout`,
     {
       scorePoints,
-      ...(scorePoints > 0 && scoreIdempotencyKey ? { scoreIdempotencyKey } : {}),
+      ...(scorePoints > 0 && scoreIdempotencyKey
+        ? { scoreIdempotencyKey }
+        : {}),
       selectedUserPromotionPublicIds,
-      ...(couponCode ? { couponCode } : {})
-    }
+      selectedPromotionPublicIds,
+      ...(couponCode ? { couponCode } : {}),
+      ...(paymentMethod ? { paymentMethod } : {}),
+    },
   );
   const booking = response.data.data;
-  emitBookingChanged({ action: "FINALIZED", publicId: booking?.publicId || bookingId });
+  emitBookingChanged({
+    action: "FINALIZED",
+    publicId: booking?.publicId || bookingId,
+  });
   return booking;
 };
 
-export const previewBookingPromotions = async (bookingId, {
-  selectedUserPromotionPublicIds = [],
-  couponCode = null
-} = {}) => {
+export const previewBookingPromotions = async (
+  bookingId,
+  {
+    selectedUserPromotionPublicIds = [],
+    selectedPromotionPublicIds = [],
+    evaluationUserPromotionPublicIds = [],
+    evaluationPromotionPublicIds = [],
+    couponCode = null,
+    paymentMethod = null,
+  } = {},
+) => {
   const response = await apiClient.post(
     `/api/bookings/${bookingId}/promotions/preview`,
     {
       selectedUserPromotionPublicIds,
-      ...(couponCode ? { couponCode } : {})
-    }
+      selectedPromotionPublicIds,
+      evaluationUserPromotionPublicIds,
+      evaluationPromotionPublicIds,
+      ...(couponCode ? { couponCode } : {}),
+      ...(paymentMethod ? { paymentMethod } : {}),
+    },
   );
   return response.data.data;
 };
@@ -128,8 +165,8 @@ export const getBookingDetails = async (bookingId) => {
  * The server is authoritative; this endpoint is not a client-side uniqueness guard.
  */
 export const getActiveBookingForShowtime = async (showtimePublicId) => {
-  const response = await apiClient.get('/api/bookings/active', {
-    params: { showtimePublicId }
+  const response = await apiClient.get("/api/bookings/active", {
+    params: { showtimePublicId },
   });
   return response.data?.data || null;
 };
@@ -160,7 +197,9 @@ export const getBookingTickets = async (bookingId) => {
  * @returns {Promise<Object>} Success response
  */
 export const resendBookingEmail = async (bookingId) => {
-  const response = await apiClient.post(`/api/bookings/${bookingId}/resend-email`);
+  const response = await apiClient.post(
+    `/api/bookings/${bookingId}/resend-email`,
+  );
   return response.data;
 };
 
@@ -175,17 +214,25 @@ export const resendBookingEmail = async (bookingId) => {
  * @param {string} [params.sort] - Sort order (e.g. "createdAt,desc")
  * @returns {Promise<Object>} Paginated bookings list
  */
-export const getBookingHistory = async ({ page = 0, size = 10, status, fromDate, toDate, sort = "createdAt,desc" }) => {
+export const getBookingHistory = async ({
+  page = 0,
+  size = 10,
+  status,
+  fromDate,
+  toDate,
+  sort = "createdAt,desc",
+}) => {
   const params = { page, size, sort };
   if (status) params.status = status;
-  if (fromDate) params.fromDate = new Date(`${fromDate}T00:00:00`).toISOString();
+  if (fromDate)
+    params.fromDate = new Date(`${fromDate}T00:00:00`).toISOString();
   if (toDate) params.toDate = new Date(`${toDate}T23:59:59.999`).toISOString();
 
   const response = await apiClient.get("/api/bookings", { params });
   const responsePage = response.data.data;
   return {
     ...responsePage,
-    content: (responsePage?.content || []).map(normalizeCustomerBooking)
+    content: (responsePage?.content || []).map(normalizeCustomerBooking),
   };
 };
 
@@ -193,9 +240,11 @@ export const getBookingHistory = async ({ page = 0, size = 10, status, fromDate,
  * Get the authenticated customer's successful paid spending for one calendar year.
  * Booking Service owns this aggregation so pagination cannot make the total incomplete.
  */
-export const getBookingSpendingSummary = async (year = new Date().getFullYear()) => {
+export const getBookingSpendingSummary = async (
+  year = new Date().getFullYear(),
+) => {
   const response = await apiClient.get("/api/bookings/spending-summary", {
-    params: { year }
+    params: { year },
   });
   return response.data.data;
 };
@@ -211,9 +260,9 @@ export const cancelBooking = async (bookingId, reason = "") => {
   const response = await apiClient.delete(`/api/bookings/${bookingId}`, {
     data: {
       reasonCode: "USER_CANCEL",
-      reasonDetail: reason
+      reasonDetail: reason,
     },
-    headers: { "Idempotency-Key": idempotencyKey }
+    headers: { "Idempotency-Key": idempotencyKey },
   });
   const booking = response.data.data;
   clearAllBookingCreationAttempts();
