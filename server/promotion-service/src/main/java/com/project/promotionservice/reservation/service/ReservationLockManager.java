@@ -1,6 +1,5 @@
 package com.project.promotionservice.reservation.service;
 
-import com.project.promotionservice.benefit.enums.BenefitEnums.RedemptionType;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.lock.RedisLockService;
 import com.project.promotionservice.reservation.exception.ReservationErrorCode;
@@ -33,9 +32,8 @@ public class ReservationLockManager {
         this.lockWait = Duration.ofMillis(Math.max(0, lockWaitMillis));
     }
 
-    public void lockBenefit(RedemptionType type, String benefitPublicId) {
-        String namespace = type == RedemptionType.COUPON ? "coupon" : "voucher";
-        acquire("promotion:" + namespace + ":" + benefitPublicId);
+    public void lockPromotion(String promotionPublicId) {
+        acquire("promotion:template:" + promotionPublicId.toLowerCase(Locale.ROOT));
     }
 
     public void lockReservation(String reservationPublicId) {

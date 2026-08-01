@@ -24,33 +24,32 @@ public interface PromotionReservationRepository extends
 
     Optional<PromotionReservation> findByReservationCodeAndDeletedAtIsNull(String reservationCode);
 
+    Optional<PromotionReservation> findByReservationScopeKeyAndDeletedAtIsNull(
+            String reservationScopeKey);
+
+    @Query("""
+            select count(distinct reservation.id)
+            from PromotionReservation reservation,
+                 PromotionRedemption redemption,
+                 Promotion promotion
+            where redemption.reservationPublicId = reservation.publicId
+              and redemption.promotionPublicId = promotion.publicId
+              and promotion.campaignPublicId = :campaignPublicId
+              and reservation.status = :status
+              and reservation.deletedAt is null
+              and redemption.deletedAt is null
+              and promotion.deletedAt is null
+            """)
+    long countByCampaignAndStatus(
+            @Param("campaignPublicId") String campaignPublicId,
+            @Param("status") ReservationStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select reservation from PromotionReservation reservation
             where reservation.publicId = :publicId and reservation.deletedAt is null
             """)
     Optional<PromotionReservation> findByPublicIdForUpdate(@Param("publicId") String publicId);
-
-    long countByCouponPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
-            String couponPublicId, ReservationStatus status, Instant now);
-
-    long countByCouponPublicIdAndUserPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
-            String couponPublicId, String userPublicId, ReservationStatus status, Instant now);
-
-    long countByCouponPublicIdAndCustomerPhoneAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
-            String couponPublicId, String customerPhone, ReservationStatus status, Instant now);
-
-    long countByVoucherPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
-            String voucherPublicId, ReservationStatus status, Instant now);
-
-    long countByCampaignPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
-            String campaignPublicId, ReservationStatus status, Instant now);
-
-    long countByCampaignPublicIdAndUserPublicIdAndStatusAndReservationExpiredAtAfterAndDeletedAtIsNull(
-            String campaignPublicId, String userPublicId, ReservationStatus status, Instant now);
-
-    long countByCampaignPublicIdAndStatusAndDeletedAtIsNull(
-            String campaignPublicId, ReservationStatus status);
 
     List<PromotionReservation> findByStatusAndReservationExpiredAtLessThanEqualAndDeletedAtIsNull(
             ReservationStatus status, Instant now, Pageable pageable);

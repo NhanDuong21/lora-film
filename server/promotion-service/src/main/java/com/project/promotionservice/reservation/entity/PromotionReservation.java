@@ -1,6 +1,5 @@
 package com.project.promotionservice.reservation.entity;
 
-import com.project.promotionservice.benefit.enums.BenefitEnums.RedemptionType;
 import com.project.promotionservice.common.entity.BaseAuditableEntity;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import jakarta.persistence.Column;
@@ -37,19 +36,6 @@ public class PromotionReservation extends BaseAuditableEntity {
     @Column(name = "reservation_scope_key", length = 80, unique = true)
     private String reservationScopeKey;
 
-    @Column(name = "campaign_public_id", length = 36)
-    private String campaignPublicId;
-
-    @Column(name = "coupon_public_id", length = 36)
-    private String couponPublicId;
-
-    @Column(name = "voucher_public_id", length = 36)
-    private String voucherPublicId;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "reservation_type", length = 30, nullable = false)
-    private RedemptionType reservationType;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private ReservationStatus status;
@@ -74,12 +60,6 @@ public class PromotionReservation extends BaseAuditableEntity {
 
     @Column(name = "confirmed_at")
     private Instant confirmedAt;
-
-    @Column(name = "cancelled_at")
-    private Instant cancelledAt;
-
-    @Column(name = "cancelled_reason", length = 255)
-    private String cancelledReason;
 
     @Column(name = "rollback_at")
     private Instant rollbackAt;
@@ -158,38 +138,6 @@ public class PromotionReservation extends BaseAuditableEntity {
         this.reservationScopeKey = reservationScopeKey;
     }
 
-    public String getCampaignPublicId() {
-        return campaignPublicId;
-    }
-
-    public void setCampaignPublicId(String campaignPublicId) {
-        this.campaignPublicId = campaignPublicId;
-    }
-
-    public String getCouponPublicId() {
-        return couponPublicId;
-    }
-
-    public void setCouponPublicId(String couponPublicId) {
-        this.couponPublicId = couponPublicId;
-    }
-
-    public String getVoucherPublicId() {
-        return voucherPublicId;
-    }
-
-    public void setVoucherPublicId(String voucherPublicId) {
-        this.voucherPublicId = voucherPublicId;
-    }
-
-    public RedemptionType getReservationType() {
-        return reservationType;
-    }
-
-    public void setReservationType(RedemptionType reservationType) {
-        this.reservationType = reservationType;
-    }
-
     public ReservationStatus getStatus() {
         return status;
     }
@@ -252,22 +200,6 @@ public class PromotionReservation extends BaseAuditableEntity {
 
     public void setConfirmedAt(Instant confirmedAt) {
         this.confirmedAt = confirmedAt;
-    }
-
-    public Instant getCancelledAt() {
-        return cancelledAt;
-    }
-
-    public void setCancelledAt(Instant cancelledAt) {
-        this.cancelledAt = cancelledAt;
-    }
-
-    public String getCancelledReason() {
-        return cancelledReason;
-    }
-
-    public void setCancelledReason(String cancelledReason) {
-        this.cancelledReason = cancelledReason;
     }
 
     public Instant getRollbackAt() {

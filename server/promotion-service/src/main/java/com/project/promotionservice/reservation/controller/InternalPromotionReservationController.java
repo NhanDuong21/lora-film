@@ -46,7 +46,7 @@ import static com.project.promotionservice.common.constant.ValidationConstants.U
 @SecurityRequirement(name = "internalTokenAuth")
 @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "400", description = "Malformed request or invalid benefit configuration",
+                responseCode = "400", description = "Malformed request or invalid promotion configuration",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404", description = "Benefit or reservation was not found",
@@ -69,7 +69,7 @@ public class InternalPromotionReservationController {
 
     @PostMapping
     @PreAuthorize("hasRole('BOOKING_SERVICE')")
-    @Operation(summary = "Validate and atomically reserve a coupon or voucher")
+    @Operation(summary = "Evaluate and atomically reserve the best promotion set")
     public ResponseEntity<ApiResponse<ReservationResponse>> reserve(
             @Parameter(required = true, description = "Stable key for safe request retries")
             @RequestHeader("X-Idempotency-Key") String idempotencyKey,
@@ -90,7 +90,7 @@ public class InternalPromotionReservationController {
     }
 
     @PostMapping("/{reservationId}/confirm")
-    @PreAuthorize("hasRole('PAYMENT_SERVICE')")
+    @PreAuthorize("hasAnyRole('BOOKING_SERVICE', 'PAYMENT_SERVICE')")
     @Operation(summary = "Confirm payment and create the final redemption ledger entry")
     public ResponseEntity<ApiResponse<ReservationResponse>> confirm(
             @PathVariable
@@ -116,7 +116,7 @@ public class InternalPromotionReservationController {
     }
 
     @PostMapping("/{reservationId}/release")
-    @PreAuthorize("hasRole('PAYMENT_SERVICE')")
+    @PreAuthorize("hasAnyRole('BOOKING_SERVICE', 'PAYMENT_SERVICE')")
     @Operation(summary = "Release an active reservation after payment failure")
     public ResponseEntity<ApiResponse<ReservationResponse>> release(
             @PathVariable
@@ -163,7 +163,7 @@ public class InternalPromotionReservationController {
                         reservationId,
                         request,
                         HttpStatus.OK.value(),
-                        () -> reservationService.cancel(
+                        () -> reservationService.release(
                                 reservationId, request, idempotencyKey, actor))));
     }
 
