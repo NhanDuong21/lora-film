@@ -31,7 +31,17 @@ class PromotionFlywayMigrationTest {
                 .baselineVersion("1")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(5);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(8);
+        assertColumnDoesNotExist("promotion_campaigns", "campaign_type");
+        assertColumnExists("promotions", "promotion_type");
+        assertColumnExists("user_promotions", "promotion_public_id");
+        assertColumnExists("promotion_redemptions", "user_promotion_public_id");
+        assertColumnDoesNotExist("promotion_reservations", "reservation_type");
+        assertColumnDoesNotExist("promotion_reservations", "coupon_public_id");
+        assertColumnDoesNotExist("promotion_reservations", "voucher_public_id");
+        assertIndexExists("promotions", "idx_promotion_discovery");
+        assertIndexExists("user_promotions", "uk_user_promotion_owner_template");
+        assertIndexExists("promotion_reservations", "idx_reservation_history_v2");
         assertColumnExists("promotion_reservations", "reservation_scope_key");
         assertColumnExists("promotion_reservations", "expiration_next_attempt_at");
         assertColumnExists("outbox_events", "processing_started_at");
@@ -40,6 +50,12 @@ class PromotionFlywayMigrationTest {
         assertIndexExists("outbox_events", "idx_outbox_claim");
         assertTableDoesNotExist("partners");
         assertTableDoesNotExist("partner_settlements");
+        assertTableDoesNotExist("compensation_vouchers");
+        assertTableDoesNotExist("coupons");
+        assertTableDoesNotExist("vouchers");
+        assertTableDoesNotExist("coupon_redemptions");
+        assertTableDoesNotExist("voucher_redemptions");
+        assertTableDoesNotExist("promotion_rules");
         assertColumnDoesNotExist("promotion_campaigns", "funding_source");
         assertColumnDoesNotExist("promotion_campaigns", "partner_public_id");
         assertColumnDoesNotExist("coupons", "partner_public_id");
@@ -49,6 +65,7 @@ class PromotionFlywayMigrationTest {
         assertIndexExists("promotion_scheduler_locks", "PRIMARY");
         assertColumnType("promotion_reservations", "user_public_id", "varchar");
         assertColumnType("promotion_idempotency_keys", "request_hash", "varchar");
+        assertColumnType("promotions", "public_id", "varchar");
     }
 
     private void assertColumnExists(String tableName, String columnName) throws Exception {
