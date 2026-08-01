@@ -3,6 +3,8 @@ package com.lorafilm.booking.monitoring.controller;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.common.response.ApiResponse;
 import com.lorafilm.booking.infrastructure.repository.BookingRetryTaskRepository;
+import com.lorafilm.booking.infrastructure.repository.BookingReconciliationTaskRepository;
+import com.lorafilm.booking.infrastructure.enums.ReconciliationStatus;
 import com.lorafilm.booking.monitoring.dto.MonitoringSummaryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,20 +16,23 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/admin/monitoring")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'OPERATIONS_MANAGER', 'FINANCE_DIRECTOR')")
 @Tag(name = "Admin Monitoring API", description = "Admin endpoints for monitoring service health and metrics summary")
 public class AdminMonitoringController {
 
     private final BookingRepository bookingRepository;
     private final BookingRetryTaskRepository retryTaskRepository;
+    private final BookingReconciliationTaskRepository reconciliationTaskRepository;
 
     private volatile CachedSummary cachedSummary = null;
 
     public AdminMonitoringController(
             BookingRepository bookingRepository,
-            BookingRetryTaskRepository retryTaskRepository) {
+            BookingRetryTaskRepository retryTaskRepository,
+            BookingReconciliationTaskRepository reconciliationTaskRepository) {
         this.bookingRepository = bookingRepository;
         this.retryTaskRepository = retryTaskRepository;
+        this.reconciliationTaskRepository = reconciliationTaskRepository;
     }
 
     @GetMapping("/summary")
@@ -38,7 +43,8 @@ public class AdminMonitoringController {
                 cached.bookingToday,
                 cached.paymentFailed,
                 cached.expiredBooking,
-                cached.pendingRetry
+                cached.pendingRetry,
+                cached.promotionReconciliationMismatch
         );
         return ResponseEntity.ok(ApiResponse.success("Monitoring summary retrieved successfully", response));
     }
@@ -53,7 +59,12 @@ public class AdminMonitoringController {
             long paymentFailed = bookingRepository.countByPaymentStatus(com.lorafilm.booking.booking.enums.PaymentStatus.FAILED);
             long expiredBooking = bookingRepository.countByBookingStatus(com.lorafilm.booking.booking.enums.BookingStatus.EXPIRED);
             long pendingRetry = retryTaskRepository.countByStatus(com.lorafilm.booking.infrastructure.enums.RetryTaskStatus.PENDING);
-            cachedSummary = new CachedSummary(bookingToday, paymentFailed, expiredBooking, pendingRetry);
+            long promotionReconciliationMismatch = reconciliationTaskRepository
+                    .countByReconciliationStatusAndReasonStartingWith(
+                            ReconciliationStatus.MISMATCH, "PROMOTION_");
+            cachedSummary = new CachedSummary(
+                    bookingToday, paymentFailed, expiredBooking, pendingRetry,
+                    promotionReconciliationMismatch);
         }
         return cachedSummary;
     }
@@ -63,13 +74,16 @@ public class AdminMonitoringController {
         final long paymentFailed;
         final long expiredBooking;
         final long pendingRetry;
+        final long promotionReconciliationMismatch;
         final long timestamp;
 
-        CachedSummary(long bookingToday, long paymentFailed, long expiredBooking, long pendingRetry) {
+        CachedSummary(long bookingToday, long paymentFailed, long expiredBooking,
+                      long pendingRetry, long promotionReconciliationMismatch) {
             this.bookingToday = bookingToday;
             this.paymentFailed = paymentFailed;
             this.expiredBooking = expiredBooking;
             this.pendingRetry = pendingRetry;
+            this.promotionReconciliationMismatch = promotionReconciliationMismatch;
             this.timestamp = System.currentTimeMillis();
         }
     }
