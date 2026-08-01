@@ -13,9 +13,29 @@ public record BookingPriceSnapshotPayload(
         String moviePublicId,
         String movieTitle,
         String cinemaPublicId,
+        String format,
+        String roomType,
+        String channel,
         BigDecimal authoritativeTicketTotal,
         List<SeatPriceLine> seats
 ) {
+    /** Compatibility constructor for snapshots without promotion context dimensions. */
+    public BookingPriceSnapshotPayload(
+            Long showtimeId,
+            String showtimePublicId,
+            Instant capturedAt,
+            String currency,
+            Long movieId,
+            String moviePublicId,
+            String movieTitle,
+            String cinemaPublicId,
+            BigDecimal authoritativeTicketTotal,
+            List<SeatPriceLine> seats) {
+        this(showtimeId, showtimePublicId, capturedAt, currency, movieId,
+                moviePublicId, movieTitle, cinemaPublicId, null, null, "WEB",
+                authoritativeTicketTotal, seats);
+    }
+
     /** Compatibility constructor for snapshots without public Movie identities. */
     public BookingPriceSnapshotPayload(
             Long showtimeId,
@@ -27,7 +47,7 @@ public record BookingPriceSnapshotPayload(
             BigDecimal authoritativeTicketTotal,
             List<SeatPriceLine> seats) {
         this(showtimeId, showtimePublicId, capturedAt, currency, movieId, null,
-                movieTitle, null, authoritativeTicketTotal, seats);
+                movieTitle, null, null, null, "WEB", authoritativeTicketTotal, seats);
     }
 
     public record SeatPriceLine(

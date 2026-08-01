@@ -189,6 +189,21 @@ public class BookingLifecycleService {
 
     private Booking persistTransition(Booking booking, BookingStatus previousStatus,
                                       BookingStatus targetStatus, String reason, String source) {
+        if (targetStatus == BookingStatus.REFUNDED
+                && booking.getPromotionReservationPublicId() != null) {
+            if (promotionReservationClient == null) {
+                throw new BusinessException(
+                        "PROMOTION_SERVICE_UNAVAILABLE",
+                        "Promotion redemption cannot be reversed after refund",
+                        HttpStatus.BAD_GATEWAY);
+            }
+            String settlementSource = targetStatus.name() + ":" + booking.getPublicId();
+            promotionReservationClient.reverse(
+                    booking.getPromotionReservationPublicId(),
+                    "PAYMENT_REVERSED",
+                    reason == null ? "Booking was fully refunded" : reason,
+                    stablePromotionKey("reverse", settlementSource));
+        }
         Booking saved = bookingRepository.save(booking);
 
         if (targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED) {

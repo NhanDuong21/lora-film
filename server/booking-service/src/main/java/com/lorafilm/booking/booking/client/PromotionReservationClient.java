@@ -17,6 +17,10 @@ public interface PromotionReservationClient {
 
     void release(String reservationPublicId, String reason, String idempotencyKey);
 
+    void reverse(
+            String reservationPublicId, String reasonCode,
+            String reason, String idempotencyKey);
+
     record CheckoutCommand(
             String userPublicId,
             BigDecimal originalAmount,

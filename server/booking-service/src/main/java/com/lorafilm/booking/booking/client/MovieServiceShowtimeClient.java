@@ -121,6 +121,7 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         public Long cinemaId;
         public Long auditoriumId;
         public ResourcePayload movie;
+        public ResourcePayload movieVersion;
         public ResourcePayload cinema;
         public ResourcePayload auditorium;
         public List<SeatPayload> selectedSeats;
@@ -151,6 +152,8 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
                     defaultZero(pricing.discountAmount),
                     defaultZero(pricing.totalAmount),
                     pricing.currency,
+                    movieVersion == null ? null : movieVersion.format,
+                    auditorium.screenType,
                     movie.title,
                     movie.posterUrl,
                     cinema.name,
@@ -174,6 +177,8 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         public String title;
         public String posterUrl;
         public String name;
+        public String format;
+        public String screenType;
     }
 
     private static class SeatPayload {

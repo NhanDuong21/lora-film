@@ -571,7 +571,9 @@ class BookingServiceTest {
 
                 BookingResponse response = bookingService.finalizeCheckout(
                                 booking.getPublicId(),
-                                new FinalizeCheckoutRequest(50, "score-idem-1"));
+                                new FinalizeCheckoutRequest(
+                                                50, "score-idem-1",
+                                                List.of(), List.of(), null, "VNPAY"));
 
                 assertEquals(50, response.scorePointsUsed());
                 assertEquals(new BigDecimal("50000.00"), response.scoreDiscount());
@@ -587,12 +589,30 @@ class BookingServiceTest {
         }
 
         @Test
-        void shouldForwardPaymentMethodToPromotionPreviewContext() {
+        void shouldForwardAuthoritativePromotionContextAndFailClosedVerification() throws Exception {
+                Instant purchaseAt = Instant.parse("2026-08-01T09:00:00Z");
+                Instant showtimeAt = Instant.parse("2026-08-03T01:00:00Z");
                 Booking booking = existingBooking(Instant.now().plusSeconds(900));
                 booking.setId(100L);
+                booking.setCreatedAt(purchaseAt);
+                BookingPriceSnapshotPayload snapshotPayload = new BookingPriceSnapshotPayload(
+                                1001L, SHOWTIME_PUBLIC_ID, purchaseAt, "VND",
+                                101L, "movie-public-1", "Superman", "cinema-public-1",
+                                "IMAX", "PREMIUM", "BOX_OFFICE",
+                                new BigDecimal("240000"), List.of());
+                BookingPriceSnapshot priceSnapshot = new BookingPriceSnapshot();
+                priceSnapshot.setPricingBreakdownJson(
+                                objectMapper.writeValueAsString(snapshotPayload));
+                BookingSnapshot displaySnapshot = new BookingSnapshot();
+                displaySnapshot.setShowtimeStart(showtimeAt);
                 when(securityContextService.getCurrentUserId()).thenReturn(15L);
+                when(securityContextService.isIdentityVerified()).thenReturn(false);
                 when(bookingRepository.findByPublicId(booking.getPublicId()))
                                 .thenReturn(Optional.of(booking));
+                when(priceSnapshotRepository.findByBookingId(100L))
+                                .thenReturn(Optional.of(priceSnapshot));
+                when(bookingSnapshotRepository.findByBookingId(100L))
+                                .thenReturn(Optional.of(displaySnapshot));
 
                 bookingService.previewPromotions(
                                 booking.getPublicId(),
@@ -607,7 +627,16 @@ class BookingServiceTest {
                 ArgumentCaptor<PromotionReservationClient.CheckoutCommand> captor =
                                 ArgumentCaptor.forClass(PromotionReservationClient.CheckoutCommand.class);
                 verify(promotionReservationClient).preview(captor.capture());
-                assertEquals("MOMO", captor.getValue().contextJson().path("paymentMethod").asText());
+                var context = captor.getValue().contextJson();
+                assertEquals("MOMO", context.path("paymentMethod").asText());
+                assertEquals(false, context.path("identityVerified").asBoolean());
+                assertEquals("IMAX", context.path("format").asText());
+                assertEquals("PREMIUM", context.path("roomType").asText());
+                assertEquals("BOX_OFFICE", context.path("channel").asText());
+                assertEquals("2026-08-01", context.path("purchaseDate").asText());
+                assertEquals("SATURDAY", context.path("purchaseDayOfWeek").asText());
+                assertEquals("2026-08-03", context.path("showtimeDate").asText());
+                assertEquals("MONDAY", context.path("showtimeDayOfWeek").asText());
         }
 
         private SeatReservation reservation(

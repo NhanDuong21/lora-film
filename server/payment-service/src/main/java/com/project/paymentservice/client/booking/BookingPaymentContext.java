@@ -13,6 +13,7 @@ public class BookingPaymentContext {
     private String currency;
     private Instant amountLockedAt;
     private Instant expiresAt;
+    private String lockedPaymentProvider;
     private AnalyticsSnapshotData analyticsSnapshot;
 
     public BookingPaymentContext() {
@@ -35,6 +36,8 @@ public class BookingPaymentContext {
     public void setAmountLockedAt(Instant value) { this.amountLockedAt = value; }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
+    public String getLockedPaymentProvider() { return lockedPaymentProvider; }
+    public void setLockedPaymentProvider(String value) { this.lockedPaymentProvider = value; }
     public AnalyticsSnapshotData getAnalyticsSnapshot() { return analyticsSnapshot; }
     public void setAnalyticsSnapshot(AnalyticsSnapshotData value) { this.analyticsSnapshot = value; }
 

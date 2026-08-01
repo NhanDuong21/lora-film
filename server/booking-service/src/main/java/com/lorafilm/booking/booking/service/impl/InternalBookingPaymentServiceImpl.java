@@ -239,6 +239,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                 normalizeCurrency(booking.getCurrency()),
                 booking.getAmountLockedAt(),
                 booking.getExpiresAt(),
+                booking.getPaymentMethodSnapshot(),
                 new InternalPaymentContextResponse.AnalyticsSnapshot(
                         snapshot.movieId(),
                         snapshot.moviePublicId(),
@@ -289,6 +290,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                 normalizeCurrency(booking.getCurrency()),
                 booking.getAmountLockedAt(),
                 booking.getExpiresAt(),
+                booking.getPaymentMethodSnapshot(),
                 new InternalPaymentContextResponse.AnalyticsSnapshot(
                         snapshot.movieId(),
                         snapshot.moviePublicId(),
@@ -444,6 +446,17 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                     "Expired, cancelled, or non-payable Booking cannot be confirmed",
                     "LATE_OR_NON_PENDING_SUCCESS");
         }
+        String lockedProvider = normalizeUpper(booking.getPaymentMethodSnapshot());
+        String actualProvider = normalizeUpper(request.paymentProvider());
+        if (lockedProvider.isBlank() || !lockedProvider.equals(actualProvider)) {
+            rejectWithReconciliation(
+                    booking,
+                    event,
+                    request,
+                    "PAYMENT_PROVIDER_MISMATCH",
+                    "Payment provider does not match the provider locked at checkout",
+                    "LOCKED_PROVIDER_MISMATCH");
+        }
 
         if (booking.getPromotionReservationPublicId() != null) {
             if (promotionReservationClient == null) {
@@ -465,7 +478,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
 
         booking.setPaymentStatus(PaymentStatus.SUCCESS);
         booking.setPaymentReference(reference(request));
-        booking.setPaymentMethodSnapshot(preferredPaymentLabel(request));
+        booking.setPaymentProvider(actualProvider);
         if (lifecycleService != null) {
             lifecycleService.confirmPayment(booking, receiptAt, "PAYMENT_SERVICE");
         } else {

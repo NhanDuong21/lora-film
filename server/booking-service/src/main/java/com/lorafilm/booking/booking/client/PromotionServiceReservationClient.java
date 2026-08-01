@@ -55,6 +55,15 @@ public class PromotionServiceReservationClient implements PromotionReservationCl
                 Map.of("reason", reason), idempotencyKey, ReservationEnvelope.class);
     }
 
+    @Override
+    public void reverse(
+            String reservationPublicId, String reasonCode,
+            String reason, String idempotencyKey) {
+        post("/internal/reservations/" + reservationPublicId + "/reverse",
+                Map.of("reasonCode", reasonCode, "reason", reason),
+                idempotencyKey, ReservationEnvelope.class);
+    }
+
     private <T> T post(String path, Object body, String idempotencyKey, Class<T> responseType) {
         try {
             RestClient.RequestBodySpec request = restClient.post()

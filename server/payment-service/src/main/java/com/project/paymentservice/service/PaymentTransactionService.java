@@ -76,6 +76,19 @@ public class PaymentTransactionService {
             Long actorAccountId,
             Long idempotencyRecordId,
             String idempotencyOwnerToken) {
+        String lockedProvider = context.getLockedPaymentProvider();
+        if (lockedProvider == null || lockedProvider.isBlank()) {
+            throw new BusinessException(
+                    "BOOKING_PAYMENT_PROVIDER_NOT_LOCKED",
+                    "Booking did not lock an eligible payment provider",
+                    HttpStatus.CONFLICT);
+        }
+        if (!provider.name().equalsIgnoreCase(lockedProvider.trim())) {
+            throw new BusinessException(
+                    "PAYMENT_PROVIDER_MISMATCH",
+                    "Requested provider does not match the provider locked by Booking",
+                    HttpStatus.CONFLICT);
+        }
         guardRepository.insertIfAbsent(context.getBookingPublicId(), context.getBookingId());
         BookingPaymentGuard guard = guardRepository
                 .findByBookingPublicIdForUpdate(context.getBookingPublicId())

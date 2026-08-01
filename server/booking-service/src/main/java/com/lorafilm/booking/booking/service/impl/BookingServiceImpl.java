@@ -94,6 +94,7 @@ public class BookingServiceImpl implements BookingService {
 
     private static final String OPEN_FOR_BOOKING = "OPEN_FOR_BOOKING";
     private static final int BOOKING_CODE_GENERATION_ATTEMPTS = 3;
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final BookingRepository bookingRepository;
     private final SeatReservationRepository reservationRepository;
@@ -1123,6 +1124,9 @@ public class BookingServiceImpl implements BookingService {
                 context.moviePublicId(),
                 context.movieTitle(),
                 context.cinemaPublicId(),
+                context.format(),
+                context.roomType(),
+                bookingChannel(),
                 context.ticketAmount(),
                 context.seats().stream()
                         .map(seat -> new BookingPriceSnapshotPayload.SeatPriceLine(
@@ -1139,6 +1143,14 @@ public class BookingServiceImpl implements BookingService {
             throw new IntegrationException("Cannot persist authoritative price snapshot", exception);
         }
         priceSnapshotRepository.save(snapshot);
+    }
+
+    private String bookingChannel() {
+        if (securityContextService.hasRole("EMPLOYEE")
+                || securityContextService.hasRole("OPERATIONS_MANAGER")) {
+            return "BOX_OFFICE";
+        }
+        return "WEB";
     }
 
     private String generateUniqueBookingCode() {
@@ -1308,6 +1320,14 @@ public class BookingServiceImpl implements BookingService {
                         requestedPoints, hold.discountAmount(), hold.holdCode());
             }
 
+            String lockedPaymentProvider = promotionSelection.normalizedPaymentMethod();
+            if (booking.getFinalAmount().signum() > 0 && lockedPaymentProvider == null) {
+                throw new BusinessException(
+                        "PAYMENT_PROVIDER_REQUIRED",
+                        "Payment provider is required before locking the checkout amount",
+                        HttpStatus.BAD_REQUEST);
+            }
+            booking.setPaymentMethodSnapshot(lockedPaymentProvider);
             booking.lockAmount(now);
             Booking saved = bookingRepository.saveAndFlush(booking);
             if (saved.getFinalAmount().signum() == 0) {
@@ -1389,7 +1409,7 @@ public class BookingServiceImpl implements BookingService {
         context.put("ticketAmount", booking.getTicketAmount());
         context.put("comboAmount", booking.getFoodAmount());
         context.put("orderType", "MOVIE_BOOKING");
-        context.put("identityVerified", true);
+        context.put("identityVerified", securityContextService.isIdentityVerified());
         String paymentMethod = selection.normalizedPaymentMethod();
         if (paymentMethod != null) {
             context.put("paymentMethod", paymentMethod);
@@ -1405,6 +1425,14 @@ public class BookingServiceImpl implements BookingService {
         if (priceSnapshot != null && priceSnapshot.showtimePublicId() != null
                 && !priceSnapshot.showtimePublicId().isBlank()) {
             context.put("showtimePublicId", priceSnapshot.showtimePublicId());
+        }
+        if (priceSnapshot != null && priceSnapshot.format() != null
+                && !priceSnapshot.format().isBlank()) {
+            context.put("format", priceSnapshot.format());
+        }
+        if (priceSnapshot != null && priceSnapshot.roomType() != null
+                && !priceSnapshot.roomType().isBlank()) {
+            context.put("roomType", priceSnapshot.roomType());
         }
         context.put("auditoriumId", booking.getAuditoriumId());
         List<SeatReservation> reservations =
@@ -1423,10 +1451,19 @@ public class BookingServiceImpl implements BookingService {
         BookingSnapshot displaySnapshot = bookingSnapshotRepository
                 .findByBookingId(booking.getId()).orElse(null);
         if (displaySnapshot != null && displaySnapshot.getShowtimeStart() != null) {
-            var showtimeDate = displaySnapshot.getShowtimeStart()
-                    .atZone(ZoneId.of("Asia/Ho_Chi_Minh"));
+            var showtimeDate = displaySnapshot.getShowtimeStart().atZone(BUSINESS_ZONE);
             context.put("businessDate", showtimeDate.toLocalDate().toString());
             context.put("dayOfWeek", showtimeDate.getDayOfWeek().name());
+            context.put("showtimeDate", showtimeDate.toLocalDate().toString());
+            context.put("showtimeDayOfWeek", showtimeDate.getDayOfWeek().name());
+        }
+        Instant purchaseInstant = booking.getCreatedAt() == null
+                ? (priceSnapshot == null ? Instant.now() : priceSnapshot.capturedAt())
+                : booking.getCreatedAt();
+        if (purchaseInstant != null) {
+            var purchaseDate = purchaseInstant.atZone(BUSINESS_ZONE);
+            context.put("purchaseDate", purchaseDate.toLocalDate().toString());
+            context.put("purchaseDayOfWeek", purchaseDate.getDayOfWeek().name());
         }
         if (scoreRedemptionClient != null) {
             try {
@@ -1443,7 +1480,8 @@ public class BookingServiceImpl implements BookingService {
                         booking.getUserId());
             }
         }
-        context.put("channel", "WEB");
+        context.put("channel", priceSnapshot == null || priceSnapshot.channel() == null
+                || priceSnapshot.channel().isBlank() ? "WEB" : priceSnapshot.channel());
         long remaining = Math.max(60, Duration.between(Instant.now(), booking.getExpiresAt()).getSeconds());
         int holdSeconds = (int) Math.min(1800, remaining);
         return new PromotionReservationClient.CheckoutCommand(

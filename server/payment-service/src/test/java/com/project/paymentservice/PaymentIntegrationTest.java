@@ -123,6 +123,24 @@ public class PaymentIntegrationTest {
     }
 
     @Test
+    void createPaymentRejectsProviderDifferentFromCheckoutLock() throws Exception {
+        BookingPaymentContext context = mockValidContext();
+        context.setLockedPaymentProvider("MOMO");
+        when(bookingClient.getPaymentContext(1001L)).thenReturn(context);
+
+        mockMvc.perform(post("/api/payments")
+                .header("Idempotency-Key", "provider-mismatch")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                        new CreatePaymentRequest(1001L, "MOCK"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode")
+                        .value("PAYMENT_PROVIDER_MISMATCH"));
+
+        assertEquals(0, paymentRepository.count());
+    }
+
+    @Test
     void createPayment_IdempotentReplay() throws Exception {
         when(bookingClient.getPaymentContext(1001L)).thenReturn(mockValidContext());
         CreatePaymentRequest req = new CreatePaymentRequest(1001L, "MOCK");

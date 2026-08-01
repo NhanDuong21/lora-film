@@ -13,8 +13,23 @@ public record InternalPaymentContextResponse(
         String currency,
         Instant amountLockedAt,
         Instant expiresAt,
+        String lockedPaymentProvider,
         AnalyticsSnapshot analyticsSnapshot
 ) {
+    public InternalPaymentContextResponse(
+            Long bookingId,
+            String bookingPublicId,
+            Long accountId,
+            String bookingStatus,
+            Boolean payable,
+            BigDecimal amount,
+            String currency,
+            Instant amountLockedAt,
+            Instant expiresAt,
+            AnalyticsSnapshot analyticsSnapshot) {
+        this(bookingId, bookingPublicId, accountId, bookingStatus, payable,
+                amount, currency, amountLockedAt, expiresAt, null, analyticsSnapshot);
+    }
     public record AnalyticsSnapshot(
             Long movieId,
             String moviePublicId,

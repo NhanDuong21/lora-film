@@ -88,6 +88,7 @@ public class CashPaymentIntegrationTest {
             context.setAccountId(1001L);
             context.setAmount(new BigDecimal("250000.00"));
             context.setCurrency("VND");
+            context.setLockedPaymentProvider("CASH");
             return TestFixtures.complete(context);
         });
     }
