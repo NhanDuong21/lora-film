@@ -51,4 +51,13 @@ public final class NotificationCommands {
             boolean idempotent,
             int deliveryCount) {
     }
+
+    public record CouponIssuedNotification(
+            String sourceEventId,
+            String userPublicId,
+            String couponCode,
+            String promotionName,
+            Instant expiresAt,
+            String deepLink) {
+    }
 }

@@ -129,4 +129,25 @@ class NotificationEventConsumerTest {
         verify(applicationService, never()).accept(any());
         verify(inboxRepository, never()).saveAndFlush(any());
     }
+
+    @Test
+    void couponIssuedCreatesAnInAppNotificationForTheAssignedCustomer() throws Exception {
+        String event = objectMapper.writeValueAsString(Map.of(
+                "eventId", "coupon-event",
+                "eventType", "COUPON_ISSUED",
+                "data", Map.of(
+                        "userPublicId", "customer-42",
+                        "couponCode", "CPN-1234",
+                        "promotionName", "Member offer",
+                        "validTo", "2099-12-31T23:59:59Z",
+                        "deepLink", "/booking")));
+
+        consumer.consumePromotionEvent(event);
+
+        ArgumentCaptor<NotificationCommands.CouponIssuedNotification> captor =
+                ArgumentCaptor.forClass(NotificationCommands.CouponIssuedNotification.class);
+        verify(applicationService).acceptCouponIssued(captor.capture());
+        assertThat(captor.getValue().userPublicId()).isEqualTo("customer-42");
+        assertThat(captor.getValue().couponCode()).isEqualTo("CPN-1234");
+    }
 }

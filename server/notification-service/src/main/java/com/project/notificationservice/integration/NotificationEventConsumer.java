@@ -2,6 +2,7 @@ package com.project.notificationservice.integration;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.project.notificationservice.domain.NotificationTypes.Category;
 import com.project.notificationservice.domain.NotificationTypes.Channel;
 import com.project.notificationservice.domain.NotificationTypes.Priority;
@@ -11,6 +12,7 @@ import com.project.notificationservice.repository.NotificationEventInboxReposito
 import com.project.notificationservice.service.NotificationApplicationService;
 import com.project.notificationservice.service.NotificationCommands.CreateNotificationCommand;
 import com.project.notificationservice.service.NotificationCommands.RecipientCommand;
+import com.project.notificationservice.service.NotificationCommands.CouponIssuedNotification;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -119,6 +122,32 @@ public class NotificationEventConsumer {
         markProcessed(event);
     }
 
+    @KafkaListener(topics = "${notification.kafka.promotion-topic:promotion.lifecycle}")
+    @Transactional
+    public void consumePromotionEvent(String json) {
+        JsonNode event = parsePromotionEnvelope(json);
+        String eventId = text(event, "eventId");
+        String eventType = normalize(text(event, "eventType"));
+        if (!acceptPromotionInbox(eventId, eventType, json)) return;
+        if (!"COUPON_ISSUED".equals(eventType)) {
+            markPromotionProcessed(eventId);
+            return;
+        }
+        JsonNode data = event.path("data");
+        String userPublicId = text(data, "userPublicId");
+        String couponCode = text(data, "couponCode");
+        String promotionName = text(data, "promotionName");
+        if (userPublicId == null || couponCode == null || promotionName == null) {
+            throw new NotificationException("EVENT_CONTRACT_INVALID",
+                    "coupon.issued event is missing recipient or coupon details",
+                    HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+        notificationService.acceptCouponIssued(new CouponIssuedNotification(
+                eventId, userPublicId, couponCode, promotionName,
+                instant(text(data, "validTo")), defaultText(text(data, "deepLink"), "/booking")));
+        markPromotionProcessed(eventId);
+    }
+
     private DomainEventEnvelope parse(String json) {
         try {
             DomainEventEnvelope event = objectMapper.readValue(json, DomainEventEnvelope.class);
@@ -131,6 +160,21 @@ public class NotificationEventConsumer {
         } catch (JsonProcessingException exception) {
             throw new NotificationException("EVENT_CONTRACT_INVALID",
                     "Kafka event is not valid JSON", HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+    }
+
+    private JsonNode parsePromotionEnvelope(String json) {
+        try {
+            JsonNode event = objectMapper.readTree(json);
+            if (text(event, "eventId") == null || text(event, "eventType") == null) {
+                throw new NotificationException("EVENT_CONTRACT_INVALID",
+                        "Promotion event id and type are required",
+                        HttpStatus.UNPROCESSABLE_ENTITY);
+            }
+            return event;
+        } catch (JsonProcessingException exception) {
+            throw new NotificationException("EVENT_CONTRACT_INVALID",
+                    "Promotion Kafka event is not valid JSON", HttpStatus.UNPROCESSABLE_ENTITY);
         }
     }
 
@@ -158,6 +202,28 @@ public class NotificationEventConsumer {
                 });
     }
 
+    private boolean acceptPromotionInbox(String eventId, String eventType, String json) {
+        if (inboxRepository.existsBySourceServiceAndSourceEventId("promotion-service", eventId)) {
+            return false;
+        }
+        NotificationEventInbox inbox = new NotificationEventInbox();
+        inbox.setSourceService("promotion-service");
+        inbox.setSourceEventId(eventId);
+        inbox.setEventType(eventType);
+        inbox.setEventVersion(1);
+        inbox.setPayloadJson(json);
+        inboxRepository.saveAndFlush(inbox);
+        return true;
+    }
+
+    private void markPromotionProcessed(String eventId) {
+        inboxRepository.findBySourceServiceAndSourceEventId("promotion-service", eventId)
+                .ifPresent(item -> {
+                    item.setStatus("PROCESSED");
+                    item.setProcessedAt(Instant.now());
+                });
+    }
+
     private String normalize(String type) {
         return type.trim().toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_');
     }
@@ -165,5 +231,26 @@ public class NotificationEventConsumer {
     private String text(Map<String, Object> payload, String key) {
         Object value = payload.get(key);
         return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value);
+    }
+
+    private String text(JsonNode node, String key) {
+        JsonNode value = node == null ? null : node.get(key);
+        return value == null || value.isNull() || value.asText().isBlank()
+                ? null : value.asText();
+    }
+
+    private String defaultText(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private Instant instant(String value) {
+        if (value == null) return null;
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw new NotificationException("EVENT_CONTRACT_INVALID",
+                    "coupon.issued validTo must be an ISO-8601 timestamp",
+                    HttpStatus.UNPROCESSABLE_ENTITY);
+        }
     }
 }
