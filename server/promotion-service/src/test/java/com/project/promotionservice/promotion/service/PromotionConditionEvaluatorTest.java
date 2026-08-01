@@ -55,4 +55,45 @@ class PromotionConditionEvaluatorTest {
                         new BigDecimal("150000"), "42", context)))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void verificationRequirementFailsClosedWhenClaimIsMissingOrFalse() {
+        var conditions = objectMapper.createObjectNode();
+        conditions.put("requiresVerification", true);
+        var missingClaimContext = objectMapper.createObjectNode();
+        var falseClaimContext = objectMapper.createObjectNode();
+        falseClaimContext.put("identityVerified", false);
+
+        assertThatThrownBy(() -> evaluator.evaluate(conditions,
+                new PromotionConditionEvaluator.EvaluationContext(
+                        new BigDecimal("150000"), "42", missingClaimContext)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Verified customer");
+        assertThatThrownBy(() -> evaluator.evaluate(conditions,
+                new PromotionConditionEvaluator.EvaluationContext(
+                        new BigDecimal("150000"), "42", falseClaimContext)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Verified customer");
+    }
+
+    @Test
+    void acceptsVerifiedIdentityAndExplicitShowtimeDimensions() {
+        var conditions = objectMapper.createObjectNode();
+        conditions.put("requiresVerification", true);
+        conditions.putArray("formats").add("IMAX");
+        conditions.putArray("showtimeDayOfWeek").add("MONDAY");
+        conditions.putArray("purchaseDayOfWeek").add("SATURDAY");
+        conditions.putArray("channels").add("BOX_OFFICE");
+        var context = objectMapper.createObjectNode();
+        context.put("identityVerified", true);
+        context.put("format", "IMAX");
+        context.put("showtimeDayOfWeek", "MONDAY");
+        context.put("purchaseDayOfWeek", "SATURDAY");
+        context.put("channel", "BOX_OFFICE");
+
+        assertThatCode(() -> evaluator.evaluate(conditions,
+                new PromotionConditionEvaluator.EvaluationContext(
+                        new BigDecimal("150000"), "42", context)))
+                .doesNotThrowAnyException();
+    }
 }

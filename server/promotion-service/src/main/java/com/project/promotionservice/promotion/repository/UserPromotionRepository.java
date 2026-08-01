@@ -20,11 +20,22 @@ public interface UserPromotionRepository extends JpaRepository<UserPromotion, Lo
 
     Optional<UserPromotion> findByPublicIdAndDeletedAtIsNull(String publicId);
 
-    Optional<UserPromotion> findByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNull(
+    Optional<UserPromotion> findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
             String userPublicId, String promotionPublicId);
 
     boolean existsByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNull(
             String userPublicId, String promotionPublicId);
+
+    long countByPromotionPublicIdAndDeletedAtIsNull(String promotionPublicId);
+
+    @Query("""
+            select (count(up) > 0) from UserPromotion up, Promotion p
+            where up.promotionPublicId = p.publicId
+              and p.campaignPublicId = :campaignPublicId
+              and up.deletedAt is null
+            """)
+    boolean existsByCampaignPublicId(
+            @Param("campaignPublicId") String campaignPublicId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

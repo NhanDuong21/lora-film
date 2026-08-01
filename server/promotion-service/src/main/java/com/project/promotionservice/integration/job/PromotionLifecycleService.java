@@ -78,6 +78,7 @@ public class PromotionLifecycleService {
         Instant now = time.now();
         var ids = promotions.findActivatableIds(
                 PromotionStatus.DRAFT, CampaignStatus.ACTIVE,
+                com.project.promotionservice.promotion.enums.LegalStatus.PASSED,
                 now, PageRequest.of(0, 500));
         int count = 0;
         for (String id : ids) {

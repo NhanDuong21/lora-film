@@ -2,7 +2,6 @@ package com.project.promotionservice.promotion.repository;
 
 import com.project.promotionservice.promotion.entity.PromotionRedemption;
 import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
-import com.project.promotionservice.promotion.enums.PromotionType;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -38,59 +37,32 @@ public interface PromotionRedemptionRepository
     long countByUserPromotionPublicIdAndStatusInAndDeletedAtIsNull(
             String userPromotionPublicId, Collection<PromotionRedemptionStatus> statuses);
 
+    boolean existsByPromotionPublicIdAndDeletedAtIsNull(String promotionPublicId);
+
+    boolean existsByCampaignPublicIdAndDeletedAtIsNull(String campaignPublicId);
+
     @Query("""
-            select count(r) from PromotionRedemption r, Promotion p
-            where r.promotionPublicId = p.publicId
-              and p.campaignPublicId = :campaignPublicId
+            select count(distinct coalesce(r.reservationPublicId, r.publicId))
+            from PromotionRedemption r
+            where r.campaignPublicId = :campaignPublicId
               and r.status in :statuses
               and r.deletedAt is null
-              and p.deletedAt is null
             """)
     long countCampaignRedemptions(
             @Param("campaignPublicId") String campaignPublicId,
             @Param("statuses") Collection<PromotionRedemptionStatus> statuses);
 
     @Query("""
-            select count(r) from PromotionRedemption r, Promotion p
-            where r.promotionPublicId = p.publicId
-              and p.campaignPublicId = :campaignPublicId
-              and p.promotionType = :promotionType
-              and r.status in :statuses
-              and r.deletedAt is null
-              and p.deletedAt is null
-            """)
-    long countCampaignRedemptionsByPromotionType(
-            @Param("campaignPublicId") String campaignPublicId,
-            @Param("promotionType") PromotionType promotionType,
-            @Param("statuses") Collection<PromotionRedemptionStatus> statuses);
-
-    @Query("""
-            select count(r) from PromotionRedemption r, Promotion p
-            where r.promotionPublicId = p.publicId
-              and p.campaignPublicId = :campaignPublicId
+            select count(distinct coalesce(r.reservationPublicId, r.publicId))
+            from PromotionRedemption r
+            where r.campaignPublicId = :campaignPublicId
               and r.userPublicId = :userPublicId
               and r.status in :statuses
               and r.deletedAt is null
-              and p.deletedAt is null
             """)
     long countCampaignUserRedemptions(
             @Param("campaignPublicId") String campaignPublicId,
             @Param("userPublicId") String userPublicId,
             @Param("statuses") Collection<PromotionRedemptionStatus> statuses);
 
-    @Query("""
-            select count(r) from PromotionRedemption r, Promotion p
-            where r.promotionPublicId = p.publicId
-              and p.campaignPublicId = :campaignPublicId
-              and p.promotionType = :promotionType
-              and r.userPublicId = :userPublicId
-              and r.status in :statuses
-              and r.deletedAt is null
-              and p.deletedAt is null
-            """)
-    long countCampaignUserRedemptionsByPromotionType(
-            @Param("campaignPublicId") String campaignPublicId,
-            @Param("promotionType") PromotionType promotionType,
-            @Param("userPublicId") String userPublicId,
-            @Param("statuses") Collection<PromotionRedemptionStatus> statuses);
 }

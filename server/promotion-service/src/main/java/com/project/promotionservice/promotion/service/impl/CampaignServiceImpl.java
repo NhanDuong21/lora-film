@@ -26,6 +26,8 @@ import com.project.promotionservice.promotion.repository.ApprovalHistoryReposito
 import com.project.promotionservice.promotion.repository.CampaignSpecification;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.repository.PromotionRepository;
+import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
+import com.project.promotionservice.promotion.repository.UserPromotionRepository;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 import com.project.promotionservice.promotion.enums.LegalStatus;
@@ -58,6 +60,8 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignMapper campaignMapper;
     private final ObjectMapper objectMapper;
     private final PromotionReservationRepository reservationRepository;
+    private final PromotionRedemptionRepository redemptionRepository;
+    private final UserPromotionRepository walletRepository;
     private final PromotionOutboxEnvelopeFactory envelopeFactory;
     private final CampaignConfigurationPolicy configurationPolicy;
 
@@ -68,6 +72,8 @@ public class CampaignServiceImpl implements CampaignService {
                                CampaignMapper campaignMapper,
                                ObjectMapper objectMapper,
                                PromotionReservationRepository reservationRepository,
+                               PromotionRedemptionRepository redemptionRepository,
+                               UserPromotionRepository walletRepository,
                                PromotionOutboxEnvelopeFactory envelopeFactory,
                                CampaignConfigurationPolicy configurationPolicy) {
         this.campaignRepository = campaignRepository;
@@ -77,6 +83,8 @@ public class CampaignServiceImpl implements CampaignService {
         this.campaignMapper = campaignMapper;
         this.objectMapper = objectMapper;
         this.reservationRepository = reservationRepository;
+        this.redemptionRepository = redemptionRepository;
+        this.walletRepository = walletRepository;
         this.envelopeFactory = envelopeFactory;
         this.configurationPolicy = configurationPolicy;
     }
@@ -120,6 +128,7 @@ public class CampaignServiceImpl implements CampaignService {
         }
 
         configurationPolicy.requireEditable(campaign);
+        requireCampaignConfigurationMutable(campaign);
 
         if (request.getEndAt().isBefore(request.getStartAt())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "End date must be after start date", HttpStatus.BAD_REQUEST);
@@ -166,11 +175,20 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaign.getDeletedAt() != null) {
             return;
         }
-        if (reservationRepository.countByCampaignAndStatus(
+        if (campaign.getStatus() != CampaignStatus.DRAFT) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "Only a draft campaign can be deleted",
+                    HttpStatus.CONFLICT);
+        }
+        if (promotionRepository.existsByCampaignPublicIdAndDeletedAtIsNull(publicId)
+                || redemptionRepository.existsByCampaignPublicIdAndDeletedAtIsNull(publicId)
+                || walletRepository.existsByCampaignPublicId(publicId)
+                || reservationRepository.countByCampaignAndStatus(
                 publicId, ReservationStatus.ACTIVE) > 0) {
             throw new BusinessException(
                     ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "Campaign with active reservations cannot be deleted",
+                    "Campaign with promotion or ledger references cannot be deleted",
                     HttpStatus.CONFLICT);
         }
 
@@ -522,6 +540,17 @@ public class CampaignServiceImpl implements CampaignService {
             throw new BusinessException(
                     ErrorCode.INVALID_REQUEST_PARAMETER,
                     "Campaign must have at least one configured promotion whose validity overlaps the campaign period",
+                    HttpStatus.CONFLICT);
+        }
+    }
+
+    private void requireCampaignConfigurationMutable(PromotionCampaign campaign) {
+        if (redemptionRepository.existsByCampaignPublicIdAndDeletedAtIsNull(
+                campaign.getPublicId())
+                || walletRepository.existsByCampaignPublicId(campaign.getPublicId())) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "Issued or redeemed campaign configuration is immutable",
                     HttpStatus.CONFLICT);
         }
     }

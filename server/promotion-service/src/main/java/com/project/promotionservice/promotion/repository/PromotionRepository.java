@@ -51,6 +51,7 @@ public interface PromotionRepository
             where p.campaignPublicId = c.publicId
               and p.status = :status
               and c.status = :campaignStatus
+              and c.legalStatus = :legalStatus
               and p.validFrom <= :now
               and p.validTo > :now
               and p.deletedAt is null
@@ -60,6 +61,7 @@ public interface PromotionRepository
     List<String> findActivatableIds(
             @Param("status") PromotionStatus status,
             @Param("campaignStatus") com.project.promotionservice.promotion.enums.CampaignStatus campaignStatus,
+            @Param("legalStatus") com.project.promotionservice.promotion.enums.LegalStatus legalStatus,
             @Param("now") Instant now,
             Pageable pageable);
 
@@ -128,6 +130,7 @@ public interface PromotionRepository
               and p.promotionType = :type
               and p.status = :status
               and c.status = :campaignStatus
+              and c.legalStatus = :legalStatus
               and p.publicVisible = true
               and p.deletedAt is null
               and c.deletedAt is null
@@ -141,6 +144,7 @@ public interface PromotionRepository
             @Param("type") PromotionType type,
             @Param("status") PromotionStatus status,
             @Param("campaignStatus") com.project.promotionservice.promotion.enums.CampaignStatus campaignStatus,
+            @Param("legalStatus") LegalStatus legalStatus,
             @Param("now") Instant now,
             Pageable pageable);
 

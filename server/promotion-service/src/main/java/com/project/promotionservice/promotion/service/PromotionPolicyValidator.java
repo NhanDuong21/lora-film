@@ -49,14 +49,11 @@ public class PromotionPolicyValidator {
                 invalid("Percentage discount cannot exceed the legal 50% limit");
             }
         } else if (normalized.equals("FIXED_AMOUNT")
-                || normalized.equals("AMOUNT")
-                || normalized.equals("CASHBACK")) {
+                || normalized.equals("AMOUNT")) {
             if (value == null || value.signum() <= 0) {
                 invalid("Fixed discount amount must be greater than zero");
             }
         } else if (!(normalized.equals("FREE")
-                || normalized.equals("FREE_TICKET")
-                || normalized.equals("FREE_COMBO")
                 || normalized.equals("FULL_DISCOUNT"))) {
             invalid("Unsupported promotion action type: " + type);
         }

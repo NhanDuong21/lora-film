@@ -30,15 +30,12 @@ public interface PromotionReservationRepository extends
     @Query("""
             select count(distinct reservation.id)
             from PromotionReservation reservation,
-                 PromotionRedemption redemption,
-                 Promotion promotion
+                 PromotionRedemption redemption
             where redemption.reservationPublicId = reservation.publicId
-              and redemption.promotionPublicId = promotion.publicId
-              and promotion.campaignPublicId = :campaignPublicId
+              and redemption.campaignPublicId = :campaignPublicId
               and reservation.status = :status
               and reservation.deletedAt is null
               and redemption.deletedAt is null
-              and promotion.deletedAt is null
             """)
     long countByCampaignAndStatus(
             @Param("campaignPublicId") String campaignPublicId,
@@ -69,4 +66,25 @@ public interface PromotionReservationRepository extends
             @Param("status") ReservationStatus status,
             @Param("now") Instant now,
             Pageable pageable);
+
+    @Query("""
+            select count(reservation) from PromotionReservation reservation
+            where reservation.status = :status
+              and reservation.reservationExpiredAt <= :now
+              and reservation.deletedAt is null
+            """)
+    long countExpirationBacklog(
+            @Param("status") ReservationStatus status,
+            @Param("now") Instant now);
+
+    @Query("""
+            select min(reservation.reservationExpiredAt)
+            from PromotionReservation reservation
+            where reservation.status = :status
+              and reservation.reservationExpiredAt <= :now
+              and reservation.deletedAt is null
+            """)
+    Optional<Instant> findOldestExpiredAt(
+            @Param("status") ReservationStatus status,
+            @Param("now") Instant now);
 }

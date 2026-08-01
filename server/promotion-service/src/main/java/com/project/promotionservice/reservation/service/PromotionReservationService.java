@@ -4,6 +4,7 @@ import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.promotion.dto.request.PromotionCheckoutRequest;
 import com.project.promotionservice.promotion.dto.response.PromotionCheckoutResponse;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ConfirmRequest;
+import com.project.promotionservice.reservation.dto.request.ReservationRequests.CompensateRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.RefreshRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ReserveRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.TransitionRequest;
@@ -24,6 +25,10 @@ public interface PromotionReservationService {
 
     ReservationResponse release(
             String reservationPublicId, TransitionRequest request,
+            String idempotencyKey, String actor);
+
+    ReservationResponse reverseConfirmed(
+            String reservationPublicId, CompensateRequest request,
             String idempotencyKey, String actor);
 
     ReservationResponse refresh(

@@ -6,6 +6,7 @@ import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.reservation.exception.ReservationErrorCode;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ConfirmRequest;
+import com.project.promotionservice.reservation.dto.request.ReservationRequests.CompensateRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.RefreshRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ReserveRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.TransitionRequest;
@@ -138,6 +139,32 @@ public class InternalPromotionReservationController {
                         request,
                         HttpStatus.OK.value(),
                         () -> reservationService.release(
+                            reservationId, request, idempotencyKey, actor))));
+    }
+
+    @PostMapping("/{reservationId}/reverse")
+    @PreAuthorize("hasAnyRole('BOOKING_SERVICE', 'PAYMENT_SERVICE')")
+    @Operation(summary = "Reverse a confirmed promotion after payment refund")
+    public ResponseEntity<ApiResponse<ReservationResponse>> reverse(
+            @PathVariable
+            @Pattern(regexp = UUID_PATTERN, message = "reservationId must be a valid UUID")
+            String reservationId,
+            @Parameter(required = true, description = "Stable key for safe request retries")
+            @RequestHeader("X-Idempotency-Key") String idempotencyKey,
+            @Parameter(hidden = true)
+            @AuthenticationPrincipal InternalServicePrincipal principal,
+            @Valid @RequestBody CompensateRequest request) {
+        String actor = principal.getServiceName();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Promotion reservation reversed",
+                idempotencyExecutor.execute(
+                        actor,
+                        "POST /internal/reservations/{reservationId}/reverse",
+                        idempotencyKey,
+                        reservationId,
+                        request,
+                        HttpStatus.OK.value(),
+                        () -> reservationService.reverseConfirmed(
                                 reservationId, request, idempotencyKey, actor))));
     }
 

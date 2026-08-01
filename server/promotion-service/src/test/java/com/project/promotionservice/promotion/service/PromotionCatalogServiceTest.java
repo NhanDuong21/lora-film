@@ -2,6 +2,7 @@ package com.project.promotionservice.promotion.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.common.exception.BusinessException;
+import com.project.promotionservice.integration.client.UserRecipientValidationClient;
 import com.project.promotionservice.promotion.dto.request.PromotionUpsertRequest;
 import com.project.promotionservice.promotion.dto.response.PromotionCloneDraftResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionIssueResponse;
@@ -14,6 +15,7 @@ import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
 import com.project.promotionservice.promotion.mapper.PromotionMapper;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
+import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
 import com.project.promotionservice.promotion.repository.PromotionRepository;
 import com.project.promotionservice.promotion.repository.UserPromotionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,12 +47,16 @@ class PromotionCatalogServiceTest {
     private UserPromotionRepository walletRepository;
     @Mock
     private PromotionCampaignRepository campaignRepository;
+    @Mock
+    private PromotionRedemptionRepository redemptionRepository;
     private PromotionMapper mapper;
     @Mock
     private PromotionPolicyValidator policyValidator;
     private CampaignConfigurationPolicy campaignPolicy;
     @Mock
     private PromotionCatalogEventService eventService;
+    @Mock
+    private UserRecipientValidationClient recipientValidationClient;
 
     private PromotionCatalogService service;
     private ObjectMapper objectMapper;
@@ -64,10 +70,12 @@ class PromotionCatalogServiceTest {
                 promotionRepository,
                 walletRepository,
                 campaignRepository,
+                redemptionRepository,
                 mapper,
                 policyValidator,
                 campaignPolicy,
-                eventService);
+                eventService,
+                recipientValidationClient);
     }
 
     @Test
@@ -89,7 +97,7 @@ class PromotionCatalogServiceTest {
         assertThat(result.sourceCampaignEditable()).isFalse();
         assertThat(result.suggestedCampaignPublicId()).isNull();
         assertThat(result.suggestedCode()).isNull();
-        assertThat(result.publicVisible()).isFalse();
+        assertThat(result.publicVisible()).isTrue();
         verify(promotionRepository, never()).save(any(Promotion.class));
     }
 
@@ -192,12 +200,17 @@ class PromotionCatalogServiceTest {
     @Test
     void issueCouponCountsGrantedUsersButKeepsIssuedItemsOutOfWalletResponse() {
         Promotion coupon = couponPromotion();
+        PromotionCampaign campaign = campaign(
+                CampaignStatus.ACTIVE, CampaignApprovalStatus.APPROVED,
+                Instant.parse("2026-07-01T00:00:00Z"),
+                Instant.parse("2026-09-01T00:00:00Z"));
+        campaign.setLegalStatus(com.project.promotionservice.promotion.enums.LegalStatus.PASSED);
+        campaign.setKillSwitch(false);
         when(promotionRepository.findByPublicIdForUpdate("coupon-1"))
                 .thenReturn(Optional.of(coupon));
-        when(walletRepository.existsByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNull(
-                "user-1", "coupon-1"))
-                .thenReturn(false);
-        when(walletRepository.findByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNull(
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-1"))
+                .thenReturn(Optional.of(campaign));
+        when(walletRepository.findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
                 "user-1", "coupon-1"))
                 .thenReturn(Optional.empty());
         when(walletRepository.save(org.mockito.ArgumentMatchers.any(UserPromotion.class)))

@@ -17,6 +17,8 @@ import com.project.promotionservice.promotion.mapper.CampaignMapper;
 import com.project.promotionservice.promotion.repository.ApprovalHistoryRepository;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.repository.PromotionRepository;
+import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
+import com.project.promotionservice.promotion.repository.UserPromotionRepository;
 import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 
@@ -52,6 +54,10 @@ class CampaignServiceImplTest {
     private ObjectMapper objectMapper;
     @Mock
     private PromotionReservationRepository reservationRepository;
+    @Mock
+    private PromotionRedemptionRepository redemptionRepository;
+    @Mock
+    private UserPromotionRepository walletRepository;
     @Mock
     private PromotionOutboxEnvelopeFactory envelopeFactory;
     @Spy
@@ -232,6 +238,7 @@ class CampaignServiceImplTest {
     void deleteCampaign_rejectsAnActiveReservation() {
         PromotionCampaign campaign = new PromotionCampaign();
         campaign.setPublicId("550e8400-e29b-41d4-a716-446655440002");
+        campaign.setStatus(CampaignStatus.DRAFT);
         when(campaignRepository.findByPublicId(campaign.getPublicId()))
                 .thenReturn(Optional.of(campaign));
         when(reservationRepository.countByCampaignAndStatus(

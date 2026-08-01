@@ -69,6 +69,13 @@ public final class ReservationRequests {
             @NotBlank @Size(max = 255) String reason) {
     }
 
+    public record CompensateRequest(
+            @NotBlank
+            @Size(max = 50)
+            @Pattern(regexp = "^[A-Z][A-Z0-9_]*$") String reasonCode,
+            @NotBlank @Size(max = 255) String reason) {
+    }
+
     public record RefreshRequest(
             @NotNull Instant requestedExpiredAt) {
     }

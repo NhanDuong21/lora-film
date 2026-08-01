@@ -63,7 +63,8 @@ public class PromotionMapper {
         return new WalletPromotionResponse(
                 wallet.getPublicId(), wallet.getUserPublicId(), wallet.getStatus(),
                 wallet.getClaimedAt(), wallet.getValidFrom(), wallet.getValidTo(),
-                wallet.getUsageCount(), wallet.getMaxUsage(), response(promotion));
+                wallet.getUsageCount(), wallet.getMaxUsage(), true, null, null,
+                response(promotion));
     }
 
     private String normalizeCode(String code) {

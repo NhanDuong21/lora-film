@@ -36,6 +36,8 @@ public class PromotionConditionEvaluator {
             "orderType",
             "allowedUserIds",
             "dayOfWeek",
+            "purchaseDayOfWeek",
+            "showtimeDayOfWeek",
             "seatTypes",
             "seatType",
             "excludeRoomTypes",
@@ -43,6 +45,7 @@ public class PromotionConditionEvaluator {
             "excludeDates",
             "requiredTierCode",
             "requiresVerification",
+            "legalDiscountCapExempt",
             "allowMultipleVoucherPerOrder",
             "stackableWith",
             "notStackableWith");
@@ -85,6 +88,8 @@ public class PromotionConditionEvaluator {
         requireArrayWhenPresent(conditions, "orderType");
         requireArrayWhenPresent(conditions, "allowedUserIds");
         requireArrayWhenPresent(conditions, "dayOfWeek");
+        requireArrayWhenPresent(conditions, "purchaseDayOfWeek");
+        requireArrayWhenPresent(conditions, "showtimeDayOfWeek");
         requireArrayWhenPresent(conditions, "seatTypes");
         requireArrayWhenPresent(conditions, "seatType");
         requireArrayWhenPresent(conditions, "excludeRoomTypes");
@@ -94,9 +99,12 @@ public class PromotionConditionEvaluator {
         requireArrayWhenPresent(conditions, "notStackableWith");
         validateMinimum(conditions);
         validateBooleanWhenPresent(conditions, "requiresVerification");
+        validateBooleanWhenPresent(conditions, "legalDiscountCapExempt");
         validateBooleanWhenPresent(conditions, "allowMultipleVoucherPerOrder");
         validateTextWhenPresent(conditions, "requiredTierCode");
         validateDayValues(conditions.get("dayOfWeek"));
+        validateDayValues(conditions.get("purchaseDayOfWeek"));
+        validateDayValues(conditions.get("showtimeDayOfWeek"));
         validateDateValues(conditions.get("excludeDates"));
     }
 
@@ -131,7 +139,14 @@ public class PromotionConditionEvaluator {
                 && !arrayContains(allowedUsers, request.userPublicId())) {
             conditionNotMet("Customer is not eligible for this benefit");
         }
-        evaluateDayOfWeek(conditions.get("dayOfWeek"), context);
+        evaluateDayOfWeek(
+                conditions.get("dayOfWeek"), context, "dayOfWeek", "businessDate");
+        evaluateDayOfWeek(
+                conditions.get("purchaseDayOfWeek"), context,
+                "purchaseDayOfWeek", "purchaseDate");
+        evaluateDayOfWeek(
+                conditions.get("showtimeDayOfWeek"), context,
+                "showtimeDayOfWeek", "showtimeDate");
         JsonNode excludedRoomTypes = conditions.has("excludeRoomTypes")
                 ? conditions.get("excludeRoomTypes") : conditions.get("excludeRoomType");
         evaluateExcludedRoomType(excludedRoomTypes, context);
@@ -149,18 +164,20 @@ public class PromotionConditionEvaluator {
             JsonNode contextJson) {
     }
 
-    private void evaluateDayOfWeek(JsonNode allowedDays, JsonNode context) {
+    private void evaluateDayOfWeek(
+            JsonNode allowedDays, JsonNode context,
+            String dayField, String dateField) {
         if (!isConfiguredArray(allowedDays)) {
             return;
         }
-        String dayValue = contextValue(context, "dayOfWeek");
+        String dayValue = contextValue(context, dayField);
         if (dayValue == null) {
-            String businessDate = contextValue(context, "businessDate");
-            if (businessDate != null) {
+            String dateValue = contextValue(context, dateField);
+            if (dateValue != null) {
                 try {
-                    dayValue = LocalDate.parse(businessDate).getDayOfWeek().name();
+                    dayValue = LocalDate.parse(dateValue).getDayOfWeek().name();
                 } catch (RuntimeException exception) {
-                    conditionNotMet("businessDate must use ISO-8601 yyyy-MM-dd");
+                    conditionNotMet(dateField + " must use ISO-8601 yyyy-MM-dd");
                 }
             }
         }

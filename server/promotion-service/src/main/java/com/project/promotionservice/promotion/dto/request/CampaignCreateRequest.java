@@ -55,8 +55,8 @@ public class CampaignCreateRequest {
     private Instant endAt;
 
     @NotNull(message = "budgetAmount is required")
-    @DecimalMin(value = "0.0", inclusive = true, message = "budgetAmount must be >= 0")
-    private BigDecimal budgetAmount = BigDecimal.ZERO;
+    @DecimalMin(value = "0.01", message = "budgetAmount must be greater than 0")
+    private BigDecimal budgetAmount;
 
     @Min(value = 1, message = "maxRedemptions must be >= 1")
     private Integer maxRedemptions;

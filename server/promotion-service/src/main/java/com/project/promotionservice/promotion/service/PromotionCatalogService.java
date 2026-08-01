@@ -2,6 +2,7 @@ package com.project.promotionservice.promotion.service;
 
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
+import com.project.promotionservice.integration.client.UserRecipientValidationClient;
 import com.project.promotionservice.promotion.dto.request.PromotionUpsertRequest;
 import com.project.promotionservice.promotion.dto.response.PromotionCloneDraftResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionIssueResponse;
@@ -13,10 +14,12 @@ import com.project.promotionservice.promotion.entity.UserPromotion;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
+import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
 import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.mapper.PromotionMapper;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
+import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
 import com.project.promotionservice.promotion.repository.PromotionRepository;
 import com.project.promotionservice.promotion.repository.PromotionSpecifications;
 import com.project.promotionservice.promotion.repository.UserPromotionRepository;
@@ -30,39 +33,51 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Set;
 
 @Service
 public class PromotionCatalogService {
 
+    private static final Set<PromotionRedemptionStatus> CAPACITY_STATUSES =
+            EnumSet.of(PromotionRedemptionStatus.RESERVED,
+                    PromotionRedemptionStatus.CONFIRMED);
+
     private final PromotionRepository promotionRepository;
     private final UserPromotionRepository walletRepository;
     private final PromotionCampaignRepository campaignRepository;
+    private final PromotionRedemptionRepository redemptionRepository;
     private final PromotionMapper mapper;
     private final PromotionPolicyValidator policyValidator;
     private final CampaignConfigurationPolicy campaignPolicy;
     private final PromotionCatalogEventService eventService;
+    private final UserRecipientValidationClient recipientValidationClient;
 
     public PromotionCatalogService(
             PromotionRepository promotionRepository,
             UserPromotionRepository walletRepository,
             PromotionCampaignRepository campaignRepository,
+            PromotionRedemptionRepository redemptionRepository,
             PromotionMapper mapper,
             PromotionPolicyValidator policyValidator,
             CampaignConfigurationPolicy campaignPolicy,
-            PromotionCatalogEventService eventService) {
+            PromotionCatalogEventService eventService,
+            UserRecipientValidationClient recipientValidationClient) {
         this.promotionRepository = promotionRepository;
         this.walletRepository = walletRepository;
         this.campaignRepository = campaignRepository;
+        this.redemptionRepository = redemptionRepository;
         this.mapper = mapper;
         this.policyValidator = policyValidator;
         this.campaignPolicy = campaignPolicy;
         this.eventService = eventService;
+        this.recipientValidationClient = recipientValidationClient;
     }
 
     @Transactional
@@ -92,6 +107,7 @@ public class PromotionCatalogService {
     public PromotionResponse update(
             String publicId, PromotionUpsertRequest request, String actor) {
         Promotion promotion = requirePromotionForUpdate(publicId);
+        requireTemplateMutable(promotion);
         if (promotion.getStatus() == PromotionStatus.ACTIVE) {
             throw conflict("Active promotion must be paused before editing");
         }
@@ -154,7 +170,8 @@ public class PromotionCatalogService {
                 source.getPublicId(), source.getName(),
                 editable ? sourceCampaign.getPublicId() : null, editable,
                 source.getPromotionType(), suggestedCode, suggestName(source),
-                source.getDescription(), false, source.getPriority(),
+                source.getDescription(),
+                Boolean.TRUE.equals(source.getPublicVisible()), source.getPriority(),
                 source.getStackable(), sourceData.conditionsJson(),
                 sourceData.actionsJson(), sourceData.metadataJson(),
                 source.getMaxRedemptions(), source.getMaxRedemptionsPerUser(),
@@ -185,9 +202,10 @@ public class PromotionCatalogService {
     @Transactional
     public void delete(String publicId, String actor) {
         Promotion promotion = requirePromotionForUpdate(publicId);
-        if (promotion.getStatus() == PromotionStatus.ACTIVE) {
-            throw conflict("Active promotion must be paused before deletion");
+        if (promotion.getStatus() != PromotionStatus.DRAFT) {
+            throw conflict("Only a draft promotion can be deleted");
         }
+        requireTemplateMutable(promotion);
         promotion.setDeletedAt(Instant.now());
         promotion.setDeletedBy(actor);
         promotion.setUpdatedBy(actor);
@@ -201,7 +219,7 @@ public class PromotionCatalogService {
         Instant now = Instant.now();
         Page<Promotion> result = promotionRepository.findPublicPromotions(
                 PromotionType.VOUCHER, PromotionStatus.ACTIVE,
-                CampaignStatus.ACTIVE, now, pageable);
+                CampaignStatus.ACTIVE, LegalStatus.PASSED, now, pageable);
         List<PromotionResponse> visible = result.getContent().stream()
                 .map(mapper::response)
                 .toList();
@@ -228,7 +246,20 @@ public class PromotionCatalogService {
                     HttpStatus.BAD_REQUEST);
         }
         requireRuntimeActive(promotion, Instant.now());
-        return mapper.wallet(issueOne(promotion, userPublicId, actor), promotion);
+        UserPromotion existing = walletRepository
+                .findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
+                        userPublicId, promotionPublicId)
+                .orElse(null);
+        if (existing != null) {
+            refreshWalletStatus(existing, Instant.now());
+            return mapper.wallet(existing, promotion);
+        }
+        if (promotion.getMaxRedemptions() != null
+                && walletRepository.countByPromotionPublicIdAndDeletedAtIsNull(
+                promotionPublicId) >= promotion.getMaxRedemptions()) {
+            throw conflict("Voucher claim capacity has been reached");
+        }
+        return mapper.wallet(createGrant(promotion, userPublicId, actor), promotion);
     }
 
     @Transactional
@@ -240,6 +271,7 @@ public class PromotionCatalogService {
                     "PROMOTION_NOT_ISSUABLE", "AUTO promotion does not use the customer wallet",
                     HttpStatus.BAD_REQUEST);
         }
+        requireRuntimeActive(promotion, Instant.now());
         LinkedHashSet<String> uniqueUsers = new LinkedHashSet<>();
         for (String user : users) {
             if (user != null && !user.isBlank()) {
@@ -251,17 +283,23 @@ public class PromotionCatalogService {
                     "PROMOTION_ISSUE_EMPTY", "At least one customer is required",
                     HttpStatus.BAD_REQUEST);
         }
+        recipientValidationClient.requireAllActive(List.copyOf(uniqueUsers));
         List<WalletPromotionResponse> issued = new ArrayList<>();
         int alreadyOwned = 0;
         int issuedCount = 0;
         for (String user : uniqueUsers) {
-            if (walletRepository
-                    .existsByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNull(
-                            user, promotionPublicId)) {
+            UserPromotion previous = walletRepository
+                    .findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
+                            user, promotionPublicId)
+                    .orElse(null);
+            if (previous != null) {
+                refreshWalletStatus(previous, Instant.now());
+            }
+            if (previous != null && previous.getStatus() == UserPromotionStatus.AVAILABLE) {
                 alreadyOwned++;
                 continue;
             }
-            UserPromotion grant = issueOne(promotion, user, actor);
+            UserPromotion grant = createGrant(promotion, user, actor);
             issuedCount++;
             if (promotion.getPromotionType() == PromotionType.COUPON) {
                 eventService.record("USER_PROMOTION", grant.getPublicId(),
@@ -286,11 +324,7 @@ public class PromotionCatalogService {
     public PagedResponse<WalletPromotionResponse> wallet(
             String userPublicId, UserPromotionStatus status, Pageable pageable) {
         Instant now = Instant.now();
-        Page<UserPromotion> result = status == UserPromotionStatus.AVAILABLE
-                ? walletRepository.findUsableWallet(
-                userPublicId, UserPromotionStatus.AVAILABLE,
-                PromotionType.COUPON, now, pageable)
-                : walletRepository.findWallet(
+        Page<UserPromotion> result = walletRepository.findWallet(
                 userPublicId, status, PromotionType.COUPON, pageable);
         List<UserPromotion> changed = new ArrayList<>();
         for (UserPromotion item : result.getContent()) {
@@ -301,14 +335,11 @@ public class PromotionCatalogService {
         if (!changed.isEmpty()) {
             walletRepository.saveAll(changed);
         }
-        List<UserPromotion> visibleItems = result.getContent().stream()
-                .filter(item -> status != UserPromotionStatus.AVAILABLE
-                        || isUsableWalletItem(item, now))
-                .toList();
+        List<UserPromotion> visibleItems = result.getContent();
         Map<String, Promotion> promotions = promotionMap(visibleItems);
         List<WalletPromotionResponse> content = visibleItems.stream()
-                .map(item -> mapper.wallet(item,
-                        requireMappedPromotion(promotions, item.getPromotionPublicId())))
+                .map(item -> walletResponse(item,
+                        requireMappedPromotion(promotions, item.getPromotionPublicId()), now))
                 .toList();
         return new PagedResponse<>(content, result.getNumber(), result.getSize(),
                 result.getTotalElements(), result.getTotalPages(), result.isLast());
@@ -332,7 +363,7 @@ public class PromotionCatalogService {
         if (promotion.getPromotionType() == PromotionType.COUPON) {
             throw notFound("Wallet voucher was not found");
         }
-        return mapper.wallet(wallet, promotion);
+        return walletResponse(wallet, promotion, now);
     }
 
     private void validate(
@@ -393,30 +424,34 @@ public class PromotionCatalogService {
                 request.clonedFromPublicId());
     }
 
-    private UserPromotion issueOne(
+    private UserPromotion createGrant(
             Promotion promotion, String userPublicId, String actor) {
-        return walletRepository
-                .findByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNull(
-                        userPublicId, promotion.getPublicId())
-                .orElseGet(() -> {
-                    UserPromotion wallet = new UserPromotion();
-                    wallet.setUserPublicId(userPublicId);
-                    wallet.setPromotionPublicId(promotion.getPublicId());
-                    wallet.setStatus(UserPromotionStatus.AVAILABLE);
-                    wallet.setClaimedAt(Instant.now());
-                    wallet.setValidFrom(promotion.getValidFrom());
-                    wallet.setValidTo(promotion.getValidTo());
-                    wallet.setMaxUsage(promotion.getMaxRedemptionsPerUser());
-                    wallet.setCreatedBy(actor);
-                    wallet.setUpdatedBy(actor);
-                    UserPromotion saved = walletRepository.save(wallet);
-                    if (promotion.getPromotionType() != PromotionType.COUPON) {
-                        eventService.record("USER_PROMOTION", saved.getPublicId(),
-                                "PROMOTION_ADDED_TO_WALLET",
-                                mapper.wallet(saved, promotion), actor);
-                    }
-                    return saved;
-                });
+        UserPromotion wallet = new UserPromotion();
+        wallet.setUserPublicId(userPublicId);
+        wallet.setPromotionPublicId(promotion.getPublicId());
+        wallet.setStatus(UserPromotionStatus.AVAILABLE);
+        wallet.setClaimedAt(Instant.now());
+        wallet.setValidFrom(promotion.getValidFrom());
+        wallet.setValidTo(promotion.getValidTo());
+        wallet.setMaxUsage(promotion.getMaxRedemptionsPerUser());
+        wallet.setCreatedBy(actor);
+        wallet.setUpdatedBy(actor);
+        UserPromotion saved = walletRepository.save(wallet);
+        if (promotion.getPromotionType() != PromotionType.COUPON) {
+            eventService.record("USER_PROMOTION", saved.getPublicId(),
+                    "PROMOTION_ADDED_TO_WALLET",
+                    mapper.wallet(saved, promotion), actor);
+        }
+        return saved;
+    }
+
+    private void requireTemplateMutable(Promotion promotion) {
+        if (walletRepository.countByPromotionPublicIdAndDeletedAtIsNull(
+                promotion.getPublicId()) > 0
+                || redemptionRepository.existsByPromotionPublicIdAndDeletedAtIsNull(
+                promotion.getPublicId())) {
+            throw conflict("Issued or redeemed promotion templates are immutable");
+        }
     }
 
     private PromotionCampaign requireCampaign(String publicId) {
@@ -505,6 +540,64 @@ public class PromotionCatalogService {
                 && (usageCount == null || maxUsage == null || usageCount < maxUsage)
                 && !now.isBefore(item.getValidFrom())
                 && now.isBefore(item.getValidTo());
+    }
+
+    private WalletPromotionResponse walletResponse(
+            UserPromotion wallet, Promotion promotion, Instant now) {
+        String reasonCode = null;
+        String reason = null;
+        if (!isUsableWalletItem(wallet, now)) {
+            reasonCode = "WALLET_NOT_AVAILABLE";
+            reason = "Voucher trong vi da het han hoac het luot su dung";
+        } else if (promotion.getStatus() != PromotionStatus.ACTIVE
+                || now.isBefore(promotion.getValidFrom())
+                || !now.isBefore(promotion.getValidTo())) {
+            reasonCode = "PROMOTION_NOT_ACTIVE";
+            reason = "Voucher chua hoat dong hoac da het hieu luc";
+        } else {
+            PromotionCampaign campaign = campaignRepository
+                    .findByPublicIdAndDeletedAtIsNull(promotion.getCampaignPublicId())
+                    .orElse(null);
+            if (!isRuntimeCampaignActive(campaign, now)) {
+                reasonCode = campaign != null && Boolean.TRUE.equals(campaign.getKillSwitch())
+                        ? "CAMPAIGN_KILL_SWITCHED" : "CAMPAIGN_NOT_ACTIVE";
+                reason = "Chien dich cua voucher hien khong hoat dong";
+            } else if (campaign.getBudgetRemaining()
+                    .subtract(campaign.getBudgetReserved()).signum() <= 0) {
+                reasonCode = "CAMPAIGN_BUDGET_EXHAUSTED";
+                reason = "Ngan sach chien dich da het";
+            } else if (promotion.getMaxRedemptions() != null
+                    && redemptionRepository
+                    .countByPromotionPublicIdAndStatusInAndDeletedAtIsNull(
+                            promotion.getPublicId(), CAPACITY_STATUSES)
+                    >= promotion.getMaxRedemptions()) {
+                reasonCode = "PROMOTION_CAPACITY_EXHAUSTED";
+                reason = "Voucher da het luot su dung";
+            } else if (redemptionRepository
+                    .countByPromotionPublicIdAndUserPublicIdAndStatusInAndDeletedAtIsNull(
+                            promotion.getPublicId(), wallet.getUserPublicId(),
+                            CAPACITY_STATUSES)
+                    >= promotion.getMaxRedemptionsPerUser()) {
+                reasonCode = "CUSTOMER_PROMOTION_LIMIT_REACHED";
+                reason = "Ban da dat gioi han su dung voucher nay";
+            } else if (campaign.getMaxRedemptions() != null
+                    && redemptionRepository.countCampaignRedemptions(
+                            campaign.getPublicId(), CAPACITY_STATUSES)
+                    >= campaign.getMaxRedemptions()) {
+                reasonCode = "CAMPAIGN_CAPACITY_EXHAUSTED";
+                reason = "Chien dich da het luot su dung";
+            } else if (redemptionRepository.countCampaignUserRedemptions(
+                    campaign.getPublicId(), wallet.getUserPublicId(), CAPACITY_STATUSES)
+                    >= campaign.getMaxRedemptionsPerUser()) {
+                reasonCode = "CUSTOMER_CAMPAIGN_LIMIT_REACHED";
+                reason = "Ban da dat gioi han su dung cua chien dich";
+            }
+        }
+        return new WalletPromotionResponse(
+                wallet.getPublicId(), wallet.getUserPublicId(), wallet.getStatus(),
+                wallet.getClaimedAt(), wallet.getValidFrom(), wallet.getValidTo(),
+                wallet.getUsageCount(), wallet.getMaxUsage(), reasonCode == null,
+                reasonCode, reason, mapper.response(promotion));
     }
 
     private String cloneCode(Promotion source) {

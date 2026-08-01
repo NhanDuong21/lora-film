@@ -38,15 +38,10 @@ public class PromotionDiscountCalculator {
             if (maximum != null) {
                 discount = discount.min(maximum);
             }
-        } else if (normalized.equals("FREE_TICKET")) {
-            discount = eligibleAmount(context, "ticketAmount", originalAmount);
-        } else if (normalized.equals("FREE_COMBO")) {
-            discount = eligibleAmount(context, "comboAmount", originalAmount);
         } else if (normalized.equals("FREE") || normalized.equals("FULL_DISCOUNT")) {
             discount = originalAmount;
         } else if (normalized.equals("FIXED_AMOUNT")
-                || normalized.equals("AMOUNT")
-                || normalized.equals("CASHBACK")) {
+                || normalized.equals("AMOUNT")) {
             if (value == null || value.signum() <= 0) {
                 throw invalid("Fixed discount value must be greater than zero");
             }
@@ -55,17 +50,6 @@ public class PromotionDiscountCalculator {
             throw invalid("Unsupported promotion action type: " + normalized);
         }
         return money(discount.min(originalAmount));
-    }
-
-    private BigDecimal eligibleAmount(
-            JsonNode context, String field, BigDecimal originalAmount) {
-        JsonNode node = context == null ? null : context.get(field);
-        BigDecimal value = decimalValue(node, field);
-        if (value == null || value.signum() <= 0
-                || value.compareTo(originalAmount) > 0) {
-            throw invalid(field + " must be greater than zero and not exceed originalAmount");
-        }
-        return money(value);
     }
 
     private String text(JsonNode node, String... fields) {

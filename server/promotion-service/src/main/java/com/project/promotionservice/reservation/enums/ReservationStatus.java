@@ -6,6 +6,7 @@ package com.project.promotionservice.reservation.enums;
 public enum ReservationStatus {
     ACTIVE,
     CONFIRMED,
+    REVERSED,
     RELEASED,
     EXPIRED
 }
