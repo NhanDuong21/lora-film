@@ -17,12 +17,20 @@ public record FinalizeCheckoutRequest(
         List<@Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") String>
         selectedUserPromotionPublicIds,
 
+        @Size(max = 10)
+        List<@Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") String>
+        selectedPromotionPublicIds,
+
         @Size(max = 100)
         @Pattern(regexp = "^[A-Za-z0-9_-]*$")
-        String couponCode
+        String couponCode,
+
+        @Size(max = 30)
+        @Pattern(regexp = "^[A-Za-z0-9_-]*$")
+        String paymentMethod
 ) {
     public FinalizeCheckoutRequest(Integer scorePoints, String scoreIdempotencyKey) {
-        this(scorePoints, scoreIdempotencyKey, List.of(), null);
+        this(scorePoints, scoreIdempotencyKey, List.of(), List.of(), null, null);
     }
 
     public int normalizedScorePoints() {
@@ -30,6 +38,8 @@ public record FinalizeCheckoutRequest(
     }
 
     public PromotionSelectionRequest promotionSelection() {
-        return new PromotionSelectionRequest(selectedUserPromotionPublicIds, couponCode);
+        return new PromotionSelectionRequest(
+                selectedUserPromotionPublicIds, selectedPromotionPublicIds, couponCode,
+                paymentMethod, List.of(), List.of());
     }
 }

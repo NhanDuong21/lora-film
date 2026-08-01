@@ -10,7 +10,20 @@ public record PromotionQuoteResponse(
         BigDecimal finalAmount,
         String currency,
         List<AppliedPromotion> appliedPromotions,
+        List<PromotionEvaluation> promotionEvaluations,
         List<String> warnings) {
+
+    public PromotionQuoteResponse(
+            boolean eligible,
+            BigDecimal originalAmount,
+            BigDecimal discountAmount,
+            BigDecimal finalAmount,
+            String currency,
+            List<AppliedPromotion> appliedPromotions,
+            List<String> warnings) {
+        this(eligible, originalAmount, discountAmount, finalAmount, currency,
+                appliedPromotions, List.of(), warnings);
+    }
 
     public record AppliedPromotion(
             String promotionPublicId,
@@ -22,5 +35,15 @@ public record PromotionQuoteResponse(
             BigDecimal discountAmount,
             Integer priority,
             boolean stackable) {
+    }
+
+    public record PromotionEvaluation(
+            String promotionPublicId,
+            String userPromotionPublicId,
+            String promotionType,
+            boolean eligible,
+            BigDecimal discountAmount,
+            String reasonCode,
+            String reason) {
     }
 }

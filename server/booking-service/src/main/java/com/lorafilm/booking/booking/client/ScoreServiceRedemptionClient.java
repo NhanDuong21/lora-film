@@ -26,6 +26,26 @@ public class ScoreServiceRedemptionClient implements ScoreRedemptionClient {
     }
 
     @Override
+    public MembershipContext getMembershipContext(Long userId) {
+        try {
+            UserScoreEnvelope envelope = restClient.get()
+                    .uri("/internal/scores/users/{userId}", userId)
+                    .header("X-Internal-Token", internalToken)
+                    .retrieve()
+                    .body(UserScoreEnvelope.class);
+            if (envelope == null || !envelope.success() || envelope.data() == null) {
+                throw new IntegrationException("Score Service returned an invalid membership response");
+            }
+            return new MembershipContext(
+                    envelope.data().tierCode(), envelope.data().status());
+        } catch (RestClientResponseException exception) {
+            throw mapResponseException(exception);
+        } catch (RestClientException exception) {
+            throw new IntegrationException("Cannot connect to Score Service", exception);
+        }
+    }
+
+    @Override
     public ScoreHoldResult hold(
             Long userId,
             Long bookingId,
@@ -178,5 +198,14 @@ public class ScoreServiceRedemptionClient implements ScoreRedemptionClient {
             String message,
             String errorCode,
             ScoreHoldPayload data) {
+    }
+
+    private record UserScorePayload(String tierCode, String status) {
+    }
+
+    private record UserScoreEnvelope(
+            boolean success,
+            String message,
+            UserScorePayload data) {
     }
 }

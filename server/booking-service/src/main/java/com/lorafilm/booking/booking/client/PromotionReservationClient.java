@@ -21,11 +21,14 @@ public interface PromotionReservationClient {
             String userPublicId,
             BigDecimal originalAmount,
             List<String> selectedUserPromotionPublicIds,
+            List<String> selectedPromotionPublicIds,
             String couponCode,
             String bookingPublicId,
             String currency,
             JsonNode contextJson,
-            Integer holdDurationSeconds) {
+            Integer holdDurationSeconds,
+            List<String> evaluationUserPromotionPublicIds,
+            List<String> evaluationPromotionPublicIds) {
     }
 
     record ReservationResult(

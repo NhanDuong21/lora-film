@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 
 public interface ScoreRedemptionClient {
 
+    MembershipContext getMembershipContext(Long userId);
+
     ScoreHoldResult hold(
             Long userId,
             Long bookingId,
@@ -37,5 +39,8 @@ public interface ScoreRedemptionClient {
             BigDecimal discountAmount,
             BigDecimal valuePerPoint,
             boolean idempotent) {
+    }
+
+    record MembershipContext(String tierCode, String status) {
     }
 }

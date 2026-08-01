@@ -759,6 +759,22 @@ public class BookingServiceImpl implements BookingService {
                 .orElseGet(List::of);
     }
 
+    private BookingPriceSnapshotPayload readPromotionSnapshot(Long bookingId) {
+        BookingPriceSnapshot snapshot = priceSnapshotRepository.findByBookingId(bookingId)
+                .orElse(null);
+        if (snapshot == null || snapshot.getPricingBreakdownJson() == null
+                || snapshot.getPricingBreakdownJson().isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(
+                    snapshot.getPricingBreakdownJson(), BookingPriceSnapshotPayload.class);
+        } catch (JsonProcessingException exception) {
+            log.warn("Cannot read promotion context snapshot for bookingId={}", bookingId, exception);
+            return null;
+        }
+    }
+
     private BookingFoodResponse buildFoodPresentation(Booking booking) {
         if (booking.getFoodOrder() == null) {
             return new BookingFoodResponse(0, BigDecimal.ZERO, List.of());
@@ -1216,7 +1232,8 @@ public class BookingServiceImpl implements BookingService {
         int requestedPoints = request == null ? 0 : request.normalizedScorePoints();
         String scoreIdempotencyKey = request == null ? null : request.scoreIdempotencyKey();
         PromotionSelectionRequest promotionSelection = request == null
-                ? new PromotionSelectionRequest(List.of(), null)
+                ? new PromotionSelectionRequest(
+                        List.of(), List.of(), null, null, List.of(), List.of())
                 : request.promotionSelection();
         String promotionFingerprint = promotionSelectionFingerprint(promotionSelection);
 
@@ -1345,7 +1362,10 @@ public class BookingServiceImpl implements BookingService {
         }
         return previewPromotions(
                 booking,
-                request == null ? new PromotionSelectionRequest(List.of(), null) : request);
+                request == null
+                        ? new PromotionSelectionRequest(
+                                List.of(), List.of(), null, null, List.of(), List.of())
+                        : request);
     }
 
     private PromotionQuoteResponse previewPromotions(
@@ -1353,7 +1373,8 @@ public class BookingServiceImpl implements BookingService {
         if (booking.promotionEligibleAmount().signum() == 0) {
             return new PromotionQuoteResponse(
                     false, BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2),
-                    BigDecimal.ZERO.setScale(2), booking.getCurrency(), List.of(), List.of());
+                    BigDecimal.ZERO.setScale(2), booking.getCurrency(), List.of(),
+                    List.of(), List.of());
         }
         return requirePromotionClient().preview(promotionCommand(booking, selection));
     }
@@ -1361,11 +1382,67 @@ public class BookingServiceImpl implements BookingService {
     private PromotionReservationClient.CheckoutCommand promotionCommand(
             Booking booking, PromotionSelectionRequest selection) {
         var context = objectMapper.createObjectNode();
+        BookingPriceSnapshotPayload priceSnapshot = readPromotionSnapshot(booking.getId());
         context.put("showtimeId", booking.getShowtimeId());
         context.put("movieId", booking.getMovieId());
         context.put("cinemaId", booking.getCinemaId());
+        context.put("ticketAmount", booking.getTicketAmount());
+        context.put("comboAmount", booking.getFoodAmount());
+        context.put("orderType", "MOVIE_BOOKING");
+        context.put("identityVerified", true);
+        String paymentMethod = selection.normalizedPaymentMethod();
+        if (paymentMethod != null) {
+            context.put("paymentMethod", paymentMethod);
+        }
+        if (priceSnapshot != null && priceSnapshot.moviePublicId() != null
+                && !priceSnapshot.moviePublicId().isBlank()) {
+            context.put("moviePublicId", priceSnapshot.moviePublicId());
+        }
+        if (priceSnapshot != null && priceSnapshot.cinemaPublicId() != null
+                && !priceSnapshot.cinemaPublicId().isBlank()) {
+            context.put("cinemaPublicId", priceSnapshot.cinemaPublicId());
+        }
+        if (priceSnapshot != null && priceSnapshot.showtimePublicId() != null
+                && !priceSnapshot.showtimePublicId().isBlank()) {
+            context.put("showtimePublicId", priceSnapshot.showtimePublicId());
+        }
         context.put("auditoriumId", booking.getAuditoriumId());
-        context.put("ticketCount", reservationRepository.findAllByBookingId(booking.getId()).size());
+        List<SeatReservation> reservations =
+                reservationRepository.findAllByBookingId(booking.getId());
+        context.put("ticketCount", reservations.size());
+        List<String> seatTypes = reservations.stream()
+                .map(SeatReservation::getSeatType)
+                .filter(value -> value != null && !value.isBlank())
+                .distinct()
+                .toList();
+        var seatTypeArray = context.putArray("seatTypes");
+        seatTypes.forEach(seatTypeArray::add);
+        if (seatTypes.size() == 1) {
+            context.put("seatType", seatTypes.get(0));
+        }
+        BookingSnapshot displaySnapshot = bookingSnapshotRepository
+                .findByBookingId(booking.getId()).orElse(null);
+        if (displaySnapshot != null && displaySnapshot.getShowtimeStart() != null) {
+            var showtimeDate = displaySnapshot.getShowtimeStart()
+                    .atZone(ZoneId.of("Asia/Ho_Chi_Minh"));
+            context.put("businessDate", showtimeDate.toLocalDate().toString());
+            context.put("dayOfWeek", showtimeDate.getDayOfWeek().name());
+        }
+        if (scoreRedemptionClient != null) {
+            try {
+                ScoreRedemptionClient.MembershipContext membership =
+                        scoreRedemptionClient.getMembershipContext(booking.getUserId());
+                if (membership != null && membership.tierCode() != null
+                        && !membership.tierCode().isBlank()
+                        && (membership.status() == null
+                        || "ACTIVE".equalsIgnoreCase(membership.status()))) {
+                    context.put("verifiedTierCode", membership.tierCode());
+                }
+            } catch (RuntimeException exception) {
+                log.warn("Cannot enrich promotion preview with membership tier for user {}",
+                        booking.getUserId());
+            }
+        }
         context.put("channel", "WEB");
         long remaining = Math.max(60, Duration.between(Instant.now(), booking.getExpiresAt()).getSeconds());
         int holdSeconds = (int) Math.min(1800, remaining);
@@ -1373,11 +1450,14 @@ public class BookingServiceImpl implements BookingService {
                 String.valueOf(booking.getUserId()),
                 booking.promotionEligibleAmount(),
                 selection.normalizedWalletIds(),
+                selection.normalizedPromotionIds(),
                 selection.normalizedCouponCode(),
                 booking.getPublicId(),
                 booking.getCurrency(),
                 context,
-                holdSeconds);
+                holdSeconds,
+                selection.normalizedEvaluationWalletIds(),
+                selection.normalizedEvaluationPromotionIds());
     }
 
     private PromotionReservationClient requirePromotionClient() {
@@ -1418,8 +1498,12 @@ public class BookingServiceImpl implements BookingService {
     private String promotionSelectionFingerprint(PromotionSelectionRequest selection) {
         List<String> walletIds = new ArrayList<>(selection.normalizedWalletIds());
         walletIds.sort(String::compareTo);
+        List<String> promotionIds = new ArrayList<>(selection.normalizedPromotionIds());
+        promotionIds.sort(String::compareTo);
         String canonical = String.join(",", walletIds) + "|"
-                + Objects.toString(selection.normalizedCouponCode(), "");
+                + String.join(",", promotionIds) + "|"
+                + Objects.toString(selection.normalizedCouponCode(), "") + "|"
+                + Objects.toString(selection.normalizedPaymentMethod(), "");
         return UUID.nameUUIDFromBytes(canonical.getBytes(StandardCharsets.UTF_8)).toString();
     }
 

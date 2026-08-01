@@ -8,6 +8,7 @@ import com.lorafilm.booking.booking.client.PromotionReservationClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
+import com.lorafilm.booking.booking.dto.request.PromotionSelectionRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
@@ -583,6 +584,30 @@ class BookingServiceTest {
                                 eq(new BigDecimal("240000.00")),
                                 any(String.class),
                                 eq("score-idem-1"));
+        }
+
+        @Test
+        void shouldForwardPaymentMethodToPromotionPreviewContext() {
+                Booking booking = existingBooking(Instant.now().plusSeconds(900));
+                booking.setId(100L);
+                when(securityContextService.getCurrentUserId()).thenReturn(15L);
+                when(bookingRepository.findByPublicId(booking.getPublicId()))
+                                .thenReturn(Optional.of(booking));
+
+                bookingService.previewPromotions(
+                                booking.getPublicId(),
+                                new PromotionSelectionRequest(
+                                                List.of(),
+                                                List.of(),
+                                                null,
+                                                "MOMO",
+                                                List.of(),
+                                                List.of()));
+
+                ArgumentCaptor<PromotionReservationClient.CheckoutCommand> captor =
+                                ArgumentCaptor.forClass(PromotionReservationClient.CheckoutCommand.class);
+                verify(promotionReservationClient).preview(captor.capture());
+                assertEquals("MOMO", captor.getValue().contextJson().path("paymentMethod").asText());
         }
 
         private SeatReservation reservation(
