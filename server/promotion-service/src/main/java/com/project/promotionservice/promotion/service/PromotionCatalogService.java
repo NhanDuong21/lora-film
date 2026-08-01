@@ -64,6 +64,7 @@ public class PromotionCatalogService {
 
     @Transactional
     public PromotionResponse create(PromotionUpsertRequest request, String actor) {
+        request = normalizeCouponCode(request, null);
         PromotionCampaign campaign = requireCampaign(request.campaignPublicId());
         campaignPolicy.requireEditable(campaign);
         validate(request, campaign, null);
@@ -84,6 +85,7 @@ public class PromotionCatalogService {
         if (promotion.getStatus() == PromotionStatus.ACTIVE) {
             throw conflict("Active promotion must be paused before editing");
         }
+        request = normalizeCouponCode(request, promotion);
         PromotionCampaign campaign = requireCampaign(request.campaignPublicId());
         campaignPolicy.requireEditable(campaign);
         validate(request, campaign, promotion);
@@ -116,37 +118,16 @@ public class PromotionCatalogService {
         return page(result.map(mapper::response));
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public PromotionResponse activate(String publicId, String actor) {
-        Promotion promotion = requirePromotionForUpdate(publicId);
-        PromotionCampaign campaign = requireCampaign(promotion.getCampaignPublicId());
-        requireCampaignCanServePromotion(campaign);
-        Instant now = Instant.now();
-        if (!now.isBefore(promotion.getValidTo())) {
-            throw conflict("Expired promotion cannot be activated");
-        }
-        promotion.setStatus(PromotionStatus.ACTIVE);
-        promotion.setUpdatedBy(actor);
-        Promotion saved = promotionRepository.save(promotion);
-        PromotionResponse response = mapper.response(saved);
-        eventService.record("PROMOTION", saved.getPublicId(),
-                "PROMOTION_ACTIVATED", response, actor);
-        return response;
+        requirePromotion(publicId);
+        throw conflict("Promotion lifecycle is controlled by its campaign and scheduler; activate the campaign instead");
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public PromotionResponse pause(String publicId, String actor) {
-        Promotion promotion = requirePromotionForUpdate(publicId);
-        if (promotion.getStatus() != PromotionStatus.ACTIVE) {
-            throw conflict("Only an active promotion can be paused");
-        }
-        promotion.setStatus(PromotionStatus.PAUSED);
-        promotion.setUpdatedBy(actor);
-        Promotion saved = promotionRepository.save(promotion);
-        PromotionResponse response = mapper.response(saved);
-        eventService.record("PROMOTION", saved.getPublicId(),
-                "PROMOTION_PAUSED", response, actor);
-        return response;
+        requirePromotion(publicId);
+        throw conflict("Promotion lifecycle is controlled by its campaign and scheduler; pause the campaign instead");
     }
 
     @Transactional
@@ -155,7 +136,8 @@ public class PromotionCatalogService {
         Promotion clone = new Promotion();
         clone.setCampaignPublicId(source.getCampaignPublicId());
         clone.setPromotionType(source.getPromotionType());
-        clone.setCode(cloneCode(source));
+        clone.setCode(source.getPromotionType() == PromotionType.COUPON
+                ? generatedCouponCode() : cloneCode(source));
         clone.setName(source.getName() + " (Copy)");
         clone.setDescription(source.getDescription());
         clone.setStatus(PromotionStatus.DRAFT);
@@ -205,6 +187,14 @@ public class PromotionCatalogService {
                 result.getTotalElements(), result.getTotalPages(), result.isLast());
     }
 
+    @Transactional(readOnly = true)
+    public PagedResponse<PromotionResponse> systemPromotions(Pageable pageable) {
+        Instant now = Instant.now();
+        return page(promotionRepository.findSystemPromotions(
+                PromotionType.AUTO, PromotionStatus.ACTIVE, CampaignStatus.ACTIVE,
+                LegalStatus.PASSED, now, pageable).map(mapper::response));
+    }
+
     @Transactional
     public WalletPromotionResponse claim(
             String promotionPublicId, String userPublicId, String actor) {
@@ -215,18 +205,6 @@ public class PromotionCatalogService {
                     "PROMOTION_NOT_CLAIMABLE", "Promotion is not a public voucher",
                     HttpStatus.BAD_REQUEST);
         }
-        requireRuntimeActive(promotion, Instant.now());
-        return mapper.wallet(issueOne(promotion, userPublicId, actor), promotion);
-    }
-
-    @Transactional
-    public WalletPromotionResponse redeemCoupon(
-            String code, String userPublicId, String actor) {
-        Promotion found = promotionRepository
-                .findByPromotionTypeAndCodeIgnoreCaseAndDeletedAtIsNull(
-                        PromotionType.COUPON, code.trim())
-                .orElseThrow(() -> notFound("Coupon code was not found"));
-        Promotion promotion = requirePromotionForUpdate(found.getPublicId());
         requireRuntimeActive(promotion, Instant.now());
         return mapper.wallet(issueOne(promotion, userPublicId, actor), promotion);
     }
@@ -253,6 +231,7 @@ public class PromotionCatalogService {
         }
         List<WalletPromotionResponse> issued = new ArrayList<>();
         int alreadyOwned = 0;
+        int issuedCount = 0;
         for (String user : uniqueUsers) {
             if (walletRepository
                     .existsByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNull(
@@ -260,10 +239,22 @@ public class PromotionCatalogService {
                 alreadyOwned++;
                 continue;
             }
-            issued.add(mapper.wallet(issueOne(promotion, user, actor), promotion));
+            UserPromotion grant = issueOne(promotion, user, actor);
+            issuedCount++;
+            if (promotion.getPromotionType() == PromotionType.COUPON) {
+                eventService.record("USER_PROMOTION", grant.getPublicId(),
+                        "COUPON_ISSUED", Map.of(
+                                "userPublicId", user,
+                                "couponCode", promotion.getCode(),
+                                "promotionName", promotion.getName(),
+                                "validTo", promotion.getValidTo().toString(),
+                                "deepLink", "/booking"), actor);
+            } else {
+                issued.add(mapper.wallet(grant, promotion));
+            }
         }
         PromotionIssueResponse response = new PromotionIssueResponse(
-                issued.size(), alreadyOwned, issued);
+                issuedCount, alreadyOwned, issued);
         eventService.record("PROMOTION", promotionPublicId,
                 "PROMOTION_ISSUED", response, actor);
         return response;
@@ -274,7 +265,7 @@ public class PromotionCatalogService {
             String userPublicId, UserPromotionStatus status, Pageable pageable) {
         Instant now = Instant.now();
         Page<UserPromotion> result = walletRepository.findWallet(
-                userPublicId, status, pageable);
+                userPublicId, status, PromotionType.COUPON, pageable);
         List<UserPromotion> changed = new ArrayList<>();
         for (UserPromotion item : result.getContent()) {
             if (item.getStatus() == UserPromotionStatus.AVAILABLE
@@ -332,6 +323,22 @@ public class PromotionCatalogService {
         policyValidator.validatePromotion(request.conditionsJson(), request.actionsJson());
     }
 
+    private PromotionUpsertRequest normalizeCouponCode(
+            PromotionUpsertRequest request, Promotion existing) {
+        if (request.promotionType() != PromotionType.COUPON) {
+            return request;
+        }
+        String code = existing == null || existing.getCode() == null
+                || existing.getCode().isBlank()
+                ? generatedCouponCode() : existing.getCode();
+        return new PromotionUpsertRequest(
+                request.campaignPublicId(), request.promotionType(), code,
+                request.name(), request.description(), request.publicVisible(),
+                request.priority(), request.stackable(), request.conditionsJson(),
+                request.actionsJson(), request.metadataJson(), request.maxRedemptions(),
+                request.maxRedemptionsPerUser(), request.validFrom(), request.validTo());
+    }
+
     private UserPromotion issueOne(
             Promotion promotion, String userPublicId, String actor) {
         return walletRepository
@@ -349,9 +356,11 @@ public class PromotionCatalogService {
                     wallet.setCreatedBy(actor);
                     wallet.setUpdatedBy(actor);
                     UserPromotion saved = walletRepository.save(wallet);
-                    eventService.record("USER_PROMOTION", saved.getPublicId(),
-                            "PROMOTION_ADDED_TO_WALLET",
-                            mapper.wallet(saved, promotion), actor);
+                    if (promotion.getPromotionType() != PromotionType.COUPON) {
+                        eventService.record("USER_PROMOTION", saved.getPublicId(),
+                                "PROMOTION_ADDED_TO_WALLET",
+                                mapper.wallet(saved, promotion), actor);
+                    }
                     return saved;
                 });
     }
@@ -427,6 +436,17 @@ public class PromotionCatalogService {
                 ? source.getPromotionType().name() : source.getCode();
         return (prefix + "_COPY_" + UUID.randomUUID().toString().substring(0, 6))
                 .toUpperCase(Locale.ROOT);
+    }
+
+    private String generatedCouponCode() {
+        String code;
+        do {
+            code = "CPN-" + UUID.randomUUID().toString().substring(0, 8)
+                    .toUpperCase(Locale.ROOT);
+        } while (promotionRepository
+                .existsByPromotionTypeAndCodeIgnoreCaseAndDeletedAtIsNull(
+                        PromotionType.COUPON, code));
+        return code;
     }
 
     private <T> PagedResponse<T> page(Page<T> result) {

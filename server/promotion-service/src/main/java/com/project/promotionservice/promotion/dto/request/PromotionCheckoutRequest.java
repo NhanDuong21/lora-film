@@ -22,6 +22,7 @@ public record PromotionCheckoutRequest(
         String userPublicId,
         @NotNull @DecimalMin(value = "0.01") BigDecimal originalAmount,
         @Size(max = 10) List<@Pattern(regexp = UUID_PATTERN) String> selectedUserPromotionPublicIds,
+        @Size(max = 10) List<@Pattern(regexp = UUID_PATTERN) String> selectedPromotionPublicIds,
         @Size(max = 100)
         @Pattern(regexp = "^[A-Za-z0-9_-]*$") String couponCode,
         @Size(max = 20) String customerPhone,
@@ -29,5 +30,25 @@ public record PromotionCheckoutRequest(
         @Pattern(regexp = UUID_PATTERN) String orderPublicId,
         @Size(max = 10) String currency,
         JsonNode contextJson,
-        @Min(60) @Max(1800) Integer holdDurationSeconds) {
+        @Min(60) @Max(1800) Integer holdDurationSeconds,
+        @Size(max = 300) List<@Pattern(regexp = UUID_PATTERN) String> evaluationUserPromotionPublicIds,
+        @Size(max = 300) List<@Pattern(regexp = UUID_PATTERN) String> evaluationPromotionPublicIds) {
+
+    public PromotionCheckoutRequest(
+            String userPublicId,
+            BigDecimal originalAmount,
+            List<String> selectedUserPromotionPublicIds,
+            List<String> selectedPromotionPublicIds,
+            String couponCode,
+            String customerPhone,
+            String bookingPublicId,
+            String orderPublicId,
+            String currency,
+            JsonNode contextJson,
+            Integer holdDurationSeconds) {
+        this(userPublicId, originalAmount, selectedUserPromotionPublicIds,
+                selectedPromotionPublicIds, couponCode, customerPhone,
+                bookingPublicId, orderPublicId, currency, contextJson,
+                holdDurationSeconds, List.of(), List.of());
+    }
 }

@@ -10,5 +10,18 @@ public record PromotionCheckoutResponse(
         BigDecimal finalAmount,
         String currency,
         List<AppliedPromotionResponse> appliedPromotions,
+        List<PromotionEligibilityResponse> promotionEvaluations,
         List<String> warnings) {
+
+    public PromotionCheckoutResponse(
+            boolean eligible,
+            BigDecimal originalAmount,
+            BigDecimal discountAmount,
+            BigDecimal finalAmount,
+            String currency,
+            List<AppliedPromotionResponse> appliedPromotions,
+            List<String> warnings) {
+        this(eligible, originalAmount, discountAmount, finalAmount, currency,
+                appliedPromotions, List.of(), warnings);
+    }
 }

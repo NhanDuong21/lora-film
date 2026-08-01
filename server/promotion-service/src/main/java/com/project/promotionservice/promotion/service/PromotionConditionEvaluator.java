@@ -20,8 +20,12 @@ public class PromotionConditionEvaluator {
             "minOrderAmount",
             "movieIds",
             "movieId",
+            "moviePublicIds",
+            "showtimeIds",
+            "showtimePublicIds",
             "cinemaIds",
             "cinemaId",
+            "cinemaPublicIds",
             "paymentMethods",
             "paymentMethod",
             "channels",
@@ -65,8 +69,12 @@ public class PromotionConditionEvaluator {
         rejectAliasesTogether(conditions, "excludeRoomTypes", "excludeRoomType");
         requireArrayWhenPresent(conditions, "movieIds");
         requireArrayWhenPresent(conditions, "movieId");
+        requireArrayWhenPresent(conditions, "moviePublicIds");
+        requireArrayWhenPresent(conditions, "showtimeIds");
+        requireArrayWhenPresent(conditions, "showtimePublicIds");
         requireArrayWhenPresent(conditions, "cinemaIds");
         requireArrayWhenPresent(conditions, "cinemaId");
+        requireArrayWhenPresent(conditions, "cinemaPublicIds");
         requireArrayWhenPresent(conditions, "paymentMethods");
         requireArrayWhenPresent(conditions, "paymentMethod");
         requireArrayWhenPresent(conditions, "channels");
@@ -101,8 +109,12 @@ public class PromotionConditionEvaluator {
         JsonNode context = request.contextJson();
         matchAllowed(conditions, context, "movieIds", "movieId");
         matchAllowed(conditions, context, "movieId", "movieId");
+        matchAllowed(conditions, context, "moviePublicIds", "moviePublicId");
+        matchAllowed(conditions, context, "showtimeIds", "showtimeId");
+        matchAllowed(conditions, context, "showtimePublicIds", "showtimePublicId");
         matchAllowed(conditions, context, "cinemaIds", "cinemaId");
         matchAllowed(conditions, context, "cinemaId", "cinemaId");
+        matchAllowed(conditions, context, "cinemaPublicIds", "cinemaPublicId");
         matchAllowed(conditions, context, "paymentMethods", "paymentMethod");
         matchAllowed(conditions, context, "paymentMethod", "paymentMethod");
         matchAllowed(conditions, context, "channels", "channel");
@@ -111,8 +123,8 @@ public class PromotionConditionEvaluator {
         matchAllowed(conditions, context, "format", "format");
         matchAllowed(conditions, context, "orderTypes", "orderType");
         matchAllowed(conditions, context, "orderType", "orderType");
-        matchAllowed(conditions, context, "seatTypes", "seatType");
-        matchAllowed(conditions, context, "seatType", "seatType");
+        matchAllowed(conditions, context, "seatTypes", "seatTypes");
+        matchAllowed(conditions, context, "seatType", "seatTypes");
 
         JsonNode allowedUsers = conditions.get("allowedUserIds");
         if (isConfiguredArray(allowedUsers)
@@ -214,8 +226,26 @@ public class PromotionConditionEvaluator {
         if (!isConfiguredArray(allowed)) {
             return;
         }
-        String actual = contextValue(context, contextField);
-        if (actual == null || !arrayContains(allowed, actual)) {
+        JsonNode actual = context == null ? null : context.get(contextField);
+        if ((actual == null || actual.isNull()) && contextField.endsWith("s")) {
+            actual = context == null
+                    ? null : context.get(contextField.substring(0, contextField.length() - 1));
+        }
+        if (actual == null || actual.isNull()) {
+            conditionNotMet("Condition not met: " + contextField);
+        }
+        if (actual.isArray()) {
+            if (actual.isEmpty()) {
+                conditionNotMet("Condition not met: " + contextField);
+            }
+            for (JsonNode value : actual) {
+                if (!arrayContains(allowed, value.asText())) {
+                    conditionNotMet("Condition not met: " + contextField);
+                }
+            }
+            return;
+        }
+        if (actual.asText().isBlank() || !arrayContains(allowed, actual.asText())) {
             conditionNotMet("Condition not met: " + contextField);
         }
     }

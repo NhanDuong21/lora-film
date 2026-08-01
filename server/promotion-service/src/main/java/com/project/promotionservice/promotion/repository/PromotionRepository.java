@@ -3,6 +3,7 @@ package com.project.promotionservice.promotion.repository;
 import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.LegalStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -138,6 +139,29 @@ public interface PromotionRepository
             @Param("type") PromotionType type,
             @Param("status") PromotionStatus status,
             @Param("campaignStatus") com.project.promotionservice.promotion.enums.CampaignStatus campaignStatus,
+            @Param("now") Instant now,
+            Pageable pageable);
+
+    @Query("""
+            select p from Promotion p, PromotionCampaign c
+            where p.campaignPublicId = c.publicId
+              and p.promotionType = :type
+              and p.status = :status
+              and c.status = :campaignStatus
+              and c.legalStatus = :legalStatus
+              and p.deletedAt is null
+              and c.deletedAt is null
+              and c.killSwitch = false
+              and p.validFrom <= :now
+              and p.validTo > :now
+              and c.startAt <= :now
+              and c.endAt > :now
+            """)
+    Page<Promotion> findSystemPromotions(
+            @Param("type") PromotionType type,
+            @Param("status") PromotionStatus status,
+            @Param("campaignStatus") com.project.promotionservice.promotion.enums.CampaignStatus campaignStatus,
+            @Param("legalStatus") LegalStatus legalStatus,
             @Param("now") Instant now,
             Pageable pageable);
 }

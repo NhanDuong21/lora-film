@@ -1,6 +1,7 @@
 package com.project.promotionservice.promotion.repository;
 
 import com.project.promotionservice.promotion.entity.UserPromotion;
+import com.project.promotionservice.promotion.enums.PromotionType;
 import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -33,14 +34,17 @@ public interface UserPromotionRepository extends JpaRepository<UserPromotion, Lo
     Optional<UserPromotion> findByPublicIdForUpdate(@Param("publicId") String publicId);
 
     @Query("""
-            select up from UserPromotion up
+            select up from UserPromotion up, Promotion p
             where up.userPublicId = :userPublicId
               and (:status is null or up.status = :status)
+              and p.publicId = up.promotionPublicId
+              and p.promotionType <> :excludedPromotionType
               and up.deletedAt is null
             """)
     Page<UserPromotion> findWallet(
             @Param("userPublicId") String userPublicId,
             @Param("status") UserPromotionStatus status,
+            @Param("excludedPromotionType") PromotionType excludedPromotionType,
             Pageable pageable);
 
     @Query("""

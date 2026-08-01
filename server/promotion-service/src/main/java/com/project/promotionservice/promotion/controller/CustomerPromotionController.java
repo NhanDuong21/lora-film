@@ -5,12 +5,10 @@ import com.project.promotionservice.common.exception.ErrorCode;
 import com.project.promotionservice.common.response.ApiResponse;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.configuration.security.principal.UserPrincipal;
-import com.project.promotionservice.promotion.dto.request.CouponRedeemRequest;
 import com.project.promotionservice.promotion.dto.response.PromotionResponse;
 import com.project.promotionservice.promotion.dto.response.WalletPromotionResponse;
 import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.service.PromotionCatalogService;
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -23,7 +21,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -59,6 +56,16 @@ public class CustomerPromotionController {
         return ResponseEntity.ok(ApiResponse.success(service.publicPromotions(pageable)));
     }
 
+    @GetMapping("/promotions/system")
+    public ResponseEntity<ApiResponse<PagedResponse<PromotionResponse>>> systemPromotions(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "priority,asc") @Size(max = 60) String sort) {
+        Pageable pageable = pageable(
+                page, size, sort, PROMOTION_SORT_FIELDS, "priority");
+        return ResponseEntity.ok(ApiResponse.success(service.systemPromotions(pageable)));
+    }
+
     @PostMapping("/promotions/{id}/claim")
     public ResponseEntity<ApiResponse<WalletPromotionResponse>> claim(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId,
@@ -67,16 +74,6 @@ public class CustomerPromotionController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Voucher added to wallet",
                         service.claim(publicId, user, user)));
-    }
-
-    @PostMapping("/promotions/coupons/redeem")
-    public ResponseEntity<ApiResponse<WalletPromotionResponse>> redeemCoupon(
-            @Valid @RequestBody CouponRedeemRequest request,
-            @AuthenticationPrincipal UserPrincipal principal) {
-        String user = currentUser(principal);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Coupon added to wallet",
-                        service.redeemCoupon(request.code(), user, user)));
     }
 
     @GetMapping("/customers/me/promotions")

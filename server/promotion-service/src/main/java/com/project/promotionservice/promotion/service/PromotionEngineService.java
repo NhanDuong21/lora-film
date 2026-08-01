@@ -8,6 +8,7 @@ import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.promotion.dto.request.PromotionCheckoutRequest;
 import com.project.promotionservice.promotion.dto.response.AppliedPromotionResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionCheckoutResponse;
+import com.project.promotionservice.promotion.dto.response.PromotionEligibilityResponse;
 import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.entity.UserPromotion;
@@ -35,7 +36,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -81,14 +81,30 @@ public class PromotionEngineService {
         List<String> warnings = new ArrayList<>();
         Set<String> addedPromotions = new HashSet<>();
 
-        for (Promotion promotion : promotionRepository.findRuntimeCandidates(
-                PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
-            addCandidate(candidates, warnings, addedPromotions,
-                    promotion, null, request, original, now, false);
-        }
-
+        List<String> selectedPromotionIds = request.selectedPromotionPublicIds() == null
+                ? List.of() : request.selectedPromotionPublicIds();
         List<String> selectedWalletIds = request.selectedUserPromotionPublicIds() == null
                 ? List.of() : request.selectedUserPromotionPublicIds();
+        boolean hasManualSelection = !selectedPromotionIds.isEmpty()
+                || !selectedWalletIds.isEmpty()
+                || (request.couponCode() != null && !request.couponCode().isBlank());
+        if (selectedPromotionIds.isEmpty() && !hasManualSelection) {
+            for (Promotion promotion : promotionRepository.findRuntimeCandidates(
+                    PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
+                addCandidate(candidates, warnings, addedPromotions,
+                        promotion, null, request, original, now, false);
+            }
+        } else {
+            for (String promotionPublicId : selectedPromotionIds) {
+                Promotion promotion = requirePromotion(promotionPublicId);
+                if (promotion.getPromotionType() != PromotionType.AUTO) {
+                    throw invalid("Only system promotions can be selected by promotionPublicId");
+                }
+                addCandidate(candidates, warnings, addedPromotions,
+                        promotion, null, request, original, now, true);
+            }
+        }
+
         for (String walletPublicId : selectedWalletIds) {
             UserPromotion wallet = requireWallet(walletPublicId, request.userPublicId(), now);
             Promotion promotion = requirePromotion(wallet.getPromotionPublicId());
@@ -106,14 +122,20 @@ public class PromotionEngineService {
                     .orElseThrow(() -> new BusinessException(
                             "COUPON_NOT_FOUND", "Coupon code was not found",
                             HttpStatus.NOT_FOUND));
-            Optional<UserPromotion> wallet = walletRepository
+            UserPromotion couponGrant = walletRepository
                     .findByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNull(
-                            request.userPublicId(), coupon.getPublicId());
-            wallet.ifPresent(value -> requireWallet(
-                    value.getPublicId(), request.userPublicId(), now));
+                            request.userPublicId(), coupon.getPublicId())
+                    .orElseThrow(() -> new BusinessException(
+                            "COUPON_NOT_ISSUED",
+                            "Coupon was not issued to this customer",
+                            HttpStatus.FORBIDDEN));
+            requireWallet(couponGrant.getPublicId(), request.userPublicId(), now);
             addCandidate(candidates, warnings, addedPromotions,
-                    coupon, wallet.orElse(null), request, original, now, true);
+                    coupon, couponGrant, request, original, now, true);
         }
+
+        List<PromotionEligibilityResponse> evaluations = evaluateRequestedPromotions(
+                request, original, now);
 
         List<Candidate> selected = selectBest(candidates, original);
         List<AppliedPromotionResponse> applied = allocate(selected, original);
@@ -127,7 +149,161 @@ public class PromotionEngineService {
                 money(original.subtract(discount).max(BigDecimal.ZERO)),
                 normalizeCurrency(request.currency()),
                 applied,
+                evaluations,
                 List.copyOf(warnings));
+    }
+
+    private List<PromotionEligibilityResponse> evaluateRequestedPromotions(
+            PromotionCheckoutRequest request, BigDecimal original, Instant now) {
+        List<PromotionEligibilityResponse> evaluations = new ArrayList<>();
+        Set<String> evaluatedKeys = new HashSet<>();
+        List<String> promotionIds = request.evaluationPromotionPublicIds() == null
+                ? List.of() : request.evaluationPromotionPublicIds();
+        for (String promotionPublicId : promotionIds) {
+            if (!evaluatedKeys.add("promotion:" + promotionPublicId)) {
+                continue;
+            }
+            Promotion promotion;
+            try {
+                promotion = requirePromotion(promotionPublicId);
+            } catch (BusinessException exception) {
+                evaluations.add(unavailableEvaluation(
+                        promotionPublicId, null, null, exception));
+                continue;
+            }
+            evaluations.add(evaluateForCheckout(
+                    promotion, null, request, original, now));
+        }
+
+        List<String> walletIds = request.evaluationUserPromotionPublicIds() == null
+                ? List.of() : request.evaluationUserPromotionPublicIds();
+        for (String walletPublicId : walletIds) {
+            if (!evaluatedKeys.add("wallet:" + walletPublicId)) {
+                continue;
+            }
+            UserPromotion wallet;
+            try {
+                wallet = requireWallet(walletPublicId, request.userPublicId(), now);
+            } catch (BusinessException exception) {
+                evaluations.add(unavailableEvaluation(
+                        null, walletPublicId, null, exception));
+                continue;
+            }
+            Promotion promotion;
+            try {
+                promotion = requirePromotion(wallet.getPromotionPublicId());
+            } catch (BusinessException exception) {
+                evaluations.add(unavailableEvaluation(
+                        wallet.getPromotionPublicId(), walletPublicId, null, exception));
+                continue;
+            }
+            evaluations.add(evaluateForCheckout(
+                    promotion, wallet, request, original, now));
+        }
+        return List.copyOf(evaluations);
+    }
+
+    private PromotionEligibilityResponse evaluateForCheckout(
+            Promotion promotion,
+            UserPromotion wallet,
+            PromotionCheckoutRequest request,
+            BigDecimal original,
+            Instant now) {
+        try {
+            Candidate candidate = buildCandidate(
+                    promotion, wallet, request, original, now);
+            return new PromotionEligibilityResponse(
+                    promotion.getPublicId(),
+                    wallet == null ? null : wallet.getPublicId(),
+                    promotion.getPromotionType(),
+                    true,
+                    money(candidate.discount()),
+                    "ELIGIBLE",
+                    "Có thể sử dụng cho đơn hiện tại");
+        } catch (BusinessException exception) {
+            return unavailableEvaluation(
+                    promotion.getPublicId(),
+                    wallet == null ? null : wallet.getPublicId(),
+                    promotion.getPromotionType(),
+                    exception);
+        }
+    }
+
+    private PromotionEligibilityResponse unavailableEvaluation(
+            String promotionPublicId,
+            String walletPublicId,
+            PromotionType promotionType,
+            BusinessException exception) {
+        String reasonCode = eligibilityReasonCode(exception);
+        return new PromotionEligibilityResponse(
+                promotionPublicId,
+                walletPublicId,
+                promotionType,
+                false,
+                BigDecimal.ZERO.setScale(2),
+                reasonCode,
+                eligibilityReason(reasonCode));
+    }
+
+    private String eligibilityReasonCode(BusinessException exception) {
+        String message = String.valueOf(exception.getMessage()).toLowerCase(Locale.ROOT);
+        if (message.contains("minimum order")) return "MINIMUM_ORDER_NOT_MET";
+        if (message.contains("movieid") || message.contains("moviepublicid")) {
+            return "MOVIE_NOT_APPLICABLE";
+        }
+        if (message.contains("cinemaid") || message.contains("cinemapublicid")) {
+            return "CINEMA_NOT_APPLICABLE";
+        }
+        if (message.contains("showtimeid") || message.contains("showtimepublicid")
+                || message.contains("day of week")
+                || message.contains("business date")) return "SHOWTIME_NOT_APPLICABLE";
+        if (message.contains("paymentmethod")) return "PAYMENT_METHOD_NOT_APPLICABLE";
+        if (message.contains("channel")) return "CHANNEL_NOT_APPLICABLE";
+        if (message.contains("format") || message.contains("room type")) {
+            return "ROOM_FORMAT_NOT_APPLICABLE";
+        }
+        if (message.contains("seattype")) return "SEAT_TYPE_NOT_APPLICABLE";
+        if (message.contains("order type")) return "ORDER_TYPE_NOT_APPLICABLE";
+        if (message.contains("membership tier")) return "MEMBER_TIER_NOT_ELIGIBLE";
+        if (message.contains("verified customer")) return "CUSTOMER_VERIFICATION_REQUIRED";
+        if (message.contains("customer is not eligible")) return "CUSTOMER_NOT_ELIGIBLE";
+        if (message.contains("wallet promotion")) return "WALLET_NOT_AVAILABLE";
+        if (message.contains("campaign is not active")) return "CAMPAIGN_NOT_ACTIVE";
+        if (message.contains("promotion is not active")) return "PROMOTION_NOT_ACTIVE";
+        if (message.contains("capacity") || message.contains("usage limit")
+                || message.contains("usage is exhausted")) return "USAGE_LIMIT_REACHED";
+        if (message.contains("budget is exhausted")) return "CAMPAIGN_BUDGET_EXHAUSTED";
+        if (exception.getErrorCode().contains("CONFIGURATION")
+                || exception.getErrorCode().contains("ACTION_INVALID")) {
+            return "PROMOTION_CONFIGURATION_INVALID";
+        }
+        if (exception.getErrorCode().contains("NOT_FOUND")) return "PROMOTION_NOT_FOUND";
+        return "PROMOTION_CONDITION_NOT_MET";
+    }
+
+    private String eligibilityReason(String reasonCode) {
+        return switch (reasonCode) {
+            case "MINIMUM_ORDER_NOT_MET" -> "Chưa đủ giá trị đơn hàng tối thiểu";
+            case "MOVIE_NOT_APPLICABLE" -> "Không áp dụng cho phim hiện tại";
+            case "CINEMA_NOT_APPLICABLE" -> "Không áp dụng cho rạp hiện tại";
+            case "SHOWTIME_NOT_APPLICABLE" -> "Không áp dụng cho suất chiếu hiện tại";
+            case "PAYMENT_METHOD_NOT_APPLICABLE" -> "Không áp dụng với phương thức thanh toán hiện tại";
+            case "CHANNEL_NOT_APPLICABLE" -> "Không áp dụng trên kênh đặt vé hiện tại";
+            case "ROOM_FORMAT_NOT_APPLICABLE" -> "Không áp dụng cho định dạng phòng chiếu hiện tại";
+            case "SEAT_TYPE_NOT_APPLICABLE" -> "Không áp dụng cho loại ghế đã chọn";
+            case "ORDER_TYPE_NOT_APPLICABLE" -> "Không áp dụng cho loại đơn hàng này";
+            case "MEMBER_TIER_NOT_ELIGIBLE" -> "Hạng thành viên chưa đáp ứng điều kiện";
+            case "CUSTOMER_VERIFICATION_REQUIRED" -> "Tài khoản cần được xác thực";
+            case "CUSTOMER_NOT_ELIGIBLE" -> "Khách hàng không thuộc nhóm được áp dụng";
+            case "WALLET_NOT_AVAILABLE" -> "Voucher trong ví đã hết hạn hoặc hết lượt sử dụng";
+            case "CAMPAIGN_NOT_ACTIVE" -> "Chiến dịch của voucher hiện không hoạt động";
+            case "PROMOTION_NOT_ACTIVE" -> "Voucher chưa có hiệu lực hoặc đã hết hạn";
+            case "USAGE_LIMIT_REACHED" -> "Voucher đã hết lượt sử dụng";
+            case "CAMPAIGN_BUDGET_EXHAUSTED" -> "Ngân sách chiến dịch đã hết";
+            case "PROMOTION_CONFIGURATION_INVALID" -> "Voucher đang được cấu hình lại";
+            case "PROMOTION_NOT_FOUND" -> "Voucher không còn tồn tại";
+            default -> "Không đáp ứng điều kiện áp dụng của voucher";
+        };
     }
 
     private void addCandidate(
@@ -144,25 +320,35 @@ public class PromotionEngineService {
             return;
         }
         try {
-            PromotionCampaign campaign = requireRuntimeCampaign(
-                    promotion.getCampaignPublicId(), now);
-            requirePromotionRuntimeActive(promotion, now);
-            JsonNode conditions = read(promotion.getConditionsJson());
-            conditionEvaluator.evaluate(conditions, new EvaluationContext(
-                    original, request.userPublicId(), request.contextJson()));
-            BigDecimal discount = discountCalculator.calculate(
-                    read(promotion.getActionsJson()), original, request.contextJson());
-            requireCapacity(promotion, wallet, campaign, request.userPublicId(), discount);
-            if (discount.signum() > 0) {
-                candidates.add(new Candidate(
-                        promotion, wallet, campaign, conditions, discount));
-            }
+            candidates.add(buildCandidate(
+                    promotion, wallet, request, original, now));
         } catch (BusinessException exception) {
             if (selectedByCustomer) {
                 throw exception;
             }
             warnings.add(promotion.getName() + ": " + exception.getMessage());
         }
+    }
+
+    private Candidate buildCandidate(
+            Promotion promotion,
+            UserPromotion wallet,
+            PromotionCheckoutRequest request,
+            BigDecimal original,
+            Instant now) {
+        PromotionCampaign campaign = requireRuntimeCampaign(
+                promotion.getCampaignPublicId(), now);
+        requirePromotionRuntimeActive(promotion, now);
+        JsonNode conditions = read(promotion.getConditionsJson());
+        conditionEvaluator.evaluate(conditions, new EvaluationContext(
+                original, request.userPublicId(), request.contextJson()));
+        BigDecimal discount = discountCalculator.calculate(
+                read(promotion.getActionsJson()), original, request.contextJson());
+        requireCapacity(promotion, wallet, campaign, request.userPublicId(), discount);
+        if (discount.signum() <= 0) {
+            throw invalid("Promotion discount must be greater than zero");
+        }
+        return new Candidate(promotion, wallet, campaign, conditions, discount);
     }
 
     private List<Candidate> selectBest(
@@ -347,16 +533,17 @@ public class PromotionEngineService {
                 throw conflict("Wallet promotion usage is exhausted");
             }
         }
-        long campaignUsage = redemptionRepository.countCampaignRedemptions(
-                campaign.getPublicId(), CAPACITY_STATUSES);
+        long campaignUsage = redemptionRepository.countCampaignRedemptionsByPromotionType(
+                campaign.getPublicId(), promotion.getPromotionType(), CAPACITY_STATUSES);
         if (campaign.getMaxRedemptions() != null
                 && campaignUsage >= campaign.getMaxRedemptions()) {
-            throw conflict("Campaign redemption capacity is exhausted");
+            throw conflict("Campaign redemption capacity is exhausted for this promotion type");
         }
-        long campaignUserUsage = redemptionRepository.countCampaignUserRedemptions(
-                campaign.getPublicId(), userPublicId, CAPACITY_STATUSES);
+        long campaignUserUsage = redemptionRepository.countCampaignUserRedemptionsByPromotionType(
+                campaign.getPublicId(), promotion.getPromotionType(),
+                userPublicId, CAPACITY_STATUSES);
         if (campaignUserUsage >= campaign.getMaxRedemptionsPerUser()) {
-            throw conflict("Campaign usage limit for this customer is exhausted");
+            throw conflict("Campaign usage limit for this customer is exhausted for this promotion type");
         }
         BigDecimal availableBudget = campaign.getBudgetRemaining()
                 .subtract(campaign.getBudgetReserved());

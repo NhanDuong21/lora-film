@@ -30,6 +30,8 @@ public final class ReservationRequests {
             @NotNull @DecimalMin("0.01") BigDecimal originalAmount,
             @Size(max = 10)
             List<@Pattern(regexp = UUID_PATTERN) String> selectedUserPromotionPublicIds,
+            @Size(max = 10)
+            List<@Pattern(regexp = UUID_PATTERN) String> selectedPromotionPublicIds,
             @Size(max = 100)
             @Pattern(regexp = "^[A-Za-z0-9_-]*$") String couponCode,
             @Size(max = 20) String customerPhone,
@@ -37,7 +39,11 @@ public final class ReservationRequests {
             @Pattern(regexp = UUID_PATTERN) String orderPublicId,
             @Size(max = 10) String currency,
             JsonNode contextJson,
-            @Min(60) @Max(1800) Integer holdDurationSeconds) {
+            @Min(60) @Max(1800) Integer holdDurationSeconds,
+            @Size(max = 300)
+            List<@Pattern(regexp = UUID_PATTERN) String> evaluationUserPromotionPublicIds,
+            @Size(max = 300)
+            List<@Pattern(regexp = UUID_PATTERN) String> evaluationPromotionPublicIds) {
 
         @AssertTrue(message = "At least one bookingPublicId or orderPublicId is required")
         public boolean isTransactionReferencePresent() {
@@ -47,8 +53,9 @@ public final class ReservationRequests {
         public PromotionCheckoutRequest checkoutRequest() {
             return new PromotionCheckoutRequest(
                     userPublicId, originalAmount, selectedUserPromotionPublicIds,
-                    couponCode, customerPhone, bookingPublicId, orderPublicId,
-                    currency, contextJson, holdDurationSeconds);
+                    selectedPromotionPublicIds, couponCode, customerPhone, bookingPublicId, orderPublicId,
+                    currency, contextJson, holdDurationSeconds,
+                    evaluationUserPromotionPublicIds, evaluationPromotionPublicIds);
         }
     }
 
